@@ -1,0 +1,7 @@
+[project]
+name = "fieldflow"
+version = "0.0.0"
+description = "Textual IR Transformations"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
