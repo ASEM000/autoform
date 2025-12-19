@@ -229,7 +229,7 @@ class TestTriplePullback:
         c2 = ("g2_p", "g2_c")
         c3 = (("g3_pp", "g3_pc"), ("g3_cp", "g3_cc"))
         result = core.run_ir(pb3, (((p, c1), c2), c3))
-        (((out_p, out_c1), out_c2), out_c3) = result
+        (((out_p, out_c1), _), _) = result
         assert out_p == "a!"
         assert out_c1 == "g1"
 
