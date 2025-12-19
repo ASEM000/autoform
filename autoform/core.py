@@ -83,7 +83,7 @@ class Interpreter(ABC):
         # NOTE(asem): divide inputs into traced values (in_tree) and static configuration (params)
         # traced valued can be args, kwargs, or combination of both packed as a tree.
         # the design choice to simplify having to deal with both args and kwargs separately.
-        # in every equation exectuion. instead the args/kwargs are packed once.
+        # in every equation execution. instead the args/kwargs are packed once.
         ...
 
 
