@@ -55,7 +55,7 @@ class TestSwitchBasic:
 
     def test_switch_with_multiple_operands(self):
         branches = {
-            "concat": core.build_ir(lambda a, b: core.concat(a, b), "A", "B"),
+            "concat": core.build_ir(core.concat, "A", "B"),
             "format": core.build_ir(lambda a, b: core.format("{} - {}", a, b), "A", "B"),
         }
 
