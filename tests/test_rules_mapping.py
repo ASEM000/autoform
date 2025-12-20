@@ -46,14 +46,6 @@ class TestInterpreterRuleMapping:
 
         assert mapping.get(p) is rule2
 
-    def test_fallback(self):
-        fallback_fn = lambda x: 0
-        mapping = core.InterpreterRuleMapping[int](override=False, fallback=fallback_fn)
-        p = core.Primitive("test_fallback")
-        result = mapping.get(p)
-        assert result is fallback_fn
-        assert result(42) == 0
-
     def test_contains(self):
         mapping = core.InterpreterRuleMapping[int](override=False)
         p1 = core.Primitive("test_contains_1")

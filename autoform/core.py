@@ -70,7 +70,7 @@ class Var:
         return "Var"
 
 
-def is_var(x) -> bool:
+def is_var(x) -> tp.TypeIs[Var]:
     return isinstance(x, Var)
 
 
@@ -92,7 +92,7 @@ class EvalInterpreter(Interpreter):
         return impl_rules.get(prim)(in_tree, **params)
 
 
-active_interpreter = ContextVar("active_interpreter", default=EvalInterpreter())
+active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
 
 
 def bind(prim: Primitive, in_tree: Tree, **params):
@@ -140,11 +140,11 @@ class IRVar(IRAtom):
         return f"{type(self).__name__}({self.id})"
 
 
-def is_irvar(x) -> bool:
+def is_irvar(x) -> tp.TypeIs[IRVar]:
     return isinstance(x, IRVar)
 
 
-def is_iratom(x) -> bool:
+def is_iratom(x) -> tp.TypeIs[IRAtom]:
     return isinstance(x, IRAtom)
 
 
@@ -224,7 +224,7 @@ class IRZero[T](IRLit[T]):
         super().__init__(value, **meta)
 
 
-def is_irlit(x) -> bool:
+def is_irlit(x) -> tp.TypeIs[IRLit]:
     return isinstance(x, IRLit)
 
 
@@ -238,10 +238,10 @@ class IREqn:
         out_ir_tree: Tree[IRAtom],
         params: dict | None = None,
     ):
+        self.params = params if params is not None else {}
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
-        self.params = params
 
 
 class IR:
@@ -270,6 +270,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         if is_irvar(atom):
             var_type = type(atom).__name__
             return f"%{atom.id}:{var_type}"
+        assert is_irlit(atom)
         val = atom.value
         if isinstance(val, IR):
             if expand_ir:
@@ -300,7 +301,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     for eqn in ir.ireqns:
         lhs = format_tree(eqn.out_ir_tree)
         rhs = format_tree(eqn.in_ir_tree)
-        params_str = ", ".join(f"{k}={v!r}" for k, v in eqn.params.items())
+        params_str = ", ".join(f"{k}={v!r}" for k, v in (eqn.params or {}).items())
         if params_str:
             lines.append(f"{sp}({lhs}) = {eqn.prim.name}({rhs}, {params_str})")
         else:
@@ -326,11 +327,10 @@ class Primitive:
 
 
 class InterpreterRuleMapping[T: Callable]:
-    def __init__(self, override: bool, fallback: T | None = None):
+    def __init__(self, override: bool):
         self.map: dict[Primitive, T] = {}
         self.lock = RLock()
         self.override = override
-        self.fallback = fallback
 
     def set(self, prim: Primitive, rule: T) -> T:
         assert isinstance(prim, Primitive)
@@ -341,10 +341,8 @@ class InterpreterRuleMapping[T: Callable]:
         return rule
 
     def get(self, prim: Primitive) -> T:
-        assert isinstance(prim, Primitive)
-        assert self.fallback is not None or prim in self.map, f"No rule defined for primitive {prim.name}."
         with self.lock:
-            return self.map.get(prim, self.fallback)
+            return self.map[prim]
 
     def __iter__(self):
         with self.lock:
@@ -443,7 +441,7 @@ def dce_ir(ir: IR) -> IR:
         return {leaf for leaf in treelib.leaves(tree) if isinstance(leaf, IRVar)}
 
     active_irvars: set[IRVar] = extract_irvars(ir.out_ir_tree)
-    active_ireqns: deque[IREqns] = deque()
+    active_ireqns: deque[IREqn] = deque()
 
     for eqn in reversed(ir.ireqns):
         if not active_irvars.isdisjoint(extract_irvars(eqn.out_ir_tree)):
@@ -502,7 +500,7 @@ def run_ir(ir: IR, *args, **kwargs) -> Tree:
             env[atom] = value
 
     def read(atom: IRAtom) -> Value:
-        return env[atom] if is_irvar(atom) else atom.value
+        return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     treelib.map(write, ir.in_ir_tree, in_tree)
 
@@ -539,7 +537,7 @@ def iter_ir(ir: IR, *args, **kwargs):
     treelib.map(write, ir.in_ir_tree, in_tree)
 
     def read(atom: IRAtom):
-        return env[atom] if is_irvar(atom) else atom.value
+        return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     for eqn in ir.ireqns:
         in_eqn_tree = treelib.map(read, eqn.in_ir_tree)
@@ -570,7 +568,7 @@ async def arun_ir(ir: IR, *args, **kwargs):
     treelib.map(write, ir.in_ir_tree, in_tree)
 
     def read(atom: IRAtom) -> Value:
-        return env[atom] if is_irvar(atom) else atom.value
+        return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     for eqn in ir.ireqns:
         in_eqn_tree = treelib.map(read, eqn.in_ir_tree)
@@ -610,10 +608,10 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
             t_env[atom] = value
 
     def read_p(atom: IRAtom) -> Value:
-        return p_env[atom] if is_irvar(atom) else atom.value
+        return p_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     def read_t(atom: IRAtom) -> Value:
-        return t_env[atom] if is_irvar(atom) else atom.value
+        return t_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     treelib.map(write_p, ir.in_ir_tree, p_in_tree)
     treelib.map(write_t, ir.in_ir_tree, t_in_tree)
@@ -746,7 +744,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
             p_env[atom] = value
 
     def read_p(atom: IRAtom):
-        return p_env[atom] if is_irvar(atom) else atom.value
+        return p_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     def write_c(atom: IRAtom, value):
         if is_irvar(atom):
@@ -909,7 +907,7 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
     axes_tree = broadcast_in_axes(col_tree, in_axes)
     in_batched_tree = in_axes_to_batch_tree(axes_tree)
-    is_leaf = lambda x: isinstance(x, bool) or is_iratom(x)
+    is_leaf = lambda x: isinstance(x, bool)
     in_batched_tree = treelib.broadcast_prefix(in_batched_tree, ir.in_ir_tree, is_leaf=is_leaf)
     batch_size = infer_batch_size(col_tree, in_axes)
 
@@ -925,7 +923,7 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
             b_env[atom] = is_batched
 
     def read_v(atom: IRAtom) -> Value | list[Value]:
-        return v_env[atom] if is_irvar(atom) else atom.value
+        return v_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
 
     def read_b(atom: IRAtom) -> bool:
         return b_env[atom] if is_irvar(atom) else False
@@ -1237,11 +1235,11 @@ def pullback_bwd_lm_call(residuals: int, cotangent_out: Tree, *, roles: tuple, m
 
 @ft.partial(batch_rules.set, lm_call_p)
 def batch_lm_call(batch_size: int, in_batched: Tree, contents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
-    batched_messages = []
-    for b in range(batch_size):
-        msgs = [dict(role=r, content=contents[i][b] if in_batched[i] else contents[i]) for i, r in enumerate(roles)]
-        batched_messages.append(msgs)
     try:
+        batched_messages = []
+        for b in range(batch_size):
+            msgs = [dict(role=r, content=contents[i][b] if in_batched[i] else contents[i]) for i, r in enumerate(roles)]
+            batched_messages.append(msgs)
         responses = litellm.batch_completion(messages=batched_messages, model=model)
         return [resp.choices[0].message.content for resp in responses], True
     except Exception as e:
@@ -1250,8 +1248,8 @@ def batch_lm_call(batch_size: int, in_batched: Tree, contents: tuple, *, roles: 
 
 @ft.partial(iter_rules.set, lm_call_p)
 def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[str]:
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     try:
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = litellm.completion(messages=messages, model=model, stream=True)
         for chunk in resp:
             delta = chunk.choices[0].delta.content or ""
@@ -1262,8 +1260,8 @@ def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[st
 
 @ft.partial(async_rules.set, lm_call_p)
 async def async_lm_call(contents: tuple, *, roles: tuple, model: str) -> str:
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     try:
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = await litellm.acompletion(messages=messages, model=model)
         return resp.choices[0].message.content
     except Exception as e:
@@ -1320,8 +1318,8 @@ def struct_lm_call(messages: list[MessageDict], *, model: str, struct: type[Stru
 
 @ft.partial(impl_rules.set, struct_lm_call_p)
 def impl_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[Struct]) -> Struct:
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     try:
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = litellm.completion(messages=messages, model=model, response_format=struct)
         return resp.choices[0].message.parsed
     except Exception as e:
@@ -1335,10 +1333,14 @@ def eval_struct_lm_call(in_tree: Tree, *, struct: type[Struct], **params) -> Tre
 
 @ft.partial(pull_fwd_rules.set, struct_lm_call_p)
 def pullback_fwd_struct_lm_call(
-    contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
+    contents: tuple,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     try:
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = litellm.completion(messages=messages, model=model, response_format=struct)
         out = resp.choices[0].message.parsed
     except Exception as e:
@@ -1361,8 +1363,8 @@ def pullback_bwd_struct_lm_call(
 
 @ft.partial(iter_rules.set, struct_lm_call_p)
 def iter_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[Struct]) -> tp.Iterator[str]:
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     try:
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = litellm.completion(messages=messages, model=model, response_format=struct, stream=True)
         for chunk in resp:
             delta = chunk.choices[0].delta.content or ""
@@ -1373,8 +1375,8 @@ def iter_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: ty
 
 @ft.partial(async_rules.set, struct_lm_call_p)
 async def async_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[Struct]) -> str:
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     try:
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = await litellm.acompletion(messages=messages, model=model, response_format=struct)
         return resp.choices[0].message.content
     except Exception as e:
@@ -1482,7 +1484,7 @@ def impl_stop_gradient(x: Tree) -> Tree:
 
 
 @ft.partial(eval_rules.set, stop_gradient_p)
-def eval_stop_gradient(x: Tree) -> Tree:
+def eval_stop_gradient(x: Tree[EvalType]) -> Tree[EvalType]:
     return x
 
 
