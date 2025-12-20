@@ -91,10 +91,10 @@ class TestFormatPrimitive:
         assert result == "1 + 2 = 3"
 
     def test_format_ir(self):
-        def ir(x):
+        def func(x):
             return core.format("Value: {}", x)
 
-        ir = core.build_ir(ir, "test")
+        ir = core.build_ir(func, "test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "format"
 
@@ -109,10 +109,10 @@ class TestConcatPrimitive:
         assert result == "AB"
 
     def test_concat_ir(self):
-        def ir(x, y):
+        def func(x, y):
             return core.concat(x, y)
 
-        ir = core.build_ir(ir, "a", "b")
+        ir = core.build_ir(func, "a", "b")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "concat"
 
@@ -129,10 +129,10 @@ class TestBind:
         def eval_rule(in_tree, *, multiplier):
             return core.Var()
 
-        def ir(x):
+        def func(x):
             return core.bind(p, x, multiplier=3)
 
-        ir = core.build_ir(ir, "A")
+        ir = core.build_ir(func, "A")
         assert ir.ireqns[0].params["multiplier"] == 3
         result = core.run_ir(ir, "B")
         assert result == "BBB"
@@ -167,46 +167,46 @@ class TestStopGradient:
         assert result == "hello"
 
     def test_ir_build(self):
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, "test")
+        ir = core.build_ir(func, "test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "stop_gradient"
 
     def test_run_ir(self):
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, "test")
+        ir = core.build_ir(func, "test")
         result = core.run_ir(ir, "hello")
         assert result == "hello"
 
     def test_pushforward_zeros_tangent(self):
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, "a")
+        ir = core.build_ir(func, "a")
         pf_ir = core.pushforward_ir(ir)
         primal_out, tangent_out = core.run_ir(pf_ir, ("primal", "tangent"))
         assert primal_out == "primal"
         assert tangent_out == "" or (hasattr(tangent_out, "items") and len(tangent_out.items) == 0)
 
     def test_pullback_zeros_cotangent(self):
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, "a")
+        ir = core.build_ir(func, "a")
         pb_ir = core.pullback_ir(ir)
         primal_out, cotangent_in = core.run_ir(pb_ir, ("primal", "cotangent"))
         assert primal_out == "primal"
         assert cotangent_in == "" or (hasattr(cotangent_in, "items") and len(cotangent_in.items) == 0)
 
     def test_batch(self):
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, "a")
+        ir = core.build_ir(func, "a")
         batched_ir = core.batch_ir(ir)
         result = core.run_ir(batched_ir, ["a", "b", "c"])
         assert result == ["a", "b", "c"]
@@ -215,30 +215,30 @@ class TestStopGradient:
         def is_zero_cotangent(val):
             return val == "" or (hasattr(val, "items") and len(val.items) == 0)
 
-        def ir(x, y):
+        def func(x, y):
             stopped = core.stop_gradient(x)
             return core.concat(stopped, y)
 
-        ir = core.build_ir(ir, "a", "b")
+        ir = core.build_ir(func, "a", "b")
         pb_ir = core.pullback_ir(ir)
         _, (cotangent_x, cotangent_y) = core.run_ir(pb_ir, (("a", "b"), "grad"))
         assert is_zero_cotangent(cotangent_x)
         assert cotangent_y == "grad"
 
     def test_chained_with_format(self):
-        def ir(x):
+        def func(x):
             stopped = core.stop_gradient(x)
             return core.format("[{}]", stopped)
 
-        ir = core.build_ir(ir, "test")
+        ir = core.build_ir(func, "test")
         result = core.run_ir(ir, "hello")
         assert result == "[hello]"
 
     def test_tree_input(self):
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, ("a", "b"))
+        ir = core.build_ir(func, ("a", "b"))
         result = core.run_ir(ir, ("hello", "world"))
         assert result == ("hello", "world")
 
@@ -246,10 +246,10 @@ class TestStopGradient:
         def is_zero_cotangent(val):
             return val == "" or (hasattr(val, "items") and len(val.items) == 0)
 
-        def ir(x):
+        def func(x):
             return core.stop_gradient(x)
 
-        ir = core.build_ir(ir, ("a", "b"))
+        ir = core.build_ir(func, ("a", "b"))
         pb_ir = core.pullback_ir(ir)
         _, cotangent_in = core.run_ir(pb_ir, (("p1", "p2"), ("c1", "c2")))
         assert is_zero_cotangent(cotangent_in[0])

@@ -1,11 +1,12 @@
 import threading
 import functools as ft
+from collections.abc import Callable
 import autoform.core as core
 
 
 class TestInterpreterRuleMapping:
     def test_basic_get_set(self):
-        mapping = core.InterpreterRuleMapping[int](override=False)
+        mapping = core.InterpreterRuleMapping[Callable](override=False)
         p = core.Primitive("test_basic")
 
         @ft.partial(mapping.set, p)
@@ -15,7 +16,7 @@ class TestInterpreterRuleMapping:
         assert mapping.get(p) is rule
 
     def test_override_false_raises(self):
-        mapping = core.InterpreterRuleMapping[int](override=False)
+        mapping = core.InterpreterRuleMapping[Callable](override=False)
         p = core.Primitive("test_override")
 
         @ft.partial(mapping.set, p)
@@ -33,7 +34,7 @@ class TestInterpreterRuleMapping:
             pass
 
     def test_override_true_allows(self):
-        mapping = core.InterpreterRuleMapping[int](override=True)
+        mapping = core.InterpreterRuleMapping[Callable](override=True)
         p = core.Primitive("test_override_true")
 
         @ft.partial(mapping.set, p)
@@ -47,7 +48,7 @@ class TestInterpreterRuleMapping:
         assert mapping.get(p) is rule2
 
     def test_contains(self):
-        mapping = core.InterpreterRuleMapping[int](override=False)
+        mapping = core.InterpreterRuleMapping[Callable](override=False)
         p1 = core.Primitive("test_contains_1")
         p2 = core.Primitive("test_contains_2")
 
@@ -59,7 +60,7 @@ class TestInterpreterRuleMapping:
         assert p2 not in mapping
 
     def test_iter(self):
-        mapping = core.InterpreterRuleMapping[int](override=False)
+        mapping = core.InterpreterRuleMapping[Callable](override=False)
         p1 = core.Primitive("test_iter_1")
         p2 = core.Primitive("test_iter_2")
 
@@ -77,7 +78,7 @@ class TestInterpreterRuleMapping:
         assert p2 in prims
 
     def test_concurrent_registration(self):
-        mapping = core.InterpreterRuleMapping[int](override=True)
+        mapping = core.InterpreterRuleMapping[Callable](override=True)
         results = []
         errors = []
 
@@ -105,7 +106,7 @@ class TestInterpreterRuleMapping:
             assert rule(1) == thread_id
 
     def test_concurrent_read_write(self):
-        mapping = core.InterpreterRuleMapping[int](override=True)
+        mapping = core.InterpreterRuleMapping[Callable](override=True)
         p = core.Primitive("concurrent_rw")
         read_results = []
         errors = []
@@ -143,7 +144,7 @@ class TestInterpreterRuleMapping:
         assert len(errors) == 0
 
     def test_reentrant_lock(self):
-        mapping = core.InterpreterRuleMapping[int](override=False)
+        mapping = core.InterpreterRuleMapping[Callable](override=False)
         p = core.Primitive("reentrant")
 
         @ft.partial(mapping.set, p)
@@ -155,7 +156,7 @@ class TestInterpreterRuleMapping:
                 assert p in mapping
 
     def test_iteration_during_contains(self):
-        mapping = core.InterpreterRuleMapping[int](override=False)
+        mapping = core.InterpreterRuleMapping[Callable](override=False)
         prims = [core.Primitive(f"iter_contains_{i}") for i in range(10)]
         for p in prims:
 
