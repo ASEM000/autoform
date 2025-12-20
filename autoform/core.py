@@ -11,7 +11,7 @@ from contextlib import contextmanager
 import optree
 from threading import RLock
 import optree.pytree
-from collections import defaultdict
+from collections import defaultdict, deque
 import litellm
 import pydantic
 
@@ -128,8 +128,7 @@ type Value = str
 # ======================================================================================================================
 
 
-class IRAtom:
-    ...
+class IRAtom: ...
 
 
 class IRVar(IRAtom):
@@ -435,6 +434,23 @@ def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
         in_ir_tree = pack_user_input(*in_ir_args, **in_ir_kwargs)
         out_ir_tree = treelib.map(assert_ir, out_ir_tree)
         return IR(ireqns=tracer.ireqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
+
+
+def dce_ir(ir: IR) -> IR:
+    """Remove code path that are not executed."""
+
+    def extract_irvars(tree: IRAtom) -> set[IRVar]:
+        return {leaf for leaf in treelib.leaves(tree) if isinstance(leaf, IRVar)}
+
+    active_irvars: set[IRVar] = extract_irvars(ir.out_ir_tree)
+    active_ireqns: deque[IREqns] = deque()
+
+    for eqn in reversed(ir.ireqns):
+        if not active_irvars.isdisjoint(extract_irvars(eqn.out_ir_tree)):
+            active_irvars |= extract_irvars(eqn.in_ir_tree)
+            active_ireqns.appendleft(eqn)
+
+    return IR(list(active_ireqns), in_ir_tree=ir.in_ir_tree, out_ir_tree=ir.out_ir_tree)
 
 
 def run_ir(ir: IR, *args, **kwargs) -> Tree:
