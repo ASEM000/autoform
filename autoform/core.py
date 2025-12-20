@@ -1343,7 +1343,12 @@ def pullback_fwd_struct_lm_call(
 
 @ft.partial(pull_bwd_rules.set, struct_lm_call_p)
 def pullback_bwd_struct_lm_call(
-    residuals: int, cotangent_out: Tree, *, roles: tuple, model: str, struct: type[Struct]
+    residuals: int,
+    cotangent_out: Tree,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
 ) -> tuple:
     n = residuals
     return tuple([cotangent_out] * n)
@@ -1504,7 +1509,7 @@ def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tre
 
 ir_call_p = Primitive("ir_call")
 
-# NOTE(asem): IR are a first-class citizen in autoform IRs
+# NOTE(asem): IR is a first-class citizen in autoform IRs
 # in essence, IR itself can be differentiated, batched, ...
 user_types.add(IR)
 
@@ -1535,7 +1540,14 @@ def impl_ir_call(in_tree):
 
 @ft.partial(eval_rules.set, ir_call_p)
 def eval_ir_call(in_tree, **params):
-    return Var()
+    ir, args, kwargs = in_tree
+
+    # NOTE(asem): convert IR atoms to eval-level values
+    # IRVar -> Var, IRLit -> value (matching TracingInterpreter.to_eval)
+    def to_eval(atom):
+        return Var() if is_irvar(atom) else atom.value
+
+    return treelib.map(to_eval, ir.out_ir_tree, is_leaf=is_iratom)
 
 
 @ft.partial(push_rules.set, ir_call_p)
@@ -1560,10 +1572,11 @@ def pullback_bwd_ir_call(residuals, cotangent_out):
     # NOTE(asem): ir_call doesn't differentiate through the ir itself.
     # zero gradients for args/kwargs since the ir is treated as a black box here.
     ir, args, kwargs = residuals
-    del ir, cotangent_out
+    del cotangent_out
+    zero_ir = zero_cotangent(ir)
     zero_args = treelib.map(zero_cotangent, args)
     zero_kwargs = treelib.map(zero_cotangent, kwargs)
-    return (None, zero_args, zero_kwargs)
+    return (zero_ir, zero_args, zero_kwargs)
 
 
 @ft.partial(batch_rules.set, ir_call_p)

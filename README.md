@@ -69,7 +69,9 @@ Everything in autoform is built from **primitives** — atomic operations with d
 - `af.concat(*args)` — joins strings together  
 - `af.lm_call(messages, model=...)` — calls an LLM and returns the response
 - `af.struct_lm_call(messages, model=..., struct=...)` — calls an LLM and returns structured data
-- ... more to come soon
+- `af.switch(key, branches, *args, **kwargs)` — selects and executes one of multiple IR branches based on a key
+- `af.stop_gradient(x)` — stops gradient flow through the input during backpropagation
+- `af.ir_call(ir, *args, **kwargs)` — calls an IR as a differentiable operation
 
 ### Transforms
 
