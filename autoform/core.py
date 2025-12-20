@@ -57,7 +57,7 @@ user_types = {str}
 type UserType = str
 
 
-def is_hi_type(x) -> bool:
+def is_user_type(x) -> bool:
     return isinstance(x, tuple(user_types))
 
 
@@ -430,16 +430,16 @@ def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
         assert not is_iratom(x)
         return x
 
-    treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_hi_type)
+    treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
 
     def assert_ir(x):
         assert is_iratom(x)
         return x
 
     def populate(x):
-        return IRVar(next(counter)) if is_hi_type(x) else IRLit(x)
+        return IRVar(next(counter)) if is_user_type(x) else IRLit(x)
 
-    in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_hi_type)
+    in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
 
     with set_interpreter(TracingInterpreter(counter)) as tracer:
         out_ir_tree = func(*in_ir_args, **in_ir_kwargs)
