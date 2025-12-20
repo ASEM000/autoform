@@ -12,6 +12,7 @@ from autoform.core import (
     format,
     lm_call,
     struct_lm_call,
+    struct_lm_call_p,
     stop_gradient,
     ir_call,
     switch,
@@ -21,6 +22,13 @@ from autoform.core import (
     Var,
     treelib,
     Struct,
+    # rule registries
+    impl_rules,
+    eval_rules,
+    push_rules,
+    pull_fwd_rules,
+    pull_bwd_rules,
+    batch_rules,
 )
 
 __all__ = [
@@ -37,6 +45,7 @@ __all__ = [
     "format",
     "lm_call",
     "struct_lm_call",
+    "struct_lm_call_p",
     "stop_gradient",
     "ir_call",
     "switch",
@@ -46,4 +55,11 @@ __all__ = [
     "Var",
     "treelib",
     "Struct",
+    # rule registries
+    "impl_rules",
+    "eval_rules",
+    "push_rules",
+    "pull_fwd_rules",
+    "pull_bwd_rules",
+    "batch_rules",
 ]

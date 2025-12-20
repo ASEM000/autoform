@@ -91,45 +91,45 @@ Want to add your own operations that work with all transforms? Define a primitiv
 
 ```python
 import functools as ft
-import autoform.core as core
+import autoform as af
 
 # create the primitive
-shout_p = core.Primitive("shout")
+shout_p = af.Primitive("shout")
 
 # user-facing function
 def shout(text: str) -> str:
     """converts text to uppercase."""
-    return core.bind(shout_p, text)
+    return af.bind(shout_p, text)
 
 # implementation rule — what it actually does when run
-@ft.partial(core.impl_rules.set, shout_p)
+@ft.partial(af.impl_rules.set, shout_p)
 def impl_shout(text: str) -> str:
     return text.upper()
 
 # eval rule — tells the tracer what shape/type the output has
-@ft.partial(core.eval_rules.set, shout_p)
-def eval_shout(text) -> core.Var:
-    return core.Var()
+@ft.partial(af.eval_rules.set, shout_p)
+def eval_shout(text) -> af.Var:
+    return af.Var()
 
 # pushforward rule — how changes propagate forward
 # "if input changes by tangent, output changes by tangent.upper()"
-@ft.partial(core.push_rules.set, shout_p)
+@ft.partial(af.push_rules.set, shout_p)
 def push_shout(primal: str, tangent: str) -> tuple[str, str]:
     return primal.upper(), tangent.upper()
 
 # pullback rules — how feedback propagates backward
 # first: run forward and save anything needed for backward
-@ft.partial(core.pull_fwd_rules.set, shout_p)
+@ft.partial(af.pull_fwd_rules.set, shout_p)
 def pull_fwd_shout(text: str) -> tuple[str, str]:
     return text.upper(), text  # (output, residual_for_backward)
 
 # then: given feedback on output, compute feedback on input
-@ft.partial(core.pull_bwd_rules.set, shout_p)
+@ft.partial(af.pull_bwd_rules.set, shout_p)
 def pull_bwd_shout(residual: str, cotangent: str) -> str:
     return cotangent  # feedback passes through unchanged
 
 # batch rule — how to process multiple inputs at once
-@ft.partial(core.batch_rules.set, shout_p)
+@ft.partial(af.batch_rules.set, shout_p)
 def batch_shout(batch_size: int, in_batched: bool, text) -> tuple:
     if in_batched:
         return [t.upper() for t in text], True
@@ -163,42 +163,42 @@ Here's how to define an LLM primitive with a custom backward pass that uses anot
 ```python
 import functools as ft
 import litellm
-import autoform.core as core
+import autoform as af
 
 # define output structures (what the LLM should return)
-class ResearchNotes(core.Struct):
+class ResearchNotes(af.Struct):
     topic: str
     key_points: str
     sources: str
 
-class Article(core.Struct):
+class Article(af.Struct):
     title: str
     body: str
     summary: str
 
 
 # create primitive with custom backward pass
-textgrad_style_lm_call_p = core.Primitive("textgrad_style_lm_call")
+textgrad_style_lm_call_p = af.Primitive("textgrad_style_lm_call")
 
-def textgrad_style_lm_call(messages, *, model: str, struct: type) -> core.Struct:
+def textgrad_style_lm_call(messages, *, model: str, struct: type) -> af.Struct:
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return core.bind(textgrad_style_lm_call_p, contents, roles=roles, model=model, struct=struct)
+    return af.bind(textgrad_style_lm_call_p, contents, roles=roles, model=model, struct=struct)
 
 # forward: normal llm call
-@ft.partial(core.impl_rules.set, textgrad_style_lm_call_p)
+@ft.partial(af.impl_rules.set, textgrad_style_lm_call_p)
 def impl_textgrad_style(contents, *, roles, model, struct):
-    return core.impl_rules.get(core.struct_lm_call_p)(
+    return af.impl_rules.get(af.struct_lm_call_p)(
         contents, roles=roles, model=model, struct=struct
     )
 
 # eval: needed for tracing/build_ir
-@ft.partial(core.eval_rules.set, textgrad_style_lm_call_p)
+@ft.partial(af.eval_rules.set, textgrad_style_lm_call_p)
 def eval_textgrad_style(in_tree, *, struct, **params):
-    return struct.model_construct(**{k: core.Var() for k in struct.model_fields})
+    return struct.model_construct(**{k: af.Var() for k in struct.model_fields})
 
 # pullback forward: run and save residuals (inputs + output)
-@ft.partial(core.pull_fwd_rules.set, textgrad_style_lm_call_p)
+@ft.partial(af.pull_fwd_rules.set, textgrad_style_lm_call_p)
 def pull_fwd_textgrad_style(contents, *, roles, model, struct):
     out = impl_textgrad_style(contents, roles=roles, model=model, struct=struct)
     residuals = (contents, roles, out)
@@ -206,7 +206,7 @@ def pull_fwd_textgrad_style(contents, *, roles, model, struct):
 
 # pullback backward: llm generates critique for inputs!
 # use an LLM to generate semantic gradients
-@ft.partial(core.pull_bwd_rules.set, textgrad_style_lm_call_p)
+@ft.partial(af.pull_bwd_rules.set, textgrad_style_lm_call_p)
 def pull_bwd_textgrad_style(residuals, cotangent_out, *, roles, model, struct):
     contents, original_roles, output = residuals
     
@@ -229,7 +229,7 @@ def pull_bwd_textgrad_style(residuals, cotangent_out, *, roles, model, struct):
     return tuple(input_gradients)
 
 # batch: scale to multiple inputs efficiently!
-@ft.partial(core.batch_rules.set, textgrad_style_lm_call_p)
+@ft.partial(af.batch_rules.set, textgrad_style_lm_call_p)
 def batch_textgrad_style(batch_size, in_batched, contents, *, roles, model, struct):
     # construct batched messages
     batched_msgs = []
@@ -317,7 +317,7 @@ Each primitive defines how it handles batched inputs. The batch rule receives:
 - `in_tree`: the actual input values
 
 ```python
-@ft.partial(core.batch_rules.set, my_primitive_p)
+@ft.partial(af.batch_rules.set, my_primitive_p)
 def batch_my_primitive(
     batch_size: int,        # number of items in batch
     in_batched: tuple,      # which inputs are batched (bool per input)
