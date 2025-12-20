@@ -1160,12 +1160,7 @@ def pushforward_format(primals: Tree, tangents: Tree, *, template: str) -> tuple
 lm_call_p = Primitive("lm_call")
 
 
-class MessageDict(tp.TypedDict):
-    role: str
-    content: str
-
-
-def lm_call(messages: list[MessageDict], *, model: str) -> str:
+def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
     """Calls a language model with the given messages and model name using Litellm.
 
     Args:
@@ -1299,7 +1294,7 @@ class Struct(pydantic.BaseModel):
 struct_lm_call_p = Primitive("struct_lm_call")
 
 
-def struct_lm_call(messages: list[MessageDict], *, model: str, struct: type[Struct]) -> str:
+def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> str:
     """Calls a language model with structured output using response_format.
 
     Args:
@@ -1321,7 +1316,7 @@ def impl_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: ty
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = litellm.completion(messages=messages, model=model, response_format=struct)
-        return resp.choices[0].message.parsed
+        return struct.model_validate_json(resp.choices[0].message.content)
     except Exception as e:
         return struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
 

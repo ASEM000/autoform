@@ -114,7 +114,7 @@ textgrad_style_lm_call_p = core.Primitive("textgrad_style_lm_call")
 
 
 def textgrad_style_lm_call(
-    messages: list[core.MessageDict],
+    messages: list[dict[str, str]],
     *,
     model: str,
     struct: type[core.Struct],
@@ -230,7 +230,7 @@ def batch_textgrad_style_lm_call(
             model=model,
             response_format=struct,
         )
-        results = [resp.choices[0].message.parsed for resp in responses]
+        results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     except Exception as e:
         results = [
             struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields}) for _ in range(batch_size)
