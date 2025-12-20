@@ -317,42 +317,6 @@ class TestIRAtoms:
         assert isinstance(bv, core.IRVar)
 
 
-class TestTreelibIsLeaf:
-    def test_is_leaf_irvar_only_visits_irvars(self):
-        v0 = core.IRVar(0)
-        v1 = core.IRVar(1)
-        lit = core.IRLit("hello")
-        tree = ((v0, lit), {"key": v1})
-        visited = []
-
-        def collect(atom):
-            visited.append(atom)
-            return atom
-
-        core.treelib.map(collect, tree, is_leaf=core.is_irvar)
-        assert v0 in visited
-        assert v1 in visited
-        assert lit not in visited
-        assert len(visited) == 2
-
-    def test_is_leaf_iratom_visits_both(self):
-        v0 = core.IRVar(0)
-        v1 = core.IRVar(1)
-        lit = core.IRLit("hello")
-        tree = ((v0, lit), {"key": v1})
-        visited = []
-
-        def collect(atom):
-            visited.append(atom)
-            return atom
-
-        core.treelib.map(collect, tree, is_leaf=core.is_iratom)
-        assert v0 in visited
-        assert v1 in visited
-        assert lit in visited
-        assert len(visited) == 3
-
-
 class TestGenerateTextCode:
     def test_basic_ir_repr(self):
         def program(x):
