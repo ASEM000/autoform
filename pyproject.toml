@@ -22,6 +22,12 @@ line-length = 120
 indent-width = 4
 target-version = "py313"
 
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+
 
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
