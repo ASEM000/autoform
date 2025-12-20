@@ -1526,21 +1526,26 @@ def ir_call(ir: IR, *args, **kwargs) -> Tree:
         The result of running the ir.
     """
     # NOTE(asem): key idea here is that IR is being traced
-    # and not a param
-    return bind(ir_call_p, (ir, args, kwargs))
+    # and not a param. Use pack_user_input for consistent structure.
+    return bind(ir_call_p, (ir, pack_user_input(*args, **kwargs)))
 
 
 @ft.partial(impl_rules.set, ir_call_p)
 def impl_ir_call(in_tree):
-    ir, args, kwargs = in_tree
+    ir, operands = in_tree
     # NOTE(asem): key idea here is that IR is being traced
     # and not a param
-    return run_ir(ir, *args, **kwargs)
+    return run_ir(ir, operands)
 
 
 @ft.partial(eval_rules.set, ir_call_p)
 def eval_ir_call(in_tree, **params):
-    ir, args, kwargs = in_tree
+    ir, operands = in_tree
+
+    # NOTE(asem): when IR itself is being traced, ir is a Var.
+    # in this case, we can't introspect the output structure, so return Var.
+    if is_var(ir):
+        return Var()
 
     # NOTE(asem): convert IR atoms to eval-level values
     # IRVar -> Var, IRLit -> value (matching TracingInterpreter.to_eval)
@@ -1552,44 +1557,43 @@ def eval_ir_call(in_tree, **params):
 
 @ft.partial(push_rules.set, ir_call_p)
 def pushforward_ir_call(primals, tangents):
-    ir, args, kwargs = primals
-    _, t_args, t_kwargs = tangents
-    primal_out = run_ir(ir, *args, **kwargs)
-    tangent_out = run_ir(ir, *t_args, **t_kwargs)
+    ir, p_operands = primals
+    _, t_operands = tangents
+    primal_out = run_ir(ir, p_operands)
+    tangent_out = run_ir(ir, t_operands)
     return primal_out, tangent_out
 
 
 @ft.partial(pull_fwd_rules.set, ir_call_p)
 def pullback_fwd_ir_call(in_tree):
-    ir, args, kwargs = in_tree
-    out = run_ir(ir, *args, **kwargs)
-    residuals = (ir, args, kwargs)
+    ir, operands = in_tree
+    out = run_ir(ir, operands)
+    residuals = (ir, operands)
     return out, residuals
 
 
 @ft.partial(pull_bwd_rules.set, ir_call_p)
 def pullback_bwd_ir_call(residuals, cotangent_out):
-    # NOTE(asem): ir_call doesn't differentiate through the ir itself.
-    # zero gradients for args/kwargs since the ir is treated as a black box here.
-    ir, args, kwargs = residuals
-    del cotangent_out
+    # NOTE(asem): ir_call differentiates through operands by running
+    # the pullback of the inner IR. The IR itself is treated as a constant
+    # (zero gradient).
+    ir, operands = residuals
+    pb_ir = pullback_ir(ir)
+    _, c_operands = run_ir(pb_ir, (operands, cotangent_out))
     zero_ir = zero_cotangent(ir)
-    zero_args = treelib.map(zero_cotangent, args)
-    zero_kwargs = treelib.map(zero_cotangent, kwargs)
-    return (zero_ir, zero_args, zero_kwargs)
+    return (zero_ir, c_operands)
 
 
 @ft.partial(batch_rules.set, ir_call_p)
 def batch_ir_call(batch_size, in_batched, in_tree):
-    irs, args, kwargs = in_tree
-    prog_batched, args_batched, kwargs_batched = in_batched
+    irs, operands = in_tree
+    prog_batched, operands_batched = in_batched
 
     results = []
     for b in range(batch_size):
         prog = irs[b] if prog_batched else irs
-        batch_args = tuple(arg[b] if batched else arg for arg, batched in zip(args, args_batched))
-        batch_kwargs = {k: v[b] if kwargs_batched.get(k, False) else v for k, v in kwargs.items()}
-        results.append(run_ir(prog, *batch_args, **batch_kwargs))
+        batch_operands = index(operands, operands_batched, b)
+        results.append(run_ir(prog, batch_operands))
 
     return results, True
 
@@ -1613,9 +1617,9 @@ def iter_ir_call(in_tree):
     # NOTE(asem): iter_ir yields chunks AND the final result.
     # iter_rule should only yield chunks (the final is computed by accumulation).
     # so we yield all but the last item from iter_ir.
-    ir, args, kwargs = in_tree
+    ir, operands = in_tree
     # NOTE(asem): final result is the accumulated output after all chunks
-    *chunks, _ = iter_ir(ir, *args, **kwargs)
+    *chunks, _ = iter_ir(ir, operands)
     for chunk in chunks:
         yield chunk
 
