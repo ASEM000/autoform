@@ -82,6 +82,7 @@ Transforms take an IR (your traced program) and return a new IR with enhanced ca
 | `pushforward_ir(ir)` | Propagates "changes" forward through the program | Sensitivity analysis: "If I change X, how does Y change?" |
 | `pullback_ir(ir)` | Propagates "feedback" backward through the program | Optimization: "Given feedback on output, what should I change about input?" |
 | `batch_ir(ir)` | Makes the program process multiple inputs at once | Efficiency: Process 100 queries in parallel instead of sequentially |
+| `dce_ir(ir)` | Removes dead code that doesn't contribute to output | Optimization: Clean up unused computations |
 
 **Transforms compose!** `batch_ir(pullback_ir(ir))` gives you batched backpropagation — get feedback for 100 examples simultaneously.
 

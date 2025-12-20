@@ -7,6 +7,7 @@ from autoform.core import (
     iter_ir,
     arun_ir,
     batch_ir,
+    dce_ir,
     # primitives
     concat,
     format,
@@ -38,6 +39,7 @@ __all__ = [
     "pushforward_ir",
     "pullback_ir",
     "batch_ir",
+    "dce_ir",
     "iter_ir",
     "arun_ir",
     # primitives
