@@ -1661,6 +1661,7 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
         >>> af.run_ir(ir, "zero", "hello")
         'zero: hello'
     """
+    assert is_user_type(key), "key must be a user-type (traceable) value"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_ir_tree)
     assert all(treelib.structure(branches[key].in_ir_tree) == tree_struct0 for key in branches)
