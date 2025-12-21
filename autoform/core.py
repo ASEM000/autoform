@@ -12,7 +12,7 @@ import optree
 from threading import RLock
 import optree.pytree
 from collections import defaultdict, deque
-import litellm
+from litellm import completion, acompletion, batch_completion
 import pydantic
 
 # ==================================================================================================
@@ -1232,7 +1232,7 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
 def impl_lm_call(contents: tuple, *, roles: tuple[str, ...], model: str) -> str:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-        resp = litellm.completion(messages=messages, model=model)
+        resp = completion(messages=messages, model=model)
         return resp.choices[0].message.content
     except Exception as e:
         return f"[Error: {e}]"
@@ -1249,8 +1249,8 @@ def pushforward_lm_call(
 ) -> tuple[Tree, Tree]:
     p_messages = [dict(role=r, content=c) for r, c in zip(roles, primals, strict=True)]
     t_messages = [dict(role=r, content=c) for r, c in zip(roles, tangents, strict=True)]
-    p_resp = litellm.completion(messages=p_messages, model=model)
-    t_resp = litellm.completion(messages=t_messages, model=model)
+    p_resp = completion(messages=p_messages, model=model)
+    t_resp = completion(messages=t_messages, model=model)
     return p_resp.choices[0].message.content, t_resp.choices[0].message.content
 
 
@@ -1258,7 +1258,7 @@ def pushforward_lm_call(
 def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = litellm.completion(messages=messages, model=model)
+        resp = completion(messages=messages, model=model)
         out = resp.choices[0].message.content
     except Exception as e:
         out = f"[Error: {e}]"
@@ -1283,7 +1283,7 @@ def batch_lm_call(
                 for i, r in enumerate(roles)
             ]
             batched_messages.append(msgs)
-        responses = litellm.batch_completion(messages=batched_messages, model=model)
+        responses = batch_completion(messages=batched_messages, model=model)
         return [resp.choices[0].message.content for resp in responses], True
     except Exception as e:
         return [f"[Error: {e}]" for _ in range(batch_size)], True
@@ -1293,7 +1293,7 @@ def batch_lm_call(
 def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[str]:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = litellm.completion(messages=messages, model=model, stream=True)
+        resp = completion(messages=messages, model=model, stream=True)
         for chunk in resp:
             delta = chunk.choices[0].delta.content or ""
             yield delta
@@ -1305,7 +1305,7 @@ def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[st
 async def async_lm_call(contents: tuple, *, roles: tuple, model: str) -> str:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = await litellm.acompletion(messages=messages, model=model)
+        resp = await acompletion(messages=messages, model=model)
         return resp.choices[0].message.content
     except Exception as e:
         return f"[Error: {e}]"
@@ -1369,7 +1369,7 @@ def impl_struct_lm_call(
 ) -> Struct:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = litellm.completion(messages=messages, model=model, response_format=struct)
+        resp = completion(messages=messages, model=model, response_format=struct)
         return struct.model_validate_json(resp.choices[0].message.content)
     except Exception as e:
         return struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
@@ -1390,7 +1390,7 @@ def pullback_fwd_struct_lm_call(
 ) -> tuple[Tree, Tree]:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = litellm.completion(messages=messages, model=model, response_format=struct)
+        resp = completion(messages=messages, model=model, response_format=struct)
         out = resp.choices[0].message.parsed
     except Exception as e:
         out = struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
@@ -1416,9 +1416,7 @@ def iter_struct_lm_call(
 ) -> tp.Iterator[str]:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = litellm.completion(
-            messages=messages, model=model, response_format=struct, stream=True
-        )
+        resp = completion(messages=messages, model=model, response_format=struct, stream=True)
         for chunk in resp:
             delta = chunk.choices[0].delta.content or ""
             yield delta
@@ -1432,7 +1430,7 @@ async def async_struct_lm_call(
 ) -> str:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = await litellm.acompletion(messages=messages, model=model, response_format=struct)
+        resp = await acompletion(messages=messages, model=model, response_format=struct)
         return resp.choices[0].message.content
     except Exception as e:
         return f"[Error: {e}]"
@@ -1626,10 +1624,7 @@ def pullback_bwd_mark[T](residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashab
 
 
 @ft.partial(batch_rules.set, mark_p)
-def batch_mark[T](
-    batch_size: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable[T]
-) -> tuple[Tree, Tree]:
-    del batch_size, tag
+def batch_mark[T](_: int, in_batched: Tree, x: Tree, *, __: tp.Hashable[T]) -> tuple[Tree, Tree]:
     return x, in_batched
 
 
