@@ -194,7 +194,7 @@ to improve this input. Be concise and targeted."""
                 model=model,
             )
             input_gradients.append(resp.choices[0].message.content)
-        except Exception as e:
+        except Exception:
             input_gradients.append(f"[Feedback propagated: {cotangent_str}]")
 
     return tuple(input_gradients)

@@ -229,6 +229,15 @@ def is_irlit(x) -> tp.TypeIs[IRLit]:
 
 
 class IREqn:
+    """An equation in the intermediate representation (IR).
+
+    Args:
+        prim: The primitive that the equation represents.
+        in_ir_tree: The input to the primitive in the IR.
+        out_ir_tree: The output of the primitive in the IR.
+        params: The parameters of the primitive.
+    """
+
     __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
     __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
 
@@ -260,6 +269,14 @@ class IREqn:
 
 
 class IR:
+    """The intermediate representation (IR) of a program.
+
+    Args:
+        ireqns: The equations in the IR.
+        in_ir_tree: The input to the IR.
+        out_ir_tree: The output of the IR.
+    """
+
     __slots__ = ("in_ir_tree", "out_ir_tree", "ireqns")
 
     def __init__(
