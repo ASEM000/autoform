@@ -202,9 +202,7 @@ class TracingInterpreter(Interpreter):
             return IRVar(next(self.counter)) if is_var(x) else IRLit(x)
 
         out_ir_tree = treelib.map(from_eval, out_tree, is_leaf=is_var)
-        self.ireqns.append(
-            IREqn(prim=prim, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree, params=params)
-        )
+        self.ireqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params))
         return out_ir_tree
 
 
@@ -1083,13 +1081,8 @@ def pushforward_ir(ir: IR) -> IR:
     p_out_ir_tree = treelib.map(make_p, ir.out_ir_tree)
     t_out_ir_tree = treelib.map(make_t, ir.out_ir_tree)
     out_ir_tree = (p_out_ir_tree, t_out_ir_tree)
-    eqn = IREqn(
-        prim=pushforward_call_p,
-        in_ir_tree=in_ir_tree,
-        out_ir_tree=out_ir_tree,
-        params=dict(ir=ir),
-    )
-    return IR(ireqns=[eqn], in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
+    eqn = IREqn(pushforward_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
+    return IR([eqn], in_ir_tree, out_ir_tree)
 
 
 # PULLBACK IR ======================================================================================
@@ -1111,13 +1104,8 @@ def pullback_ir(ir: IR) -> IR:
     p_out = treelib.map(make_p, ir.out_ir_tree)
     c_in = treelib.map(make_c, ir.in_ir_tree)
     out_ir_tree = (p_out, c_in)
-    eqn = IREqn(
-        prim=pullback_call_p,
-        in_ir_tree=in_ir_tree,
-        out_ir_tree=out_ir_tree,
-        params=dict(ir=ir),
-    )
-    return IR(ireqns=[eqn], in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
+    eqn = IREqn(pullback_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
+    return IR([eqn], in_ir_tree, out_ir_tree)
 
 
 # BATCH IR =========================================================================================
@@ -1133,13 +1121,8 @@ def batch_ir(ir: IR, in_axes: Tree[type | None] = list) -> IR:
     b_in_ir_tree = treelib.map(make_b, ir.in_ir_tree)
     b_out_ir_tree = treelib.map(make_b, ir.out_ir_tree)
 
-    eqn = IREqn(
-        prim=batch_call_p,
-        in_ir_tree=b_in_ir_tree,
-        out_ir_tree=b_out_ir_tree,
-        params=dict(ir=ir, in_axes=in_axes),
-    )
-    return IR(ireqns=[eqn], in_ir_tree=b_in_ir_tree, out_ir_tree=b_out_ir_tree)
+    eqn = IREqn(batch_call_p, b_in_ir_tree, b_out_ir_tree, dict(ir=ir, in_axes=in_axes))
+    return IR([eqn], b_in_ir_tree, b_out_ir_tree)
 
 
 # FORMAT ===========================================================================================
@@ -1842,11 +1825,11 @@ def batch_switch(
     key_col, operands_col = in_tree
     key_batched, operands_batched = in_batched
     index_at = ft.partial(index, operands_col, operands_batched)
-    results = [
-        run_ir(branches[key_col[b] if key_batched else key_col], index_at(b))
-        for b in range(batch_size)
-    ]
-    return results, True
+
+    def run_ir_at(b):
+        return run_ir(branches[key_col[b] if key_batched else key_col], index_at(b))
+
+    return [run_ir_at(b) for b in range(batch_size)], True
 
 
 @ft.partial(iter_rules.set, switch_p)
