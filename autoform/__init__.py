@@ -8,15 +8,24 @@ from autoform.core import (
     arun_ir,
     batch_ir,
     dce_ir,
-    # primitives
+    # primitives (functions)
     concat,
     format,
     lm_call,
     struct_lm_call,
-    struct_lm_call_p,
     stop_gradient,
+    mark,
     ir_call,
     switch,
+    # primitives (objects)
+    concat_p,
+    format_p,
+    lm_call_p,
+    struct_lm_call_p,
+    stop_gradient_p,
+    mark_p,
+    ir_call_p,
+    switch_p,
     # constructs
     bind,
     Primitive,
@@ -42,15 +51,24 @@ __all__ = [
     "dce_ir",
     "iter_ir",
     "arun_ir",
-    # primitives
+    # primitives (functions)
     "concat",
     "format",
     "lm_call",
     "struct_lm_call",
-    "struct_lm_call_p",
     "stop_gradient",
+    "mark",
     "ir_call",
     "switch",
+    # primitives (objects)
+    "concat_p",
+    "format_p",
+    "lm_call_p",
+    "struct_lm_call_p",
+    "stop_gradient_p",
+    "mark_p",
+    "ir_call_p",
+    "switch_p",
     # constructs
     "bind",
     "Primitive",

@@ -1507,6 +1507,70 @@ def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tre
     return x, in_batched
 
 
+# MARK =============================================================================================================
+
+mark_p = Primitive("mark")
+
+
+def mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
+    """Identity operation with a tag.
+
+    Args:
+        x: The input tree (e.g., a string, number, or nested structure)
+        tag: A hashable value to identify this mark in the IR.
+
+    Returns:
+        The same input tree, unchanged.
+
+    Example:
+        >>> import autoform as af
+        >>> def ir(x):
+        ...     marked = af.mark(x, tag="my_tag")
+        ...     return af.concat("Result: ", marked)
+        >>> ir = af.build_ir(ir, "hello")
+        >>> af.run_ir(ir, "world")
+        'Result: world'
+    """
+    assert hash(tag) is not None, "Tag must be hashable"
+    return bind(mark_p, x, tag=tag)
+
+
+@ft.partial(impl_rules.set, mark_p)
+def impl_mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
+    del tag
+    return x
+
+
+@ft.partial(eval_rules.set, mark_p)
+def eval_mark[T](x: Tree[EvalType], *, tag: tp.Hashable[T]) -> Tree[EvalType]:
+    del tag
+    return x
+
+
+@ft.partial(push_rules.set, mark_p)
+def pushforward_mark[T](primal: Tree, tangent: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+    del tag
+    return primal, tangent
+
+
+@ft.partial(pull_fwd_rules.set, mark_p)
+def pullback_fwd_mark[T](x: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+    del tag
+    return x, x  # residuals = input for structure
+
+
+@ft.partial(pull_bwd_rules.set, mark_p)
+def pullback_bwd_mark[T](residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashable[T]) -> Tree:
+    del residuals, tag
+    return cotangent_out  # identity backward pass
+
+
+@ft.partial(batch_rules.set, mark_p)
+def batch_mark[T](batch_size: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+    del batch_size, tag
+    return x, in_batched
+
+
 # IR CALL =========================================================================================================
 
 ir_call_p = Primitive("ir_call")
@@ -1661,7 +1725,7 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
         >>> af.run_ir(ir, "zero", "hello")
         'zero: hello'
     """
-    assert is_user_type(key), "key must be a user-type (traceable) value"
+    assert is_user_type(key) or is_iratom(key), "key must be a user-type (traceable) value"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_ir_tree)
     assert all(treelib.structure(branches[key].in_ir_tree) == tree_struct0 for key in branches)
