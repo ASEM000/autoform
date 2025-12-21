@@ -21,7 +21,7 @@ import pydantic
 
 PYTREE_NAMESPACE = "AUTOFORM"
 treelib = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
-Tree = optree.PyTree
+type Tree[T] = optree.PyTree[T]
 
 
 def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R]:
