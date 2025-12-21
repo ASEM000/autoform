@@ -306,7 +306,8 @@ class TestSwitchComplexBranches:
 
     def test_many_branches(self):
         branches = {
-            f"branch{i}": core.build_ir(lambda x, i=i: core.format("branch{}: {}", str(i), x), "X") for i in range(5)
+            f"branch{i}": core.build_ir(lambda x, i=i: core.format("branch{}: {}", str(i), x), "X")
+            for i in range(5)
         }
 
         def program(key, x):

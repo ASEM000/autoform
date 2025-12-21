@@ -15,9 +15,9 @@ from collections import defaultdict, deque
 import litellm
 import pydantic
 
-# ======================================================================================================================
+# ==================================================================================================
 # UTILS
-# ======================================================================================================================
+# ==================================================================================================
 
 PYTREE_NAMESPACE = "AUTOFORM"
 treelib = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
@@ -47,9 +47,9 @@ def index(tree: Tree, mask: Tree, i: int) -> Tree:
     return spec.unflatten(selected)
 
 
-# ======================================================================================================================
+# ==================================================================================================
 # BASE INTERPRETER
-# ======================================================================================================================
+# ==================================================================================================
 
 
 user_types = {str}
@@ -64,7 +64,7 @@ def is_user_type(x) -> bool:
 class Var:
     """A symbolic user-facing variable used for `eval_rule` definitions."""
 
-    __slots__ = []
+    __slots__ = ()
 
     def __repr__(self) -> str:
         return "Var"
@@ -123,9 +123,9 @@ def set_interpreter(interpreter: Interpreter):
 type Value = str
 
 
-# ======================================================================================================================
+# ==================================================================================================
 # IR
-# ======================================================================================================================
+# ==================================================================================================
 
 
 class IRAtom: ...
@@ -202,7 +202,9 @@ class TracingInterpreter(Interpreter):
             return IRVar(next(self.counter)) if is_var(x) else IRLit(x)
 
         out_ir_tree = treelib.map(from_eval, out_tree, is_leaf=is_var)
-        self.ireqns.append(IREqn(prim=prim, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree, params=params))
+        self.ireqns.append(
+            IREqn(prim=prim, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree, params=params)
+        )
         return out_ir_tree
 
 
@@ -229,7 +231,8 @@ def is_irlit(x) -> tp.TypeIs[IRLit]:
 
 
 class IREqn:
-    __slots__ = ["prim", "in_ir_tree", "out_ir_tree", "params"]
+    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
+    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
 
     def __init__(
         self,
@@ -243,9 +246,23 @@ class IREqn:
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
 
+    def replace(
+        self,
+        prim: Primitive | None = None,
+        in_ir_tree: Tree[IRAtom] | None = None,
+        out_ir_tree: Tree[IRAtom] | None = None,
+        params: dict | None = None,
+    ) -> IREqn:
+        return IREqn(
+            prim=prim if prim is not None else self.prim,
+            in_ir_tree=in_ir_tree if in_ir_tree is not None else self.in_ir_tree,
+            out_ir_tree=out_ir_tree if out_ir_tree is not None else self.out_ir_tree,
+            params=params if params is not None else self.params,
+        )
+
 
 class IR:
-    __slots__ = ["in_ir_tree", "out_ir_tree", "ireqns"]
+    __slots__ = ("in_ir_tree", "out_ir_tree", "ireqns")
 
     def __init__(
         self,
@@ -311,16 +328,18 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     return "\n".join(lines)
 
 
-# ======================================================================================================================
+# ==================================================================================================
 # PRIMITIVES
-# ======================================================================================================================
+# ==================================================================================================
 
 
 class Primitive:
-    __slots__ = ["name"]
+    __slots__ = ("name", "tag")
+    __match_args__ = ("name", "tag")
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, tag: tp.Hashable | None = None):
         self.name = name
+        self.tag = tag
 
     def __repr__(self) -> str:
         return self.name
@@ -335,7 +354,9 @@ class InterpreterRuleMapping[T: Callable]:
     def set(self, prim: Primitive, rule: T) -> T:
         assert isinstance(prim, Primitive)
         assert isinstance(rule, Callable)
-        assert prim not in self.map or self.override, f"Rule for primitive {prim.name} already defined."
+        assert prim not in self.map or self.override, (
+            f"Rule for primitive {prim.name} already defined."
+        )
         with self.lock:
             self.map[prim] = rule
         return rule
@@ -374,9 +395,9 @@ iter_rules = InterpreterRuleMapping[IterRule](override=False)
 async_rules = InterpreterRuleMapping[AsyncRule](override=False)
 
 
-# ======================================================================================================================
+# ==================================================================================================
 # iR BUILD AND EVALUATION
-# ======================================================================================================================
+# ==================================================================================================
 
 
 def pack_user_input(*args, **kwargs) -> Tree:
@@ -581,15 +602,15 @@ async def arun_ir(ir: IR, *args, **kwargs):
     return treelib.map(read, ir.out_ir_tree)
 
 
-# ======================================================================================================================
+# ==================================================================================================
 # HIGHER-ORDER PRIMITIVES
-# ======================================================================================================================
+# ==================================================================================================
 
-# higher-order primitives denotes primitives that operates on IRs rather than raw values like strings.
+# higher-order primitives denotes primitives that operates on IRs
 
-# PUSHFORWARD CALL =====================================================================================================
+# PUSHFORWARD CALL =================================================================================
 
-pushforward_call_p = Primitive("pushforward_call")
+pushforward_call_p = Primitive("pushforward_call", tag="transformation")
 
 
 @ft.partial(impl_rules.set, pushforward_call_p)
@@ -671,7 +692,9 @@ def pullback_bwd_pushforward_call(residuals: Tree, cotangent_out: Tree, *, ir: I
 
 
 @ft.partial(batch_rules.set, pushforward_call_p)
-def batch_pushforward_call(batch_size: int, in_batched: Tree[bool], in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def batch_pushforward_call(
+    batch_size: int, in_batched: Tree[bool], in_tree: Tree, *, ir: IR
+) -> tuple[Tree, Tree]:
     (p_cols, t_cols), (p_batched, t_batched) = in_tree, in_batched
 
     index_p = ft.partial(index, p_cols, p_batched)
@@ -683,15 +706,17 @@ def batch_pushforward_call(batch_size: int, in_batched: Tree[bool], in_tree: Tre
 
     out_spec = treelib.structure(pf_ir.out_ir_tree)
     leaves_per_result = [out_spec.flatten_up_to(r) for r in results]
-    stacked_leaves = [[leaves_per_result[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
+    stacked_leaves = [
+        [leaves_per_result[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)
+    ]
     out_cols = out_spec.unflatten(stacked_leaves)
     out_batched = treelib.map(lambda _: True, pf_ir.out_ir_tree)
     return out_cols, out_batched
 
 
-# PULLBACK CALL ========================================================================================================
+# PULLBACK CALL ====================================================================================
 
-pullback_call_p = Primitive("pullback_call")
+pullback_call_p = Primitive("pullback_call", tag="transformation")
 
 
 zero_cotangents_map: dict[type, Callable[[], tp.Any]] = {}
@@ -833,33 +858,35 @@ def pullback_bwd_pullback_call(residuals: Tree, cotangent_out: Tree, *, ir: IR) 
 def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_cols, c_out_cols) = in_tree
     (p_batched, c_batched) = in_batched
+    p_index = ft.partial(index, p_cols, p_batched)
+    c_index = ft.partial(index, c_out_cols, c_batched)
     pb_ir = pullback_ir(ir)
-    results = [run_ir(pb_ir, (index(p_cols, p_batched, b), index(c_out_cols, c_batched, b))) for b in range(size)]
+    results = [run_ir(pb_ir, (p_index(b), c_index(b))) for b in range(size)]
     out_spec = treelib.structure(pb_ir.out_ir_tree)
-    leaves_per_result = [out_spec.flatten_up_to(r) for r in results]
-    stacked_leaves = [[leaves_per_result[b][i] for b in range(size)] for i in range(out_spec.num_leaves)]
+    outs = [out_spec.flatten_up_to(r) for r in results]
+    stacked_leaves = [[outs[b][i] for b in range(size)] for i in range(out_spec.num_leaves)]
     out_cols = out_spec.unflatten(stacked_leaves)
     out_batched = treelib.map(lambda _: True, pb_ir.out_ir_tree)
     return out_cols, out_batched
 
 
-# BATCH CALL ===========================================================================================================
+# BATCH CALL =======================================================================================
 
-batch_call_p = Primitive("batch_call")
+batch_call_p = Primitive("batch_call", tag="transformation")
 
 
 def is_axis_spec(x) -> bool:
-    # NOTE(asem): axis spec defines how to batch by passing the container type if the leaf is to be batched,
-    # otherwise pass `None` to indicate no batching on that leaf.
+    # NOTE(asem): axis spec defines how to batch by passing the container type if the leaf is to be
+    # batched, otherwise pass `None` to indicate no batching on that leaf.
     # the rational behind passing the type is that fundamentally ff has no registered type of
     # container type, as a container type like a list can be a leaf.
-    # another approach is to implement a custom Batch container, however this would require the users to wrap
-    # their inputs with Batch which is not user-friendly.
+    # another approach is to implement a custom Batch container, however this would require the
+    # users to wraptheir inputs with Batch which is not user-friendly.
     return x is None or isinstance(x, type)
 
 
 def make_is_batch_leaf(in_axes: Tree) -> Callable[[Tree], bool]:
-    # NOTE(asem): get all types leaves and create a function to check if a leaf is of any of these types
+    # NOTE(asem): get all types leaves and create a function to check if a leaf is of any types
     batch_types = tuple(treelib.leaves(in_axes, is_leaf=lambda x: isinstance(x, type)))
     return (lambda x: isinstance(x, batch_types)) if batch_types else (lambda _: False)
 
@@ -934,9 +961,13 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     for eqn in ir.ireqns:
         in_vals = treelib.map(read_v, eqn.in_ir_tree)
         in_batched = treelib.map(read_b, eqn.in_ir_tree)
-        out_vals, out_batched_tree = batch_rules.get(eqn.prim)(batch_size, in_batched, in_vals, **eqn.params)
+        out_vals, out_batched_tree = batch_rules.get(eqn.prim)(
+            batch_size, in_batched, in_vals, **eqn.params
+        )
         treelib.map(write_v, eqn.out_ir_tree, out_vals)
-        out_batched_tree = assert_batch_tree_matches_ir_tree(out_batched_tree, eqn.out_ir_tree, eqn.prim.name)
+        out_batched_tree = assert_batch_tree_matches_ir_tree(
+            out_batched_tree, eqn.out_ir_tree, eqn.prim.name
+        )
         treelib.map(write_b, eqn.out_ir_tree, out_batched_tree)
 
     return treelib.map(read_v, ir.out_ir_tree)
@@ -949,7 +980,9 @@ def eval_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 
 @ft.partial(push_rules.set, batch_call_p)
-def pushforward_batch_call(primals: Tree, tangents: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+def pushforward_batch_call(
+    primals: Tree, tangents: Tree, *, ir: IR, in_axes: Tree
+) -> tuple[Tree, Tree]:
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward_ir(ir)
     batch_pf_ir = batch_ir(pf_ir, in_axes=(in_axes, in_axes))
@@ -978,7 +1011,9 @@ def pullback_bwd_batch_call(residuals: Tree, cotangent_out: Tree, *, ir: IR, in_
 
 
 @ft.partial(batch_rules.set, batch_call_p)
-def batch_batch_call(batch_size: int, in_batched: Tree, in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+def batch_batch_call(
+    batch_size: int, in_batched: Tree, in_tree: Tree, *, ir: IR, in_axes: Tree
+) -> tuple[Tree, Tree]:
     col_cols = in_tree
 
     in_axes_tree = broadcast_in_axes(col_cols, in_axes)
@@ -994,7 +1029,9 @@ def batch_batch_call(batch_size: int, in_batched: Tree, in_tree: Tree, *, ir: IR
     out_spec = treelib.structure(ir.out_ir_tree)
     leaves_per_result = [out_spec.flatten_up_to(r) for r in results]
     num_leaves = out_spec.num_leaves
-    stacked_leaves = [[leaves_per_result[b][i] for b in range(batch_size)] for i in range(num_leaves)]
+    stacked_leaves = [
+        [leaves_per_result[b][i] for b in range(batch_size)] for i in range(num_leaves)
+    ]
     out_cols = out_spec.unflatten(stacked_leaves)
     return out_cols, out_batched
 
@@ -1017,15 +1054,17 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     results = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
     out_spec = treelib.structure(ir.out_ir_tree)
     leaves_per_result = [out_spec.flatten_up_to(r) for r in results]
-    stacked_leaves = [[leaves_per_result[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
+    stacked_leaves = [
+        [leaves_per_result[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)
+    ]
     return out_spec.unflatten(stacked_leaves)
 
 
-# ======================================================================================================================
+# ==================================================================================================
 # IR -> IR TRANSFORMS
-# ======================================================================================================================
+# ==================================================================================================
 
-# PUSHFORWARD IR =======================================================================================================
+# PUSHFORWARD IR ===================================================================================
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -1053,7 +1092,7 @@ def pushforward_ir(ir: IR) -> IR:
     return IR(ireqns=[eqn], in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
 
-# PULLBACK IR ==========================================================================================================
+# PULLBACK IR ======================================================================================
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -1081,7 +1120,7 @@ def pullback_ir(ir: IR) -> IR:
     return IR(ireqns=[eqn], in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
 
-# BATCH IR =============================================================================================================
+# BATCH IR =========================================================================================
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -1103,9 +1142,9 @@ def batch_ir(ir: IR, in_axes: Tree[type | None] = list) -> IR:
     return IR(ireqns=[eqn], in_ir_tree=b_in_ir_tree, out_ir_tree=b_out_ir_tree)
 
 
-# FORMAT ===============================================================================================================
+# FORMAT ===========================================================================================
 
-format_p = Primitive("format")
+format_p = Primitive("format", tag="string")
 
 
 def format(template: str, *args) -> str:
@@ -1137,7 +1176,9 @@ def pullback_bwd_format(residuals: Tree, cotangent_out: Tree, *, template: str) 
 
 
 @ft.partial(batch_rules.set, format_p)
-def batch_format(batch_size: int, in_batched: Tree, in_tree: Tree, *, template: str) -> tuple[Tree, Tree]:
+def batch_format(
+    batch_size: int, in_batched: Tree, in_tree: Tree, *, template: str
+) -> tuple[Tree, Tree]:
     args = tuple(in_tree)
     args_batched = tuple(in_batched)
 
@@ -1155,9 +1196,9 @@ def pushforward_format(primals: Tree, tangents: Tree, *, template: str) -> tuple
     return primal_out, tangent_out
 
 
-# LM CALL ==============================================================================================================
+# LM CALL ==========================================================================================
 
-lm_call_p = Primitive("lm_call")
+lm_call_p = Primitive("lm_call", tag="lm")
 
 
 def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
@@ -1203,7 +1244,9 @@ def eval_lm_call(in_tree: Tree, **params) -> Var:
 
 
 @ft.partial(push_rules.set, lm_call_p)
-def pushforward_lm_call(primals: tuple, tangents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
+def pushforward_lm_call(
+    primals: tuple, tangents: tuple, *, roles: tuple, model: str
+) -> tuple[Tree, Tree]:
     p_messages = [dict(role=r, content=c) for r, c in zip(roles, primals, strict=True)]
     t_messages = [dict(role=r, content=c) for r, c in zip(roles, tangents, strict=True)]
     p_resp = litellm.completion(messages=p_messages, model=model)
@@ -1229,11 +1272,16 @@ def pullback_bwd_lm_call(residuals: int, cotangent_out: Tree, *, roles: tuple, m
 
 
 @ft.partial(batch_rules.set, lm_call_p)
-def batch_lm_call(batch_size: int, in_batched: Tree, contents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
+def batch_lm_call(
+    batch_size: int, in_batched: Tree, contents: tuple, *, roles: tuple, model: str
+) -> tuple[Tree, Tree]:
     try:
         batched_messages = []
         for b in range(batch_size):
-            msgs = [dict(role=r, content=contents[i][b] if in_batched[i] else contents[i]) for i, r in enumerate(roles)]
+            msgs = [
+                dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
+                for i, r in enumerate(roles)
+            ]
             batched_messages.append(msgs)
         responses = litellm.batch_completion(messages=batched_messages, model=model)
         return [resp.choices[0].message.content for resp in responses], True
@@ -1263,7 +1311,7 @@ async def async_lm_call(contents: tuple, *, roles: tuple, model: str) -> str:
         return f"[Error: {e}]"
 
 
-# STRUCT LM CALL =======================================================================================================
+# STRUCT LM CALL ===================================================================================
 
 
 class Struct(pydantic.BaseModel):
@@ -1291,7 +1339,7 @@ class Struct(pydantic.BaseModel):
         optree.register_pytree_node(cls, flatten, unflatten, namespace=PYTREE_NAMESPACE)
 
 
-struct_lm_call_p = Primitive("struct_lm_call")
+struct_lm_call_p = Primitive("struct_lm_call", tag="lm")
 
 
 def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> str:
@@ -1312,7 +1360,13 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
 
 @ft.partial(impl_rules.set, struct_lm_call_p)
-def impl_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[Struct]) -> Struct:
+def impl_struct_lm_call(
+    contents: tuple,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
+) -> Struct:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = litellm.completion(messages=messages, model=model, response_format=struct)
@@ -1357,10 +1411,14 @@ def pullback_bwd_struct_lm_call(
 
 
 @ft.partial(iter_rules.set, struct_lm_call_p)
-def iter_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[Struct]) -> tp.Iterator[str]:
+def iter_struct_lm_call(
+    contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
+) -> tp.Iterator[str]:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = litellm.completion(messages=messages, model=model, response_format=struct, stream=True)
+        resp = litellm.completion(
+            messages=messages, model=model, response_format=struct, stream=True
+        )
         for chunk in resp:
             delta = chunk.choices[0].delta.content or ""
             yield delta
@@ -1369,7 +1427,9 @@ def iter_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: ty
 
 
 @ft.partial(async_rules.set, struct_lm_call_p)
-async def async_struct_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[Struct]) -> str:
+async def async_struct_lm_call(
+    contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
+) -> str:
     try:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
         resp = await litellm.acompletion(messages=messages, model=model, response_format=struct)
@@ -1378,9 +1438,9 @@ async def async_struct_lm_call(contents: tuple, *, roles: tuple, model: str, str
         return f"[Error: {e}]"
 
 
-# CONCAT ===============================================================================================================
+# CONCAT ===========================================================================================
 
-concat_p = Primitive("concat")
+concat_p = Primitive("concat", tag="string")
 
 
 def concat(*args) -> str:
@@ -1443,9 +1503,9 @@ def batch_concat(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[Tree
     return result, True
 
 
-# STOP GRADIENT ========================================================================================================
+# STOP GRADIENT ====================================================================================
 
-stop_gradient_p = Primitive("stop_gradient")
+stop_gradient_p = Primitive("stop_gradient", tag="control")
 
 
 def stop_gradient(x: Tree) -> Tree:
@@ -1507,9 +1567,9 @@ def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tre
     return x, in_batched
 
 
-# MARK =============================================================================================================
+# MARK =============================================================================================
 
-mark_p = Primitive("mark")
+mark_p = Primitive("mark", tag="core")
 
 
 def mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
@@ -1566,14 +1626,16 @@ def pullback_bwd_mark[T](residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashab
 
 
 @ft.partial(batch_rules.set, mark_p)
-def batch_mark[T](batch_size: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+def batch_mark[T](
+    batch_size: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable[T]
+) -> tuple[Tree, Tree]:
     del batch_size, tag
     return x, in_batched
 
 
-# IR CALL =========================================================================================================
+# IR CALL ==========================================================================================
 
-ir_call_p = Primitive("ir_call")
+ir_call_p = Primitive("ir_call", tag="call")
 
 # NOTE(asem): IR is a first-class citizen in autoform IRs
 # in essence, IR itself can be differentiated, batched, ...
@@ -1690,9 +1752,9 @@ def iter_ir_call(in_tree):
         yield chunk
 
 
-# SWITCH ===============================================================================================================
+# SWITCH ===========================================================================================
 
-switch_p = Primitive("switch")
+switch_p = Primitive("switch", tag="control")
 
 
 def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
@@ -1774,11 +1836,16 @@ def pullback_bwd_switch(residuals, cotangent_out, *, branches: dict[str, IR]):
 
 
 @ft.partial(batch_rules.set, switch_p)
-def batch_switch(batch_size: int, in_batched, in_tree, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
+def batch_switch(
+    batch_size: int, in_batched, in_tree, *, branches: dict[str, IR]
+) -> tuple[Tree, bool]:
     key_col, operands_col = in_tree
     key_batched, operands_batched = in_batched
     index_at = ft.partial(index, operands_col, operands_batched)
-    results = [run_ir(branches[key_col[b] if key_batched else key_col], index_at(b)) for b in range(batch_size)]
+    results = [
+        run_ir(branches[key_col[b] if key_batched else key_col], index_at(b))
+        for b in range(batch_size)
+    ]
     return results, True
 
 

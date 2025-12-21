@@ -200,7 +200,9 @@ class TestStopGradient:
         pb_ir = core.pullback_ir(ir)
         primal_out, cotangent_in = core.run_ir(pb_ir, ("primal", "cotangent"))
         assert primal_out == "primal"
-        assert cotangent_in == "" or (hasattr(cotangent_in, "items") and len(cotangent_in.items) == 0)
+        assert cotangent_in == "" or (
+            hasattr(cotangent_in, "items") and len(cotangent_in.items) == 0
+        )
 
     def test_batch(self):
         def func(x):

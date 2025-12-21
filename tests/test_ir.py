@@ -14,7 +14,9 @@ class TestBuildIR:
         eqn = ir.ireqns[0]
         assert len(eqn.in_ir_tree) == 2
         lit_candidate = eqn.in_ir_tree[0]
-        assert (core.is_irlit(lit_candidate) and lit_candidate.value == "Hello, ") or lit_candidate == "Hello, "
+        assert (
+            core.is_irlit(lit_candidate) and lit_candidate.value == "Hello, "
+        ) or lit_candidate == "Hello, "
         assert core.is_irvar(eqn.in_ir_tree[1])
 
     def test_format_traces_template_and_args(self):

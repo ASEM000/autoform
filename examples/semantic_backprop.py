@@ -88,7 +88,9 @@ def pull_bwd_textgrad(residuals, cotangent_out, *, roles, model, struct):
 **Loss/Feedback on Output**: {cotangent_out}
 
 Provide specific, actionable feedback on how to improve the Input Variable to address the Loss/Feedback. Focus on what changes would lead to a better output."""
-        resp = litellm.completion(messages=[dict(role="user", content=critique_prompt)], model=model)
+        resp = litellm.completion(
+            messages=[dict(role="user", content=critique_prompt)], model=model
+        )
         input_gradients.append(resp.choices[0].message.content)
 
     return tuple(input_gradients)
@@ -102,10 +104,17 @@ def batch_textgrad(batch_size, in_batched, contents, *, roles, model, struct):
     try:
         batched_msgs = []
         for b in range(batch_size):
-            msgs = [dict(role=r, content=contents[i][b] if in_batched[i] else contents[i]) for i, r in enumerate(roles)]
+            msgs = [
+                dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
+                for i, r in enumerate(roles)
+            ]
             batched_msgs.append(msgs)
-        responses = litellm.batch_completion(messages=batched_msgs, model=model, response_format=struct)
-        results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
+        responses = litellm.batch_completion(
+            messages=batched_msgs, model=model, response_format=struct
+        )
+        results = [
+            struct.model_validate_json(resp.choices[0].message.content) for resp in responses
+        ]
         return results, True
     except Exception as e:
         error_struct = struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
