@@ -45,5 +45,5 @@ outputs, input_grads = af.run_ir(batch_pb_ir, (topics, feedbacks))
 
 ## More Examples
 
-- [examples/research_and_write.py](examples/research_and_write.py) — multi-step pipeline with batching
-- [examples/semantic_backprop.py](examples/semantic_backprop.py) — TextGrad-style custom backward passes
+- [examples/research_and_write.py](examples/research_and_write.py): multi-step pipeline with batching
+- [examples/semantic_backprop.py](examples/semantic_backprop.py): TextGrad-style custom backward passes
