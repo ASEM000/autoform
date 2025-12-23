@@ -1704,7 +1704,8 @@ def pullback_bwd_mark[T](residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashab
 
 
 @ft.partial(batch_rules.set, mark_p)
-def batch_mark[T](_: int, in_batched: Tree, x: Tree, *, __: tp.Hashable[T]) -> tuple[Tree, Tree]:
+def batch_mark[T](_: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+    del tag
     return x, in_batched
 
 
