@@ -43,6 +43,7 @@ from autoform.core import (
     # ir
     IR,
     IREqn,
+    IRVar,
 )
 
 __all__ = [
@@ -90,4 +91,5 @@ __all__ = [
     # ir
     "IR",
     "IREqn",
+    "IRVar",
 ]
