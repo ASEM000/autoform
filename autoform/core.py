@@ -411,7 +411,7 @@ async_rules = InterpreterRuleMapping[AsyncRule](override=False)
 
 
 # ==================================================================================================
-# iR BUILD AND EVALUATION
+# IR BUILD AND EVALUATION
 # ==================================================================================================
 
 
@@ -485,6 +485,86 @@ def dce_ir(ir: IR) -> IR:
             active_ireqns.appendleft(eqn)
 
     return IR(list(active_ireqns), in_ir_tree=ir.in_ir_tree, out_ir_tree=ir.out_ir_tree)
+
+
+def fold_ir(ir: IR) -> IR:
+    """Evaluate constant IR subexpressions.
+
+    Args:
+        ir: The intermediate representation to fold.
+
+    Returns:
+        The folded intermediate representation.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     constant = af.format("{}, {}", "hello", "world")
+        ...     return af.concat(x, constant)
+        >>> ir = af.build_ir(program, "input")
+        >>> print(ir)
+        func(%0:IRVar) -> (%2:IRVar) {
+          (%1:IRVar) = format('hello':Lit, 'world':Lit, template='{}, {}')
+          (%2:IRVar) = concat(%0:IRVar, %1:IRVar)
+        }
+        >>> folded = af.fold_ir(ir)
+        >>> print(folded)
+        func(%0:IRVar) -> (%2:IRVar) {
+          (%2:IRVar) = concat(%0:IRVar, 'hello, world':Lit)
+        }
+    """
+
+    def is_const_ir_tree(ir_tree: Tree[IRAtom]) -> bool:
+        leaves = treelib.leaves(ir_tree)
+        return all(isinstance(leaf, IRLit) for leaf in leaves)
+
+    def run_const_eqn(ireqn: IREqn, in_ir_tree: Tree[IRAtom]):
+        in_eqn_tree = treelib.map(lambda x: x.value, in_ir_tree)
+        out_eqn_tree = impl_rules.get(ireqn.prim)(in_eqn_tree, **ireqn.params)
+        return treelib.map(IRLit, out_eqn_tree)
+
+    env: dict[IRVar, IRVar | IRLit] = {}
+    eqns = []
+
+    def write(atom: IRAtom, value):
+        if is_irvar(atom):
+            env[atom] = value
+
+    def read(atom: IRAtom):
+        if is_irvar(atom):
+            return env[atom]
+        return atom
+
+    treelib.map(write, ir.in_ir_tree, ir.in_ir_tree)
+
+    for eqn in ir.ireqns:
+        # NOTE(asem): read the input IR tree might have folded values
+        in_ir_tree = treelib.map(read, eqn.in_ir_tree)
+        if is_const_ir_tree(in_ir_tree):
+            out_ir_tree = run_const_eqn(eqn, in_ir_tree)
+            treelib.map(write, eqn.out_ir_tree, out_ir_tree)
+        else:
+            treelib.map(write, eqn.out_ir_tree, eqn.out_ir_tree)
+            # NOTE(asem): use the read in_ir_tree (might have folded values)
+            # example:
+            # >>> def program(x):
+            # ...     a = af.format("{}, {}", "a", "b")
+            # ...     return af.concat(a, x)
+            # >>> print(ir)
+            # func(%0:IRVar) -> (%2:IRVar) {
+            #   (%1:IRVar) = format('a':Lit, 'b':Lit, template='{}, {}')
+            #   (%2:IRVar) = concat(%1:IRVar, %0:IRVar)
+            # }
+            # after folding, %1 is replaced with IRLit("a, b") in the concat equation:
+            # >>> print(folded)
+            # func(%0:IRVar) -> (%2:IRVar) {
+            #   (%2:IRVar) = concat('a, b':Lit, %0:IRVar)
+            # }
+            eqns.append(IREqn(eqn.prim, in_ir_tree, eqn.out_ir_tree, eqn.params))
+
+    out_ir_tree = treelib.map(read, ir.out_ir_tree)
+
+    return IR(eqns, ir.in_ir_tree, out_ir_tree)
 
 
 def run_ir(ir: IR, *args, **kwargs) -> Tree:
