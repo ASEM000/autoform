@@ -473,6 +473,8 @@ def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
 def dce_ir(ir: IR) -> IR:
     """Remove code path that are not executed."""
 
+    # TODO(asem): dce nested IRs
+
     def extract_irvars(tree: IRAtom) -> set[IRVar]:
         return {leaf for leaf in treelib.leaves(tree) if isinstance(leaf, IRVar)}
 
@@ -513,6 +515,8 @@ def fold_ir(ir: IR) -> IR:
           (%2:IRVar) = concat(%0:IRVar, 'hello, world':Lit)
         }
     """
+
+    # TODO(asem): fold nested IRs
 
     def is_const_ir_tree(ir_tree: Tree[IRAtom]) -> bool:
         leaves = treelib.leaves(ir_tree)
