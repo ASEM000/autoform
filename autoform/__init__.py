@@ -7,20 +7,43 @@ from autoform.core import (
     iter_ir,
     arun_ir,
     batch_ir,
-    # primitives
+    dce_ir,
+    fold_ir,
+    # primitives (functions)
     concat,
     format,
     lm_call,
     struct_lm_call,
     stop_gradient,
+    mark,
     ir_call,
     switch,
+    # primitives (objects)
+    concat_p,
+    format_p,
+    lm_call_p,
+    struct_lm_call_p,
+    stop_gradient_p,
+    mark_p,
+    ir_call_p,
+    switch_p,
     # constructs
     bind,
     Primitive,
     Var,
     treelib,
     Struct,
+    # rule registries
+    impl_rules,
+    eval_rules,
+    push_rules,
+    pull_fwd_rules,
+    pull_bwd_rules,
+    batch_rules,
+    # ir
+    IR,
+    IREqn,
+    IRVar,
 )
 
 __all__ = [
@@ -30,20 +53,43 @@ __all__ = [
     "pushforward_ir",
     "pullback_ir",
     "batch_ir",
+    "dce_ir",
+    "fold_ir",
     "iter_ir",
     "arun_ir",
-    # primitives
+    # primitives (functions)
     "concat",
     "format",
     "lm_call",
     "struct_lm_call",
     "stop_gradient",
+    "mark",
     "ir_call",
     "switch",
+    # primitives (objects)
+    "concat_p",
+    "format_p",
+    "lm_call_p",
+    "struct_lm_call_p",
+    "stop_gradient_p",
+    "mark_p",
+    "ir_call_p",
+    "switch_p",
     # constructs
     "bind",
     "Primitive",
     "Var",
     "treelib",
     "Struct",
+    # rule registries
+    "impl_rules",
+    "eval_rules",
+    "push_rules",
+    "pull_fwd_rules",
+    "pull_bwd_rules",
+    "batch_rules",
+    # ir
+    "IR",
+    "IREqn",
+    "IRVar",
 ]

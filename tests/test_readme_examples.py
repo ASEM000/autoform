@@ -114,7 +114,7 @@ textgrad_style_lm_call_p = core.Primitive("textgrad_style_lm_call")
 
 
 def textgrad_style_lm_call(
-    messages: list[core.MessageDict],
+    messages: list[dict[str, str]],
     *,
     model: str,
     struct: type[core.Struct],
@@ -125,8 +125,12 @@ def textgrad_style_lm_call(
 
 
 @ft.partial(core.impl_rules.set, textgrad_style_lm_call_p)
-def impl_textgrad_style_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]):
-    return core.impl_rules.get(core.struct_lm_call_p)(contents, roles=roles, model=model, struct=struct)
+def impl_textgrad_style_lm_call(
+    contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
+):
+    return core.impl_rules.get(core.struct_lm_call_p)(
+        contents, roles=roles, model=model, struct=struct
+    )
 
 
 @ft.partial(core.eval_rules.set, textgrad_style_lm_call_p)
@@ -135,8 +139,12 @@ def eval_textgrad_style_lm_call(in_tree, *, struct: type[core.Struct], **params)
 
 
 @ft.partial(core.pull_fwd_rules.set, textgrad_style_lm_call_p)
-def pull_fwd_textgrad_style_lm_call(contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]):
-    out = core.impl_rules.get(core.struct_lm_call_p)(contents, roles=roles, model=model, struct=struct)
+def pull_fwd_textgrad_style_lm_call(
+    contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
+):
+    out = core.impl_rules.get(core.struct_lm_call_p)(
+        contents, roles=roles, model=model, struct=struct
+    )
     residuals = (contents, roles, out)
     return out, residuals
 
@@ -186,7 +194,7 @@ to improve this input. Be concise and targeted."""
                 model=model,
             )
             input_gradients.append(resp.choices[0].message.content)
-        except Exception as e:
+        except Exception:
             input_gradients.append(f"[Feedback propagated: {cotangent_str}]")
 
     return tuple(input_gradients)
@@ -202,8 +210,12 @@ def push_textgrad_style_lm_call(
     This is useful for sensitivity analysis — seeing how changes to inputs
     affect the outputs.
     """
-    p_out = core.impl_rules.get(core.struct_lm_call_p)(primals, roles=roles, model=model, struct=struct)
-    t_out = core.impl_rules.get(core.struct_lm_call_p)(tangents, roles=roles, model=model, struct=struct)
+    p_out = core.impl_rules.get(core.struct_lm_call_p)(
+        primals, roles=roles, model=model, struct=struct
+    )
+    t_out = core.impl_rules.get(core.struct_lm_call_p)(
+        tangents, roles=roles, model=model, struct=struct
+    )
     return p_out, t_out
 
 
@@ -219,7 +231,10 @@ def batch_textgrad_style_lm_call(
 ):
     batched_messages = []
     for b in range(batch_size):
-        msgs = [{"role": r, "content": contents[i][b] if in_batched[i] else contents[i]} for i, r in enumerate(roles)]
+        msgs = [
+            {"role": r, "content": contents[i][b] if in_batched[i] else contents[i]}
+            for i, r in enumerate(roles)
+        ]
         batched_messages.append(msgs)
 
     try:
@@ -230,10 +245,13 @@ def batch_textgrad_style_lm_call(
             model=model,
             response_format=struct,
         )
-        results = [resp.choices[0].message.parsed for resp in responses]
+        results = [
+            struct.model_validate_json(resp.choices[0].message.content) for resp in responses
+        ]
     except Exception as e:
         results = [
-            struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields}) for _ in range(batch_size)
+            struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
+            for _ in range(batch_size)
         ]
 
     return results, True
@@ -255,13 +273,21 @@ class TestTextGradStylePullback:
     def test_multi_agent_ir_build(self):
         def multi_agent_pipeline(topic: str):
             research_messages = [
-                {"role": "system", "content": "You are a research assistant. Gather key information."},
+                {
+                    "role": "system",
+                    "content": "You are a research assistant. Gather key information.",
+                },
                 {"role": "user", "content": core.format("Research this topic: {}", topic)},
             ]
-            notes = textgrad_style_lm_call(research_messages, model="openai/gpt-4o", struct=ResearchNotes)
+            notes = textgrad_style_lm_call(
+                research_messages, model="openai/gpt-4o", struct=ResearchNotes
+            )
 
             writer_messages = [
-                {"role": "system", "content": "You are a writer. Create an article from research notes."},
+                {
+                    "role": "system",
+                    "content": "You are a writer. Create an article from research notes.",
+                },
                 {"role": "user", "content": core.format("Notes: {}", notes.key_points)},
             ]
             article = textgrad_style_lm_call(writer_messages, model="openai/gpt-4o", struct=Article)

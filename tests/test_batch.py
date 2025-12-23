@@ -215,7 +215,9 @@ class TestBatchRuleOutBatched:
         batch_size = 2
         in_batched = (True,)
         in_tree = (["a", "b"],)
-        out_vals, out_batched = core.batch_rules.get(core.format_p)(batch_size, in_batched, in_tree, template="{}")
+        out_vals, out_batched = core.batch_rules.get(core.format_p)(
+            batch_size, in_batched, in_tree, template="{}"
+        )
         assert out_batched == True
         assert out_vals == ["a", "b"]
 
