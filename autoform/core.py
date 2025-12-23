@@ -209,6 +209,7 @@ class TracingInterpreter(Interpreter):
 class IRLit[T: Value](IRAtom):
     def __init__(self, value: T, /, **meta):
         assert not is_iratom(value)
+        assert hash(value) is not None  # NOTE(asem): for CSE
         self.value = value
         self.meta = meta
 
@@ -475,15 +476,15 @@ def dce_ir(ir: IR) -> IR:
 
     # TODO(asem): dce nested IRs
 
-    def extract_irvars(tree: IRAtom) -> set[IRVar]:
-        return {leaf for leaf in treelib.leaves(tree) if isinstance(leaf, IRVar)}
+    def ir_tree_to_irvars(ir_tree: IRAtom) -> set[IRVar]:
+        return {leaf for leaf in treelib.leaves(ir_tree) if isinstance(leaf, IRVar)}
 
-    active_irvars: set[IRVar] = extract_irvars(ir.out_ir_tree)
+    active_irvars: set[IRVar] = ir_tree_to_irvars(ir.out_ir_tree)
     active_ireqns: deque[IREqn] = deque()
 
     for eqn in reversed(ir.ireqns):
-        if not active_irvars.isdisjoint(extract_irvars(eqn.out_ir_tree)):
-            active_irvars |= extract_irvars(eqn.in_ir_tree)
+        if not active_irvars.isdisjoint(ir_tree_to_irvars(eqn.out_ir_tree)):
+            active_irvars |= ir_tree_to_irvars(eqn.in_ir_tree)
             active_ireqns.appendleft(eqn)
 
     return IR(list(active_ireqns), in_ir_tree=ir.in_ir_tree, out_ir_tree=ir.out_ir_tree)
