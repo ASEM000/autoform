@@ -350,6 +350,40 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 
 class Primitive:
+    """A primitive operation in the IR.
+
+    Primitives are the building blocks of IR programs. Each primitive has a name
+    and an optional tag for categorization. Tags enable pattern matching on IR
+    equations by semantic category rather than individual primitive names.
+
+    Args:
+        name: Unique identifier for the primitive (e.g., "concat", "lm_call").
+        tag: Optional hashable value for categorization (e.g., "string", "lm").
+
+    Example:
+        >>> string_concat_p = Primitive("concat", tag="string")
+        >>> lm_call_p = Primitive("lm_call", tag="lm")
+
+        Pattern matching on equations by tag:
+
+        >>> from autoform import build_ir, concat, format
+        >>> def program(x):
+        ...     return concat(format("{}", x), x)
+        >>> ir = build_ir(program, "test")
+        >>> for eqn in ir.ireqns:
+        ...     match eqn.prim:
+        ...         case Primitive(_, tag="string"):
+        ...             print(f"String primitive: {eqn.prim.name}")
+        ...         case Primitive(name, _):
+        ...             print(f"Other: {name}")
+        String primitive: format
+        String primitive: concat
+
+        Filtering equations by tag:
+
+        >>> lm_eqns = [eqn for eqn in ir.ireqns if eqn.prim.tag == "lm"]
+    """
+
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
