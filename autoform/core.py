@@ -523,18 +523,13 @@ def dce_ir(ir: IR) -> IR:
     active_ireqns: deque[IREqn] = deque()
 
     for ireqn in reversed(ir.ireqns):
-        if ireqn.prim in dce_rules:
-            can_axe, cur_active, new_eqn = dce_rules.get(ireqn.prim)(ireqn, active_irvars)
+        dce_rule = dce_rules.get(ireqn.prim) if ireqn.prim in dce_rules else default_dce 
+        can_axe, cur_active, new_eqn = dce_rule(ireqn, active_irvars)
 
-            if not can_axe:
-                active_ireqns.appendleft(new_eqn)
-                active_irvars |= cur_active
-
-        else:
-            can_axe, cur_active, new_eqn = default_dce(ireqn, active_irvars)
+        if not can_axe:
+            active_ireqns.appendleft(new_eqn)
             active_irvars |= cur_active
-            if not can_axe:
-                active_ireqns.appendleft(new_eqn)
+
     return IR(list(active_ireqns), in_irtree=ir.in_irtree, out_irtree=ir.out_irtree)
 
 
