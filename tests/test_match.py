@@ -83,8 +83,8 @@ class TestIREqnMatchArgs:
 
         new_ir = core.IR(
             ireqns=new_eqns,
-            in_ir_tree=ir.in_ir_tree,
-            out_ir_tree=ir.out_ir_tree,
+            in_irtree=ir.in_irtree,
+            out_irtree=ir.out_irtree,
         )
 
         # Verify the tag was changed
@@ -107,8 +107,8 @@ class TestIREqnReplace:
         assert eqn.params["tag"] == "old"  # original unchanged
         assert new_eqn.params["tag"] == "new"
         assert new_eqn.prim == eqn.prim
-        assert new_eqn.in_ir_tree == eqn.in_ir_tree
-        assert new_eqn.out_ir_tree == eqn.out_ir_tree
+        assert new_eqn.in_irtree == eqn.in_irtree
+        assert new_eqn.out_irtree == eqn.out_irtree
 
     def test_replace_prim(self):
         def func(x):
@@ -133,8 +133,8 @@ class TestIREqnReplace:
         new_eqn = eqn.replace(params={"tag": "changed"})
 
         assert new_eqn.prim is eqn.prim
-        assert new_eqn.in_ir_tree is eqn.in_ir_tree
-        assert new_eqn.out_ir_tree is eqn.out_ir_tree
+        assert new_eqn.in_irtree is eqn.in_irtree
+        assert new_eqn.out_irtree is eqn.out_irtree
 
 
 class TestInsertAfterPattern:
@@ -160,11 +160,118 @@ class TestInsertAfterPattern:
 
         new_ir = core.IR(
             ireqns=new_eqns,
-            in_ir_tree=ir.in_ir_tree,
-            out_ir_tree=ir.out_ir_tree,
+            in_irtree=ir.in_irtree,
+            out_irtree=ir.out_irtree,
         )
 
         assert len(new_ir.ireqns) == 3
         assert new_ir.ireqns[0].params["tag"] == "insert_here"
         assert new_ir.ireqns[1].params["tag"] == "inserted"
         assert new_ir.ireqns[2].prim == core.concat_p
+
+
+class TestIRMatchArgs:
+    def test_match_ir_positional(self):
+        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+
+        match ir:
+            case core.IR(eqns, in_tree, out_tree):
+                assert len(eqns) == 1
+                assert core.is_irvar(in_tree)
+                assert core.is_irvar(out_tree)
+            case _:
+                assert False, "Pattern should match"
+
+    def test_match_ir_with_nested_eqns(self):
+        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+
+        match ir:
+            case core.IR([core.IREqn(prim, in_tree, out_tree, params)], _, _):
+                assert prim == core.concat_p
+                assert prim.tag == "string"
+                assert len(core.treelib.leaves(in_tree)) == 2
+            case _:
+                assert False, "Pattern should match single equation"
+
+    def test_match_multiple_equations(self):
+        def program(x, y):
+            formatted = core.format("Hello {}", x)
+            return core.concat(formatted, y)
+
+        ir = core.build_ir(program, "World", "!")
+
+        match ir:
+            case core.IR([core.IREqn(p1, _, _, _), core.IREqn(p2, _, _, _)], _, _):
+                assert p1.name == "format"
+                assert p2.name == "concat"
+            case _:
+                assert False, "Pattern should match two equations"
+
+    def test_match_by_primitive_tag(self):
+        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+
+        match ir:
+            case core.IR([core.IREqn(core.Primitive(name, "string"), _, _, _)], _, _):
+                assert name == "concat"
+            case _:
+                assert False, "Pattern should match string-tagged primitive"
+
+    def test_match_higher_order_primitive_with_nested_ir(self):
+        inner_ir = core.build_ir(lambda x: core.concat("a", x), "b")
+        pf_ir = core.pushforward_ir(inner_ir)
+
+        match pf_ir:
+            case core.IR([core.IREqn(core.Primitive("pushforward_call", _), _, _, params)], _, _):
+                nested = params["ir"]
+                assert isinstance(nested, core.IR)
+                assert len(nested.ireqns) == 1
+            case _:
+                assert False, "Pattern should match pushforward_call"
+
+    def test_match_switch_branches(self):
+        branches = {
+            "a": core.build_ir(lambda x: core.concat("A: ", x), "X"),
+            "b": core.build_ir(lambda x: core.concat("B: ", x), "X"),
+        }
+
+        def program(key, x):
+            return core.switch(key, branches, x)
+
+        ir = core.build_ir(program, "a", "test")
+
+        match ir:
+            case core.IR([core.IREqn(core.Primitive("switch", "control"), _, _, params)], _, _):
+                branch_dict = params["branches"]
+                assert "a" in branch_dict
+                assert "b" in branch_dict
+                assert isinstance(branch_dict["a"], core.IR)
+            case _:
+                assert False, "Pattern should match switch"
+
+    def test_match_ir_guard(self):
+        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+
+        match ir:
+            case core.IR(eqns, _, _) if len(eqns) == 1:
+                single_eqn = True
+            case core.IR(eqns, _, _) if len(eqns) > 1:
+                single_eqn = False
+            case _:
+                single_eqn = None
+
+        assert single_eqn is True
+
+    def test_match_all_string_primitives(self):
+        def program(x, y):
+            a = core.format("Hello {}", x)
+            return core.concat(a, y)
+
+        ir = core.build_ir(program, "World", "!")
+
+        match ir:
+            case core.IR(eqns, _, _) if all(e.prim.tag == "string" for e in eqns):
+                all_string = True
+            case _:
+                all_string = False
+
+        assert all_string is True

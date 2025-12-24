@@ -10,14 +10,14 @@ class TestBuildIR:
 
         ir = core.build_ir(program, "Alice")
         assert len(ir.ireqns) == 1
-        assert core.is_irvar(ir.in_ir_tree)
+        assert core.is_irvar(ir.in_irtree)
         eqn = ir.ireqns[0]
-        assert len(eqn.in_ir_tree) == 2
-        lit_candidate = eqn.in_ir_tree[0]
+        assert len(eqn.in_irtree) == 2
+        lit_candidate = eqn.in_irtree[0]
         assert (
             core.is_irlit(lit_candidate) and lit_candidate.value == "Hello, "
         ) or lit_candidate == "Hello, "
-        assert core.is_irvar(eqn.in_ir_tree[1])
+        assert core.is_irvar(eqn.in_irtree[1])
 
     def test_format_traces_template_and_args(self):
         def program(x):
@@ -26,9 +26,9 @@ class TestBuildIR:
         ir = core.build_ir(program, "World")
         assert len(ir.ireqns) == 1
         eqn = ir.ireqns[0]
-        assert len(eqn.in_ir_tree) == 1
+        assert len(eqn.in_irtree) == 1
         assert eqn.params["template"] == "Hello, {}!"
-        assert core.is_irvar(eqn.in_ir_tree[0])
+        assert core.is_irvar(eqn.in_irtree[0])
         assert core.run_ir(ir, "Alice") == "Hello, Alice!"
 
     def test_multiple_operations(self):
@@ -45,15 +45,15 @@ class TestBuildIR:
             return core.concat(x, x)
 
         ir = core.build_ir(program, "test")
-        assert core.is_irvar(ir.in_ir_tree)
+        assert core.is_irvar(ir.in_irtree)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
             return core.concat(a, b)
 
         ir = core.build_ir(program, "A", "B")
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 2
+        assert isinstance(ir.in_irtree, tuple)
+        assert len(ir.in_irtree) == 2
 
 
 class TestRunIR:

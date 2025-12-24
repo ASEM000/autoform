@@ -1,9 +1,9 @@
 [project]
 name = "autoform"
-version = "0.0.1"
+version = "0.0.2"
 description = "Composable function transformations for LLM programs"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "litellm>=1.80.9",
     "optree>=0.18.0",
@@ -20,10 +20,10 @@ dev = [
 preview = true
 line-length = 100
 indent-width = 4
-target-version = "py313"
+target-version = "py312"
 
 [tool.ty.environment]
-python-version = "3.13"
+python-version = "3.12"
 
 [tool.ty.rules]
 unresolved-import = "ignore"

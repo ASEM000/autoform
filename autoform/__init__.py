@@ -40,6 +40,7 @@ from autoform.core import (
     pull_fwd_rules,
     pull_bwd_rules,
     batch_rules,
+    dce_rules,
     # ir
     IR,
     IREqn,
@@ -88,6 +89,7 @@ __all__ = [
     "pull_fwd_rules",
     "pull_bwd_rules",
     "batch_rules",
+    "dce_rules",
     # ir
     "IR",
     "IREqn",
