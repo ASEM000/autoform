@@ -381,7 +381,7 @@ class Primitive:
 
     def bind(self, in_tree: Tree, **params):
         """Dispatch to the active interpreter.
-        
+
         Example:
             >>> format_p = Primitive("format")
             >>> def format(template, *args):
@@ -1376,6 +1376,12 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
         >>> result = af.run_ir(ir, "Alice") # doctest: +SKIP
     """
     # NOTE(asem): separate roles (static) from contents (traced) at bind time
+    assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
+    for m in messages:
+        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
+        assert "role" in m, f"message must have a 'role' key, got {m.keys()=}"
+        assert "content" in m, f"message must have a 'content' key, got {m.keys()=}"
+
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
     return lm_call_p.bind(contents, roles=roles, model=model)
@@ -1489,7 +1495,11 @@ class Struct(pydantic.BaseModel):
         def unflatten(keys, children):
             return cls.model_construct(**dict(zip(keys, children)))
 
-        optree.register_pytree_node(cls, flatten, unflatten, namespace=PYTREE_NAMESPACE)
+        treelib.register_node(cls, flatten, unflatten)
+
+    def __hash__(self):
+        # NOTE(asem): to use for `in_axes` in batch rules
+        return hash(tuple(getattr(self, k) for k in type(self).model_fields))
 
 
 struct_lm_call_p = Primitive("struct_lm_call", tag="lm")
@@ -1558,6 +1568,7 @@ def pullback_bwd_struct_lm_call(
     contents, output = residuals
     grads = []
     for content in contents:
+        # TODO(asem): remove this
         grad_prompt = f"""Given this LLM interaction:
 
 INPUT: {content}
