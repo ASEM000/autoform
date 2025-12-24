@@ -1389,12 +1389,9 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
 
 @ft.partial(impl_rules.set, lm_call_p)
 def impl_lm_call(contents: tuple, *, roles: tuple[str, ...], model: str) -> str:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-        resp = completion(messages=messages, model=model)
-        return resp.choices[0].message.content
-    except Exception as e:
-        return f"[Error: {e}]"
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    resp = completion(messages=messages, model=model)
+    return resp.choices[0].message.content
 
 
 @ft.partial(eval_rules.set, lm_call_p)
@@ -1415,59 +1412,60 @@ def pushforward_lm_call(
 
 @ft.partial(pull_fwd_rules.set, lm_call_p)
 def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = completion(messages=messages, model=model)
-        out = resp.choices[0].message.content
-    except Exception as e:
-        out = f"[Error: {e}]"
-    return out, len(contents)
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = completion(messages=messages, model=model)
+    out = resp.choices[0].message.content
+    residuals = (contents, out)  # save for backward pass
+    return out, residuals
 
 
 @ft.partial(pull_bwd_rules.set, lm_call_p)
-def pullback_bwd_lm_call(residuals: int, cotangent_out: Tree, *, roles: tuple, model: str) -> tuple:
-    n = residuals
-    return tuple([cotangent_out] * n)
+def pullback_bwd_lm_call(residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str) -> tuple:
+    """TextGrad-style semantic gradient: use LLM to generate feedback on inputs."""
+    contents, output = residuals
+    grads = []
+    for content in contents:
+        grad_prompt = f"""Given this LLM interaction:
+
+INPUT: {content}
+OUTPUT: {output}
+FEEDBACK ON OUTPUT: {cotangent_out}
+
+Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
+        resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
+        grads.append(resp.choices[0].message.content)
+    return tuple(grads)
 
 
 @ft.partial(batch_rules.set, lm_call_p)
 def batch_lm_call(
     batch_size: int, in_batched: Tree, contents: tuple, *, roles: tuple, model: str
 ) -> tuple[Tree, Tree]:
-    try:
-        batched_messages = []
-        for b in range(batch_size):
-            msgs = [
-                dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
-                for i, r in enumerate(roles)
-            ]
-            batched_messages.append(msgs)
-        responses = batch_completion(messages=batched_messages, model=model)
-        return [resp.choices[0].message.content for resp in responses], True
-    except Exception as e:
-        return [f"[Error: {e}]" for _ in range(batch_size)], True
+    batched_messages = []
+    for b in range(batch_size):
+        msgs = [
+            dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
+            for i, r in enumerate(roles)
+        ]
+        batched_messages.append(msgs)
+    responses = batch_completion(messages=batched_messages, model=model)
+    return [resp.choices[0].message.content for resp in responses], True
 
 
 @ft.partial(iter_rules.set, lm_call_p)
 def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[str]:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = completion(messages=messages, model=model, stream=True)
-        for chunk in resp:
-            delta = chunk.choices[0].delta.content or ""
-            yield delta
-    except Exception as e:
-        yield f"[Error: {e}]"
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = completion(messages=messages, model=model, stream=True)
+    for chunk in resp:
+        delta = chunk.choices[0].delta.content or ""
+        yield delta
 
 
 @ft.partial(async_rules.set, lm_call_p)
 async def async_lm_call(contents: tuple, *, roles: tuple, model: str) -> str:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = await acompletion(messages=messages, model=model)
-        return resp.choices[0].message.content
-    except Exception as e:
-        return f"[Error: {e}]"
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = await acompletion(messages=messages, model=model)
+    return resp.choices[0].message.content
 
 
 # STRUCT LM CALL ===================================================================================
@@ -1526,12 +1524,9 @@ def impl_struct_lm_call(
     model: str,
     struct: type[Struct],
 ) -> Struct:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = completion(messages=messages, model=model, response_format=struct)
-        return struct.model_validate_json(resp.choices[0].message.content)
-    except Exception as e:
-        return struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = completion(messages=messages, model=model, response_format=struct)
+    return struct.model_validate_json(resp.choices[0].message.content)
 
 
 @ft.partial(eval_rules.set, struct_lm_call_p)
@@ -1547,52 +1542,56 @@ def pullback_fwd_struct_lm_call(
     model: str,
     struct: type[Struct],
 ) -> tuple[Tree, Tree]:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = completion(messages=messages, model=model, response_format=struct)
-        out = resp.choices[0].message.parsed
-    except Exception as e:
-        out = struct.model_construct(**{k: f"[Error: {e}]" for k in struct.model_fields})
-    return out, len(contents)
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = completion(messages=messages, model=model, response_format=struct)
+    out = struct.model_validate_json(resp.choices[0].message.content)
+    residuals = (contents, out)
+    return out, residuals
 
 
 @ft.partial(pull_bwd_rules.set, struct_lm_call_p)
 def pullback_bwd_struct_lm_call(
-    residuals: int,
+    residuals: tuple,
     cotangent_out: Tree,
     *,
     roles: tuple,
     model: str,
     struct: type[Struct],
 ) -> tuple:
-    n = residuals
-    return tuple([cotangent_out] * n)
+    """TextGrad-style semantic gradient for structured outputs."""
+    contents, output = residuals
+    grads = []
+    for content in contents:
+        grad_prompt = f"""Given this LLM interaction:
+
+INPUT: {content}
+OUTPUT: {output}
+FEEDBACK ON OUTPUT: {cotangent_out}
+
+Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
+        resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
+        grads.append(resp.choices[0].message.content)
+    return tuple(grads)
 
 
 @ft.partial(iter_rules.set, struct_lm_call_p)
 def iter_struct_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
 ) -> tp.Iterator[str]:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = completion(messages=messages, model=model, response_format=struct, stream=True)
-        for chunk in resp:
-            delta = chunk.choices[0].delta.content or ""
-            yield delta
-    except Exception as e:
-        yield f"[Error: {e}]"
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = completion(messages=messages, model=model, response_format=struct, stream=True)
+    for chunk in resp:
+        delta = chunk.choices[0].delta.content or ""
+        yield delta
 
 
 @ft.partial(async_rules.set, struct_lm_call_p)
 async def async_struct_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
 ) -> str:
-    try:
-        messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-        resp = await acompletion(messages=messages, model=model, response_format=struct)
-        return resp.choices[0].message.content
-    except Exception as e:
-        return f"[Error: {e}]"
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    resp = await acompletion(messages=messages, model=model, response_format=struct)
+    return resp.choices[0].message.content
 
 
 # CONCAT ===========================================================================================
