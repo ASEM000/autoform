@@ -7,9 +7,7 @@
 ## Install
 
 ```bash
-git clone https://github.com/ASEM000/autoform.git
-cd autoform
-uv sync
+pip install autoform
 ```
 
 ## Example
