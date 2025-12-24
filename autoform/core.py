@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from operator import setitem
 from contextvars import ContextVar
 import functools as ft
 import itertools as it
@@ -566,8 +567,7 @@ def fold_ir(ir: IR) -> IR:
     eqns = []
 
     def write(atom: IRAtom, value):
-        if is_irvar(atom):
-            env[atom] = value
+        is_irvar(atom) and setitem(env, atom, value)
 
     def read(atom: IRAtom):
         return env[atom] if is_irvar(atom) else atom
@@ -649,8 +649,7 @@ def run_ir(ir: IR, *args, **kwargs) -> Tree:
     env: dict[IRVar, Value] = {}
 
     def write(atom: IRVar, value):
-        if is_irvar(atom):
-            env[atom] = value
+        is_irvar(atom) and setitem(env, atom, value)
 
     def read(atom: IRAtom) -> Value:
         return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
@@ -684,8 +683,7 @@ def iter_ir(ir: IR, *args, **kwargs):
     env: dict[IRVar, Value] = {}
 
     def write(atom: IRVar, value: Value):
-        if is_irvar(atom):
-            env[atom] = value
+        is_irvar(atom) and setitem(env, atom, value)
 
     treelib.map(write, ir.in_irtree, in_tree)
 
@@ -715,8 +713,7 @@ async def arun_ir(ir: IR, *args, **kwargs):
     env: dict[IRVar, Value] = {}
 
     def write(atom: IRVar, value):
-        if is_irvar(atom):
-            env[atom] = value
+        is_irvar(atom) and setitem(env, atom, value)
 
     treelib.map(write, ir.in_irtree, in_tree)
 
@@ -753,12 +750,10 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     t_env: dict[IRVar, Value] = {}
 
     def write_p(atom: IRAtom, value: Value):
-        if is_irvar(atom):
-            p_env[atom] = value
+        is_irvar(atom) and setitem(p_env, atom, value)
 
     def write_t(atom: IRAtom, value: Value):
-        if is_irvar(atom):
-            t_env[atom] = value
+        is_irvar(atom) and setitem(t_env, atom, value)
 
     def read_p(atom: IRAtom) -> Value:
         return p_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
@@ -906,8 +901,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     c_env: defaultdict[IRVar, list] = defaultdict(list)
 
     def write_p(atom: IRAtom, value):
-        if is_irvar(atom):
-            p_env[atom] = value
+        is_irvar(atom) and setitem(p_env, atom, value)
 
     def read_p(atom: IRAtom):
         return p_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
@@ -1092,12 +1086,10 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     b_env: dict[IRVar, bool] = {}
 
     def write_v(atom: IRAtom, value: Value | list[Value]):
-        if is_irvar(atom):
-            v_env[atom] = value
+        is_irvar(atom) and setitem(v_env, atom, value)
 
     def write_b(atom: IRAtom, is_batched: bool):
-        if is_irvar(atom):
-            b_env[atom] = is_batched
+        is_irvar(atom) and setitem(b_env, atom, is_batched)
 
     def read_v(atom: IRAtom) -> Value | list[Value]:
         return v_env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
