@@ -28,7 +28,6 @@ from autoform.core import (
     ir_call_p,
     switch_p,
     # constructs
-    bind,
     Primitive,
     Var,
     treelib,
@@ -77,7 +76,6 @@ __all__ = [
     "ir_call_p",
     "switch_p",
     # constructs
-    "bind",
     "Primitive",
     "Var",
     "treelib",

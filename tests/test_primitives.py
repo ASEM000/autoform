@@ -130,7 +130,7 @@ class TestBind:
             return core.Var()
 
         def func(x):
-            return core.bind(p, x, multiplier=3)
+            return p.bind(x, multiplier=3)
 
         ir = core.build_ir(func, "A")
         assert ir.ireqns[0].params["multiplier"] == 3

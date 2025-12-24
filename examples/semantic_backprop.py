@@ -41,7 +41,7 @@ def textgrad_lm_call(messages: list, *, model: str, struct: type) -> af.Struct:
     """LLM call that supports semantic backpropagation."""
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return af.bind(textgrad_lm_call_p, contents, roles=roles, model=model, struct=struct)
+    return textgrad_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
 
 
 # ==================================================================================================

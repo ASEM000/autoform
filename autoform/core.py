@@ -95,22 +95,6 @@ class EvalInterpreter(Interpreter):
 active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
 
 
-def bind(prim: Primitive, in_tree: Tree, **params):
-    # NOTE(asem): dispatch the user-facing function (e.g. concat) to
-    # the active interpreter (e.g., EvalInterpreter, TracingInterpreter, etc.)
-    # example:
-    # format_p = Primitive("format")
-    # def format(template, a, b):
-    #     return format_p.bind(template, a, b)
-    # @format_p.def_impl
-    # def impl_format(a_b, *, template):
-    #    a, b = a_b
-    #    return template.format(a, b)
-    # then calling `format("Hello {}, {}", "World", 42)` will dispatch to
-    # `active_interpreter.process(format_p, ("World", 42), template="Hello {}, {}")`
-    return active_interpreter.get().process(prim, in_tree, **params)
-
-
 @contextmanager
 def set_interpreter(interpreter: Interpreter):
     token = active_interpreter.set(interpreter)
@@ -395,6 +379,16 @@ class Primitive:
     def __repr__(self) -> str:
         return self.name
 
+    def bind(self, in_tree: Tree, **params):
+        """Dispatch to the active interpreter.
+        
+        Example:
+            >>> format_p = Primitive("format")
+            >>> def format(template, *args):
+            ...     return format_p.bind(args, template=template)
+        """
+        return active_interpreter.get().process(self, in_tree, **params)
+
 
 class InterpreterRuleMapping[T: Callable]:
     def __init__(self, override: bool):
@@ -518,13 +512,13 @@ def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVa
 
 def dce_ir(ir: IR) -> IR:
     """Remove code paths that are not executed."""
-    # NOTE(asem): simple axe/no axe is used for now. 
+    # NOTE(asem): simple axe/no axe is used for now.
     # in futrue maybe we can do partial elimination.
     active_irvars: set[IRVar] = set(x for x in treelib.leaves(ir.out_irtree) if is_irvar(x))
     active_ireqns: deque[IREqn] = deque()
 
     for ireqn in reversed(ir.ireqns):
-        dce_rule = dce_rules.get(ireqn.prim) if ireqn.prim in dce_rules else default_dce 
+        dce_rule = dce_rules.get(ireqn.prim) if ireqn.prim in dce_rules else default_dce
         can_axe, cur_active, new_eqn = dce_rule(ireqn, active_irvars)
 
         if not can_axe:
@@ -671,7 +665,7 @@ def run_ir(ir: IR, *args, **kwargs) -> Tree:
 
     for ireqn in ir.ireqns:
         in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
-        out_ireqn_tree = bind(ireqn.prim, in_ireqn_tree, **ireqn.params)
+        out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
         treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
     return treelib.map(read, ir.out_irtree)
 
@@ -716,7 +710,7 @@ def iter_ir(ir: IR, *args, **kwargs):
                 yield chunk
             out_ireqn_tree = out_treespec.unflatten(map(accumulate_chunks, acc))
         else:
-            out_ireqn_tree = bind(ireqn.prim, in_ireqn_tree, **ireqn.params)
+            out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
 
         treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
     yield treelib.map(read, ir.out_irtree)
@@ -741,7 +735,7 @@ async def arun_ir(ir: IR, *args, **kwargs):
             async_rule = async_rules.get(ireqn.prim)
             out_ireqn_tree = await async_rule(in_ireqn_tree, **ireqn.params)
         else:
-            out_ireqn_tree = bind(ireqn.prim, in_ireqn_tree, **ireqn.params)
+            out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
         treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
     return treelib.map(read, ir.out_irtree)
 
@@ -942,7 +936,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
             res_env[i] = residuals
         else:
             # fallback: use impl_rule and save inputs as residuals
-            p_out_ireqn = bind(eqn.prim, p_in_ireqn, **eqn.params)
+            p_out_ireqn = eqn.prim.bind(p_in_ireqn, **eqn.params)
             res_env[i] = p_in_ireqn
         treelib.map(write_p, eqn.out_irtree, p_out_ireqn)
 
@@ -1303,7 +1297,7 @@ format_p = Primitive("format", tag="string")
 
 
 def format(template: str, *args) -> str:
-    return bind(format_p, args, template=template)
+    return format_p.bind(args, template=template)
 
 
 @ft.partial(impl_rules.set, format_p)
@@ -1384,7 +1378,7 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
     # NOTE(asem): separate roles (static) from contents (traced) at bind time
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return bind(lm_call_p, contents, roles=roles, model=model)
+    return lm_call_p.bind(contents, roles=roles, model=model)
 
 
 @ft.partial(impl_rules.set, lm_call_p)
@@ -1420,7 +1414,9 @@ def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[
 
 
 @ft.partial(pull_bwd_rules.set, lm_call_p)
-def pullback_bwd_lm_call(residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str) -> tuple:
+def pullback_bwd_lm_call(
+    residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str
+) -> tuple:
     """TextGrad-style semantic gradient: use LLM to generate feedback on inputs."""
     contents, output = residuals
     grads = []
@@ -1513,7 +1509,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return bind(struct_lm_call_p, contents, roles=roles, model=model, struct=struct)
+    return struct_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
 
 
 @ft.partial(impl_rules.set, struct_lm_call_p)
@@ -1614,7 +1610,7 @@ def concat(*args) -> str:
         >>> print(result)
         Hello, world!
     """
-    return bind(concat_p, args)
+    return concat_p.bind(args)
 
 
 @ft.partial(impl_rules.set, concat_p)
@@ -1686,7 +1682,7 @@ def stop_gradient(x: Tree) -> Tree:
         >>> cotangent_y
         'grad'
     """
-    return bind(stop_gradient_p, x)
+    return stop_gradient_p.bind(x)
 
 
 @ft.partial(impl_rules.set, stop_gradient_p)
@@ -1748,7 +1744,7 @@ def mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
         'Result: world'
     """
     assert hash(tag) is not None, "Tag must be hashable"
-    return bind(mark_p, x, tag=tag)
+    return mark_p.bind(x, tag=tag)
 
 
 @ft.partial(impl_rules.set, mark_p)
@@ -1809,7 +1805,7 @@ def ir_call(ir: IR, *args, **kwargs) -> Tree:
     """
     # NOTE(asem): key idea here is that IR is being traced
     # and not a param. Use pack_user_input for consistent structure.
-    return bind(ir_call_p, (ir, pack_user_input(*args, **kwargs)))
+    return ir_call_p.bind((ir, pack_user_input(*args, **kwargs)))
 
 
 @ft.partial(impl_rules.set, ir_call_p)
@@ -1948,7 +1944,7 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
     tree_struct0 = treelib.structure(branches[next(iter(branches))].out_irtree)
     assert all(treelib.structure(branches[key].out_irtree) == tree_struct0 for key in branches)
     # NOTE(asem): always use pack_user_input to at the interface of user-bind
-    return bind(switch_p, (key, pack_user_input(*operands, **kw_operands)), branches=branches)
+    return switch_p.bind((key, pack_user_input(*operands, **kw_operands)), branches=branches)
 
 
 @ft.partial(impl_rules.set, switch_p)
@@ -1991,7 +1987,11 @@ def pullback_bwd_switch(residuals, cotangent_out, *, branches: dict[str, IR]):
 
 @ft.partial(batch_rules.set, switch_p)
 def batch_switch(
-    batch_size: int, in_batched, in_tree, *, branches: dict[str, IR]
+    batch_size: int,
+    in_batched,
+    in_tree,
+    *,
+    branches: dict[str, IR],
 ) -> tuple[Tree, bool]:
     key_col, operands_col = in_tree
     key_batched, operands_batched = in_batched

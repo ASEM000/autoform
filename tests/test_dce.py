@@ -57,7 +57,7 @@ class TestDCE:
             return "constant"
 
         def program(x):
-            y = core.bind(const_p, x)
+            y = const_p.bind(x)
             z = core.concat(y, "!")
             return z
 

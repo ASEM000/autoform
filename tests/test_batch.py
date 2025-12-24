@@ -250,7 +250,7 @@ class TestBatchMultipleOutputs:
             return (out1, out2), (True, True)
 
         def program(x):
-            return core.bind(split_p, x)
+            return split_p.bind(x)
 
         ir = core.build_ir(program, "abc")
         batched_ir = core.batch_ir(ir)
@@ -276,7 +276,7 @@ class TestBatchMultipleOutputs:
             return (out1, out2), ((True, True), True)
 
         def program(x):
-            return core.bind(nested_p, x)
+            return nested_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -329,7 +329,7 @@ class TestBatchRuleOutBatchedValidation:
             return [x[i] for i in range(batch_size)], True
 
         def program(x):
-            return core.bind(single_p, x)
+            return single_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -353,7 +353,7 @@ class TestBatchRuleOutBatchedValidation:
             return (vals, vals), True
 
         def program(x):
-            return core.bind(tuple_p, x)
+            return tuple_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -377,7 +377,7 @@ class TestBatchRuleOutBatchedValidation:
             return (vals, vals), (True, True)
 
         def program(x):
-            return core.bind(tuple_p, x)
+            return tuple_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -402,7 +402,7 @@ class TestBatchRuleOutBatchedValidation:
             return {"first": vals, "second": (vals, vals)}, True
 
         def program(x):
-            return core.bind(nested_p, x)
+            return nested_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -427,7 +427,7 @@ class TestBatchRuleOutBatchedValidation:
             return {"first": vals, "second": (vals, vals)}, {"first": True, "second": (True, True)}
 
         def program(x):
-            return core.bind(nested_p, x)
+            return nested_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -452,7 +452,7 @@ class TestBatchRuleOutBatchedValidation:
             return (vals, ["constant"] * batch_size), (True, True)
 
         def program(x):
-            return core.bind(mixed_p, x)
+            return mixed_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)

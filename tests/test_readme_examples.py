@@ -6,7 +6,7 @@ shout_p = core.Primitive("shout")
 
 
 def shout(text: str) -> str:
-    return core.bind(shout_p, text)
+    return shout_p.bind(text)
 
 
 @ft.partial(core.impl_rules.set, shout_p)
@@ -121,7 +121,7 @@ def textgrad_style_lm_call(
 ) -> core.Struct:
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return core.bind(textgrad_style_lm_call_p, contents, roles=roles, model=model, struct=struct)
+    return textgrad_style_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
 
 
 @ft.partial(core.impl_rules.set, textgrad_style_lm_call_p)

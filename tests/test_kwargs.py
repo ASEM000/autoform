@@ -6,7 +6,7 @@ greet_p = core.Primitive("greet")
 
 
 def greet(name: str, *, greeting: str = "Hello", punctuation: str = "!") -> str:
-    return core.bind(greet_p, (name, dict(greeting=greeting, punctuation=punctuation)))
+    return greet_p.bind((name, dict(greeting=greeting, punctuation=punctuation)))
 
 
 @ft.partial(core.impl_rules.set, greet_p)
@@ -88,7 +88,7 @@ class TestKwargsPushforward:
             return impl_rule(primals), impl_rule(tangents)
 
         def program(x, *, repeat=1):
-            return core.bind(test_p, (x, dict(repeat=repeat)))
+            return test_p.bind((x, dict(repeat=repeat)))
 
         ir = core.build_ir(program, "A", repeat=3)
         match ir.in_irtree:

@@ -98,7 +98,7 @@ class TestIterIR:
                 yield ch
 
         def stream(x):
-            return core.bind(stream_p, x)
+            return stream_p.bind(x)
 
         ir = core.build_ir(stream, "AB")
         outputs = list(core.iter_ir(ir, "AB"))
@@ -126,7 +126,7 @@ class TestIterIR:
                 yield (ch, ch)
 
         def split(x):
-            return core.bind(split_p, x)
+            return split_p.bind(x)
 
         ir = core.build_ir(split, "AB")
         iterator = core.iter_ir(ir, "AB")
@@ -151,7 +151,7 @@ class TestIterIR:
             yield "c"
 
         def func(x):
-            return core.bind(p, x)
+            return p.bind(x)
 
         ir = core.build_ir(func, "input")
         results = list(core.iter_ir(ir, "input"))
@@ -170,7 +170,7 @@ class TestIterIR:
             yield [3, 4]
 
         def func(x):
-            return core.bind(p, x)
+            return p.bind(x)
 
         ir = core.build_ir(func, "input")
         results = list(core.iter_ir(ir, "input"))
@@ -191,7 +191,7 @@ class TestIterIR:
                 yield ch
 
         def stream_tokens(x):
-            return core.bind(stream_p, x)
+            return stream_p.bind(x)
 
         inner_ir = core.build_ir(stream_tokens, "abc")
 
@@ -218,7 +218,7 @@ class TestIterIR:
                 yield f"{i}:{ch}"
 
         def deep_stream(x):
-            return core.bind(stream_p, x)
+            return stream_p.bind(x)
 
         ir_level0 = core.build_ir(deep_stream, "ab")
 
@@ -253,7 +253,7 @@ class TestAsyncIR:
             return x
 
         def func(x):
-            return core.bind(p, x)
+            return p.bind(x)
 
         ir = core.build_ir(func, "hello")
         result = await core.arun_ir(ir, "hello")
@@ -272,7 +272,7 @@ class TestAsyncIR:
             return x + "!"
 
         def func(x):
-            return core.bind(p, x)
+            return p.bind(x)
 
         ir = core.build_ir(func, "hello")
         result = await core.arun_ir(ir, "hello")
