@@ -518,7 +518,8 @@ def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVa
 
 def dce_ir(ir: IR) -> IR:
     """Remove code paths that are not executed."""
-
+    # NOTE(asem): simple axe/no axe is used for now. 
+    # in futrue maybe we can do partial elimination.
     active_irvars: set[IRVar] = set(x for x in treelib.leaves(ir.out_irtree) if is_irvar(x))
     active_ireqns: deque[IREqn] = deque()
 
