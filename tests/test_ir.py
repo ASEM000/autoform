@@ -330,7 +330,7 @@ class TestGenerateTextCode:
         assert "concat" in text
         assert "}" in text
 
-    def test_format_with_params(self):
+    def test_format_using(self):
         def program(x):
             return core.format("Hello, {}!", x)
 

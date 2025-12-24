@@ -238,19 +238,12 @@ class IREqn:
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
-    def replace(
-        self,
-        prim: Primitive | None = None,
-        in_irtree: Tree[IRAtom] | None = None,
-        out_irtree: Tree[IRAtom] | None = None,
-        params: dict | None = None,
-    ) -> IREqn:
-        return IREqn(
-            prim=prim if prim is not None else self.prim,
-            in_irtree=in_irtree if in_irtree is not None else self.in_irtree,
-            out_irtree=out_irtree if out_irtree is not None else self.out_irtree,
-            params=params if params is not None else self.params,
-        )
+    def __setitem__(self, key, value):
+        raise TypeError("IREqn is immutable")
+
+    def using(self, **kwargs) -> IREqn:
+        """Return new IREqn with kwargs merged into params."""
+        return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
 
 
 class IR:
@@ -274,6 +267,9 @@ class IR:
         self.ireqns = ireqns
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
+
+    def __setitem__(self, key, value):
+        raise TypeError("IR is immutable")
 
     def __repr__(self) -> str:
         return generate_text_code(ir=self, expand_ir=True)
@@ -854,7 +850,7 @@ def batch_pushforward_call(
 def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
     # Recursively DCE the inner IR and return modified equation
     dced_ir = dce_ir(ireqn.params["ir"])
-    new_eqn = ireqn.replace(params={**ireqn.params, "ir": dced_ir})
+    new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
 
@@ -1018,7 +1014,7 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
 @ft.partial(dce_rules.set, pullback_call_p)
 def dce_pullback_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
     dced_ir = dce_ir(ireqn.params["ir"])
-    new_eqn = ireqn.replace(params={**ireqn.params, "ir": dced_ir})
+    new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
 
@@ -1227,7 +1223,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 @ft.partial(dce_rules.set, batch_call_p)
 def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
     dced_ir = dce_ir(ireqn.params["ir"])
-    new_eqn = ireqn.replace(params={**ireqn.params, "ir": dced_ir})
+    new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
 
@@ -2065,6 +2061,6 @@ def dce_switch(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar
     # to allow for recursive pruning. otherwise, we do not have any
     # mechanism to dce higher order primitives.
     dced_branches = {k: dce_ir(v) for k, v in ireqn.params["branches"].items()}
-    new_eqn = ireqn.replace(params={**ireqn.params, "branches": dced_branches})
+    new_eqn = ireqn.using(branches=dced_branches)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn

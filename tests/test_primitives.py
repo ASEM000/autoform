@@ -118,7 +118,7 @@ class TestConcatPrimitive:
 
 
 class TestBind:
-    def test_bind_with_params(self):
+    def test_bind_using(self):
         p = core.Primitive("custom_bind")
 
         @ft.partial(core.impl_rules.set, p)

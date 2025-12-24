@@ -77,7 +77,7 @@ class TestIREqnMatchArgs:
         for eqn in ir.ireqns:
             match eqn:
                 case core.IREqn(prim=p, params={"tag": "old_tag"}) if p == core.mark_p:
-                    new_eqns.append(eqn.replace(params={"tag": "new_tag"}))
+                    new_eqns.append(eqn.using(tag="new_tag"))
                 case _:
                     new_eqns.append(eqn)
 
@@ -94,15 +94,15 @@ class TestIREqnMatchArgs:
         assert result == "hello!"
 
 
-class TestIREqnReplace:
-    def test_replace_params(self):
+class TestIREqnWithParams:
+    def test_using_merges(self):
         def func(x):
             return core.mark(x, tag="old")
 
         ir = core.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
-        new_eqn = eqn.replace(params={"tag": "new"})
+        new_eqn = eqn.using(tag="new")
 
         assert eqn.params["tag"] == "old"  # original unchanged
         assert new_eqn.params["tag"] == "new"
@@ -110,27 +110,14 @@ class TestIREqnReplace:
         assert new_eqn.in_irtree == eqn.in_irtree
         assert new_eqn.out_irtree == eqn.out_irtree
 
-    def test_replace_prim(self):
-        def func(x):
-            return core.concat(x, "!")
-
-        ir = core.build_ir(func, "test")
-        eqn = ir.ireqns[0]
-
-        new_eqn = eqn.replace(prim=core.format_p)
-
-        assert eqn.prim == core.concat_p  # original unchanged
-        assert new_eqn.prim == core.format_p
-
-    def test_replace_preserves_unspecified(self):
+    def test_using_preserves_fields(self):
         def func(x):
             return core.mark(x, tag="test")
 
         ir = core.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
-        # Replace only params, everything else should be preserved
-        new_eqn = eqn.replace(params={"tag": "changed"})
+        new_eqn = eqn.using(tag="changed")
 
         assert new_eqn.prim is eqn.prim
         assert new_eqn.in_irtree is eqn.in_irtree
@@ -155,7 +142,7 @@ class TestInsertAfterPattern:
             match eqn:
                 case core.IREqn(prim=p, params={"tag": "insert_here"}) if p == core.mark_p:
                     # Create a new mark equation with the same IO but different tag
-                    inserted = eqn.replace(params={"tag": "inserted"})
+                    inserted = eqn.using(tag="inserted")
                     new_eqns.append(inserted)
 
         new_ir = core.IR(
