@@ -207,7 +207,7 @@ class TestBatchUtils:
         in_axes = (list, None)
         tree = (["a", "b", "c"], {"x": 1, "y": 2})
         broadcasted_in_axes = (list, {"x": None, "y": None})
-        assert core.broadcast_in_axes(tree, in_axes) == broadcasted_in_axes
+        assert core.broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
 
 
 class TestBatchRuleOutBatched:
@@ -385,7 +385,6 @@ class TestBatchRuleOutBatchedValidation:
         assert result == (["a", "b"], ["a", "b"])
 
     def test_nested_output_requires_nested_out_batched(self):
-        """Nested output structure requires matching nested out_batched."""
         nested_p = core.Primitive("nested_out")
 
         @ft.partial(core.impl_rules.set, nested_p)
@@ -410,7 +409,6 @@ class TestBatchRuleOutBatchedValidation:
             core.run_ir(batched_ir, ["a", "b"])
 
     def test_nested_output_with_correct_out_batched(self):
-        """Nested output with matching nested out_batched works."""
         nested_p = core.Primitive("nested_out_correct")
 
         @ft.partial(core.impl_rules.set, nested_p)
@@ -435,7 +433,6 @@ class TestBatchRuleOutBatchedValidation:
         assert result == {"first": ["a", "b"], "second": (["a", "b"], ["a", "b"])}
 
     def test_mixed_batched_output(self):
-        """Some outputs batched, some not."""
         mixed_p = core.Primitive("mixed_batch")
 
         @ft.partial(core.impl_rules.set, mixed_p)

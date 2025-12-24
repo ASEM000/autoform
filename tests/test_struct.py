@@ -222,3 +222,61 @@ class TestStructInAxes:
         hash(a2)
 
         assert hash(a1) == hash(a2)
+
+    def test_batch_preserves_struct_output(self):
+        class Output(core.Struct):
+            first: str
+            second: str
+
+        def process(x: str) -> Output:
+            return Output.model_construct(
+                first=core.format("A:{}", x),
+                second=core.format("B:{}", x),
+            )
+
+        ir = core.build_ir(process, "x")
+        batch_ir = core.batch_ir(ir, in_axes=list)
+        result = core.run_ir(batch_ir, ["1", "2", "3"])
+        assert isinstance(result, Output)
+        assert result.first == ["A:1", "A:2", "A:3"]
+        assert result.second == ["B:1", "B:2", "B:3"]
+
+    def test_batch_preserves_nested_struct_output(self):
+        class Inner(core.Struct):
+            value: str
+
+        class Outer(core.Struct):
+            inner: Inner
+            tag: str
+
+        def create(x: str) -> Outer:
+            return Outer.model_construct(
+                inner=Inner.model_construct(value=core.format("V:{}", x)),
+                tag=core.format("T:{}", x),
+            )
+
+        ir = core.build_ir(create, "x")
+        batch_ir = core.batch_ir(ir, in_axes=list)
+        result = core.run_ir(batch_ir, ["a", "b"])
+        assert isinstance(result, Outer)
+        assert isinstance(result.inner, Inner)
+        assert result.inner.value == ["V:a", "V:b"]
+        assert result.tag == ["T:a", "T:b"]
+
+    def test_batch_preserves_tuple_output(self):
+        def dual(x: str) -> tuple[str, str]:
+            return core.format("L:{}", x), core.format("R:{}", x)
+
+        ir = core.build_ir(dual, "x")
+        batch_ir = core.batch_ir(ir, in_axes=list)
+        result = core.run_ir(batch_ir, ["a", "b"])
+        assert result == (["L:a", "L:b"], ["R:a", "R:b"])
+
+    def test_batch_preserves_nested_tuple_output(self):
+        def nested(x: str) -> tuple[tuple[str, str], str]:
+            return (core.format("A:{}", x), core.format("B:{}", x)), core.format("C:{}", x)
+
+        ir = core.build_ir(nested, "x")
+        batch_ir = core.batch_ir(ir, in_axes=list)
+        result = core.run_ir(batch_ir, ["1", "2"])
+        assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])

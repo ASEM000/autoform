@@ -1053,7 +1053,7 @@ def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
     return next((len(v) for v, a in zip(col_leaves, axes_leaves) if a is not None), 0)
 
 
-def broadcast_in_axes(tree: Tree, in_axes: Tree) -> Tree:
+def broadcast_in_axes_prefix(in_axes: Tree, tree: Tree) -> Tree:
     # NOTE(asem): broadcast in_axes spec to match the structure of tree
     # >>> in_axes = (list, None)
     # >>> tree = (["a", "b", "c"], {"x": 1, "y": 2})
@@ -1087,10 +1087,11 @@ def assert_batch_tree_matches_irtree(batch_tree: Tree, irtree: Tree, prim_name: 
 @ft.partial(impl_rules.set, batch_call_p)
 def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
-    axes_tree = broadcast_in_axes(col_tree, in_axes)
-    in_batched_tree = in_axes_to_batch_tree(axes_tree)
-    is_leaf = lambda x: isinstance(x, bool)
-    in_batched_tree = treelib.broadcast_prefix(in_batched_tree, ir.in_irtree, is_leaf=is_leaf)
+
+    # NOTE(asem): produce a tree of booleans indicating which leaves are batched
+    axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
+    in_batched_tree: Tree[bool] = in_axes_to_batch_tree(axes_tree)
+    in_batched_tree = treelib.broadcast_prefix(in_batched_tree, ir.in_irtree)
     batch_size = infer_batch_size(col_tree, in_axes)
 
     v_env: dict[IRVar, Value | list[Value]] = {}
@@ -1117,11 +1118,16 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
         in_vals = treelib.map(read_v, ireqn.in_irtree)
         in_batched = treelib.map(read_b, ireqn.in_irtree)
         out_vals, out_batched = batch_rules.get(ireqn.prim)(
-            batch_size, in_batched, in_vals, **ireqn.params
+            batch_size,
+            in_batched,
+            in_vals,
+            **ireqn.params,
         )
         treelib.map(write_v, ireqn.out_irtree, out_vals)
         out_batched = assert_batch_tree_matches_irtree(
-            out_batched, ireqn.out_irtree, ireqn.prim.name
+            out_batched,
+            ireqn.out_irtree,
+            ireqn.prim.name,
         )
         treelib.map(write_b, ireqn.out_irtree, out_batched)
 
@@ -1136,7 +1142,11 @@ def eval_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(push_rules.set, batch_call_p)
 def pushforward_batch_call(
-    primals: Tree, tangents: Tree, *, ir: IR, in_axes: Tree
+    primals: Tree,
+    tangents: Tree,
+    *,
+    ir: IR,
+    in_axes: Tree,
 ) -> tuple[Tree, Tree]:
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward_ir(ir)
@@ -1176,7 +1186,7 @@ def batch_batch_call(
 ) -> tuple[Tree, Tree]:
     col_cols = in_tree
 
-    in_axes_tree = broadcast_in_axes(col_cols, in_axes)
+    in_axes_tree = broadcast_in_axes_prefix(in_axes, col_cols)
     get_is_leaf = make_is_batch_leaf(in_axes_tree)
     batched_ir = batch_ir(ir, in_axes=in_axes)
 
@@ -1198,7 +1208,7 @@ def batch_batch_call(
 async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
 
-    axes_tree = broadcast_in_axes(col_tree, in_axes)
+    axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
     run_is_leaf = make_is_batch_leaf(axes_tree)
     batch_size = infer_batch_size(col_tree, in_axes)
 
@@ -1286,7 +1296,6 @@ def batch_ir(ir: IR, in_axes: Tree[type | None] = list) -> IR:
 
     b_in_irtree = treelib.map(make_b, ir.in_irtree)
     b_out_irtree = treelib.map(make_b, ir.out_irtree)
-
     eqn = IREqn(batch_call_p, b_in_irtree, b_out_irtree, dict(ir=ir, in_axes=in_axes))
     return IR([eqn], b_in_irtree, b_out_irtree)
 
