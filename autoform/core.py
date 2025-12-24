@@ -574,9 +574,7 @@ def fold_ir(ir: IR) -> IR:
             env[atom] = value
 
     def read(atom: IRAtom):
-        if is_irvar(atom):
-            return env[atom]
-        return atom
+        return env[atom] if is_irvar(atom) else atom
 
     treelib.map(write, ir.in_irtree, ir.in_irtree)
 
