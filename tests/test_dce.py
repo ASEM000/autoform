@@ -242,3 +242,95 @@ class TestDCEEdgeCases:
         assert len(dce.ireqns) == 2
         prim_names = [eqn.prim.name for eqn in dce.ireqns]
         assert prim_names == ["stop_gradient", "concat"]
+
+
+class TestNestedDCE:
+    def test_switch_dces_inner_branches(self):
+        def branch_a_fn(x):
+            dead = core.concat(x, " DEAD")  # unused
+            live = core.concat(x, " LIVE")  # returned
+            return live
+
+        branch_a = core.build_ir(branch_a_fn, "test")
+        branch_b = core.build_ir(lambda x: core.concat(x, " B"), "test")
+
+        assert len(branch_a.ireqns) == 2
+
+        def program(key, x):
+            return core.switch(key, {"a": branch_a, "b": branch_b}, x)
+
+        ir = core.build_ir(program, "a", "input")
+        dce = core.dce_ir(ir)
+
+        dced_branch_a = dce.ireqns[0].params["branches"]["a"]
+        assert len(dced_branch_a.ireqns) == 1
+
+        result = core.run_ir(dce, "a", "hello")
+        assert result == "hello LIVE"
+
+    def test_batch_call_dces_inner_ir(self):
+        def inner_fn(x):
+            dead = core.concat(x, " DEAD")
+            live = core.concat(x, " LIVE")
+            return live
+
+        inner_ir = core.build_ir(inner_fn, "test")
+        assert len(inner_ir.ireqns) == 2
+
+        batch_ir = core.batch_ir(inner_ir, in_axes=list)
+        dce = core.dce_ir(batch_ir)
+
+        dced_inner = dce.ireqns[0].params["ir"]
+        assert len(dced_inner.ireqns) == 1
+
+    def test_pushforward_call_dces_inner_ir(self):
+        def inner_fn(x):
+            dead = core.concat(x, " DEAD")
+            live = core.concat(x, " LIVE")
+            return live
+
+        inner_ir = core.build_ir(inner_fn, "test")
+        assert len(inner_ir.ireqns) == 2
+
+        pf_ir = core.pushforward_ir(inner_ir)
+        dce = core.dce_ir(pf_ir)
+
+        dced_inner = dce.ireqns[0].params["ir"]
+        assert len(dced_inner.ireqns) == 1
+
+    def test_pullback_call_dces_inner_ir(self):
+        def inner_fn(x):
+            dead = core.concat(x, " DEAD")
+            live = core.concat(x, " LIVE")
+            return live
+
+        inner_ir = core.build_ir(inner_fn, "test")
+        assert len(inner_ir.ireqns) == 2
+
+        pb_ir = core.pullback_ir(inner_ir)
+        dce = core.dce_ir(pb_ir)
+
+        dced_inner = dce.ireqns[0].params["ir"]
+        assert len(dced_inner.ireqns) == 1
+
+    def test_deeply_nested_dce(self):
+        def branch_fn(x):
+            dead = core.concat(x, " DEAD")
+            live = core.concat(x, " LIVE")
+            return live
+
+        branch = core.build_ir(branch_fn, "test")
+        assert len(branch.ireqns) == 2
+
+        def outer_fn(key, x):
+            return core.switch(key, {"a": branch}, x)
+
+        outer_ir = core.build_ir(outer_fn, "a", "test")
+        batch_ir = core.batch_ir(outer_ir, in_axes=(None, list))
+        dce = core.dce_ir(batch_ir)
+
+        batch_inner = dce.ireqns[0].params["ir"]
+        switch_eqn = batch_inner.ireqns[0]
+        nested_branch = switch_eqn.params["branches"]["a"]
+
+        assert len(nested_branch.ireqns) == 1

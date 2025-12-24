@@ -435,6 +435,7 @@ type PullbackFwdRule = Callable[..., tuple[Tree, Tree]]
 type PullbackBwdRule = Callable[[Tree, Tree], Tree]
 type IterRule = Callable[..., tp.Iterator[Tree]]
 type AsyncRule = Callable[..., Coroutine[tp.Any, tp.Any, Tree]]
+type DCERule = Callable[[IREqn, set[IRVar]], tuple[bool, set[IRVar], IREqn]]
 
 impl_rules = InterpreterRuleMapping[ImplRule](override=False)
 eval_rules = InterpreterRuleMapping[EvalRule](override=False)
@@ -444,6 +445,7 @@ pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule](override=False)
 pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule](override=False)
 iter_rules = InterpreterRuleMapping[IterRule](override=False)
 async_rules = InterpreterRuleMapping[AsyncRule](override=False)
+dce_rules = InterpreterRuleMapping[DCERule](override=False)
 
 
 # ==================================================================================================
@@ -506,22 +508,33 @@ def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
         return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
 
+def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    out_vars = set(x for x in treelib.leaves(ireqn.out_irtree) if is_irvar(x))
+    if out_vars.isdisjoint(active_irvars):
+        return True, set(), ireqn  # axe (equation returned but unused)
+    in_vars = set(x for x in treelib.leaves(ireqn.in_irtree) if is_irvar(x))
+    return False, in_vars, ireqn  # (equation unchanged)
+
+
 def dce_ir(ir: IR) -> IR:
-    """Remove code path that are not executed."""
+    """Remove code paths that are not executed."""
 
-    # TODO(asem): dce nested IRs
-
-    def irtree_to_irvars(irtree: IRAtom) -> set[IRVar]:
-        return {leaf for leaf in treelib.leaves(irtree) if isinstance(leaf, IRVar)}
-
-    active_irvars: set[IRVar] = irtree_to_irvars(ir.out_irtree)
+    active_irvars: set[IRVar] = set(x for x in treelib.leaves(ir.out_irtree) if is_irvar(x))
     active_ireqns: deque[IREqn] = deque()
 
     for ireqn in reversed(ir.ireqns):
-        if not active_irvars.isdisjoint(irtree_to_irvars(ireqn.out_irtree)):
-            active_irvars |= irtree_to_irvars(ireqn.in_irtree)
-            active_ireqns.appendleft(ireqn)
+        if ireqn.prim in dce_rules:
+            can_axe, cur_active, new_eqn = dce_rules.get(ireqn.prim)(ireqn, active_irvars)
 
+            if not can_axe:
+                active_ireqns.appendleft(new_eqn)
+                active_irvars |= cur_active
+
+        else:
+            can_axe, cur_active, new_eqn = default_dce(ireqn, active_irvars)
+            active_irvars |= cur_active
+            if not can_axe:
+                active_ireqns.appendleft(new_eqn)
     return IR(list(active_ireqns), in_irtree=ir.in_irtree, out_irtree=ir.out_irtree)
 
 
@@ -849,6 +862,15 @@ def batch_pushforward_call(
     return out_cols, out_batched
 
 
+@ft.partial(dce_rules.set, pushforward_call_p)
+def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    # Recursively DCE the inner IR and return modified equation
+    dced_ir = dce_ir(ireqn.params["ir"])
+    new_eqn = ireqn.replace(params={**ireqn.params, "ir": dced_ir})
+    can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
+    return can_axe, used_ins, new_eqn
+
+
 # PULLBACK CALL ====================================================================================
 
 pullback_call_p = Primitive("pullback_call", tag="transformation")
@@ -1005,6 +1027,14 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
     return out_cols, out_batched
 
 
+@ft.partial(dce_rules.set, pullback_call_p)
+def dce_pullback_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    dced_ir = dce_ir(ireqn.params["ir"])
+    new_eqn = ireqn.replace(params={**ireqn.params, "ir": dced_ir})
+    can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
+    return can_axe, used_ins, new_eqn
+
+
 # BATCH CALL =======================================================================================
 
 batch_call_p = Primitive("batch_call", tag="transformation")
@@ -1096,14 +1126,14 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     for ireqn in ir.ireqns:
         in_vals = treelib.map(read_v, ireqn.in_irtree)
         in_batched = treelib.map(read_b, ireqn.in_irtree)
-        out_vals, out_batched_tree = batch_rules.get(ireqn.prim)(
+        out_vals, out_batched = batch_rules.get(ireqn.prim)(
             batch_size, in_batched, in_vals, **ireqn.params
         )
         treelib.map(write_v, ireqn.out_irtree, out_vals)
-        out_batched_tree = assert_batch_tree_matches_irtree(
-            out_batched_tree, ireqn.out_irtree, ireqn.prim.name
+        out_batched = assert_batch_tree_matches_irtree(
+            out_batched, ireqn.out_irtree, ireqn.prim.name
         )
-        treelib.map(write_b, ireqn.out_irtree, out_batched_tree)
+        treelib.map(write_b, ireqn.out_irtree, out_batched)
 
     return treelib.map(read_v, ir.out_irtree)
 
@@ -1194,6 +1224,14 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     leaves_bi = [out_spec.flatten_up_to(r) for r in results]
     stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
     return out_spec.unflatten(stacked)
+
+
+@ft.partial(dce_rules.set, batch_call_p)
+def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    dced_ir = dce_ir(ireqn.params["ir"])
+    new_eqn = ireqn.replace(params={**ireqn.params, "ir": dced_ir})
+    can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
+    return can_axe, used_ins, new_eqn
 
 
 # ==================================================================================================
@@ -1298,7 +1336,11 @@ def pullback_bwd_format(residuals: Tree, cotangent_out: Tree, *, template: str) 
 
 @ft.partial(batch_rules.set, format_p)
 def batch_format(
-    batch_size: int, in_batched: Tree, in_tree: Tree, *, template: str
+    batch_size: int,
+    in_batched: Tree,
+    in_tree: Tree,
+    *,
+    template: str,
 ) -> tuple[Tree, Tree]:
     args = tuple(in_tree)
     args_batched = tuple(in_batched)
@@ -1979,3 +2021,37 @@ def iter_switch(in_tree, *, branches: dict[str, IR]):
 async def async_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
     key, operands = in_tree
     return await arun_ir(branches[key], operands)
+
+
+@ft.partial(dce_rules.set, switch_p)
+def dce_switch(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    # >>> import autoform as af
+    # >>> # branch A has dead code
+    # >>> def branch_a_fn(x):
+    # ...     dead = af.concat(x, " DEAD")  # unused
+    # ...     live = af.concat(x, " LIVE")  # returned
+    # ...     return live
+    # >>> branch_a = af.build_ir(branch_a_fn, "test")
+    # >>> branch_b = af.build_ir(lambda x: af.concat(x, " B"), "test")
+    # >>> len(branch_a.ireqns)
+    # 2
+    # >>> # outer program using switch
+    # >>> def program(key, x):
+    # ...     return af.switch(key, {"a": branch_a, "b": branch_b}, x)
+    # >>> ir = af.build_ir(program, "a", "input")
+    # >>> len(ir.ireqns[0].params["branches"]["a"].ireqns)
+    # 2
+    # >>> # After DCE, nested IR has dead code eliminated
+    # >>> dced_ir = af.dce_ir(ir)
+    # >>> len(dced_ir.ireqns[0].params["branches"]["a"].ireqns)
+    # 1
+    # >>> af.run_ir(dced_ir, "a", "hello")
+    # 'hello LIVE'
+
+    # NOTE(asem): the key idea here is that dce rules need to return equations
+    # to allow for recursive pruning. otherwise, we do not have any
+    # mechanism to dce higher order primitives.
+    dced_branches = {k: dce_ir(v) for k, v in ireqn.params["branches"].items()}
+    new_eqn = ireqn.replace(params={**ireqn.params, "branches": dced_branches})
+    can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
+    return can_axe, used_ins, new_eqn
