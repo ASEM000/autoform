@@ -52,13 +52,13 @@ class TestKwargsBuildIR:
         assert len(ir.ireqns) == 1
         eqn = ir.ireqns[0]
         assert eqn.prim == greet_p
-        match eqn.in_ir_tree:
+        match eqn.in_irtree:
             case (name, {"greeting": greeting, "punctuation": punctuation}):
                 assert core.is_irvar(name)
                 assert core.is_irlit(greeting)
                 assert core.is_irlit(punctuation)
             case _:
-                pytest.fail("Unexpected in_ir_tree structure")
+                pytest.fail("Unexpected in_irtree structure")
 
     def test_kwargs_execution(self):
         def program(name):
@@ -91,7 +91,7 @@ class TestKwargsPushforward:
             return core.bind(test_p, (x, dict(repeat=repeat)))
 
         ir = core.build_ir(program, "A", repeat=3)
-        match ir.in_ir_tree:
+        match ir.in_irtree:
             case (x, {"repeat": repeat}):
                 assert isinstance(x, core.IRVar)
                 assert isinstance(repeat, core.IRLit)
@@ -104,5 +104,5 @@ class TestKwargsPullback:
 
         ir = core.build_ir(program, "World")
         pb_ir = core.pullback_ir(ir)
-        assert len(pb_ir.in_ir_tree) == 2
-        assert len(pb_ir.out_ir_tree) == 2
+        assert len(pb_ir.in_irtree) == 2
+        assert len(pb_ir.out_irtree) == 2

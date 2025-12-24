@@ -41,8 +41,8 @@ class TestDCE:
 
         assert len(dce.ireqns) == 3
         for i in range(len(dce.ireqns) - 1):
-            curr_out = dce.ireqns[i].out_ir_tree
-            next_in_leaves = core.treelib.leaves(dce.ireqns[i + 1].in_ir_tree)
+            curr_out = dce.ireqns[i].out_irtree
+            next_in_leaves = core.treelib.leaves(dce.ireqns[i + 1].in_irtree)
             assert curr_out in next_in_leaves
 
     def test_removes_constant_folded_equation(self):

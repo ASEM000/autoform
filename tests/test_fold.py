@@ -72,7 +72,7 @@ class TestFoldIR:
         assert len(ir.ireqns) == 1
         assert len(folded.ireqns) == 0
 
-        out_leaves = core.treelib.leaves(folded.out_ir_tree)
+        out_leaves = core.treelib.leaves(folded.out_irtree)
         assert len(out_leaves) == 1
         assert core.is_irlit(out_leaves[0])
         assert out_leaves[0].value == "hello world"

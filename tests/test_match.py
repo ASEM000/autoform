@@ -83,8 +83,8 @@ class TestIREqnMatchArgs:
 
         new_ir = core.IR(
             ireqns=new_eqns,
-            in_ir_tree=ir.in_ir_tree,
-            out_ir_tree=ir.out_ir_tree,
+            in_irtree=ir.in_irtree,
+            out_irtree=ir.out_irtree,
         )
 
         # Verify the tag was changed
@@ -107,8 +107,8 @@ class TestIREqnReplace:
         assert eqn.params["tag"] == "old"  # original unchanged
         assert new_eqn.params["tag"] == "new"
         assert new_eqn.prim == eqn.prim
-        assert new_eqn.in_ir_tree == eqn.in_ir_tree
-        assert new_eqn.out_ir_tree == eqn.out_ir_tree
+        assert new_eqn.in_irtree == eqn.in_irtree
+        assert new_eqn.out_irtree == eqn.out_irtree
 
     def test_replace_prim(self):
         def func(x):
@@ -133,8 +133,8 @@ class TestIREqnReplace:
         new_eqn = eqn.replace(params={"tag": "changed"})
 
         assert new_eqn.prim is eqn.prim
-        assert new_eqn.in_ir_tree is eqn.in_ir_tree
-        assert new_eqn.out_ir_tree is eqn.out_ir_tree
+        assert new_eqn.in_irtree is eqn.in_irtree
+        assert new_eqn.out_irtree is eqn.out_irtree
 
 
 class TestInsertAfterPattern:
@@ -160,8 +160,8 @@ class TestInsertAfterPattern:
 
         new_ir = core.IR(
             ireqns=new_eqns,
-            in_ir_tree=ir.in_ir_tree,
-            out_ir_tree=ir.out_ir_tree,
+            in_irtree=ir.in_irtree,
+            out_irtree=ir.out_irtree,
         )
 
         assert len(new_ir.ireqns) == 3
