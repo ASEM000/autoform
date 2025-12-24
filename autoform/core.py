@@ -1597,8 +1597,12 @@ def iter_struct_lm_call(
 
 @ft.partial(async_rules.set, struct_lm_call_p)
 async def async_struct_lm_call(
-    contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
-) -> str:
+    contents: tuple,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
+) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await acompletion(messages=messages, model=model, response_format=struct)
     return resp.choices[0].message.content
