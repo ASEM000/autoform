@@ -278,7 +278,8 @@ class IR:
         out_irtree: The output of the IR.
     """
 
-    __slots__ = ("in_irtree", "out_irtree", "ireqns")
+    __slots__ = ("ireqns", "in_irtree", "out_irtree")
+    __match_args__ = ("ireqns", "in_irtree", "out_irtree")
 
     def __init__(
         self,
@@ -841,11 +842,9 @@ def batch_pushforward_call(
     results = [run_ir(pf_ir, (index_p(b), index_t(b))) for b in range(batch_size)]
 
     out_spec = treelib.structure(pf_ir.out_irtree)
-    leaves_per_result = [out_spec.flatten_up_to(r) for r in results]
-    stacked_leaves = [
-        [leaves_per_result[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)
-    ]
-    out_cols = out_spec.unflatten(stacked_leaves)
+    leaves_bi = [out_spec.flatten_up_to(r) for r in results]
+    stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
+    out_cols = out_spec.unflatten(stacked)
     out_batched = treelib.map(lambda _: True, pf_ir.out_irtree)
     return out_cols, out_batched
 
@@ -999,9 +998,9 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
     pb_ir = pullback_ir(ir)
     results = [run_ir(pb_ir, (p_index(b), c_index(b))) for b in range(size)]
     out_spec = treelib.structure(pb_ir.out_irtree)
-    outs = [out_spec.flatten_up_to(r) for r in results]
-    stacked_leaves = [[outs[b][i] for b in range(size)] for i in range(out_spec.num_leaves)]
-    out_cols = out_spec.unflatten(stacked_leaves)
+    leaves_bi = [out_spec.flatten_up_to(r) for r in results]
+    stacked = [[leaves_bi[b][i] for b in range(size)] for i in range(out_spec.num_leaves)]
+    out_cols = out_spec.unflatten(stacked)
     out_batched = treelib.map(lambda _: True, pb_ir.out_irtree)
     return out_cols, out_batched
 
@@ -1170,8 +1169,8 @@ def batch_batch_call(
     out_spec = treelib.structure(ir.out_irtree)
     leaves_bi = [out_spec.flatten_up_to(r) for r in results]
     num_leaves = out_spec.num_leaves
-    stacked_leaves = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(num_leaves)]
-    out_cols = out_spec.unflatten(stacked_leaves)
+    stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(num_leaves)]
+    out_cols = out_spec.unflatten(stacked)
     return out_cols, out_batched
 
 
@@ -1193,8 +1192,8 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     results = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
     out_spec = treelib.structure(ir.out_irtree)
     leaves_bi = [out_spec.flatten_up_to(r) for r in results]
-    stacked_leaves = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
-    return out_spec.unflatten(stacked_leaves)
+    stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
+    return out_spec.unflatten(stacked)
 
 
 # ==================================================================================================
