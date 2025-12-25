@@ -16,6 +16,8 @@ from autoform.transforms import (
     batch_ir,
     reap_ir,
     plant_ir,
+    split_ir,
+    merge_ir,
     sow,
     dce_ir,
     fold_ir,
@@ -38,6 +40,8 @@ __all__ = [
     "batch_ir",
     "reap_ir",
     "plant_ir",
+    "split_ir",
+    "merge_ir",
     "dce_ir",
     "fold_ir",
     # primitives (user-facing functions)
