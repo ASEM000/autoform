@@ -1214,8 +1214,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(dce_rules.set, batch_call_p)
 def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    dced_ir = dce_ir(ireqn.params["ir"])
-    new_eqn = ireqn.using(ir=dced_ir)
+    new_eqn = ireqn.using(ir=dce_ir(ireqn.params["ir"]))
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
 
@@ -1377,8 +1376,8 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
         assert "role" in m, f"message must have a 'role' key, got {m.keys()=}"
         assert "content" in m, f"message must have a 'content' key, got {m.keys()=}"
 
-    roles = tuple(m["role"] for m in messages)
-    contents = tuple(m["content"] for m in messages)
+    roles = [m["role"] for m in messages]
+    contents = [m["content"] for m in messages]
     return lm_call_p.bind(contents, roles=roles, model=model)
 
 
@@ -1512,8 +1511,8 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         The structured response as a JSON string.
     """
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
-    roles = tuple(m["role"] for m in messages)
-    contents = tuple(m["content"] for m in messages)
+    roles = [m["role"] for m in messages]
+    contents = [m["content"] for m in messages]
     return struct_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
 
 
@@ -2056,7 +2055,10 @@ def dce_switch(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar
     # NOTE(asem): the key idea here is that dce rules need to return equations
     # to allow for recursive pruning. otherwise, we do not have any
     # mechanism to dce higher order primitives.
-    dced_branches = {k: dce_ir(v) for k, v in ireqn.params["branches"].items()}
-    new_eqn = ireqn.using(branches=dced_branches)
+
+    for k in (branches := dict(ireqn.params["branches"])):
+        branches[k] = dce_ir(branches[k])
+
+    new_eqn = ireqn.using(branches=branches)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn

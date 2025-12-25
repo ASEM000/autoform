@@ -86,7 +86,7 @@ class TestStructLmCall:
         params = built_ir.ireqns[0].params
         assert params["model"] == "gpt-4o-mini"
         assert params["struct"] is Answer
-        assert params["roles"] == ("user",)
+        assert params["roles"] == ["user"]
 
     def test_struct_lm_call_eval_returns_var_tree(self):
         class Answer(core.Struct):
