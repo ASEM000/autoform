@@ -33,18 +33,15 @@ class IRBVar(IRVar): ...
 
 
 def is_axis_spec(x) -> bool:
-    """Check if x is an axis specification (None or a type)."""
     return x is None or isinstance(x, type)
 
 
 def make_is_batch_leaf(in_axes: Tree) -> Callable[[Tree], bool]:
-    """Create predicate for batch leaf detection based on axis spec."""
     batch_types = tuple(treelib.leaves(in_axes, is_leaf=lambda x: isinstance(x, type)))
     return (lambda x: isinstance(x, batch_types)) if batch_types else (lambda _: False)
 
 
 def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
-    """Infer batch size from tree and axis specification."""
     is_batch_leaf = make_is_batch_leaf(in_axes)
     axes_leaves = treelib.leaves(in_axes, is_leaf=is_axis_spec)
     col_leaves = treelib.leaves(tree, is_leaf=is_batch_leaf)
@@ -52,19 +49,16 @@ def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
 
 
 def broadcast_in_axes_prefix(in_axes: Tree, tree: Tree) -> Tree:
-    """Broadcast axis spec to match tree structure."""
     is_batch_leaf = make_is_batch_leaf(in_axes)
     is_leaf = lambda x: is_axis_spec(x) or is_batch_leaf(x)
     return treelib.broadcast_prefix(in_axes, tree, is_leaf=is_leaf)
 
 
 def in_axes_to_batch_tree(in_axes: Tree) -> Tree[bool]:
-    """Convert axis spec to boolean tree indicating batched leaves."""
     return treelib.map(lambda ax: ax is not None, in_axes, is_leaf=is_axis_spec)
 
 
 def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
-    """Ensure batch_tree structure matches irtree."""
     expected_batch_tree = treelib.map(lambda _: False, irtree)
     is_bool_leaf = lambda x: isinstance(x, bool)
     batch_spec = treelib.structure(batch_tree, is_leaf=is_bool_leaf)
@@ -86,8 +80,6 @@ batch_call_p = Primitive("batch_call", tag="transformation")
 
 
 class BatchInterpreter(Interpreter):
-    """Interpreter for batched/vectorized execution."""
-
     def __init__(self, *, batch_size: int):
         self.parent = get_interp()
         self.batch_size = batch_size

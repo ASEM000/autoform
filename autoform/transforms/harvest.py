@@ -262,8 +262,6 @@ plant_call_p = Primitive("plant_call", tag="harvest")
 
 
 class PlantInterpreter(Interpreter):
-    """Interpreter that injects values at sow locations."""
-
     def __init__(self, *, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]):
         self.tag = tag
         self.plants = plants
