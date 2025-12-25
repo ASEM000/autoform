@@ -1,6 +1,6 @@
 # autoform
 
-**JAX-style function transformations for LLM programs**
+**Composable function transformations for LLM programs**
 
 > ⚠️ **Early Development**: API may change.
 

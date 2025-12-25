@@ -1,99 +1,58 @@
-from autoform.core import (
-    # ir construction
-    build_ir,
-    run_ir,
+"""Autoform: Composable function transformations for LLM programs."""
+
+# Subpackages
+from autoform import core
+from autoform import evaluation
+from autoform import transforms
+
+# Core API
+from autoform.core import build_ir
+from autoform.evaluation import run_ir, iter_ir, arun_ir
+
+# Transformations
+from autoform.transforms import (
     pushforward_ir,
     pullback_ir,
-    iter_ir,
-    arun_ir,
     batch_ir,
-    dce_ir,
-    fold_ir,
     reap_ir,
     plant_ir,
-    # primitives (functions)
-    concat,
-    format,
-    lm_call,
-    struct_lm_call,
-    stop_gradient,
     sow,
-    ir_call,
-    switch,
-    # primitives (objects)
-    concat_p,
-    format_p,
-    lm_call_p,
-    struct_lm_call_p,
-    stop_gradient_p,
-    sow_p,
-    ir_call_p,
-    switch_p,
-    # constructs
-    Primitive,
-    Var,
-    treelib,
-    Struct,
-    # rule registries
-    impl_rules,
-    eval_rules,
-    push_rules,
-    pull_fwd_rules,
-    pull_bwd_rules,
-    batch_rules,
-    dce_rules,
-    # ir
-    IR,
-    IREqn,
-    IRVar,
+    dce_ir,
+    fold_ir,
 )
 
+# User-facing primitives (functions only)
+from autoform.string import format, concat
+from autoform.lm import lm_call, struct_lm_call, Struct
+from autoform.control import stop_gradient, ir_call, switch
+
 __all__ = [
-    # ir functions
+    # core
     "build_ir",
     "run_ir",
+    "iter_ir",
+    "arun_ir",
+    # transformations
     "pushforward_ir",
     "pullback_ir",
     "batch_ir",
-    "dce_ir",
-    "fold_ir",
-    "iter_ir",
-    "arun_ir",
     "reap_ir",
     "plant_ir",
-    # primitives (functions)
-    "concat",
+    "dce_ir",
+    "fold_ir",
+    # primitives (user-facing functions)
     "format",
+    "concat",
     "lm_call",
     "struct_lm_call",
     "stop_gradient",
     "sow",
     "ir_call",
     "switch",
-    # primitives (objects)
-    "concat_p",
-    "format_p",
-    "lm_call_p",
-    "struct_lm_call_p",
-    "stop_gradient_p",
-    "sow_p",
-    "ir_call_p",
-    "switch_p",
-    # constructs
-    "Primitive",
-    "Var",
-    "treelib",
+    # types
     "Struct",
-    # rule registries
-    "impl_rules",
-    "eval_rules",
-    "push_rules",
-    "pull_fwd_rules",
-    "pull_bwd_rules",
-    "batch_rules",
-    "dce_rules",
-    # ir
-    "IR",
-    "IREqn",
-    "IRVar",
+    # subpackages
+    "core",
+    "evaluation",
+    "transforms",
 ]

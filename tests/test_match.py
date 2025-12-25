@@ -1,18 +1,18 @@
 """Tests for pattern matching and replace on IR structures."""
 
-import autoform.core as core
+import autoform as af
 
 
 class TestIREqnMatchArgs:
     def test_match_by_primitive(self):
         def func(x):
-            return core.concat("Hello, ", x)
+            return af.concat("Hello, ", x)
 
-        ir = core.build_ir(func, "world")
+        ir = af.build_ir(func, "world")
         eqn = ir.ireqns[0]
 
         match eqn:
-            case core.IREqn(prim=p) if p == core.concat_p:
+            case af.core.IREqn(prim=p) if p == af.string.concat_p:
                 matched = True
             case _:
                 matched = False
@@ -21,13 +21,13 @@ class TestIREqnMatchArgs:
 
     def test_match_by_params(self):
         def func(x):
-            return core.sow(x, tag="step1", name="x")
+            return af.sow(x, tag="step1", name="x")
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
         match eqn:
-            case core.IREqn(params={"tag": tag}):
+            case af.core.IREqn(params={"tag": tag}):
                 matched_tag = tag
             case _:
                 matched_tag = None
@@ -36,29 +36,29 @@ class TestIREqnMatchArgs:
 
     def test_match_positional_destructuring(self):
         def func(x):
-            return core.format("Value: {}", x)
+            return af.format("Value: {}", x)
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
         match eqn:
-            case core.IREqn(prim, in_tree, out_tree, params):
-                assert prim == core.format_p
+            case af.core.IREqn(prim, in_tree, out_tree, params):
+                assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
     def test_match_in_loop(self):
         def func(x):
-            a = core.sow(x, tag="step1", name="a")
-            b = core.concat(a, "!")
-            c = core.sow(b, tag="step2", name="c")
+            a = af.sow(x, tag="step1", name="a")
+            b = af.concat(a, "!")
+            c = af.sow(b, tag="step2", name="c")
             return c
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
 
         tags_found = []
         for eqn in ir.ireqns:
             match eqn:
-                case core.IREqn(prim=p, params={"tag": tag}) if p == core.sow_p:
+                case af.core.IREqn(prim=p, params={"tag": tag}) if p == af.transforms.sow_p:
                     tags_found.append(tag)
 
         assert tags_found == ["step1", "step2"]
@@ -67,21 +67,21 @@ class TestIREqnMatchArgs:
         """Test matching equations and building a transformed IR."""
 
         def func(x):
-            a = core.sow(x, tag="old_tag", name="a")
-            return core.concat(a, "!")
+            a = af.sow(x, tag="old_tag", name="a")
+            return af.concat(a, "!")
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
 
         # Transform: find sow with old_tag and change to new_tag
         new_eqns = []
         for eqn in ir.ireqns:
             match eqn:
-                case core.IREqn(prim=p, params={"tag": "old_tag"}) if p == core.sow_p:
+                case af.core.IREqn(prim=p, params={"tag": "old_tag"}) if p == af.transforms.sow_p:
                     new_eqns.append(eqn.using(tag="new_tag"))
                 case _:
                     new_eqns.append(eqn)
 
-        new_ir = core.IR(
+        new_ir = af.core.IR(
             ireqns=new_eqns,
             in_irtree=ir.in_irtree,
             out_irtree=ir.out_irtree,
@@ -90,16 +90,16 @@ class TestIREqnMatchArgs:
         # Verify the tag was changed
         assert new_ir.ireqns[0].params["tag"] == "new_tag"
         # Verify the IR still works
-        result = core.run_ir(new_ir, "hello")
+        result = af.run_ir(new_ir, "hello")
         assert result == "hello!"
 
 
 class TestIREqnWithParams:
     def test_using_merges(self):
         def func(x):
-            return core.sow(x, tag="old", name="x")
+            return af.sow(x, tag="old", name="x")
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
         new_eqn = eqn.using(tag="new")
@@ -112,9 +112,9 @@ class TestIREqnWithParams:
 
     def test_using_preserves_fields(self):
         def func(x):
-            return core.sow(x, tag="test", name="x")
+            return af.sow(x, tag="test", name="x")
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
         new_eqn = eqn.using(tag="changed")
@@ -129,10 +129,10 @@ class TestInsertAfterPattern:
         """Test inserting a new equation after a matched one."""
 
         def func(x):
-            a = core.sow(x, tag="insert_here", name="a")
-            return core.concat(a, "!")
+            a = af.sow(x, tag="insert_here", name="a")
+            return af.concat(a, "!")
 
-        ir = core.build_ir(func, "test")
+        ir = af.build_ir(func, "test")
         assert len(ir.ireqns) == 2
 
         # Insert a new sow after the first sow
@@ -140,12 +140,14 @@ class TestInsertAfterPattern:
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
             match eqn:
-                case core.IREqn(prim=p, params={"tag": "insert_here"}) if p == core.sow_p:
+                case af.core.IREqn(prim=p, params={"tag": "insert_here"}) if (
+                    p == af.transforms.sow_p
+                ):
                     # Create a new sow equation with the same IO but different tag
                     inserted = eqn.using(tag="inserted")
                     new_eqns.append(inserted)
 
-        new_ir = core.IR(
+        new_ir = af.core.IR(
             ireqns=new_eqns,
             in_irtree=ir.in_irtree,
             out_irtree=ir.out_irtree,
@@ -154,94 +156,98 @@ class TestInsertAfterPattern:
         assert len(new_ir.ireqns) == 3
         assert new_ir.ireqns[0].params["tag"] == "insert_here"
         assert new_ir.ireqns[1].params["tag"] == "inserted"
-        assert new_ir.ireqns[2].prim == core.concat_p
+        assert new_ir.ireqns[2].prim == af.string.concat_p
 
 
 class TestIRMatchArgs:
     def test_match_ir_positional(self):
-        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x), "b")
 
         match ir:
-            case core.IR(eqns, in_tree, out_tree):
+            case af.core.IR(eqns, in_tree, out_tree):
                 assert len(eqns) == 1
-                assert core.is_irvar(in_tree)
-                assert core.is_irvar(out_tree)
+                assert isinstance(in_tree, af.core.IRVar)
+                assert isinstance(out_tree, af.core.IRVar)
             case _:
                 assert False, "Pattern should match"
 
     def test_match_ir_with_nested_eqns(self):
-        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x), "b")
 
         match ir:
-            case core.IR([core.IREqn(prim, in_tree, out_tree, params)], _, _):
-                assert prim == core.concat_p
+            case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
+                assert prim == af.string.concat_p
                 assert prim.tag == "string"
-                assert len(core.treelib.leaves(in_tree)) == 2
+                assert len(af.utils.treelib.leaves(in_tree)) == 2
             case _:
                 assert False, "Pattern should match single equation"
 
     def test_match_multiple_equations(self):
         def program(x, y):
-            formatted = core.format("Hello {}", x)
-            return core.concat(formatted, y)
+            formatted = af.format("Hello {}", x)
+            return af.concat(formatted, y)
 
-        ir = core.build_ir(program, "World", "!")
+        ir = af.build_ir(program, "World", "!")
 
         match ir:
-            case core.IR([core.IREqn(p1, _, _, _), core.IREqn(p2, _, _, _)], _, _):
+            case af.core.IR([af.core.IREqn(p1, _, _, _), af.core.IREqn(p2, _, _, _)], _, _):
                 assert p1.name == "format"
                 assert p2.name == "concat"
             case _:
                 assert False, "Pattern should match two equations"
 
     def test_match_by_primitive_tag(self):
-        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x), "b")
 
         match ir:
-            case core.IR([core.IREqn(core.Primitive(name, "string"), _, _, _)], _, _):
+            case af.core.IR([af.core.IREqn(af.core.Primitive(name, "string"), _, _, _)], _, _):
                 assert name == "concat"
             case _:
                 assert False, "Pattern should match string-tagged primitive"
 
     def test_match_higher_order_primitive_with_nested_ir(self):
-        inner_ir = core.build_ir(lambda x: core.concat("a", x), "b")
-        pf_ir = core.pushforward_ir(inner_ir)
+        inner_ir = af.build_ir(lambda x: af.concat("a", x), "b")
+        pf_ir = af.pushforward_ir(inner_ir)
 
         match pf_ir:
-            case core.IR([core.IREqn(core.Primitive("pushforward_call", _), _, _, params)], _, _):
+            case af.core.IR(
+                [af.core.IREqn(af.core.Primitive("pushforward_call", _), _, _, params)], _, _
+            ):
                 nested = params["ir"]
-                assert isinstance(nested, core.IR)
+                assert isinstance(nested, af.core.IR)
                 assert len(nested.ireqns) == 1
             case _:
                 assert False, "Pattern should match pushforward_call"
 
     def test_match_switch_branches(self):
         branches = {
-            "a": core.build_ir(lambda x: core.concat("A: ", x), "X"),
-            "b": core.build_ir(lambda x: core.concat("B: ", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("A: ", x), "X"),
+            "b": af.build_ir(lambda x: af.concat("B: ", x), "X"),
         }
 
         def program(key, x):
-            return core.switch(key, branches, x)
+            return af.switch(key, branches, x)
 
-        ir = core.build_ir(program, "a", "test")
+        ir = af.build_ir(program, "a", "test")
 
         match ir:
-            case core.IR([core.IREqn(core.Primitive("switch", "control"), _, _, params)], _, _):
+            case af.core.IR(
+                [af.core.IREqn(af.core.Primitive("switch", "control"), _, _, params)], _, _
+            ):
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
                 assert "b" in branch_dict
-                assert isinstance(branch_dict["a"], core.IR)
+                assert isinstance(branch_dict["a"], af.core.IR)
             case _:
                 assert False, "Pattern should match switch"
 
     def test_match_ir_guard(self):
-        ir = core.build_ir(lambda x: core.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x), "b")
 
         match ir:
-            case core.IR(eqns, _, _) if len(eqns) == 1:
+            case af.core.IR(eqns, _, _) if len(eqns) == 1:
                 single_eqn = True
-            case core.IR(eqns, _, _) if len(eqns) > 1:
+            case af.core.IR(eqns, _, _) if len(eqns) > 1:
                 single_eqn = False
             case _:
                 single_eqn = None
@@ -250,13 +256,13 @@ class TestIRMatchArgs:
 
     def test_match_all_string_primitives(self):
         def program(x, y):
-            a = core.format("Hello {}", x)
-            return core.concat(a, y)
+            a = af.format("Hello {}", x)
+            return af.concat(a, y)
 
-        ir = core.build_ir(program, "World", "!")
+        ir = af.build_ir(program, "World", "!")
 
         match ir:
-            case core.IR(eqns, _, _) if all(e.prim.tag == "string" for e in eqns):
+            case af.core.IR(eqns, _, _) if all(e.prim.tag == "string" for e in eqns):
                 all_string = True
             case _:
                 all_string = False
