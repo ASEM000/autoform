@@ -9,23 +9,23 @@ class TestInterpreterRuleMapping:
         mapping = core.InterpreterRuleMapping[Callable]()
         p = core.Primitive("test_basic")
 
-        @ft.partial(mapping.set, p)
+        @ft.partial(mapping.def_rule, p)
         def rule(x):
             return x
 
-        assert mapping.get(p) is rule
+        assert mapping[p] is rule
 
     def test_duplicate_raises(self):
         mapping = core.InterpreterRuleMapping[Callable]()
         p = core.Primitive("test_duplicate")
 
-        @ft.partial(mapping.set, p)
+        @ft.partial(mapping.def_rule, p)
         def rule1(x):
             return x
 
         try:
 
-            @ft.partial(mapping.set, p)
+            @ft.partial(mapping.def_rule, p)
             def rule2(x):
                 return x
 
@@ -38,7 +38,7 @@ class TestInterpreterRuleMapping:
         p1 = core.Primitive("test_contains_1")
         p2 = core.Primitive("test_contains_2")
 
-        @ft.partial(mapping.set, p1)
+        @ft.partial(mapping.def_rule, p1)
         def rule(x):
             return x
 
@@ -50,11 +50,11 @@ class TestInterpreterRuleMapping:
         p1 = core.Primitive("test_iter_1")
         p2 = core.Primitive("test_iter_2")
 
-        @ft.partial(mapping.set, p1)
+        @ft.partial(mapping.def_rule, p1)
         def rule1(x):
             return x
 
-        @ft.partial(mapping.set, p2)
+        @ft.partial(mapping.def_rule, p2)
         def rule2(x):
             return x
 
@@ -72,7 +72,7 @@ class TestInterpreterRuleMapping:
             try:
                 p = core.Primitive(f"concurrent_{thread_id}")
 
-                @ft.partial(mapping.set, p)
+                @ft.partial(mapping.def_rule, p)
                 def rule(x):
                     return x * thread_id
 
@@ -88,14 +88,14 @@ class TestInterpreterRuleMapping:
         assert len(errors) == 0
         assert len(results) == 50
         for thread_id, p in results:
-            rule = mapping.get(p)
+            rule = mapping[p]
             assert rule(1) == thread_id
 
     def test_reentrant_lock(self):
         mapping = core.InterpreterRuleMapping[Callable]()
         p = core.Primitive("reentrant")
 
-        @ft.partial(mapping.set, p)
+        @ft.partial(mapping.def_rule, p)
         def rule(x):
             return x
 
@@ -108,7 +108,7 @@ class TestInterpreterRuleMapping:
         prims = [core.Primitive(f"iter_contains_{i}") for i in range(10)]
         for p in prims:
 
-            @ft.partial(mapping.set, p)
+            @ft.partial(mapping.def_rule, p)
             def rule(x, prim=p):
                 return x
 

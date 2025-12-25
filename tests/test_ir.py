@@ -88,11 +88,11 @@ class TestIterIR:
     def test_streams_and_accumulates(self):
         stream_p = core.Primitive("stream")
 
-        @ft.partial(core.eval_rules.set, stream_p)
+        @ft.partial(core.eval_rules.def_rule, stream_p)
         def eval_stream(x):
             return core.Var()
 
-        @ft.partial(core.iter_rules.set, stream_p)
+        @ft.partial(core.iter_rules.def_rule, stream_p)
         def iter_stream(x):
             for ch in x:
                 yield ch
@@ -116,11 +116,11 @@ class TestIterIR:
     def test_multiple_outputs(self):
         split_p = core.Primitive("split")
 
-        @ft.partial(core.eval_rules.set, split_p)
+        @ft.partial(core.eval_rules.def_rule, split_p)
         def eval_split(x):
             return core.Var(), core.Var()
 
-        @ft.partial(core.iter_rules.set, split_p)
+        @ft.partial(core.iter_rules.def_rule, split_p)
         def iter_split(x):
             for ch in x:
                 yield (ch, ch)
@@ -140,11 +140,11 @@ class TestIterIR:
     def test_string_accumulation(self):
         p = core.Primitive("strs")
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(x):
             return core.Var()
 
-        @ft.partial(core.iter_rules.set, p)
+        @ft.partial(core.iter_rules.def_rule, p)
         def iter_rule(x):
             yield "a"
             yield "b"
@@ -160,11 +160,11 @@ class TestIterIR:
     def test_list_accumulation(self):
         p = core.Primitive("lists")
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(x):
             return core.Var()
 
-        @ft.partial(core.iter_rules.set, p)
+        @ft.partial(core.iter_rules.def_rule, p)
         def iter_rule(x):
             yield [1, 2]
             yield [3, 4]
@@ -180,11 +180,11 @@ class TestIterIR:
         """Test that iter_ir streams through program_call via its iter_rule."""
         stream_p = core.Primitive("stream_tokens")
 
-        @ft.partial(core.eval_rules.set, stream_p)
+        @ft.partial(core.eval_rules.def_rule, stream_p)
         def eval_stream(x):
             return core.Var()
 
-        @ft.partial(core.iter_rules.set, stream_p)
+        @ft.partial(core.iter_rules.def_rule, stream_p)
         def iter_stream(in_tree):
             x = in_tree
             for ch in x:
@@ -207,11 +207,11 @@ class TestIterIR:
         """Test streaming through multiple levels of program_call."""
         stream_p = core.Primitive("deep_stream")
 
-        @ft.partial(core.eval_rules.set, stream_p)
+        @ft.partial(core.eval_rules.def_rule, stream_p)
         def eval_stream(x):
             return core.Var()
 
-        @ft.partial(core.iter_rules.set, stream_p)
+        @ft.partial(core.iter_rules.def_rule, stream_p)
         def iter_stream(in_tree):
             x = in_tree
             for i, ch in enumerate(x):
@@ -243,11 +243,11 @@ class TestAsyncIR:
 
         p = core.Primitive("async_identity")
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(x):
             return core.Var()
 
-        @ft.partial(core.async_rules.set, p)
+        @ft.partial(core.async_rules.def_rule, p)
         async def async_rule(x):
             await asyncio.sleep(0.001)
             return x
@@ -263,11 +263,11 @@ class TestAsyncIR:
     async def test_fallback_to_impl(self):
         p = core.Primitive("sync_only")
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(x):
             return core.Var()
 
-        @ft.partial(core.impl_rules.set, p)
+        @ft.partial(core.impl_rules.def_rule, p)
         def impl_rule(x):
             return x + "!"
 

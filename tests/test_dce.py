@@ -48,11 +48,11 @@ class TestDCE:
     def test_removes_constant_folded_equation(self):
         const_p = core.Primitive("test_const_fold")
 
-        @ft.partial(core.impl_rules.set, const_p)
+        @ft.partial(core.impl_rules.def_rule, const_p)
         def impl(x):
             return "constant"
 
-        @ft.partial(core.eval_rules.set, const_p)
+        @ft.partial(core.eval_rules.def_rule, const_p)
         def eval_const(x):
             return "constant"
 

@@ -11,74 +11,74 @@ class TestPrimitive:
     def test_def_impl_decorator(self):
         p = core.Primitive("test_impl")
 
-        @ft.partial(core.impl_rules.set, p)
+        @ft.partial(core.impl_rules.def_rule, p)
         def impl(x):
             return x
 
-        assert core.impl_rules.get(p) is impl
+        assert core.impl_rules[p] is impl
 
     def test_def_eval_decorator(self):
         p = core.Primitive("test_eval")
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(x):
             return core.Var()
 
-        assert core.eval_rules.get(p) is eval_rule
+        assert core.eval_rules[p] is eval_rule
 
     def test_def_batch_decorator(self):
         p = core.Primitive("test_batch")
 
-        @ft.partial(core.batch_rules.set, p)
+        @ft.partial(core.batch_rules.def_rule, p)
         def batch_rule(batch_size, in_batched, in_tree):
             return in_tree, True
 
-        assert core.batch_rules.get(p) is batch_rule
+        assert core.batch_rules[p] is batch_rule
 
     def test_def_pushforward_decorator(self):
         p = core.Primitive("test_pushforward")
 
-        @ft.partial(core.push_rules.set, p)
+        @ft.partial(core.push_rules.def_rule, p)
         def pf_rule(primals, tangents):
             return primals, tangents
 
-        assert core.push_rules.get(p) is pf_rule
+        assert core.push_rules[p] is pf_rule
 
     def test_def_pullback_forward_decorator(self):
         p = core.Primitive("test_pullback_fwd")
 
-        @ft.partial(core.pull_fwd_rules.set, p)
+        @ft.partial(core.pull_fwd_rules.def_rule, p)
         def pb_fwd_rule(in_tree):
             return in_tree, in_tree
 
-        assert core.pull_fwd_rules.get(p) is pb_fwd_rule
+        assert core.pull_fwd_rules[p] is pb_fwd_rule
 
     def test_def_pullback_backward_decorator(self):
         p = core.Primitive("test_pullback_bwd")
 
-        @ft.partial(core.pull_bwd_rules.set, p)
+        @ft.partial(core.pull_bwd_rules.def_rule, p)
         def pb_bwd_rule(residuals, cotangent_out):
             return cotangent_out
 
-        assert core.pull_bwd_rules.get(p) is pb_bwd_rule
+        assert core.pull_bwd_rules[p] is pb_bwd_rule
 
     def test_def_iter_decorator(self):
         p = core.Primitive("test_iter")
 
-        @ft.partial(core.iter_rules.set, p)
+        @ft.partial(core.iter_rules.def_rule, p)
         def iter_rule(x):
             yield [x]
 
-        assert core.iter_rules.get(p) is iter_rule
+        assert core.iter_rules[p] is iter_rule
 
     def test_def_async_decorator(self):
         p = core.Primitive("test_async")
 
-        @ft.partial(core.async_rules.set, p)
+        @ft.partial(core.async_rules.def_rule, p)
         async def async_rule(x):
             return x
 
-        assert core.async_rules.get(p) is async_rule
+        assert core.async_rules[p] is async_rule
 
 
 class TestFormatPrimitive:
@@ -121,11 +121,11 @@ class TestBind:
     def test_bind_using(self):
         p = core.Primitive("custom_bind")
 
-        @ft.partial(core.impl_rules.set, p)
+        @ft.partial(core.impl_rules.def_rule, p)
         def impl(in_tree, *, multiplier):
             return in_tree * multiplier
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(in_tree, *, multiplier):
             return core.Var()
 
@@ -144,20 +144,18 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_use_interpreter_context(self):
-        var_counter = core.IRVarCounter()
-        tracer = core.TracingInterpreter(counter=var_counter)
+        tracer = core.TracingInterpreter()
         with core.using_interp(tracer) as t:
             assert t is tracer
-            core.format("Hello, {}!", core.IRVar(0))
+            core.format("Hello, {}!", core.IRVar.fresh())
             assert len(tracer.ireqns) == 1
         result = core.concat("a", "b")
         assert result == "ab"
 
     def test_tracing_interpreter_creates_ireqns(self):
-        var_counter = core.IRVarCounter()
-        tracer = core.TracingInterpreter(counter=var_counter)
+        tracer = core.TracingInterpreter()
         with core.using_interp(tracer):
-            core.format("Hello, {}!", core.IRVar(0))
+            core.format("Hello, {}!", core.IRVar.fresh())
         assert len(tracer.ireqns) == 1
 
 
