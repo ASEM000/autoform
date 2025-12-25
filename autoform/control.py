@@ -100,15 +100,28 @@ user_types.add(IR)
 
 
 def ir_call(ir: IR, *args, **kwargs) -> Tree:
-    """Call a ir as a differentiable operation.
+    """Call an IR as a differentiable operation.
+
+    Enables higher-order programming by treating IRs as first-class values
+    that can be called within other traced programs.
 
     Args:
-        ir: The IR ir to execute.
-        *args: Positional arguments to pass to the ir.
-        **kwargs: Keyword arguments to pass to the ir.
+        ir: The IR to execute.
+        *args: Positional arguments to pass to the IR.
+        **kwargs: Keyword arguments to pass to the IR.
 
     Returns:
-        The result of running the ir.
+        The result of running the IR.
+
+    Example:
+        >>> import autoform as af
+        >>> inner_ir = af.build_ir(lambda x: af.concat("Inner: ", x), "test")
+        >>> def outer(ir, x):
+        ...     result = af.ir_call(ir, x)
+        ...     return af.concat(result, "!")
+        >>> outer_ir = af.build_ir(outer, inner_ir, "hello")
+        >>> af.run_ir(outer_ir, inner_ir, "world")
+        'Inner: world!'
     """
     return ir_call_p.bind((ir, pack_user_input(*args, **kwargs)))
 

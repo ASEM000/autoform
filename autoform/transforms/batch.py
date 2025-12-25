@@ -250,12 +250,28 @@ def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[I
 def batch_ir(ir: IR, in_axes: Tree[type | None] = list) -> IR:
     """Transform an IR to process batched inputs.
 
+    Creates a batched version of the IR that processes multiple inputs
+    simultaneously. Use `in_axes` to specify which inputs are batched (type
+    like `list`) vs broadcast (None).
+
     Args:
-        ir: The IR to transform
-        in_axes: Axis specification (type for batched dims, None for broadcast)
+        ir: The IR to transform.
+        in_axes: Axis specification tree matching input structure.
+            - Container type: This input is batched (e.g. list of values).
+            - `None`: This input is broadcast (same value for all batch items).
 
     Returns:
-        A new IR that processes batched inputs and returns batched outputs
+        A new IR that takes batched inputs and returns batched outputs.
+
+    Example:
+        >>> import autoform as af
+        >>> def greet(greeting, name):
+        ...     return af.concat(greeting, name)
+        >>> ir = af.build_ir(greet, "Hi", "World")
+        >>> # Batch over names contained in list, broadcast greeting
+        >>> batched = af.batch_ir(ir, in_axes=(None, list))
+        >>> af.run_ir(batched, ("Hello, ", ["Alice", "Bob", "Carol"]))
+        ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
 
     def make_b(atom):

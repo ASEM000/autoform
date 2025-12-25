@@ -186,13 +186,29 @@ struct_lm_call_p = Primitive("struct_lm_call", tag="lm")
 def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> str:
     """Calls a language model with structured output using response_format.
 
+    Uses LLM's built-in JSON mode with a Pydantic schema to extract structured
+    data. The model response is automatically parsed and validated.
+
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
         model: The name of the language model to use.
-        struct: A Pydantic model or type for structured output.
+        struct: A Pydantic model subclassing `Struct` for the output schema.
 
     Returns:
-        The structured response as a JSON string.
+        A validated instance of the struct type.
+
+    Example:
+        >>> import autoform as af
+        >>> class Answer(af.Struct):
+        ...     reasoning: str
+        ...     answer: int
+        >>> def solver(question):
+        ...     messages = [{"role": "user", "content": question}]
+        ...     return af.struct_lm_call(messages, model="gpt-4o", struct=Answer)
+        >>> ir = af.build_ir(solver, "What is 2+2?")  # doctest: +SKIP
+        >>> result = af.run_ir(ir, "What is 2+2?")  # doctest: +SKIP
+        >>> result.answer  # doctest: +SKIP
+        4
     """
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
     roles = [m["role"] for m in messages]

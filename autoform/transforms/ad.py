@@ -55,12 +55,26 @@ class PushforwardInterpreter(Interpreter):
 def pushforward_ir(ir: IR) -> IR:
     """Transform an IR to compute primals and tangents (forward-mode AD).
 
+    Creates a new IR that propagates tangent (perturbation) vectors alongside
+    primal values. Useful for computing Jacobian-vector products (JVPs).
+
     Args:
-        ir: The IR to transform
+        ir: The IR to transform.
 
     Returns:
-        A new IR that takes (primal_inputs, tangent_inputs) and returns
-        (primal_outputs, tangent_outputs)
+        A new IR: `(primals, tangents) -> (primal_outputs, tangent_outputs)`
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x, y):
+        ...     return af.concat(x, y)
+        >>> ir = af.build_ir(program, "a", "b")
+        >>> pf_ir = af.pushforward_ir(ir)
+        >>> primals, tangents = af.run_ir(pf_ir, (("Hello", " World"), ("dx", "dy")))
+        >>> primals
+        'Hello World'
+        >>> tangents
+        'dxdy'
     """
 
     def make_p(atom):
@@ -262,12 +276,26 @@ class PullbackBwdInterpreter(Interpreter):
 def pullback_ir(ir: IR) -> IR:
     """Transform an IR to compute outputs and input cotangents (reverse-mode AD).
 
+    Creates a new IR that computes gradients by backpropagating cotangent
+    (adjoint) vectors. Useful for computing vector-Jacobian products (VJPs).
+
     Args:
-        ir: The IR to transform
+        ir: The IR to transform.
 
     Returns:
-        A new IR that takes (primal_inputs, output_cotangents) and returns
-        (primal_outputs, input_cotangents)
+        A new IR: `(primals, output_cotangent) -> (outputs, input_cotangents)`
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x, y):
+        ...     return af.concat(x, y)
+        >>> ir = af.build_ir(program, "a", "b")
+        >>> pb_ir = af.pullback_ir(ir)
+        >>> outputs, cotangents = af.run_ir(pb_ir, (("Hello", " World"), "feedback"))
+        >>> outputs
+        'Hello World'
+        >>> cotangents  # Gradient flows back to both inputs
+        ('feedback', 'feedback')
     """
 
     def make_p(atom):

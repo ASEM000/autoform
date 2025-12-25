@@ -372,7 +372,27 @@ class TracingInterpreter(Interpreter):
 
 
 def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
-    """Build an IR from a function by tracing its execution."""
+    """Build an IR from a function by tracing its execution.
+
+    Traces `func` with example inputs to capture the computation graph as an
+    intermediate representation (IR).
+
+    Args:
+        func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
+        *args: Example positional arguments to trace with.
+        **kwargs: Example keyword arguments to trace with.
+
+    Returns:
+        An IR representing the traced computation graph.
+
+    Example:
+        >>> import autoform as af
+        >>> def greet(name, punctuation):
+        ...     return af.format("Hello, {}{}!", name, punctuation)
+        >>> ir = af.build_ir(greet, "World", "?")
+        >>> af.run_ir(ir, "Alice", "!")
+        'Hello, Alice!!'
+    """
 
     def assert_no_iratom(x):
         assert not is_iratom(x)

@@ -76,7 +76,28 @@ def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
 
 
 def iter_ir(ir: IR, *args, **kwargs):
-    """Iterate through IR execution, yielding intermediate results."""
+    """Iterate through IR execution, yielding intermediate results.
+
+    Enables streaming execution for primitives with `iter_rules` (e.g., `lm_call`).
+    Yields chunks as they become available, with the final yield being the complete result.
+
+    Args:
+        ir: The intermediate representation to execute.
+        *args: Positional arguments to provide as inputs.
+        **kwargs: Keyword arguments to provide as inputs.
+
+    Yields:
+        Intermediate chunks from streaming primitives, then the final result.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     return af.concat("Result: ", x)
+        >>> ir = af.build_ir(program, "test")
+        >>> chunks = list(af.iter_ir(ir, "hello"))
+        >>> chunks[-1]  # Final result is always last
+        'Result: hello'
+    """
     in_tree = pack_user_input(*args, **kwargs)
     env: dict[IRVar, Value] = {}
 
@@ -112,7 +133,28 @@ def iter_ir(ir: IR, *args, **kwargs):
 
 
 async def arun_ir(ir: IR, *args, **kwargs):
-    """Asynchronously run the IR."""
+    """Asynchronously execute the IR.
+
+    Enables concurrent execution for primitives with `async_rules` (e.g., `lm_call`).
+    Useful for running multiple IR executions in parallel with `asyncio.gather`.
+
+    Args:
+        ir: The intermediate representation to execute.
+        *args: Positional arguments to provide as inputs.
+        **kwargs: Keyword arguments to provide as inputs.
+
+    Returns:
+        The output tree produced by running the IR.
+
+    Example:
+        >>> import autoform as af
+        >>> import asyncio
+        >>> def program(x):
+        ...     return af.concat("Hello, ", x)
+        >>> ir = af.build_ir(program, "test")
+        >>> asyncio.run(af.arun_ir(ir, "World"))
+        'Hello, World'
+    """
     in_tree = pack_user_input(*args, **kwargs)
     env: dict[IRVar, Value] = {}
 
