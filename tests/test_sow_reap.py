@@ -74,7 +74,8 @@ class TestReapIr:
             return core.sow(x, tag="debug", name="captured")
 
         ir = core.build_ir(func, "test")
-        result, reaped = core.reap_ir(ir, "debug", "hello")
+        reap = core.reap_ir(ir, tag="debug")
+        result, reaped = core.run_ir(reap, "hello")
         assert result == "hello"
         assert reaped == {"captured": "hello"}
 
@@ -86,7 +87,8 @@ class TestReapIr:
             return c
 
         ir = core.build_ir(func, "test")
-        result, reaped = core.reap_ir(ir, "debug", "hi")
+        reap = core.reap_ir(ir, tag="debug")
+        result, reaped = core.run_ir(reap, "hi")
         assert result == "hi!"
         assert reaped == {"first": "hi", "second": "hi!"}
 
@@ -98,10 +100,12 @@ class TestReapIr:
 
         ir = core.build_ir(func, "test")
 
-        _, debug_reaped = core.reap_ir(ir, "debug", "hello")
+        reap_debug = core.reap_ir(ir, tag="debug")
+        _, debug_reaped = core.run_ir(reap_debug, "hello")
         assert debug_reaped == {"debug_val": "hello"}
 
-        _, metrics_reaped = core.reap_ir(ir, "metrics", "hello")
+        reap_metrics = core.reap_ir(ir, tag="metrics")
+        _, metrics_reaped = core.run_ir(reap_metrics, "hello")
         assert metrics_reaped == {"metrics_val": "hello"}
 
     def test_reap_empty_when_no_match(self):
@@ -109,7 +113,8 @@ class TestReapIr:
             return core.sow(x, tag="other", name="val")
 
         ir = core.build_ir(func, "test")
-        result, reaped = core.reap_ir(ir, "debug", "hello")
+        reap = core.reap_ir(ir, tag="debug")
+        result, reaped = core.run_ir(reap, "hello")
         assert result == "hello"
         assert reaped == {}
 
@@ -118,7 +123,8 @@ class TestReapIr:
             return core.concat(x, "!")
 
         ir = core.build_ir(func, "test")
-        result, reaped = core.reap_ir(ir, "debug", "hello")
+        reap = core.reap_ir(ir, tag="debug")
+        result, reaped = core.run_ir(reap, "hello")
         assert result == "hello!"
         assert reaped == {}
 
@@ -129,10 +135,19 @@ class TestReapIr:
             return core.sow(response, tag="debug", name="response")
 
         ir = core.build_ir(func, "test")
-        result, reaped = core.reap_ir(ir, "debug", "What?")
+        reap = core.reap_ir(ir, tag="debug")
+        result, reaped = core.run_ir(reap, "What?")
         assert result == "Q: What? A: 42"
         assert reaped["prompt"] == "Q: What?"
         assert reaped["response"] == "Q: What? A: 42"
+
+    def test_reap_returns_ir(self):
+        def func(x):
+            return core.sow(x, tag="debug", name="val")
+
+        ir = core.build_ir(func, "test")
+        reap = core.reap_ir(ir, tag="debug")
+        assert isinstance(reap, core.IR)
 
 
 class TestPlantIr:
@@ -142,12 +157,11 @@ class TestPlantIr:
 
         ir = core.build_ir(func, "test")
 
-        # Normal execution
         result = core.run_ir(ir, "World")
         assert result == "Hello, World"
 
-        # Plant overrides the sow value
-        result = core.plant_ir(ir, "cache", {"greeting": "CACHED"}, "World")
+        planted = core.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")
+        result = core.run_ir(planted, "World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
@@ -158,8 +172,8 @@ class TestPlantIr:
 
         ir = core.build_ir(func, "test")
 
-        # Only plant first, second computes normally
-        result = core.plant_ir(ir, "cache", {"first": "PLANTED"}, "ignored")
+        planted = core.plant_ir(ir, {"first": "PLANTED"}, tag="cache")
+        result = core.run_ir(planted, "ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
@@ -170,7 +184,8 @@ class TestPlantIr:
 
         ir = core.build_ir(func, "test")
 
-        result = core.plant_ir(ir, "cache", {"val": "CACHED"}, "input")
+        planted = core.plant_ir(ir, {"val": "CACHED"}, tag="cache")
+        result = core.run_ir(planted, "input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
@@ -178,7 +193,9 @@ class TestPlantIr:
             return core.sow(x, tag="cache", name="val")
 
         ir = core.build_ir(func, "test")
-        result = core.plant_ir(ir, "cache", {}, "hello")
+
+        planted = core.plant_ir(ir, {}, tag="cache")
+        result = core.run_ir(planted, "hello")
         assert result == "hello"
 
     def test_plant_unmatched_name(self):
@@ -187,5 +204,126 @@ class TestPlantIr:
 
         ir = core.build_ir(func, "test")
 
-        result = core.plant_ir(ir, "cache", {"other": "PLANTED"}, "hello")
+        planted = core.plant_ir(ir, {"other": "PLANTED"}, tag="cache")
+        result = core.run_ir(planted, "hello")
         assert result == "hello"
+
+    def test_plant_returns_ir(self):
+        def func(x):
+            return core.sow(x, tag="cache", name="val")
+
+        ir = core.build_ir(func, "test")
+        planted = core.plant_ir(ir, {"val": "X"}, tag="cache")
+        assert isinstance(planted, core.IR)
+
+
+class TestReapTransformComposition:
+    def test_batch_of_reap(self):
+        def func(x):
+            return core.sow(core.concat("Hello, ", x), tag="debug", name="greeting")
+
+        ir = core.build_ir(func, "test")
+        reap = core.reap_ir(ir, tag="debug")
+        batched_reap = core.batch_ir(reap)
+
+        result = core.run_ir(batched_reap, ["World", "Universe"])
+        outputs, reaped = result
+        assert outputs == ["Hello, World", "Hello, Universe"]
+
+    def test_pushforward_of_reap(self):
+        def func(x):
+            return core.sow(x, tag="debug", name="val")
+
+        ir = core.build_ir(func, "test")
+        reap = core.reap_ir(ir, tag="debug")
+        pf_reap = core.pushforward_ir(reap)
+
+        result = core.run_ir(pf_reap, ("primal", "tangent"))
+        (primal_out, _), (tangent_out, _) = result
+        assert primal_out == "primal"
+        assert tangent_out == "tangent"
+
+    def test_pullback_of_reap(self):
+        def func(x):
+            return core.sow(x, tag="debug", name="val")
+
+        ir = core.build_ir(func, "test")
+        reap = core.reap_ir(ir, tag="debug")
+        pb_reap = core.pullback_ir(reap)
+
+        result = core.run_ir(pb_reap, ("primal", ("cotangent", {})))
+        primal_out, cotangent_in = result
+        assert primal_out[0] == "primal"
+
+
+class TestPlantTransformComposition:
+    def test_batch_of_plant(self):
+        def func(x):
+            return core.sow(core.concat("Hello, ", x), tag="cache", name="greeting")
+
+        ir = core.build_ir(func, "test")
+        planted = core.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")
+        batched_plant = core.batch_ir(planted)
+        result = core.run_ir(batched_plant, ["World", "Universe"])
+        assert result == ["Hello, World", "Hello, Universe"]
+
+    def test_pushforward_of_plant(self):
+        def func(x):
+            return core.sow(x, tag="cache", name="val")
+
+        ir = core.build_ir(func, "test")
+        planted = core.plant_ir(ir, {"val": "CACHED"}, tag="cache")
+        pf_plant = core.pushforward_ir(planted)
+
+        result = core.run_ir(pf_plant, ("primal", "tangent"))
+        primal_out, tangent_out = result
+        assert primal_out == "primal"
+        assert tangent_out == "tangent"
+
+    def test_pullback_of_plant(self):
+        def func(x):
+            return core.sow(x, tag="cache", name="val")
+
+        ir = core.build_ir(func, "test")
+        planted = core.plant_ir(ir, {"val": "CACHED"}, tag="cache")
+        pb_plant = core.pullback_ir(planted)
+
+        result = core.run_ir(pb_plant, ("primal", "cotangent"))
+        primal_out, cotangent_in = result
+        assert primal_out == "CACHED"
+
+
+class TestNestedReapPlantComposition:
+    def test_reap_of_batch(self):
+        def func(x):
+            return core.sow(core.concat("Hello, ", x), tag="debug", name="greeting")
+
+        ir = core.build_ir(func, "test")
+        batched = core.batch_ir(ir)
+        reap_batched = core.reap_ir(batched, tag="debug")
+
+        result, reaped = core.run_ir(reap_batched, ["World", "Universe"])
+        assert result == ["Hello, World", "Hello, Universe"]
+
+    def test_reap_of_plant(self):
+        def func(x):
+            return core.sow(core.concat("Hello, ", x), tag="cache", name="greeting")
+
+        ir = core.build_ir(func, "test")
+        planted = core.plant_ir(ir, {"greeting": "OVERRIDE"}, tag="cache")
+        reap_planted = core.reap_ir(planted, tag="cache")
+
+        result, reaped = core.run_ir(reap_planted, "ignored")
+        assert result == "OVERRIDE"
+
+    def test_batch_of_batch_of_reap(self):
+        def func(x):
+            return core.sow(x, tag="debug", name="val")
+
+        ir = core.build_ir(func, "test")
+        reap = core.reap_ir(ir, tag="debug")
+        batched = core.batch_ir(reap)
+        double_batched = core.batch_ir(batched)
+        result = core.run_ir(double_batched, [["a", "b"], ["c", "d"]])
+        outputs, _ = result
+        assert outputs == [["a", "b"], ["c", "d"]]
