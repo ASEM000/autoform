@@ -1733,7 +1733,7 @@ def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tre
 mark_p = Primitive("mark", tag="core")
 
 
-def mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
+def mark(x: Tree, *, tag: tp.Hashable) -> Tree:
     """Identity operation with a tag.
 
     Args:
@@ -1757,37 +1757,37 @@ def mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
 
 
 @ft.partial(impl_rules.set, mark_p)
-def impl_mark[T](x: Tree, *, tag: tp.Hashable[T]) -> Tree:
+def impl_mark(x: Tree, *, tag: tp.Hashable) -> Tree:
     del tag
     return x
 
 
 @ft.partial(eval_rules.set, mark_p)
-def eval_mark[T](x: Tree[EvalType], *, tag: tp.Hashable[T]) -> Tree[EvalType]:
+def eval_mark(x: Tree[EvalType], *, tag: tp.Hashable) -> Tree[EvalType]:
     del tag
     return x
 
 
 @ft.partial(push_rules.set, mark_p)
-def pushforward_mark[T](primal: Tree, tangent: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+def pushforward_mark(primal: Tree, tangent: Tree, *, tag: tp.Hashable) -> tuple[Tree, Tree]:
     del tag
     return primal, tangent
 
 
 @ft.partial(pull_fwd_rules.set, mark_p)
-def pullback_fwd_mark[T](x: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+def pullback_fwd_mark(x: Tree, *, tag: tp.Hashable) -> tuple[Tree, Tree]:
     del tag
     return x, x  # residuals = input for structure
 
 
 @ft.partial(pull_bwd_rules.set, mark_p)
-def pullback_bwd_mark[T](residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashable[T]) -> Tree:
+def pullback_bwd_mark(residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashable) -> Tree:
     del residuals, tag
     return cotangent_out  # identity backward pass
 
 
 @ft.partial(batch_rules.set, mark_p)
-def batch_mark[T](_: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable[T]) -> tuple[Tree, Tree]:
+def batch_mark(_: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable) -> tuple[Tree, Tree]:
     del tag
     return x, in_batched
 
