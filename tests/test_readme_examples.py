@@ -128,9 +128,7 @@ def textgrad_style_lm_call(
 def impl_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
 ):
-    return core.impl_rules[core.struct_lm_call_p](
-        contents, roles=roles, model=model, struct=struct
-    )
+    return core.impl_rules[core.struct_lm_call_p](contents, roles=roles, model=model, struct=struct)
 
 
 @ft.partial(core.eval_rules.def_rule, textgrad_style_lm_call_p)
@@ -142,9 +140,7 @@ def eval_textgrad_style_lm_call(in_tree, *, struct: type[core.Struct], **params)
 def pull_fwd_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
 ):
-    out = core.impl_rules[core.struct_lm_call_p](
-        contents, roles=roles, model=model, struct=struct
-    )
+    out = core.impl_rules[core.struct_lm_call_p](contents, roles=roles, model=model, struct=struct)
     residuals = (contents, roles, out)
     return out, residuals
 
@@ -210,9 +206,7 @@ def push_textgrad_style_lm_call(
     This is useful for sensitivity analysis — seeing how changes to inputs
     affect the outputs.
     """
-    p_out = core.impl_rules[core.struct_lm_call_p](
-        primals, roles=roles, model=model, struct=struct
-    )
+    p_out = core.impl_rules[core.struct_lm_call_p](primals, roles=roles, model=model, struct=struct)
     t_out = core.impl_rules[core.struct_lm_call_p](
         tangents, roles=roles, model=model, struct=struct
     )

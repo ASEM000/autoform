@@ -9,13 +9,15 @@ from autoform.core import (
     batch_ir,
     dce_ir,
     fold_ir,
+    reap_ir,
+    plant_ir,
     # primitives (functions)
     concat,
     format,
     lm_call,
     struct_lm_call,
     stop_gradient,
-    mark,
+    sow,
     ir_call,
     switch,
     # primitives (objects)
@@ -24,7 +26,7 @@ from autoform.core import (
     lm_call_p,
     struct_lm_call_p,
     stop_gradient_p,
-    mark_p,
+    sow_p,
     ir_call_p,
     switch_p,
     # constructs
@@ -57,13 +59,15 @@ __all__ = [
     "fold_ir",
     "iter_ir",
     "arun_ir",
+    "reap_ir",
+    "plant_ir",
     # primitives (functions)
     "concat",
     "format",
     "lm_call",
     "struct_lm_call",
     "stop_gradient",
-    "mark",
+    "sow",
     "ir_call",
     "switch",
     # primitives (objects)
@@ -72,7 +76,7 @@ __all__ = [
     "lm_call_p",
     "struct_lm_call_p",
     "stop_gradient_p",
-    "mark_p",
+    "sow_p",
     "ir_call_p",
     "switch_p",
     # constructs
