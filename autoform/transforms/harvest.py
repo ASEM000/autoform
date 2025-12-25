@@ -7,7 +7,7 @@ import typing as tp
 from operator import setitem
 
 from autoform.core import Interpreter, build_ir, get_interp, using_interp
-from autoform.core import IR, EvalType, IRLit, IRVar, Value, Var, is_irvar, is_var, user_types
+from autoform.core import IR, EvalType, IRLit, IRVar, Value, Var, is_irvar, is_var
 from autoform.core import (
     Primitive,
     batch_rules,
@@ -124,16 +124,12 @@ def batch_sow(
 
 reap_call_p = Primitive("reap_call", tag="harvest")
 
-
-class Reaped(dict[tp.Hashable, Tree]): ...
-
-
-user_types.add(Reaped)  # Register as opaque leaf
+type Reaped = dict[tp.Hashable, Tree]
 
 
 @ft.partial(impl_rules.def_rule, reap_call_p)
 def impl_reap_call(in_tree: Tree, *, ir: IR, tag: tp.Hashable) -> tuple[Tree, Reaped]:
-    reaped = Reaped()
+    reaped: Reaped = {}
     env: dict[IRVar, Value] = {}
 
     def write(atom, value: Value):
