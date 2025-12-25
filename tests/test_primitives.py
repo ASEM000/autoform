@@ -145,8 +145,8 @@ class TestInterpreter:
 
     def test_use_interpreter_context(self):
         var_counter = core.IRVarCounter()
-        tracer = core.TracingInterpreter(var_counter)
-        with core.set_interpreter(tracer) as t:
+        tracer = core.TracingInterpreter(counter=var_counter)
+        with core.using_interp(tracer) as t:
             assert t is tracer
             core.format("Hello, {}!", core.IRVar(0))
             assert len(tracer.ireqns) == 1
@@ -155,8 +155,8 @@ class TestInterpreter:
 
     def test_tracing_interpreter_creates_ireqns(self):
         var_counter = core.IRVarCounter()
-        tracer = core.TracingInterpreter(var_counter)
-        with core.set_interpreter(tracer):
+        tracer = core.TracingInterpreter(counter=var_counter)
+        with core.using_interp(tracer):
             core.format("Hello, {}!", core.IRVar(0))
         assert len(tracer.ireqns) == 1
 

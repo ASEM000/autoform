@@ -48,6 +48,15 @@ def index(tree: Tree, mask: Tree, i: int) -> Tree:
     return spec.unflatten(selected)
 
 
+def pack_user_input(*args, **kwargs) -> Tree:
+    # NOTE(asem): used at the interface of user-bind (i.e. args,kwargs => in_tree, **params)
+    if kwargs:
+        return (*args, kwargs)
+    if len(args) == 1:
+        return args[0]
+    return args
+
+
 # ==================================================================================================
 # BASE INTERPRETER
 # ==================================================================================================
@@ -97,13 +106,15 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 @contextmanager
-def set_interpreter(interpreter: Interpreter):
+def using_interp(interpreter: Interpreter):
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
     finally:
         active_interpreter.reset(token)
 
+def get_interp() -> Interpreter:
+    return active_interpreter.get()
 
 type Value = str
 
@@ -151,44 +162,6 @@ class IRVarCounter:
 
     def __next__(self):
         return next(self.counter)
-
-
-class TracingInterpreter(Interpreter):
-    def __init__(self, counter: IRVarCounter):
-        self.ireqns: list[IREqn] = []
-        self.counter = counter
-
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> list[IRVar]:
-        # NOTE(asem): convert inputs to IR-level atoms
-        # example
-        # >>> def progam(name: str):
-        # >>>   return concat("Hello, ", name)
-        # here concat receives ("Hello, ", IRVar(0)) as inputs, where
-        # iRVar(0) is created by `build_ir` with the tracing interpreter.
-        # but "Hello" must be converted to IRLit("Hello") before passing to concat.
-        def to_ir_atom(x):
-            return x if is_iratom(x) else IRLit(x)
-
-        in_irtree = treelib.map(to_ir_atom, in_tree)
-
-        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
-
-        # NOTE(asem): `eval_rule` objective is to get the output structure in terms
-        # of `irvar` and `irlit` instances. however, we do not want the user to interact
-        # with IR-level constructs inside `eval_rule`, hence we expose `Var` and raw values only.
-        # where `Var` -> `IRVar` and raw values -> `IRLit`.
-        def to_eval(x):
-            return Var() if is_irvar(x) else x.value
-
-        in_eval_tree = treelib.map(to_eval, in_irtree)
-        out_tree = eval_rules.get(prim)(in_eval_tree, **params)
-
-        def from_eval(x):
-            return IRVar(next(self.counter)) if is_var(x) else IRLit(x)
-
-        out_irtree = treelib.map(from_eval, out_tree, is_leaf=is_var)
-        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
-        return out_irtree
 
 
 class IRLit[T: Value](IRAtom):
@@ -377,28 +350,19 @@ class Primitive:
         return self.name
 
     def bind(self, in_tree: Tree, **params):
-        """Dispatch to the active interpreter.
-
-        Example:
-            >>> format_p = Primitive("format")
-            >>> def format(template, *args):
-            ...     return format_p.bind(args, template=template)
-        """
-        return active_interpreter.get().process(self, in_tree, **params)
+        return get_interp().process(self, in_tree, **params)
 
 
 class InterpreterRuleMapping[T: Callable]:
-    def __init__(self, override: bool):
+    def __init__(self):
         self.map: dict[Primitive, T] = {}
         self.lock = RLock()
-        self.override = override
 
     def set(self, prim: Primitive, rule: T) -> T:
         assert isinstance(prim, Primitive)
         assert isinstance(rule, Callable)
-        assert prim not in self.map or self.override, (
-            f"Rule for primitive {prim.name} already defined."
-        )
+        assert prim not in self.map
+
         with self.lock:
             self.map[prim] = rule
         return rule
@@ -428,15 +392,15 @@ type IterRule = Callable[..., tp.Iterator[Tree]]
 type AsyncRule = Callable[..., Coroutine[tp.Any, tp.Any, Tree]]
 type DCERule = Callable[[IREqn, set[IRVar]], tuple[bool, set[IRVar], IREqn]]
 
-impl_rules = InterpreterRuleMapping[ImplRule](override=False)
-eval_rules = InterpreterRuleMapping[EvalRule](override=False)
-batch_rules = InterpreterRuleMapping[BatchRule](override=False)
-push_rules = InterpreterRuleMapping[PushforwardRule](override=False)
-pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule](override=False)
-pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule](override=False)
-iter_rules = InterpreterRuleMapping[IterRule](override=False)
-async_rules = InterpreterRuleMapping[AsyncRule](override=False)
-dce_rules = InterpreterRuleMapping[DCERule](override=False)
+impl_rules = InterpreterRuleMapping[ImplRule]()
+eval_rules = InterpreterRuleMapping[EvalRule]()
+batch_rules = InterpreterRuleMapping[BatchRule]()
+push_rules = InterpreterRuleMapping[PushforwardRule]()
+pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule]()
+pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule]()
+iter_rules = InterpreterRuleMapping[IterRule]()
+async_rules = InterpreterRuleMapping[AsyncRule]()
+dce_rules = InterpreterRuleMapping[DCERule]()
 
 
 # ==================================================================================================
@@ -444,13 +408,42 @@ dce_rules = InterpreterRuleMapping[DCERule](override=False)
 # ==================================================================================================
 
 
-def pack_user_input(*args, **kwargs) -> Tree:
-    # NOTE(asem): used at the interface of user-bind (i.e. args,kwargs => in_tree, **params)
-    if kwargs:
-        return (*args, kwargs)
-    if len(args) == 1:
-        return args[0]
-    return args
+class TracingInterpreter(Interpreter):
+    def __init__(self, *, counter: IRVarCounter):
+        self.ireqns: list[IREqn] = []
+        self.counter = counter
+
+    def process(self, prim: Primitive, in_tree: Tree, **params) -> list[IRVar]:
+        # NOTE(asem): convert inputs to IR-level atoms
+        # example
+        # >>> def progam(name: str):
+        # >>>   return concat("Hello, ", name)
+        # here concat receives ("Hello, ", IRVar(0)) as inputs, where
+        # iRVar(0) is created by `build_ir` with the tracing interpreter.
+        # but "Hello" must be converted to IRLit("Hello") before passing to concat.
+        def to_ir_atom(x):
+            return x if is_iratom(x) else IRLit(x)
+
+        in_irtree = treelib.map(to_ir_atom, in_tree)
+
+        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
+
+        # NOTE(asem): `eval_rule` objective is to get the output structure in terms
+        # of `irvar` and `irlit` instances. however, we do not want the user to interact
+        # with IR-level constructs inside `eval_rule`, hence we expose `Var` and raw values only.
+        # where `Var` -> `IRVar` and raw values -> `IRLit`.
+        def to_eval(x):
+            return Var() if is_irvar(x) else x.value
+
+        in_eval_tree = treelib.map(to_eval, in_irtree)
+        out_tree = eval_rules.get(prim)(in_eval_tree, **params)
+
+        def from_eval(x):
+            return IRVar(next(self.counter)) if is_var(x) else IRLit(x)
+
+        out_irtree = treelib.map(from_eval, out_tree, is_leaf=is_var)
+        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
+        return out_irtree
 
 
 def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
@@ -492,7 +485,7 @@ def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
 
     in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
 
-    with set_interpreter(TracingInterpreter(counter)) as tracer:
+    with using_interp(TracingInterpreter(counter=counter)) as tracer:
         out_irtree = func(*in_ir_args, **in_ir_kwargs)
         in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
         out_irtree = treelib.map(assert_ir, out_irtree)
@@ -742,6 +735,16 @@ async def arun_ir(ir: IR, *args, **kwargs):
 pushforward_call_p = Primitive("pushforward_call", tag="transformation")
 
 
+class PushforwardInterpreter(Interpreter):
+    def __init__(self):
+        self.parent = get_interp()
+
+    def process(self, prim: Primitive, in_tree: Tree, **params):
+        in_primal, in_tangent = in_tree
+        with using_interp(self.parent):
+            return push_rules.get(prim)(in_primal, in_tangent, **params)
+
+
 @ft.partial(impl_rules.set, pushforward_call_p)
 def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, t_in_tree) = in_tree
@@ -764,14 +767,14 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     treelib.map(write_p, ir.in_irtree, p_in_tree)
     treelib.map(write_t, ir.in_irtree, t_in_tree)
 
-    for ireqn in ir.ireqns:
-        p_in_ireqn = treelib.map(read_p, ireqn.in_irtree)
-        t_in_ireqn = treelib.map(read_t, ireqn.in_irtree)
-        p_out_ireqn, t_out_ireqn = push_rules.get(ireqn.prim)(
-            p_in_ireqn, t_in_ireqn, **ireqn.params
-        )
-        treelib.map(write_p, ireqn.out_irtree, p_out_ireqn)
-        treelib.map(write_t, ireqn.out_irtree, t_out_ireqn)
+    with using_interp(PushforwardInterpreter()):
+        for ireqn in ir.ireqns:
+            p_in_ireqn = treelib.map(read_p, ireqn.in_irtree)
+            t_in_ireqn = treelib.map(read_t, ireqn.in_irtree)
+            in_tree = (p_in_ireqn, t_in_ireqn)
+            p_out_ireqn, t_out_ireqn = ireqn.prim.bind(in_tree, **ireqn.params)
+            treelib.map(write_p, ireqn.out_irtree, p_out_ireqn)
+            treelib.map(write_t, ireqn.out_irtree, t_out_ireqn)
 
     p_out_tree = treelib.map(read_p, ir.out_irtree)
     t_out_tree = treelib.map(read_t, ir.out_irtree)
@@ -822,17 +825,18 @@ def pullback_bwd_pushforward_call(residuals: Tree, cotangent_out: Tree, *, ir: I
 
 @ft.partial(batch_rules.set, pushforward_call_p)
 def batch_pushforward_call(
-    batch_size: int, in_batched: Tree[bool], in_tree: Tree, *, ir: IR
+    batch_size: int,
+    in_batched: Tree[bool],
+    in_tree: Tree,
+    *,
+    ir: IR,
 ) -> tuple[Tree, Tree]:
-    (p_cols, t_cols), (p_batched, t_batched) = in_tree, in_batched
 
+    (p_cols, t_cols), (p_batched, t_batched) = in_tree, in_batched
     index_p = ft.partial(index, p_cols, p_batched)
     index_t = ft.partial(index, t_cols, t_batched)
     pf_ir = pushforward_ir(ir)
-
-    # NOTE(asem): run the pushforward_ir for each element
     results = [run_ir(pf_ir, (index_p(b), index_t(b))) for b in range(batch_size)]
-
     out_spec = treelib.structure(pf_ir.out_irtree)
     leaves_bi = [out_spec.flatten_up_to(r) for r in results]
     stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
@@ -843,7 +847,6 @@ def batch_pushforward_call(
 
 @ft.partial(dce_rules.set, pushforward_call_p)
 def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    # Recursively DCE the inner IR and return modified equation
     dced_ir = dce_ir(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
@@ -853,6 +856,25 @@ def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool,
 # PULLBACK CALL ====================================================================================
 
 pullback_call_p = Primitive("pullback_call", tag="transformation")
+
+
+class PullbackFwdInterpreter(Interpreter):
+    def __init__(self):
+        self.parent = get_interp()
+
+    def process(self, prim: Primitive, in_tree: Tree, **params):
+        with using_interp(self.parent):
+            return pull_fwd_rules.get(prim)(in_tree, **params)
+
+
+class PullbackBwdInterpreter(Interpreter):
+    def __init__(self):
+        self.parent = get_interp()
+
+    def process(self, prim: Primitive, in_tree: Tree, **params):
+        in_residual, out_cotangent = in_tree
+        with using_interp(self.parent):
+            return pull_bwd_rules.get(prim)(in_residual, out_cotangent, **params)
 
 
 zero_cotangents_map: dict[type, Callable[[], tp.Any]] = {}
@@ -916,33 +938,22 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
 
-    # forward pass: compute outputs AND save residuals
-    for i, eqn in enumerate(ir.ireqns):
-        p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
-        if eqn.prim in pull_fwd_rules:
-            p_out_ireqn, residuals = pull_fwd_rules.get(eqn.prim)(p_in_ireqn, **eqn.params)
+    with using_interp(PullbackFwdInterpreter()):
+        for i, eqn in enumerate(ir.ireqns):
+            p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
+            p_out_ireqn, residuals = eqn.prim.bind(p_in_ireqn, **eqn.params)
             res_env[i] = residuals
-        else:
-            # fallback: use impl_rule and save inputs as residuals
-            p_out_ireqn = eqn.prim.bind(p_in_ireqn, **eqn.params)
-            res_env[i] = p_in_ireqn
-        treelib.map(write_p, eqn.out_irtree, p_out_ireqn)
+            treelib.map(write_p, eqn.out_irtree, p_out_ireqn)
 
-    # seed output cotangents
     treelib.map(write_c, ir.out_irtree, c_out_tree)
 
-    # backward pass: use residuals, no recomputation
-    for i, eqn in enumerate(reversed(ir.ireqns)):
-        idx = len(ir.ireqns) - 1 - i
-        residuals = res_env[idx]
-        c_out_ireqn = treelib.map(read_c, eqn.out_irtree)
-        if eqn.prim in pull_bwd_rules:
-            c_in_ireqn = pull_bwd_rules.get(eqn.prim)(residuals, c_out_ireqn, **eqn.params)
-        else:
-            # fallback: no backward rule defined, propagate zero
-            p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
-            c_in_ireqn = treelib.map(zero_cotangent, p_in_ireqn)
-        treelib.map(write_c, eqn.in_irtree, c_in_ireqn)
+    with using_interp(PullbackBwdInterpreter()):
+        for i, eqn in enumerate(reversed(ir.ireqns)):
+            idx = len(ir.ireqns) - 1 - i
+            residuals = res_env[idx]
+            c_out_ireqn = treelib.map(read_c, eqn.out_irtree)
+            c_in_ireqn = eqn.prim.bind((residuals, c_out_ireqn), **eqn.params)
+            treelib.map(write_c, eqn.in_irtree, c_in_ireqn)
 
     p_out_tree = treelib.map(read_p, ir.out_irtree)
     c_in_tree = treelib.map(read_c, ir.in_irtree)
@@ -1056,7 +1067,7 @@ def in_axes_to_batch_tree(in_axes: Tree) -> Tree[bool]:
     return treelib.map(lambda ax: ax is not None, in_axes, is_leaf=is_axis_spec)
 
 
-def assert_batch_tree_matches_irtree(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
+def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
     # NOTE(asem): ensure batch_tree (of booleans) matches the structure of irtree exactly
     # convert irtree to a tree of bools for structure comparison
     expected_batch_tree = treelib.map(lambda _: False, irtree)
@@ -1072,11 +1083,25 @@ def assert_batch_tree_matches_irtree(batch_tree: Tree, irtree: Tree, prim_name: 
     return batch_tree
 
 
+class BatchInterpreter(Interpreter):
+    def __init__(self, *, batch_size: int):
+        self.parent = get_interp()
+        self.batch_size = batch_size
+
+    def process(self, prim: Primitive, in_tree: Tree, **params):
+        batch_size, in_batched, in_values = in_tree
+        with using_interp(self.parent):
+            return batch_rules.get(prim)(batch_size, in_batched, in_values, **params)
+
+
 @ft.partial(impl_rules.set, batch_call_p)
 def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
-
-    # NOTE(asem): produce a tree of booleans indicating which leaves are batched
+    axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
+    in_batched_tree: Tree[bool] = in_axes_to_batch_tree(axes_tree)
+    in_batched_tree = treelib.broadcast_prefix(in_batched_tree, ir.in_irtree)
+    batch_size = infer_batch_size(col_tree, in_axes)
+    v_env: dict[IRVar, Value | list[Value]] = {}
     axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
     in_batched_tree: Tree[bool] = in_axes_to_batch_tree(axes_tree)
     in_batched_tree = treelib.broadcast_prefix(in_batched_tree, ir.in_irtree)
@@ -1100,22 +1125,15 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     treelib.map(write_v, ir.in_irtree, col_tree)
     treelib.map(write_b, ir.in_irtree, in_batched_tree)
 
-    for ireqn in ir.ireqns:
-        in_vals = treelib.map(read_v, ireqn.in_irtree)
-        in_batched = treelib.map(read_b, ireqn.in_irtree)
-        out_vals, out_batched = batch_rules.get(ireqn.prim)(
-            batch_size,
-            in_batched,
-            in_vals,
-            **ireqn.params,
-        )
-        treelib.map(write_v, ireqn.out_irtree, out_vals)
-        out_batched = assert_batch_tree_matches_irtree(
-            out_batched,
-            ireqn.out_irtree,
-            ireqn.prim.name,
-        )
-        treelib.map(write_b, ireqn.out_irtree, out_batched)
+    with using_interp(BatchInterpreter(batch_size=batch_size)):
+        for ireqn in ir.ireqns:
+            in_vals = treelib.map(read_v, ireqn.in_irtree)
+            in_batched = treelib.map(read_b, ireqn.in_irtree)
+            in_tree = (batch_size, in_batched, in_vals)
+            out_vals, out_batched = ireqn.prim.bind(in_tree, **ireqn.params)
+            treelib.map(write_v, ireqn.out_irtree, out_vals)
+            out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
+            treelib.map(write_b, ireqn.out_irtree, out_batched)
 
     return treelib.map(read_v, ir.out_irtree)
 
@@ -1417,7 +1435,6 @@ def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[
 def pullback_bwd_lm_call(
     residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str
 ) -> tuple:
-    """TextGrad-style semantic gradient: use LLM to generate feedback on inputs."""
     contents, output = residuals
     grads = []
     for content in contents:
@@ -1558,7 +1575,6 @@ def pullback_bwd_struct_lm_call(
     model: str,
     struct: type[Struct],
 ) -> tuple:
-    """TextGrad-style semantic gradient for structured outputs."""
     contents, output = residuals
     grads = []
     for content in contents:
@@ -1577,7 +1593,11 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 
 @ft.partial(iter_rules.set, struct_lm_call_p)
 def iter_struct_lm_call(
-    contents: tuple, *, roles: tuple, model: str, struct: type[Struct]
+    contents: tuple,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
 ) -> tp.Iterator[str]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, response_format=struct, stream=True)
