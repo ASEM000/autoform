@@ -171,7 +171,7 @@ def push_reap_call(
     pf_ir = pushforward_ir(ir)
     p_result, p_reaped = reap_call_p.bind((primals, tangents), ir=pf_ir, tag=tag)
     primal_out, tangent_out = p_result
-    return (primal_out, p_reaped), (tangent_out, Reaped())
+    return (primal_out, p_reaped), (tangent_out, {})
 
 
 @ft.partial(pull_fwd_rules.def_rule, reap_call_p)

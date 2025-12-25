@@ -341,7 +341,7 @@ async def async_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
 
 @ft.partial(dce_rules.def_rule, switch_p)
 def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
-    from autoform.transforms.optimizations import default_dce, dce_ir
+    from autoform.transforms.optims import default_dce, dce_ir
 
     for k in (branches := dict(ireqn.params["branches"])):
         branches[k] = dce_ir(branches[k])

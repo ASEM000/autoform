@@ -14,7 +14,7 @@ from autoform.transforms.harvest import (
     sow,
     sow_p,
 )
-from autoform.transforms.optimizations import dce_ir, fold_ir
+from autoform.transforms.optims import dce_ir, fold_ir
 
 __all__ = [
     "pushforward_ir",

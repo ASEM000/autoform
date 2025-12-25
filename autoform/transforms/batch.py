@@ -234,7 +234,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(dce_rules.def_rule, batch_call_p)
 def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    from autoform.transforms.optimizations import default_dce, dce_ir
+    from autoform.transforms.optims import default_dce, dce_ir
 
     new_eqn = ireqn.using(ir=dce_ir(ireqn.params["ir"]))
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
