@@ -17,7 +17,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, treelib, lru_cache
 
 # ==================================================================================================
 # SOW
@@ -219,6 +219,7 @@ def batch_reap_call(
     return (result, reaped), (in_batched, False)
 
 
+@ft.partial(lru_cache, maxsize=256)
 def reap_ir(ir: IR, *, tag: tp.Hashable) -> IR:
     """Transform IR to return (result, reaped_dict).
 
