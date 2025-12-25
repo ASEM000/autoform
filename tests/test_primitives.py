@@ -11,74 +11,74 @@ class TestPrimitive:
     def test_def_impl_decorator(self):
         p = core.Primitive("test_impl")
 
-        @ft.partial(core.impl_rules.set, p)
+        @ft.partial(core.impl_rules.def_rule, p)
         def impl(x):
             return x
 
-        assert core.impl_rules.get(p) is impl
+        assert core.impl_rules[p] is impl
 
     def test_def_eval_decorator(self):
         p = core.Primitive("test_eval")
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(x):
             return core.Var()
 
-        assert core.eval_rules.get(p) is eval_rule
+        assert core.eval_rules[p] is eval_rule
 
     def test_def_batch_decorator(self):
         p = core.Primitive("test_batch")
 
-        @ft.partial(core.batch_rules.set, p)
+        @ft.partial(core.batch_rules.def_rule, p)
         def batch_rule(batch_size, in_batched, in_tree):
             return in_tree, True
 
-        assert core.batch_rules.get(p) is batch_rule
+        assert core.batch_rules[p] is batch_rule
 
     def test_def_pushforward_decorator(self):
         p = core.Primitive("test_pushforward")
 
-        @ft.partial(core.push_rules.set, p)
+        @ft.partial(core.push_rules.def_rule, p)
         def pf_rule(primals, tangents):
             return primals, tangents
 
-        assert core.push_rules.get(p) is pf_rule
+        assert core.push_rules[p] is pf_rule
 
     def test_def_pullback_forward_decorator(self):
         p = core.Primitive("test_pullback_fwd")
 
-        @ft.partial(core.pull_fwd_rules.set, p)
+        @ft.partial(core.pull_fwd_rules.def_rule, p)
         def pb_fwd_rule(in_tree):
             return in_tree, in_tree
 
-        assert core.pull_fwd_rules.get(p) is pb_fwd_rule
+        assert core.pull_fwd_rules[p] is pb_fwd_rule
 
     def test_def_pullback_backward_decorator(self):
         p = core.Primitive("test_pullback_bwd")
 
-        @ft.partial(core.pull_bwd_rules.set, p)
+        @ft.partial(core.pull_bwd_rules.def_rule, p)
         def pb_bwd_rule(residuals, cotangent_out):
             return cotangent_out
 
-        assert core.pull_bwd_rules.get(p) is pb_bwd_rule
+        assert core.pull_bwd_rules[p] is pb_bwd_rule
 
     def test_def_iter_decorator(self):
         p = core.Primitive("test_iter")
 
-        @ft.partial(core.iter_rules.set, p)
+        @ft.partial(core.iter_rules.def_rule, p)
         def iter_rule(x):
             yield [x]
 
-        assert core.iter_rules.get(p) is iter_rule
+        assert core.iter_rules[p] is iter_rule
 
     def test_def_async_decorator(self):
         p = core.Primitive("test_async")
 
-        @ft.partial(core.async_rules.set, p)
+        @ft.partial(core.async_rules.def_rule, p)
         async def async_rule(x):
             return x
 
-        assert core.async_rules.get(p) is async_rule
+        assert core.async_rules[p] is async_rule
 
 
 class TestFormatPrimitive:
@@ -118,19 +118,19 @@ class TestConcatPrimitive:
 
 
 class TestBind:
-    def test_bind_with_params(self):
+    def test_bind_using(self):
         p = core.Primitive("custom_bind")
 
-        @ft.partial(core.impl_rules.set, p)
+        @ft.partial(core.impl_rules.def_rule, p)
         def impl(in_tree, *, multiplier):
             return in_tree * multiplier
 
-        @ft.partial(core.eval_rules.set, p)
+        @ft.partial(core.eval_rules.def_rule, p)
         def eval_rule(in_tree, *, multiplier):
             return core.Var()
 
         def func(x):
-            return core.bind(p, x, multiplier=3)
+            return p.bind(x, multiplier=3)
 
         ir = core.build_ir(func, "A")
         assert ir.ireqns[0].params["multiplier"] == 3
@@ -144,20 +144,18 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_use_interpreter_context(self):
-        var_counter = core.IRVarCounter()
-        tracer = core.TracingInterpreter(var_counter)
-        with core.set_interpreter(tracer) as t:
+        tracer = core.TracingInterpreter()
+        with core.using_interp(tracer) as t:
             assert t is tracer
-            core.format("Hello, {}!", core.IRVar(0))
+            core.format("Hello, {}!", core.IRVar.fresh())
             assert len(tracer.ireqns) == 1
         result = core.concat("a", "b")
         assert result == "ab"
 
     def test_tracing_interpreter_creates_ireqns(self):
-        var_counter = core.IRVarCounter()
-        tracer = core.TracingInterpreter(var_counter)
-        with core.set_interpreter(tracer):
-            core.format("Hello, {}!", core.IRVar(0))
+        tracer = core.TracingInterpreter()
+        with core.using_interp(tracer):
+            core.format("Hello, {}!", core.IRVar.fresh())
         assert len(tracer.ireqns) == 1
 
 
@@ -256,102 +254,6 @@ class TestStopGradient:
         _, cotangent_in = core.run_ir(pb_ir, (("p1", "p2"), ("c1", "c2")))
         assert is_zero_cotangent(cotangent_in[0])
         assert is_zero_cotangent(cotangent_in[1])
-
-
-class TestMark:
-    def test_impl_is_identity(self):
-        result = core.mark("hello", tag="test_tag")
-        assert result == "hello"
-
-    def test_ir_build(self):
-        def func(x):
-            return core.mark(x, tag="my_tag")
-
-        ir = core.build_ir(func, "test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "mark"
-        assert ir.ireqns[0].params["tag"] == "my_tag"
-
-    def test_run_ir(self):
-        def func(x):
-            return core.mark(x, tag="test")
-
-        ir = core.build_ir(func, "test")
-        result = core.run_ir(ir, "hello")
-        assert result == "hello"
-
-    def test_tag_types(self):
-        # string tag
-        assert core.mark("x", tag="str_tag") == "x"
-        # int tag
-        assert core.mark("x", tag=42) == "x"
-        # tuple tag
-        assert core.mark("x", tag=("a", 1)) == "x"
-
-    def test_pushforward_preserves_both(self):
-        def func(x):
-            return core.mark(x, tag="test")
-
-        ir = core.build_ir(func, "a")
-        pf_ir = core.pushforward_ir(ir)
-        primal_out, tangent_out = core.run_ir(pf_ir, ("primal", "tangent"))
-        assert primal_out == "primal"
-        assert tangent_out == "tangent"
-
-    def test_pullback_preserves_cotangent(self):
-        def func(x):
-            return core.mark(x, tag="test")
-
-        ir = core.build_ir(func, "a")
-        pb_ir = core.pullback_ir(ir)
-        primal_out, cotangent_in = core.run_ir(pb_ir, ("primal", "cotangent"))
-        assert primal_out == "primal"
-        assert cotangent_in == "cotangent"
-
-    def test_batch(self):
-        def func(x):
-            return core.mark(x, tag="test")
-
-        ir = core.build_ir(func, "a")
-        batched_ir = core.batch_ir(ir)
-        result = core.run_ir(batched_ir, ["a", "b", "c"])
-        assert result == ["a", "b", "c"]
-
-    def test_in_chain(self):
-        def func(x):
-            marked = core.mark(x, tag="middle")
-            return core.concat("[", marked, "]")
-
-        ir = core.build_ir(func, "a")
-        result = core.run_ir(ir, "hello")
-        assert result == "[hello]"
-
-    def test_tree_input(self):
-        def func(x):
-            return core.mark(x, tag="tree_test")
-
-        ir = core.build_ir(func, ("a", "b"))
-        result = core.run_ir(ir, ("hello", "world"))
-        assert result == ("hello", "world")
-
-    def test_multiple_marks_different_tags(self):
-        def func(x):
-            m1 = core.mark(x, tag="first")
-            m2 = core.mark(m1, tag="second")
-            return m2
-
-        ir = core.build_ir(func, "a")
-        assert len(ir.ireqns) == 2
-        assert ir.ireqns[0].params["tag"] == "first"
-        assert ir.ireqns[1].params["tag"] == "second"
-        result = core.run_ir(ir, "hello")
-        assert result == "hello"
-
-    def test_unhashable_tag_raises(self):
-        import pytest
-
-        with pytest.raises(TypeError):
-            core.mark("x", tag=["unhashable", "list"])
 
 
 class TestirCall:

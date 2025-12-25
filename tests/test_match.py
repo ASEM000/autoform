@@ -21,7 +21,7 @@ class TestIREqnMatchArgs:
 
     def test_match_by_params(self):
         def func(x):
-            return core.mark(x, tag="step1")
+            return core.sow(x, tag="step1", name="x")
 
         ir = core.build_ir(func, "test")
         eqn = ir.ireqns[0]
@@ -48,9 +48,9 @@ class TestIREqnMatchArgs:
 
     def test_match_in_loop(self):
         def func(x):
-            a = core.mark(x, tag="step1")
+            a = core.sow(x, tag="step1", name="a")
             b = core.concat(a, "!")
-            c = core.mark(b, tag="step2")
+            c = core.sow(b, tag="step2", name="c")
             return c
 
         ir = core.build_ir(func, "test")
@@ -58,7 +58,7 @@ class TestIREqnMatchArgs:
         tags_found = []
         for eqn in ir.ireqns:
             match eqn:
-                case core.IREqn(prim=p, params={"tag": tag}) if p == core.mark_p:
+                case core.IREqn(prim=p, params={"tag": tag}) if p == core.sow_p:
                     tags_found.append(tag)
 
         assert tags_found == ["step1", "step2"]
@@ -67,17 +67,17 @@ class TestIREqnMatchArgs:
         """Test matching equations and building a transformed IR."""
 
         def func(x):
-            a = core.mark(x, tag="old_tag")
+            a = core.sow(x, tag="old_tag", name="a")
             return core.concat(a, "!")
 
         ir = core.build_ir(func, "test")
 
-        # Transform: find mark with old_tag and change to new_tag
+        # Transform: find sow with old_tag and change to new_tag
         new_eqns = []
         for eqn in ir.ireqns:
             match eqn:
-                case core.IREqn(prim=p, params={"tag": "old_tag"}) if p == core.mark_p:
-                    new_eqns.append(eqn.replace(params={"tag": "new_tag"}))
+                case core.IREqn(prim=p, params={"tag": "old_tag"}) if p == core.sow_p:
+                    new_eqns.append(eqn.using(tag="new_tag"))
                 case _:
                     new_eqns.append(eqn)
 
@@ -94,15 +94,15 @@ class TestIREqnMatchArgs:
         assert result == "hello!"
 
 
-class TestIREqnReplace:
-    def test_replace_params(self):
+class TestIREqnWithParams:
+    def test_using_merges(self):
         def func(x):
-            return core.mark(x, tag="old")
+            return core.sow(x, tag="old", name="x")
 
         ir = core.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
-        new_eqn = eqn.replace(params={"tag": "new"})
+        new_eqn = eqn.using(tag="new")
 
         assert eqn.params["tag"] == "old"  # original unchanged
         assert new_eqn.params["tag"] == "new"
@@ -110,27 +110,14 @@ class TestIREqnReplace:
         assert new_eqn.in_irtree == eqn.in_irtree
         assert new_eqn.out_irtree == eqn.out_irtree
 
-    def test_replace_prim(self):
+    def test_using_preserves_fields(self):
         def func(x):
-            return core.concat(x, "!")
+            return core.sow(x, tag="test", name="x")
 
         ir = core.build_ir(func, "test")
         eqn = ir.ireqns[0]
 
-        new_eqn = eqn.replace(prim=core.format_p)
-
-        assert eqn.prim == core.concat_p  # original unchanged
-        assert new_eqn.prim == core.format_p
-
-    def test_replace_preserves_unspecified(self):
-        def func(x):
-            return core.mark(x, tag="test")
-
-        ir = core.build_ir(func, "test")
-        eqn = ir.ireqns[0]
-
-        # Replace only params, everything else should be preserved
-        new_eqn = eqn.replace(params={"tag": "changed"})
+        new_eqn = eqn.using(tag="changed")
 
         assert new_eqn.prim is eqn.prim
         assert new_eqn.in_irtree is eqn.in_irtree
@@ -142,20 +129,20 @@ class TestInsertAfterPattern:
         """Test inserting a new equation after a matched one."""
 
         def func(x):
-            a = core.mark(x, tag="insert_here")
+            a = core.sow(x, tag="insert_here", name="a")
             return core.concat(a, "!")
 
         ir = core.build_ir(func, "test")
         assert len(ir.ireqns) == 2
 
-        # Insert a new mark after the first mark
+        # Insert a new sow after the first sow
         new_eqns = []
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
             match eqn:
-                case core.IREqn(prim=p, params={"tag": "insert_here"}) if p == core.mark_p:
-                    # Create a new mark equation with the same IO but different tag
-                    inserted = eqn.replace(params={"tag": "inserted"})
+                case core.IREqn(prim=p, params={"tag": "insert_here"}) if p == core.sow_p:
+                    # Create a new sow equation with the same IO but different tag
+                    inserted = eqn.using(tag="inserted")
                     new_eqns.append(inserted)
 
         new_ir = core.IR(

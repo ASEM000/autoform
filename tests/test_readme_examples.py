@@ -6,35 +6,35 @@ shout_p = core.Primitive("shout")
 
 
 def shout(text: str) -> str:
-    return core.bind(shout_p, text)
+    return shout_p.bind(text)
 
 
-@ft.partial(core.impl_rules.set, shout_p)
+@ft.partial(core.impl_rules.def_rule, shout_p)
 def impl_shout(text: str) -> str:
     return text.upper()
 
 
-@ft.partial(core.eval_rules.set, shout_p)
+@ft.partial(core.eval_rules.def_rule, shout_p)
 def eval_shout(text) -> core.Var:
     return core.Var()
 
 
-@ft.partial(core.push_rules.set, shout_p)
+@ft.partial(core.push_rules.def_rule, shout_p)
 def push_shout(primal: str, tangent: str) -> tuple[str, str]:
     return primal.upper(), tangent.upper()
 
 
-@ft.partial(core.pull_fwd_rules.set, shout_p)
+@ft.partial(core.pull_fwd_rules.def_rule, shout_p)
 def pull_fwd_shout(text: str) -> tuple[str, str]:
     return text.upper(), text
 
 
-@ft.partial(core.pull_bwd_rules.set, shout_p)
+@ft.partial(core.pull_bwd_rules.def_rule, shout_p)
 def pull_bwd_shout(residual: str, cotangent: str) -> str:
     return cotangent
 
 
-@ft.partial(core.batch_rules.set, shout_p)
+@ft.partial(core.batch_rules.def_rule, shout_p)
 def batch_shout(batch_size: int, in_batched: bool, text) -> tuple[list[str], bool]:
     if in_batched:
         return [t.upper() for t in text], True
@@ -121,35 +121,31 @@ def textgrad_style_lm_call(
 ) -> core.Struct:
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return core.bind(textgrad_style_lm_call_p, contents, roles=roles, model=model, struct=struct)
+    return textgrad_style_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
 
 
-@ft.partial(core.impl_rules.set, textgrad_style_lm_call_p)
+@ft.partial(core.impl_rules.def_rule, textgrad_style_lm_call_p)
 def impl_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
 ):
-    return core.impl_rules.get(core.struct_lm_call_p)(
-        contents, roles=roles, model=model, struct=struct
-    )
+    return core.impl_rules[core.struct_lm_call_p](contents, roles=roles, model=model, struct=struct)
 
 
-@ft.partial(core.eval_rules.set, textgrad_style_lm_call_p)
+@ft.partial(core.eval_rules.def_rule, textgrad_style_lm_call_p)
 def eval_textgrad_style_lm_call(in_tree, *, struct: type[core.Struct], **params):
     return struct.model_construct(**{k: core.Var() for k in struct.model_fields})
 
 
-@ft.partial(core.pull_fwd_rules.set, textgrad_style_lm_call_p)
+@ft.partial(core.pull_fwd_rules.def_rule, textgrad_style_lm_call_p)
 def pull_fwd_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
 ):
-    out = core.impl_rules.get(core.struct_lm_call_p)(
-        contents, roles=roles, model=model, struct=struct
-    )
+    out = core.impl_rules[core.struct_lm_call_p](contents, roles=roles, model=model, struct=struct)
     residuals = (contents, roles, out)
     return out, residuals
 
 
-@ft.partial(core.pull_bwd_rules.set, textgrad_style_lm_call_p)
+@ft.partial(core.pull_bwd_rules.def_rule, textgrad_style_lm_call_p)
 def pull_bwd_textgrad_style_lm_call(
     residuals: tuple,
     cotangent_out,
@@ -200,7 +196,7 @@ to improve this input. Be concise and targeted."""
     return tuple(input_gradients)
 
 
-@ft.partial(core.push_rules.set, textgrad_style_lm_call_p)
+@ft.partial(core.push_rules.def_rule, textgrad_style_lm_call_p)
 def push_textgrad_style_lm_call(
     primals: tuple, tangents: tuple, *, roles: tuple, model: str, struct: type[core.Struct]
 ):
@@ -210,16 +206,14 @@ def push_textgrad_style_lm_call(
     This is useful for sensitivity analysis — seeing how changes to inputs
     affect the outputs.
     """
-    p_out = core.impl_rules.get(core.struct_lm_call_p)(
-        primals, roles=roles, model=model, struct=struct
-    )
-    t_out = core.impl_rules.get(core.struct_lm_call_p)(
+    p_out = core.impl_rules[core.struct_lm_call_p](primals, roles=roles, model=model, struct=struct)
+    t_out = core.impl_rules[core.struct_lm_call_p](
         tangents, roles=roles, model=model, struct=struct
     )
     return p_out, t_out
 
 
-@ft.partial(core.batch_rules.set, textgrad_style_lm_call_p)
+@ft.partial(core.batch_rules.def_rule, textgrad_style_lm_call_p)
 def batch_textgrad_style_lm_call(
     batch_size: int,
     in_batched: tuple[bool, ...],

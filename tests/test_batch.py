@@ -207,7 +207,7 @@ class TestBatchUtils:
         in_axes = (list, None)
         tree = (["a", "b", "c"], {"x": 1, "y": 2})
         broadcasted_in_axes = (list, {"x": None, "y": None})
-        assert core.broadcast_in_axes(tree, in_axes) == broadcasted_in_axes
+        assert core.broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
 
 
 class TestBatchRuleOutBatched:
@@ -215,7 +215,7 @@ class TestBatchRuleOutBatched:
         batch_size = 2
         in_batched = (True,)
         in_tree = (["a", "b"],)
-        out_vals, out_batched = core.batch_rules.get(core.format_p)(
+        out_vals, out_batched = core.batch_rules[core.format_p](
             batch_size, in_batched, in_tree, template="{}"
         )
         assert out_batched == True
@@ -225,7 +225,7 @@ class TestBatchRuleOutBatched:
         batch_size = 2
         in_batched = (True, True)
         in_tree = (["a", "b"], ["x", "y"])
-        out_vals, out_batched = core.batch_rules.get(core.concat_p)(batch_size, in_batched, in_tree)
+        out_vals, out_batched = core.batch_rules[core.concat_p](batch_size, in_batched, in_tree)
         assert out_batched == True
         assert out_vals == ["ax", "by"]
 
@@ -234,15 +234,15 @@ class TestBatchMultipleOutputs:
     def test_batch_primitive_with_two_outputs(self):
         split_p = core.Primitive("split")
 
-        @ft.partial(core.eval_rules.set, split_p)
+        @ft.partial(core.eval_rules.def_rule, split_p)
         def eval_split(x):
             return core.Var(), core.Var()
 
-        @ft.partial(core.impl_rules.set, split_p)
+        @ft.partial(core.impl_rules.def_rule, split_p)
         def impl_split(x):
             return x[0], x[1:]
 
-        @ft.partial(core.batch_rules.set, split_p)
+        @ft.partial(core.batch_rules.def_rule, split_p)
         def batch_split(batch_size, in_batched, in_tree):
             results = [impl_split(in_tree[b]) for b in range(batch_size)]
             out1 = [r[0] for r in results]
@@ -250,7 +250,7 @@ class TestBatchMultipleOutputs:
             return (out1, out2), (True, True)
 
         def program(x):
-            return core.bind(split_p, x)
+            return split_p.bind(x)
 
         ir = core.build_ir(program, "abc")
         batched_ir = core.batch_ir(ir)
@@ -260,15 +260,15 @@ class TestBatchMultipleOutputs:
     def test_batch_nested_tuple_output(self):
         nested_p = core.Primitive("nested")
 
-        @ft.partial(core.eval_rules.set, nested_p)
+        @ft.partial(core.eval_rules.def_rule, nested_p)
         def eval_nested(x):
             return (core.Var(), core.Var()), core.Var()
 
-        @ft.partial(core.impl_rules.set, nested_p)
+        @ft.partial(core.impl_rules.def_rule, nested_p)
         def impl_nested(x):
             return (x + "1", x + "2"), x + "3"
 
-        @ft.partial(core.batch_rules.set, nested_p)
+        @ft.partial(core.batch_rules.def_rule, nested_p)
         def batch_nested(batch_size, in_batched, in_tree):
             results = [impl_nested(in_tree[b]) for b in range(batch_size)]
             out1 = ([r[0][0] for r in results], [r[0][1] for r in results])
@@ -276,7 +276,7 @@ class TestBatchMultipleOutputs:
             return (out1, out2), ((True, True), True)
 
         def program(x):
-            return core.bind(nested_p, x)
+            return nested_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -289,7 +289,7 @@ class TestBatchBroadcasting:
         batch_size = 3
         in_batched = (True, False)
         in_tree = (["a", "b", "c"], "!")
-        out_vals, out_batched = core.batch_rules.get(core.concat_p)(batch_size, in_batched, in_tree)
+        out_vals, out_batched = core.batch_rules[core.concat_p](batch_size, in_batched, in_tree)
         assert out_vals == ["a!", "b!", "c!"]
         assert out_batched == True
 
@@ -297,7 +297,7 @@ class TestBatchBroadcasting:
         batch_size = 2
         in_batched = (True, False)
         in_tree = (["Alice", "Bob"], "Hello")
-        out_vals, out_batched = core.batch_rules.get(core.format_p)(
+        out_vals, out_batched = core.batch_rules[core.format_p](
             batch_size, in_batched, in_tree, template="{1}, {0}!"
         )
         assert out_vals == ["Hello, Alice!", "Hello, Bob!"]
@@ -307,7 +307,7 @@ class TestBatchBroadcasting:
         batch_size = 0
         in_batched = (False, False)
         in_tree = ("a", "b")
-        out_vals, out_batched = core.batch_rules.get(core.concat_p)(batch_size, in_batched, in_tree)
+        out_vals, out_batched = core.batch_rules[core.concat_p](batch_size, in_batched, in_tree)
         assert out_vals == []
         assert out_batched == True
 
@@ -316,20 +316,20 @@ class TestBatchRuleOutBatchedValidation:
     def test_single_output_accepts_scalar_bool(self):
         single_p = core.Primitive("single_out")
 
-        @ft.partial(core.impl_rules.set, single_p)
+        @ft.partial(core.impl_rules.def_rule, single_p)
         def impl(x):
             return x
 
-        @ft.partial(core.eval_rules.set, single_p)
+        @ft.partial(core.eval_rules.def_rule, single_p)
         def eval_rule(x):
             return core.Var()
 
-        @ft.partial(core.batch_rules.set, single_p)
+        @ft.partial(core.batch_rules.def_rule, single_p)
         def batch_rule(batch_size, in_batched, x):
             return [x[i] for i in range(batch_size)], True
 
         def program(x):
-            return core.bind(single_p, x)
+            return single_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -339,21 +339,21 @@ class TestBatchRuleOutBatchedValidation:
     def test_tuple_output_requires_tuple_out_batched(self):
         tuple_p = core.Primitive("tuple_out")
 
-        @ft.partial(core.impl_rules.set, tuple_p)
+        @ft.partial(core.impl_rules.def_rule, tuple_p)
         def impl(x):
             return (x, x)
 
-        @ft.partial(core.eval_rules.set, tuple_p)
+        @ft.partial(core.eval_rules.def_rule, tuple_p)
         def eval_rule(x):
             return (core.Var(), core.Var())
 
-        @ft.partial(core.batch_rules.set, tuple_p)
+        @ft.partial(core.batch_rules.def_rule, tuple_p)
         def bad_batch_rule(batch_size, in_batched, x):
             vals = [x[i] for i in range(batch_size)]
             return (vals, vals), True
 
         def program(x):
-            return core.bind(tuple_p, x)
+            return tuple_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -363,21 +363,21 @@ class TestBatchRuleOutBatchedValidation:
     def test_tuple_output_with_correct_out_batched(self):
         tuple_p = core.Primitive("tuple_out_correct")
 
-        @ft.partial(core.impl_rules.set, tuple_p)
+        @ft.partial(core.impl_rules.def_rule, tuple_p)
         def impl(x):
             return (x, x)
 
-        @ft.partial(core.eval_rules.set, tuple_p)
+        @ft.partial(core.eval_rules.def_rule, tuple_p)
         def eval_rule(x):
             return (core.Var(), core.Var())
 
-        @ft.partial(core.batch_rules.set, tuple_p)
+        @ft.partial(core.batch_rules.def_rule, tuple_p)
         def correct_batch_rule(batch_size, in_batched, x):
             vals = [x[i] for i in range(batch_size)]
             return (vals, vals), (True, True)
 
         def program(x):
-            return core.bind(tuple_p, x)
+            return tuple_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -385,24 +385,23 @@ class TestBatchRuleOutBatchedValidation:
         assert result == (["a", "b"], ["a", "b"])
 
     def test_nested_output_requires_nested_out_batched(self):
-        """Nested output structure requires matching nested out_batched."""
         nested_p = core.Primitive("nested_out")
 
-        @ft.partial(core.impl_rules.set, nested_p)
+        @ft.partial(core.impl_rules.def_rule, nested_p)
         def impl(x):
             return {"first": x, "second": (x, x)}
 
-        @ft.partial(core.eval_rules.set, nested_p)
+        @ft.partial(core.eval_rules.def_rule, nested_p)
         def eval_rule(x):
             return {"first": core.Var(), "second": (core.Var(), core.Var())}
 
-        @ft.partial(core.batch_rules.set, nested_p)
+        @ft.partial(core.batch_rules.def_rule, nested_p)
         def bad_batch_rule(batch_size, in_batched, x):
             vals = [x[i] for i in range(batch_size)]
             return {"first": vals, "second": (vals, vals)}, True
 
         def program(x):
-            return core.bind(nested_p, x)
+            return nested_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -410,24 +409,23 @@ class TestBatchRuleOutBatchedValidation:
             core.run_ir(batched_ir, ["a", "b"])
 
     def test_nested_output_with_correct_out_batched(self):
-        """Nested output with matching nested out_batched works."""
         nested_p = core.Primitive("nested_out_correct")
 
-        @ft.partial(core.impl_rules.set, nested_p)
+        @ft.partial(core.impl_rules.def_rule, nested_p)
         def impl(x):
             return {"first": x, "second": (x, x)}
 
-        @ft.partial(core.eval_rules.set, nested_p)
+        @ft.partial(core.eval_rules.def_rule, nested_p)
         def eval_rule(x):
             return {"first": core.Var(), "second": (core.Var(), core.Var())}
 
-        @ft.partial(core.batch_rules.set, nested_p)
+        @ft.partial(core.batch_rules.def_rule, nested_p)
         def correct_batch_rule(batch_size, in_batched, x):
             vals = [x[i] for i in range(batch_size)]
             return {"first": vals, "second": (vals, vals)}, {"first": True, "second": (True, True)}
 
         def program(x):
-            return core.bind(nested_p, x)
+            return nested_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)
@@ -435,24 +433,23 @@ class TestBatchRuleOutBatchedValidation:
         assert result == {"first": ["a", "b"], "second": (["a", "b"], ["a", "b"])}
 
     def test_mixed_batched_output(self):
-        """Some outputs batched, some not."""
         mixed_p = core.Primitive("mixed_batch")
 
-        @ft.partial(core.impl_rules.set, mixed_p)
+        @ft.partial(core.impl_rules.def_rule, mixed_p)
         def impl(x):
             return (x, "constant")
 
-        @ft.partial(core.eval_rules.set, mixed_p)
+        @ft.partial(core.eval_rules.def_rule, mixed_p)
         def eval_rule(x):
             return (core.Var(), core.Var())
 
-        @ft.partial(core.batch_rules.set, mixed_p)
+        @ft.partial(core.batch_rules.def_rule, mixed_p)
         def batch_rule(batch_size, in_batched, x):
             vals = [x[i] for i in range(batch_size)]
             return (vals, ["constant"] * batch_size), (True, True)
 
         def program(x):
-            return core.bind(mixed_p, x)
+            return mixed_p.bind(x)
 
         ir = core.build_ir(program, "a")
         batched_ir = core.batch_ir(ir)

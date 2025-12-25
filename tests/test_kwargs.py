@@ -6,34 +6,34 @@ greet_p = core.Primitive("greet")
 
 
 def greet(name: str, *, greeting: str = "Hello", punctuation: str = "!") -> str:
-    return core.bind(greet_p, (name, dict(greeting=greeting, punctuation=punctuation)))
+    return greet_p.bind((name, dict(greeting=greeting, punctuation=punctuation)))
 
 
-@ft.partial(core.impl_rules.set, greet_p)
+@ft.partial(core.impl_rules.def_rule, greet_p)
 def impl_greet(in_tree) -> str:
     match in_tree:
         case (name, {"greeting": greeting, "punctuation": punctuation}):
             return f"{greeting}, {name}{punctuation}"
 
 
-@ft.partial(core.eval_rules.set, greet_p)
+@ft.partial(core.eval_rules.def_rule, greet_p)
 def eval_greet(in_tree) -> core.Var:
     return core.Var()
 
 
-@ft.partial(core.push_rules.set, greet_p)
+@ft.partial(core.push_rules.def_rule, greet_p)
 def pushforward_greet(primals, tangents):
     return impl_greet(primals), impl_greet(tangents)
 
 
-@ft.partial(core.pull_fwd_rules.set, greet_p)
+@ft.partial(core.pull_fwd_rules.def_rule, greet_p)
 def pullback_fwd_greet(in_tree):
     out = impl_greet(in_tree)
     residuals = in_tree
     return out, residuals
 
 
-@ft.partial(core.pull_bwd_rules.set, greet_p)
+@ft.partial(core.pull_bwd_rules.def_rule, greet_p)
 def pullback_bwd_greet(residuals, cotangent_out):
     match residuals:
         case (_, {"greeting": greeting, "punctuation": punct}):
@@ -73,22 +73,22 @@ class TestKwargsPushforward:
     def test_pushforward_with_kwargs_ir(self):
         test_p = core.Primitive("test_kwargs_pf")
 
-        @ft.partial(core.eval_rules.set, test_p)
+        @ft.partial(core.eval_rules.def_rule, test_p)
         def eval_rule(in_tree):
             return core.Var()
 
-        @ft.partial(core.impl_rules.set, test_p)
+        @ft.partial(core.impl_rules.def_rule, test_p)
         def impl_rule(in_tree):
             x, kwargs = in_tree
             repeat = kwargs["repeat"]
             return x * repeat
 
-        @ft.partial(core.push_rules.set, test_p)
+        @ft.partial(core.push_rules.def_rule, test_p)
         def pf_rule(primals, tangents):
             return impl_rule(primals), impl_rule(tangents)
 
         def program(x, *, repeat=1):
-            return core.bind(test_p, (x, dict(repeat=repeat)))
+            return test_p.bind((x, dict(repeat=repeat)))
 
         ir = core.build_ir(program, "A", repeat=3)
         match ir.in_irtree:

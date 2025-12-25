@@ -41,7 +41,7 @@ def textgrad_lm_call(messages: list, *, model: str, struct: type) -> af.Struct:
     """LLM call that supports semantic backpropagation."""
     roles = tuple(m["role"] for m in messages)
     contents = tuple(m["content"] for m in messages)
-    return af.bind(textgrad_lm_call_p, contents, roles=roles, model=model, struct=struct)
+    return textgrad_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
 
 
 # ==================================================================================================
@@ -50,19 +50,19 @@ def textgrad_lm_call(messages: list, *, model: str, struct: type) -> af.Struct:
 
 
 # impl_rule: what happens when you actually run this primitive
-@ft.partial(af.impl_rules.set, textgrad_lm_call_p)
+@ft.partial(af.impl_rules.def_rule, textgrad_lm_call_p)
 def impl_textgrad(contents, *, roles, model, struct):
-    return af.impl_rules.get(af.struct_lm_call_p)(contents, roles=roles, model=model, struct=struct)
+    return af.impl_rules[af.struct_lm_call_p](contents, roles=roles, model=model, struct=struct)
 
 
 # eval_rule: tells the tracer what shape/type the output has (for build_ir)
-@ft.partial(af.eval_rules.set, textgrad_lm_call_p)
+@ft.partial(af.eval_rules.def_rule, textgrad_lm_call_p)
 def eval_textgrad(in_tree, *, struct, **params):
     return struct.model_construct(**{k: af.Var() for k in struct.model_fields})
 
 
 # pull_fwd_rule: forward pass of pullback - run and save what we need for backward
-@ft.partial(af.pull_fwd_rules.set, textgrad_lm_call_p)
+@ft.partial(af.pull_fwd_rules.def_rule, textgrad_lm_call_p)
 def pull_fwd_textgrad(contents, *, roles, model, struct):
     out = impl_textgrad(contents, roles=roles, model=model, struct=struct)
     residuals = (contents, roles, out)  # save for backward
@@ -71,7 +71,7 @@ def pull_fwd_textgrad(contents, *, roles, model, struct):
 
 # pull_bwd_rule: backward pass - given feedback on output, generate feedback on inputs
 # this is the "textgrad" part: we use an LLM to generate semantic gradients
-@ft.partial(af.pull_bwd_rules.set, textgrad_lm_call_p)
+@ft.partial(af.pull_bwd_rules.def_rule, textgrad_lm_call_p)
 def pull_bwd_textgrad(residuals, cotangent_out, *, roles, model, struct):
     import litellm
 
@@ -97,7 +97,7 @@ Provide specific, actionable feedback on how to improve the Input Variable to ad
 
 
 # batch_rule: how to process multiple inputs at once (uses batch_completion)
-@ft.partial(af.batch_rules.set, textgrad_lm_call_p)
+@ft.partial(af.batch_rules.def_rule, textgrad_lm_call_p)
 def batch_textgrad(batch_size, in_batched, contents, *, roles, model, struct):
     import litellm
 
