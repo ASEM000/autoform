@@ -182,6 +182,7 @@ class IRLit[T: Value](IRAtom):
 
 class IRZero[T](IRLit[T]): ...
 
+
 def is_irlit(x) -> tp.TypeIs[IRLit]:
     return isinstance(x, IRLit)
 
@@ -665,6 +666,189 @@ async def arun_ir(ir: IR, *args, **kwargs):
 
 
 # ==================================================================================================
+# HARVESTING (SOW/REAP)
+# ==================================================================================================
+
+
+sow_p = Primitive("sow", tag="core")
+
+
+def sow(x: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
+    """Tag a value with a category and name for later collection.
+
+    `sow` marks a value with a `tag` (category) and `name` (unique identifier)
+    that can be collected by `reap_ir`. It acts as an identity operation in
+    normal execution, but when run under a `ReapInterpreter`, the sown values
+    are captured.
+
+    Args:
+        x: The value to sow (returned unchanged).
+        tag: Category for filtering (e.g., "debug", "cache", "metrics").
+        name: Unique identifier within the tag namespace.
+
+    Returns:
+        The input value unchanged.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
+        ...     response = af.concat(prompt, " A: 42")
+        ...     return af.sow(response, tag="debug", name="response")
+        >>> ir = af.build_ir(program, "test")
+        >>> result, reaped = af.reap_ir(ir, "debug", "What is 6*7?")
+        >>> result
+        'Q: What is 6*7? A: 42'
+        >>> reaped["prompt"]
+        'Q: What is 6*7?'
+        >>> reaped["response"]
+        'Q: What is 6*7? A: 42'
+    """
+    assert hash(tag) is not None, "Tag must be hashable"
+    assert hash(name) is not None, "Name must be hashable"
+    return sow_p.bind(x, tag=tag, name=name)
+
+
+@ft.partial(impl_rules.def_rule, sow_p)
+def impl_sow(x: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
+    del tag, name
+    return x
+
+
+@ft.partial(eval_rules.def_rule, sow_p)
+def eval_sow(x: Tree[EvalType], *, tag: tp.Hashable, name: tp.Hashable) -> Tree[EvalType]:
+    del tag, name
+    return x
+
+
+@ft.partial(push_rules.def_rule, sow_p)
+def pushforward_sow(
+    primal: Tree, tangent: Tree, *, tag: tp.Hashable, name: tp.Hashable
+) -> tuple[Tree, Tree]:
+    del tag, name
+    return primal, tangent
+
+
+@ft.partial(pull_fwd_rules.def_rule, sow_p)
+def pullback_fwd_sow(x: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[Tree, Tree]:
+    del tag, name
+    return x, x  # residuals = input for structure
+
+
+@ft.partial(pull_bwd_rules.def_rule, sow_p)
+def pullback_bwd_sow(
+    residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashable, name: tp.Hashable
+) -> Tree:
+    del residuals, tag, name
+    return cotangent_out  # identity backward pass
+
+
+@ft.partial(batch_rules.def_rule, sow_p)
+def batch_sow(
+    _: int,
+    in_batched: Tree,
+    x: Tree,
+    *,
+    tag: tp.Hashable,
+    name: tp.Hashable,
+) -> tuple[Tree, Tree]:
+    del tag, name
+    return x, in_batched
+
+
+class ReapInterpreter(Interpreter):
+    def __init__(self, *, tag: tp.Hashable):
+        self.tag = tag
+        self.parent = get_interp()
+        self.reaped: dict[tp.Hashable, Tree] = {}
+
+    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        with using_interp(self.parent):
+            result = self.parent.process(prim, in_tree, **params)
+        if prim == sow_p and params.get("tag") == self.tag:
+            self.reaped[params["name"]] = result
+        return result
+
+
+def reap_ir(ir: IR, tag: tp.Hashable, *args, **kwargs) -> tuple[Tree, dict[tp.Hashable, Tree]]:
+    """Execute IR and collect sown values matching the tag.
+
+    Args:
+        ir: The intermediate representation to execute.
+        tag: The tag to filter sown values by.
+        *args: Positional arguments to the IR.
+        **kwargs: Keyword arguments to the IR.
+
+    Returns:
+        A tuple of (result, reaped) where result is the IR output and
+        reaped is a dictionary mapping names to their sown values.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
+        ...     return af.concat(prompt, " A: 42")
+        >>> ir = af.build_ir(program, "test")
+        >>> result, reaped = af.reap_ir(ir, "debug", "What?")
+        >>> result
+        'Q: What? A: 42'
+        >>> reaped
+        {'prompt': 'Q: What?'}
+    """
+    assert isinstance(ir, IR), f"{type(ir)=} is not an IR instance."
+    with using_interp(ReapInterpreter(tag=tag)) as reaper:
+        result = run_ir(ir, *args, **kwargs)
+    return result, reaper.reaped
+
+
+class PlantInterpreter(Interpreter):
+    def __init__(self, *, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]):
+        self.tag = tag
+        self.plants = plants
+        self.parent = get_interp()
+
+    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        if (
+            prim == sow_p
+            and params.get("tag") == self.tag
+            and (name := params.get("name")) in self.plants
+        ):
+            return self.plants[name]
+        with using_interp(self.parent):
+            return self.parent.process(prim, in_tree, **params)
+
+
+def plant_ir(ir: IR, tag: tp.Hashable, plants: dict[tp.Hashable, Tree], *args, **kwargs) -> Tree:
+    """Execute IR with values planted at sow locations.
+
+    Args:
+        ir: The intermediate representation to execute.
+        tag: The tag to filter sow locations by.
+        plants: Dictionary mapping sow names to values to inject.
+        *args: Positional arguments to the IR.
+        **kwargs: Keyword arguments to the IR.
+
+    Returns:
+        The result of executing the IR with planted values.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
+        >>> ir = af.build_ir(program, "test")
+        >>> # normal execution
+        >>> af.run_ir(ir, "World")
+        'Hello, World'
+        >>> # plant a cached value
+        >>> af.plant_ir(ir, "cache", {"greeting": "CACHED"}, "World")
+        'CACHED'
+    """
+    assert isinstance(ir, IR), f"{type(ir)=} is not an IR instance."
+    with using_interp(PlantInterpreter(tag=tag, plants=plants)):
+        return run_ir(ir, *args, **kwargs)
+
+
+# ==================================================================================================
 # HIGHER-ORDER PRIMITIVES
 # ==================================================================================================
 
@@ -682,7 +866,8 @@ class PushforwardInterpreter(Interpreter):
     def process(self, prim: Primitive, in_tree: Tree, **params):
         in_primal, in_tangent = in_tree
         with using_interp(self.parent):
-            return push_rules[prim](in_primal, in_tangent, **params)
+            rule = push_rules[prim]
+            return rule(in_primal, in_tangent, **params)
 
 
 @ft.partial(impl_rules.def_rule, pushforward_call_p)
@@ -811,8 +996,8 @@ class PullbackBwdInterpreter(Interpreter):
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params):
-        in_residual, out_cotangent = in_tree
         with using_interp(self.parent):
+            in_residual, out_cotangent = in_tree
             return pull_bwd_rules[prim](in_residual, out_cotangent, **params)
 
 
@@ -1028,8 +1213,8 @@ class BatchInterpreter(Interpreter):
         self.batch_size = batch_size
 
     def process(self, prim: Primitive, in_tree: Tree, **params):
-        batch_size, in_batched, in_values = in_tree
         with using_interp(self.parent):
+            batch_size, in_batched, in_values = in_tree
             return batch_rules[prim](batch_size, in_batched, in_values, **params)
 
 
@@ -1678,70 +1863,6 @@ def pullback_bwd_stop_gradient(residuals: Tree, cotangent_out: Tree) -> Tree:
 @ft.partial(batch_rules.def_rule, stop_gradient_p)
 def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tree, Tree]:
     del batch_size
-    return x, in_batched
-
-
-# MARK =============================================================================================
-
-mark_p = Primitive("mark", tag="core")
-
-
-def mark(x: Tree, *, tag: tp.Hashable) -> Tree:
-    """Identity operation with a tag.
-
-    Args:
-        x: The input tree (e.g., a string, number, or nested structure)
-        tag: A hashable value to identify this mark in the IR.
-
-    Returns:
-        The same input tree, unchanged.
-
-    Example:
-        >>> import autoform as af
-        >>> def ir(x):
-        ...     marked = af.mark(x, tag="my_tag")
-        ...     return af.concat("Result: ", marked)
-        >>> ir = af.build_ir(ir, "hello")
-        >>> af.run_ir(ir, "world")
-        'Result: world'
-    """
-    assert hash(tag) is not None, "Tag must be hashable"
-    return mark_p.bind(x, tag=tag)
-
-
-@ft.partial(impl_rules.def_rule, mark_p)
-def impl_mark(x: Tree, *, tag: tp.Hashable) -> Tree:
-    del tag
-    return x
-
-
-@ft.partial(eval_rules.def_rule, mark_p)
-def eval_mark(x: Tree[EvalType], *, tag: tp.Hashable) -> Tree[EvalType]:
-    del tag
-    return x
-
-
-@ft.partial(push_rules.def_rule, mark_p)
-def pushforward_mark(primal: Tree, tangent: Tree, *, tag: tp.Hashable) -> tuple[Tree, Tree]:
-    del tag
-    return primal, tangent
-
-
-@ft.partial(pull_fwd_rules.def_rule, mark_p)
-def pullback_fwd_mark(x: Tree, *, tag: tp.Hashable) -> tuple[Tree, Tree]:
-    del tag
-    return x, x  # residuals = input for structure
-
-
-@ft.partial(pull_bwd_rules.def_rule, mark_p)
-def pullback_bwd_mark(residuals: Tree, cotangent_out: Tree, *, tag: tp.Hashable) -> Tree:
-    del residuals, tag
-    return cotangent_out  # identity backward pass
-
-
-@ft.partial(batch_rules.def_rule, mark_p)
-def batch_mark(_: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable) -> tuple[Tree, Tree]:
-    del tag
     return x, in_batched
 
 
