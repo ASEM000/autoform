@@ -167,13 +167,13 @@ class InterpreterRuleMapping[T: Callable]:
 
 type ImplRule = Callable[..., Tree]
 type EvalRule = Callable[..., Tree[EvalType]]
-type BatchRule = Callable[[int, Tree[bool], Tree], tuple[Tree, Tree[bool]]]
-type PushforwardRule = Callable[[Tree, Tree], tuple[Tree, Tree]]
+type BatchRule = Callable[..., tuple[Tree, Tree[bool] | bool]]
+type PushforwardRule = Callable[..., tuple[Tree, Tree]]
 type PullbackFwdRule = Callable[..., tuple[Tree, Tree]]
-type PullbackBwdRule = Callable[[Tree, Tree], Tree]
+type PullbackBwdRule = Callable[..., Tree]
 type IterRule = Callable[..., tp.Iterator[Tree]]
 type AsyncRule = Callable[..., Coroutine[tp.Any, tp.Any, Tree]]
-type DCERule = Callable[["IREqn", set[IRVar]], tuple[bool, set[IRVar], "IREqn"]]
+type DCERule = Callable[[IREqn, set[IRVar]], tuple[bool, set[IRVar], IREqn]]
 
 # ==================================================================================================
 # RULE REGISTRIES
