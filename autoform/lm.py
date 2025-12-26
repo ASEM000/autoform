@@ -282,7 +282,6 @@ def batch_struct_lm_call(
     model: str,
     struct: type[Struct],
 ) -> tuple[Tree, Tree]:
-
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
 

@@ -177,7 +177,6 @@ class TestIterIR:
         assert results[-1] == [1, 2, 3, 4]
 
     def test_program_call_streams_through(self):
-        """Test that iter_ir streams through inlined run_ir via bind."""
         stream_p = af.core.Primitive("stream_tokens")
 
         @ft.partial(af.core.eval_rules.def_rule, stream_p)
@@ -205,7 +204,6 @@ class TestIterIR:
         assert outputs[-1] == "xyz"
 
     def test_nested_program_call_streams(self):
-        """Test streaming through multiple levels of inlined run_ir."""
         stream_p = af.core.Primitive("deep_stream")
 
         @ft.partial(af.core.eval_rules.def_rule, stream_p)
