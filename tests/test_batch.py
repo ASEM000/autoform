@@ -188,26 +188,26 @@ class TestBatchUtils:
     def test_basic_axes_tree(self):
         col_tree = (["a", "b"], ["x", "y"])
         in_axes = list
-        batch_size = af.transforms.batch.infer_batch_size(col_tree, in_axes)
+        batch_size = af.batch.infer_batch_size(col_tree, in_axes)
         assert batch_size == 2
 
     def test_broadcast_axes_tree(self):
         col_tree = (["a", "b"], "single")
         in_axes = (list, None)
-        batch_size = af.transforms.batch.infer_batch_size(col_tree, in_axes)
+        batch_size = af.batch.infer_batch_size(col_tree, in_axes)
         assert batch_size == 2
 
     def test_no_batched_returns_zero(self):
         col_tree = ("a", "b")
         in_axes = (None, None)
-        batch_size = af.transforms.batch.infer_batch_size(col_tree, in_axes)
+        batch_size = af.batch.infer_batch_size(col_tree, in_axes)
         assert batch_size == 0
 
     def test_mixed_axes_tree(self):
         in_axes = (list, None)
         tree = (["a", "b", "c"], {"x": 1, "y": 2})
         broadcasted_in_axes = (list, {"x": None, "y": None})
-        assert af.transforms.batch.broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
+        assert af.batch.broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
 
 
 class TestBatchRuleOutBatched:

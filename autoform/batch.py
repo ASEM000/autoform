@@ -145,7 +145,7 @@ def pushforward_batch_call(
     in_axes: Tree,
 ) -> tuple[Tree, Tree]:
     from autoform.evaluation import run_ir
-    from autoform.transforms.ad import pushforward_ir
+    from autoform.ad import pushforward_ir
 
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward_ir(ir)
@@ -167,7 +167,7 @@ def pullback_fwd_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tr
 @ft.partial(pull_bwd_rules.def_rule, batch_call_p)
 def pullback_bwd_batch_call(residuals: Tree, cotangent_out: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     from autoform.evaluation import run_ir
-    from autoform.transforms.ad import pullback_ir
+    from autoform.ad import pullback_ir
 
     p_cols, _ = residuals
     c_out_cols = cotangent_out
@@ -234,7 +234,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(dce_rules.def_rule, batch_call_p)
 def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    from autoform.transforms.optims import default_dce, dce_ir
+    from autoform.optims import default_dce, dce_ir
 
     new_eqn = ireqn.using(ir=dce_ir(ireqn.params["ir"]))
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)

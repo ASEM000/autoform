@@ -166,7 +166,7 @@ def push_reap_call(
     ir: IR,
     tag: tp.Hashable,
 ) -> tuple[tuple[Tree, Reaped], tuple[Tree, Reaped]]:
-    from autoform.transforms.ad import pushforward_ir
+    from autoform.ad import pushforward_ir
 
     pf_ir = pushforward_ir(ir)
     p_result, p_reaped = reap_call_p.bind((primals, tangents), ir=pf_ir, tag=tag)
@@ -194,7 +194,7 @@ def pull_bwd_reap_call(
     tag: tp.Hashable,
 ) -> Tree:
     from autoform.evaluation import run_ir
-    from autoform.transforms.ad import pullback_ir
+    from autoform.ad import pullback_ir
 
     in_tree, _ = residuals
     ct_result, _ = cotangent
@@ -212,7 +212,7 @@ def batch_reap_call(
     ir: IR,
     tag: tp.Hashable,
 ) -> tuple[tuple[Tree, Reaped], tuple[Tree, bool]]:
-    from autoform.transforms.batch import batch_ir
+    from autoform.batch import batch_ir
 
     batched_ir = batch_ir(ir)
     result, reaped = reap_call_p.bind(in_values, ir=batched_ir, tag=tag)
@@ -325,7 +325,7 @@ def push_plant_call(
     tag: tp.Hashable,
     plants: dict[tp.Hashable, Tree],
 ) -> tuple[Tree, Tree]:
-    from autoform.transforms.ad import pushforward_ir
+    from autoform.ad import pushforward_ir
 
     pf_ir = pushforward_ir(ir)
     primal_tangent = plant_call_p.bind((primals, tangents), ir=pf_ir, tag=tag, plants=plants)
@@ -346,7 +346,7 @@ def pull_bwd_plant_call(
     residuals: Tree, cotangent: Tree, *, ir: IR, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]
 ) -> Tree:
     from autoform.evaluation import run_ir
-    from autoform.transforms.ad import pullback_ir
+    from autoform.ad import pullback_ir
 
     in_tree = residuals
     pb_ir = pullback_ir(ir)
@@ -364,7 +364,7 @@ def batch_plant_call(
     tag: tp.Hashable,
     plants: dict[tp.Hashable, Tree],
 ) -> tuple[Tree, Tree]:
-    from autoform.transforms.batch import batch_ir
+    from autoform.batch import batch_ir
 
     batched_ir = batch_ir(ir)
     result = plant_call_p.bind(in_values, ir=batched_ir, tag=tag, plants=plants)

@@ -58,7 +58,7 @@ class TestIREqnMatchArgs:
         tags_found = []
         for eqn in ir.ireqns:
             match eqn:
-                case af.core.IREqn(prim=p, params={"tag": tag}) if p == af.transforms.sow_p:
+                case af.core.IREqn(prim=p, params={"tag": tag}) if p == af.harvest.sow_p:
                     tags_found.append(tag)
 
         assert tags_found == ["step1", "step2"]
@@ -76,7 +76,7 @@ class TestIREqnMatchArgs:
         new_eqns = []
         for eqn in ir.ireqns:
             match eqn:
-                case af.core.IREqn(prim=p, params={"tag": "old_tag"}) if p == af.transforms.sow_p:
+                case af.core.IREqn(prim=p, params={"tag": "old_tag"}) if p == af.harvest.sow_p:
                     new_eqns.append(eqn.using(tag="new_tag"))
                 case _:
                     new_eqns.append(eqn)
@@ -140,9 +140,7 @@ class TestInsertAfterPattern:
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
             match eqn:
-                case af.core.IREqn(prim=p, params={"tag": "insert_here"}) if (
-                    p == af.transforms.sow_p
-                ):
+                case af.core.IREqn(prim=p, params={"tag": "insert_here"}) if p == af.harvest.sow_p:
                     # Create a new sow equation with the same IO but different tag
                     inserted = eqn.using(tag="inserted")
                     new_eqns.append(inserted)
