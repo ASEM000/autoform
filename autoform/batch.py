@@ -21,7 +21,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, lru_cache, treelib
+from autoform.utils import Tree, lru_cache, treelib, transpose_batch
 
 
 class IRBVar(IRVar): ...
@@ -198,14 +198,10 @@ def batch_batch_call(
         get_at_b = lambda v, a: v if a is None else v[b]
         return treelib.map(get_at_b, col_cols, in_axes_tree, is_leaf=get_is_leaf)
 
-    results = [run_ir(batched_ir, get(b)) for b in range(batch_size)]
+    output_bi = [run_ir(batched_ir, get(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
-    out_spec = treelib.structure(ir.out_irtree)
-    leaves_bi = [out_spec.flatten_up_to(r) for r in results]
-    num_leaves = out_spec.num_leaves
-    stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(num_leaves)]
-    out_cols = out_spec.unflatten(stacked)
-    return out_cols, out_batched
+    output_ib = transpose_batch(batch_size, out_batched, output_bi)
+    return output_ib, out_batched
 
 
 @ft.partial(async_rules.def_rule, batch_call_p)
@@ -225,11 +221,9 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
         value = treelib.map(get, col_tree, axes_tree, is_leaf=run_is_leaf)
         return await arun_ir(ir, value)
 
-    results = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
-    out_spec = treelib.structure(ir.out_irtree)
-    leaves_bi = [out_spec.flatten_up_to(r) for r in results]
-    stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
-    return out_spec.unflatten(stacked)
+    output_bi = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
+    out_batched = treelib.map(lambda _: True, ir.out_irtree)
+    return transpose_batch(batch_size, out_batched, output_bi)
 
 
 @ft.partial(dce_rules.def_rule, batch_call_p)

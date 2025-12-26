@@ -61,7 +61,6 @@ def run_ir(ir: IR, *args, **kwargs) -> Tree:
 
 
 def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
-    """Accumulate chunks from streaming iteration."""
     if not chunks:
         return None
     head = chunks[0]

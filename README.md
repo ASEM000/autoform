@@ -1,47 +1,79 @@
 # autoform
 
-**Composable function transformations for LLM programs**
+**composable function transformations for LLM programs**
 
-> ⚠️ **Early Development**: API may change.
-
-## Install
+> ⚠️ **early development**: API may change.
 
 ```bash
 pip install autoform
 ```
 
+
 ## Example
 
-Write an LLM pipeline once. Transform it — **batch** (parallel `batch_completion`), **backprop** (semantic gradients), or **both**.
+Write a multi-agent pipeline once. get **per-agent semantic gradients** on a **batched dataset** in one call.
 
 ```python
 import autoform as af
 
-def research_and_write(topic: str) -> str:
-    # step 1: research
-    prompt1 = af.format("List 3 key facts about: {}", topic)
-    notes = af.lm_call([dict(role="user", content=prompt1)], model="gpt-4.1")
-    # step 2: write using the research
-    prompt2 = af.format("Write a paragraph using: {}", notes)
-    article = af.lm_call([dict(role="user", content=prompt2)], model="gpt-4.1")
-    return article
+class Verdict(af.Struct):  # pydantic model for structured output
+    decision: str
+    reasoning: str
 
-# trace the program
-ir = af.build_ir(research_and_write, "example")
+def judge_debate(topic: str) -> Verdict:
+    """three agents debate, one judges. we can optimize any of them."""
+    # agent 1: argue for
+    pro = af.format("Argue FOR: {}", topic)
+    pro = af.sow(pro, tag="prompts", name="pro")  # tag for collection
+    msg = dict(role="user", content=pro)
+    pro = af.lm_call([msg], model="gpt-4.1")
 
-# transform: batch (uses litellm.batch_completion, not a loop)
+    # agent 2: argue against
+    con = af.format("Argue AGAINST: {}", topic)
+    con = af.sow(con, tag="prompts", name="con")
+    msg = dict(role="user", content=con)
+    con = af.lm_call([msg], model="gpt-4.1")
+
+    # agent 3: judge
+    prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
+    prompt = af.sow(prompt, tag="prompts", name="judge")
+    msg = dict(role="user", content=prompt)
+    return af.struct_lm_call([msg], model="gpt-4o", struct=Verdict)
+
+# trace
+ir = af.build_ir(judge_debate, "...")
+
+# batch: parallel topics
 batch_ir = af.batch_ir(ir, in_axes=list)
-articles = af.run_ir(batch_ir, ["AI safety", "quantum computing", "climate"])
+verdicts = af.run_ir(batch_ir, ["pineapple on pizza", "cats vs dogs", "morning vs night"])
 
-# compose transforms: batched semantic backprop
+# gradients: feedback on output -> feedback on input
 pb_ir = af.pullback_ir(ir)
-batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))
-topics = ["AI safety", "quantum computing", "climate"]
-feedbacks = ["too brief", "good", "needs examples"]
-outputs, input_grads = af.run_ir(batch_pb_ir, (topics, feedbacks))
+feedback = Verdict(decision="too one-sided", reasoning="pro was weak")
+verdict, grad = af.run_ir(pb_ir, ("pineapple on pizza", feedback))
+
+# batched gradients
+batch_pb = af.batch_ir(pb_ir, in_axes=(list, list))
+
+# harvest: collect prompts
+reaped_ir = af.reap_ir(ir, tag="prompts")
+verdict, prompts = af.run_ir(reaped_ir, "pineapple on pizza")
+
+# split: isolate judge for testing
+ir_before, ir_after = af.split_ir(ir, tag="prompts", name="judge")
+
+# composition: nest IRs (inlined during tracing)
+def meta(topic):
+    v1, v2 = af.run_ir(ir, topic), af.run_ir(ir, topic)
+    return af.format("{} vs {}", v1.decision, v2.decision)
+meta_ir = af.build_ir(meta, "...")
+
+# transforms compose
+batch_batch = af.batch_ir(af.batch_ir(ir, in_axes=list), in_axes=list)
+grad_grad = af.pullback_ir(af.pullback_ir(ir))
 ```
 
-## More Examples
+## More
 
-- [examples/research_and_write.py](examples/research_and_write.py): multi-step pipeline with batching
-- [examples/semantic_backprop.py](examples/semantic_backprop.py): TextGrad-style custom backward passes
+- [examples/research_and_write.py](examples/research_and_write.py)
+- [examples/semantic_backprop.py](examples/semantic_backprop.py)

@@ -177,7 +177,6 @@ class TestIterIR:
         assert results[-1] == [1, 2, 3, 4]
 
     def test_program_call_streams_through(self):
-        """Test that iter_ir streams through program_call via its iter_rule."""
         stream_p = af.core.Primitive("stream_tokens")
 
         @ft.partial(af.core.eval_rules.def_rule, stream_p)
@@ -195,8 +194,9 @@ class TestIterIR:
 
         inner_ir = af.build_ir(stream_tokens, "abc")
 
+        # run_ir inlines the streaming primitive directly
         def outer(x):
-            return af.ir_call(inner_ir, x)
+            return af.run_ir(inner_ir, x)
 
         outer_ir = af.build_ir(outer, "abc")
         outputs = list(af.iter_ir(outer_ir, "xyz"))
@@ -204,7 +204,6 @@ class TestIterIR:
         assert outputs[-1] == "xyz"
 
     def test_nested_program_call_streams(self):
-        """Test streaming through multiple levels of program_call."""
         stream_p = af.core.Primitive("deep_stream")
 
         @ft.partial(af.core.eval_rules.def_rule, stream_p)
@@ -223,12 +222,12 @@ class TestIterIR:
         ir_level0 = af.build_ir(deep_stream, "ab")
 
         def level1(x):
-            return af.ir_call(ir_level0, x)
+            return af.run_ir(ir_level0, x)
 
         ir_level1 = af.build_ir(level1, "ab")
 
         def level2(x):
-            return af.ir_call(ir_level1, x)
+            return af.run_ir(ir_level1, x)
 
         ir_level2 = af.build_ir(level2, "ab")
         outputs = list(af.iter_ir(ir_level2, "XY"))

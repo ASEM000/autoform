@@ -20,7 +20,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, treelib, transpose_batch
 
 # ==================================================================================================
 # STRUCT
@@ -43,11 +43,10 @@ class Struct(pydantic.BaseModel):
         super().__init_subclass__(**kwargs)
 
         def flatten(model):
-            values = tuple(getattr(model, k) for k in cls.model_fields)
-            return values, tuple(cls.model_fields.keys())
+            return tuple(getattr(model, k) for k in cls.model_fields), tuple(cls.model_fields)
 
         def unflatten(keys, children):
-            return cls.model_construct(**dict(zip(keys, children)))
+            return cls.model_construct(**dict(zip(keys, children, strict=True)))
 
         treelib.register_node(cls, flatten, unflatten)
 
@@ -95,7 +94,7 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
 
 
 @ft.partial(impl_rules.def_rule, lm_call_p)
-def impl_lm_call(contents: tuple, *, roles: tuple[str, ...], model: str) -> str:
+def impl_lm_call(contents: list, *, roles: tuple[str, ...], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = completion(messages=messages, model=model)
     return resp.choices[0].message.content
@@ -118,7 +117,7 @@ def pushforward_lm_call(
 
 
 @ft.partial(pull_fwd_rules.def_rule, lm_call_p)
-def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model)
     out = resp.choices[0].message.content
@@ -129,7 +128,7 @@ def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[
 @ft.partial(pull_bwd_rules.def_rule, lm_call_p)
 def pullback_bwd_lm_call(
     residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str
-) -> tuple:
+) -> list:
     contents, output = residuals
     grads = []
     for content in contents:
@@ -142,26 +141,23 @@ FEEDBACK ON OUTPUT: {cotangent_out}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
         grads.append(resp.choices[0].message.content)
-    return tuple(grads)
+    return grads
 
 
 @ft.partial(batch_rules.def_rule, lm_call_p)
 def batch_lm_call(
-    batch_size: int, in_batched: Tree, contents: tuple, *, roles: tuple, model: str
+    batch_size: int, in_batched: Tree, contents: list, *, roles: tuple, model: str
 ) -> tuple[Tree, Tree]:
-    batched_messages = []
-    for b in range(batch_size):
-        msgs = [
-            dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
-            for i, r in enumerate(roles)
-        ]
-        batched_messages.append(msgs)
+    def get_message(i: int, b: int) -> dict[str, str]:
+        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+
+    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
     responses = batch_completion(messages=batched_messages, model=model)
     return [resp.choices[0].message.content for resp in responses], True
 
 
 @ft.partial(iter_rules.def_rule, lm_call_p)
-def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[str]:
+def iter_lm_call(contents: list, *, roles: tuple, model: str) -> tp.Iterator[str]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, stream=True)
     for chunk in resp:
@@ -170,7 +166,7 @@ def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[st
 
 
 @ft.partial(async_rules.def_rule, lm_call_p)
-async def async_lm_call(contents: tuple, *, roles: tuple, model: str) -> str:
+async def async_lm_call(contents: list, *, roles: tuple, model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await acompletion(messages=messages, model=model)
     return resp.choices[0].message.content
@@ -218,7 +214,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
 @ft.partial(impl_rules.def_rule, struct_lm_call_p)
 def impl_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
@@ -236,7 +232,7 @@ def eval_struct_lm_call(in_tree: Tree, *, struct: type[Struct], **params) -> Tre
 
 @ft.partial(pull_fwd_rules.def_rule, struct_lm_call_p)
 def pullback_fwd_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
@@ -257,7 +253,7 @@ def pullback_bwd_struct_lm_call(
     roles: tuple,
     model: str,
     struct: type[Struct],
-) -> tuple:
+) -> list:
     contents, output = residuals
     grads = []
     for content in contents:
@@ -270,12 +266,33 @@ FEEDBACK ON OUTPUT: {cotangent_out}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
         grads.append(resp.choices[0].message.content)
-    return tuple(grads)
+    return grads
+
+
+@ft.partial(batch_rules.def_rule, struct_lm_call_p)
+def batch_struct_lm_call(
+    batch_size: int,
+    in_batched: Tree,
+    contents: list,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
+) -> tuple[Tree, Tree]:
+    def get_message(i: int, b: int) -> dict[str, str]:
+        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+
+    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
+    responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
+    results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
+    out_batched = treelib.map(lambda _: True, results[0])
+    output_ib = transpose_batch(batch_size, out_batched, results)
+    return output_ib, out_batched
 
 
 @ft.partial(iter_rules.def_rule, struct_lm_call_p)
 def iter_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
@@ -290,7 +307,7 @@ def iter_struct_lm_call(
 
 @ft.partial(async_rules.def_rule, struct_lm_call_p)
 async def async_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
