@@ -128,7 +128,7 @@ def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[T
 @ft.partial(pull_bwd_rules.def_rule, lm_call_p)
 def pullback_bwd_lm_call(
     residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str
-) -> tuple:
+) -> list:
     contents, output = residuals
     grads = []
     for content in contents:
@@ -141,20 +141,17 @@ FEEDBACK ON OUTPUT: {cotangent_out}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
         grads.append(resp.choices[0].message.content)
-    return tuple(grads)
+    return grads
 
 
 @ft.partial(batch_rules.def_rule, lm_call_p)
 def batch_lm_call(
     batch_size: int, in_batched: Tree, contents: list, *, roles: tuple, model: str
 ) -> tuple[Tree, Tree]:
-    batched_messages = []
-    for b in range(batch_size):
-        msgs = [
-            dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
-            for i, r in enumerate(roles)
-        ]
-        batched_messages.append(msgs)
+    def get_message(i: int, b: int) -> dict[str, str]:
+        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+
+    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
     responses = batch_completion(messages=batched_messages, model=model)
     return [resp.choices[0].message.content for resp in responses], True
 
@@ -256,7 +253,7 @@ def pullback_bwd_struct_lm_call(
     roles: tuple,
     model: str,
     struct: type[Struct],
-) -> tuple:
+) -> list:
     contents, output = residuals
     grads = []
     for content in contents:
@@ -269,7 +266,7 @@ FEEDBACK ON OUTPUT: {cotangent_out}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
         grads.append(resp.choices[0].message.content)
-    return tuple(grads)
+    return grads
 
 
 @ft.partial(batch_rules.def_rule, struct_lm_call_p)
