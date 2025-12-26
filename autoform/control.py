@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.core import IR, Var, is_irvar, is_user_type, is_var
+from autoform.core import IR, Var, is_irvar, is_user_type
 from autoform.core import (
     Primitive,
     async_rules,

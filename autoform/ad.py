@@ -238,7 +238,6 @@ def zero_cotangent(example: tp.Any = None) -> tp.Any:
 
 
 def accumulate_cotangents(cotangents: list) -> tp.Any:
-    """Accumulate multiple cotangents into one."""
     if not cotangents:
         return zero_cotangent()
     if len(cotangents) == 1:

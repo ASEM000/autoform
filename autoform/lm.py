@@ -285,11 +285,11 @@ def batch_struct_lm_call(
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
 
-    batched_messages = [get_message(i, b) for b in range(batch_size) for i in range(len(roles))]
+    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
-    output_bi = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
-    out_batched = treelib.map(lambda _: True, output_bi[0])
-    output_ib = transpose_batch(batch_size, out_batched, output_bi)
+    results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
+    out_batched = treelib.map(lambda _: True, results[0])
+    output_ib = transpose_batch(batch_size, out_batched, results)
     return output_ib, out_batched
 
 
