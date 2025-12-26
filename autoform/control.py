@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.core import IR, Var, is_irvar, is_user_type, is_var, user_types
+from autoform.core import IR, Var, is_irvar, is_user_type, is_var
 from autoform.core import (
     Primitive,
     async_rules,
@@ -87,120 +87,6 @@ def pullback_bwd_stop_gradient(residuals: Tree, cotangent_out: Tree) -> Tree:
 def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tree, Tree]:
     del batch_size
     return x, in_batched
-
-
-# ==================================================================================================
-# IR CALL
-# ==================================================================================================
-
-ir_call_p = Primitive("ir_call", tag="call")
-
-# IR is a first-class citizen in autoform IRs
-user_types.add(IR)
-
-
-def ir_call(ir: IR, *args, **kwargs) -> Tree:
-    """Call an IR as a differentiable operation.
-
-    Enables higher-order programming by treating IRs as first-class values
-    that can be called within other traced programs.
-
-    Args:
-        ir: The IR to execute.
-        *args: Positional arguments to pass to the IR.
-        **kwargs: Keyword arguments to pass to the IR.
-
-    Returns:
-        The result of running the IR.
-
-    Example:
-        >>> import autoform as af
-        >>> inner_ir = af.build_ir(lambda x: af.concat("Inner: ", x), "test")
-        >>> def outer(ir, x):
-        ...     result = af.ir_call(ir, x)
-        ...     return af.concat(result, "!")
-        >>> outer_ir = af.build_ir(outer, inner_ir, "hello")
-        >>> af.run_ir(outer_ir, inner_ir, "world")
-        'Inner: world!'
-    """
-    return ir_call_p.bind((ir, pack_user_input(*args, **kwargs)))
-
-
-@ft.partial(impl_rules.def_rule, ir_call_p)
-def impl_ir_call(in_tree):
-    from autoform.evaluation import run_ir
-
-    ir, operands = in_tree
-    return run_ir(ir, operands)
-
-
-@ft.partial(eval_rules.def_rule, ir_call_p)
-def eval_ir_call(in_tree, **params):
-    ir, operands = in_tree
-
-    def to_eval(atom):
-        return Var() if is_irvar(atom) else atom.value
-
-    return treelib.map(to_eval, ir.out_irtree)
-
-
-@ft.partial(push_rules.def_rule, ir_call_p)
-def pushforward_ir_call(primals, tangents):
-    from autoform.evaluation import run_ir
-
-    ir, p_operands = primals
-    _, t_operands = tangents
-    primal_out = run_ir(ir, p_operands)
-    tangent_out = run_ir(ir, t_operands)
-    return primal_out, tangent_out
-
-
-@ft.partial(pull_fwd_rules.def_rule, ir_call_p)
-def pullback_fwd_ir_call(in_tree):
-    from autoform.evaluation import run_ir
-
-    ir, operands = in_tree
-    out = run_ir(ir, operands)
-    residuals = (ir, operands)
-    return out, residuals
-
-
-@ft.partial(pull_bwd_rules.def_rule, ir_call_p)
-def pullback_bwd_ir_call(residuals, cotangent_out):
-    from autoform.evaluation import run_ir
-    from autoform.ad import pullback_ir, zero_cotangent
-
-    ir, operands = residuals
-    pb_ir = pullback_ir(ir)
-    _, c_operands = run_ir(pb_ir, (operands, cotangent_out))
-    zero_ir = zero_cotangent(ir)
-    return (zero_ir, c_operands)
-
-
-@ft.partial(batch_rules.def_rule, ir_call_p)
-def batch_ir_call(batch_size, in_batched, in_tree):
-    from autoform.evaluation import run_ir
-
-    irs, operands = in_tree
-    prog_batched, operands_batched = in_batched
-
-    results = []
-    for b in range(batch_size):
-        prog = irs[b] if prog_batched else irs
-        batch_operands = unbatch_at(operands, operands_batched, b)
-        results.append(run_ir(prog, batch_operands))
-
-    return results, True
-
-
-@ft.partial(iter_rules.def_rule, ir_call_p)
-def iter_ir_call(in_tree):
-    from autoform.evaluation import iter_ir
-
-    ir, operands = in_tree
-    *chunks, _ = iter_ir(ir, operands)
-    for chunk in chunks:
-        yield chunk
 
 
 # ==================================================================================================

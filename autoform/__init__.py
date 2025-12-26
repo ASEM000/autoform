@@ -10,7 +10,7 @@ from autoform.optims import dce_ir, fold_ir
 
 from autoform.string import format, concat
 from autoform.lm import lm_call, struct_lm_call, Struct
-from autoform.control import stop_gradient, ir_call, switch
+from autoform.control import stop_gradient, switch
 
 from autoform.utils import PYTREE_NAMESPACE
 
@@ -37,7 +37,6 @@ __all__ = [
     "struct_lm_call",
     "stop_gradient",
     "sow",
-    "ir_call",
     "switch",
     # types
     "Struct",

@@ -94,31 +94,38 @@ class TestDCE:
 
 
 class TestDCEWithHigherOrderPrimitives:
-    def test_ir_call_kept_when_used(self):
+    def test_run_ir_inlines_for_dce(self):
+        """run_ir inlines operations, so DCE sees the inner ops directly."""
         inner_ir = af.build_ir(lambda x: af.concat(x, "!"), "x")
 
         def program(x):
-            return af.ir_call(inner_ir, x)
+            return af.run_ir(inner_ir, x)
 
         ir = af.build_ir(program, "input")
         dce = af.dce_ir(ir)
 
+        # Operations are inlined, so we see concat directly
         assert len(dce.ireqns) == 1
-        assert dce.ireqns[0].prim.name == "ir_call"
+        assert dce.ireqns[0].prim.name == "concat"
 
-    def test_ir_call_removed_when_unused(self):
-        inner_ir = af.build_ir(lambda x: af.concat(x, "!"), "x")
+    def test_inlined_dead_code_removed(self):
+        """DCE removes dead code from inlined run_ir."""
 
-        def program(x):
-            dead = af.ir_call(inner_ir, x)
-            live = af.concat(x, "live")
+        def inner(x):
+            dead = af.concat(x, "dead")  # This is dead
+            live = af.concat(x, "live")  # This is returned
             return live
 
+        inner_ir = af.build_ir(inner, "x")
+
+        def program(x):
+            return af.run_ir(inner_ir, x)
+
         ir = af.build_ir(program, "input")
         dce = af.dce_ir(ir)
 
-        assert len(ir.ireqns) == 2
-        assert len(dce.ireqns) == 1
+        assert len(ir.ireqns) == 2  # Both ops are inlined
+        assert len(dce.ireqns) == 1  # DCE removes dead one
         assert dce.ireqns[0].prim.name == "concat"
 
     def test_switch_kept_when_used(self):
