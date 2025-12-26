@@ -12,6 +12,8 @@ from autoform.string import format, concat
 from autoform.lm import lm_call, struct_lm_call, Struct
 from autoform.control import stop_gradient, ir_call, switch
 
+from autoform.utils import PYTREE_NAMESPACE
+
 __all__ = [
     # core
     "build_ir",
@@ -39,4 +41,5 @@ __all__ = [
     "switch",
     # types
     "Struct",
+    "PYTREE_NAMESPACE",
 ]

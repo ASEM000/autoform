@@ -17,7 +17,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, index, pack_user_input, treelib
+from autoform.utils import Tree, unbatch_at, pack_user_input, treelib
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -138,9 +138,6 @@ def impl_ir_call(in_tree):
 def eval_ir_call(in_tree, **params):
     ir, operands = in_tree
 
-    if is_var(ir):
-        return Var()
-
     def to_eval(atom):
         return Var() if is_irvar(atom) else atom.value
 
@@ -190,7 +187,7 @@ def batch_ir_call(batch_size, in_batched, in_tree):
     results = []
     for b in range(batch_size):
         prog = irs[b] if prog_batched else irs
-        batch_operands = index(operands, operands_batched, b)
+        batch_operands = unbatch_at(operands, operands_batched, b)
         results.append(run_ir(prog, batch_operands))
 
     return results, True
@@ -313,10 +310,10 @@ def batch_switch(
 
     key_col, operands_col = in_tree
     key_batched, operands_batched = in_batched
-    index_at = ft.partial(index, operands_col, operands_batched)
+    unbatch_operands = ft.partial(unbatch_at, operands_col, operands_batched)
 
     def run_ir_at(b):
-        return run_ir(branches[key_col[b] if key_batched else key_col], index_at(b))
+        return run_ir(branches[key_col[b] if key_batched else key_col], unbatch_operands(b))
 
     return [run_ir_at(b) for b in range(batch_size)], True
 
