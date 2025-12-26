@@ -43,11 +43,10 @@ class Struct(pydantic.BaseModel):
         super().__init_subclass__(**kwargs)
 
         def flatten(model):
-            values = tuple(getattr(model, k) for k in cls.model_fields)
-            return values, tuple(cls.model_fields.keys())
+            return tuple(getattr(model, k) for k in cls.model_fields), tuple(cls.model_fields)
 
         def unflatten(keys, children):
-            return cls.model_construct(**dict(zip(keys, children)))
+            return cls.model_construct(**dict(zip(keys, children, strict=True)))
 
         treelib.register_node(cls, flatten, unflatten)
 
@@ -283,13 +282,11 @@ def batch_struct_lm_call(
     model: str,
     struct: type[Struct],
 ) -> tuple[Tree, Tree]:
-    batched_messages = []
-    for b in range(batch_size):
-        msgs = [
-            dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
-            for i, r in enumerate(roles)
-        ]
-        batched_messages.append(msgs)
+
+    def get_message(i: int, b: int) -> dict[str, str]:
+        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+
+    batched_messages = [get_message(i, b) for b in range(batch_size) for i in range(len(roles))]
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
     output_bi = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, output_bi[0])

@@ -15,7 +15,6 @@ from autoform.utils import Tree, treelib
 
 
 def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    """Default DCE rule: axe if output vars are not active."""
     out_vars = set(x for x in treelib.leaves(ireqn.out_irtree) if is_irvar(x))
     if out_vars.isdisjoint(active_irvars):
         return True, set(), ireqn  # axe (equation returned but unused)

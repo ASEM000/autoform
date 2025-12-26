@@ -26,13 +26,7 @@ def is_user_type(x) -> bool:
     return isinstance(x, tuple(user_types))
 
 
-class Var:
-    """A symbolic user-facing variable used for `eval_rule` definitions."""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "Var"
+class Var: ...
 
 
 def is_var(x) -> tp.TypeIs[Var]:
@@ -47,13 +41,10 @@ type EvalType = Var | UserType
 # ==================================================================================================
 
 
-class IRAtom:
-    """Base class for IR atoms (variables and literals)."""
+class IRAtom: ...
 
 
 class IRVar(IRAtom):
-    """A variable in the IR representing a computed value."""
-
     counter = it.count(0)
     lock = RLock()
 
@@ -79,8 +70,6 @@ def is_iratom(x) -> tp.TypeIs[IRAtom]:
 
 
 class IRLit[T](IRAtom):
-    """A literal value in the IR."""
-
     def __init__(self, value: T, /, **meta):
         assert not is_iratom(value)
         assert hash(value) is not None  # NOTE(asem): for CSE
@@ -94,8 +83,7 @@ class IRLit[T](IRAtom):
         return hash((self.value, frozenset(self.meta.items()) if self.meta else None))
 
 
-class IRZero[T](IRLit[T]):
-    """A zero literal (for cotangents)."""
+class IRZero[T](IRLit[T]): ...
 
 
 def is_irlit(x) -> tp.TypeIs[IRLit]:
@@ -108,8 +96,6 @@ def is_irlit(x) -> tp.TypeIs[IRLit]:
 
 
 class Primitive:
-    """A primitive operation in the IR."""
-
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
@@ -130,8 +116,6 @@ class Primitive:
 
 
 class InterpreterRuleMapping[T: Callable]:
-    """Thread-safe mapping from primitives to interpretation rules."""
-
     def __init__(self):
         self.map: dict[Primitive, T] = {}
         self.lock = RLock()
@@ -196,8 +180,6 @@ dce_rules = InterpreterRuleMapping[DCERule]()
 
 
 class IREqn:
-    """An equation in the intermediate representation (IR)."""
-
     __slots__ = ("prim", "in_irtree", "out_irtree", "params")
     __match_args__ = ("prim", "in_irtree", "out_irtree", "params")
 
@@ -222,8 +204,6 @@ class IREqn:
 
 
 class IR:
-    """The intermediate representation (IR) of a program."""
-
     __slots__ = ("ireqns", "in_irtree", "out_irtree")
     __match_args__ = ("ireqns", "in_irtree", "out_irtree")
 
@@ -245,7 +225,6 @@ class IR:
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
-    """Generate text representation of an IR program."""
     assert isinstance(indent, int) and indent >= 0
     sp = " " * indent
 
@@ -301,13 +280,10 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 class Interpreter(ABC):
     @abstractmethod
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any:
-        """Process a primitive operation."""
+    def process(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
 
 
 class EvalInterpreter(Interpreter):
-    """Default interpreter that evaluates primitives directly."""
-
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         return impl_rules[prim](in_tree, **params)
 
@@ -321,7 +297,6 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 @contextmanager
 def using_interp(interpreter: Interpreter):
-    """Context manager to temporarily switch the active interpreter."""
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -330,7 +305,6 @@ def using_interp(interpreter: Interpreter):
 
 
 def get_interp() -> Interpreter:
-    """Get the currently active interpreter."""
     return active_interpreter.get()
 
 
@@ -340,8 +314,6 @@ def get_interp() -> Interpreter:
 
 
 class TracingInterpreter(Interpreter):
-    """Interpreter that records operations as IR equations."""
-
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
