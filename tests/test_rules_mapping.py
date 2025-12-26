@@ -1,13 +1,13 @@
 import threading
 import functools as ft
 from collections.abc import Callable
-import autoform.core as core
+import autoform as af
 
 
 class TestInterpreterRuleMapping:
     def test_basic_get_set(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
-        p = core.Primitive("test_basic")
+        mapping = af.core.InterpreterRuleMapping[Callable]()
+        p = af.core.Primitive("test_basic")
 
         @ft.partial(mapping.def_rule, p)
         def rule(x):
@@ -16,8 +16,8 @@ class TestInterpreterRuleMapping:
         assert mapping[p] is rule
 
     def test_duplicate_raises(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
-        p = core.Primitive("test_duplicate")
+        mapping = af.core.InterpreterRuleMapping[Callable]()
+        p = af.core.Primitive("test_duplicate")
 
         @ft.partial(mapping.def_rule, p)
         def rule1(x):
@@ -34,9 +34,9 @@ class TestInterpreterRuleMapping:
             pass
 
     def test_contains(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
-        p1 = core.Primitive("test_contains_1")
-        p2 = core.Primitive("test_contains_2")
+        mapping = af.core.InterpreterRuleMapping[Callable]()
+        p1 = af.core.Primitive("test_contains_1")
+        p2 = af.core.Primitive("test_contains_2")
 
         @ft.partial(mapping.def_rule, p1)
         def rule(x):
@@ -46,9 +46,9 @@ class TestInterpreterRuleMapping:
         assert p2 not in mapping
 
     def test_iter(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
-        p1 = core.Primitive("test_iter_1")
-        p2 = core.Primitive("test_iter_2")
+        mapping = af.core.InterpreterRuleMapping[Callable]()
+        p1 = af.core.Primitive("test_iter_1")
+        p2 = af.core.Primitive("test_iter_2")
 
         @ft.partial(mapping.def_rule, p1)
         def rule1(x):
@@ -64,13 +64,13 @@ class TestInterpreterRuleMapping:
         assert p2 in prims
 
     def test_concurrent_registration(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
+        mapping = af.core.InterpreterRuleMapping[Callable]()
         results = []
         errors = []
 
         def register_rule(thread_id):
             try:
-                p = core.Primitive(f"concurrent_{thread_id}")
+                p = af.core.Primitive(f"concurrent_{thread_id}")
 
                 @ft.partial(mapping.def_rule, p)
                 def rule(x):
@@ -92,8 +92,8 @@ class TestInterpreterRuleMapping:
             assert rule(1) == thread_id
 
     def test_reentrant_lock(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
-        p = core.Primitive("reentrant")
+        mapping = af.core.InterpreterRuleMapping[Callable]()
+        p = af.core.Primitive("reentrant")
 
         @ft.partial(mapping.def_rule, p)
         def rule(x):
@@ -104,8 +104,8 @@ class TestInterpreterRuleMapping:
                 assert p in mapping
 
     def test_iteration_during_contains(self):
-        mapping = core.InterpreterRuleMapping[Callable]()
-        prims = [core.Primitive(f"iter_contains_{i}") for i in range(10)]
+        mapping = af.core.InterpreterRuleMapping[Callable]()
+        prims = [af.core.Primitive(f"iter_contains_{i}") for i in range(10)]
         for p in prims:
 
             @ft.partial(mapping.def_rule, p)
