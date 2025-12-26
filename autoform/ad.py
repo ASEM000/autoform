@@ -31,7 +31,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, index, lru_cache, treelib
+from autoform.utils import Tree, index, lru_cache, treelib, transpose_batch
 
 
 # ==================================================================================================
@@ -192,13 +192,10 @@ def batch_pushforward_call(
     index_p = ft.partial(index, p_cols, p_batched)
     index_t = ft.partial(index, t_cols, t_batched)
     pf_ir = pushforward_ir(ir)
-    results = [run_ir(pf_ir, (index_p(b), index_t(b))) for b in range(batch_size)]
-    out_spec = treelib.structure(pf_ir.out_irtree)
-    leaves_bi = [out_spec.flatten_up_to(r) for r in results]
-    stacked = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(out_spec.num_leaves)]
-    out_cols = out_spec.unflatten(stacked)
+    output_bi = [run_ir(pf_ir, (index_p(b), index_t(b))) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, pf_ir.out_irtree)
-    return out_cols, out_batched
+    output_ib = transpose_batch(batch_size, out_batched, output_bi)
+    return output_ib, out_batched
 
 
 @ft.partial(dce_rules.def_rule, pushforward_call_p)
@@ -416,13 +413,10 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
     p_index = ft.partial(index, p_cols, p_batched)
     c_index = ft.partial(index, c_out_cols, c_batched)
     pb_ir = pullback_ir(ir)
-    results = [run_ir(pb_ir, (p_index(b), c_index(b))) for b in range(size)]
-    out_spec = treelib.structure(pb_ir.out_irtree)
-    leaves_bi = [out_spec.flatten_up_to(r) for r in results]
-    stacked = [[leaves_bi[b][i] for b in range(size)] for i in range(out_spec.num_leaves)]
-    out_cols = out_spec.unflatten(stacked)
+    output_bi = [run_ir(pb_ir, (p_index(b), c_index(b))) for b in range(size)]
     out_batched = treelib.map(lambda _: True, pb_ir.out_irtree)
-    return out_cols, out_batched
+    output_ib = transpose_batch(size, out_batched, output_bi)
+    return output_ib, out_batched
 
 
 @ft.partial(dce_rules.def_rule, pullback_call_p)

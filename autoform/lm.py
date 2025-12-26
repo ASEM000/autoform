@@ -20,7 +20,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, treelib, transpose_batch
 
 # ==================================================================================================
 # STRUCT
@@ -95,7 +95,7 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
 
 
 @ft.partial(impl_rules.def_rule, lm_call_p)
-def impl_lm_call(contents: tuple, *, roles: tuple[str, ...], model: str) -> str:
+def impl_lm_call(contents: list, *, roles: tuple[str, ...], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = completion(messages=messages, model=model)
     return resp.choices[0].message.content
@@ -118,7 +118,7 @@ def pushforward_lm_call(
 
 
 @ft.partial(pull_fwd_rules.def_rule, lm_call_p)
-def pullback_fwd_lm_call(contents: tuple, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model)
     out = resp.choices[0].message.content
@@ -147,7 +147,7 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 
 @ft.partial(batch_rules.def_rule, lm_call_p)
 def batch_lm_call(
-    batch_size: int, in_batched: Tree, contents: tuple, *, roles: tuple, model: str
+    batch_size: int, in_batched: Tree, contents: list, *, roles: tuple, model: str
 ) -> tuple[Tree, Tree]:
     batched_messages = []
     for b in range(batch_size):
@@ -161,7 +161,7 @@ def batch_lm_call(
 
 
 @ft.partial(iter_rules.def_rule, lm_call_p)
-def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[str]:
+def iter_lm_call(contents: list, *, roles: tuple, model: str) -> tp.Iterator[str]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, stream=True)
     for chunk in resp:
@@ -170,7 +170,7 @@ def iter_lm_call(contents: tuple, *, roles: tuple, model: str) -> tp.Iterator[st
 
 
 @ft.partial(async_rules.def_rule, lm_call_p)
-async def async_lm_call(contents: tuple, *, roles: tuple, model: str) -> str:
+async def async_lm_call(contents: list, *, roles: tuple, model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await acompletion(messages=messages, model=model)
     return resp.choices[0].message.content
@@ -218,7 +218,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
 @ft.partial(impl_rules.def_rule, struct_lm_call_p)
 def impl_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
@@ -236,7 +236,7 @@ def eval_struct_lm_call(in_tree: Tree, *, struct: type[Struct], **params) -> Tre
 
 @ft.partial(pull_fwd_rules.def_rule, struct_lm_call_p)
 def pullback_fwd_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
@@ -273,9 +273,33 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
     return tuple(grads)
 
 
+@ft.partial(batch_rules.def_rule, struct_lm_call_p)
+def batch_struct_lm_call(
+    batch_size: int,
+    in_batched: Tree,
+    contents: list,
+    *,
+    roles: tuple,
+    model: str,
+    struct: type[Struct],
+) -> tuple[Tree, Tree]:
+    batched_messages = []
+    for b in range(batch_size):
+        msgs = [
+            dict(role=r, content=contents[i][b] if in_batched[i] else contents[i])
+            for i, r in enumerate(roles)
+        ]
+        batched_messages.append(msgs)
+    responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
+    output_bi = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
+    out_batched = treelib.map(lambda _: True, output_bi[0])
+    output_ib = transpose_batch(batch_size, out_batched, output_bi)
+    return output_ib, out_batched
+
+
 @ft.partial(iter_rules.def_rule, struct_lm_call_p)
 def iter_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
@@ -290,7 +314,7 @@ def iter_struct_lm_call(
 
 @ft.partial(async_rules.def_rule, struct_lm_call_p)
 async def async_struct_lm_call(
-    contents: tuple,
+    contents: list,
     *,
     roles: tuple,
     model: str,
