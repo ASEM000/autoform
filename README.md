@@ -40,7 +40,7 @@ def judge_debate(topic: str) -> Verdict:
     msg = dict(role="user", content=prompt)
     return af.struct_lm_call([msg], model="gpt-4o", struct=Verdict)
 
-# trace
+# trace with a dummy input (no executions happens)
 ir = af.build_ir(judge_debate)("...")
 
 # execute
