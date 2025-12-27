@@ -190,9 +190,7 @@ class PlantInterpreter(Interpreter):
             return self.parent.process(prim, in_tree, **params)
 
 
-def plant[**P, R](
-    ir: IR, plants: dict[tp.Hashable, Tree], *, tag: tp.Hashable
-) -> tp.Callable[P, R]:
+def plant[**P, R](ir: IR, plants: Reaped, *, tag: tp.Hashable) -> tp.Callable[P, R]:
     """Create a planting executor for an IR.
 
     Args:

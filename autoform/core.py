@@ -203,7 +203,7 @@ class IREqn:
         return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
 
 
-class IR:
+class IR[**P, R]:
     __slots__ = ("ireqns", "in_irtree", "out_irtree")
     __match_args__ = ("ireqns", "in_irtree", "out_irtree")
 
