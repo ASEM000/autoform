@@ -330,59 +330,54 @@ class TestNestedReapPlantComposition:
 
 
 class TestReapDuringTransforms:
-    """Tests that ReapInterpreter captures sows inside transform rules."""
-
     def test_reap_captures_during_pushforward(self):
-        """Pushforward_sow calls sow() on both primal and tangent."""
 
         def func(x):
             return af.sow(x, tag="debug", name="val")
 
         ir = af.build_ir(func, "test")
         pf_ir = af.pushforward_ir(ir)
-        reap_pf = af.reap_ir(pf_ir, tag="debug")
 
-        result, reaped = af.run_ir(reap_pf, ("primal", "tangent"))
-        primal_out, tangent_out = result
-        assert primal_out == "primal"
-        assert tangent_out == "tangent"
-        # Sow called for both - last one wins in reaped dict
-        assert reaped["val"] in ["primal", "tangent"]
+        reap_primal = af.reap_ir(pf_ir, tag=("debug", "primal"))
+        result, primals = af.run_ir(reap_primal, ("primal", "tangent"))
+        assert primals == {"val": "primal"}
+
+        reap_tangent = af.reap_ir(pf_ir, tag=("debug", "tangent"))
+        result, tangents = af.run_ir(reap_tangent, ("primal", "tangent"))
+        assert tangents == {"val": "tangent"}
 
     def test_reap_captures_during_pullback(self):
-        """Pullback_bwd_sow calls sow() on cotangent."""
 
         def func(x):
             return af.sow(x, tag="debug", name="val")
 
         ir = af.build_ir(func, "test")
         pb_ir = af.pullback_ir(ir)
-        reap_pb = af.reap_ir(pb_ir, tag="debug")
 
-        result, reaped = af.run_ir(reap_pb, ("primal", "cotangent"))
-        primal_out, cotangent_in = result
-        assert primal_out == "primal"
-        assert cotangent_in == "cotangent"
-        # Cotangent captured during backward pass
-        assert "val" in reaped
+        # Reap primal from forward pass
+        reap_primal = af.reap_ir(pb_ir, tag=("debug", "primal"))
+        result, primals = af.run_ir(reap_primal, ("primal", "cotangent"))
+        assert primals == {"val": "primal"}
+
+        # Reap cotangent from backward pass
+        reap_grad = af.reap_ir(pb_ir, tag=("debug", "cotangent"))
+        result, grads = af.run_ir(reap_grad, ("primal", "cotangent"))
+        assert grads == {"val": "cotangent"}
 
     def test_reap_captures_during_batch(self):
-        """Batch_sow calls sow() on batched values."""
 
         def func(x):
             return af.sow(x, tag="debug", name="val")
 
         ir = af.build_ir(func, "test")
         batched = af.batch_ir(ir)
-        reap_batched = af.reap_ir(batched, tag="debug")
+        reap_batched = af.reap_ir(batched, tag=("debug", "batch"))
 
         result, reaped = af.run_ir(reap_batched, ["a", "b", "c"])
         assert result == ["a", "b", "c"]
-        # Batched values captured
-        assert "val" in reaped
+        assert reaped == {"val": ["a", "b", "c"]}
 
     def test_reap_captures_in_switch_branches(self):
-        """ReapInterpreter captures sows inside switch branches."""
 
         def branch_a(x):
             return af.sow(af.concat("a: ", x), tag="debug", name="result")

@@ -83,12 +83,14 @@ def pushforward_sow(
     tag: tp.Hashable,
     name: tp.Hashable,
 ) -> tuple[Tree, Tree]:
-    return sow(primal, tag=tag, name=name), sow(tangent, tag=tag, name=name)
+    p = sow(primal, tag=(tag, "primal"), name=name)
+    t = sow(tangent, tag=(tag, "tangent"), name=name)
+    return p, t
 
 
 @ft.partial(pull_fwd_rules.def_rule, sow_p)
 def pullback_fwd_sow(in_tree: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[Tree, Tree]:
-    out = sow(in_tree, tag=tag, name=name)
+    out = sow(in_tree, tag=(tag, "primal"), name=name)
     return out, out
 
 
@@ -101,7 +103,7 @@ def pullback_bwd_sow(
     name: tp.Hashable,
 ) -> Tree:
     del in_residuals
-    return sow(out_cotangent, tag=tag, name=name)
+    return sow(out_cotangent, tag=(tag, "cotangent"), name=name)
 
 
 @ft.partial(batch_rules.def_rule, sow_p)
@@ -113,7 +115,7 @@ def batch_sow(
     tag: tp.Hashable,
     name: tp.Hashable,
 ) -> tuple[Tree, Tree]:
-    return sow(x, tag=tag, name=name), in_batched
+    return sow(x, tag=(tag, "batch"), name=name), in_batched
 
 
 # ==================================================================================================
