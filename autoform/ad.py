@@ -175,11 +175,7 @@ def pullback_bwd_pushforward_call(residuals: Tree, cotangent_out: Tree, *, ir: I
 
 @ft.partial(batch_rules.def_rule, pushforward_call_p)
 def batch_pushforward_call(
-    batch_size: int,
-    in_batched: Tree[bool],
-    in_tree: Tree,
-    *,
-    ir: IR,
+    batch_size: int, in_batched: Tree[bool], in_tree: Tree, *, ir: IR
 ) -> tuple[Tree, Tree]:
     (p_cols, t_cols), (p_batched, t_batched) = in_tree, in_batched
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)

@@ -75,11 +75,7 @@ def eval_sow(in_tree: Tree[EvalType], *, tag: tp.Hashable, name: tp.Hashable) ->
 
 @ft.partial(push_rules.def_rule, sow_p)
 def pushforward_sow(
-    primal: Tree,
-    tangent: Tree,
-    *,
-    tag: tp.Hashable,
-    name: tp.Hashable,
+    primal: Tree, tangent: Tree, *, tag: tp.Hashable, name: tp.Hashable
 ) -> tuple[Tree, Tree]:
     p = sow(primal, tag=(tag, "primal"), name=name)
     t = sow(tangent, tag=(tag, "tangent"), name=name)
@@ -94,11 +90,7 @@ def pullback_fwd_sow(in_tree: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> t
 
 @ft.partial(pull_bwd_rules.def_rule, sow_p)
 def pullback_bwd_sow(
-    in_residuals: Tree,
-    out_cotangent: Tree,
-    *,
-    tag: tp.Hashable,
-    name: tp.Hashable,
+    in_residuals: Tree, out_cotangent: Tree, *, tag: tp.Hashable, name: tp.Hashable
 ) -> Tree:
     del in_residuals
     return sow(out_cotangent, tag=(tag, "cotangent"), name=name)
@@ -106,12 +98,7 @@ def pullback_bwd_sow(
 
 @ft.partial(batch_rules.def_rule, sow_p)
 def batch_sow(
-    _: int,
-    in_batched: Tree,
-    x: Tree,
-    *,
-    tag: tp.Hashable,
-    name: tp.Hashable,
+    _: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable, name: tp.Hashable
 ) -> tuple[Tree, Tree]:
     return sow(x, tag=(tag, "batch"), name=name), in_batched
 
