@@ -1,4 +1,4 @@
-"""Harvest primitives - sow/reap/plant for effect handling."""
+"""Harvest primitives - checkpoint/collect/inject for effect handling."""
 
 from __future__ import annotations
 
@@ -19,185 +19,188 @@ from autoform.utils import Tree
 from autoform.core import call_ir
 
 # ==================================================================================================
-# SOW
+# CHECKPOINT
 # ==================================================================================================
 
-sow_p = Primitive("sow", tag="core")
+checkpoint_p = Primitive("checkpoint", tag="core")
 
 
-def sow(in_tree: Tree, /, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
-    """Tag a value with a category and name for later collection.
+def checkpoint(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) -> Tree:
+    """Tag a value with a collection and name for later collection.
 
-    `sow` marks a value with a `tag` (category) and `name` (unique identifier)
-    that can be collected by `run_and_reap`. It acts as an identity operation in
-    normal execution, but when run under a `ReapInterpreter`, the sown values
-    are captured.
+    `checkpoint` marks a value with a `collection` and `name` (unique identifier)
+    that can be collected by `collect_ir`. It acts as an identity operation in
+    normal execution.
 
     Args:
-        in_tree: The value to sow (returned unchanged).
-        tag: Category for filtering (e.g., "debug", "cache", "metrics").
-        name: Unique identifier within the tag namespace.
+        in_tree: the value to checkpoint (returned unchanged).
+        collection: collection for filtering (e.g., "debug", "cache", "metrics").
+        name: unique identifier within the collection namespace.
 
     Returns:
-        The input value unchanged.
+        the input value unchanged.
 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
+        ...     prompt = af.checkpoint(af.format("Q: {}", x), collection="debug", name="prompt")
         ...     response = af.concat(prompt, " A: 42")
-        ...     return af.sow(response, tag="debug", name="response")
+        ...     return af.checkpoint(response, collection="debug", name="response")
         >>> ir = af.build_ir(program)("test")
-        >>> result, reaped = af.reap_ir(ir, tag="debug")("What is 6*7?")
+        >>> result, collected = af.collect_ir(ir, collection="debug")("What is 6*7?")
         >>> result
         'Q: What is 6*7? A: 42'
-        >>> reaped["prompt"]
+        >>> collected["prompt"]
         'Q: What is 6*7?'
-        >>> reaped["response"]
+        >>> collected["response"]
         'Q: What is 6*7? A: 42'
     """
-    assert hash(tag) is not None, "Tag must be hashable"
+    assert hash(collection) is not None, "Collection must be hashable"
     assert hash(name) is not None, "Name must be hashable"
-    return sow_p.bind(in_tree, tag=tag, name=name)
+    return checkpoint_p.bind(in_tree, collection=collection, name=name)
 
 
-@ft.partial(impl_rules.def_rule, sow_p)
-def impl_sow(in_tree: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
-    del tag, name
+@ft.partial(impl_rules.def_rule, checkpoint_p)
+def impl_checkpoint(in_tree: Tree, *, collection: tp.Hashable, name: tp.Hashable) -> Tree:
+    del collection, name
     return in_tree
 
 
-@ft.partial(eval_rules.def_rule, sow_p)
-def eval_sow(in_tree: Tree[EvalType], *, tag: tp.Hashable, name: tp.Hashable) -> Tree[EvalType]:
-    del tag, name
+@ft.partial(eval_rules.def_rule, checkpoint_p)
+def eval_checkpoint(
+    in_tree: Tree[EvalType], *, collection: tp.Hashable, name: tp.Hashable
+) -> Tree[EvalType]:
+    del collection, name
     return in_tree
 
 
-@ft.partial(push_rules.def_rule, sow_p)
-def pushforward_sow(
-    primal: Tree, tangent: Tree, *, tag: tp.Hashable, name: tp.Hashable
+@ft.partial(push_rules.def_rule, checkpoint_p)
+def pushforward_checkpoint(
+    primal: Tree, tangent: Tree, *, collection: tp.Hashable, name: tp.Hashable
 ) -> tuple[Tree, Tree]:
-    p = sow(primal, tag=(tag, "primal"), name=name)
-    t = sow(tangent, tag=(tag, "tangent"), name=name)
+    p = checkpoint(primal, collection=(collection, "primal"), name=name)
+    t = checkpoint(tangent, collection=(collection, "tangent"), name=name)
     return p, t
 
 
-@ft.partial(pull_fwd_rules.def_rule, sow_p)
-def pullback_fwd_sow(in_tree: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[Tree, Tree]:
-    out = sow(in_tree, tag=(tag, "primal"), name=name)
+@ft.partial(pull_fwd_rules.def_rule, checkpoint_p)
+def pullback_fwd_checkpoint(
+    in_tree: Tree, *, collection: tp.Hashable, name: tp.Hashable
+) -> tuple[Tree, Tree]:
+    out = checkpoint(in_tree, collection=(collection, "primal"), name=name)
     return out, out
 
 
-@ft.partial(pull_bwd_rules.def_rule, sow_p)
-def pullback_bwd_sow(
-    in_residuals: Tree, out_cotangent: Tree, *, tag: tp.Hashable, name: tp.Hashable
+@ft.partial(pull_bwd_rules.def_rule, checkpoint_p)
+def pullback_bwd_checkpoint(
+    in_residuals: Tree, out_cotangent: Tree, *, collection: tp.Hashable, name: tp.Hashable
 ) -> Tree:
     del in_residuals
-    return sow(out_cotangent, tag=(tag, "cotangent"), name=name)
+    return checkpoint(out_cotangent, collection=(collection, "cotangent"), name=name)
 
 
-@ft.partial(batch_rules.def_rule, sow_p)
-def batch_sow(
-    _: int, in_batched: Tree, x: Tree, *, tag: tp.Hashable, name: tp.Hashable
+@ft.partial(batch_rules.def_rule, checkpoint_p)
+def batch_checkpoint(
+    _: int, in_batched: Tree, x: Tree, *, collection: tp.Hashable, name: tp.Hashable
 ) -> tuple[Tree, Tree]:
-    return sow(x, tag=(tag, "batch"), name=name), in_batched
+    return checkpoint(x, collection=(collection, "batch"), name=name), in_batched
 
 
 # ==================================================================================================
-# REAP
+# COLLECT
 # ==================================================================================================
 
-type Reaped = dict[tp.Hashable, Tree]
+type Collected = dict[tp.Hashable, Tree]
 
 
-class ReapInterpreter(Interpreter):
-    def __init__(self, *, tag: tp.Hashable):
-        self.tag = tag
-        self.reaped: Reaped = {}
+class CollectInterpreter(Interpreter):
+    def __init__(self, *, collection: tp.Hashable):
+        self.collection = collection
+        self.collected: Collected = {}
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         result = self.parent.process(prim, in_tree, **params)
-        if prim == sow_p and params.get("tag") == self.tag:
-            self.reaped[params["name"]] = result
+        if prim == checkpoint_p and params.get("collection") == self.collection:
+            self.collected[params["name"]] = result
         return result
 
 
-def reap_ir[**P, R](ir: IR, *, tag: tp.Hashable) -> tp.Callable[P, tuple[R, Reaped]]:
-    """Create a reaping executor for an IR.
+def collect_ir[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
+    """Collect checkpointed values from an IR.
 
     Args:
         ir: The intermediate representation to run.
-        tag: The tag to filter sown values by.
+        collection: The collection to filter checkpointed values by.
 
     Returns:
-        A callable that executes the IR and returns (result, reaped_dict).
+        A callable that executes the IR and returns (result, collected_dict).
 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
+        ...     prompt = af.checkpoint(af.format("Q: {}", x), collection="debug", name="prompt")
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.build_ir(program)("test")
-        >>> result, reaped = af.reap_ir(ir, tag="debug")("What?")
+        >>> result, collected = af.collect_ir(ir, collection="debug")("What?")
         >>> result
         'Q: What? A: 42'
-        >>> reaped
+        >>> collected
         {'prompt': 'Q: What?'}
     """
 
-    def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Reaped]:
-        with using_interp(ReapInterpreter(tag=tag)) as reaper:
+    def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
+        with using_interp(CollectInterpreter(collection=collection)) as collector:
             result = call_ir(ir)(*args, **kwargs)
-        return result, reaper.reaped
+        return result, collector.collected
 
     return execute
 
 
 # ==================================================================================================
-# PLANT
+# INJECT
 # ==================================================================================================
 
 
-class PlantInterpreter(Interpreter):
-    def __init__(self, *, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]):
-        self.tag = tag
-        self.plants = plants
+class InjectInterpreter(Interpreter):
+    def __init__(self, *, collection: tp.Hashable, values: dict[tp.Hashable, Tree]):
+        self.collection = collection
+        self.values = values
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         if (
-            prim == sow_p
-            and params.get("tag") == self.tag
-            and (name := params.get("name")) in self.plants
+            prim == checkpoint_p
+            and params.get("collection") == self.collection
+            and (name := params.get("name")) in self.values
         ):
-            return self.plants[name]
+            return self.values[name]
         with using_interp(self.parent):
             return self.parent.process(prim, in_tree, **params)
 
 
-def plant_ir[**P, R](ir: IR, plants: Reaped, *, tag: tp.Hashable) -> tp.Callable[P, R]:
-    """Create a planting executor for an IR.
+def inject_ir[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
+    """Create an injecting executor for an IR.
 
     Args:
         ir: The intermediate representation to run.
-        plants: Dictionary mapping sow names to values to inject.
-        tag: The tag to filter sow locations by.
+        collection: The collection to filter checkpoint locations by.
+        values: Dictionary mapping checkpoint names to values to inject.
 
     Returns:
-        A callable that executes the IR with planted values.
+        A callable that executes the IR with injected values.
 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
+        ...     return af.checkpoint(af.concat("Hello, ", x), collection="cache", name="greeting")
         >>> ir = af.build_ir(program)("test")
-        >>> af.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")("World")
+        >>> af.inject_ir(ir, collection="cache", values={"greeting": "CACHED"})("World")
         'CACHED'
     """
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
-        with using_interp(PlantInterpreter(tag=tag, plants=plants)):
+        with using_interp(InjectInterpreter(collection=collection, values=values)):
             return call_ir(ir)(*args, **kwargs)
 
     return execute

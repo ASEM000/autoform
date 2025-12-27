@@ -24,49 +24,46 @@ def judge_debate(topic: str) -> Verdict:
     """three agents debate, one judges. we can optimize any of them."""
     # agent 1: argue for
     pro = af.format("Argue FOR: {}", topic)
-    pro = af.sow(pro, tag="prompts", name="pro")  # tag for collection
+    pro = af.checkpoint(pro, collection="debug", name="pro")  # tag for collection
     msg = dict(role="user", content=pro)
     pro = af.lm_call([msg], model="gpt-4.1")
 
     # agent 2: argue against
     con = af.format("Argue AGAINST: {}", topic)
-    con = af.sow(con, tag="prompts", name="con")
+    con = af.checkpoint(con, collection="debug", name="con")
     msg = dict(role="user", content=con)
     con = af.lm_call([msg], model="gpt-4.1")
 
     # agent 3: judge
     prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
-    prompt = af.sow(prompt, tag="prompts", name="judge")
+    prompt = af.checkpoint(prompt, collection="debug", name="judge")
     msg = dict(role="user", content=prompt)
     return af.struct_lm_call([msg], model="gpt-4o", struct=Verdict)
 
 # trace
 ir = af.build_ir(judge_debate)("...")
 
+# execute
+verdict = af.call_ir(ir)("pineapple on pizza")
+
 # batch: parallel topics
 batch_ir = af.batch_ir(ir, in_axes=list)
-verdicts = batch_ir.call(["pineapple on pizza", "cats vs dogs", "morning vs night"])
+verdicts = af.call_ir(batch_ir)(["pineapple on pizza", "cats vs dogs", "morning vs night"])
 
 # gradients: feedback on output -> feedback on input
 pb_ir = af.pullback_ir(ir)
 feedback = Verdict(decision="too one-sided", reasoning="pro was weak")
-verdict, grad = pb_ir.call(("pineapple on pizza", feedback))
+verdict, grad = af.call_ir(pb_ir)(("pineapple on pizza", feedback))
 
 # batched gradients
 batch_pb = af.batch_ir(pb_ir, in_axes=(list, list))
 
-# harvest: collect prompts
-reaped_ir = af.reap_ir(ir, tag="prompts")
-verdict, prompts = reaped_ir.call("pineapple on pizza")
+# harvest: collect prompts at runtime
+verdict, prompts = af.collect_ir(ir, collection="debug")("pineapple on pizza")
+# prompts: {'pro': '...', 'con': '...', 'judge': '...'}
 
-# split: isolate judge for testing
-ir_before, ir_after = af.split_ir(ir, tag="prompts", name="judge")
-
-# composition: nest IRs (inlined during tracing)
-def meta(topic):
-    v1, v2 = ir.call(topic), ir.call(topic)
-    return af.format("{} vs {}", v1.decision, v2.decision)
-meta_ir = af.build_ir(meta)("...")
+# plant: inject cached values
+verdict = af.inject_ir(ir, collection="debug", values={"pro": "cached response"})("pineapple on pizza")
 
 # transforms compose
 batch_batch = af.batch_ir(af.batch_ir(ir, in_axes=list), in_axes=list)

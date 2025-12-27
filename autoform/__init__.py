@@ -4,7 +4,7 @@ from autoform.core import build_ir
 
 from autoform.ad import pushforward_ir, pullback_ir
 from autoform.batch import batch_ir
-from autoform.harvest import reap_ir, plant_ir, sow
+from autoform.harvest import collect_ir, inject_ir, checkpoint
 from autoform.optims import dce_ir, fold_ir
 from autoform.core import call_ir, icall_ir, acall_ir
 
@@ -25,8 +25,8 @@ __all__ = [
     "pushforward_ir",
     "pullback_ir",
     "batch_ir",
-    "reap_ir",
-    "plant_ir",
+    "collect_ir",
+    "inject_ir",
     "dce_ir",
     "fold_ir",
     # primitives (user-facing functions)
@@ -35,7 +35,7 @@ __all__ = [
     "lm_call",
     "struct_lm_call",
     "stop_gradient",
-    "sow",
+    "checkpoint",
     "switch",
     # types
     "Struct",

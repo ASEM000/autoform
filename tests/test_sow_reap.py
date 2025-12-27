@@ -3,35 +3,35 @@ import autoform as af
 
 class TestSow:
     def test_impl_is_identity(self):
-        result = af.sow("hello", tag="debug", name="test")
+        result = af.checkpoint("hello", collection="debug", name="test")
         assert result == "hello"
 
     def test_ir_build(self):
         def func(x):
-            return af.sow(x, tag="my_tag", name="my_name")
+            return af.checkpoint(x, collection="my_tag", name="my_name")
 
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "sow"
-        assert ir.ireqns[0].params["tag"] == "my_tag"
+        assert ir.ireqns[0].prim.name == "checkpoint"
+        assert ir.ireqns[0].params["collection"] == "my_tag"
         assert ir.ireqns[0].params["name"] == "my_name"
 
     def test_run_ir(self):
         def func(x):
-            return af.sow(x, tag="test", name="value")
+            return af.checkpoint(x, collection="test", name="value")
 
         ir = af.build_ir(func)("test")
         result = af.call_ir(ir)("hello")
         assert result == "hello"
 
     def test_hashable_tags_and_names(self):
-        assert af.sow("x", tag="str_tag", name="str_name") == "x"
-        assert af.sow("x", tag=42, name=100) == "x"
-        assert af.sow("x", tag=("a", 1), name=("b", 2)) == "x"
+        assert af.checkpoint("x", collection="str_tag", name="str_name") == "x"
+        assert af.checkpoint("x", collection=42, name=100) == "x"
+        assert af.checkpoint("x", collection=("a", 1), name=("b", 2)) == "x"
 
     def test_pushforward_preserves_both(self):
         def func(x):
-            return af.sow(x, tag="test", name="val")
+            return af.checkpoint(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
         pf_ir = af.pushforward_ir(ir)
@@ -41,7 +41,7 @@ class TestSow:
 
     def test_pullback_preserves_cotangent(self):
         def func(x):
-            return af.sow(x, tag="test", name="val")
+            return af.checkpoint(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
         pb_ir = af.pullback_ir(ir)
@@ -51,7 +51,7 @@ class TestSow:
 
     def test_batch(self):
         def func(x):
-            return af.sow(x, tag="test", name="val")
+            return af.checkpoint(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
         batched_ir = af.batch_ir(ir)
@@ -60,7 +60,7 @@ class TestSow:
 
     def test_in_chain(self):
         def func(x):
-            sowed = af.sow(x, tag="debug", name="input")
+            sowed = af.checkpoint(x, collection="debug", name="input")
             return af.concat("[", sowed, "]")
 
         ir = af.build_ir(func)("a")
@@ -71,167 +71,167 @@ class TestSow:
 class TestRunAndReap:
     def test_reap_single_sow(self):
         def func(x):
-            return af.sow(x, tag="debug", name="captured")
+            return af.checkpoint(x, collection="debug", name="captured")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap_ir(ir, tag="debug")("hello")
+        result, collected = af.collect_ir(ir, collection="debug")("hello")
         assert result == "hello"
-        assert reaped == {"captured": "hello"}
+        assert collected == {"captured": "hello"}
 
     def test_reap_multiple_sows_same_tag(self):
         def func(x):
-            a = af.sow(x, tag="debug", name="first")
+            a = af.checkpoint(x, collection="debug", name="first")
             b = af.concat(a, "!")
-            c = af.sow(b, tag="debug", name="second")
+            c = af.checkpoint(b, collection="debug", name="second")
             return c
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap_ir(ir, tag="debug")("hi")
+        result, collected = af.collect_ir(ir, collection="debug")("hi")
         assert result == "hi!"
-        assert reaped == {"first": "hi", "second": "hi!"}
+        assert collected == {"first": "hi", "second": "hi!"}
 
     def test_reap_filters_by_tag(self):
         def func(x):
-            a = af.sow(x, tag="debug", name="debug_val")
-            b = af.sow(a, tag="metrics", name="metrics_val")
+            a = af.checkpoint(x, collection="debug", name="debug_val")
+            b = af.checkpoint(a, collection="metrics", name="metrics_val")
             return b
 
         ir = af.build_ir(func)("test")
 
-        _, debug_reaped = af.reap_ir(ir, tag="debug")("hello")
-        assert debug_reaped == {"debug_val": "hello"}
+        _, debug_collected = af.collect_ir(ir, collection="debug")("hello")
+        assert debug_collected == {"debug_val": "hello"}
 
-        _, metrics_reaped = af.reap_ir(ir, tag="metrics")("hello")
-        assert metrics_reaped == {"metrics_val": "hello"}
+        _, metrics_collected = af.collect_ir(ir, collection="metrics")("hello")
+        assert metrics_collected == {"metrics_val": "hello"}
 
     def test_reap_empty_when_no_match(self):
         def func(x):
-            return af.sow(x, tag="other", name="val")
+            return af.checkpoint(x, collection="other", name="val")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap_ir(ir, tag="debug")("hello")
+        result, collected = af.collect_ir(ir, collection="debug")("hello")
         assert result == "hello"
-        assert reaped == {}
+        assert collected == {}
 
     def test_reap_with_no_sows(self):
         def func(x):
             return af.concat(x, "!")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap_ir(ir, tag="debug")("hello")
+        result, collected = af.collect_ir(ir, collection="debug")("hello")
         assert result == "hello!"
-        assert reaped == {}
+        assert collected == {}
 
     def test_reap_preserves_execution(self):
         def func(x):
-            a = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
+            a = af.checkpoint(af.format("Q: {}", x), collection="debug", name="prompt")
             response = af.concat(a, " A: 42")
-            return af.sow(response, tag="debug", name="response")
+            return af.checkpoint(response, collection="debug", name="response")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap_ir(ir, tag="debug")("What?")
+        result, collected = af.collect_ir(ir, collection="debug")("What?")
         assert result == "Q: What? A: 42"
-        assert reaped["prompt"] == "Q: What?"
-        assert reaped["response"] == "Q: What? A: 42"
+        assert collected["prompt"] == "Q: What?"
+        assert collected["response"] == "Q: What? A: 42"
 
 
 class TestRunAndPlant:
     def test_plant_overrides_sow(self):
         def func(x):
-            return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
+            return af.checkpoint(af.concat("Hello, ", x), collection="cache", name="greeting")
 
         ir = af.build_ir(func)("test")
 
         result = af.call_ir(ir)("World")
         assert result == "Hello, World"
 
-        result = af.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")("World")
+        result = af.inject_ir(ir, collection="cache", values={"greeting": "CACHED"})("World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
         def func(x):
-            a = af.sow(x, tag="cache", name="first")
-            b = af.sow(af.concat(a, "!"), tag="cache", name="second")
+            a = af.checkpoint(x, collection="cache", name="first")
+            b = af.checkpoint(af.concat(a, "!"), collection="cache", name="second")
             return b
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant_ir(ir, {"first": "PLANTED"}, tag="cache")("ignored")
+        result = af.inject_ir(ir, collection="cache", values={"first": "PLANTED"})("ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
         def func(x):
-            a = af.sow(x, tag="cache", name="val")
-            b = af.sow(a, tag="other", name="val")
+            a = af.checkpoint(x, collection="cache", name="val")
+            b = af.checkpoint(a, collection="other", name="val")
             return b
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant_ir(ir, {"val": "CACHED"}, tag="cache")("input")
+        result = af.inject_ir(ir, collection="cache", values={"val": "CACHED"})("input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
         def func(x):
-            return af.sow(x, tag="cache", name="val")
+            return af.checkpoint(x, collection="cache", name="val")
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant_ir(ir, {}, tag="cache")("hello")
+        result = af.inject_ir(ir, collection="cache", values={})("hello")
         assert result == "hello"
 
     def test_plant_unmatched_name(self):
         def func(x):
-            return af.sow(x, tag="cache", name="val")
+            return af.checkpoint(x, collection="cache", name="val")
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant_ir(ir, {"other": "PLANTED"}, tag="cache")("hello")
+        result = af.inject_ir(ir, collection="cache", values={"other": "PLANTED"})("hello")
         assert result == "hello"
 
 
 class TestTransformThenReap:
     def test_reap_captures_during_pushforward(self):
         def func(x):
-            return af.sow(x, tag="debug", name="val")
+            return af.checkpoint(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward_ir(ir)
 
-        result, primals = af.reap_ir(pf_ir, tag=("debug", "primal"))(("primal", "tangent"))
+        result, primals = af.collect_ir(pf_ir, collection=("debug", "primal"))(("primal", "tangent"))
         assert primals == {"val": "primal"}
 
-        result, tangents = af.reap_ir(pf_ir, tag=("debug", "tangent"))(("primal", "tangent"))
+        result, tangents = af.collect_ir(pf_ir, collection=("debug", "tangent"))(("primal", "tangent"))
         assert tangents == {"val": "tangent"}
 
     def test_reap_captures_during_pullback(self):
         def func(x):
-            return af.sow(x, tag="debug", name="val")
+            return af.checkpoint(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback_ir(ir)
 
-        result, primals = af.reap_ir(pb_ir, tag=("debug", "primal"))(("primal", "cotangent"))
+        result, primals = af.collect_ir(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
         assert primals == {"val": "primal"}
 
-        result, grads = af.reap_ir(pb_ir, tag=("debug", "cotangent"))(("primal", "cotangent"))
+        result, grads = af.collect_ir(pb_ir, collection=("debug", "cotangent"))(("primal", "cotangent"))
         assert grads == {"val": "cotangent"}
 
     def test_reap_captures_during_batch(self):
         def func(x):
-            return af.sow(x, tag="debug", name="val")
+            return af.checkpoint(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
         batched = af.batch_ir(ir)
-        result, reaped = af.reap_ir(batched, tag=("debug", "batch"))(["a", "b", "c"])
+        result, collected = af.collect_ir(batched, collection=("debug", "batch"))(["a", "b", "c"])
         assert result == ["a", "b", "c"]
-        assert reaped == {"val": ["a", "b", "c"]}
+        assert collected == {"val": ["a", "b", "c"]}
 
     def test_reap_captures_in_switch_branches(self):
         def branch_a(x):
-            return af.sow(af.concat("a: ", x), tag="debug", name="result")
+            return af.checkpoint(af.concat("a: ", x), collection="debug", name="result")
 
         def branch_b(x):
-            return af.sow(af.concat("b: ", x), tag="debug", name="result")
+            return af.checkpoint(af.concat("b: ", x), collection="debug", name="result")
 
         ir_a = af.build_ir(branch_a)("x")
         ir_b = af.build_ir(branch_b)("x")
@@ -240,6 +240,6 @@ class TestTransformThenReap:
             return af.switch("a", {"a": ir_a, "b": ir_b}, x)
 
         ir = af.build_ir(func)("input")
-        result, reaped = af.reap_ir(ir, tag="debug")("hello")
+        result, collected = af.collect_ir(ir, collection="debug")("hello")
         assert result == "a: hello"
-        assert reaped == {"result": "a: hello"}
+        assert collected == {"result": "a: hello"}
