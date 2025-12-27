@@ -327,3 +327,78 @@ class TestNestedReapPlantComposition:
         result = af.run_ir(double_batched, [["a", "b"], ["c", "d"]])
         outputs, _ = result
         assert outputs == [["a", "b"], ["c", "d"]]
+
+
+class TestReapDuringTransforms:
+    """Tests that ReapInterpreter captures sows inside transform rules."""
+
+    def test_reap_captures_during_pushforward(self):
+        """Pushforward_sow calls sow() on both primal and tangent."""
+
+        def func(x):
+            return af.sow(x, tag="debug", name="val")
+
+        ir = af.build_ir(func, "test")
+        pf_ir = af.pushforward_ir(ir)
+        reap_pf = af.reap_ir(pf_ir, tag="debug")
+
+        result, reaped = af.run_ir(reap_pf, ("primal", "tangent"))
+        primal_out, tangent_out = result
+        assert primal_out == "primal"
+        assert tangent_out == "tangent"
+        # Sow called for both - last one wins in reaped dict
+        assert reaped["val"] in ["primal", "tangent"]
+
+    def test_reap_captures_during_pullback(self):
+        """Pullback_bwd_sow calls sow() on cotangent."""
+
+        def func(x):
+            return af.sow(x, tag="debug", name="val")
+
+        ir = af.build_ir(func, "test")
+        pb_ir = af.pullback_ir(ir)
+        reap_pb = af.reap_ir(pb_ir, tag="debug")
+
+        result, reaped = af.run_ir(reap_pb, ("primal", "cotangent"))
+        primal_out, cotangent_in = result
+        assert primal_out == "primal"
+        assert cotangent_in == "cotangent"
+        # Cotangent captured during backward pass
+        assert "val" in reaped
+
+    def test_reap_captures_during_batch(self):
+        """Batch_sow calls sow() on batched values."""
+
+        def func(x):
+            return af.sow(x, tag="debug", name="val")
+
+        ir = af.build_ir(func, "test")
+        batched = af.batch_ir(ir)
+        reap_batched = af.reap_ir(batched, tag="debug")
+
+        result, reaped = af.run_ir(reap_batched, ["a", "b", "c"])
+        assert result == ["a", "b", "c"]
+        # Batched values captured
+        assert "val" in reaped
+
+    def test_reap_captures_in_switch_branches(self):
+        """ReapInterpreter captures sows inside switch branches."""
+
+        def branch_a(x):
+            return af.sow(af.concat("a: ", x), tag="debug", name="result")
+
+        def branch_b(x):
+            return af.sow(af.concat("b: ", x), tag="debug", name="result")
+
+        ir_a = af.build_ir(branch_a, "x")
+        ir_b = af.build_ir(branch_b, "x")
+
+        def func(x):
+            return af.switch("a", {"a": ir_a, "b": ir_b}, x)
+
+        ir = af.build_ir(func, "input")
+        reap = af.reap_ir(ir, tag="debug")
+
+        result, reaped = af.run_ir(reap, "hello")
+        assert result == "a: hello"
+        assert reaped == {"result": "a: hello"}

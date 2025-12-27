@@ -83,14 +83,13 @@ def pushforward_sow(
     tag: tp.Hashable,
     name: tp.Hashable,
 ) -> tuple[Tree, Tree]:
-    del tag, name
-    return primal, tangent
+    return sow(primal, tag=tag, name=name), sow(tangent, tag=tag, name=name)
 
 
 @ft.partial(pull_fwd_rules.def_rule, sow_p)
 def pullback_fwd_sow(in_tree: Tree, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[Tree, Tree]:
-    del tag, name
-    return in_tree, in_tree
+    out = sow(in_tree, tag=tag, name=name)
+    return out, out
 
 
 @ft.partial(pull_bwd_rules.def_rule, sow_p)
@@ -101,8 +100,8 @@ def pullback_bwd_sow(
     tag: tp.Hashable,
     name: tp.Hashable,
 ) -> Tree:
-    del in_residuals, tag, name
-    return out_cotangent
+    del in_residuals
+    return sow(out_cotangent, tag=tag, name=name)
 
 
 @ft.partial(batch_rules.def_rule, sow_p)
@@ -114,12 +113,11 @@ def batch_sow(
     tag: tp.Hashable,
     name: tp.Hashable,
 ) -> tuple[Tree, Tree]:
-    del tag, name
-    return x, in_batched
+    return sow(x, tag=tag, name=name), in_batched
 
 
 # ==================================================================================================
-# REAP CALL PRIMITIVE
+# REAP
 # ==================================================================================================
 
 reap_call_p = Primitive("reap_call", tag="harvest")
@@ -127,28 +125,26 @@ reap_call_p = Primitive("reap_call", tag="harvest")
 type Reaped = dict[tp.Hashable, Tree]
 
 
+class ReapInterpreter(Interpreter):
+    def __init__(self, *, tag: tp.Hashable):
+        self.tag = tag
+        self.reaped: Reaped = {}
+        self.parent = get_interp()
+
+    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        result = self.parent.process(prim, in_tree, **params)
+        if prim == sow_p and params.get("tag") == self.tag:
+            self.reaped[params["name"]] = result
+        return result
+
+
 @ft.partial(impl_rules.def_rule, reap_call_p)
 def impl_reap_call(in_tree: Tree, *, ir: IR, tag: tp.Hashable) -> tuple[Tree, Reaped]:
-    reaped: Reaped = {}
-    env: dict[IRVar, Value] = {}
+    from autoform.evaluation import run_ir
 
-    def write(atom, value: Value):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Value:
-        return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
-
-    treelib.map(write, ir.in_irtree, in_tree)
-
-    for ireqn in ir.ireqns:
-        in_ireqn = treelib.map(read, ireqn.in_irtree)
-        out_ireqn = ireqn.prim.bind(in_ireqn, **ireqn.params)
-        treelib.map(write, ireqn.out_irtree, out_ireqn)
-        if ireqn.prim == sow_p and ireqn.params.get("tag") == tag:
-            reaped[ireqn.params["name"]] = out_ireqn
-
-    result = treelib.map(read, ir.out_irtree)
-    return result, reaped
+    with using_interp(ReapInterpreter(tag=tag)) as reap:
+        result = run_ir(ir, in_tree)
+    return result, reap.reaped
 
 
 @ft.partial(eval_rules.def_rule, reap_call_p)
@@ -252,7 +248,7 @@ def reap_ir(ir: IR, *, tag: tp.Hashable) -> IR:
 
 
 # ==================================================================================================
-# PLANT CALL PRIMITIVE
+# PLANT
 # ==================================================================================================
 
 plant_call_p = Primitive("plant_call", tag="harvest")
