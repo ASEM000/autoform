@@ -10,7 +10,7 @@ from collections.abc import Callable, Coroutine
 from contextlib import contextmanager
 from contextvars import ContextVar
 from threading import RLock
-
+from operator import setitem
 from autoform.utils import Tree, pack_user_input, treelib
 
 # ==================================================================================================
@@ -196,15 +196,14 @@ class IREqn:
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, _, __):
         raise TypeError("IREqn is immutable")
 
     def using(self, **kwargs) -> IREqn:
-        """Return new IREqn with kwargs merged into params."""
         return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
 
 
-class IR:
+class IR[**P, R]:
     __slots__ = ("ireqns", "in_irtree", "out_irtree")
     __match_args__ = ("ireqns", "in_irtree", "out_irtree")
 
@@ -218,15 +217,13 @@ class IR:
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, _, __):
         raise TypeError("IR is immutable")
 
     def __repr__(self) -> str:
         return generate_text_code(ir=self, expand_ir=True)
 
-    def call(self, *args, **kwargs) -> Tree:
-        """Execute this IR synchronously with the provided inputs."""
-        from operator import setitem
+    def call(self, *args: P.args, **kwargs: P.kwargs) -> R:
 
         in_tree = pack_user_input(*args, **kwargs)
         env: dict[IRVar, Value] = {}
@@ -245,10 +242,7 @@ class IR:
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         return treelib.map(read, self.out_irtree)
 
-    def icall(self, *args, **kwargs) -> tp.Iterator[Tree]:
-        """Execute this IR as an iterator, yielding intermediate results."""
-        import itertools as it
-        from operator import setitem
+    def icall(self, *args: P.args, **kwargs: P.kwargs) -> tp.Iterator[R]:
 
         def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
             if not chunks:
@@ -290,10 +284,7 @@ class IR:
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         yield treelib.map(read, self.out_irtree)
 
-    async def acall(self, *args, **kwargs) -> Tree:
-        """Execute this IR asynchronously."""
-        from operator import setitem
-
+    async def acall(self, *args: P.args, **kwargs: P.kwargs) -> R:
         in_tree = pack_user_input(*args, **kwargs)
         env: dict[IRVar, Value] = {}
 
@@ -435,7 +426,7 @@ class TracingInterpreter(Interpreter):
 # ==================================================================================================
 
 
-def build_ir[**P](func: Callable[P, Tree]) -> Callable[P, IR]:
+def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
     """Build an IR from a function by tracing its execution.
 
     Args:
@@ -465,7 +456,7 @@ def build_ir[**P](func: Callable[P, Tree]) -> Callable[P, IR]:
         return x
 
     @ft.wraps(func)
-    def trace(*args: P.args, **kwargs: P.kwargs) -> IR:
+    def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
         treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
         in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
         with using_interp(TracingInterpreter()) as tracer:
