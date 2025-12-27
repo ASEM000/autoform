@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import functools as ft
 import typing as tp
-from operator import setitem
 
 from autoform.core import Interpreter, build_ir, get_interp, using_interp
-from autoform.core import IR, EvalType, IRLit, IRVar, Value, Var, is_irvar, is_var
+from autoform.core import IR, EvalType, IRVar, Var, is_irvar, is_var
 from autoform.core import (
     Primitive,
     batch_rules,
@@ -281,29 +280,10 @@ def impl_plant_call(
     tag: tp.Hashable,
     plants: dict[tp.Hashable, Tree],
 ) -> Tree:
-    env: dict[IRVar, Value] = {}
+    from autoform.evaluation import run_ir
 
-    def write(atom, value: Value):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Value:
-        return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
-
-    treelib.map(write, ir.in_irtree, in_tree)
-
-    for ireqn in ir.ireqns:
-        in_ireqn = treelib.map(read, ireqn.in_irtree)
-        if (
-            ireqn.prim == sow_p
-            and ireqn.params.get("tag") == tag
-            and ireqn.params["name"] in plants
-        ):
-            out_ireqn = plants[ireqn.params["name"]]
-        else:
-            out_ireqn = ireqn.prim.bind(in_ireqn, **ireqn.params)
-        treelib.map(write, ireqn.out_irtree, out_ireqn)
-
-    return treelib.map(read, ir.out_irtree)
+    with using_interp(PlantInterpreter(tag=tag, plants=plants)):
+        return run_ir(ir, in_tree)
 
 
 @ft.partial(eval_rules.def_rule, plant_call_p)
