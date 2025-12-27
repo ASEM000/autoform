@@ -74,7 +74,7 @@ class TestRunAndReap:
             return af.sow(x, tag="debug", name="captured")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap(ir, tag="debug")("hello")
+        result, reaped = af.reap_ir(ir, tag="debug")("hello")
         assert result == "hello"
         assert reaped == {"captured": "hello"}
 
@@ -86,7 +86,7 @@ class TestRunAndReap:
             return c
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap(ir, tag="debug")("hi")
+        result, reaped = af.reap_ir(ir, tag="debug")("hi")
         assert result == "hi!"
         assert reaped == {"first": "hi", "second": "hi!"}
 
@@ -98,10 +98,10 @@ class TestRunAndReap:
 
         ir = af.build_ir(func)("test")
 
-        _, debug_reaped = af.reap(ir, tag="debug")("hello")
+        _, debug_reaped = af.reap_ir(ir, tag="debug")("hello")
         assert debug_reaped == {"debug_val": "hello"}
 
-        _, metrics_reaped = af.reap(ir, tag="metrics")("hello")
+        _, metrics_reaped = af.reap_ir(ir, tag="metrics")("hello")
         assert metrics_reaped == {"metrics_val": "hello"}
 
     def test_reap_empty_when_no_match(self):
@@ -109,7 +109,7 @@ class TestRunAndReap:
             return af.sow(x, tag="other", name="val")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap(ir, tag="debug")("hello")
+        result, reaped = af.reap_ir(ir, tag="debug")("hello")
         assert result == "hello"
         assert reaped == {}
 
@@ -118,7 +118,7 @@ class TestRunAndReap:
             return af.concat(x, "!")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap(ir, tag="debug")("hello")
+        result, reaped = af.reap_ir(ir, tag="debug")("hello")
         assert result == "hello!"
         assert reaped == {}
 
@@ -129,7 +129,7 @@ class TestRunAndReap:
             return af.sow(response, tag="debug", name="response")
 
         ir = af.build_ir(func)("test")
-        result, reaped = af.reap(ir, tag="debug")("What?")
+        result, reaped = af.reap_ir(ir, tag="debug")("What?")
         assert result == "Q: What? A: 42"
         assert reaped["prompt"] == "Q: What?"
         assert reaped["response"] == "Q: What? A: 42"
@@ -145,7 +145,7 @@ class TestRunAndPlant:
         result = af.call_ir(ir)("World")
         assert result == "Hello, World"
 
-        result = af.plant(ir, {"greeting": "CACHED"}, tag="cache")("World")
+        result = af.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")("World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
@@ -156,7 +156,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant(ir, {"first": "PLANTED"}, tag="cache")("ignored")
+        result = af.plant_ir(ir, {"first": "PLANTED"}, tag="cache")("ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
@@ -167,7 +167,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant(ir, {"val": "CACHED"}, tag="cache")("input")
+        result = af.plant_ir(ir, {"val": "CACHED"}, tag="cache")("input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
@@ -176,7 +176,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant(ir, {}, tag="cache")("hello")
+        result = af.plant_ir(ir, {}, tag="cache")("hello")
         assert result == "hello"
 
     def test_plant_unmatched_name(self):
@@ -185,7 +185,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.plant(ir, {"other": "PLANTED"}, tag="cache")("hello")
+        result = af.plant_ir(ir, {"other": "PLANTED"}, tag="cache")("hello")
         assert result == "hello"
 
 
@@ -197,10 +197,10 @@ class TestTransformThenReap:
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward_ir(ir)
 
-        result, primals = af.reap(pf_ir, tag=("debug", "primal"))(("primal", "tangent"))
+        result, primals = af.reap_ir(pf_ir, tag=("debug", "primal"))(("primal", "tangent"))
         assert primals == {"val": "primal"}
 
-        result, tangents = af.reap(pf_ir, tag=("debug", "tangent"))(("primal", "tangent"))
+        result, tangents = af.reap_ir(pf_ir, tag=("debug", "tangent"))(("primal", "tangent"))
         assert tangents == {"val": "tangent"}
 
     def test_reap_captures_during_pullback(self):
@@ -210,10 +210,10 @@ class TestTransformThenReap:
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback_ir(ir)
 
-        result, primals = af.reap(pb_ir, tag=("debug", "primal"))(("primal", "cotangent"))
+        result, primals = af.reap_ir(pb_ir, tag=("debug", "primal"))(("primal", "cotangent"))
         assert primals == {"val": "primal"}
 
-        result, grads = af.reap(pb_ir, tag=("debug", "cotangent"))(("primal", "cotangent"))
+        result, grads = af.reap_ir(pb_ir, tag=("debug", "cotangent"))(("primal", "cotangent"))
         assert grads == {"val": "cotangent"}
 
     def test_reap_captures_during_batch(self):
@@ -222,7 +222,7 @@ class TestTransformThenReap:
 
         ir = af.build_ir(func)("test")
         batched = af.batch_ir(ir)
-        result, reaped = af.reap(batched, tag=("debug", "batch"))(["a", "b", "c"])
+        result, reaped = af.reap_ir(batched, tag=("debug", "batch"))(["a", "b", "c"])
         assert result == ["a", "b", "c"]
         assert reaped == {"val": ["a", "b", "c"]}
 
@@ -240,6 +240,6 @@ class TestTransformThenReap:
             return af.switch("a", {"a": ir_a, "b": ir_b}, x)
 
         ir = af.build_ir(func)("input")
-        result, reaped = af.reap(ir, tag="debug")("hello")
+        result, reaped = af.reap_ir(ir, tag="debug")("hello")
         assert result == "a: hello"
         assert reaped == {"result": "a: hello"}

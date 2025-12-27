@@ -48,7 +48,7 @@ def sow(in_tree: Tree, /, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
         ...     response = af.concat(prompt, " A: 42")
         ...     return af.sow(response, tag="debug", name="response")
         >>> ir = af.build_ir(program)("test")
-        >>> result, reaped = af.reap(ir, tag="debug")("What is 6*7?")
+        >>> result, reaped = af.reap_ir(ir, tag="debug")("What is 6*7?")
         >>> result
         'Q: What is 6*7? A: 42'
         >>> reaped["prompt"]
@@ -136,7 +136,7 @@ class ReapInterpreter(Interpreter):
         return result
 
 
-def reap[**P, R](ir: IR, *, tag: tp.Hashable) -> tp.Callable[P, tuple[R, Reaped]]:
+def reap_ir[**P, R](ir: IR, *, tag: tp.Hashable) -> tp.Callable[P, tuple[R, Reaped]]:
     """Create a reaping executor for an IR.
 
     Args:
@@ -152,7 +152,7 @@ def reap[**P, R](ir: IR, *, tag: tp.Hashable) -> tp.Callable[P, tuple[R, Reaped]
         ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.build_ir(program)("test")
-        >>> result, reaped = af.reap(ir, tag="debug")("What?")
+        >>> result, reaped = af.reap_ir(ir, tag="debug")("What?")
         >>> result
         'Q: What? A: 42'
         >>> reaped
@@ -189,7 +189,7 @@ class PlantInterpreter(Interpreter):
             return self.parent.process(prim, in_tree, **params)
 
 
-def plant[**P, R](ir: IR, plants: Reaped, *, tag: tp.Hashable) -> tp.Callable[P, R]:
+def plant_ir[**P, R](ir: IR, plants: Reaped, *, tag: tp.Hashable) -> tp.Callable[P, R]:
     """Create a planting executor for an IR.
 
     Args:
@@ -205,7 +205,7 @@ def plant[**P, R](ir: IR, plants: Reaped, *, tag: tp.Hashable) -> tp.Callable[P,
         >>> def program(x):
         ...     return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
         >>> ir = af.build_ir(program)("test")
-        >>> af.plant(ir, {"greeting": "CACHED"}, tag="cache")("World")
+        >>> af.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")("World")
         'CACHED'
     """
 

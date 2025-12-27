@@ -4,7 +4,7 @@ from autoform.core import build_ir
 
 from autoform.ad import pushforward_ir, pullback_ir
 from autoform.batch import batch_ir
-from autoform.harvest import reap, plant, sow
+from autoform.harvest import reap_ir, plant_ir, sow
 from autoform.optims import dce_ir, fold_ir
 from autoform.core import call_ir, icall_ir, acall_ir
 
@@ -25,8 +25,8 @@ __all__ = [
     "pushforward_ir",
     "pullback_ir",
     "batch_ir",
-    "reap",
-    "plant",
+    "reap_ir",
+    "plant_ir",
     "dce_ir",
     "fold_ir",
     # primitives (user-facing functions)
