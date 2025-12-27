@@ -405,6 +405,7 @@ def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
         >>> af.call(ir)("Alice")
         'Hello Alice'
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
         in_tree = pack_user_input(*args, **kwargs)
@@ -442,6 +443,7 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
         >>> list(af.icall(ir)("Alice"))
         ['Hello Alice']
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tp.Iterator[R]:
         def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
@@ -503,6 +505,7 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
         >>> asyncio.run(af.acall(ir)("Alice"))
         'Hello Alice'
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def execute(*args: P.args, **kwargs: P.kwargs) -> R:
         in_tree = pack_user_input(*args, **kwargs)

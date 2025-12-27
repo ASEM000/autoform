@@ -259,6 +259,7 @@ def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
         >>> call(batched)(("Hello, ", ["Alice", "Bob", "Carol"]))
         ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_b(atom):
         return IRBVar.fresh(source=atom) if is_irvar(atom) else atom

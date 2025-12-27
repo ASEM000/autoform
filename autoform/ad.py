@@ -77,6 +77,7 @@ def pushforward(ir: IR) -> IR:
         >>> tangents
         'dxdy'
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
         return IRPVar.fresh(source=atom) if is_irvar(atom) else atom
@@ -280,6 +281,7 @@ def pullback(ir: IR) -> IR:
         >>> cotangents  # Gradient flows back to both inputs
         ('feedback', 'feedback')
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
         return IRPVar.fresh(source=atom) if is_irvar(atom) else atom
