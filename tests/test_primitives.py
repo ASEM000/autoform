@@ -94,7 +94,7 @@ class TestFormatPrimitive:
         def func(x):
             return af.format("Value: {}", x)
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "format"
 
@@ -112,7 +112,7 @@ class TestConcatPrimitive:
         def func(x, y):
             return af.concat(x, y)
 
-        ir = af.build_ir(func, "a", "b")
+        ir = af.build_ir(func)("a", "b")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "concat"
 
@@ -132,9 +132,9 @@ class TestBind:
         def func(x):
             return p.bind(x, multiplier=3)
 
-        ir = af.build_ir(func, "A")
+        ir = af.build_ir(func)("A")
         assert ir.ireqns[0].params["multiplier"] == 3
-        result = af.run_ir(ir, "B")
+        result = af.call(ir)("B")
         assert result == "BBB"
 
 
@@ -168,7 +168,7 @@ class TestStopGradient:
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "stop_gradient"
 
@@ -176,17 +176,17 @@ class TestStopGradient:
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, "test")
-        result = af.run_ir(ir, "hello")
+        ir = af.build_ir(func)("test")
+        result = af.call(ir)("hello")
         assert result == "hello"
 
     def test_pushforward_zeros_tangent(self):
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, "a")
-        pf_ir = af.pushforward_ir(ir)
-        primal_out, tangent_out = af.run_ir(pf_ir, ("primal", "tangent"))
+        ir = af.build_ir(func)("a")
+        pf_ir = af.pushforward(ir)
+        primal_out, tangent_out = af.call(pf_ir)(("primal", "tangent"))
         assert primal_out == "primal"
         assert tangent_out == "" or (hasattr(tangent_out, "items") and len(tangent_out.items) == 0)
 
@@ -194,9 +194,9 @@ class TestStopGradient:
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, "a")
-        pb_ir = af.pullback_ir(ir)
-        primal_out, cotangent_in = af.run_ir(pb_ir, ("primal", "cotangent"))
+        ir = af.build_ir(func)("a")
+        pb_ir = af.pullback(ir)
+        primal_out, cotangent_in = af.call(pb_ir)(("primal", "cotangent"))
         assert primal_out == "primal"
         assert cotangent_in == "" or (
             hasattr(cotangent_in, "items") and len(cotangent_in.items) == 0
@@ -206,9 +206,9 @@ class TestStopGradient:
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b", "c"])
+        ir = af.build_ir(func)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b", "c"])
         assert result == ["a", "b", "c"]
 
     def test_in_chain_stops_gradient(self):
@@ -219,9 +219,9 @@ class TestStopGradient:
             stopped = af.stop_gradient(x)
             return af.concat(stopped, y)
 
-        ir = af.build_ir(func, "a", "b")
-        pb_ir = af.pullback_ir(ir)
-        _, (cotangent_x, cotangent_y) = af.run_ir(pb_ir, (("a", "b"), "grad"))
+        ir = af.build_ir(func)("a", "b")
+        pb_ir = af.pullback(ir)
+        _, (cotangent_x, cotangent_y) = af.call(pb_ir)((("a", "b"), "grad"))
         assert is_zero_cotangent(cotangent_x)
         assert cotangent_y == "grad"
 
@@ -230,16 +230,16 @@ class TestStopGradient:
             stopped = af.stop_gradient(x)
             return af.format("[{}]", stopped)
 
-        ir = af.build_ir(func, "test")
-        result = af.run_ir(ir, "hello")
+        ir = af.build_ir(func)("test")
+        result = af.call(ir)("hello")
         assert result == "[hello]"
 
     def test_tree_input(self):
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, ("a", "b"))
-        result = af.run_ir(ir, ("hello", "world"))
+        ir = af.build_ir(func)(("a", "b"))
+        result = af.call(ir)(("hello", "world"))
         assert result == ("hello", "world")
 
     def test_tree_pullback_zeros_all(self):
@@ -249,9 +249,9 @@ class TestStopGradient:
         def func(x):
             return af.stop_gradient(x)
 
-        ir = af.build_ir(func, ("a", "b"))
-        pb_ir = af.pullback_ir(ir)
-        _, cotangent_in = af.run_ir(pb_ir, (("p1", "p2"), ("c1", "c2")))
+        ir = af.build_ir(func)(("a", "b"))
+        pb_ir = af.pullback(ir)
+        _, cotangent_in = af.call(pb_ir)((("p1", "p2"), ("c1", "c2")))
         assert is_zero_cotangent(cotangent_in[0])
         assert is_zero_cotangent(cotangent_in[1])
 
@@ -261,25 +261,25 @@ class TestRunIRInline:
 
     def test_run_ir_inlines_operations(self):
         """run_ir inside a traced function inlines the inner IR's operations."""
-        inner_ir = af.build_ir(lambda x: af.format("[{}]", x), "X")
+        inner_ir = af.build_ir(lambda x: af.format("[{}]", x))("X")
 
         def outer(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(outer, "X")
+        outer_ir = af.build_ir(outer)("X")
         # Operations are inlined, so we see format directly
         assert len(outer_ir.ireqns) == 1
         assert outer_ir.ireqns[0].prim.name == "format"
 
     def test_run_ir_inline_executes_correctly(self):
         """Inlined run_ir produces correct output."""
-        inner_ir = af.build_ir(lambda x: af.format("<{}>", x), "X")
+        inner_ir = af.build_ir(lambda x: af.format("<{}>", x))("X")
 
         def outer(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(outer, "X")
-        result = af.run_ir(outer_ir, "test")
+        outer_ir = af.build_ir(outer)("X")
+        result = af.call(outer_ir)("test")
         assert result == "<test>"
 
     def test_run_ir_inline_with_multiple_ops(self):
@@ -290,63 +290,63 @@ class TestRunIRInline:
             b = af.format("[{}]", a)
             return b
 
-        inner_ir = af.build_ir(inner, "X")
+        inner_ir = af.build_ir(inner)("X")
 
         def outer(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(outer, "X")
+        outer_ir = af.build_ir(outer)("X")
         assert len(outer_ir.ireqns) == 2
-        result = af.run_ir(outer_ir, "hello")
+        result = af.call(outer_ir)("hello")
         assert result == "[hello!]"
 
     def test_nested_run_ir_inlines(self):
         """Nested run_ir calls all get inlined."""
-        ir1 = af.build_ir(lambda x: af.concat(x, "1"), "X")
-        ir2 = af.build_ir(lambda x: af.concat(x, "2"), "X")
+        ir1 = af.build_ir(lambda x: af.concat(x, "1"))("X")
+        ir2 = af.build_ir(lambda x: af.concat(x, "2"))("X")
 
         def outer(x):
-            r1 = af.run_ir(ir1, x)
-            return af.run_ir(ir2, r1)
+            r1 = af.call(ir1)(x)
+            return af.call(ir2)(r1)
 
-        outer_ir = af.build_ir(outer, "X")
+        outer_ir = af.build_ir(outer)("X")
         assert len(outer_ir.ireqns) == 2
-        result = af.run_ir(outer_ir, "start")
+        result = af.call(outer_ir)("start")
         assert result == "start12"
 
     def test_pushforward_on_inlined_run_ir(self):
         """Pushforward works on inlined run_ir."""
-        inner_ir = af.build_ir(lambda x: af.concat(x, "!"), "X")
+        inner_ir = af.build_ir(lambda x: af.concat(x, "!"))("X")
 
         def outer(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(outer, "X")
-        pf_ir = af.pushforward_ir(outer_ir)
-        (p_out, t_out) = af.run_ir(pf_ir, ("primal", "tangent"))
+        outer_ir = af.build_ir(outer)("X")
+        pf_ir = af.pushforward(outer_ir)
+        (p_out, t_out) = af.call(pf_ir)(("primal", "tangent"))
         assert p_out == "primal!"
         assert t_out == "tangent!"
 
     def test_pullback_on_inlined_run_ir(self):
         """Pullback works on inlined run_ir."""
-        inner_ir = af.build_ir(lambda x: af.concat(x, "!"), "X")
+        inner_ir = af.build_ir(lambda x: af.concat(x, "!"))("X")
 
         def outer(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(outer, "X")
-        pb_ir = af.pullback_ir(outer_ir)
-        _, cotangent = af.run_ir(pb_ir, ("hello", "grad"))
+        outer_ir = af.build_ir(outer)("X")
+        pb_ir = af.pullback(outer_ir)
+        _, cotangent = af.call(pb_ir)(("hello", "grad"))
         assert cotangent == "grad"
 
     def test_batch_on_inlined_run_ir(self):
         """Batch works on inlined run_ir."""
-        inner_ir = af.build_ir(lambda x: af.format("[{}]", x), "X")
+        inner_ir = af.build_ir(lambda x: af.format("[{}]", x))("X")
 
         def outer(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(outer, "X")
-        batched_ir = af.batch_ir(outer_ir, in_axes=list)
-        result = af.run_ir(batched_ir, ["a", "b", "c"])
+        outer_ir = af.build_ir(outer)("X")
+        batched_ir = af.batch(outer_ir, in_axes=list)
+        result = af.call(batched_ir)(["a", "b", "c"])
         assert result == ["[a]", "[b]", "[c]"]

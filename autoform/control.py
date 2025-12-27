@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import functools as ft
-
-from autoform.core import IR, Var, is_irvar, is_user_type
+from autoform.optims import default_dce, dce
+from autoform.core import call, icall, acall
+from autoform.core import IR, Var, is_irvar, is_user_type, is_iratom
 from autoform.core import (
     Primitive,
     async_rules,
@@ -18,6 +19,7 @@ from autoform.core import (
     push_rules,
 )
 from autoform.utils import Tree, unbatch_at, pack_user_input, treelib
+from autoform.ad import pullback, zero_cotangent, pushforward
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -40,9 +42,9 @@ def stop_gradient(x: Tree) -> Tree:
         >>> def ir(x, y):
         ...     stopped = af.stop_gradient(x)
         ...     return af.concat(stopped, y)
-        >>> ir = af.build_ir(ir, "a", "b")
-        >>> pb_ir = af.pullback_ir(ir)
-        >>> _, (cotangent_x, cotangent_y) = af.run_ir(pb_ir, (("a", "b"), "grad"))
+        >>> ir = af.build_ir(ir)("a", "b")
+        >>> pb_ir = af.pullback(ir)
+        >>> _, (cotangent_x, cotangent_y) = call(pb_ir)((("a", "b"), "grad"))
         >>> cotangent_x
         ''
         >>> cotangent_y
@@ -63,8 +65,6 @@ def eval_stop_gradient(x: Tree) -> Tree:
 
 @ft.partial(push_rules.def_rule, stop_gradient_p)
 def pushforward_stop_gradient(primal: Tree, tangent: Tree) -> tuple[Tree, Tree]:
-    from autoform.ad import zero_cotangent
-
     zero_tangent = treelib.map(zero_cotangent, primal)
     return primal, zero_tangent
 
@@ -76,10 +76,8 @@ def pullback_fwd_stop_gradient(x: Tree) -> tuple[Tree, Tree]:
 
 
 @ft.partial(pull_bwd_rules.def_rule, stop_gradient_p)
-def pullback_bwd_stop_gradient(residuals: Tree, cotangent_out: Tree) -> Tree:
-    from autoform.ad import zero_cotangent
-
-    del cotangent_out
+def pullback_bwd_stop_gradient(residuals: Tree, out_cotangent: Tree) -> Tree:
+    del out_cotangent
     return treelib.map(zero_cotangent, residuals)
 
 
@@ -114,20 +112,18 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
     Example:
         >>> import autoform as af
         >>> branches = {
-        ...     "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-        ...     "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
-        ...     "two": af.build_ir(lambda x: af.concat("two: ", x), "X"),
+        ...     "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+        ...     "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
+        ...     "two": af.build_ir(lambda x: af.concat("two: ", x))("X"),
         ... }
         >>> def ir(key, x):
         ...     return af.switch(key, branches, x)
-        >>> ir = af.build_ir(ir, "one", "hello")
-        >>> af.run_ir(ir, "one", "hello")
+        >>> ir = af.build_ir(ir)("one", "hello")
+        >>> call(ir)("one", "hello")
         'one: hello'
-        >>> af.run_ir(ir, "zero", "hello")
+        >>> call(ir)("zero", "hello")
         'zero: hello'
     """
-    from autoform.core import is_iratom
-
     assert is_user_type(key) or is_iratom(key), "key must be a user-type (traceable) value"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_irtree)
@@ -139,10 +135,8 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
 
 @ft.partial(impl_rules.def_rule, switch_p)
 def impl_switch(in_tree, *, branches: dict[str, IR]):
-    from autoform.evaluation import run_ir
-
     key, operands = in_tree
-    return run_ir(branches[key], operands)
+    return call(branches[key])(operands)
 
 
 @ft.partial(eval_rules.def_rule, switch_p)
@@ -155,32 +149,24 @@ def eval_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
 
 @ft.partial(push_rules.def_rule, switch_p)
 def pushforward_switch(primals, tangents, *, branches: dict[str, IR]):
-    from autoform.evaluation import run_ir
-    from autoform.ad import pushforward_ir
-
     (key, p_operands), (_, t_operands) = primals, tangents
-    pf_ir = pushforward_ir(branches[key])
-    return run_ir(pf_ir, (p_operands, t_operands))
+    pf_ir = pushforward(branches[key])
+    return call(pf_ir)((p_operands, t_operands))
 
 
 @ft.partial(pull_fwd_rules.def_rule, switch_p)
 def pullback_fwd_switch(in_tree, *, branches: dict[str, IR]) -> tuple[Tree, Tree]:
-    from autoform.evaluation import run_ir
-
     key, operands = in_tree
-    out = run_ir(branches[key], operands)
+    out = call(branches[key])(operands)
     residuals = (key, operands)
     return out, residuals
 
 
 @ft.partial(pull_bwd_rules.def_rule, switch_p)
-def pullback_bwd_switch(residuals, cotangent_out, *, branches: dict[str, IR]):
-    from autoform.evaluation import run_ir
-    from autoform.ad import pullback_ir, zero_cotangent
-
+def pullback_bwd_switch(residuals, out_cotangent, *, branches: dict[str, IR]):
     key, operands = residuals
-    pb_ir = pullback_ir(branches[key])
-    _, c_operands = run_ir(pb_ir, (operands, cotangent_out))
+    pb_ir = pullback(branches[key])
+    _, c_operands = call(pb_ir)((operands, out_cotangent))
     return (zero_cotangent(key), c_operands)
 
 
@@ -192,42 +178,34 @@ def batch_switch(
     *,
     branches: dict[str, IR],
 ) -> tuple[Tree, bool]:
-    from autoform.evaluation import run_ir
-
     key_col, operands_col = in_tree
     key_batched, operands_batched = in_batched
     unbatch_operands = ft.partial(unbatch_at, operands_col, operands_batched)
 
     def run_ir_at(b):
-        return run_ir(branches[key_col[b] if key_batched else key_col], unbatch_operands(b))
+        return call(branches[key_col[b] if key_batched else key_col])(unbatch_operands(b))
 
     return [run_ir_at(b) for b in range(batch_size)], True
 
 
 @ft.partial(iter_rules.def_rule, switch_p)
 def iter_switch(in_tree, *, branches: dict[str, IR]):
-    from autoform.evaluation import iter_ir
-
     key, operands = in_tree
-    *chunks, _ = iter_ir(branches[key], operands)
+    *chunks, _ = icall(branches[key])(operands)
     for chunk in chunks:
         yield chunk
 
 
 @ft.partial(async_rules.def_rule, switch_p)
 async def async_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
-    from autoform.evaluation import arun_ir
-
     key, operands = in_tree
-    return await arun_ir(branches[key], operands)
+    return await acall(branches[key])(operands)
 
 
 @ft.partial(dce_rules.def_rule, switch_p)
 def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
-    from autoform.optims import default_dce, dce_ir
-
     for k in (branches := dict(ireqn.params["branches"])):
-        branches[k] = dce_ir(branches[k])
+        branches[k] = dce(branches[k])
 
     new_eqn = ireqn.using(branches=branches)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)

@@ -10,8 +10,8 @@ class TestDCE:
             live = af.concat(x, "live")
             return live
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2
         assert len(dce.ireqns) == 1
@@ -23,8 +23,8 @@ class TestDCE:
             z = af.concat(y, "b")
             return z
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2
         assert len(dce.ireqns) == 2
@@ -36,8 +36,8 @@ class TestDCE:
             w = af.concat(z, "c")
             return w
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(dce.ireqns) == 3
         for i in range(len(dce.ireqns) - 1):
@@ -61,8 +61,8 @@ class TestDCE:
             z = af.concat(y, "!")
             return z
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2
         assert len(dce.ireqns) == 1
@@ -72,8 +72,8 @@ class TestDCE:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == len(dce.ireqns)
 
@@ -84,8 +84,8 @@ class TestDCE:
             c = af.concat(a, "c")
             return c
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 3
         assert len(dce.ireqns) == 2
@@ -96,13 +96,13 @@ class TestDCE:
 class TestDCEWithHigherOrderPrimitives:
     def test_run_ir_inlines_for_dce(self):
         """run_ir inlines operations, so DCE sees the inner ops directly."""
-        inner_ir = af.build_ir(lambda x: af.concat(x, "!"), "x")
+        inner_ir = af.build_ir(lambda x: af.concat(x, "!"))("x")
 
         def program(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        ir = af.build_ir(program, "input")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("input")
+        dce = af.dce(ir)
 
         # Operations are inlined, so we see concat directly
         assert len(dce.ireqns) == 1
@@ -116,13 +116,13 @@ class TestDCEWithHigherOrderPrimitives:
             live = af.concat(x, "live")  # This is returned
             return live
 
-        inner_ir = af.build_ir(inner, "x")
+        inner_ir = af.build_ir(inner)("x")
 
         def program(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        ir = af.build_ir(program, "input")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("input")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2  # Both ops are inlined
         assert len(dce.ireqns) == 1  # DCE removes dead one
@@ -130,23 +130,23 @@ class TestDCEWithHigherOrderPrimitives:
 
     def test_switch_kept_when_used(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat(x, " A"), "x"),
-            "b": af.build_ir(lambda x: af.concat(x, " B"), "x"),
+            "a": af.build_ir(lambda x: af.concat(x, " A"))("x"),
+            "b": af.build_ir(lambda x: af.concat(x, " B"))("x"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "a", "input")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("a", "input")
+        dce = af.dce(ir)
 
         assert len(dce.ireqns) == 1
         assert dce.ireqns[0].prim.name == "switch"
 
     def test_switch_removed_when_unused(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat(x, " A"), "x"),
-            "b": af.build_ir(lambda x: af.concat(x, " B"), "x"),
+            "a": af.build_ir(lambda x: af.concat(x, " A"))("x"),
+            "b": af.build_ir(lambda x: af.concat(x, " B"))("x"),
         }
 
         def program(key, x):
@@ -154,8 +154,8 @@ class TestDCEWithHigherOrderPrimitives:
             live = af.concat(x, "live")
             return live
 
-        ir = af.build_ir(program, "a", "input")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("a", "input")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2
         assert len(dce.ireqns) == 1
@@ -163,41 +163,41 @@ class TestDCEWithHigherOrderPrimitives:
 
 
 class TestDCEWithTransformedIR:
-    def test_dce_on_pushforward_ir(self):
+    def test_dce_on_pushforward(self):
         def program(x):
             y = af.concat(x, "a")
             dead = af.concat(x, "dead")
             return y
 
-        ir = af.build_ir(program, "x")
-        pf_ir = af.pushforward_ir(ir)
-        dce = af.dce_ir(pf_ir)
+        ir = af.build_ir(program)("x")
+        pf_ir = af.pushforward(ir)
+        dce = af.dce(pf_ir)
 
         assert len(dce.ireqns) <= len(pf_ir.ireqns)
 
-    def test_dce_on_pullback_ir(self):
+    def test_dce_on_pullback(self):
         def program(x):
             y = af.concat(x, "a")
             dead = af.concat(x, "dead")
             return y
 
-        ir = af.build_ir(program, "x")
-        pb_ir = af.pullback_ir(ir)
-        dce = af.dce_ir(pb_ir)
+        ir = af.build_ir(program)("x")
+        pb_ir = af.pullback(ir)
+        dce = af.dce(pb_ir)
 
         assert len(dce.ireqns) <= len(pb_ir.ireqns)
 
-    def test_dce_on_batch_ir(self):
+    def test_dce_on_batch(self):
         def program(x):
             y = af.concat(x, "a")
             dead = af.concat(x, "dead")
             return y
 
-        ir = af.build_ir(program, "x")
-        batch_ir = af.batch_ir(ir, in_axes=list)
-        dce = af.dce_ir(batch_ir)
+        ir = af.build_ir(program)("x")
+        batch = af.batch(ir, in_axes=list)
+        dce = af.dce(batch)
 
-        assert len(dce.ireqns) <= len(batch_ir.ireqns)
+        assert len(dce.ireqns) <= len(batch.ireqns)
 
 
 class TestDCEEdgeCases:
@@ -205,8 +205,8 @@ class TestDCEEdgeCases:
         def program(x):
             return x
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 0
         assert len(dce.ireqns) == 0
@@ -217,8 +217,8 @@ class TestDCEEdgeCases:
             dead2 = af.concat(x, "dead2")
             return x
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2
         assert len(dce.ireqns) == 0
@@ -231,8 +231,8 @@ class TestDCEEdgeCases:
             d = af.concat(b, c)
             return d
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(ir.ireqns) == 4
         assert len(dce.ireqns) == 4
@@ -243,8 +243,8 @@ class TestDCEEdgeCases:
             z = af.concat(y, "!")
             return z
 
-        ir = af.build_ir(program, "x")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("x")
+        dce = af.dce(ir)
 
         assert len(dce.ireqns) == 2
         prim_names = [eqn.prim.name for eqn in dce.ireqns]
@@ -258,21 +258,21 @@ class TestNestedDCE:
             live = af.concat(x, " LIVE")  # returned
             return live
 
-        branch_a = af.build_ir(branch_a_fn, "test")
-        branch_b = af.build_ir(lambda x: af.concat(x, " B"), "test")
+        branch_a = af.build_ir(branch_a_fn)("test")
+        branch_b = af.build_ir(lambda x: af.concat(x, " B"))("test")
 
         assert len(branch_a.ireqns) == 2
 
         def program(key, x):
             return af.switch(key, {"a": branch_a, "b": branch_b}, x)
 
-        ir = af.build_ir(program, "a", "input")
-        dce = af.dce_ir(ir)
+        ir = af.build_ir(program)("a", "input")
+        dce = af.dce(ir)
 
         dced_branch_a = dce.ireqns[0].params["branches"]["a"]
         assert len(dced_branch_a.ireqns) == 1
 
-        result = af.run_ir(dce, "a", "hello")
+        result = af.call(dce)("a", "hello")
         assert result == "hello LIVE"
 
     def test_batch_call_dces_inner_ir(self):
@@ -281,11 +281,11 @@ class TestNestedDCE:
             live = af.concat(x, " LIVE")
             return live
 
-        inner_ir = af.build_ir(inner_fn, "test")
+        inner_ir = af.build_ir(inner_fn)("test")
         assert len(inner_ir.ireqns) == 2
 
-        batch_ir = af.batch_ir(inner_ir, in_axes=list)
-        dce = af.dce_ir(batch_ir)
+        batch = af.batch(inner_ir, in_axes=list)
+        dce = af.dce(batch)
 
         dced_inner = dce.ireqns[0].params["ir"]
         assert len(dced_inner.ireqns) == 1
@@ -296,11 +296,11 @@ class TestNestedDCE:
             live = af.concat(x, " LIVE")
             return live
 
-        inner_ir = af.build_ir(inner_fn, "test")
+        inner_ir = af.build_ir(inner_fn)("test")
         assert len(inner_ir.ireqns) == 2
 
-        pf_ir = af.pushforward_ir(inner_ir)
-        dce = af.dce_ir(pf_ir)
+        pf_ir = af.pushforward(inner_ir)
+        dce = af.dce(pf_ir)
 
         dced_inner = dce.ireqns[0].params["ir"]
         assert len(dced_inner.ireqns) == 1
@@ -311,11 +311,11 @@ class TestNestedDCE:
             live = af.concat(x, " LIVE")
             return live
 
-        inner_ir = af.build_ir(inner_fn, "test")
+        inner_ir = af.build_ir(inner_fn)("test")
         assert len(inner_ir.ireqns) == 2
 
-        pb_ir = af.pullback_ir(inner_ir)
-        dce = af.dce_ir(pb_ir)
+        pb_ir = af.pullback(inner_ir)
+        dce = af.dce(pb_ir)
 
         dced_inner = dce.ireqns[0].params["ir"]
         assert len(dced_inner.ireqns) == 1
@@ -326,15 +326,15 @@ class TestNestedDCE:
             live = af.concat(x, " LIVE")
             return live
 
-        branch = af.build_ir(branch_fn, "test")
+        branch = af.build_ir(branch_fn)("test")
         assert len(branch.ireqns) == 2
 
         def outer_fn(key, x):
             return af.switch(key, {"a": branch}, x)
 
-        outer_ir = af.build_ir(outer_fn, "a", "test")
-        batch_ir = af.batch_ir(outer_ir, in_axes=(None, list))
-        dce = af.dce_ir(batch_ir)
+        outer_ir = af.build_ir(outer_fn)("a", "test")
+        batch = af.batch(outer_ir, in_axes=(None, list))
+        dce = af.dce(batch)
 
         batch_inner = dce.ireqns[0].params["ir"]
         switch_eqn = batch_inner.ireqns[0]

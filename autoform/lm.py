@@ -39,16 +39,14 @@ class Struct(pydantic.BaseModel):
         ...     answer: int
     """
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(k, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        def flatten(model):
-            return tuple(getattr(model, k) for k in cls.model_fields), tuple(cls.model_fields)
-
-        def unflatten(keys, children):
-            return cls.model_construct(**dict(zip(keys, children, strict=True)))
-
-        treelib.register_node(cls, flatten, unflatten)
+        treelib.register_node(
+            k,
+            lambda x: (tuple(getattr(x, k) for k in k.model_fields), tuple(k.model_fields)),
+            lambda keys, children: k.model_construct(**dict(zip(keys, children, strict=True))),
+        )
 
     def __hash__(self):
         return hash(tuple(getattr(self, k) for k in type(self).model_fields))
@@ -79,8 +77,8 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
         ...     user_message = dict(role="user", content=greeting)
         ...     greeting = af.lm_call([system_message, user_message], model="gpt-3.5-turbo")
         ...     return greeting
-        >>> ir = af.build_ir(ir, "World") # doctest: +SKIP
-        >>> result = af.run_ir(ir, "Alice") # doctest: +SKIP
+        >>> ir = af.build_ir(ir)("World") # doctest: +SKIP
+        >>> result = ir.call("Alice") # doctest: +SKIP
     """
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
     for m in messages:
@@ -127,7 +125,7 @@ def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[T
 
 @ft.partial(pull_bwd_rules.def_rule, lm_call_p)
 def pullback_bwd_lm_call(
-    residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str
+    residuals: tuple, out_cotangent: Tree, *, roles: tuple, model: str
 ) -> list:
     contents, output = residuals
     grads = []
@@ -136,7 +134,7 @@ def pullback_bwd_lm_call(
 
 INPUT: {content}
 OUTPUT: {output}
-FEEDBACK ON OUTPUT: {cotangent_out}
+FEEDBACK ON OUTPUT: {out_cotangent}
 
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
@@ -201,8 +199,8 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         >>> def solver(question):
         ...     messages = [{"role": "user", "content": question}]
         ...     return af.struct_lm_call(messages, model="gpt-4o", struct=Answer)
-        >>> ir = af.build_ir(solver, "What is 2+2?")  # doctest: +SKIP
-        >>> result = af.run_ir(ir, "What is 2+2?")  # doctest: +SKIP
+        >>> ir = af.build_ir(solver)("What is 2+2?")  # doctest: +SKIP
+        >>> result = ir.call("What is 2+2?")  # doctest: +SKIP
         >>> result.answer  # doctest: +SKIP
         4
     """
@@ -248,7 +246,7 @@ def pullback_fwd_struct_lm_call(
 @ft.partial(pull_bwd_rules.def_rule, struct_lm_call_p)
 def pullback_bwd_struct_lm_call(
     residuals: tuple,
-    cotangent_out: Tree,
+    out_cotangent: Tree,
     *,
     roles: tuple,
     model: str,
@@ -261,7 +259,7 @@ def pullback_bwd_struct_lm_call(
 
 INPUT: {content}
 OUTPUT: {output}
-FEEDBACK ON OUTPUT: {cotangent_out}
+FEEDBACK ON OUTPUT: {out_cotangent}
 
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
@@ -286,8 +284,8 @@ def batch_struct_lm_call(
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
     results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, results[0])
-    output_ib = transpose_batch(batch_size, out_batched, results)
-    return output_ib, out_batched
+    out_ib = transpose_batch(batch_size, out_batched, results)
+    return out_ib, out_batched
 
 
 @ft.partial(iter_rules.def_rule, struct_lm_call_p)

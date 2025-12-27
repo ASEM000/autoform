@@ -6,15 +6,15 @@ class TestTraceRunIR:
         def inner_program(x):
             return af.format("Hello, {}!", x)
 
-        inner_ir = af.build_ir(inner_program, "world")
+        inner_ir = af.build_ir(inner_program)("world")
 
         def program_with_run_ir(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(program_with_run_ir, "test")
+        outer_ir = af.build_ir(program_with_run_ir)("test")
         assert len(outer_ir.ireqns) == 1
         assert outer_ir.ireqns[0].prim.name == "format"
-        result = af.run_ir(outer_ir, "Alice")
+        result = af.call(outer_ir)("Alice")
         assert result == "Hello, Alice!"
 
     def test_trace_run_ir_multiple_operations(self):
@@ -22,68 +22,68 @@ class TestTraceRunIR:
             y = af.format("[{}]", x)
             return af.concat(y, "!")
 
-        inner_ir = af.build_ir(inner_program, "x")
+        inner_ir = af.build_ir(inner_program)("x")
 
         def program_with_run_ir(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(program_with_run_ir, "test")
+        outer_ir = af.build_ir(program_with_run_ir)("test")
         assert len(outer_ir.ireqns) == 2
-        result = af.run_ir(outer_ir, "hello")
+        result = af.call(outer_ir)("hello")
         assert result == "[hello]!"
 
 
 class TestTraceBatchIR:
-    def test_trace_batch_ir_creates_batch_call(self):
+    def test_trace_batch_creates_batch_call(self):
         def inner_program(x):
             return af.format("Item: {}", x)
 
-        inner_ir = af.build_ir(inner_program, "x")
-        batched_inner_ir = af.batch_ir(inner_ir, in_axes=list)
+        inner_ir = af.build_ir(inner_program)("x")
+        batched_inner_ir = af.batch(inner_ir, in_axes=list)
 
         def program_with_batch(xs):
-            return af.run_ir(batched_inner_ir, xs)
+            return af.call(batched_inner_ir)(xs)
 
-        outer_ir = af.build_ir(program_with_batch, ["a", "b", "c"])
+        outer_ir = af.build_ir(program_with_batch)(["a", "b", "c"])
         assert len(outer_ir.ireqns) == 1
         assert outer_ir.ireqns[0].prim.name == "batch_call"
-        result = af.run_ir(outer_ir, ["x", "y", "z"])
+        result = af.call(outer_ir)(["x", "y", "z"])
         assert result == ["Item: x", "Item: y", "Item: z"]
 
 
 class TestTracePushforwardIR:
-    def test_trace_pushforward_ir_creates_pushforward_call(self):
+    def test_trace_pushforward_creates_pushforward_call(self):
         def inner_program(x):
             return af.format("[{}]", x)
 
-        inner_ir = af.build_ir(inner_program, "x")
-        pf_ir = af.pushforward_ir(inner_ir)
+        inner_ir = af.build_ir(inner_program)("x")
+        pf_ir = af.pushforward(inner_ir)
 
         def program_with_pushforward(primals, tangents):
-            return af.run_ir(pf_ir, (primals, tangents))
+            return af.call(pf_ir)((primals, tangents))
 
-        outer_ir = af.build_ir(program_with_pushforward, "p", "t")
+        outer_ir = af.build_ir(program_with_pushforward)("p", "t")
         assert len(outer_ir.ireqns) == 1
         assert outer_ir.ireqns[0].prim.name == "pushforward_call"
-        result = af.run_ir(outer_ir, "primal", "tangent")
+        result = af.call(outer_ir)("primal", "tangent")
         assert result == ("[primal]", "[tangent]")
 
 
 class TestTracePullbackIR:
-    def test_trace_pullback_ir_creates_pullback_call(self):
+    def test_trace_pullback_creates_pullback_call(self):
         def inner_program(x):
             return af.format("<{}>", x)
 
-        inner_ir = af.build_ir(inner_program, "x")
-        pb_ir = af.pullback_ir(inner_ir)
+        inner_ir = af.build_ir(inner_program)("x")
+        pb_ir = af.pullback(inner_ir)
 
         def program_with_pullback(primal, cotangent):
-            return af.run_ir(pb_ir, (primal, cotangent))
+            return af.call(pb_ir)((primal, cotangent))
 
-        outer_ir = af.build_ir(program_with_pullback, "p", "c")
+        outer_ir = af.build_ir(program_with_pullback)("p", "c")
         assert len(outer_ir.ireqns) == 1
         assert outer_ir.ireqns[0].prim.name == "pullback_call"
-        result = af.run_ir(outer_ir, "primal", "cotan")
+        result = af.call(outer_ir)("primal", "cotan")
         assert result == ("<primal>", "cotan")
 
 
@@ -92,44 +92,44 @@ class TestMultiLevelTracing:
         def base_program(x):
             return af.format("({})", x)
 
-        base_ir = af.build_ir(base_program, "x")
+        base_ir = af.build_ir(base_program)("x")
 
         def level1(x):
-            return af.run_ir(base_ir, x)
+            return af.call(base_ir)(x)
 
-        level1_ir = af.build_ir(level1, "y")
+        level1_ir = af.build_ir(level1)("y")
 
         def level2(x):
-            return af.run_ir(level1_ir, x)
+            return af.call(level1_ir)(x)
 
-        level2_ir = af.build_ir(level2, "z")
+        level2_ir = af.build_ir(level2)("z")
         assert len(level2_ir.ireqns) == 1
         assert level2_ir.ireqns[0].prim.name == "format"
-        result = af.run_ir(level2_ir, "hello")
+        result = af.call(level2_ir)("hello")
         assert result == "(hello)"
 
     def test_triple_trace_flattens_operations(self):
         def base_program(x):
             return af.concat(x, "!")
 
-        base_ir = af.build_ir(base_program, "x")
+        base_ir = af.build_ir(base_program)("x")
 
         def level1(x):
-            return af.run_ir(base_ir, x)
+            return af.call(base_ir)(x)
 
-        level1_ir = af.build_ir(level1, "y")
+        level1_ir = af.build_ir(level1)("y")
 
         def level2(x):
-            return af.run_ir(level1_ir, x)
+            return af.call(level1_ir)(x)
 
-        level2_ir = af.build_ir(level2, "z")
+        level2_ir = af.build_ir(level2)("z")
 
         def level3(x):
-            return af.run_ir(level2_ir, x)
+            return af.call(level2_ir)(x)
 
-        level3_ir = af.build_ir(level3, "w")
+        level3_ir = af.build_ir(level3)("w")
         assert len(level3_ir.ireqns) == 1
-        result = af.run_ir(level3_ir, "test")
+        result = af.call(level3_ir)("test")
         assert result == "test!"
 
 
@@ -138,40 +138,40 @@ class TestTransformOfTracedRunIR:
         def inner_program(x):
             return af.format("[{}]", x)
 
-        inner_ir = af.build_ir(inner_program, "x")
+        inner_ir = af.build_ir(inner_program)("x")
 
         def program_with_run_ir(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(program_with_run_ir, "test")
-        pf_outer_ir = af.pushforward_ir(outer_ir)
-        result = af.run_ir(pf_outer_ir, ("primal", "tangent"))
+        outer_ir = af.build_ir(program_with_run_ir)("test")
+        pf_outer_ir = af.pushforward(outer_ir)
+        result = af.call(pf_outer_ir)(("primal", "tangent"))
         assert result == ("[primal]", "[tangent]")
 
     def test_batch_of_traced_run_ir(self):
         def inner_program(x):
             return af.format("<{}>", x)
 
-        inner_ir = af.build_ir(inner_program, "x")
+        inner_ir = af.build_ir(inner_program)("x")
 
         def program_with_run_ir(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(program_with_run_ir, "test")
-        batch_outer_ir = af.batch_ir(outer_ir, in_axes=list)
-        result = af.run_ir(batch_outer_ir, ["a", "b", "c"])
+        outer_ir = af.build_ir(program_with_run_ir)("test")
+        batch_outer_ir = af.batch(outer_ir, in_axes=list)
+        result = af.call(batch_outer_ir)(["a", "b", "c"])
         assert result == ["<a>", "<b>", "<c>"]
 
     def test_pullback_of_traced_run_ir(self):
         def inner_program(x):
             return af.concat(x, "!")
 
-        inner_ir = af.build_ir(inner_program, "x")
+        inner_ir = af.build_ir(inner_program)("x")
 
         def program_with_run_ir(x):
-            return af.run_ir(inner_ir, x)
+            return af.call(inner_ir)(x)
 
-        outer_ir = af.build_ir(program_with_run_ir, "test")
-        pb_outer_ir = af.pullback_ir(outer_ir)
-        result = af.run_ir(pb_outer_ir, ("primal", "cotan"))
+        outer_ir = af.build_ir(program_with_run_ir)("test")
+        pb_outer_ir = af.pullback(outer_ir)
+        result = af.call(pb_outer_ir)(("primal", "cotan"))
         assert result == ("primal!", "cotan")

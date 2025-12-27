@@ -72,7 +72,7 @@ def pull_fwd_textgrad(contents, *, roles, model, struct):
 # pull_bwd_rule: backward pass - given feedback on output, generate feedback on inputs
 # this is the "textgrad" part: we use an LLM to generate semantic gradients
 @ft.partial(af.pull_bwd_rules.def_rule, textgrad_lm_call_p)
-def pull_bwd_textgrad(residuals, cotangent_out, *, roles, model, struct):
+def pull_bwd_textgrad(residuals, out_cotangent, *, roles, model, struct):
     import litellm
 
     contents, original_roles, output = residuals
@@ -85,7 +85,7 @@ def pull_bwd_textgrad(residuals, cotangent_out, *, roles, model, struct):
 
 **Output produced**: {output}
 
-**Loss/Feedback on Output**: {cotangent_out}
+**Loss/Feedback on Output**: {out_cotangent}
 
 Provide specific, actionable feedback on how to improve the Input Variable to address the Loss/Feedback. Focus on what changes would lead to a better output."""
         resp = litellm.completion(
@@ -153,16 +153,16 @@ def multi_agent_pipeline(topic: str) -> Article:
 
 if __name__ == "__main__":
     # trace the pipeline into an IR
-    ir = af.build_ir(multi_agent_pipeline, "example topic")
+    ir = af.build_ir(multi_agent_pipeline)("example topic")
 
     # transform: pullback (semantic backprop)
-    pb_ir = af.pullback_ir(ir)
+    pb_ir = af.pullback(ir)
 
     # transform: batch the pullback
-    batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))
+    batch_pb = af.batch(pb_ir, in_axes=(list, list))
 
     # run: given a topic and feedback on the output, get feedback on the input
     feedback = Article(title="Good title", body="Needs more technical depth.", summary="Concise.")
-    output, input_grad = af.run_ir(pb_ir, ("AI safety", feedback))
+    output, input_grad = af.call(pb_ir)(("AI safety", feedback))
     print("output:", output)
     print("input gradient:", input_grad)

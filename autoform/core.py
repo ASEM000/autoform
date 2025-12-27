@@ -1,7 +1,8 @@
 """IR data structures, primitives, interpreters, and IR building"""
 
 from __future__ import annotations
-
+from operator import setitem
+import functools as ft
 import itertools as it
 import typing as tp
 from abc import ABC, abstractmethod
@@ -195,15 +196,14 @@ class IREqn:
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, _, __):
         raise TypeError("IREqn is immutable")
 
     def using(self, **kwargs) -> IREqn:
-        """Return new IREqn with kwargs merged into params."""
         return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
 
 
-class IR:
+class IR[**P, R]:
     __slots__ = ("ireqns", "in_irtree", "out_irtree")
     __match_args__ = ("ireqns", "in_irtree", "out_irtree")
 
@@ -217,7 +217,7 @@ class IR:
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, _, __):
         raise TypeError("IR is immutable")
 
     def __repr__(self) -> str:
@@ -296,7 +296,7 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 @contextmanager
-def using_interp(interpreter: Interpreter):
+def using_interp[T: Interpreter](interpreter: T) -> tp.Generator[T, None, None]:
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -343,26 +343,21 @@ class TracingInterpreter(Interpreter):
 # ==================================================================================================
 
 
-def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
+def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
     """Build an IR from a function by tracing its execution.
-
-    Traces `func` with example inputs to capture the computation graph as an
-    intermediate representation (IR).
 
     Args:
         func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
-        *args: Example positional arguments to trace with.
-        **kwargs: Example keyword arguments to trace with.
 
     Returns:
-        An IR representing the traced computation graph.
+        A tracer callable that takes (*args, **kwargs) and returns an IR.
 
     Example:
         >>> import autoform as af
         >>> def greet(name, punctuation):
         ...     return af.format("Hello, {}{}!", name, punctuation)
-        >>> ir = af.build_ir(greet, "World", "?")
-        >>> af.run_ir(ir, "Alice", "!")
+        >>> ir = af.build_ir(greet)("World", "?")
+        >>> af.call(ir)("Alice", "!")
         'Hello, Alice!!'
     """
 
@@ -370,19 +365,168 @@ def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
         assert not is_iratom(x)
         return x
 
-    treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
-
     def populate(x):
         return IRVar.fresh() if is_user_type(x) else IRLit(x)
-
-    in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
 
     def assert_ir(x):
         assert is_iratom(x)
         return x
 
-    with using_interp(TracingInterpreter()) as tracer:
-        out_irtree = func(*in_ir_args, **in_ir_kwargs)
-        in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
-        out_irtree = treelib.map(assert_ir, out_irtree)
-        return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+    @ft.wraps(func)
+    def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
+        treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
+        in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
+        with using_interp(TracingInterpreter()) as tracer:
+            out_irtree = func(*in_ir_args, **in_ir_kwargs)
+            in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
+            out_irtree = treelib.map(assert_ir, out_irtree)
+            return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+
+    return trace
+
+
+# ==================================================================================================
+# IR EXECUTION
+# ==================================================================================================
+
+
+def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
+    """Create a synchronous executor for an IR.
+
+    Args:
+        ir: The IR to execute.
+
+    Returns:
+        A callable that executes the IR with the provided arguments.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.build_ir(lambda x: af.format("Hello {}", x))("world")
+        >>> af.call(ir)("Alice")
+        'Hello Alice'
+    """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+
+    def execute(*args: P.args, **kwargs: P.kwargs) -> R:
+        in_tree = pack_user_input(*args, **kwargs)
+        env: dict[IRVar, Value] = {}
+
+        def write(atom: IRVar, value):
+            is_irvar(atom) and setitem(env, atom, value)
+
+        def read(atom) -> Value:
+            return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
+
+        treelib.map(write, ir.in_irtree, in_tree)
+
+        for ireqn in ir.ireqns:
+            in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
+            out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
+        return treelib.map(read, ir.out_irtree)
+
+    return execute
+
+
+def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
+    """Create an iterator executor for an IR.
+
+    Args:
+        ir: The IR to execute.
+
+    Returns:
+        A callable that executes the IR and yields intermediate results.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.build_ir(lambda x: af.format("Hello {}", x))("world")
+        >>> list(af.icall(ir)("Alice"))
+        ['Hello Alice']
+    """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+
+    def execute(*args: P.args, **kwargs: P.kwargs) -> tp.Iterator[R]:
+        def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
+            if not chunks:
+                return None
+            head = chunks[0]
+            if isinstance(head, str):
+                return "".join(chunks)
+            if isinstance(head, list):
+                return list(it.chain.from_iterable(chunks))
+            try:
+                return ft.reduce(lambda a, b: a + b, chunks)
+            except TypeError:
+                return chunks
+
+        in_tree = pack_user_input(*args, **kwargs)
+        env: dict[IRVar, Value] = {}
+
+        def write(atom: IRVar, value: Value):
+            is_irvar(atom) and setitem(env, atom, value)
+
+        def read(atom):
+            return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
+
+        treelib.map(write, ir.in_irtree, in_tree)
+
+        for ireqn in ir.ireqns:
+            in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
+            if ireqn.prim in iter_rules:
+                iter_rule = iter_rules[ireqn.prim]
+                out_treespec = treelib.structure(ireqn.out_irtree)
+                acc = [[] for _ in range(out_treespec.num_leaves)]
+                for chunk in iter_rule(in_ireqn_tree, **ireqn.params):
+                    for i, leaf in enumerate(out_treespec.flatten_up_to(chunk)):
+                        acc[i].append(leaf)
+                    yield chunk
+                out_ireqn_tree = out_treespec.unflatten(map(accumulate_chunks, acc))
+            else:
+                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
+        yield treelib.map(read, ir.out_irtree)
+
+    return execute
+
+
+def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
+    """Create an async executor for an IR.
+
+    Args:
+        ir: The IR to execute.
+
+    Returns:
+        A callable that executes the IR asynchronously.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.build_ir(lambda x: af.format("Hello {}", x))("world")
+        >>> import asyncio
+        >>> asyncio.run(af.acall(ir)("Alice"))
+        'Hello Alice'
+    """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+
+    async def execute(*args: P.args, **kwargs: P.kwargs) -> R:
+        in_tree = pack_user_input(*args, **kwargs)
+        env: dict[IRVar, Value] = {}
+
+        def write(atom: IRVar, value):
+            is_irvar(atom) and setitem(env, atom, value)
+
+        def read(atom) -> Value:
+            return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
+
+        treelib.map(write, ir.in_irtree, in_tree)
+
+        for ireqn in ir.ireqns:
+            in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
+            if ireqn.prim in async_rules:
+                async_rule = async_rules[ireqn.prim]
+                out_ireqn_tree = await async_rule(in_ireqn_tree, **ireqn.params)
+            else:
+                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
+        return treelib.map(read, ir.out_irtree)
+
+    return execute

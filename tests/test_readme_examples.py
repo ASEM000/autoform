@@ -51,20 +51,20 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
+        ir = af.build_ir(program)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "shout"
 
-        result = af.run_ir(ir, "world")
+        result = af.call(ir)("world")
         assert result == "WORLD"
 
     def test_shout_pushforward(self):
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
-        pf_ir = af.pushforward_ir(ir)
-        primal_out, tangent_out = af.run_ir(pf_ir, ("hello", "bye"))
+        ir = af.build_ir(program)("test")
+        pf_ir = af.pushforward(ir)
+        primal_out, tangent_out = af.call(pf_ir)(("hello", "bye"))
         assert primal_out == "HELLO"
         assert tangent_out == "BYE"
 
@@ -72,9 +72,9 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
-        pb_ir = af.pullback_ir(ir)
-        output, grad_input = af.run_ir(pb_ir, ("hello", "feedback"))
+        ir = af.build_ir(program)("test")
+        pb_ir = af.pullback(ir)
+        output, grad_input = af.call(pb_ir)(("hello", "feedback"))
         assert output == "HELLO"
         assert grad_input == "feedback"
 
@@ -82,9 +82,9 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
-        batch_ir = af.batch_ir(ir, in_axes=list)
-        result = af.run_ir(batch_ir, ["hello", "world", "test"])
+        ir = af.build_ir(program)("test")
+        batch = af.batch(ir, in_axes=list)
+        result = af.call(batch)(["hello", "world", "test"])
         assert result == ["HELLO", "WORLD", "TEST"]
 
     def test_shout_chained(self):
@@ -93,8 +93,8 @@ class TestCustomPrimitive:
             step2 = shout(step1)
             return step2
 
-        ir = af.build_ir(program, "hello")
-        result = af.run_ir(ir, "world")
+        ir = af.build_ir(program)("hello")
+        result = af.call(ir)("world")
         assert result == "SAY: WORLD"
 
 
@@ -264,7 +264,7 @@ class TestTextGradStylePullback:
             ]
             return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
 
-        ir = af.build_ir(program, "test topic")
+        ir = af.build_ir(program)("test topic")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "textgrad_style_lm_call"
 
@@ -292,21 +292,21 @@ class TestTextGradStylePullback:
 
             return article
 
-        ir = af.build_ir(multi_agent_pipeline, "AI safety")
+        ir = af.build_ir(multi_agent_pipeline)("AI safety")
 
         prim_names = [eqn.prim.name for eqn in ir.ireqns]
         assert prim_names.count("textgrad_style_lm_call") == 2
         assert prim_names.count("format") == 2
 
-    def test_pullback_ir_construction(self):
+    def test_pullback_construction(self):
         def pipeline(topic: str):
             messages = [
                 {"role": "user", "content": af.format("Research: {}", topic)},
             ]
             return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
 
-        ir = af.build_ir(pipeline, "test")
-        pb_ir = af.pullback_ir(ir)
+        ir = af.build_ir(pipeline)("test")
+        pb_ir = af.pullback(ir)
 
         assert len(pb_ir.ireqns) == 1
         assert pb_ir.ireqns[0].prim.name == "pullback_call"
@@ -317,10 +317,10 @@ class TestMultiAgentComposition:
         def simple_agent(query: str):
             return af.format("[Processed: {}]", query)
 
-        ir = af.build_ir(simple_agent, "test")
-        batch_ir = af.batch_ir(ir, in_axes=list)
+        ir = af.build_ir(simple_agent)("test")
+        batch = af.batch(ir, in_axes=list)
 
-        results = af.run_ir(batch_ir, ["query1", "query2", "query3"])
+        results = af.call(batch)(["query1", "query2", "query3"])
         assert results == ["[Processed: query1]", "[Processed: query2]", "[Processed: query3]"]
 
     def test_pushforward_chained_agents(self):
@@ -329,10 +329,10 @@ class TestMultiAgentComposition:
             step2 = af.format("[Agent2: {}]", step1)
             return step2
 
-        ir = af.build_ir(chained_agents, "test")
-        pf_ir = af.pushforward_ir(ir)
+        ir = af.build_ir(chained_agents)("test")
+        pf_ir = af.pushforward(ir)
 
-        primal_out, tangent_out = af.run_ir(pf_ir, ("input", "delta"))
+        primal_out, tangent_out = af.call(pf_ir)(("input", "delta"))
         assert primal_out == "[Agent2: [Agent1: input]]"
         assert tangent_out == "[Agent2: [Agent1: delta]]"
 
@@ -342,20 +342,20 @@ class TestMultiAgentComposition:
             step2 = af.format("[Agent2: {}]", step1)
             return step2
 
-        ir = af.build_ir(chained_agents, "test")
-        pb_ir = af.pullback_ir(ir)
+        ir = af.build_ir(chained_agents)("test")
+        pb_ir = af.pullback(ir)
 
-        output, input_grad = af.run_ir(pb_ir, ("input", "feedback"))
+        output, input_grad = af.call(pb_ir)(("input", "feedback"))
         assert output == "[Agent2: [Agent1: input]]"
 
         assert input_grad == "feedback"
 
-    def test_batch_ir_construction_textgrad_style(self):
-        """Test that batch_ir can be constructed for TextGrad primitive.
+    def test_batch_construction_textgrad_style(self):
+        """Test that batch can be constructed for TextGrad primitive.
 
         This demonstrates the batch transform:
         1. Write a program that processes ONE input
-        2. Call batch_ir() to transform it
+        2. Call batch() to transform it
         3. Now it can process MANY inputs at once!
         """
 
@@ -365,9 +365,9 @@ class TestMultiAgentComposition:
             ]
             return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
 
-        ir = af.build_ir(single_agent, "test")
+        ir = af.build_ir(single_agent)("test")
 
-        batch_transformed = af.batch_ir(ir, in_axes=list)
+        batch_transformed = af.batch(ir, in_axes=list)
 
         assert len(batch_transformed.ireqns) == 1
         assert batch_transformed.ireqns[0].prim.name == "batch_call"
@@ -375,20 +375,20 @@ class TestMultiAgentComposition:
     def test_nested_batch_and_pullback(self):
         """Test composing batch and pullback transforms.
 
-        Shows how transforms compose: batch_ir(pullback_ir(ir))
+        Shows how transforms compose: batch(pullback(ir))
         """
 
         def agent(x: str):
             return af.format("[Processed: {}]", x)
 
-        ir = af.build_ir(agent, "test")
+        ir = af.build_ir(agent)("test")
 
-        pb_ir = af.pullback_ir(ir)
-        batch_pb = af.batch_ir(pb_ir, in_axes=(list, list))
+        pb_ir = af.pullback(ir)
+        batch_pb = af.batch(pb_ir, in_axes=(list, list))
 
         inputs = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]
-        outputs, input_grads = af.run_ir(batch_pb, inputs, cotangents)
+        outputs, input_grads = af.call(batch_pb)(inputs, cotangents)
 
         assert outputs == ["[Processed: a]", "[Processed: b]", "[Processed: c]"]
         assert input_grads == ["g1", "g2", "g3"]

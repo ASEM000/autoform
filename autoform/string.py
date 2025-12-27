@@ -52,10 +52,10 @@ def pullback_fwd_format(in_tree: Tree, *, template: str) -> tuple[Tree, Tree]:
 
 
 @ft.partial(pull_bwd_rules.def_rule, format_p)
-def pullback_bwd_format(residuals: Tree, cotangent_out: Tree, *, template: str) -> Tree:
+def pullback_bwd_format(residuals: Tree, out_cotangent: Tree, *, template: str) -> Tree:
     del template
     n = residuals
-    return tuple([cotangent_out] * n)
+    return tuple([out_cotangent] * n)
 
 
 @ft.partial(batch_rules.def_rule, format_p)
@@ -78,9 +78,9 @@ def batch_format(
 
 @ft.partial(push_rules.def_rule, format_p)
 def pushforward_format(primals: Tree, tangents: Tree, *, template: str) -> tuple[Tree, Tree]:
-    primal_out = format(template, *primals)
-    tangent_out = format(template, *tangents)
-    return primal_out, tangent_out
+    out_primal = format(template, *primals)
+    out_tangent = format(template, *tangents)
+    return out_primal, out_tangent
 
 
 # ==================================================================================================
@@ -131,9 +131,9 @@ def pullback_fwd_concat(in_tree: Tree) -> tuple[Tree, Tree]:
 
 
 @ft.partial(pull_bwd_rules.def_rule, concat_p)
-def pullback_bwd_concat(residuals: Tree, cotangent_out: Tree) -> Tree:
+def pullback_bwd_concat(residuals: Tree, out_cotangent: Tree) -> Tree:
     n = residuals
-    return tuple([cotangent_out] * n)
+    return tuple([out_cotangent] * n)
 
 
 @ft.partial(batch_rules.def_rule, concat_p)

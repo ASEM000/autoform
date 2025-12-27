@@ -8,7 +8,7 @@ class TestIREqnMatchArgs:
         def func(x):
             return af.concat("Hello, ", x)
 
-        ir = af.build_ir(func, "world")
+        ir = af.build_ir(func)("world")
         eqn = ir.ireqns[0]
 
         match eqn:
@@ -21,13 +21,13 @@ class TestIREqnMatchArgs:
 
     def test_match_by_params(self):
         def func(x):
-            return af.sow(x, tag="step1", name="x")
+            return af.checkpoint(x, collection="step1", name="x")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
         match eqn:
-            case af.core.IREqn(params={"tag": tag}):
+            case af.core.IREqn(params={"collection": tag}):
                 matched_tag = tag
             case _:
                 matched_tag = None
@@ -38,7 +38,7 @@ class TestIREqnMatchArgs:
         def func(x):
             return af.format("Value: {}", x)
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
         match eqn:
@@ -48,17 +48,19 @@ class TestIREqnMatchArgs:
 
     def test_match_in_loop(self):
         def func(x):
-            a = af.sow(x, tag="step1", name="a")
+            a = af.checkpoint(x, collection="step1", name="a")
             b = af.concat(a, "!")
-            c = af.sow(b, tag="step2", name="c")
+            c = af.checkpoint(b, collection="step2", name="c")
             return c
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         tags_found = []
         for eqn in ir.ireqns:
             match eqn:
-                case af.core.IREqn(prim=p, params={"tag": tag}) if p == af.harvest.sow_p:
+                case af.core.IREqn(prim=p, params={"collection": tag}) if (
+                    p == af.harvest.checkpoint_p
+                ):
                     tags_found.append(tag)
 
         assert tags_found == ["step1", "step2"]
@@ -67,17 +69,19 @@ class TestIREqnMatchArgs:
         """Test matching equations and building a transformed IR."""
 
         def func(x):
-            a = af.sow(x, tag="old_tag", name="a")
+            a = af.checkpoint(x, collection="old_tag", name="a")
             return af.concat(a, "!")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         # Transform: find sow with old_tag and change to new_tag
         new_eqns = []
         for eqn in ir.ireqns:
             match eqn:
-                case af.core.IREqn(prim=p, params={"tag": "old_tag"}) if p == af.harvest.sow_p:
-                    new_eqns.append(eqn.using(tag="new_tag"))
+                case af.core.IREqn(prim=p, params={"collection": "old_tag"}) if (
+                    p == af.harvest.checkpoint_p
+                ):
+                    new_eqns.append(eqn.using(collection="new_tag"))
                 case _:
                     new_eqns.append(eqn)
 
@@ -88,36 +92,36 @@ class TestIREqnMatchArgs:
         )
 
         # Verify the tag was changed
-        assert new_ir.ireqns[0].params["tag"] == "new_tag"
+        assert new_ir.ireqns[0].params["collection"] == "new_tag"
         # Verify the IR still works
-        result = af.run_ir(new_ir, "hello")
+        result = af.call(new_ir)("hello")
         assert result == "hello!"
 
 
 class TestIREqnWithParams:
     def test_using_merges(self):
         def func(x):
-            return af.sow(x, tag="old", name="x")
+            return af.checkpoint(x, collection="old", name="x")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
-        new_eqn = eqn.using(tag="new")
+        new_eqn = eqn.using(collection="new")
 
-        assert eqn.params["tag"] == "old"  # original unchanged
-        assert new_eqn.params["tag"] == "new"
+        assert eqn.params["collection"] == "old"  # original unchanged
+        assert new_eqn.params["collection"] == "new"
         assert new_eqn.prim == eqn.prim
         assert new_eqn.in_irtree == eqn.in_irtree
         assert new_eqn.out_irtree == eqn.out_irtree
 
     def test_using_preserves_fields(self):
         def func(x):
-            return af.sow(x, tag="test", name="x")
+            return af.checkpoint(x, collection="test", name="x")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
-        new_eqn = eqn.using(tag="changed")
+        new_eqn = eqn.using(collection="changed")
 
         assert new_eqn.prim is eqn.prim
         assert new_eqn.in_irtree is eqn.in_irtree
@@ -129,10 +133,10 @@ class TestInsertAfterPattern:
         """Test inserting a new equation after a matched one."""
 
         def func(x):
-            a = af.sow(x, tag="insert_here", name="a")
+            a = af.checkpoint(x, collection="insert_here", name="a")
             return af.concat(a, "!")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 2
 
         # Insert a new sow after the first sow
@@ -140,9 +144,11 @@ class TestInsertAfterPattern:
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
             match eqn:
-                case af.core.IREqn(prim=p, params={"tag": "insert_here"}) if p == af.harvest.sow_p:
+                case af.core.IREqn(prim=p, params={"collection": "insert_here"}) if (
+                    p == af.harvest.checkpoint_p
+                ):
                     # Create a new sow equation with the same IO but different tag
-                    inserted = eqn.using(tag="inserted")
+                    inserted = eqn.using(collection="inserted")
                     new_eqns.append(inserted)
 
         new_ir = af.core.IR(
@@ -152,14 +158,14 @@ class TestInsertAfterPattern:
         )
 
         assert len(new_ir.ireqns) == 3
-        assert new_ir.ireqns[0].params["tag"] == "insert_here"
-        assert new_ir.ireqns[1].params["tag"] == "inserted"
+        assert new_ir.ireqns[0].params["collection"] == "insert_here"
+        assert new_ir.ireqns[1].params["collection"] == "inserted"
         assert new_ir.ireqns[2].prim == af.string.concat_p
 
 
 class TestIRMatchArgs:
     def test_match_ir_positional(self):
-        ir = af.build_ir(lambda x: af.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x))("b")
 
         match ir:
             case af.core.IR(eqns, in_tree, out_tree):
@@ -170,7 +176,7 @@ class TestIRMatchArgs:
                 assert False, "Pattern should match"
 
     def test_match_ir_with_nested_eqns(self):
-        ir = af.build_ir(lambda x: af.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x))("b")
 
         match ir:
             case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
@@ -185,7 +191,7 @@ class TestIRMatchArgs:
             formatted = af.format("Hello {}", x)
             return af.concat(formatted, y)
 
-        ir = af.build_ir(program, "World", "!")
+        ir = af.build_ir(program)("World", "!")
 
         match ir:
             case af.core.IR([af.core.IREqn(p1, _, _, _), af.core.IREqn(p2, _, _, _)], _, _):
@@ -195,7 +201,7 @@ class TestIRMatchArgs:
                 assert False, "Pattern should match two equations"
 
     def test_match_by_primitive_tag(self):
-        ir = af.build_ir(lambda x: af.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x))("b")
 
         match ir:
             case af.core.IR([af.core.IREqn(af.core.Primitive(name, "string"), _, _, _)], _, _):
@@ -204,8 +210,8 @@ class TestIRMatchArgs:
                 assert False, "Pattern should match string-tagged primitive"
 
     def test_match_higher_order_primitive_with_nested_ir(self):
-        inner_ir = af.build_ir(lambda x: af.concat("a", x), "b")
-        pf_ir = af.pushforward_ir(inner_ir)
+        inner_ir = af.build_ir(lambda x: af.concat("a", x))("b")
+        pf_ir = af.pushforward(inner_ir)
 
         match pf_ir:
             case af.core.IR(
@@ -219,14 +225,14 @@ class TestIRMatchArgs:
 
     def test_match_switch_branches(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat("A: ", x), "X"),
-            "b": af.build_ir(lambda x: af.concat("B: ", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("A: ", x))("X"),
+            "b": af.build_ir(lambda x: af.concat("B: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "a", "test")
+        ir = af.build_ir(program)("a", "test")
 
         match ir:
             case af.core.IR(
@@ -240,7 +246,7 @@ class TestIRMatchArgs:
                 assert False, "Pattern should match switch"
 
     def test_match_ir_guard(self):
-        ir = af.build_ir(lambda x: af.concat("a", x), "b")
+        ir = af.build_ir(lambda x: af.concat("a", x))("b")
 
         match ir:
             case af.core.IR(eqns, _, _) if len(eqns) == 1:
@@ -257,7 +263,7 @@ class TestIRMatchArgs:
             a = af.format("Hello {}", x)
             return af.concat(a, y)
 
-        ir = af.build_ir(program, "World", "!")
+        ir = af.build_ir(program)("World", "!")
 
         match ir:
             case af.core.IR(eqns, _, _) if all(e.prim.tag == "string" for e in eqns):

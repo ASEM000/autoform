@@ -8,27 +8,27 @@ class TestBatchBasic:
         def shout(text):
             return af.format("{}!", text)
 
-        ir = af.build_ir(shout, "hello")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["hello", "world"])
+        ir = af.build_ir(shout)("hello")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["hello", "world"])
         assert result == ["hello!", "world!"]
 
     def test_two_args(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["Asem", "Zeyad"], ["Hi", "Hello"])
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["Asem", "Zeyad"], ["Hi", "Hello"])
         assert result == ["Hi: Asem", "Hello: Zeyad"]
 
     def test_concat(self):
         def join(a, b):
             return af.concat(a, b)
 
-        ir = af.build_ir(join, "Hello", " World")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["Hello", "Good"], [" World", " Day"])
+        ir = af.build_ir(join)("Hello", " World")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["Hello", "Good"], [" World", " Day"])
         assert result == ["Hello World", "Good Day"]
 
     def test_chained(self):
@@ -37,9 +37,9 @@ class TestBatchBasic:
             step2 = af.concat(step1, "!")
             return step2
 
-        ir = af.build_ir(process, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b", "c"])
+        ir = af.build_ir(process)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b", "c"])
         assert result == ["[a]!", "[b]!", "[c]!"]
 
     def test_nested_format(self):
@@ -47,18 +47,18 @@ class TestBatchBasic:
             inner = af.format("{} units", value)
             return af.format("{}: {}", name, inner)
 
-        ir = af.build_ir(template, "temp", "25")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["temp", "pressure"], ["25", "101"])
+        ir = af.build_ir(template)("temp", "25")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["temp", "pressure"], ["25", "101"])
         assert result == ["temp: 25 units", "pressure: 101 units"]
 
     def test_empty_batch(self):
         def f(x):
             return af.format("{}!", x)
 
-        ir = af.build_ir(f, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, [])
+        ir = af.build_ir(f)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)([])
         assert result == []
 
 
@@ -67,8 +67,8 @@ class TestBatchIRStructure:
         def f(x):
             return af.concat(x, x)
 
-        ir = af.build_ir(f, "hello")
-        batched_ir = af.batch_ir(ir)
+        ir = af.build_ir(f)("hello")
+        batched_ir = af.batch(ir)
         assert len(batched_ir.ireqns) == 1
         assert batched_ir.ireqns[0].prim.name == "batch_call"
 
@@ -76,16 +76,16 @@ class TestBatchIRStructure:
         def f(x):
             return af.concat(x, x)
 
-        ir = af.build_ir(f, "hello")
-        batched_ir = af.batch_ir(ir, in_axes=list)
+        ir = af.build_ir(f)("hello")
+        batched_ir = af.batch(ir, in_axes=list)
         assert "in_axes" in batched_ir.ireqns[0].params
 
     def test_has_sub_ir_param(self):
         def f(x):
             return af.concat(x, x)
 
-        ir = af.build_ir(f, "hello")
-        batched_ir = af.batch_ir(ir)
+        ir = af.build_ir(f)("hello")
+        batched_ir = af.batch(ir)
         assert "ir" in batched_ir.ireqns[0].params
 
 
@@ -94,21 +94,20 @@ class TestNestedBatch:
         def shout(text):
             return af.format("{}!", text)
 
-        ir = af.build_ir(shout, "hello")
-        batched_ir = af.batch_ir(ir)
-        double_batched_ir = af.batch_ir(batched_ir)
-        result = af.run_ir(double_batched_ir, [["a", "b"], ["c", "d", "e"]])
+        ir = af.build_ir(shout)("hello")
+        batched_ir = af.batch(ir)
+        double_batched_ir = af.batch(batched_ir)
+        result = af.call(double_batched_ir)([["a", "b"], ["c", "d", "e"]])
         assert result == [["a!", "b!"], ["c!", "d!", "e!"]]
 
     def test_batch_of_batch_two_args(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir)
-        double_batched_ir = af.batch_ir(batched_ir)
-        result = af.run_ir(
-            double_batched_ir,
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir)
+        double_batched_ir = af.batch(batched_ir)
+        result = af.call(double_batched_ir)(
             [["Asem", "Zeyad"], ["Zeyad"]],
             [["Hi", "Hello"], ["Hey"]],
         )
@@ -120,45 +119,45 @@ class TestBatchInAxes:
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir, in_axes=(list, None))
-        result = af.run_ir(batched_ir, ["Asem", "Zeyad", "Zeyad"], "Hi")
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir, in_axes=(list, None))
+        result = af.call(batched_ir)(["Asem", "Zeyad", "Zeyad"], "Hi")
         assert result == ["Hi: Asem", "Hi: Zeyad", "Hi: Zeyad"]
 
     def test_broadcast_first_arg(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir, in_axes=(None, list))
-        result = af.run_ir(batched_ir, "Asem", ["Hi", "Hello", "Hey"])
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir, in_axes=(None, list))
+        result = af.call(batched_ir)("Asem", ["Hi", "Hello", "Hey"])
         assert result == ["Hi: Asem", "Hello: Asem", "Hey: Asem"]
 
     def test_default_all_batched(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["Asem", "Zeyad"], ["Hi", "Hello"])
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["Asem", "Zeyad"], ["Hi", "Hello"])
         assert result == ["Hi: Asem", "Hello: Zeyad"]
 
     def test_explicit_all_batched(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir, in_axes=(list, list))
-        result = af.run_ir(batched_ir, ["Asem", "Zeyad"], ["Hi", "Hello"])
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir, in_axes=(list, list))
+        result = af.call(batched_ir)(["Asem", "Zeyad"], ["Hi", "Hello"])
         assert result == ["Hi: Asem", "Hello: Zeyad"]
 
     def test_all_broadcast(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir, in_axes=(None, None))
-        result = af.run_ir(batched_ir, "Asem", "Hi")
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir, in_axes=(None, None))
+        result = af.call(batched_ir)("Asem", "Hi")
         assert result == []
 
 
@@ -168,9 +167,9 @@ class TestBatchAsync:
         def shout(text):
             return af.format("{}!", text)
 
-        ir = af.build_ir(shout, "hello")
-        batched_ir = af.batch_ir(ir)
-        result = await af.arun_ir(batched_ir, ["a", "b", "c"])
+        ir = af.build_ir(shout)("hello")
+        batched_ir = af.batch(ir)
+        result = await af.acall(batched_ir)(["a", "b", "c"])
         assert result == ["a!", "b!", "c!"]
 
     @pytest.mark.asyncio
@@ -178,36 +177,44 @@ class TestBatchAsync:
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.build_ir(greet, "Asem", "Hi")
-        batched_ir = af.batch_ir(ir, in_axes=(list, None))
-        result = await af.arun_ir(batched_ir, ["A", "B"], "Hi")
+        ir = af.build_ir(greet)("Asem", "Hi")
+        batched_ir = af.batch(ir, in_axes=(list, None))
+        result = await af.acall(batched_ir)(["A", "B"], "Hi")
         assert result == ["Hi: A", "Hi: B"]
 
 
 class TestBatchUtils:
     def test_basic_axes_tree(self):
+        from autoform.batch import infer_batch_size
+
         col_tree = (["a", "b"], ["x", "y"])
         in_axes = list
-        batch_size = af.batch.infer_batch_size(col_tree, in_axes)
+        batch_size = infer_batch_size(col_tree, in_axes)
         assert batch_size == 2
 
     def test_broadcast_axes_tree(self):
+        from autoform.batch import infer_batch_size
+
         col_tree = (["a", "b"], "single")
         in_axes = (list, None)
-        batch_size = af.batch.infer_batch_size(col_tree, in_axes)
+        batch_size = infer_batch_size(col_tree, in_axes)
         assert batch_size == 2
 
     def test_no_batched_returns_zero(self):
+        from autoform.batch import infer_batch_size
+
         col_tree = ("a", "b")
         in_axes = (None, None)
-        batch_size = af.batch.infer_batch_size(col_tree, in_axes)
+        batch_size = infer_batch_size(col_tree, in_axes)
         assert batch_size == 0
 
     def test_mixed_axes_tree(self):
+        from autoform.batch import broadcast_in_axes_prefix
+
         in_axes = (list, None)
         tree = (["a", "b", "c"], {"x": 1, "y": 2})
         broadcasted_in_axes = (list, {"x": None, "y": None})
-        assert af.batch.broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
+        assert broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
 
 
 class TestBatchRuleOutBatched:
@@ -254,9 +261,9 @@ class TestBatchMultipleOutputs:
         def program(x):
             return split_p.bind(x)
 
-        ir = af.build_ir(program, "abc")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["abc", "xyz", "123"])
+        ir = af.build_ir(program)("abc")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["abc", "xyz", "123"])
         assert result == (["a", "x", "1"], ["bc", "yz", "23"])
 
     def test_batch_nested_tuple_output(self):
@@ -280,9 +287,9 @@ class TestBatchMultipleOutputs:
         def program(x):
             return nested_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b"])
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b"])
         assert result == ((["a1", "b1"], ["a2", "b2"]), ["a3", "b3"])
 
 
@@ -337,9 +344,9 @@ class TestBatchRuleOutBatchedValidation:
         def program(x):
             return single_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b"])
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b"])
         assert result == ["a", "b"]
 
     def test_tuple_output_requires_tuple_out_batched(self):
@@ -361,10 +368,10 @@ class TestBatchRuleOutBatchedValidation:
         def program(x):
             return tuple_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
         with pytest.raises(ValueError, match="out_batched.*structure"):
-            af.run_ir(batched_ir, ["a", "b"])
+            af.call(batched_ir)(["a", "b"])
 
     def test_tuple_output_with_correct_out_batched(self):
         tuple_p = af.core.Primitive("tuple_out_correct")
@@ -385,9 +392,9 @@ class TestBatchRuleOutBatchedValidation:
         def program(x):
             return tuple_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b"])
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b"])
         assert result == (["a", "b"], ["a", "b"])
 
     def test_nested_output_requires_nested_out_batched(self):
@@ -409,10 +416,10 @@ class TestBatchRuleOutBatchedValidation:
         def program(x):
             return nested_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
         with pytest.raises(ValueError, match="out_batched.*structure"):
-            af.run_ir(batched_ir, ["a", "b"])
+            af.call(batched_ir)(["a", "b"])
 
     def test_nested_output_with_correct_out_batched(self):
         nested_p = af.core.Primitive("nested_out_correct")
@@ -433,9 +440,9 @@ class TestBatchRuleOutBatchedValidation:
         def program(x):
             return nested_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b"])
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b"])
         assert result == {"first": ["a", "b"], "second": (["a", "b"], ["a", "b"])}
 
     def test_mixed_batched_output(self):
@@ -457,9 +464,9 @@ class TestBatchRuleOutBatchedValidation:
         def program(x):
             return mixed_p.bind(x)
 
-        ir = af.build_ir(program, "a")
-        batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b"])
+        ir = af.build_ir(program)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b"])
         assert result == (["a", "b"], ["constant", "constant"])
 
 
