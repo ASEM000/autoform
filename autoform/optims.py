@@ -33,7 +33,7 @@ def dce_ir(ir: IR) -> IR:
         ...     dead = af.concat(x, " dead")  # unused
         ...     live = af.concat(x, " live")  # returned
         ...     return live
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> len(ir.ireqns)
         2
         >>> dced = af.dce_ir(ir)
@@ -69,7 +69,7 @@ def fold_ir(ir: IR) -> IR:
         >>> def program(x):
         ...     constant = af.format("{}, {}", "a", "b")
         ...     return af.concat(constant, x)
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> len(ir.ireqns)
         2
         >>> folded = af.fold_ir(ir)

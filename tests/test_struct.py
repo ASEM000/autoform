@@ -67,7 +67,7 @@ class TestStructLmCall:
                 struct=Answer,
             )
 
-        built_ir = af.build_ir(ir, "test")
+        built_ir = af.build_ir(ir)("test")
         assert len(built_ir.ireqns) == 1
         assert built_ir.ireqns[0].prim.name == "struct_lm_call"
 
@@ -82,7 +82,7 @@ class TestStructLmCall:
                 struct=Answer,
             )
 
-        built_ir = af.build_ir(ir, "test")
+        built_ir = af.build_ir(ir)("test")
         params = built_ir.ireqns[0].params
         assert params["model"] == "gpt-4o-mini"
         assert params["struct"] is Answer
@@ -100,7 +100,7 @@ class TestStructLmCall:
                 struct=Answer,
             )
 
-        built_ir = af.build_ir(ir, "test")
+        built_ir = af.build_ir(ir)("test")
         assert len(built_ir.ireqns) == 1
         assert built_ir.ireqns[0].prim.name == "struct_lm_call"
 
@@ -115,7 +115,7 @@ class TestStructLmCall:
                 struct=Answer,
             )
 
-        built_ir = af.build_ir(ir, "test")
+        built_ir = af.build_ir(ir)("test")
         pb_ir = af.pullback_ir(built_ir)
         assert pb_ir is not None
         assert len(pb_ir.ireqns) > 0
@@ -155,7 +155,7 @@ class TestStructLmCall:
             )
             return step2
 
-        built_ir = af.build_ir(ir, "test")
+        built_ir = af.build_ir(ir)("test")
         prim_names = [eqn.prim.name for eqn in built_ir.ireqns]
         assert "struct_lm_call" in prim_names
         assert prim_names.count("struct_lm_call") == 2
@@ -170,7 +170,7 @@ class TestStructInAxes:
         def greet(p: Person) -> str:
             return af.format("Hello {}, {}", p.name, p.sur)
 
-        ir = af.build_ir(greet, Person(name="x", sur="y"))
+        ir = af.build_ir(greet)(Person(name="x", sur="y"))
 
         batch_ir = af.batch_ir(ir, in_axes=Person.model_construct(name=list, sur=None))
 
@@ -192,7 +192,7 @@ class TestStructInAxes:
         def process(o: Outer) -> str:
             return af.format("[{}] {}", o.tag, o.inner.value)
 
-        ir = af.build_ir(process, Outer(inner=Inner(value="x"), tag="t"))
+        ir = af.build_ir(process)(Outer(inner=Inner(value="x"), tag="t"))
 
         batch_ir = af.batch_ir(
             ir,
@@ -234,7 +234,7 @@ class TestStructInAxes:
                 second=af.format("B:{}", x),
             )
 
-        ir = af.build_ir(process, "x")
+        ir = af.build_ir(process)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
         result = af.run_ir(batch_ir, ["1", "2", "3"])
         assert isinstance(result, Output)
@@ -255,7 +255,7 @@ class TestStructInAxes:
                 tag=af.format("T:{}", x),
             )
 
-        ir = af.build_ir(create, "x")
+        ir = af.build_ir(create)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
         result = af.run_ir(batch_ir, ["a", "b"])
         assert isinstance(result, Outer)
@@ -267,7 +267,7 @@ class TestStructInAxes:
         def dual(x: str) -> tuple[str, str]:
             return af.format("L:{}", x), af.format("R:{}", x)
 
-        ir = af.build_ir(dual, "x")
+        ir = af.build_ir(dual)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
         result = af.run_ir(batch_ir, ["a", "b"])
         assert result == (["L:a", "L:b"], ["R:a", "R:b"])
@@ -276,7 +276,7 @@ class TestStructInAxes:
         def nested(x: str) -> tuple[tuple[str, str], str]:
             return (af.format("A:{}", x), af.format("B:{}", x)), af.format("C:{}", x)
 
-        ir = af.build_ir(nested, "x")
+        ir = af.build_ir(nested)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
         result = af.run_ir(batch_ir, ["1", "2"])
         assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])

@@ -48,7 +48,7 @@ class TestKwargsBuildIR:
         def program(name):
             return greet(name, greeting="Hi", punctuation="?")
 
-        ir = af.build_ir(program, "World")
+        ir = af.build_ir(program)("World")
         assert len(ir.ireqns) == 1
         eqn = ir.ireqns[0]
         assert eqn.prim == greet_p
@@ -64,7 +64,7 @@ class TestKwargsBuildIR:
         def program(name):
             return greet(name, greeting="Hi", punctuation="?")
 
-        ir = af.build_ir(program, "World")
+        ir = af.build_ir(program)("World")
         result = af.run_ir(ir, "World")
         assert result == "Hi, World?"
 
@@ -90,7 +90,7 @@ class TestKwargsPushforward:
         def program(x, *, repeat=1):
             return test_p.bind((x, dict(repeat=repeat)))
 
-        ir = af.build_ir(program, "A", repeat=3)
+        ir = af.build_ir(program)("A", repeat=3)
         match ir.in_irtree:
             case (x, {"repeat": repeat}):
                 assert isinstance(x, af.core.IRVar)
@@ -102,7 +102,7 @@ class TestKwargsPullback:
         def program(name):
             return greet(name, greeting="Hi", punctuation="?")
 
-        ir = af.build_ir(program, "World")
+        ir = af.build_ir(program)("World")
         pb_ir = af.pullback_ir(ir)
         assert len(pb_ir.in_irtree) == 2
         assert len(pb_ir.out_irtree) == 2

@@ -8,7 +8,7 @@ class TestBuildIR:
         def program(name):
             return af.concat("Hello, ", name)
 
-        ir = af.build_ir(program, "Alice")
+        ir = af.build_ir(program)("Alice")
         assert len(ir.ireqns) == 1
         assert isinstance(ir.in_irtree, af.core.IRVar)
         eqn = ir.ireqns[0]
@@ -23,7 +23,7 @@ class TestBuildIR:
         def program(x):
             return af.format("Hello, {}!", x)
 
-        ir = af.build_ir(program, "World")
+        ir = af.build_ir(program)("World")
         assert len(ir.ireqns) == 1
         eqn = ir.ireqns[0]
         assert len(eqn.in_irtree) == 1
@@ -37,21 +37,21 @@ class TestBuildIR:
             b = af.format("[{}]", a)
             return b
 
-        ir = af.build_ir(program, "A", "B")
+        ir = af.build_ir(program)("A", "B")
         assert len(ir.ireqns) == 2
 
     def test_single_input_tree_structure(self):
         def program(x):
             return af.concat(x, x)
 
-        ir = af.build_ir(program, "test")
+        ir = af.build_ir(program)("test")
         assert isinstance(ir.in_irtree, af.core.IRVar)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
             return af.concat(a, b)
 
-        ir = af.build_ir(program, "A", "B")
+        ir = af.build_ir(program)("A", "B")
         assert isinstance(ir.in_irtree, tuple)
         assert len(ir.in_irtree) == 2
 
@@ -61,7 +61,7 @@ class TestRunIR:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "hello")
+        ir = af.build_ir(program)("hello")
         result = af.run_ir(ir, "world")
         assert result == "world!"
 
@@ -71,7 +71,7 @@ class TestRunIR:
             step2 = af.format("[{}]", step1)
             return step2
 
-        ir = af.build_ir(program, "A")
+        ir = af.build_ir(program)("A")
         result = af.run_ir(ir, "B")
         assert result == "[BB]"
 
@@ -79,7 +79,7 @@ class TestRunIR:
         def program(a, b):
             return af.format("{} + {}", a, b)
 
-        ir = af.build_ir(program, "x", "y")
+        ir = af.build_ir(program)("x", "y")
         result = af.run_ir(ir, "1", "2")
         assert result == "1 + 2"
 
@@ -100,7 +100,7 @@ class TestIterIR:
         def stream(x):
             return stream_p.bind(x)
 
-        ir = af.build_ir(stream, "AB")
+        ir = af.build_ir(stream)("AB")
         outputs = list(af.iter_ir(ir, "AB"))
         assert outputs[:-1] == ["A", "B"]
         assert outputs[-1] == "AB"
@@ -109,7 +109,7 @@ class TestIterIR:
         def program(x, y):
             return af.concat(x, y)
 
-        ir = af.build_ir(program, "A", "B")
+        ir = af.build_ir(program)("A", "B")
         outputs = list(af.iter_ir(ir, "A", "B"))
         assert outputs == ["AB"]
 
@@ -128,7 +128,7 @@ class TestIterIR:
         def split(x):
             return split_p.bind(x)
 
-        ir = af.build_ir(split, "AB")
+        ir = af.build_ir(split)("AB")
         iterator = af.iter_ir(ir, "AB")
         chunk1 = next(iterator)
         assert chunk1 == ("A", "A")
@@ -153,7 +153,7 @@ class TestIterIR:
         def func(x):
             return p.bind(x)
 
-        ir = af.build_ir(func, "input")
+        ir = af.build_ir(func)("input")
         results = list(af.iter_ir(ir, "input"))
         assert results[-1] == "abc"
 
@@ -172,7 +172,7 @@ class TestIterIR:
         def func(x):
             return p.bind(x)
 
-        ir = af.build_ir(func, "input")
+        ir = af.build_ir(func)("input")
         results = list(af.iter_ir(ir, "input"))
         assert results[-1] == [1, 2, 3, 4]
 
@@ -192,13 +192,13 @@ class TestIterIR:
         def stream_tokens(x):
             return stream_p.bind(x)
 
-        inner_ir = af.build_ir(stream_tokens, "abc")
+        inner_ir = af.build_ir(stream_tokens)("abc")
 
         # run_ir inlines the streaming primitive directly
         def outer(x):
             return af.run_ir(inner_ir, x)
 
-        outer_ir = af.build_ir(outer, "abc")
+        outer_ir = af.build_ir(outer)("abc")
         outputs = list(af.iter_ir(outer_ir, "xyz"))
         assert outputs[:-1] == ["x", "y", "z"]
         assert outputs[-1] == "xyz"
@@ -219,17 +219,17 @@ class TestIterIR:
         def deep_stream(x):
             return stream_p.bind(x)
 
-        ir_level0 = af.build_ir(deep_stream, "ab")
+        ir_level0 = af.build_ir(deep_stream)("ab")
 
         def level1(x):
             return af.run_ir(ir_level0, x)
 
-        ir_level1 = af.build_ir(level1, "ab")
+        ir_level1 = af.build_ir(level1)("ab")
 
         def level2(x):
             return af.run_ir(ir_level1, x)
 
-        ir_level2 = af.build_ir(level2, "ab")
+        ir_level2 = af.build_ir(level2)("ab")
         outputs = list(af.iter_ir(ir_level2, "XY"))
         assert outputs[:-1] == ["0:X", "1:Y"]
         assert outputs[-1] == "0:X1:Y"
@@ -254,7 +254,7 @@ class TestAsyncIR:
         def func(x):
             return p.bind(x)
 
-        ir = af.build_ir(func, "hello")
+        ir = af.build_ir(func)("hello")
         result = await af.arun_ir(ir, "hello")
         assert result == "hello"
 
@@ -273,6 +273,6 @@ class TestAsyncIR:
         def func(x):
             return p.bind(x)
 
-        ir = af.build_ir(func, "hello")
+        ir = af.build_ir(func)("hello")
         result = await af.arun_ir(ir, "hello")
         assert result == "hello!"

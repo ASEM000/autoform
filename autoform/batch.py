@@ -261,7 +261,7 @@ def batch_ir(ir: IR, in_axes: Tree[type | None] = list) -> IR:
         >>> import autoform as af
         >>> def greet(greeting, name):
         ...     return af.concat(greeting, name)
-        >>> ir = af.build_ir(greet, "Hi", "World")
+        >>> ir = af.build_ir(greet)("Hi", "World")
         >>> # Batch over names contained in list, broadcast greeting
         >>> batched = af.batch_ir(ir, in_axes=(None, list))
         >>> af.run_ir(batched, ("Hello, ", ["Alice", "Bob", "Carol"]))

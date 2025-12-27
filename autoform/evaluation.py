@@ -31,7 +31,7 @@ def run_ir(ir: IR, *args, **kwargs) -> Tree:
         >>> import autoform as af
         >>> def ir(x, y):
         ...     return af.concat(x, y)
-        >>> ir = af.build_ir(ir, "Hello, ", "World!")
+        >>> ir = af.build_ir(ir)("Hello, ", "World!")
         >>> af.run_ir(ir, "Hello, ", "World!")
         'Hello, World!'
     """
@@ -92,7 +92,7 @@ def iter_ir(ir: IR, *args, **kwargs):
         >>> import autoform as af
         >>> def program(x):
         ...     return af.concat("Result: ", x)
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> chunks = list(af.iter_ir(ir, "hello"))
         >>> chunks[-1]  # Final result is always last
         'Result: hello'
@@ -150,7 +150,7 @@ async def arun_ir(ir: IR, *args, **kwargs):
         >>> import asyncio
         >>> def program(x):
         ...     return af.concat("Hello, ", x)
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> asyncio.run(af.arun_ir(ir, "World"))
         'Hello, World'
     """

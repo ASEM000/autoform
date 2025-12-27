@@ -343,46 +343,44 @@ class TracingInterpreter(Interpreter):
 # ==================================================================================================
 
 
-def build_ir(func: Callable[..., Tree], *args, **kwargs) -> IR:
+def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR]:
     """Build an IR from a function by tracing its execution.
-
-    Traces `func` with example inputs to capture the computation graph as an
-    intermediate representation (IR).
 
     Args:
         func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
-        *args: Example positional arguments to trace with.
-        **kwargs: Example keyword arguments to trace with.
 
     Returns:
-        An IR representing the traced computation graph.
+        A tracer callable that takes (*args, **kwargs) and returns an IR.
 
     Example:
         >>> import autoform as af
         >>> def greet(name, punctuation):
         ...     return af.format("Hello, {}{}!", name, punctuation)
-        >>> ir = af.build_ir(greet, "World", "?")
+        >>> ir = af.build_ir(greet)("World", "?")
         >>> af.run_ir(ir, "Alice", "!")
         'Hello, Alice!!'
     """
 
-    def assert_no_iratom(x):
-        assert not is_iratom(x)
-        return x
+    def trace(*args: P.args, **kwargs: P.kwargs) -> IR:
+        def assert_no_iratom(x):
+            assert not is_iratom(x)
+            return x
 
-    treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
+        treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
 
-    def populate(x):
-        return IRVar.fresh() if is_user_type(x) else IRLit(x)
+        def populate(x):
+            return IRVar.fresh() if is_user_type(x) else IRLit(x)
 
-    in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
+        in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
 
-    def assert_ir(x):
-        assert is_iratom(x)
-        return x
+        def assert_ir(x):
+            assert is_iratom(x)
+            return x
 
-    with using_interp(TracingInterpreter()) as tracer:
-        out_irtree = func(*in_ir_args, **in_ir_kwargs)
-        in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
-        out_irtree = treelib.map(assert_ir, out_irtree)
-        return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+        with using_interp(TracingInterpreter()) as tracer:
+            out_irtree = func(*in_ir_args, **in_ir_kwargs)
+            in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
+            out_irtree = treelib.map(assert_ir, out_irtree)
+            return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+
+    return trace

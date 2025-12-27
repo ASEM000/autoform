@@ -51,7 +51,7 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
+        ir = af.build_ir(program)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "shout"
 
@@ -62,7 +62,7 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
+        ir = af.build_ir(program)("test")
         pf_ir = af.pushforward_ir(ir)
         primal_out, tangent_out = af.run_ir(pf_ir, ("hello", "bye"))
         assert primal_out == "HELLO"
@@ -72,7 +72,7 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
+        ir = af.build_ir(program)("test")
         pb_ir = af.pullback_ir(ir)
         output, grad_input = af.run_ir(pb_ir, ("hello", "feedback"))
         assert output == "HELLO"
@@ -82,7 +82,7 @@ class TestCustomPrimitive:
         def program(x):
             return shout(x)
 
-        ir = af.build_ir(program, "test")
+        ir = af.build_ir(program)("test")
         batch_ir = af.batch_ir(ir, in_axes=list)
         result = af.run_ir(batch_ir, ["hello", "world", "test"])
         assert result == ["HELLO", "WORLD", "TEST"]
@@ -93,7 +93,7 @@ class TestCustomPrimitive:
             step2 = shout(step1)
             return step2
 
-        ir = af.build_ir(program, "hello")
+        ir = af.build_ir(program)("hello")
         result = af.run_ir(ir, "world")
         assert result == "SAY: WORLD"
 
@@ -264,7 +264,7 @@ class TestTextGradStylePullback:
             ]
             return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
 
-        ir = af.build_ir(program, "test topic")
+        ir = af.build_ir(program)("test topic")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "textgrad_style_lm_call"
 
@@ -292,7 +292,7 @@ class TestTextGradStylePullback:
 
             return article
 
-        ir = af.build_ir(multi_agent_pipeline, "AI safety")
+        ir = af.build_ir(multi_agent_pipeline)("AI safety")
 
         prim_names = [eqn.prim.name for eqn in ir.ireqns]
         assert prim_names.count("textgrad_style_lm_call") == 2
@@ -305,7 +305,7 @@ class TestTextGradStylePullback:
             ]
             return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
 
-        ir = af.build_ir(pipeline, "test")
+        ir = af.build_ir(pipeline)("test")
         pb_ir = af.pullback_ir(ir)
 
         assert len(pb_ir.ireqns) == 1
@@ -317,7 +317,7 @@ class TestMultiAgentComposition:
         def simple_agent(query: str):
             return af.format("[Processed: {}]", query)
 
-        ir = af.build_ir(simple_agent, "test")
+        ir = af.build_ir(simple_agent)("test")
         batch_ir = af.batch_ir(ir, in_axes=list)
 
         results = af.run_ir(batch_ir, ["query1", "query2", "query3"])
@@ -329,7 +329,7 @@ class TestMultiAgentComposition:
             step2 = af.format("[Agent2: {}]", step1)
             return step2
 
-        ir = af.build_ir(chained_agents, "test")
+        ir = af.build_ir(chained_agents)("test")
         pf_ir = af.pushforward_ir(ir)
 
         primal_out, tangent_out = af.run_ir(pf_ir, ("input", "delta"))
@@ -342,7 +342,7 @@ class TestMultiAgentComposition:
             step2 = af.format("[Agent2: {}]", step1)
             return step2
 
-        ir = af.build_ir(chained_agents, "test")
+        ir = af.build_ir(chained_agents)("test")
         pb_ir = af.pullback_ir(ir)
 
         output, input_grad = af.run_ir(pb_ir, ("input", "feedback"))
@@ -365,7 +365,7 @@ class TestMultiAgentComposition:
             ]
             return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
 
-        ir = af.build_ir(single_agent, "test")
+        ir = af.build_ir(single_agent)("test")
 
         batch_transformed = af.batch_ir(ir, in_axes=list)
 
@@ -381,7 +381,7 @@ class TestMultiAgentComposition:
         def agent(x: str):
             return af.format("[Processed: {}]", x)
 
-        ir = af.build_ir(agent, "test")
+        ir = af.build_ir(agent)("test")
 
         pb_ir = af.pullback_ir(ir)
         batch_pb = af.batch_ir(pb_ir, in_axes=(list, list))

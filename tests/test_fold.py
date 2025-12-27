@@ -7,7 +7,7 @@ class TestFoldIR:
             constant = af.format("{}, {}", "hello", "world")
             return af.concat(x, constant)
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 2
@@ -19,7 +19,7 @@ class TestFoldIR:
             constant = af.concat("hello", " world")
             return af.concat(x, constant)
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 2
@@ -30,7 +30,7 @@ class TestFoldIR:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 1
@@ -42,7 +42,7 @@ class TestFoldIR:
             b = af.concat(a, " suffix")
             return af.concat(x, b)
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 3
@@ -56,7 +56,7 @@ class TestFoldIR:
             c = af.concat(b, "!")
             return c
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 3
@@ -66,7 +66,7 @@ class TestFoldIR:
         def program(x):
             return af.concat("hello", " world")
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 1
@@ -81,7 +81,7 @@ class TestFoldIR:
         def program(x, y):
             return af.concat(x, y)
 
-        ir = af.build_ir(program, "a", "b")
+        ir = af.build_ir(program)("a", "b")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == len(folded.ireqns)
@@ -90,7 +90,7 @@ class TestFoldIR:
         def program(x):
             return x
 
-        ir = af.build_ir(program, "input")
+        ir = af.build_ir(program)("input")
         folded = af.fold_ir(ir)
 
         assert len(ir.ireqns) == 0
@@ -103,7 +103,7 @@ class TestFoldIRExecution:
             prefix = af.concat("Hello", ", ")
             return af.concat(prefix, x)
 
-        ir = af.build_ir(program, "World")
+        ir = af.build_ir(program)("World")
         folded = af.fold_ir(ir)
 
         original_result = af.run_ir(ir, "World")
@@ -115,7 +115,7 @@ class TestFoldIRExecution:
         def program(x):
             return af.concat("hello", " world")
 
-        ir = af.build_ir(program, "ignored")
+        ir = af.build_ir(program)("ignored")
         folded = af.fold_ir(ir)
 
         result = af.run_ir(folded, "anything")

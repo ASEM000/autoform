@@ -21,7 +21,7 @@ def research_and_write(topic: str) -> str:
 
 
 if __name__ == "__main__":
-    ir = af.build_ir(research_and_write, "example topic")
+    ir = af.build_ir(research_and_write)("example topic")
     batch_ir = af.batch_ir(ir, in_axes=list)
     pb_ir = af.pullback_ir(ir)
     batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))

@@ -68,7 +68,7 @@ def pushforward_ir(ir: IR) -> IR:
         >>> import autoform as af
         >>> def program(x, y):
         ...     return af.concat(x, y)
-        >>> ir = af.build_ir(program, "a", "b")
+        >>> ir = af.build_ir(program)("a", "b")
         >>> pf_ir = af.pushforward_ir(ir)
         >>> primals, tangents = af.run_ir(pf_ir, (("Hello", " World"), ("dx", "dy")))
         >>> primals
@@ -285,7 +285,7 @@ def pullback_ir(ir: IR) -> IR:
         >>> import autoform as af
         >>> def program(x, y):
         ...     return af.concat(x, y)
-        >>> ir = af.build_ir(program, "a", "b")
+        >>> ir = af.build_ir(program)("a", "b")
         >>> pb_ir = af.pullback_ir(ir)
         >>> outputs, cotangents = af.run_ir(pb_ir, (("Hello", " World"), "feedback"))
         >>> outputs

@@ -10,7 +10,7 @@ class TestSplitIr:
             b = af.concat(mid, " -> Step2")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
 
         result1 = af.run_ir(ir1, "input")
@@ -25,7 +25,7 @@ class TestSplitIr:
             b = af.sow(af.concat(a, "!"), tag="split", name="second")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="first")
 
         result1 = af.run_ir(ir1, "hello")
@@ -39,7 +39,7 @@ class TestSplitIr:
             a = af.concat("prefix: ", x)
             return af.sow(a, tag="split", name="end")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="end")
 
         result1 = af.run_ir(ir1, "test")
@@ -52,7 +52,7 @@ class TestSplitIr:
         def func(x):
             return af.concat("hello", x)
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="missing")
 
         # ir1 should be the original IR
@@ -68,7 +68,7 @@ class TestSplitIr:
             b = af.sow(a, tag="split", name="checkpoint")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
         assert len(ir1.ireqns) == 2
 
@@ -81,8 +81,8 @@ class TestMergeIr:
         def step2(x):
             return af.concat(x, " -> Step2")
 
-        ir1 = af.build_ir(step1, "test")
-        ir2 = af.build_ir(step2, "test")
+        ir1 = af.build_ir(step1)("test")
+        ir2 = af.build_ir(step2)("test")
         merged = af.merge_ir(ir1, ir2)
 
         result = af.run_ir(merged, "input")
@@ -95,8 +95,8 @@ class TestMergeIr:
         def g(x):
             return af.format("g({})", x)
 
-        ir_f = af.build_ir(f, "test")
-        ir_g = af.build_ir(g, "test")
+        ir_f = af.build_ir(f)("test")
+        ir_g = af.build_ir(g)("test")
         merged = af.merge_ir(ir_f, ir_g)
 
         result = af.run_ir(merged, "x")
@@ -112,9 +112,9 @@ class TestMergeIr:
         def add_c(x):
             return af.concat(x, "c")
 
-        ir_a = af.build_ir(add_a, "")
-        ir_b = af.build_ir(add_b, "")
-        ir_c = af.build_ir(add_c, "")
+        ir_a = af.build_ir(add_a)("")
+        ir_b = af.build_ir(add_b)("")
+        ir_c = af.build_ir(add_c)("")
 
         merged = af.merge_ir(af.merge_ir(ir_a, ir_b), ir_c)
         result = af.run_ir(merged, "")
@@ -127,8 +127,8 @@ class TestMergeIr:
         def double_in(x, y):
             return af.concat(x, y)
 
-        ir1 = af.build_ir(single_out, "test")
-        ir2 = af.build_ir(double_in, "a", "b")
+        ir1 = af.build_ir(single_out)("test")
+        ir2 = af.build_ir(double_in)("a", "b")
 
         with pytest.raises(AssertionError, match="mismatch"):
             af.merge_ir(ir1, ir2)
@@ -140,8 +140,8 @@ class TestMergeIr:
         def list_in(x):
             return af.concat(x[0], x[1])
 
-        ir1 = af.build_ir(tuple_out, "test")
-        ir2 = af.build_ir(list_in, ["a", "b"])
+        ir1 = af.build_ir(tuple_out)("test")
+        ir2 = af.build_ir(list_in)(["a", "b"])
         with pytest.raises(AssertionError, match="mismatch"):
             af.merge_ir(ir1, ir2)
 
@@ -154,7 +154,7 @@ class TestSplitMergeRoundtrip:
             b = af.concat(mid, " -> Step2")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
         merged = af.merge_ir(ir1, ir2)
         original_result = af.run_ir(ir, "test")
@@ -168,7 +168,7 @@ class TestSplitMergeRoundtrip:
             step2 = af.format("[{}]", checkpoint)
             return step2
 
-        ir = af.build_ir(pipeline, "test")
+        ir = af.build_ir(pipeline)("test")
 
         ir1, ir2 = af.split_ir(ir, tag="debug", name="after_step1")
         intermediate = af.run_ir(ir1, "data")
@@ -185,7 +185,7 @@ class TestSplitMergeWithTransforms:
             b = af.concat(mid, " trainable")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="mid")
 
         # Only differentiate ir2
@@ -201,8 +201,8 @@ class TestSplitMergeWithTransforms:
         def g(x):
             return af.concat(x, ":g")
 
-        ir_f = af.build_ir(f, "")
-        ir_g = af.build_ir(g, "")
+        ir_f = af.build_ir(f)("")
+        ir_g = af.build_ir(g)("")
         merged = af.merge_ir(ir_f, ir_g)
         batched = af.batch_ir(merged)
 

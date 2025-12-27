@@ -47,7 +47,7 @@ def sow(in_tree: Tree, /, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
         ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
         ...     response = af.concat(prompt, " A: 42")
         ...     return af.sow(response, tag="debug", name="response")
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> result, reaped = af.run_and_reap(ir, "What is 6*7?", tag="debug")
         >>> result
         'Q: What is 6*7? A: 42'
@@ -152,7 +152,7 @@ def run_and_reap(ir: IR, in_tree: Tree, *, tag: tp.Hashable) -> tuple[Tree, Reap
         >>> def program(x):
         ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
         ...     return af.concat(prompt, " A: 42")
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> result, reaped = af.run_and_reap(ir, "What?", tag="debug")
         >>> result
         'Q: What? A: 42'
@@ -206,7 +206,7 @@ def run_and_plant(
         >>> import autoform as af
         >>> def program(x):
         ...     return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> result = af.run_and_plant(ir, "World", {"greeting": "CACHED"}, tag="cache")
         >>> result
         'CACHED'
@@ -243,7 +243,7 @@ def split_ir(ir: IR, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[IR, IR]:
         ...     mid = af.sow(a, tag="split", name="checkpoint")
         ...     b = af.concat(mid, " -> Step2")
         ...     return b
-        >>> ir = af.build_ir(program, "test")
+        >>> ir = af.build_ir(program)("test")
         >>> ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
         >>> af.run_ir(ir1, "input")
         'Step1: input'
@@ -298,8 +298,8 @@ def merge_ir(ir1: IR, ir2: IR) -> IR:
         ...     return af.concat("Step1: ", x)
         >>> def step2(x):
         ...     return af.concat(x, " -> Step2")
-        >>> ir1 = af.build_ir(step1, "test")
-        >>> ir2 = af.build_ir(step2, "test")
+        >>> ir1 = af.build_ir(step1)("test")
+        >>> ir2 = af.build_ir(step2)("test")
         >>> merged = af.merge_ir(ir1, ir2)
         >>> af.run_ir(merged, "input")
         'Step1: input -> Step2'

@@ -10,7 +10,7 @@ class TestSow:
         def func(x):
             return af.sow(x, tag="my_tag", name="my_name")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "sow"
         assert ir.ireqns[0].params["tag"] == "my_tag"
@@ -20,7 +20,7 @@ class TestSow:
         def func(x):
             return af.sow(x, tag="test", name="value")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         result = af.run_ir(ir, "hello")
         assert result == "hello"
 
@@ -33,7 +33,7 @@ class TestSow:
         def func(x):
             return af.sow(x, tag="test", name="val")
 
-        ir = af.build_ir(func, "a")
+        ir = af.build_ir(func)("a")
         pf_ir = af.pushforward_ir(ir)
         primal_out, tangent_out = af.run_ir(pf_ir, ("primal", "tangent"))
         assert primal_out == "primal"
@@ -43,7 +43,7 @@ class TestSow:
         def func(x):
             return af.sow(x, tag="test", name="val")
 
-        ir = af.build_ir(func, "a")
+        ir = af.build_ir(func)("a")
         pb_ir = af.pullback_ir(ir)
         primal_out, cotangent_in = af.run_ir(pb_ir, ("primal", "cotangent"))
         assert primal_out == "primal"
@@ -53,7 +53,7 @@ class TestSow:
         def func(x):
             return af.sow(x, tag="test", name="val")
 
-        ir = af.build_ir(func, "a")
+        ir = af.build_ir(func)("a")
         batched_ir = af.batch_ir(ir)
         result = af.run_ir(batched_ir, ["a", "b", "c"])
         assert result == ["a", "b", "c"]
@@ -63,7 +63,7 @@ class TestSow:
             sowed = af.sow(x, tag="debug", name="input")
             return af.concat("[", sowed, "]")
 
-        ir = af.build_ir(func, "a")
+        ir = af.build_ir(func)("a")
         result = af.run_ir(ir, "hello")
         assert result == "[hello]"
 
@@ -73,7 +73,7 @@ class TestRunAndReap:
         def func(x):
             return af.sow(x, tag="debug", name="captured")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         result, reaped = af.run_and_reap(ir, "hello", tag="debug")
         assert result == "hello"
         assert reaped == {"captured": "hello"}
@@ -85,7 +85,7 @@ class TestRunAndReap:
             c = af.sow(b, tag="debug", name="second")
             return c
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         result, reaped = af.run_and_reap(ir, "hi", tag="debug")
         assert result == "hi!"
         assert reaped == {"first": "hi", "second": "hi!"}
@@ -96,7 +96,7 @@ class TestRunAndReap:
             b = af.sow(a, tag="metrics", name="metrics_val")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         _, debug_reaped = af.run_and_reap(ir, "hello", tag="debug")
         assert debug_reaped == {"debug_val": "hello"}
@@ -108,7 +108,7 @@ class TestRunAndReap:
         def func(x):
             return af.sow(x, tag="other", name="val")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         result, reaped = af.run_and_reap(ir, "hello", tag="debug")
         assert result == "hello"
         assert reaped == {}
@@ -117,7 +117,7 @@ class TestRunAndReap:
         def func(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         result, reaped = af.run_and_reap(ir, "hello", tag="debug")
         assert result == "hello!"
         assert reaped == {}
@@ -128,7 +128,7 @@ class TestRunAndReap:
             response = af.concat(a, " A: 42")
             return af.sow(response, tag="debug", name="response")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         result, reaped = af.run_and_reap(ir, "What?", tag="debug")
         assert result == "Q: What? A: 42"
         assert reaped["prompt"] == "Q: What?"
@@ -140,7 +140,7 @@ class TestRunAndPlant:
         def func(x):
             return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         result = af.run_ir(ir, "World")
         assert result == "Hello, World"
@@ -154,7 +154,7 @@ class TestRunAndPlant:
             b = af.sow(af.concat(a, "!"), tag="cache", name="second")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         result = af.run_and_plant(ir, "ignored", {"first": "PLANTED"}, tag="cache")
         assert result == "PLANTED!"
@@ -165,7 +165,7 @@ class TestRunAndPlant:
             b = af.sow(a, tag="other", name="val")
             return b
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         result = af.run_and_plant(ir, "input", {"val": "CACHED"}, tag="cache")
         assert result == "CACHED"
@@ -174,7 +174,7 @@ class TestRunAndPlant:
         def func(x):
             return af.sow(x, tag="cache", name="val")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         result = af.run_and_plant(ir, "hello", {}, tag="cache")
         assert result == "hello"
@@ -183,7 +183,7 @@ class TestRunAndPlant:
         def func(x):
             return af.sow(x, tag="cache", name="val")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
 
         result = af.run_and_plant(ir, "hello", {"other": "PLANTED"}, tag="cache")
         assert result == "hello"
@@ -194,7 +194,7 @@ class TestTransformThenReap:
         def func(x):
             return af.sow(x, tag="debug", name="val")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         pf_ir = af.pushforward_ir(ir)
 
         result, primals = af.run_and_reap(pf_ir, ("primal", "tangent"), tag=("debug", "primal"))
@@ -207,7 +207,7 @@ class TestTransformThenReap:
         def func(x):
             return af.sow(x, tag="debug", name="val")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         pb_ir = af.pullback_ir(ir)
 
         result, primals = af.run_and_reap(pb_ir, ("primal", "cotangent"), tag=("debug", "primal"))
@@ -220,7 +220,7 @@ class TestTransformThenReap:
         def func(x):
             return af.sow(x, tag="debug", name="val")
 
-        ir = af.build_ir(func, "test")
+        ir = af.build_ir(func)("test")
         batched = af.batch_ir(ir)
         result, reaped = af.run_and_reap(batched, ["a", "b", "c"], tag=("debug", "batch"))
         assert result == ["a", "b", "c"]
@@ -233,13 +233,13 @@ class TestTransformThenReap:
         def branch_b(x):
             return af.sow(af.concat("b: ", x), tag="debug", name="result")
 
-        ir_a = af.build_ir(branch_a, "x")
-        ir_b = af.build_ir(branch_b, "x")
+        ir_a = af.build_ir(branch_a)("x")
+        ir_b = af.build_ir(branch_b)("x")
 
         def func(x):
             return af.switch("a", {"a": ir_a, "b": ir_b}, x)
 
-        ir = af.build_ir(func, "input")
+        ir = af.build_ir(func)("input")
         result, reaped = af.run_and_reap(ir, "hello", tag="debug")
         assert result == "a: hello"
         assert reaped == {"result": "a: hello"}

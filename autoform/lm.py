@@ -79,7 +79,7 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
         ...     user_message = dict(role="user", content=greeting)
         ...     greeting = af.lm_call([system_message, user_message], model="gpt-3.5-turbo")
         ...     return greeting
-        >>> ir = af.build_ir(ir, "World") # doctest: +SKIP
+        >>> ir = af.build_ir(ir)("World") # doctest: +SKIP
         >>> result = af.run_ir(ir, "Alice") # doctest: +SKIP
     """
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
@@ -201,7 +201,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         >>> def solver(question):
         ...     messages = [{"role": "user", "content": question}]
         ...     return af.struct_lm_call(messages, model="gpt-4o", struct=Answer)
-        >>> ir = af.build_ir(solver, "What is 2+2?")  # doctest: +SKIP
+        >>> ir = af.build_ir(solver)("What is 2+2?")  # doctest: +SKIP
         >>> result = af.run_ir(ir, "What is 2+2?")  # doctest: +SKIP
         >>> result.answer  # doctest: +SKIP
         4

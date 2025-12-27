@@ -153,7 +153,7 @@ def multi_agent_pipeline(topic: str) -> Article:
 
 if __name__ == "__main__":
     # trace the pipeline into an IR
-    ir = af.build_ir(multi_agent_pipeline, "example topic")
+    ir = af.build_ir(multi_agent_pipeline)("example topic")
 
     # transform: pullback (semantic backprop)
     pb_ir = af.pullback_ir(ir)

@@ -41,7 +41,7 @@ def judge_debate(topic: str) -> Verdict:
     return af.struct_lm_call([msg], model="gpt-4o", struct=Verdict)
 
 # trace
-ir = af.build_ir(judge_debate, "...")
+ir = af.build_ir(judge_debate)("...")
 
 # batch: parallel topics
 batch_ir = af.batch_ir(ir, in_axes=list)
@@ -66,7 +66,7 @@ ir_before, ir_after = af.split_ir(ir, tag="prompts", name="judge")
 def meta(topic):
     v1, v2 = af.run_ir(ir, topic), af.run_ir(ir, topic)
     return af.format("{} vs {}", v1.decision, v2.decision)
-meta_ir = af.build_ir(meta, "...")
+meta_ir = af.build_ir(meta)("...")
 
 # transforms compose
 batch_batch = af.batch_ir(af.batch_ir(ir, in_axes=list), in_axes=list)

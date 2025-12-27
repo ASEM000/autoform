@@ -5,64 +5,64 @@ import autoform as af
 class TestSwitchBasic:
     def test_switch_key_zero(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
-            "two": af.build_ir(lambda x: af.concat("two: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
+            "two": af.build_ir(lambda x: af.concat("two: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "zero", "hello")
+        ir = af.build_ir(program)("zero", "hello")
         result = af.run_ir(ir, "zero", "hello")
         assert result == "zero: hello"
 
     def test_switch_key_one(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
-            "two": af.build_ir(lambda x: af.concat("two: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
+            "two": af.build_ir(lambda x: af.concat("two: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "one", "hello")
+        ir = af.build_ir(program)("one", "hello")
         result = af.run_ir(ir, "one", "hello")
         assert result == "one: hello"
 
     def test_switch_key_two(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
-            "two": af.build_ir(lambda x: af.concat("two: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
+            "two": af.build_ir(lambda x: af.concat("two: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "two", "hello")
+        ir = af.build_ir(program)("two", "hello")
         result = af.run_ir(ir, "two", "hello")
         assert result == "two: hello"
 
     def test_switch_invalid_key_raises(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat("A:", x), "X"),
-            "b": af.build_ir(lambda x: af.concat("B:", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("A:", x))("X"),
+            "b": af.build_ir(lambda x: af.concat("B:", x))("X"),
         }
         with pytest.raises(KeyError):
             af.switch("invalid_key", branches, "hello")
 
     def test_switch_with_multiple_operands(self):
         branches = {
-            "concat": af.build_ir(af.concat, "A", "B"),
-            "format": af.build_ir(lambda a, b: af.format("{} - {}", a, b), "A", "B"),
+            "concat": af.build_ir(af.concat)("A", "B"),
+            "format": af.build_ir(lambda a, b: af.format("{} - {}", a, b))("A", "B"),
         }
 
         def program(key, x, y):
             return af.switch(key, branches, x, y)
 
-        ir = af.build_ir(program, "concat", "Hello", "World")
+        ir = af.build_ir(program)("concat", "Hello", "World")
         result = af.run_ir(ir, "concat", "Hello", "World")
         assert result == "HelloWorld"
         result = af.run_ir(ir, "format", "Hello", "World")
@@ -70,8 +70,8 @@ class TestSwitchBasic:
 
     def test_switch_direct_call(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat("A:", x), "X"),
-            "b": af.build_ir(lambda x: af.concat("B:", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("A:", x))("X"),
+            "b": af.build_ir(lambda x: af.concat("B:", x))("X"),
         }
         result = af.switch("a", branches, "test")
         assert result == "A:test"
@@ -82,27 +82,27 @@ class TestSwitchBasic:
 class TestSwitchIRStructure:
     def test_creates_switch_eqn(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat("a", x), "X"),
-            "b": af.build_ir(lambda x: af.concat("b", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("a", x))("X"),
+            "b": af.build_ir(lambda x: af.concat("b", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "a", "test")
+        ir = af.build_ir(program)("a", "test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "switch"
 
     def test_has_branches_param(self):
         branches = {
-            "x": af.build_ir(lambda x: x, "X"),
-            "y": af.build_ir(lambda x: x, "X"),
+            "x": af.build_ir(lambda x: x)("X"),
+            "y": af.build_ir(lambda x: x)("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "x", "test")
+        ir = af.build_ir(program)("x", "test")
         assert "branches" in ir.ireqns[0].params
         assert len(ir.ireqns[0].params["branches"]) == 2
 
@@ -110,14 +110,14 @@ class TestSwitchIRStructure:
 class TestSwitchPushforward:
     def test_pushforward_selects_correct_branch(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "zero", "hello")
+        ir = af.build_ir(program)("zero", "hello")
         pf_ir = af.pushforward_ir(ir)
         primals = ("zero", "hello")
         tangents = ("", "world")
@@ -127,14 +127,14 @@ class TestSwitchPushforward:
 
     def test_pushforward_key_one(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "one", "hello")
+        ir = af.build_ir(program)("one", "hello")
         pf_ir = af.pushforward_ir(ir)
         primals = ("one", "hello")
         tangents = ("", "world")
@@ -149,14 +149,14 @@ class TestSwitchPullback:
             return val == "" or (hasattr(val, "items") and len(val.items) == 0)
 
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "zero", "hello")
+        ir = af.build_ir(program)("zero", "hello")
         pb_ir = af.pullback_ir(ir)
         primals = ("zero", "hello")
         cotangent = "grad"
@@ -169,14 +169,14 @@ class TestSwitchPullback:
             return val == "" or (hasattr(val, "items") and len(val.items) == 0)
 
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "one", "hello")
+        ir = af.build_ir(program)("one", "hello")
         pb_ir = af.pullback_ir(ir)
         primals = ("one", "hello")
         cotangent = "grad"
@@ -188,42 +188,42 @@ class TestSwitchPullback:
 class TestSwitchBatch:
     def test_batch_same_key(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "zero", "hello")
+        ir = af.build_ir(program)("zero", "hello")
         batched_ir = af.batch_ir(ir, in_axes=(None, list))
         result = af.run_ir(batched_ir, "zero", ["a", "b", "c"])
         assert result == ["zero: a", "zero: b", "zero: c"]
 
     def test_batch_varying_key(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "zero", "hello")
+        ir = af.build_ir(program)("zero", "hello")
         batched_ir = af.batch_ir(ir, in_axes=(list, list))
         result = af.run_ir(batched_ir, ["zero", "one", "zero"], ["a", "b", "c"])
         assert result == ["zero: a", "one: b", "zero: c"]
 
     def test_batch_varying_key_static_operand(self):
         branches = {
-            "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-            "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
+            "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+            "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "zero", "hello")
+        ir = af.build_ir(program)("zero", "hello")
         batched_ir = af.batch_ir(ir, in_axes=(list, None))
         result = af.run_ir(batched_ir, ["zero", "one", "one"], "test")
         assert result == ["zero: test", "one: test", "one: test"]
@@ -232,14 +232,14 @@ class TestSwitchBatch:
 class TestSwitchNestedTransforms:
     def test_pushforward_of_batch(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat("A:", x), "X"),
-            "b": af.build_ir(lambda x: af.concat("B:", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("A:", x))("X"),
+            "b": af.build_ir(lambda x: af.concat("B:", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "a", "hello")
+        ir = af.build_ir(program)("a", "hello")
         batched_ir = af.batch_ir(ir, in_axes=(None, list))
         pf_batched_ir = af.pushforward_ir(batched_ir)
         primals = ("a", ["a", "b"])
@@ -250,14 +250,14 @@ class TestSwitchNestedTransforms:
 
     def test_pullback_of_batch(self):
         branches = {
-            "a": af.build_ir(lambda x: af.concat("A:", x), "X"),
-            "b": af.build_ir(lambda x: af.concat("B:", x), "X"),
+            "a": af.build_ir(lambda x: af.concat("A:", x))("X"),
+            "b": af.build_ir(lambda x: af.concat("B:", x))("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "a", "hello")
+        ir = af.build_ir(program)("a", "hello")
         batched_ir = af.batch_ir(ir, in_axes=(None, list))
         pb_batched_ir = af.pullback_ir(batched_ir)
         primals = ("a", ["a", "b"])
@@ -271,8 +271,8 @@ class TestSwitchNestedTransforms:
 class TestSwitchWithKwargs:
     def test_switch_with_keyword_operands(self):
         branches = {
-            "dash": af.build_ir(lambda x, y: af.format("{}-{}", x, y), "X", "Y"),
-            "plus": af.build_ir(lambda x, y: af.format("{}+{}", x, y), "X", "Y"),
+            "dash": af.build_ir(lambda x, y: af.format("{}-{}", x, y))("X", "Y"),
+            "plus": af.build_ir(lambda x, y: af.format("{}+{}", x, y))("X", "Y"),
         }
         result = af.switch("dash", branches, "a", "b")
         assert result == "a-b"
@@ -293,27 +293,27 @@ class TestSwitchComplexBranches:
             return step2
 
         branches = {
-            "brackets": af.build_ir(make_branch0, "X"),
-            "parens": af.build_ir(make_branch1, "X"),
+            "brackets": af.build_ir(make_branch0)("X"),
+            "parens": af.build_ir(make_branch1)("X"),
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "brackets", "test")
+        ir = af.build_ir(program)("brackets", "test")
         assert af.run_ir(ir, "brackets", "hello") == "[hello]!"
         assert af.run_ir(ir, "parens", "hello") == "(hello)?"
 
     def test_many_branches(self):
         branches = {
-            f"branch{i}": af.build_ir(lambda x, i=i: af.format("branch{}: {}", str(i), x), "X")
+            f"branch{i}": af.build_ir(lambda x, i=i: af.format("branch{}: {}", str(i), x))("X")
             for i in range(5)
         }
 
         def program(key, x):
             return af.switch(key, branches, x)
 
-        ir = af.build_ir(program, "branch0", "test")
+        ir = af.build_ir(program)("branch0", "test")
         for i in range(5):
             result = af.run_ir(ir, f"branch{i}", "hello")
             assert result == f"branch{i}: hello"

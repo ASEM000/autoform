@@ -40,7 +40,7 @@ def stop_gradient(x: Tree) -> Tree:
         >>> def ir(x, y):
         ...     stopped = af.stop_gradient(x)
         ...     return af.concat(stopped, y)
-        >>> ir = af.build_ir(ir, "a", "b")
+        >>> ir = af.build_ir(ir)("a", "b")
         >>> pb_ir = af.pullback_ir(ir)
         >>> _, (cotangent_x, cotangent_y) = af.run_ir(pb_ir, (("a", "b"), "grad"))
         >>> cotangent_x
@@ -114,13 +114,13 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
     Example:
         >>> import autoform as af
         >>> branches = {
-        ...     "zero": af.build_ir(lambda x: af.concat("zero: ", x), "X"),
-        ...     "one": af.build_ir(lambda x: af.concat("one: ", x), "X"),
-        ...     "two": af.build_ir(lambda x: af.concat("two: ", x), "X"),
+        ...     "zero": af.build_ir(lambda x: af.concat("zero: ", x))("X"),
+        ...     "one": af.build_ir(lambda x: af.concat("one: ", x))("X"),
+        ...     "two": af.build_ir(lambda x: af.concat("two: ", x))("X"),
         ... }
         >>> def ir(key, x):
         ...     return af.switch(key, branches, x)
-        >>> ir = af.build_ir(ir, "one", "hello")
+        >>> ir = af.build_ir(ir)("one", "hello")
         >>> af.run_ir(ir, "one", "hello")
         'one: hello'
         >>> af.run_ir(ir, "zero", "hello")

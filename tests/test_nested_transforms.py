@@ -8,7 +8,7 @@ class TestBatchOfPushforward:
             z = af.concat(y, "!")
             return z
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         pf_ir = af.pushforward_ir(ir)
         batch_pf_ir = af.batch_ir(pf_ir, in_axes=(list, list))
         primals = ["a", "b", "c"]
@@ -23,7 +23,7 @@ class TestBatchOfPushforward:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         pf_ir = af.pushforward_ir(ir)
         batch_pf_ir = af.batch_ir(pf_ir, in_axes=(list, list))
         result = af.run_ir(batch_pf_ir, ["a"], ["da"])
@@ -37,7 +37,7 @@ class TestBatchOfPullback:
             z = af.concat(y, "!")
             return z
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         pb_ir = af.pullback_ir(ir)
         batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))
         primals = ["a", "b", "c"]
@@ -52,7 +52,7 @@ class TestBatchOfPullback:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         pb_ir = af.pullback_ir(ir)
         batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))
         result = af.run_ir(batch_pb_ir, ["a"], ["g"])
@@ -66,7 +66,7 @@ class TestPushforwardOfBatch:
             z = af.concat(y, "!")
             return z
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         batch_ir_obj = af.batch_ir(ir)
         pf_batch_ir = af.pushforward_ir(batch_ir_obj)
         p_xs = ["a", "b"]
@@ -81,7 +81,7 @@ class TestPushforwardOfBatch:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         batch_ir_obj = af.batch_ir(ir)
         pf_batch_ir = af.pushforward_ir(batch_ir_obj)
         result = af.run_ir(pf_batch_ir, (["a"], ["da"]))
@@ -95,7 +95,7 @@ class TestPullbackOfBatch:
             z = af.concat(y, "!")
             return z
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         batch_ir_obj = af.batch_ir(ir)
         pb_batch_ir = af.pullback_ir(batch_ir_obj)
         p_xs = ["a", "b"]
@@ -110,7 +110,7 @@ class TestPullbackOfBatch:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         batch_ir_obj = af.batch_ir(ir)
         pb_batch_ir = af.pullback_ir(batch_ir_obj)
         result = af.run_ir(pb_batch_ir, (["a"], ["g"]))
@@ -122,7 +122,7 @@ class TestTripleNesting:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         batch_ir1 = af.batch_ir(ir)
         batch_ir2 = af.batch_ir(batch_ir1)
         inputs = [["a", "b"], ["c", "d"]]
@@ -133,7 +133,7 @@ class TestTripleNesting:
         def program(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(program, "x")
+        ir = af.build_ir(program)("x")
         batch_ir_obj = af.batch_ir(ir)
         pf1 = af.pushforward_ir(batch_ir_obj)
         pf2 = af.pushforward_ir(pf1)
@@ -152,7 +152,7 @@ class TestTripleBatch:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         b3 = af.batch_ir(b2)
@@ -164,7 +164,7 @@ class TestTripleBatch:
         def f(x):
             return af.format("[{}]", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         b3 = af.batch_ir(b2)
@@ -179,7 +179,7 @@ class TestTriplePushforward:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pf1 = af.pushforward_ir(ir)
         pf2 = af.pushforward_ir(pf1)
         pf3 = af.pushforward_ir(pf2)
@@ -197,7 +197,7 @@ class TestTriplePushforward:
         def f(x):
             return af.format("[{}]", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pf1 = af.pushforward_ir(ir)
         pf2 = af.pushforward_ir(pf1)
         pf3 = af.pushforward_ir(pf2)
@@ -220,7 +220,7 @@ class TestTriplePullback:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pb1 = af.pullback_ir(ir)
         pb2 = af.pullback_ir(pb1)
         pb3 = af.pullback_ir(pb2)
@@ -239,7 +239,7 @@ class TestMixedDeepNesting:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pb = af.pullback_ir(ir)
         pf = af.pushforward_ir(pb)
         b = af.batch_ir(pf, in_axes=(list, list))
@@ -254,7 +254,7 @@ class TestMixedDeepNesting:
         def f(x):
             return af.format("[{}]", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pb = af.pullback_ir(ir)
         b = af.batch_ir(pb, in_axes=(list, list))
         pf = af.pushforward_ir(b)
@@ -271,7 +271,7 @@ class TestMixedDeepNesting:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b = af.batch_ir(ir)
         pf = af.pushforward_ir(b)
         pb = af.pullback_ir(pf)
@@ -286,7 +286,7 @@ class TestMixedDeepNesting:
         def f(x):
             return af.format("<{}>", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pf = af.pushforward_ir(ir)
         b1 = af.batch_ir(pf, in_axes=(list, list))
         b2 = af.batch_ir(b1, in_axes=(list, list))
@@ -302,7 +302,7 @@ class TestMixedDeepNesting:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b = af.batch_ir(ir)
         pf1 = af.pushforward_ir(b)
         pf2 = af.pushforward_ir(pf1)
@@ -321,7 +321,7 @@ class TestAlternatingTransforms:
         def f(x):
             return af.format("[{}]", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pb1 = af.pullback_ir(ir)
         pf1 = af.pushforward_ir(pb1)
         pb2 = af.pullback_ir(pf1)
@@ -347,7 +347,7 @@ class TestAlternatingTransforms:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pf1 = af.pushforward_ir(ir)
         b1 = af.batch_ir(pf1, in_axes=(list, list))
         pf2 = af.pushforward_ir(b1)
@@ -374,7 +374,7 @@ class TestDeepWithMultipleArgs:
         def f(a, b):
             return af.concat(a, b)
 
-        ir = af.build_ir(f, "a", "b")
+        ir = af.build_ir(f)("a", "b")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         a_vals = [["a1", "a2"], ["a3"]]
@@ -386,7 +386,7 @@ class TestDeepWithMultipleArgs:
         def f(a, b):
             return af.format("{}-{}", a, b)
 
-        ir = af.build_ir(f, "a", "b")
+        ir = af.build_ir(f)("a", "b")
         b = af.batch_ir(ir)
         pf = af.pushforward_ir(b)
         p_a = ["a1", "a2"]
@@ -403,7 +403,7 @@ class TestDeepWithMultipleArgs:
         def f(a, b):
             return af.concat(a, b)
 
-        ir = af.build_ir(f, "a", "b")
+        ir = af.build_ir(f)("a", "b")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         pb = af.pullback_ir(b2)
@@ -420,7 +420,7 @@ class TestEdgeCasesDeepNesting:
         def f(x):
             return af.format("{}!", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         b3 = af.batch_ir(b2)
@@ -432,7 +432,7 @@ class TestEdgeCasesDeepNesting:
         def f(x):
             return af.concat(x, "!")
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         b3 = af.batch_ir(b2)
@@ -446,7 +446,7 @@ class TestEdgeCasesDeepNesting:
         def f(x):
             return af.format("<{}>", x)
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         inputs = [["a", "b"], [], ["c"]]
@@ -461,7 +461,7 @@ class TestChainedOperations:
             step2 = af.concat(step1, "!")
             return step2
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         b1 = af.batch_ir(ir)
         b2 = af.batch_ir(b1)
         pf = af.pushforward_ir(b2)
@@ -479,7 +479,7 @@ class TestChainedOperations:
             b = af.concat(a, ")")
             return b
 
-        ir = af.build_ir(f, "x")
+        ir = af.build_ir(f)("x")
         pb = af.pullback_ir(ir)
         b = af.batch_ir(pb, in_axes=(list, list))
         pf = af.pushforward_ir(b)
