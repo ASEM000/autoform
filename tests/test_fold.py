@@ -106,8 +106,8 @@ class TestFoldIRExecution:
         ir = af.build_ir(program)("World")
         folded = af.fold_ir(ir)
 
-        original_result = af.run_ir(ir, "World")
-        folded_result = af.run_ir(folded, "World")
+        original_result = ir.call("World")
+        folded_result = folded.call("World")
 
         assert original_result == folded_result == "Hello, World"
 
@@ -118,5 +118,5 @@ class TestFoldIRExecution:
         ir = af.build_ir(program)("ignored")
         folded = af.fold_ir(ir)
 
-        result = af.run_ir(folded, "anything")
+        result = folded.call("anything")
         assert result == "hello world"

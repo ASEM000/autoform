@@ -26,7 +26,7 @@ if __name__ == "__main__":
     pb_ir = af.pullback_ir(ir)
     batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))
     topics = ["AI safety", "quantum computing", "climate change"]
-    articles = af.run_ir(batch_ir, topics)
+    articles = batch_ir.call(topics)
     topics = ["AI safety", "quantum computing", "climate change"]
     feedbacks = ["too technical", "good overview", "needs more data"]
-    outputs, input_grads = af.run_ir(batch_pb_ir, (topics, feedbacks))
+    outputs, input_grads = batch_pb_ir.call((topics, feedbacks))

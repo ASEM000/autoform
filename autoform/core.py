@@ -224,6 +224,97 @@ class IR:
     def __repr__(self) -> str:
         return generate_text_code(ir=self, expand_ir=True)
 
+    def call(self, *args, **kwargs) -> Tree:
+        """Execute this IR synchronously with the provided inputs."""
+        from operator import setitem
+
+        in_tree = pack_user_input(*args, **kwargs)
+        env: dict[IRVar, Value] = {}
+
+        def write(atom: IRVar, value):
+            is_irvar(atom) and setitem(env, atom, value)
+
+        def read(atom) -> Value:
+            return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
+
+        treelib.map(write, self.in_irtree, in_tree)
+
+        for ireqn in self.ireqns:
+            in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
+            out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
+        return treelib.map(read, self.out_irtree)
+
+    def icall(self, *args, **kwargs) -> tp.Iterator[Tree]:
+        """Execute this IR as an iterator, yielding intermediate results."""
+        import itertools as it
+        from operator import setitem
+
+        def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
+            if not chunks:
+                return None
+            head = chunks[0]
+            if isinstance(head, str):
+                return "".join(chunks)
+            if isinstance(head, list):
+                return list(it.chain.from_iterable(chunks))
+            try:
+                return ft.reduce(lambda a, b: a + b, chunks)
+            except TypeError:
+                return chunks
+
+        in_tree = pack_user_input(*args, **kwargs)
+        env: dict[IRVar, Value] = {}
+
+        def write(atom: IRVar, value: Value):
+            is_irvar(atom) and setitem(env, atom, value)
+
+        def read(atom):
+            return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
+
+        treelib.map(write, self.in_irtree, in_tree)
+
+        for ireqn in self.ireqns:
+            in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
+            if ireqn.prim in iter_rules:
+                iter_rule = iter_rules[ireqn.prim]
+                out_treespec = treelib.structure(ireqn.out_irtree)
+                acc = [[] for _ in range(out_treespec.num_leaves)]
+                for chunk in iter_rule(in_ireqn_tree, **ireqn.params):
+                    for i, leaf in enumerate(out_treespec.flatten_up_to(chunk)):
+                        acc[i].append(leaf)
+                    yield chunk
+                out_ireqn_tree = out_treespec.unflatten(map(accumulate_chunks, acc))
+            else:
+                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
+        yield treelib.map(read, self.out_irtree)
+
+    async def acall(self, *args, **kwargs) -> Tree:
+        """Execute this IR asynchronously."""
+        from operator import setitem
+
+        in_tree = pack_user_input(*args, **kwargs)
+        env: dict[IRVar, Value] = {}
+
+        def write(atom: IRVar, value):
+            is_irvar(atom) and setitem(env, atom, value)
+
+        def read(atom) -> Value:
+            return env[atom] if is_irvar(atom) else tp.cast(IRLit, atom).value
+
+        treelib.map(write, self.in_irtree, in_tree)
+
+        for ireqn in self.ireqns:
+            in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
+            if ireqn.prim in async_rules:
+                async_rule = async_rules[ireqn.prim]
+                out_ireqn_tree = await async_rule(in_ireqn_tree, **ireqn.params)
+            else:
+                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
+        return treelib.map(read, self.out_irtree)
+
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
     assert isinstance(indent, int) and indent >= 0
@@ -358,7 +449,7 @@ def build_ir[**P](func: Callable[P, Tree]) -> Callable[P, IR]:
         >>> def greet(name, punctuation):
         ...     return af.format("Hello, {}{}!", name, punctuation)
         >>> ir = af.build_ir(greet)("World", "?")
-        >>> af.run_ir(ir, "Alice", "!")
+        >>> ir.call("Alice", "!")
         'Hello, Alice!!'
     """
 

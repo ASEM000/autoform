@@ -163,6 +163,6 @@ if __name__ == "__main__":
 
     # run: given a topic and feedback on the output, get feedback on the input
     feedback = Article(title="Good title", body="Needs more technical depth.", summary="Concise.")
-    output, input_grad = af.run_ir(pb_ir, ("AI safety", feedback))
+    output, input_grad = pb_ir.call(("AI safety", feedback))
     print("output:", output)
     print("input gradient:", input_grad)

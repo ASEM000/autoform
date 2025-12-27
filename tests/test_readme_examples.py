@@ -55,7 +55,7 @@ class TestCustomPrimitive:
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "shout"
 
-        result = af.run_ir(ir, "world")
+        result = ir.call("world")
         assert result == "WORLD"
 
     def test_shout_pushforward(self):
@@ -64,7 +64,7 @@ class TestCustomPrimitive:
 
         ir = af.build_ir(program)("test")
         pf_ir = af.pushforward_ir(ir)
-        primal_out, tangent_out = af.run_ir(pf_ir, ("hello", "bye"))
+        primal_out, tangent_out = pf_ir.call(("hello", "bye"))
         assert primal_out == "HELLO"
         assert tangent_out == "BYE"
 
@@ -74,7 +74,7 @@ class TestCustomPrimitive:
 
         ir = af.build_ir(program)("test")
         pb_ir = af.pullback_ir(ir)
-        output, grad_input = af.run_ir(pb_ir, ("hello", "feedback"))
+        output, grad_input = pb_ir.call(("hello", "feedback"))
         assert output == "HELLO"
         assert grad_input == "feedback"
 
@@ -84,7 +84,7 @@ class TestCustomPrimitive:
 
         ir = af.build_ir(program)("test")
         batch_ir = af.batch_ir(ir, in_axes=list)
-        result = af.run_ir(batch_ir, ["hello", "world", "test"])
+        result = batch_ir.call(["hello", "world", "test"])
         assert result == ["HELLO", "WORLD", "TEST"]
 
     def test_shout_chained(self):
@@ -94,7 +94,7 @@ class TestCustomPrimitive:
             return step2
 
         ir = af.build_ir(program)("hello")
-        result = af.run_ir(ir, "world")
+        result = ir.call("world")
         assert result == "SAY: WORLD"
 
 
@@ -320,7 +320,7 @@ class TestMultiAgentComposition:
         ir = af.build_ir(simple_agent)("test")
         batch_ir = af.batch_ir(ir, in_axes=list)
 
-        results = af.run_ir(batch_ir, ["query1", "query2", "query3"])
+        results = batch_ir.call(["query1", "query2", "query3"])
         assert results == ["[Processed: query1]", "[Processed: query2]", "[Processed: query3]"]
 
     def test_pushforward_chained_agents(self):
@@ -332,7 +332,7 @@ class TestMultiAgentComposition:
         ir = af.build_ir(chained_agents)("test")
         pf_ir = af.pushforward_ir(ir)
 
-        primal_out, tangent_out = af.run_ir(pf_ir, ("input", "delta"))
+        primal_out, tangent_out = pf_ir.call(("input", "delta"))
         assert primal_out == "[Agent2: [Agent1: input]]"
         assert tangent_out == "[Agent2: [Agent1: delta]]"
 
@@ -345,7 +345,7 @@ class TestMultiAgentComposition:
         ir = af.build_ir(chained_agents)("test")
         pb_ir = af.pullback_ir(ir)
 
-        output, input_grad = af.run_ir(pb_ir, ("input", "feedback"))
+        output, input_grad = pb_ir.call(("input", "feedback"))
         assert output == "[Agent2: [Agent1: input]]"
 
         assert input_grad == "feedback"
@@ -388,7 +388,7 @@ class TestMultiAgentComposition:
 
         inputs = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]
-        outputs, input_grads = af.run_ir(batch_pb, inputs, cotangents)
+        outputs, input_grads = batch_pb.call(inputs, cotangents)
 
         assert outputs == ["[Processed: a]", "[Processed: b]", "[Processed: c]"]
         assert input_grads == ["g1", "g2", "g3"]

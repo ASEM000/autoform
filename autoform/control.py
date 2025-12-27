@@ -42,7 +42,7 @@ def stop_gradient(x: Tree) -> Tree:
         ...     return af.concat(stopped, y)
         >>> ir = af.build_ir(ir)("a", "b")
         >>> pb_ir = af.pullback_ir(ir)
-        >>> _, (cotangent_x, cotangent_y) = af.run_ir(pb_ir, (("a", "b"), "grad"))
+        >>> _, (cotangent_x, cotangent_y) = pb_ir.call((("a", "b"), "grad"))
         >>> cotangent_x
         ''
         >>> cotangent_y
@@ -121,9 +121,9 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
         >>> def ir(key, x):
         ...     return af.switch(key, branches, x)
         >>> ir = af.build_ir(ir)("one", "hello")
-        >>> af.run_ir(ir, "one", "hello")
+        >>> ir.call("one", "hello")
         'one: hello'
-        >>> af.run_ir(ir, "zero", "hello")
+        >>> ir.call("zero", "hello")
         'zero: hello'
     """
     from autoform.core import is_iratom
@@ -139,10 +139,8 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
 
 @ft.partial(impl_rules.def_rule, switch_p)
 def impl_switch(in_tree, *, branches: dict[str, IR]):
-    from autoform.evaluation import run_ir
-
     key, operands = in_tree
-    return run_ir(branches[key], operands)
+    return branches[key].call(operands)
 
 
 @ft.partial(eval_rules.def_rule, switch_p)
@@ -155,32 +153,28 @@ def eval_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
 
 @ft.partial(push_rules.def_rule, switch_p)
 def pushforward_switch(primals, tangents, *, branches: dict[str, IR]):
-    from autoform.evaluation import run_ir
     from autoform.ad import pushforward_ir
 
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = pushforward_ir(branches[key])
-    return run_ir(pf_ir, (p_operands, t_operands))
+    return pf_ir.call((p_operands, t_operands))
 
 
 @ft.partial(pull_fwd_rules.def_rule, switch_p)
 def pullback_fwd_switch(in_tree, *, branches: dict[str, IR]) -> tuple[Tree, Tree]:
-    from autoform.evaluation import run_ir
-
     key, operands = in_tree
-    out = run_ir(branches[key], operands)
+    out = branches[key].call(operands)
     residuals = (key, operands)
     return out, residuals
 
 
 @ft.partial(pull_bwd_rules.def_rule, switch_p)
 def pullback_bwd_switch(residuals, cotangent_out, *, branches: dict[str, IR]):
-    from autoform.evaluation import run_ir
     from autoform.ad import pullback_ir, zero_cotangent
 
     key, operands = residuals
     pb_ir = pullback_ir(branches[key])
-    _, c_operands = run_ir(pb_ir, (operands, cotangent_out))
+    _, c_operands = pb_ir.call((operands, cotangent_out))
     return (zero_cotangent(key), c_operands)
 
 
@@ -192,34 +186,28 @@ def batch_switch(
     *,
     branches: dict[str, IR],
 ) -> tuple[Tree, bool]:
-    from autoform.evaluation import run_ir
-
     key_col, operands_col = in_tree
     key_batched, operands_batched = in_batched
     unbatch_operands = ft.partial(unbatch_at, operands_col, operands_batched)
 
     def run_ir_at(b):
-        return run_ir(branches[key_col[b] if key_batched else key_col], unbatch_operands(b))
+        return branches[key_col[b] if key_batched else key_col].call(unbatch_operands(b))
 
     return [run_ir_at(b) for b in range(batch_size)], True
 
 
 @ft.partial(iter_rules.def_rule, switch_p)
 def iter_switch(in_tree, *, branches: dict[str, IR]):
-    from autoform.evaluation import iter_ir
-
     key, operands = in_tree
-    *chunks, _ = iter_ir(branches[key], operands)
+    *chunks, _ = branches[key].icall(operands)
     for chunk in chunks:
         yield chunk
 
 
 @ft.partial(async_rules.def_rule, switch_p)
 async def async_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
-    from autoform.evaluation import arun_ir
-
     key, operands = in_tree
-    return await arun_ir(branches[key], operands)
+    return await branches[key].acall(operands)
 
 
 @ft.partial(dce_rules.def_rule, switch_p)

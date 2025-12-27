@@ -1,7 +1,6 @@
 """Autoform: Composable function transformations for LLM programs."""
 
 from autoform.core import build_ir
-from autoform.evaluation import run_ir, iter_ir, arun_ir
 
 from autoform.ad import pushforward_ir, pullback_ir
 from autoform.batch import batch_ir
@@ -17,9 +16,6 @@ from autoform.utils import PYTREE_NAMESPACE
 __all__ = [
     # core
     "build_ir",
-    "run_ir",
-    "iter_ir",
-    "arun_ir",
     # transformations
     "pushforward_ir",
     "pullback_ir",

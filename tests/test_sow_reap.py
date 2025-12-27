@@ -21,7 +21,7 @@ class TestSow:
             return af.sow(x, tag="test", name="value")
 
         ir = af.build_ir(func)("test")
-        result = af.run_ir(ir, "hello")
+        result = ir.call("hello")
         assert result == "hello"
 
     def test_hashable_tags_and_names(self):
@@ -35,7 +35,7 @@ class TestSow:
 
         ir = af.build_ir(func)("a")
         pf_ir = af.pushforward_ir(ir)
-        primal_out, tangent_out = af.run_ir(pf_ir, ("primal", "tangent"))
+        primal_out, tangent_out = pf_ir.call(("primal", "tangent"))
         assert primal_out == "primal"
         assert tangent_out == "tangent"
 
@@ -45,7 +45,7 @@ class TestSow:
 
         ir = af.build_ir(func)("a")
         pb_ir = af.pullback_ir(ir)
-        primal_out, cotangent_in = af.run_ir(pb_ir, ("primal", "cotangent"))
+        primal_out, cotangent_in = pb_ir.call(("primal", "cotangent"))
         assert primal_out == "primal"
         assert cotangent_in == "cotangent"
 
@@ -55,7 +55,7 @@ class TestSow:
 
         ir = af.build_ir(func)("a")
         batched_ir = af.batch_ir(ir)
-        result = af.run_ir(batched_ir, ["a", "b", "c"])
+        result = batched_ir.call(["a", "b", "c"])
         assert result == ["a", "b", "c"]
 
     def test_in_chain(self):
@@ -64,7 +64,7 @@ class TestSow:
             return af.concat("[", sowed, "]")
 
         ir = af.build_ir(func)("a")
-        result = af.run_ir(ir, "hello")
+        result = ir.call("hello")
         assert result == "[hello]"
 
 
@@ -142,7 +142,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.run_ir(ir, "World")
+        result = ir.call("World")
         assert result == "Hello, World"
 
         result = af.run_and_plant(ir, "World", {"greeting": "CACHED"}, tag="cache")

@@ -45,26 +45,26 @@ ir = af.build_ir(judge_debate)("...")
 
 # batch: parallel topics
 batch_ir = af.batch_ir(ir, in_axes=list)
-verdicts = af.run_ir(batch_ir, ["pineapple on pizza", "cats vs dogs", "morning vs night"])
+verdicts = batch_ir.call(["pineapple on pizza", "cats vs dogs", "morning vs night"])
 
 # gradients: feedback on output -> feedback on input
 pb_ir = af.pullback_ir(ir)
 feedback = Verdict(decision="too one-sided", reasoning="pro was weak")
-verdict, grad = af.run_ir(pb_ir, ("pineapple on pizza", feedback))
+verdict, grad = pb_ir.call(("pineapple on pizza", feedback))
 
 # batched gradients
 batch_pb = af.batch_ir(pb_ir, in_axes=(list, list))
 
 # harvest: collect prompts
 reaped_ir = af.reap_ir(ir, tag="prompts")
-verdict, prompts = af.run_ir(reaped_ir, "pineapple on pizza")
+verdict, prompts = reaped_ir.call("pineapple on pizza")
 
 # split: isolate judge for testing
 ir_before, ir_after = af.split_ir(ir, tag="prompts", name="judge")
 
 # composition: nest IRs (inlined during tracing)
 def meta(topic):
-    v1, v2 = af.run_ir(ir, topic), af.run_ir(ir, topic)
+    v1, v2 = ir.call(topic), ir.call(topic)
     return af.format("{} vs {}", v1.decision, v2.decision)
 meta_ir = af.build_ir(meta)("...")
 

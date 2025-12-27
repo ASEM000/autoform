@@ -159,10 +159,9 @@ def run_and_reap(ir: IR, in_tree: Tree, *, tag: tp.Hashable) -> tuple[Tree, Reap
         >>> reaped
         {'prompt': 'Q: What?'}
     """
-    from autoform.evaluation import run_ir
 
     with using_interp(ReapInterpreter(tag=tag)) as reap:
-        result = run_ir(ir, in_tree)
+        result = ir.call(in_tree)
     return result, reap.reaped
 
 
@@ -211,10 +210,9 @@ def run_and_plant(
         >>> result
         'CACHED'
     """
-    from autoform.evaluation import run_ir
 
     with using_interp(PlantInterpreter(tag=tag, plants=plants)):
-        return run_ir(ir, in_tree)
+        return ir.call(in_tree)
 
 
 # ==================================================================================================
@@ -245,9 +243,9 @@ def split_ir(ir: IR, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[IR, IR]:
         ...     return b
         >>> ir = af.build_ir(program)("test")
         >>> ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
-        >>> af.run_ir(ir1, "input")
+        >>> ir1.call("input")
         'Step1: input'
-        >>> af.run_ir(ir2, "Step1: input")
+        >>> ir2.call("Step1: input")
         'Step1: input -> Step2'
     """
     assert isinstance(ir, IR), f"{type(ir)=} is not an IR instance."
@@ -301,7 +299,7 @@ def merge_ir(ir1: IR, ir2: IR) -> IR:
         >>> ir1 = af.build_ir(step1)("test")
         >>> ir2 = af.build_ir(step2)("test")
         >>> merged = af.merge_ir(ir1, ir2)
-        >>> af.run_ir(merged, "input")
+        >>> merged.call("input")
         'Step1: input -> Step2'
     """
     assert isinstance(ir1, IR), f"{type(ir1)=} is not an IR instance."

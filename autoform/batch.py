@@ -144,36 +144,32 @@ def pushforward_batch_call(
     ir: IR,
     in_axes: Tree,
 ) -> tuple[Tree, Tree]:
-    from autoform.evaluation import run_ir
     from autoform.ad import pushforward_ir
 
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward_ir(ir)
     batch_pf_ir = batch_ir(pf_ir, in_axes=(in_axes, in_axes))
-    return run_ir(batch_pf_ir, (p_cols, t_cols))
+    return batch_pf_ir.call((p_cols, t_cols))
 
 
 @ft.partial(pull_fwd_rules.def_rule, batch_call_p)
 def pullback_fwd_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
-    from autoform.evaluation import run_ir
-
     col_tree = in_tree
     batched_ir = batch_ir(ir, in_axes=in_axes)
-    out_cols = run_ir(batched_ir, col_tree)
+    out_cols = batched_ir.call(col_tree)
     residuals = (col_tree, in_axes)
     return out_cols, residuals
 
 
 @ft.partial(pull_bwd_rules.def_rule, batch_call_p)
 def pullback_bwd_batch_call(residuals: Tree, cotangent_out: Tree, *, ir: IR, in_axes: Tree) -> Tree:
-    from autoform.evaluation import run_ir
     from autoform.ad import pullback_ir
 
     p_cols, _ = residuals
     c_out_cols = cotangent_out
     pb_ir = pullback_ir(ir)
     batch_pb_ir = batch_ir(pb_ir, in_axes=(in_axes, list))
-    _, c_in_cols = run_ir(batch_pb_ir, (p_cols, c_out_cols))
+    _, c_in_cols = batch_pb_ir.call((p_cols, c_out_cols))
     return c_in_cols
 
 
@@ -186,8 +182,6 @@ def batch_batch_call(
     ir: IR,
     in_axes: Tree,
 ) -> tuple[Tree, Tree]:
-    from autoform.evaluation import run_ir
-
     col_cols = in_tree
 
     in_axes_tree = broadcast_in_axes_prefix(in_axes, col_cols)
@@ -198,7 +192,7 @@ def batch_batch_call(
         get_at_b = lambda v, a: v if a is None else v[b]
         return treelib.map(get_at_b, col_cols, in_axes_tree, is_leaf=get_is_leaf)
 
-    output_bi = [run_ir(batched_ir, get(b)) for b in range(batch_size)]
+    output_bi = [batched_ir.call(get(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
     output_ib = transpose_batch(batch_size, out_batched, output_bi)
     return output_ib, out_batched
@@ -206,8 +200,6 @@ def batch_batch_call(
 
 @ft.partial(async_rules.def_rule, batch_call_p)
 async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
-    from autoform.evaluation import arun_ir
-
     col_tree = in_tree
 
     axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
@@ -219,7 +211,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
             return v if a is None else v[b]
 
         value = treelib.map(get, col_tree, axes_tree, is_leaf=run_is_leaf)
-        return await arun_ir(ir, value)
+        return await ir.acall(value)
 
     output_bi = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
@@ -264,7 +256,7 @@ def batch_ir(ir: IR, in_axes: Tree[type | None] = list) -> IR:
         >>> ir = af.build_ir(greet)("Hi", "World")
         >>> # Batch over names contained in list, broadcast greeting
         >>> batched = af.batch_ir(ir, in_axes=(None, list))
-        >>> af.run_ir(batched, ("Hello, ", ["Alice", "Bob", "Carol"]))
+        >>> batched.call(("Hello, ", ["Alice", "Bob", "Carol"]))
         ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
 
