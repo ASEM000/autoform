@@ -125,7 +125,7 @@ def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[T
 
 @ft.partial(pull_bwd_rules.def_rule, lm_call_p)
 def pullback_bwd_lm_call(
-    residuals: tuple, cotangent_out: Tree, *, roles: tuple, model: str
+    residuals: tuple, out_cotangent: Tree, *, roles: tuple, model: str
 ) -> list:
     contents, output = residuals
     grads = []
@@ -134,7 +134,7 @@ def pullback_bwd_lm_call(
 
 INPUT: {content}
 OUTPUT: {output}
-FEEDBACK ON OUTPUT: {cotangent_out}
+FEEDBACK ON OUTPUT: {out_cotangent}
 
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
@@ -246,7 +246,7 @@ def pullback_fwd_struct_lm_call(
 @ft.partial(pull_bwd_rules.def_rule, struct_lm_call_p)
 def pullback_bwd_struct_lm_call(
     residuals: tuple,
-    cotangent_out: Tree,
+    out_cotangent: Tree,
     *,
     roles: tuple,
     model: str,
@@ -259,7 +259,7 @@ def pullback_bwd_struct_lm_call(
 
 INPUT: {content}
 OUTPUT: {output}
-FEEDBACK ON OUTPUT: {cotangent_out}
+FEEDBACK ON OUTPUT: {out_cotangent}
 
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
         resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
@@ -284,8 +284,8 @@ def batch_struct_lm_call(
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
     results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, results[0])
-    output_ib = transpose_batch(batch_size, out_batched, results)
-    return output_ib, out_batched
+    out_ib = transpose_batch(batch_size, out_batched, results)
+    return out_ib, out_batched
 
 
 @ft.partial(iter_rules.def_rule, struct_lm_call_p)

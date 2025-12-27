@@ -76,8 +76,8 @@ def pullback_fwd_stop_gradient(x: Tree) -> tuple[Tree, Tree]:
 
 
 @ft.partial(pull_bwd_rules.def_rule, stop_gradient_p)
-def pullback_bwd_stop_gradient(residuals: Tree, cotangent_out: Tree) -> Tree:
-    del cotangent_out
+def pullback_bwd_stop_gradient(residuals: Tree, out_cotangent: Tree) -> Tree:
+    del out_cotangent
     return treelib.map(zero_cotangent, residuals)
 
 
@@ -163,10 +163,10 @@ def pullback_fwd_switch(in_tree, *, branches: dict[str, IR]) -> tuple[Tree, Tree
 
 
 @ft.partial(pull_bwd_rules.def_rule, switch_p)
-def pullback_bwd_switch(residuals, cotangent_out, *, branches: dict[str, IR]):
+def pullback_bwd_switch(residuals, out_cotangent, *, branches: dict[str, IR]):
     key, operands = residuals
     pb_ir = pullback(branches[key])
-    _, c_operands = call(pb_ir)((operands, cotangent_out))
+    _, c_operands = call(pb_ir)((operands, out_cotangent))
     return (zero_cotangent(key), c_operands)
 
 

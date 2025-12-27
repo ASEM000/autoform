@@ -164,14 +164,14 @@ def pullback_fwd_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tr
 
 
 @ft.partial(pull_bwd_rules.def_rule, batch_call_p)
-def pullback_bwd_batch_call(residuals: Tree, cotangent_out: Tree, *, ir: IR, in_axes: Tree) -> Tree:
+def pullback_bwd_batch_call(residuals: Tree, out_cotangent: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
     p_cols, _ = residuals
-    c_out_cols = cotangent_out
+    out_c_cols = out_cotangent
     pb_ir = pullback(ir)
     batch_pb_ir = batch(pb_ir, in_axes=(in_axes, list))
-    _, c_in_cols = call(batch_pb_ir)((p_cols, c_out_cols))
-    return c_in_cols
+    _, in_c_cols = call(batch_pb_ir)((p_cols, out_c_cols))
+    return in_c_cols
 
 
 @ft.partial(batch_rules.def_rule, batch_call_p)
@@ -193,10 +193,10 @@ def batch_batch_call(
         get_at_b = lambda v, a: v if a is None else v[b]
         return treelib.map(get_at_b, col_cols, in_axes_tree, is_leaf=get_is_leaf)
 
-    output_bi = [call(batched_ir)(get(b)) for b in range(batch_size)]
+    out_bi = [call(batched_ir)(get(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
-    output_ib = transpose_batch(batch_size, out_batched, output_bi)
-    return output_ib, out_batched
+    out_ib = transpose_batch(batch_size, out_batched, out_bi)
+    return out_ib, out_batched
 
 
 @ft.partial(async_rules.def_rule, batch_call_p)
@@ -214,9 +214,9 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
         value = treelib.map(get, col_tree, axes_tree, is_leaf=run_is_leaf)
         return await acall(ir)(value)
 
-    output_bi = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
+    out_bi = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
-    return transpose_batch(batch_size, out_batched, output_bi)
+    return transpose_batch(batch_size, out_batched, out_bi)
 
 
 @ft.partial(dce_rules.def_rule, batch_call_p)
@@ -263,7 +263,7 @@ def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
     def make_b(atom):
         return IRBVar.fresh(source=atom) if is_irvar(atom) else atom
 
-    b_in_irtree = treelib.map(make_b, ir.in_irtree)
-    b_out_irtree = treelib.map(make_b, ir.out_irtree)
-    eqn = IREqn(batch_call_p, b_in_irtree, b_out_irtree, dict(ir=ir, in_axes=in_axes))
-    return IR([eqn], b_in_irtree, b_out_irtree)
+    in_b_irtree = treelib.map(make_b, ir.in_irtree)
+    out_b_irtree = treelib.map(make_b, ir.out_irtree)
+    eqn = IREqn(batch_call_p, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
+    return IR([eqn], in_b_irtree, out_b_irtree)
