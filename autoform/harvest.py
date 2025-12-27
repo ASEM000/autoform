@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 import typing as tp
-
+from autoform.core import IREqn
 from autoform.core import Interpreter, get_interp, using_interp
 from autoform.core import IR, EvalType, IRVar, is_irvar
 from autoform.core import (
@@ -337,7 +337,6 @@ def merge_ir(ir1: IR, ir2: IR) -> IR:
     remapped_eqns = []
     for ireqn in ir2.ireqns:
         remapped_in = treelib.map(remap_atom, ireqn.in_irtree)
-        from autoform.core import IREqn
 
         remapped_eqns.append(IREqn(ireqn.prim, remapped_in, ireqn.out_irtree, ireqn.params))
 

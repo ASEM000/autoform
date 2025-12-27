@@ -379,7 +379,7 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 @contextmanager
-def using_interp(interpreter: Interpreter):
+def using_interp[T: Interpreter](interpreter: T) -> tp.Generator[T, None, None]:
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
