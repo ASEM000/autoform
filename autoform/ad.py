@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from operator import setitem
 
+from autoform.core import call_ir
 from autoform.core import (
     IR,
     IREqn,
@@ -70,7 +71,7 @@ def pushforward_ir(ir: IR) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.build_ir(program)("a", "b")
         >>> pf_ir = af.pushforward_ir(ir)
-        >>> primals, tangents = pf_ir.call((("Hello", " World"), ("dx", "dy")))
+        >>> primals, tangents = call_ir(pf_ir)((("Hello", " World"), ("dx", "dy")))
         >>> primals
         'Hello World'
         >>> tangents
@@ -148,8 +149,8 @@ def eval_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 def pushforward_pushforward_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
     pf_ir = pushforward_ir(ir)
-    p_out = pf_ir.call((p_in, t_in))
-    t_out = pf_ir.call((p_in_t, t_in_t))
+    p_out = call_ir(pf_ir)((p_in, t_in))
+    t_out = call_ir(pf_ir)((p_in_t, t_in_t))
     return p_out, t_out
 
 
@@ -157,7 +158,7 @@ def pushforward_pushforward_call(primals: Tree, tangents: Tree, *, ir: IR) -> tu
 def pullback_fwd_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in) = in_tree
     pf_ir = pushforward_ir(ir)
-    p_out, t_out = pf_ir.call((p_in, t_in))
+    p_out, t_out = call_ir(pf_ir)((p_in, t_in))
     residuals = (p_in, t_in)
     return (p_out, t_out), residuals
 
@@ -167,8 +168,8 @@ def pullback_bwd_pushforward_call(residuals: Tree, cotangent_out: Tree, *, ir: I
     p_in, t_in = residuals
     c_p_out, c_t_out = cotangent_out
     pb_ir = pullback_ir(ir)
-    _, c_p_in = pb_ir.call((p_in, c_p_out))
-    _, c_t_in = pb_ir.call((t_in, c_t_out))
+    _, c_p_in = call_ir(pb_ir)((p_in, c_p_out))
+    _, c_t_in = call_ir(pb_ir)((t_in, c_t_out))
     return (c_p_in, c_t_in)
 
 
@@ -184,7 +185,7 @@ def batch_pushforward_call(
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)
     unbatch_t = ft.partial(unbatch_at, t_cols, t_batched)
     pf_ir = pushforward_ir(ir)
-    output_bi = [pf_ir.call((unbatch_p(b), unbatch_t(b))) for b in range(batch_size)]
+    output_bi = [call_ir(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, pf_ir.out_irtree)
     output_ib = transpose_batch(batch_size, out_batched, output_bi)
     return output_ib, out_batched
@@ -279,7 +280,7 @@ def pullback_ir(ir: IR) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.build_ir(program)("a", "b")
         >>> pb_ir = af.pullback_ir(ir)
-        >>> outputs, cotangents = pb_ir.call((("Hello", " World"), "feedback"))
+        >>> outputs, cotangents = call_ir(pb_ir)((("Hello", " World"), "feedback"))
         >>> outputs
         'Hello World'
         >>> cotangents  # Gradient flows back to both inputs
@@ -365,8 +366,8 @@ def eval_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 def pushforward_pullback_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
     pb_ir = pullback_ir(ir)
-    p_result = pb_ir.call((p_in, c_out))
-    t_result = pb_ir.call((t_p_in, t_c_out))
+    p_result = call_ir(pb_ir)((p_in, c_out))
+    t_result = call_ir(pb_ir)((t_p_in, t_c_out))
     return p_result, t_result
 
 
@@ -374,7 +375,7 @@ def pushforward_pullback_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple
 def pullback_fwd_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
     pb_ir = pullback_ir(ir)
-    p_out, c_in = pb_ir.call((p_in, c_out))
+    p_out, c_in = call_ir(pb_ir)((p_in, c_out))
     residuals = (p_in, c_out, p_out, c_in)
     return (p_out, c_in), residuals
 
@@ -384,8 +385,8 @@ def pullback_bwd_pullback_call(residuals: Tree, cotangent_out: Tree, *, ir: IR) 
     p_in, c_out, _, _ = residuals
     c_p_out, c_c_in = cotangent_out
     pb_ir = pullback_ir(ir)
-    _, c_p_in = pb_ir.call((p_in, c_p_out))
-    _, c_c_out = pb_ir.call((p_in, c_c_in))
+    _, c_p_in = call_ir(pb_ir)((p_in, c_p_out))
+    _, c_c_out = call_ir(pb_ir)((p_in, c_c_in))
     return (c_p_in, c_c_out)
 
 
@@ -396,7 +397,7 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)
     unbatch_c = ft.partial(unbatch_at, c_out_cols, c_batched)
     pb_ir = pullback_ir(ir)
-    output_bi = [pb_ir.call((unbatch_p(b), unbatch_c(b))) for b in range(size)]
+    output_bi = [call_ir(pb_ir)((unbatch_p(b), unbatch_c(b))) for b in range(size)]
     out_batched = treelib.map(lambda _: True, pb_ir.out_irtree)
     output_ib = transpose_batch(size, out_batched, output_bi)
     return output_ib, out_batched

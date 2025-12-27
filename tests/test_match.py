@@ -90,7 +90,7 @@ class TestIREqnMatchArgs:
         # Verify the tag was changed
         assert new_ir.ireqns[0].params["tag"] == "new_tag"
         # Verify the IR still works
-        result = new_ir.call("hello")
+        result = af.call_ir(new_ir)("hello")
         assert result == "hello!"
 
 

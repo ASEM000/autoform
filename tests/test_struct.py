@@ -174,7 +174,7 @@ class TestStructInAxes:
 
         batch_ir = af.batch_ir(ir, in_axes=Person.model_construct(name=list, sur=None))
 
-        result = batch_ir.call(
+        result = af.call_ir(batch_ir)(
             # NOTE(asem): model_construct is used to bypass validation for axis spec
             Person.model_construct(name=["Alice", "Bob"], sur="Smith"),
         )
@@ -200,7 +200,7 @@ class TestStructInAxes:
             in_axes=Outer.model_construct(inner=Inner.model_construct(value=list), tag=None),
         )
 
-        result = batch_ir.call(
+        result = af.call_ir(batch_ir)(
             Outer.model_construct(
                 inner=Inner.model_construct(value=["a", "b", "c"]),
                 tag="PREFIX",
@@ -234,7 +234,7 @@ class TestStructInAxes:
 
         ir = af.build_ir(process)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
-        result = batch_ir.call(["1", "2", "3"])
+        result = af.call_ir(batch_ir)(["1", "2", "3"])
         assert isinstance(result, Output)
         assert result.first == ["A:1", "A:2", "A:3"]
         assert result.second == ["B:1", "B:2", "B:3"]
@@ -255,7 +255,7 @@ class TestStructInAxes:
 
         ir = af.build_ir(create)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
-        result = batch_ir.call(["a", "b"])
+        result = af.call_ir(batch_ir)(["a", "b"])
         assert isinstance(result, Outer)
         assert isinstance(result.inner, Inner)
         assert result.inner.value == ["V:a", "V:b"]
@@ -267,7 +267,7 @@ class TestStructInAxes:
 
         ir = af.build_ir(dual)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
-        result = batch_ir.call(["a", "b"])
+        result = af.call_ir(batch_ir)(["a", "b"])
         assert result == (["L:a", "L:b"], ["R:a", "R:b"])
 
     def test_batch_preserves_nested_tuple_output(self):
@@ -276,5 +276,5 @@ class TestStructInAxes:
 
         ir = af.build_ir(nested)("x")
         batch_ir = af.batch_ir(ir, in_axes=list)
-        result = batch_ir.call(["1", "2"])
+        result = af.call_ir(batch_ir)(["1", "2"])
         assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])

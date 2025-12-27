@@ -13,10 +13,10 @@ class TestSplitIr:
         ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
 
-        result1 = ir1.call("input")
+        result1 = af.call_ir(ir1)("input")
         assert result1 == "Step1: input"
 
-        result2 = ir2.call("Step1: input")
+        result2 = af.call_ir(ir2)("Step1: input")
         assert result2 == "Step1: input -> Step2"
 
     def test_split_at_first_sow(self):
@@ -28,10 +28,10 @@ class TestSplitIr:
         ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="first")
 
-        result1 = ir1.call("hello")
+        result1 = af.call_ir(ir1)("hello")
         assert result1 == "hello"
 
-        result2 = ir2.call("hello")
+        result2 = af.call_ir(ir2)("hello")
         assert result2 == "hello!"
 
     def test_split_at_end(self):
@@ -42,10 +42,10 @@ class TestSplitIr:
         ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="end")
 
-        result1 = ir1.call("test")
+        result1 = af.call_ir(ir1)("test")
         assert result1 == "prefix: test"
 
-        result2 = ir2.call("anything")
+        result2 = af.call_ir(ir2)("anything")
         assert result2 == "anything"
 
     def test_split_not_found_returns_original(self):
@@ -85,7 +85,7 @@ class TestMergeIr:
         ir2 = af.build_ir(step2)("test")
         merged = af.merge_ir(ir1, ir2)
 
-        result = merged.call("input")
+        result = af.call_ir(merged)("input")
         assert result == "Step1: input -> Step2"
 
     def test_merge_is_composition(self):
@@ -99,7 +99,7 @@ class TestMergeIr:
         ir_g = af.build_ir(g)("test")
         merged = af.merge_ir(ir_f, ir_g)
 
-        result = merged.call("x")
+        result = af.call_ir(merged)("x")
         assert result == "g(f(x))"
 
     def test_merge_many(self):
@@ -117,7 +117,7 @@ class TestMergeIr:
         ir_c = af.build_ir(add_c)("")
 
         merged = af.merge_ir(af.merge_ir(ir_a, ir_b), ir_c)
-        result = merged.call("")
+        result = af.call_ir(merged)("")
         assert result == "abc"
 
     def test_merge_structure_mismatch_raises(self):
@@ -157,8 +157,8 @@ class TestSplitMergeRoundtrip:
         ir = af.build_ir(func)("test")
         ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
         merged = af.merge_ir(ir1, ir2)
-        original_result = ir.call("test")
-        merged_result = merged.call("test")
+        original_result = af.call_ir(ir)("test")
+        merged_result = af.call_ir(merged)("test")
         assert original_result == merged_result
 
     def test_split_for_debugging(self):
@@ -171,9 +171,9 @@ class TestSplitMergeRoundtrip:
         ir = af.build_ir(pipeline)("test")
 
         ir1, ir2 = af.split_ir(ir, tag="debug", name="after_step1")
-        intermediate = ir1.call("data")
+        intermediate = af.call_ir(ir1)("data")
         assert intermediate == "processed: data"
-        final = ir2.call(intermediate)
+        final = af.call_ir(ir2)(intermediate)
         assert final == "[processed: data]"
 
 
@@ -190,7 +190,7 @@ class TestSplitMergeWithTransforms:
 
         # Only differentiate ir2
         grad_ir2 = af.pullback_ir(ir2)
-        result = grad_ir2.call(("primal_mid", "cotangent"))
+        result = af.call_ir(grad_ir2)(("primal_mid", "cotangent"))
         primal_out, cotangent_in = result
         assert "trainable" in primal_out
 
@@ -206,5 +206,5 @@ class TestSplitMergeWithTransforms:
         merged = af.merge_ir(ir_f, ir_g)
         batched = af.batch_ir(merged)
 
-        result = batched.call(["a", "b", "c"])
+        result = af.call_ir(batched)(["a", "b", "c"])
         assert result == ["f:a:g", "f:b:g", "f:c:g"]

@@ -65,7 +65,7 @@ class TestKwargsBuildIR:
             return greet(name, greeting="Hi", punctuation="?")
 
         ir = af.build_ir(program)("World")
-        result = ir.call("World")
+        result = af.call_ir(ir)("World")
         assert result == "Hi, World?"
 
 

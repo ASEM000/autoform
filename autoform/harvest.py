@@ -17,6 +17,7 @@ from autoform.core import (
     push_rules,
 )
 from autoform.utils import Tree, treelib
+from autoform.core import call_ir
 
 # ==================================================================================================
 # SOW
@@ -48,7 +49,7 @@ def sow(in_tree: Tree, /, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
         ...     response = af.concat(prompt, " A: 42")
         ...     return af.sow(response, tag="debug", name="response")
         >>> ir = af.build_ir(program)("test")
-        >>> result, reaped = af.run_and_reap(ir, "What is 6*7?", tag="debug")
+        >>> result, reaped = af.reap(ir, tag="debug")("What is 6*7?")
         >>> result
         'Q: What is 6*7? A: 42'
         >>> reaped["prompt"]
@@ -136,16 +137,15 @@ class ReapInterpreter(Interpreter):
         return result
 
 
-def run_and_reap(ir: IR, in_tree: Tree, *, tag: tp.Hashable) -> tuple[Tree, Reaped]:
-    """Run an IR and collect all sown values matching the tag.
+def reap[**P, R](ir: IR, *, tag: tp.Hashable) -> tp.Callable[P, tuple[R, Reaped]]:
+    """Create a reaping executor for an IR.
 
     Args:
         ir: The intermediate representation to run.
-        in_tree: Input values to the IR.
         tag: The tag to filter sown values by.
 
     Returns:
-        A tuple of (result, reaped_dict) where reaped_dict maps names to values.
+        A callable that executes the IR and returns (result, reaped_dict).
 
     Example:
         >>> import autoform as af
@@ -153,16 +153,19 @@ def run_and_reap(ir: IR, in_tree: Tree, *, tag: tp.Hashable) -> tuple[Tree, Reap
         ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.build_ir(program)("test")
-        >>> result, reaped = af.run_and_reap(ir, "What?", tag="debug")
+        >>> result, reaped = af.reap(ir, tag="debug")("What?")
         >>> result
         'Q: What? A: 42'
         >>> reaped
         {'prompt': 'Q: What?'}
     """
 
-    with using_interp(ReapInterpreter(tag=tag)) as reap:
-        result = ir.call(in_tree)
-    return result, reap.reaped
+    def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Reaped]:
+        with using_interp(ReapInterpreter(tag=tag)) as reaper:
+            result = call_ir(ir)(*args, **kwargs)
+        return result, reaper.reaped
+
+    return execute
 
 
 # ==================================================================================================
@@ -187,32 +190,33 @@ class PlantInterpreter(Interpreter):
             return self.parent.process(prim, in_tree, **params)
 
 
-def run_and_plant(
-    ir: IR, in_tree: Tree, plants: dict[tp.Hashable, Tree], *, tag: tp.Hashable
-) -> Tree:
-    """Run an IR with planted values injected at sow locations.
+def plant[**P, R](
+    ir: IR, plants: dict[tp.Hashable, Tree], *, tag: tp.Hashable
+) -> tp.Callable[P, R]:
+    """Create a planting executor for an IR.
 
     Args:
         ir: The intermediate representation to run.
-        in_tree: Input values to the IR.
         plants: Dictionary mapping sow names to values to inject.
         tag: The tag to filter sow locations by.
 
     Returns:
-        The result with planted values.
+        A callable that executes the IR with planted values.
 
     Example:
         >>> import autoform as af
         >>> def program(x):
         ...     return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
         >>> ir = af.build_ir(program)("test")
-        >>> result = af.run_and_plant(ir, "World", {"greeting": "CACHED"}, tag="cache")
-        >>> result
+        >>> af.plant(ir, {"greeting": "CACHED"}, tag="cache")("World")
         'CACHED'
     """
 
-    with using_interp(PlantInterpreter(tag=tag, plants=plants)):
-        return ir.call(in_tree)
+    def execute(*args: P.args, **kwargs: P.kwargs) -> R:
+        with using_interp(PlantInterpreter(tag=tag, plants=plants)):
+            return call_ir(ir)(*args, **kwargs)
+
+    return execute
 
 
 # ==================================================================================================
@@ -243,9 +247,9 @@ def split_ir(ir: IR, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[IR, IR]:
         ...     return b
         >>> ir = af.build_ir(program)("test")
         >>> ir1, ir2 = af.split_ir(ir, tag="split", name="checkpoint")
-        >>> ir1.call("input")
+        >>> call_ir(ir1)("input")
         'Step1: input'
-        >>> ir2.call("Step1: input")
+        >>> call_ir(ir2)("Step1: input")
         'Step1: input -> Step2'
     """
     assert isinstance(ir, IR), f"{type(ir)=} is not an IR instance."
@@ -299,7 +303,7 @@ def merge_ir(ir1: IR, ir2: IR) -> IR:
         >>> ir1 = af.build_ir(step1)("test")
         >>> ir2 = af.build_ir(step2)("test")
         >>> merged = af.merge_ir(ir1, ir2)
-        >>> merged.call("input")
+        >>> call_ir(merged)("input")
         'Step1: input -> Step2'
     """
     assert isinstance(ir1, IR), f"{type(ir1)=} is not an IR instance."

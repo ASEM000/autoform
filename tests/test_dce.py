@@ -99,7 +99,7 @@ class TestDCEWithHigherOrderPrimitives:
         inner_ir = af.build_ir(lambda x: af.concat(x, "!"))("x")
 
         def program(x):
-            return inner_ir.call(x)
+            return af.call_ir(inner_ir)(x)
 
         ir = af.build_ir(program)("input")
         dce = af.dce_ir(ir)
@@ -119,7 +119,7 @@ class TestDCEWithHigherOrderPrimitives:
         inner_ir = af.build_ir(inner)("x")
 
         def program(x):
-            return inner_ir.call(x)
+            return af.call_ir(inner_ir)(x)
 
         ir = af.build_ir(program)("input")
         dce = af.dce_ir(ir)
@@ -272,7 +272,7 @@ class TestNestedDCE:
         dced_branch_a = dce.ireqns[0].params["branches"]["a"]
         assert len(dced_branch_a.ireqns) == 1
 
-        result = dce.call("a", "hello")
+        result = af.call_ir(dce)("a", "hello")
         assert result == "hello LIVE"
 
     def test_batch_call_dces_inner_ir(self):
