@@ -39,16 +39,14 @@ class Struct(pydantic.BaseModel):
         ...     answer: int
     """
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(k, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        def flatten(model):
-            return tuple(getattr(model, k) for k in cls.model_fields), tuple(cls.model_fields)
-
-        def unflatten(keys, children):
-            return cls.model_construct(**dict(zip(keys, children, strict=True)))
-
-        treelib.register_node(cls, flatten, unflatten)
+        treelib.register_node(
+            k,
+            lambda x: (tuple(getattr(x, k) for k in k.model_fields), tuple(k.model_fields)),
+            lambda keys, children: k.model_construct(**dict(zip(keys, children, strict=True))),
+        )
 
     def __hash__(self):
         return hash(tuple(getattr(self, k) for k in type(self).model_fields))
