@@ -1,12 +1,12 @@
-"""Harvest primitives"""
+"""Harvest primitives - sow/reap/plant for effect handling."""
 
 from __future__ import annotations
 
 import functools as ft
 import typing as tp
 
-from autoform.core import Interpreter, build_ir, get_interp, using_interp
-from autoform.core import IR, EvalType, IRVar, Var, is_irvar, is_var
+from autoform.core import Interpreter, get_interp, using_interp
+from autoform.core import IR, EvalType, IRVar, is_irvar
 from autoform.core import (
     Primitive,
     batch_rules,
@@ -16,7 +16,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, treelib, lru_cache
+from autoform.utils import Tree, treelib
 
 # ==================================================================================================
 # SOW
@@ -29,7 +29,7 @@ def sow(in_tree: Tree, /, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
     """Tag a value with a category and name for later collection.
 
     `sow` marks a value with a `tag` (category) and `name` (unique identifier)
-    that can be collected by `reap_ir`. It acts as an identity operation in
+    that can be collected by `run_and_reap`. It acts as an identity operation in
     normal execution, but when run under a `ReapInterpreter`, the sown values
     are captured.
 
@@ -48,8 +48,7 @@ def sow(in_tree: Tree, /, *, tag: tp.Hashable, name: tp.Hashable) -> Tree:
         ...     response = af.concat(prompt, " A: 42")
         ...     return af.sow(response, tag="debug", name="response")
         >>> ir = af.build_ir(program, "test")
-        >>> reap = af.reap_ir(ir, tag="debug")
-        >>> result, reaped = af.run_ir(reap, "What is 6*7?")
+        >>> result, reaped = af.run_and_reap(ir, "What is 6*7?", tag="debug")
         >>> result
         'Q: What is 6*7? A: 42'
         >>> reaped["prompt"]
@@ -121,8 +120,6 @@ def batch_sow(
 # REAP
 # ==================================================================================================
 
-reap_call_p = Primitive("reap_call", tag="harvest")
-
 type Reaped = dict[tp.Hashable, Tree]
 
 
@@ -139,93 +136,16 @@ class ReapInterpreter(Interpreter):
         return result
 
 
-@ft.partial(impl_rules.def_rule, reap_call_p)
-def impl_reap_call(in_tree: Tree, *, ir: IR, tag: tp.Hashable) -> tuple[Tree, Reaped]:
-    from autoform.evaluation import run_ir
-
-    with using_interp(ReapInterpreter(tag=tag)) as reap:
-        result = run_ir(ir, in_tree)
-    return result, reap.reaped
-
-
-@ft.partial(eval_rules.def_rule, reap_call_p)
-def eval_reap_call(in_tree: Tree, *, ir: IR, tag: tp.Hashable) -> tuple[Tree, Var]:
-    del ir, tag
-    out = treelib.map(lambda _: Var(), in_tree, is_leaf=is_var)
-    return out, Var()
-
-
-@ft.partial(push_rules.def_rule, reap_call_p)
-def push_reap_call(
-    primals: Tree,
-    tangents: Tree,
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-) -> tuple[tuple[Tree, Reaped], tuple[Tree, Reaped]]:
-    from autoform.ad import pushforward_ir
-
-    pf_ir = pushforward_ir(ir)
-    p_result, p_reaped = reap_call_p.bind((primals, tangents), ir=pf_ir, tag=tag)
-    primal_out, tangent_out = p_result
-    return (primal_out, p_reaped), (tangent_out, {})
-
-
-@ft.partial(pull_fwd_rules.def_rule, reap_call_p)
-def pull_fwd_reap_call(
-    in_tree: Tree,
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-) -> tuple[tuple[Tree, Reaped], tuple[Tree, Reaped]]:
-    result, reaped = impl_reap_call(in_tree, ir=ir, tag=tag)
-    return (result, reaped), (in_tree, reaped)
-
-
-@ft.partial(pull_bwd_rules.def_rule, reap_call_p)
-def pull_bwd_reap_call(
-    residuals: tuple[Tree, Reaped],
-    cotangent: tuple[Tree, Reaped],
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-) -> Tree:
-    from autoform.evaluation import run_ir
-    from autoform.ad import pullback_ir
-
-    in_tree, _ = residuals
-    ct_result, _ = cotangent
-    pb_ir = pullback_ir(ir)
-    _, ct_in = run_ir(pb_ir, (in_tree, ct_result))
-    return ct_in
-
-
-@ft.partial(batch_rules.def_rule, reap_call_p)
-def batch_reap_call(
-    batch_size: int,
-    in_batched: Tree,
-    in_values: Tree,
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-) -> tuple[tuple[Tree, Reaped], tuple[Tree, bool]]:
-    from autoform.batch import batch_ir
-
-    batched_ir = batch_ir(ir)
-    result, reaped = reap_call_p.bind(in_values, ir=batched_ir, tag=tag)
-    return (result, reaped), (in_batched, False)
-
-
-@ft.partial(lru_cache, maxsize=256)
-def reap_ir(ir: IR, *, tag: tp.Hashable) -> IR:
-    """Transform IR to return (result, reaped_dict).
+def run_and_reap(ir: IR, in_tree: Tree, *, tag: tp.Hashable) -> tuple[Tree, Reaped]:
+    """Run an IR and collect all sown values matching the tag.
 
     Args:
-        ir: The intermediate representation to transform.
+        ir: The intermediate representation to run.
+        in_tree: Input values to the IR.
         tag: The tag to filter sown values by.
 
     Returns:
-        A new IR that outputs (original_result, reaped_dict).
+        A tuple of (result, reaped_dict) where reaped_dict maps names to values.
 
     Example:
         >>> import autoform as af
@@ -233,26 +153,22 @@ def reap_ir(ir: IR, *, tag: tp.Hashable) -> IR:
         ...     prompt = af.sow(af.format("Q: {}", x), tag="debug", name="prompt")
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.build_ir(program, "test")
-        >>> reap = af.reap_ir(ir, tag="debug")
-        >>> result, reaped = af.run_ir(reap, "What?")
+        >>> result, reaped = af.run_and_reap(ir, "What?", tag="debug")
         >>> result
         'Q: What? A: 42'
         >>> reaped
         {'prompt': 'Q: What?'}
     """
-    assert isinstance(ir, IR), f"{type(ir)=} is not an IR instance."
+    from autoform.evaluation import run_ir
 
-    def func(in_tree):
-        return reap_call_p.bind(in_tree, ir=ir, tag=tag)
-
-    return build_ir(func, treelib.map(lambda _: "", ir.in_irtree))
+    with using_interp(ReapInterpreter(tag=tag)) as reap:
+        result = run_ir(ir, in_tree)
+    return result, reap.reaped
 
 
 # ==================================================================================================
 # PLANT
 # ==================================================================================================
-
-plant_call_p = Primitive("plant_call", tag="harvest")
 
 
 class PlantInterpreter(Interpreter):
@@ -272,109 +188,33 @@ class PlantInterpreter(Interpreter):
             return self.parent.process(prim, in_tree, **params)
 
 
-@ft.partial(impl_rules.def_rule, plant_call_p)
-def impl_plant_call(
-    in_tree: Tree,
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-    plants: dict[tp.Hashable, Tree],
+def run_and_plant(
+    ir: IR, in_tree: Tree, plants: dict[tp.Hashable, Tree], *, tag: tp.Hashable
 ) -> Tree:
-    from autoform.evaluation import run_ir
-
-    with using_interp(PlantInterpreter(tag=tag, plants=plants)):
-        return run_ir(ir, in_tree)
-
-
-@ft.partial(eval_rules.def_rule, plant_call_p)
-def eval_plant_call(
-    in_tree: Tree, *, ir: IR, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]
-) -> Tree:
-    del ir, tag, plants
-    return treelib.map(lambda _: Var(), in_tree, is_leaf=is_var)
-
-
-@ft.partial(push_rules.def_rule, plant_call_p)
-def push_plant_call(
-    primals: Tree,
-    tangents: Tree,
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-    plants: dict[tp.Hashable, Tree],
-) -> tuple[Tree, Tree]:
-    from autoform.ad import pushforward_ir
-
-    pf_ir = pushforward_ir(ir)
-    primal_tangent = plant_call_p.bind((primals, tangents), ir=pf_ir, tag=tag, plants=plants)
-    primal_out, tangent_out = primal_tangent
-    return primal_out, tangent_out
-
-
-@ft.partial(pull_fwd_rules.def_rule, plant_call_p)
-def pull_fwd_plant_call(
-    in_tree: Tree, *, ir: IR, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]
-) -> tuple[Tree, Tree]:
-    result = impl_plant_call(in_tree, ir=ir, tag=tag, plants=plants)
-    return result, in_tree  # residuals = input
-
-
-@ft.partial(pull_bwd_rules.def_rule, plant_call_p)
-def pull_bwd_plant_call(
-    residuals: Tree, cotangent: Tree, *, ir: IR, tag: tp.Hashable, plants: dict[tp.Hashable, Tree]
-) -> Tree:
-    from autoform.evaluation import run_ir
-    from autoform.ad import pullback_ir
-
-    in_tree = residuals
-    pb_ir = pullback_ir(ir)
-    _, ct_in = run_ir(pb_ir, (in_tree, cotangent))
-    return ct_in
-
-
-@ft.partial(batch_rules.def_rule, plant_call_p)
-def batch_plant_call(
-    batch_size: int,
-    in_batched: Tree,
-    in_values: Tree,
-    *,
-    ir: IR,
-    tag: tp.Hashable,
-    plants: dict[tp.Hashable, Tree],
-) -> tuple[Tree, Tree]:
-    from autoform.batch import batch_ir
-
-    batched_ir = batch_ir(ir)
-    result = plant_call_p.bind(in_values, ir=batched_ir, tag=tag, plants=plants)
-    return result, in_batched
-
-
-def plant_ir(ir: IR, plants: dict[tp.Hashable, Tree], *, tag: tp.Hashable) -> IR:
-    """Transform IR to inject planted values at sow locations.
+    """Run an IR with planted values injected at sow locations.
 
     Args:
-        ir: The intermediate representation to transform.
+        ir: The intermediate representation to run.
+        in_tree: Input values to the IR.
         plants: Dictionary mapping sow names to values to inject.
         tag: The tag to filter sow locations by.
 
     Returns:
-        A new IR with planted values.
+        The result with planted values.
 
     Example:
         >>> import autoform as af
         >>> def program(x):
         ...     return af.sow(af.concat("Hello, ", x), tag="cache", name="greeting")
         >>> ir = af.build_ir(program, "test")
-        >>> planted = af.plant_ir(ir, {"greeting": "CACHED"}, tag="cache")
-        >>> af.run_ir(planted, "World")
+        >>> result = af.run_and_plant(ir, "World", {"greeting": "CACHED"}, tag="cache")
+        >>> result
         'CACHED'
     """
-    assert isinstance(ir, IR), f"{type(ir)=} is not an IR instance."
+    from autoform.evaluation import run_ir
 
-    def func(in_tree):
-        return plant_call_p.bind(in_tree, ir=ir, tag=tag, plants=plants)
-
-    return build_ir(func, treelib.map(lambda _: "", ir.in_irtree))
+    with using_interp(PlantInterpreter(tag=tag, plants=plants)):
+        return run_ir(ir, in_tree)
 
 
 # ==================================================================================================
@@ -385,9 +225,6 @@ def plant_ir(ir: IR, plants: dict[tp.Hashable, Tree], *, tag: tp.Hashable) -> IR
 def split_ir(ir: IR, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[IR, IR]:
     """Split IR at a sow point into (before, after).
 
-    Finds the first `sow` equation matching the given tag and name, then splits
-    the IR into two parts: equations before (inclusive of the sow) and after.
-
     Args:
         ir: The intermediate representation to split.
         tag: The tag to match on the sow.
@@ -397,9 +234,7 @@ def split_ir(ir: IR, *, tag: tp.Hashable, name: tp.Hashable) -> tuple[IR, IR]:
         A tuple of (ir_before, ir_after) where:
         - ir_before: IR from input to the sow point (sow output is the output)
         - ir_after: IR from the sow output to the original output
-
-    Raises:
-        ValueError: If no matching sow is found.
+        If no matching sow is found, returns (original_ir, empty_ir).
 
     Example:
         >>> import autoform as af

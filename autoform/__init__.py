@@ -5,7 +5,7 @@ from autoform.evaluation import run_ir, iter_ir, arun_ir
 
 from autoform.ad import pushforward_ir, pullback_ir
 from autoform.batch import batch_ir
-from autoform.harvest import reap_ir, plant_ir, split_ir, merge_ir, sow
+from autoform.harvest import run_and_reap, run_and_plant, split_ir, merge_ir, sow
 from autoform.optims import dce_ir, fold_ir
 
 from autoform.string import format, concat
@@ -24,8 +24,8 @@ __all__ = [
     "pushforward_ir",
     "pullback_ir",
     "batch_ir",
-    "reap_ir",
-    "plant_ir",
+    "run_and_reap",
+    "run_and_plant",
     "split_ir",
     "merge_ir",
     "dce_ir",
