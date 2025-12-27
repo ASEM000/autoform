@@ -2,8 +2,8 @@
 
 This demonstrates:
 1. A pipeline with multiple lm_calls (research -> write)
-2. batch_ir: parallelize with batch_completion, not a loop
-3. batch_ir(pullback_ir(ir)): batched semantic backpropagation
+2. batch: parallelize with batch_completion, not a loop
+3. batch(pullback(ir)): batched semantic backpropagation
 """
 
 import autoform as af
@@ -22,11 +22,10 @@ def research_and_write(topic: str) -> str:
 
 if __name__ == "__main__":
     ir = af.build_ir(research_and_write)("example topic")
-    batch_ir = af.batch_ir(ir, in_axes=list)
-    pb_ir = af.pullback_ir(ir)
-    batch_pb_ir = af.batch_ir(pb_ir, in_axes=(list, list))
+    batched = af.batch(ir, in_axes=list)
+    pb_ir = af.pullback(ir)
+    batch_pb = af.batch(pb_ir, in_axes=(list, list))
     topics = ["AI safety", "quantum computing", "climate change"]
-    articles = batch_ir.call(topics)
-    topics = ["AI safety", "quantum computing", "climate change"]
+    articles = af.call(batched)(topics)
     feedbacks = ["too technical", "good overview", "needs more data"]
-    outputs, input_grads = batch_pb_ir.call((topics, feedbacks))
+    outputs, input_grads = af.call(batch_pb)((topics, feedbacks))
