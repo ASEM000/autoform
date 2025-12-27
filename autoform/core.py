@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools as ft
 import itertools as it
 import typing as tp
 from abc import ABC, abstractmethod
@@ -343,7 +344,7 @@ class TracingInterpreter(Interpreter):
 # ==================================================================================================
 
 
-def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR]:
+def build_ir[**P](func: Callable[P, Tree]) -> Callable[P, IR]:
     """Build an IR from a function by tracing its execution.
 
     Args:
@@ -361,22 +362,21 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR]:
         'Hello, Alice!!'
     """
 
+    def assert_no_iratom(x):
+        assert not is_iratom(x)
+        return x
+
+    def populate(x):
+        return IRVar.fresh() if is_user_type(x) else IRLit(x)
+
+    def assert_ir(x):
+        assert is_iratom(x)
+        return x
+
+    @ft.wraps(func)
     def trace(*args: P.args, **kwargs: P.kwargs) -> IR:
-        def assert_no_iratom(x):
-            assert not is_iratom(x)
-            return x
-
         treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
-
-        def populate(x):
-            return IRVar.fresh() if is_user_type(x) else IRLit(x)
-
         in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
-
-        def assert_ir(x):
-            assert is_iratom(x)
-            return x
-
         with using_interp(TracingInterpreter()) as tracer:
             out_irtree = func(*in_ir_args, **in_ir_kwargs)
             in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
