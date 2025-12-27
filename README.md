@@ -63,7 +63,8 @@ verdict, captured = af.collect(ir, collection="debug")("pineapple on pizza")
 # captured: {'pro': 'Argue FOR: ...', 'con': '...', 'judge': '...'}
 
 # inject: override checkpoint outputs with different values
-verdict = af.inject(ir, collection="debug", values={"pro": "custom argument"})("pineapple on pizza")
+values = dict(pro="custom argument")
+verdict = af.inject(ir, collection="debug", values=values)("pineapple on pizza")
 
 # transforms compose
 batch_batch = af.batch(af.batch(ir, in_axes=list), in_axes=list)
