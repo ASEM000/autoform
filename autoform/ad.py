@@ -169,9 +169,9 @@ def pullback_bwd_pushforward_call(residuals: Tree, out_cotangent: Tree, *, ir: I
     in_p, in_t = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
-    _, c_p_in = call(pb_ir)((in_p, out_c_p))
-    _, c_t_in = call(pb_ir)((in_t, out_c_t))
-    return (c_p_in, c_t_in)
+    _, in_c_p = call(pb_ir)((in_p, out_c_p))
+    _, in_c_t = call(pb_ir)((in_t, out_c_t))
+    return (in_c_p, in_c_t)
 
 
 @ft.partial(batch_rules.def_rule, pushforward_call_p)
