@@ -33,7 +33,7 @@ from autoform.core import (
     push_rules,
 )
 from autoform.utils import Tree, unbatch_at, lru_cache, treelib, transpose_batch
-
+from autoform.optims import default_dce, dce
 
 # ==================================================================================================
 # PUSHFORWARD
@@ -189,7 +189,6 @@ def batch_pushforward_call(
 
 @ft.partial(dce_rules.def_rule, pushforward_call_p)
 def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    from autoform.optims import default_dce, dce
 
     dced_ir = dce(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
@@ -401,8 +400,6 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
 
 @ft.partial(dce_rules.def_rule, pullback_call_p)
 def dce_pullback_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    from autoform.optims import default_dce, dce
-
     dced_ir = dce(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
