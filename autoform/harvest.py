@@ -16,7 +16,7 @@ from autoform.core import (
     push_rules,
 )
 from autoform.utils import Tree
-from autoform.core import call_ir
+from autoform.core import call
 
 # ==================================================================================================
 # CHECKPOINT
@@ -29,7 +29,7 @@ def checkpoint(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) 
     """Tag a value with a collection and name for later collection.
 
     `checkpoint` marks a value with a `collection` and `name` (unique identifier)
-    that can be collected by `collect_ir`. It acts as an identity operation in
+    that can be collected by `collect`. It acts as an identity operation in
     normal execution.
 
     Args:
@@ -47,7 +47,7 @@ def checkpoint(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) 
         ...     response = af.concat(prompt, " A: 42")
         ...     return af.checkpoint(response, collection="debug", name="response")
         >>> ir = af.build_ir(program)("test")
-        >>> result, collected = af.collect_ir(ir, collection="debug")("What is 6*7?")
+        >>> result, collected = af.collect(ir, collection="debug")("What is 6*7?")
         >>> result
         'Q: What is 6*7? A: 42'
         >>> collected["prompt"]
@@ -126,7 +126,7 @@ class CollectInterpreter(Interpreter):
         return result
 
 
-def collect_ir[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
+def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
     """Collect checkpointed values from an IR.
 
     Args:
@@ -142,7 +142,7 @@ def collect_ir[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tup
         ...     prompt = af.checkpoint(af.format("Q: {}", x), collection="debug", name="prompt")
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.build_ir(program)("test")
-        >>> result, collected = af.collect_ir(ir, collection="debug")("What?")
+        >>> result, collected = af.collect(ir, collection="debug")("What?")
         >>> result
         'Q: What? A: 42'
         >>> collected
@@ -151,7 +151,7 @@ def collect_ir[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tup
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
         with using_interp(CollectInterpreter(collection=collection)) as collector:
-            result = call_ir(ir)(*args, **kwargs)
+            result = call(ir)(*args, **kwargs)
         return result, collector.collected
 
     return execute
@@ -179,7 +179,7 @@ class InjectInterpreter(Interpreter):
             return self.parent.process(prim, in_tree, **params)
 
 
-def inject_ir[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
+def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
     """Create an injecting executor for an IR.
 
     Args:
@@ -195,12 +195,12 @@ def inject_ir[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> 
         >>> def program(x):
         ...     return af.checkpoint(af.concat("Hello, ", x), collection="cache", name="greeting")
         >>> ir = af.build_ir(program)("test")
-        >>> af.inject_ir(ir, collection="cache", values={"greeting": "CACHED"})("World")
+        >>> af.inject(ir, collection="cache", values={"greeting": "CACHED"})("World")
         'CACHED'
     """
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
         with using_interp(InjectInterpreter(collection=collection, values=values)):
-            return call_ir(ir)(*args, **kwargs)
+            return call(ir)(*args, **kwargs)
 
     return execute

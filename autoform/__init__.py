@@ -2,11 +2,11 @@
 
 from autoform.core import build_ir
 
-from autoform.ad import pushforward_ir, pullback_ir
-from autoform.batch import batch_ir
-from autoform.harvest import collect_ir, inject_ir, checkpoint
-from autoform.optims import dce_ir, fold_ir
-from autoform.core import call_ir, icall_ir, acall_ir
+from autoform.ad import pushforward, pullback
+from autoform.batch import batch
+from autoform.harvest import collect, inject, checkpoint
+from autoform.optims import dce, fold
+from autoform.core import call, icall, acall
 
 from autoform.string import format, concat
 from autoform.lm import lm_call, struct_lm_call, Struct
@@ -18,17 +18,17 @@ __all__ = [
     # core
     "build_ir",
     # execution
-    "call_ir",
-    "icall_ir",
-    "acall_ir",
+    "call",
+    "icall",
+    "acall",
     # transformations
-    "pushforward_ir",
-    "pullback_ir",
-    "batch_ir",
-    "collect_ir",
-    "inject_ir",
-    "dce_ir",
-    "fold_ir",
+    "pushforward",
+    "pullback",
+    "batch",
+    "collect",
+    "inject",
+    "dce",
+    "fold",
     # primitives (user-facing functions)
     "format",
     "concat",

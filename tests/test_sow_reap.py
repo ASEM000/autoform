@@ -21,7 +21,7 @@ class TestSow:
             return af.checkpoint(x, collection="test", name="value")
 
         ir = af.build_ir(func)("test")
-        result = af.call_ir(ir)("hello")
+        result = af.call(ir)("hello")
         assert result == "hello"
 
     def test_hashable_tags_and_names(self):
@@ -34,8 +34,8 @@ class TestSow:
             return af.checkpoint(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
-        pf_ir = af.pushforward_ir(ir)
-        primal_out, tangent_out = af.call_ir(pf_ir)(("primal", "tangent"))
+        pf_ir = af.pushforward(ir)
+        primal_out, tangent_out = af.call(pf_ir)(("primal", "tangent"))
         assert primal_out == "primal"
         assert tangent_out == "tangent"
 
@@ -44,8 +44,8 @@ class TestSow:
             return af.checkpoint(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
-        pb_ir = af.pullback_ir(ir)
-        primal_out, cotangent_in = af.call_ir(pb_ir)(("primal", "cotangent"))
+        pb_ir = af.pullback(ir)
+        primal_out, cotangent_in = af.call(pb_ir)(("primal", "cotangent"))
         assert primal_out == "primal"
         assert cotangent_in == "cotangent"
 
@@ -54,8 +54,8 @@ class TestSow:
             return af.checkpoint(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
-        batched_ir = af.batch_ir(ir)
-        result = af.call_ir(batched_ir)(["a", "b", "c"])
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b", "c"])
         assert result == ["a", "b", "c"]
 
     def test_in_chain(self):
@@ -64,7 +64,7 @@ class TestSow:
             return af.concat("[", sowed, "]")
 
         ir = af.build_ir(func)("a")
-        result = af.call_ir(ir)("hello")
+        result = af.call(ir)("hello")
         assert result == "[hello]"
 
 
@@ -74,7 +74,7 @@ class TestRunAndReap:
             return af.checkpoint(x, collection="debug", name="captured")
 
         ir = af.build_ir(func)("test")
-        result, collected = af.collect_ir(ir, collection="debug")("hello")
+        result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "hello"
         assert collected == {"captured": "hello"}
 
@@ -86,7 +86,7 @@ class TestRunAndReap:
             return c
 
         ir = af.build_ir(func)("test")
-        result, collected = af.collect_ir(ir, collection="debug")("hi")
+        result, collected = af.collect(ir, collection="debug")("hi")
         assert result == "hi!"
         assert collected == {"first": "hi", "second": "hi!"}
 
@@ -98,10 +98,10 @@ class TestRunAndReap:
 
         ir = af.build_ir(func)("test")
 
-        _, debug_collected = af.collect_ir(ir, collection="debug")("hello")
+        _, debug_collected = af.collect(ir, collection="debug")("hello")
         assert debug_collected == {"debug_val": "hello"}
 
-        _, metrics_collected = af.collect_ir(ir, collection="metrics")("hello")
+        _, metrics_collected = af.collect(ir, collection="metrics")("hello")
         assert metrics_collected == {"metrics_val": "hello"}
 
     def test_reap_empty_when_no_match(self):
@@ -109,7 +109,7 @@ class TestRunAndReap:
             return af.checkpoint(x, collection="other", name="val")
 
         ir = af.build_ir(func)("test")
-        result, collected = af.collect_ir(ir, collection="debug")("hello")
+        result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "hello"
         assert collected == {}
 
@@ -118,7 +118,7 @@ class TestRunAndReap:
             return af.concat(x, "!")
 
         ir = af.build_ir(func)("test")
-        result, collected = af.collect_ir(ir, collection="debug")("hello")
+        result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "hello!"
         assert collected == {}
 
@@ -129,7 +129,7 @@ class TestRunAndReap:
             return af.checkpoint(response, collection="debug", name="response")
 
         ir = af.build_ir(func)("test")
-        result, collected = af.collect_ir(ir, collection="debug")("What?")
+        result, collected = af.collect(ir, collection="debug")("What?")
         assert result == "Q: What? A: 42"
         assert collected["prompt"] == "Q: What?"
         assert collected["response"] == "Q: What? A: 42"
@@ -142,10 +142,10 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.call_ir(ir)("World")
+        result = af.call(ir)("World")
         assert result == "Hello, World"
 
-        result = af.inject_ir(ir, collection="cache", values={"greeting": "CACHED"})("World")
+        result = af.inject(ir, collection="cache", values={"greeting": "CACHED"})("World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
@@ -156,7 +156,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject_ir(ir, collection="cache", values={"first": "PLANTED"})("ignored")
+        result = af.inject(ir, collection="cache", values={"first": "PLANTED"})("ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
@@ -167,7 +167,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject_ir(ir, collection="cache", values={"val": "CACHED"})("input")
+        result = af.inject(ir, collection="cache", values={"val": "CACHED"})("input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
@@ -176,7 +176,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject_ir(ir, collection="cache", values={})("hello")
+        result = af.inject(ir, collection="cache", values={})("hello")
         assert result == "hello"
 
     def test_plant_unmatched_name(self):
@@ -185,7 +185,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject_ir(ir, collection="cache", values={"other": "PLANTED"})("hello")
+        result = af.inject(ir, collection="cache", values={"other": "PLANTED"})("hello")
         assert result == "hello"
 
 
@@ -195,12 +195,12 @@ class TestTransformThenReap:
             return af.checkpoint(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
-        pf_ir = af.pushforward_ir(ir)
+        pf_ir = af.pushforward(ir)
 
-        result, primals = af.collect_ir(pf_ir, collection=("debug", "primal"))(("primal", "tangent"))
+        result, primals = af.collect(pf_ir, collection=("debug", "primal"))(("primal", "tangent"))
         assert primals == {"val": "primal"}
 
-        result, tangents = af.collect_ir(pf_ir, collection=("debug", "tangent"))(("primal", "tangent"))
+        result, tangents = af.collect(pf_ir, collection=("debug", "tangent"))(("primal", "tangent"))
         assert tangents == {"val": "tangent"}
 
     def test_reap_captures_during_pullback(self):
@@ -208,12 +208,12 @@ class TestTransformThenReap:
             return af.checkpoint(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
-        pb_ir = af.pullback_ir(ir)
+        pb_ir = af.pullback(ir)
 
-        result, primals = af.collect_ir(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
+        result, primals = af.collect(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
         assert primals == {"val": "primal"}
 
-        result, grads = af.collect_ir(pb_ir, collection=("debug", "cotangent"))(("primal", "cotangent"))
+        result, grads = af.collect(pb_ir, collection=("debug", "cotangent"))(("primal", "cotangent"))
         assert grads == {"val": "cotangent"}
 
     def test_reap_captures_during_batch(self):
@@ -221,8 +221,8 @@ class TestTransformThenReap:
             return af.checkpoint(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
-        batched = af.batch_ir(ir)
-        result, collected = af.collect_ir(batched, collection=("debug", "batch"))(["a", "b", "c"])
+        batched = af.batch(ir)
+        result, collected = af.collect(batched, collection=("debug", "batch"))(["a", "b", "c"])
         assert result == ["a", "b", "c"]
         assert collected == {"val": ["a", "b", "c"]}
 
@@ -240,6 +240,6 @@ class TestTransformThenReap:
             return af.switch("a", {"a": ir_a, "b": ir_b}, x)
 
         ir = af.build_ir(func)("input")
-        result, collected = af.collect_ir(ir, collection="debug")("hello")
+        result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "a: hello"
         assert collected == {"result": "a: hello"}

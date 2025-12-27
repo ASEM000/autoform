@@ -44,30 +44,30 @@ def judge_debate(topic: str) -> Verdict:
 ir = af.build_ir(judge_debate)("...")
 
 # execute
-verdict = af.call_ir(ir)("pineapple on pizza")
+verdict = af.call(ir)("pineapple on pizza")
 
 # batch: parallel topics
-batch_ir = af.batch_ir(ir, in_axes=list)
-verdicts = af.call_ir(batch_ir)(["pineapple on pizza", "cats vs dogs", "morning vs night"])
+batch = af.batch(ir, in_axes=list)
+verdicts = af.call(batch)(["pineapple on pizza", "cats vs dogs", "morning vs night"])
 
 # gradients: feedback on output -> feedback on input
-pb_ir = af.pullback_ir(ir)
+pb_ir = af.pullback(ir)
 feedback = Verdict(decision="too one-sided", reasoning="pro was weak")
-verdict, grad = af.call_ir(pb_ir)(("pineapple on pizza", feedback))
+verdict, grad = af.call(pb_ir)(("pineapple on pizza", feedback))
 
 # batched gradients
-batch_pb = af.batch_ir(pb_ir, in_axes=(list, list))
+batch_pb = af.batch(pb_ir, in_axes=(list, list))
 
-# harvest: collect prompts at runtime
-verdict, prompts = af.collect_ir(ir, collection="debug")("pineapple on pizza")
-# prompts: {'pro': '...', 'con': '...', 'judge': '...'}
+# collect: capture intermediate values at runtime
+verdict, captured = af.collect(ir, collection="debug")("pineapple on pizza")
+# captured: {'pro': 'Argue FOR: ...', 'con': '...', 'judge': '...'}
 
-# plant: inject cached values
-verdict = af.inject_ir(ir, collection="debug", values={"pro": "cached response"})("pineapple on pizza")
+# inject: override checkpoint outputs with different values
+verdict = af.inject(ir, collection="debug", values={"pro": "custom argument"})("pineapple on pizza")
 
 # transforms compose
-batch_batch = af.batch_ir(af.batch_ir(ir, in_axes=list), in_axes=list)
-grad_grad = af.pullback_ir(af.pullback_ir(ir))
+batch_batch = af.batch(af.batch(ir, in_axes=list), in_axes=list)
+grad_grad = af.pullback(af.pullback(ir))
 ```
 
 ## More

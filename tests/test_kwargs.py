@@ -65,7 +65,7 @@ class TestKwargsBuildIR:
             return greet(name, greeting="Hi", punctuation="?")
 
         ir = af.build_ir(program)("World")
-        result = af.call_ir(ir)("World")
+        result = af.call(ir)("World")
         assert result == "Hi, World?"
 
 
@@ -103,6 +103,6 @@ class TestKwargsPullback:
             return greet(name, greeting="Hi", punctuation="?")
 
         ir = af.build_ir(program)("World")
-        pb_ir = af.pullback_ir(ir)
+        pb_ir = af.pullback(ir)
         assert len(pb_ir.in_irtree) == 2
         assert len(pb_ir.out_irtree) == 2

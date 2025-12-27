@@ -29,7 +29,7 @@ class TestBuildIR:
         assert len(eqn.in_irtree) == 1
         assert eqn.params["template"] == "Hello, {}!"
         assert isinstance(eqn.in_irtree[0], af.core.IRVar)
-        assert af.call_ir(ir)("Alice") == "Hello, Alice!"
+        assert af.call(ir)("Alice") == "Hello, Alice!"
 
     def test_multiple_operations(self):
         def program(x, y):
@@ -62,7 +62,7 @@ class TestRunIR:
             return af.concat(x, "!")
 
         ir = af.build_ir(program)("hello")
-        result = af.call_ir(ir)("world")
+        result = af.call(ir)("world")
         assert result == "world!"
 
     def test_chained_operations(self):
@@ -72,7 +72,7 @@ class TestRunIR:
             return step2
 
         ir = af.build_ir(program)("A")
-        result = af.call_ir(ir)("B")
+        result = af.call(ir)("B")
         assert result == "[BB]"
 
     def test_multiple_args(self):
@@ -80,7 +80,7 @@ class TestRunIR:
             return af.format("{} + {}", a, b)
 
         ir = af.build_ir(program)("x", "y")
-        result = af.call_ir(ir)("1", "2")
+        result = af.call(ir)("1", "2")
         assert result == "1 + 2"
 
 
@@ -101,7 +101,7 @@ class TestIterIR:
             return stream_p.bind(x)
 
         ir = af.build_ir(stream)("AB")
-        outputs = list(af.icall_ir(ir)("AB"))
+        outputs = list(af.icall(ir)("AB"))
         assert outputs[:-1] == ["A", "B"]
         assert outputs[-1] == "AB"
 
@@ -110,7 +110,7 @@ class TestIterIR:
             return af.concat(x, y)
 
         ir = af.build_ir(program)("A", "B")
-        outputs = list(af.icall_ir(ir)("A", "B"))
+        outputs = list(af.icall(ir)("A", "B"))
         assert outputs == ["AB"]
 
     def test_multiple_outputs(self):
@@ -129,7 +129,7 @@ class TestIterIR:
             return split_p.bind(x)
 
         ir = af.build_ir(split)("AB")
-        iterator = af.icall_ir(ir)("AB")
+        iterator = af.icall(ir)("AB")
         chunk1 = next(iterator)
         assert chunk1 == ("A", "A")
         chunk2 = next(iterator)
@@ -154,7 +154,7 @@ class TestIterIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("input")
-        results = list(af.icall_ir(ir)("input"))
+        results = list(af.icall(ir)("input"))
         assert results[-1] == "abc"
 
     def test_list_accumulation(self):
@@ -173,7 +173,7 @@ class TestIterIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("input")
-        results = list(af.icall_ir(ir)("input"))
+        results = list(af.icall(ir)("input"))
         assert results[-1] == [1, 2, 3, 4]
 
     def test_program_call_streams_through(self):
@@ -196,10 +196,10 @@ class TestIterIR:
 
         # run_ir inlines the streaming primitive directly
         def outer(x):
-            return af.call_ir(inner_ir)(x)
+            return af.call(inner_ir)(x)
 
         outer_ir = af.build_ir(outer)("abc")
-        outputs = list(af.icall_ir(outer_ir)("xyz"))
+        outputs = list(af.icall(outer_ir)("xyz"))
         assert outputs[:-1] == ["x", "y", "z"]
         assert outputs[-1] == "xyz"
 
@@ -222,15 +222,15 @@ class TestIterIR:
         ir_level0 = af.build_ir(deep_stream)("ab")
 
         def level1(x):
-            return af.call_ir(ir_level0)(x)
+            return af.call(ir_level0)(x)
 
         ir_level1 = af.build_ir(level1)("ab")
 
         def level2(x):
-            return af.call_ir(ir_level1)(x)
+            return af.call(ir_level1)(x)
 
         ir_level2 = af.build_ir(level2)("ab")
-        outputs = list(af.icall_ir(ir_level2)("XY"))
+        outputs = list(af.icall(ir_level2)("XY"))
         assert outputs[:-1] == ["0:X", "1:Y"]
         assert outputs[-1] == "0:X1:Y"
 
@@ -255,7 +255,7 @@ class TestAsyncIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("hello")
-        result = await af.acall_ir(ir)("hello")
+        result = await af.acall(ir)("hello")
         assert result == "hello"
 
     @pytest.mark.asyncio
@@ -274,5 +274,5 @@ class TestAsyncIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("hello")
-        result = await af.acall_ir(ir)("hello")
+        result = await af.acall(ir)("hello")
         assert result == "hello!"

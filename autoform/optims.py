@@ -22,7 +22,7 @@ def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVa
     return False, in_vars, ireqn  # (equation unchanged)
 
 
-def dce_ir(ir: IR) -> IR:
+def dce(ir: IR) -> IR:
     """Remove dead code from an IR.
 
     Performs backward pass to identify which equations contribute to output.
@@ -36,7 +36,7 @@ def dce_ir(ir: IR) -> IR:
         >>> ir = af.build_ir(program)("test")
         >>> len(ir.ireqns)
         2
-        >>> dced = af.dce_ir(ir)
+        >>> dced = af.dce(ir)
         >>> len(dced.ireqns)
         1
     """
@@ -59,7 +59,7 @@ def dce_ir(ir: IR) -> IR:
 # ==================================================================================================
 
 
-def fold_ir(ir: IR) -> IR:
+def fold(ir: IR) -> IR:
     """Evaluate constant IR subexpressions.
 
     Replaces equations with all-literal inputs with their computed values.
@@ -72,7 +72,7 @@ def fold_ir(ir: IR) -> IR:
         >>> ir = af.build_ir(program)("test")
         >>> len(ir.ireqns)
         2
-        >>> folded = af.fold_ir(ir)
+        >>> folded = af.fold(ir)
         >>> len(folded.ireqns)
         1
     """

@@ -55,7 +55,7 @@ class TestStruct:
 
 
 class TestStructLmCall:
-    def test_struct_lm_call_ir_build(self):
+    def test_struct_lm_call_build(self):
         class Answer(af.Struct):
             reasoning: str
             answer: int
@@ -104,7 +104,7 @@ class TestStructLmCall:
         assert len(built_ir.ireqns) == 1
         assert built_ir.ireqns[0].prim.name == "struct_lm_call"
 
-    def test_struct_lm_call_pullback_ir(self):
+    def test_struct_lm_call_pullback(self):
         class Answer(af.Struct):
             text: str
 
@@ -116,7 +116,7 @@ class TestStructLmCall:
             )
 
         built_ir = af.build_ir(ir)("test")
-        pb_ir = af.pullback_ir(built_ir)
+        pb_ir = af.pullback(built_ir)
         assert pb_ir is not None
         assert len(pb_ir.ireqns) > 0
 
@@ -172,9 +172,9 @@ class TestStructInAxes:
 
         ir = af.build_ir(greet)(Person(name="x", sur="y"))
 
-        batch_ir = af.batch_ir(ir, in_axes=Person.model_construct(name=list, sur=None))
+        batch = af.batch(ir, in_axes=Person.model_construct(name=list, sur=None))
 
-        result = af.call_ir(batch_ir)(
+        result = af.call(batch)(
             # NOTE(asem): model_construct is used to bypass validation for axis spec
             Person.model_construct(name=["Alice", "Bob"], sur="Smith"),
         )
@@ -193,14 +193,14 @@ class TestStructInAxes:
 
         ir = af.build_ir(process)(Outer(inner=Inner(value="x"), tag="t"))
 
-        batch_ir = af.batch_ir(
+        batch = af.batch(
             ir,
             # NOTE(asem): basically list is the container to batch over
             # and broadcast tag (None)
             in_axes=Outer.model_construct(inner=Inner.model_construct(value=list), tag=None),
         )
 
-        result = af.call_ir(batch_ir)(
+        result = af.call(batch)(
             Outer.model_construct(
                 inner=Inner.model_construct(value=["a", "b", "c"]),
                 tag="PREFIX",
@@ -233,8 +233,8 @@ class TestStructInAxes:
             )
 
         ir = af.build_ir(process)("x")
-        batch_ir = af.batch_ir(ir, in_axes=list)
-        result = af.call_ir(batch_ir)(["1", "2", "3"])
+        batch = af.batch(ir, in_axes=list)
+        result = af.call(batch)(["1", "2", "3"])
         assert isinstance(result, Output)
         assert result.first == ["A:1", "A:2", "A:3"]
         assert result.second == ["B:1", "B:2", "B:3"]
@@ -254,8 +254,8 @@ class TestStructInAxes:
             )
 
         ir = af.build_ir(create)("x")
-        batch_ir = af.batch_ir(ir, in_axes=list)
-        result = af.call_ir(batch_ir)(["a", "b"])
+        batch = af.batch(ir, in_axes=list)
+        result = af.call(batch)(["a", "b"])
         assert isinstance(result, Outer)
         assert isinstance(result.inner, Inner)
         assert result.inner.value == ["V:a", "V:b"]
@@ -266,8 +266,8 @@ class TestStructInAxes:
             return af.format("L:{}", x), af.format("R:{}", x)
 
         ir = af.build_ir(dual)("x")
-        batch_ir = af.batch_ir(ir, in_axes=list)
-        result = af.call_ir(batch_ir)(["a", "b"])
+        batch = af.batch(ir, in_axes=list)
+        result = af.call(batch)(["a", "b"])
         assert result == (["L:a", "L:b"], ["R:a", "R:b"])
 
     def test_batch_preserves_nested_tuple_output(self):
@@ -275,6 +275,6 @@ class TestStructInAxes:
             return (af.format("A:{}", x), af.format("B:{}", x)), af.format("C:{}", x)
 
         ir = af.build_ir(nested)("x")
-        batch_ir = af.batch_ir(ir, in_axes=list)
-        result = af.call_ir(batch_ir)(["1", "2"])
+        batch = af.batch(ir, in_axes=list)
+        result = af.call(batch)(["1", "2"])
         assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])

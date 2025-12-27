@@ -90,7 +90,7 @@ class TestIREqnMatchArgs:
         # Verify the tag was changed
         assert new_ir.ireqns[0].params["collection"] == "new_tag"
         # Verify the IR still works
-        result = af.call_ir(new_ir)("hello")
+        result = af.call(new_ir)("hello")
         assert result == "hello!"
 
 
@@ -205,7 +205,7 @@ class TestIRMatchArgs:
 
     def test_match_higher_order_primitive_with_nested_ir(self):
         inner_ir = af.build_ir(lambda x: af.concat("a", x))("b")
-        pf_ir = af.pushforward_ir(inner_ir)
+        pf_ir = af.pushforward(inner_ir)
 
         match pf_ir:
             case af.core.IR(

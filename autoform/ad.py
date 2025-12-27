@@ -8,7 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import call_ir
+from autoform.core import call
 from autoform.core import (
     IR,
     IREqn,
@@ -53,7 +53,7 @@ class PushforwardInterpreter(Interpreter):
 
 
 @ft.partial(lru_cache, maxsize=256)
-def pushforward_ir(ir: IR) -> IR:
+def pushforward(ir: IR) -> IR:
     """Transform an IR to compute primals and tangents (forward-mode AD).
 
     Creates a new IR that propagates tangent (perturbation) vectors alongside
@@ -70,8 +70,8 @@ def pushforward_ir(ir: IR) -> IR:
         >>> def program(x, y):
         ...     return af.concat(x, y)
         >>> ir = af.build_ir(program)("a", "b")
-        >>> pf_ir = af.pushforward_ir(ir)
-        >>> primals, tangents = call_ir(pf_ir)((("Hello", " World"), ("dx", "dy")))
+        >>> pf_ir = af.pushforward(ir)
+        >>> primals, tangents = call(pf_ir)((("Hello", " World"), ("dx", "dy")))
         >>> primals
         'Hello World'
         >>> tangents
@@ -148,17 +148,17 @@ def eval_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 @ft.partial(push_rules.def_rule, pushforward_call_p)
 def pushforward_pushforward_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
-    pf_ir = pushforward_ir(ir)
-    p_out = call_ir(pf_ir)((p_in, t_in))
-    t_out = call_ir(pf_ir)((p_in_t, t_in_t))
+    pf_ir = pushforward(ir)
+    p_out = call(pf_ir)((p_in, t_in))
+    t_out = call(pf_ir)((p_in_t, t_in_t))
     return p_out, t_out
 
 
 @ft.partial(pull_fwd_rules.def_rule, pushforward_call_p)
 def pullback_fwd_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in) = in_tree
-    pf_ir = pushforward_ir(ir)
-    p_out, t_out = call_ir(pf_ir)((p_in, t_in))
+    pf_ir = pushforward(ir)
+    p_out, t_out = call(pf_ir)((p_in, t_in))
     residuals = (p_in, t_in)
     return (p_out, t_out), residuals
 
@@ -167,9 +167,9 @@ def pullback_fwd_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]
 def pullback_bwd_pushforward_call(residuals: Tree, cotangent_out: Tree, *, ir: IR) -> Tree:
     p_in, t_in = residuals
     c_p_out, c_t_out = cotangent_out
-    pb_ir = pullback_ir(ir)
-    _, c_p_in = call_ir(pb_ir)((p_in, c_p_out))
-    _, c_t_in = call_ir(pb_ir)((t_in, c_t_out))
+    pb_ir = pullback(ir)
+    _, c_p_in = call(pb_ir)((p_in, c_p_out))
+    _, c_t_in = call(pb_ir)((t_in, c_t_out))
     return (c_p_in, c_t_in)
 
 
@@ -180,8 +180,8 @@ def batch_pushforward_call(
     (p_cols, t_cols), (p_batched, t_batched) = in_tree, in_batched
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)
     unbatch_t = ft.partial(unbatch_at, t_cols, t_batched)
-    pf_ir = pushforward_ir(ir)
-    output_bi = [call_ir(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(batch_size)]
+    pf_ir = pushforward(ir)
+    output_bi = [call(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, pf_ir.out_irtree)
     output_ib = transpose_batch(batch_size, out_batched, output_bi)
     return output_ib, out_batched
@@ -189,9 +189,9 @@ def batch_pushforward_call(
 
 @ft.partial(dce_rules.def_rule, pushforward_call_p)
 def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    from autoform.optims import default_dce, dce_ir
+    from autoform.optims import default_dce, dce
 
-    dced_ir = dce_ir(ireqn.params["ir"])
+    dced_ir = dce(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
@@ -258,7 +258,7 @@ class PullbackBwdInterpreter(Interpreter):
 
 
 @ft.partial(lru_cache, maxsize=256)
-def pullback_ir(ir: IR) -> IR:
+def pullback(ir: IR) -> IR:
     """Transform an IR to compute outputs and input cotangents (reverse-mode AD).
 
     Creates a new IR that computes gradients by backpropagating cotangent
@@ -275,8 +275,8 @@ def pullback_ir(ir: IR) -> IR:
         >>> def program(x, y):
         ...     return af.concat(x, y)
         >>> ir = af.build_ir(program)("a", "b")
-        >>> pb_ir = af.pullback_ir(ir)
-        >>> outputs, cotangents = call_ir(pb_ir)((("Hello", " World"), "feedback"))
+        >>> pb_ir = af.pullback(ir)
+        >>> outputs, cotangents = call(pb_ir)((("Hello", " World"), "feedback"))
         >>> outputs
         'Hello World'
         >>> cotangents  # Gradient flows back to both inputs
@@ -361,17 +361,17 @@ def eval_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 @ft.partial(push_rules.def_rule, pullback_call_p)
 def pushforward_pullback_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
-    pb_ir = pullback_ir(ir)
-    p_result = call_ir(pb_ir)((p_in, c_out))
-    t_result = call_ir(pb_ir)((t_p_in, t_c_out))
+    pb_ir = pullback(ir)
+    p_result = call(pb_ir)((p_in, c_out))
+    t_result = call(pb_ir)((t_p_in, t_c_out))
     return p_result, t_result
 
 
 @ft.partial(pull_fwd_rules.def_rule, pullback_call_p)
 def pullback_fwd_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
-    pb_ir = pullback_ir(ir)
-    p_out, c_in = call_ir(pb_ir)((p_in, c_out))
+    pb_ir = pullback(ir)
+    p_out, c_in = call(pb_ir)((p_in, c_out))
     residuals = (p_in, c_out, p_out, c_in)
     return (p_out, c_in), residuals
 
@@ -380,9 +380,9 @@ def pullback_fwd_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 def pullback_bwd_pullback_call(residuals: Tree, cotangent_out: Tree, *, ir: IR) -> Tree:
     p_in, c_out, _, _ = residuals
     c_p_out, c_c_in = cotangent_out
-    pb_ir = pullback_ir(ir)
-    _, c_p_in = call_ir(pb_ir)((p_in, c_p_out))
-    _, c_c_out = call_ir(pb_ir)((p_in, c_c_in))
+    pb_ir = pullback(ir)
+    _, c_p_in = call(pb_ir)((p_in, c_p_out))
+    _, c_c_out = call(pb_ir)((p_in, c_c_in))
     return (c_p_in, c_c_out)
 
 
@@ -392,8 +392,8 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
     (p_batched, c_batched) = in_batched
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)
     unbatch_c = ft.partial(unbatch_at, c_out_cols, c_batched)
-    pb_ir = pullback_ir(ir)
-    output_bi = [call_ir(pb_ir)((unbatch_p(b), unbatch_c(b))) for b in range(size)]
+    pb_ir = pullback(ir)
+    output_bi = [call(pb_ir)((unbatch_p(b), unbatch_c(b))) for b in range(size)]
     out_batched = treelib.map(lambda _: True, pb_ir.out_irtree)
     output_ib = transpose_batch(size, out_batched, output_bi)
     return output_ib, out_batched
@@ -401,9 +401,9 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
 
 @ft.partial(dce_rules.def_rule, pullback_call_p)
 def dce_pullback_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    from autoform.optims import default_dce, dce_ir
+    from autoform.optims import default_dce, dce
 
-    dced_ir = dce_ir(ireqn.params["ir"])
+    dced_ir = dce(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn

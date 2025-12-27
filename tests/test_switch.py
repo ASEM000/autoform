@@ -14,7 +14,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        result = af.call_ir(ir)("zero", "hello")
+        result = af.call(ir)("zero", "hello")
         assert result == "zero: hello"
 
     def test_switch_key_one(self):
@@ -28,7 +28,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("one", "hello")
-        result = af.call_ir(ir)("one", "hello")
+        result = af.call(ir)("one", "hello")
         assert result == "one: hello"
 
     def test_switch_key_two(self):
@@ -42,7 +42,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("two", "hello")
-        result = af.call_ir(ir)("two", "hello")
+        result = af.call(ir)("two", "hello")
         assert result == "two: hello"
 
     def test_switch_invalid_key_raises(self):
@@ -63,9 +63,9 @@ class TestSwitchBasic:
             return af.switch(key, branches, x, y)
 
         ir = af.build_ir(program)("concat", "Hello", "World")
-        result = af.call_ir(ir)("concat", "Hello", "World")
+        result = af.call(ir)("concat", "Hello", "World")
         assert result == "HelloWorld"
-        result = af.call_ir(ir)("format", "Hello", "World")
+        result = af.call(ir)("format", "Hello", "World")
         assert result == "Hello - World"
 
     def test_switch_direct_call(self):
@@ -118,10 +118,10 @@ class TestSwitchPushforward:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        pf_ir = af.pushforward_ir(ir)
+        pf_ir = af.pushforward(ir)
         primals = ("zero", "hello")
         tangents = ("", "world")
-        p_out, t_out = af.call_ir(pf_ir)((primals, tangents))
+        p_out, t_out = af.call(pf_ir)((primals, tangents))
         assert p_out == "zero: hello"
         assert t_out == "zero: world"
 
@@ -135,10 +135,10 @@ class TestSwitchPushforward:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("one", "hello")
-        pf_ir = af.pushforward_ir(ir)
+        pf_ir = af.pushforward(ir)
         primals = ("one", "hello")
         tangents = ("", "world")
-        p_out, t_out = af.call_ir(pf_ir)((primals, tangents))
+        p_out, t_out = af.call(pf_ir)((primals, tangents))
         assert p_out == "one: hello"
         assert t_out == "one: world"
 
@@ -157,10 +157,10 @@ class TestSwitchPullback:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        pb_ir = af.pullback_ir(ir)
+        pb_ir = af.pullback(ir)
         primals = ("zero", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = af.call_ir(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = af.call(pb_ir)((primals, cotangent))
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -177,10 +177,10 @@ class TestSwitchPullback:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("one", "hello")
-        pb_ir = af.pullback_ir(ir)
+        pb_ir = af.pullback(ir)
         primals = ("one", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = af.call_ir(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = af.call(pb_ir)((primals, cotangent))
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -196,8 +196,8 @@ class TestSwitchBatch:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        batched_ir = af.batch_ir(ir, in_axes=(None, list))
-        result = af.call_ir(batched_ir)("zero", ["a", "b", "c"])
+        batched_ir = af.batch(ir, in_axes=(None, list))
+        result = af.call(batched_ir)("zero", ["a", "b", "c"])
         assert result == ["zero: a", "zero: b", "zero: c"]
 
     def test_batch_varying_key(self):
@@ -210,8 +210,8 @@ class TestSwitchBatch:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        batched_ir = af.batch_ir(ir, in_axes=(list, list))
-        result = af.call_ir(batched_ir)(["zero", "one", "zero"], ["a", "b", "c"])
+        batched_ir = af.batch(ir, in_axes=(list, list))
+        result = af.call(batched_ir)(["zero", "one", "zero"], ["a", "b", "c"])
         assert result == ["zero: a", "one: b", "zero: c"]
 
     def test_batch_varying_key_static_operand(self):
@@ -224,8 +224,8 @@ class TestSwitchBatch:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        batched_ir = af.batch_ir(ir, in_axes=(list, None))
-        result = af.call_ir(batched_ir)(["zero", "one", "one"], "test")
+        batched_ir = af.batch(ir, in_axes=(list, None))
+        result = af.call(batched_ir)(["zero", "one", "one"], "test")
         assert result == ["zero: test", "one: test", "one: test"]
 
 
@@ -240,11 +240,11 @@ class TestSwitchNestedTransforms:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("a", "hello")
-        batched_ir = af.batch_ir(ir, in_axes=(None, list))
-        pf_batched_ir = af.pushforward_ir(batched_ir)
+        batched_ir = af.batch(ir, in_axes=(None, list))
+        pf_batched_ir = af.pushforward(batched_ir)
         primals = ("a", ["a", "b"])
         tangents = ("", ["ta", "tb"])
-        p_out, t_out = af.call_ir(pf_batched_ir)((primals, tangents))
+        p_out, t_out = af.call(pf_batched_ir)((primals, tangents))
         assert p_out == ["A:a", "A:b"]
         assert t_out == ["A:ta", "A:tb"]
 
@@ -258,11 +258,11 @@ class TestSwitchNestedTransforms:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("a", "hello")
-        batched_ir = af.batch_ir(ir, in_axes=(None, list))
-        pb_batched_ir = af.pullback_ir(batched_ir)
+        batched_ir = af.batch(ir, in_axes=(None, list))
+        pb_batched_ir = af.pullback(batched_ir)
         primals = ("a", ["a", "b"])
         cotangents = ["grad1", "grad2"]
-        p_out, c_in = af.call_ir(pb_batched_ir)((primals, cotangents))
+        p_out, c_in = af.call(pb_batched_ir)((primals, cotangents))
         assert p_out == ["A:a", "A:b"]
         c_key, c_x = c_in
         assert c_x == ["grad1", "grad2"]
@@ -301,8 +301,8 @@ class TestSwitchComplexBranches:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("brackets", "test")
-        assert af.call_ir(ir)("brackets", "hello") == "[hello]!"
-        assert af.call_ir(ir)("parens", "hello") == "(hello)?"
+        assert af.call(ir)("brackets", "hello") == "[hello]!"
+        assert af.call(ir)("parens", "hello") == "(hello)?"
 
     def test_many_branches(self):
         branches = {
@@ -315,5 +315,5 @@ class TestSwitchComplexBranches:
 
         ir = af.build_ir(program)("branch0", "test")
         for i in range(5):
-            result = af.call_ir(ir)(f"branch{i}", "hello")
+            result = af.call(ir)(f"branch{i}", "hello")
             assert result == f"branch{i}: hello"
