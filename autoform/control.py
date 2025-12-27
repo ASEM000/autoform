@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.core import call_ir, iter_ir, async_ir
+from autoform.core import call_ir, icall_ir, acall_ir
 from autoform.core import IR, Var, is_irvar, is_user_type, is_iratom
 from autoform.core import (
     Primitive,
@@ -198,7 +198,7 @@ def batch_switch(
 @ft.partial(iter_rules.def_rule, switch_p)
 def iter_switch(in_tree, *, branches: dict[str, IR]):
     key, operands = in_tree
-    *chunks, _ = iter_ir(branches[key])(operands)
+    *chunks, _ = icall_ir(branches[key])(operands)
     for chunk in chunks:
         yield chunk
 
@@ -206,7 +206,7 @@ def iter_switch(in_tree, *, branches: dict[str, IR]):
 @ft.partial(async_rules.def_rule, switch_p)
 async def async_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
     key, operands = in_tree
-    return await async_ir(branches[key])(operands)
+    return await acall_ir(branches[key])(operands)
 
 
 @ft.partial(dce_rules.def_rule, switch_p)

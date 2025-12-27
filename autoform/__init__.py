@@ -6,7 +6,7 @@ from autoform.ad import pushforward_ir, pullback_ir
 from autoform.batch import batch_ir
 from autoform.harvest import reap, plant, split_ir, merge_ir, sow
 from autoform.optims import dce_ir, fold_ir
-from autoform.core import call_ir, iter_ir, async_ir
+from autoform.core import call_ir, icall_ir, acall_ir
 
 from autoform.string import format, concat
 from autoform.lm import lm_call, struct_lm_call, Struct
@@ -19,8 +19,8 @@ __all__ = [
     "build_ir",
     # execution
     "call_ir",
-    "iter_ir",
-    "async_ir",
+    "icall_ir",
+    "acall_ir",
     # transformations
     "pushforward_ir",
     "pullback_ir",

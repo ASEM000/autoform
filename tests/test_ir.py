@@ -101,7 +101,7 @@ class TestIterIR:
             return stream_p.bind(x)
 
         ir = af.build_ir(stream)("AB")
-        outputs = list(af.iter_ir(ir)("AB"))
+        outputs = list(af.icall_ir(ir)("AB"))
         assert outputs[:-1] == ["A", "B"]
         assert outputs[-1] == "AB"
 
@@ -110,7 +110,7 @@ class TestIterIR:
             return af.concat(x, y)
 
         ir = af.build_ir(program)("A", "B")
-        outputs = list(af.iter_ir(ir)("A", "B"))
+        outputs = list(af.icall_ir(ir)("A", "B"))
         assert outputs == ["AB"]
 
     def test_multiple_outputs(self):
@@ -129,7 +129,7 @@ class TestIterIR:
             return split_p.bind(x)
 
         ir = af.build_ir(split)("AB")
-        iterator = af.iter_ir(ir)("AB")
+        iterator = af.icall_ir(ir)("AB")
         chunk1 = next(iterator)
         assert chunk1 == ("A", "A")
         chunk2 = next(iterator)
@@ -154,7 +154,7 @@ class TestIterIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("input")
-        results = list(af.iter_ir(ir)("input"))
+        results = list(af.icall_ir(ir)("input"))
         assert results[-1] == "abc"
 
     def test_list_accumulation(self):
@@ -173,7 +173,7 @@ class TestIterIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("input")
-        results = list(af.iter_ir(ir)("input"))
+        results = list(af.icall_ir(ir)("input"))
         assert results[-1] == [1, 2, 3, 4]
 
     def test_program_call_streams_through(self):
@@ -199,7 +199,7 @@ class TestIterIR:
             return af.call_ir(inner_ir)(x)
 
         outer_ir = af.build_ir(outer)("abc")
-        outputs = list(af.iter_ir(outer_ir)("xyz"))
+        outputs = list(af.icall_ir(outer_ir)("xyz"))
         assert outputs[:-1] == ["x", "y", "z"]
         assert outputs[-1] == "xyz"
 
@@ -230,7 +230,7 @@ class TestIterIR:
             return af.call_ir(ir_level1)(x)
 
         ir_level2 = af.build_ir(level2)("ab")
-        outputs = list(af.iter_ir(ir_level2)("XY"))
+        outputs = list(af.icall_ir(ir_level2)("XY"))
         assert outputs[:-1] == ["0:X", "1:Y"]
         assert outputs[-1] == "0:X1:Y"
 
@@ -255,7 +255,7 @@ class TestAsyncIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("hello")
-        result = await af.async_ir(ir)("hello")
+        result = await af.acall_ir(ir)("hello")
         assert result == "hello"
 
     @pytest.mark.asyncio
@@ -274,5 +274,5 @@ class TestAsyncIR:
             return p.bind(x)
 
         ir = af.build_ir(func)("hello")
-        result = await af.async_ir(ir)("hello")
+        result = await af.acall_ir(ir)("hello")
         assert result == "hello!"

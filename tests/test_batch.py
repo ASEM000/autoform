@@ -169,7 +169,7 @@ class TestBatchAsync:
 
         ir = af.build_ir(shout)("hello")
         batched_ir = af.batch_ir(ir)
-        result = await af.async_ir(batched_ir)(["a", "b", "c"])
+        result = await af.acall_ir(batched_ir)(["a", "b", "c"])
         assert result == ["a!", "b!", "c!"]
 
     @pytest.mark.asyncio
@@ -179,7 +179,7 @@ class TestBatchAsync:
 
         ir = af.build_ir(greet)("Asem", "Hi")
         batched_ir = af.batch_ir(ir, in_axes=(list, None))
-        result = await af.async_ir(batched_ir)(["A", "B"], "Hi")
+        result = await af.acall_ir(batched_ir)(["A", "B"], "Hi")
         assert result == ["Hi: A", "Hi: B"]
 
 

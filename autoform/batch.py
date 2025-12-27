@@ -8,7 +8,7 @@ import typing as tp
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import call_ir, async_ir
+from autoform.core import call_ir, acall_ir
 from autoform.core import Interpreter, get_interp, using_interp
 from autoform.core import IR, IREqn, IRLit, IRVar, Value, Var, is_irvar
 from autoform.core import (
@@ -212,7 +212,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
             return v if a is None else v[b]
 
         value = treelib.map(get, col_tree, axes_tree, is_leaf=run_is_leaf)
-        return await async_ir(ir)(value)
+        return await acall_ir(ir)(value)
 
     output_bi = await asyncio.gather(*[run_item(b) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, ir.out_irtree)

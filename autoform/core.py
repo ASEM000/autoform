@@ -427,7 +427,7 @@ def call_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
     return execute
 
 
-def iter_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
+def icall_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     """Create an iterator executor for an IR.
 
     Args:
@@ -439,7 +439,7 @@ def iter_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     Example:
         >>> import autoform as af
         >>> ir = af.build_ir(lambda x: af.format("Hello {}", x))("world")
-        >>> list(af.iter_ir(ir)("Alice"))
+        >>> list(af.icall_ir(ir)("Alice"))
         ['Hello Alice']
     """
 
@@ -487,7 +487,7 @@ def iter_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     return execute
 
 
-def async_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
+def acall_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
     """Create an async executor for an IR.
 
     Args:
@@ -500,7 +500,7 @@ def async_ir[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any
         >>> import autoform as af
         >>> ir = af.build_ir(lambda x: af.format("Hello {}", x))("world")
         >>> import asyncio
-        >>> asyncio.run(af.async_ir(ir)("Alice"))
+        >>> asyncio.run(af.acall_ir(ir)("Alice"))
         'Hello Alice'
     """
 
