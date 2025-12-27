@@ -149,6 +149,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
         >>> collected
         {'prompt': 'Q: What?'}
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
         with using_interp(CollectInterpreter(collection=collection)) as collector:
@@ -199,6 +200,7 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         >>> af.inject(ir, collection="cache", values={"greeting": "CACHED"})("World")
         'CACHED'
     """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
         with using_interp(InjectInterpreter(collection=collection, values=values)):
