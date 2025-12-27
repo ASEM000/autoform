@@ -1,4 +1,4 @@
-"""Harvest primitives - checkpoint/collect/inject for effect handling."""
+"""Harvest primitives"""
 
 from __future__ import annotations
 
@@ -120,6 +120,7 @@ class CollectInterpreter(Interpreter):
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        # NOTE(asem): no context switch for interception interpreter
         result = self.parent.process(prim, in_tree, **params)
         if prim == checkpoint_p and params.get("collection") == self.collection:
             self.collected[params["name"]] = result
@@ -175,8 +176,8 @@ class InjectInterpreter(Interpreter):
             and (name := params.get("name")) in self.values
         ):
             return self.values[name]
-        with using_interp(self.parent):
-            return self.parent.process(prim, in_tree, **params)
+        # NOTE(asem): no context switch for interception interpreter
+        return self.parent.process(prim, in_tree, **params)
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:

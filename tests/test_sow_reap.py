@@ -213,7 +213,10 @@ class TestTransformThenReap:
         result, primals = af.collect(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
         assert primals == {"val": "primal"}
 
-        result, grads = af.collect(pb_ir, collection=("debug", "cotangent"))(("primal", "cotangent"))
+        result, grads = af.collect(pb_ir, collection=("debug", "cotangent"))((
+            "primal",
+            "cotangent",
+        ))
         assert grads == {"val": "cotangent"}
 
     def test_reap_captures_during_batch(self):
@@ -243,3 +246,81 @@ class TestTransformThenReap:
         result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "a: hello"
         assert collected == {"result": "a: hello"}
+
+
+class TestInjectAndDCE:
+    def test_inject_trace_creates_literal(self):
+        def program(x):
+            expensive = af.concat("EXPENSIVE:", x)
+            cached = af.checkpoint(expensive, collection="cache", name="result")
+            return af.concat("Got: ", cached)
+
+        ir = af.build_ir(program)("test")
+
+        assert len(ir.ireqns) == 3
+
+        def wrapped(x):
+            return af.inject(ir, collection="cache", values={"result": "CACHED"})("ignored")
+
+        traced_ir = af.build_ir(wrapped)("example")
+
+        assert len(traced_ir.ireqns) == 2
+
+        last_eqn = traced_ir.ireqns[-1]
+        assert last_eqn.prim.name == "concat"
+
+    def test_dce_removes_dead_code_after_inject(self):
+        def program(x):
+            expensive = af.concat("EXPENSIVE:", x)
+            cached = af.checkpoint(expensive, collection="cache", name="result")
+            return af.concat("Got: ", cached)
+
+        ir = af.build_ir(program)("test")
+
+        def wrapped(x):
+            return af.inject(ir, collection="cache", values={"result": "CACHED"})("ignored")
+
+        traced_ir = af.build_ir(wrapped)("example")
+
+        assert len(traced_ir.ireqns) == 2
+
+        optimized_ir = af.dce(traced_ir)
+        assert len(optimized_ir.ireqns) == 1
+        assert optimized_ir.ireqns[0].prim.name == "concat"
+
+        result = af.call(optimized_ir)("any_input")
+        assert result == "Got: CACHED"
+
+    def test_inject_dce_with_multiple_checkpoints(self):
+        def program(x):
+            step1 = af.concat("step1:", x)
+            saved1 = af.checkpoint(step1, collection="cache", name="first")
+            step2 = af.concat("step2:", saved1)
+            saved2 = af.checkpoint(step2, collection="cache", name="second")
+            return af.concat("final:", saved2)
+
+        ir = af.build_ir(program)("test")
+        assert len(ir.ireqns) == 5  # 3 concats + 2 checkpoints
+
+        def wrapped(x):
+            return af.inject(ir, collection="cache", values={"first": "CACHED1"})(x)
+
+        traced_ir = af.build_ir(wrapped)("example")
+        optimized_ir = af.dce(traced_ir)
+        result = af.call(optimized_ir)("input")
+        assert result == "final:step2:CACHED1"
+
+    def test_inject_works_with_nested_transforms(self):
+        def program(x):
+            expensive = af.concat("EXPENSIVE:", x)
+            cached = af.checkpoint(expensive, collection="cache", name="result")
+            return af.concat("Got: ", cached)
+
+        ir = af.build_ir(program)("test")
+        batched_ir = af.batch(ir)
+
+        result = af.inject(
+            batched_ir, collection=("cache", "batch"), values={"result": ["A", "B"]}
+        )(["x", "y"])
+
+        assert result == ["Got: A", "Got: B"]
