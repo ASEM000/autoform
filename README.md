@@ -16,10 +16,6 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Downloads](https://pepy.tech/badge/autoform)](https://pepy.tech/project/autoform)
 [![DOI](https://zenodo.org/badge/1115015093.svg)](https://doi.org/10.5281/zenodo.18071950)
-[![CodeFactor](https://www.codefactor.io/repository/github/asem000/autoform/badge)](https://www.codefactor.io/repository/github/asem000/autoform)
-[![Commits](https://img.shields.io/github/commit-activity/m/ASEM000/autoform)](https://github.com/ASEM000/autoform/commits)
-[![Snyk](https://snyk.io/test/github/ASEM000/autoform/badge.svg)](https://snyk.io/test/github/ASEM000/autoform)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 </td>
 </tr>
@@ -31,6 +27,27 @@
 pip install autoform
 ```
 
+## Why
+
+LLM programs are hard to optimize. You write multi-agent pipelines, but:
+- **debugging**: which agent caused the bad output?
+- **optimization**: how do you improve prompts systematically?
+- **batching**: how do you run N inputs without rewriting code?
+
+autoform solves this with **function transformations**. trace once, transform freely.
+
+## Features
+
+| Transform | What it does |
+|-----------|-------------|
+| `build_ir` | trace function → IR (no execution) |
+| `call` | execute IR |
+| `batch` | parallelize over inputs |
+| `pullback` | semantic gradients (feedback → input feedback) |
+| `collect` | capture intermediate values |
+| `inject` | override intermediate values |
+
+transforms compose: `batch(pullback(ir))`, `pullback(pullback(ir))`, etc.
 
 ## Example
 
@@ -96,5 +113,4 @@ grad_grad = af.pullback(af.pullback(ir))
 
 ## More
 
-- [examples/research_and_write.py](examples/research_and_write.py)
-- [examples/semantic_backprop.py](examples/semantic_backprop.py)
+- [Documentation](https://autoform.readthedocs.io)
