@@ -15,14 +15,16 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
 ]
-
-[project.optional-dependencies]
 docs = [
     "sphinx>=7.0",
-    "sphinx-book-theme>=1.0",
-    "myst-parser>=3.0",
+    "sphinx-book-theme>=1.1.4",
+    "myst-parser>=2.0,<4.0",
+    "nbsphinx>=0.9.8",
 ]
-
+notebook = [
+    "ipykernel>=7.1.0",
+    "jupyterlab>=4.5.1",
+]
 
 [tool.ruff]
 preview = true
