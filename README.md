@@ -1,5 +1,8 @@
 # autoform
 
+[![DOI](https://zenodo.org/badge/1115015093.svg)](https://doi.org/10.5281/zenodo.18071950)
+
+
 **composable function transformations for LLM programs**
 
 > ⚠️ **early development**: API may change.
