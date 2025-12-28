@@ -16,6 +16,13 @@ dev = [
     "pytest-cov>=7.0.0",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-book-theme>=1.0",
+    "myst-parser>=3.0",
+]
+
 
 [tool.ruff]
 preview = true
