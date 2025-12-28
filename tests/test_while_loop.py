@@ -1,8 +1,6 @@
-import pytest
-
 import autoform as af
 from autoform.core import build_ir, call
-import os
+from tests.conftest import TEST_MODEL, requires_llm
 
 
 class TestWhileLoopImpl:
@@ -182,7 +180,7 @@ class TestWhileLoopValidation:
 
 
 class TestWhileLoopWithLLM:
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_refine_text_with_traces(self):
 
         def cond(x):
@@ -193,7 +191,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make this text more professional."},
                 {"role": "user", "content": text},
             ]
-            refined = af.lm_call(msgs, model="gpt-4o")
+            refined = af.lm_call(msgs, model=TEST_MODEL)
             return af.checkpoint(refined, collection="refinements", name="step")
 
         cond_ir = build_ir(cond)("x")
@@ -211,7 +209,7 @@ class TestWhileLoopWithLLM:
         assert "step" in collected
         assert len(collected["step"]) == 3
 
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_refine_with_pullback(self):
 
         def cond(x):
@@ -222,7 +220,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make this text more professional."},
                 {"role": "user", "content": text},
             ]
-            return af.lm_call(msgs, model="gpt-4o")
+            return af.lm_call(msgs, model=TEST_MODEL)
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("text")
@@ -242,7 +240,7 @@ class TestWhileLoopWithLLM:
         assert len(final_state) > 0
         assert isinstance(in_cotangent, str)
 
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_batched_lm_calls(self):
 
         def translate(text):
@@ -250,7 +248,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Translate to French. Return ONLY the translation."},
                 {"role": "user", "content": text},
             ]
-            return af.lm_call(msgs, model="gpt-4o-mini")
+            return af.lm_call(msgs, model=TEST_MODEL)
 
         translate_ir = build_ir(translate)("text")
         batched_ir = af.batch(translate_ir, in_axes=list)
@@ -263,7 +261,7 @@ class TestWhileLoopWithLLM:
             assert isinstance(r, str)
             assert len(r) > 0
 
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_struct_lm_call(self):
 
         class Sentiment(af.Struct):
@@ -273,7 +271,7 @@ class TestWhileLoopWithLLM:
 
         def analyze(text):
             msgs = [{"role": "user", "content": af.format("Analyze sentiment: {}", text)}]
-            return af.struct_lm_call(msgs, model="gpt-4o-mini", struct=Sentiment)
+            return af.struct_lm_call(msgs, model=TEST_MODEL, struct=Sentiment)
 
         analyze_ir = build_ir(analyze)("text")
         result = call(analyze_ir)("I love this product! It's amazing!")
@@ -283,7 +281,7 @@ class TestWhileLoopWithLLM:
         assert hasattr(result, "summary")
         assert isinstance(result.positive, bool)
 
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_pushforward_lm(self):
 
         def improve(text):
@@ -291,7 +289,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make more professional."},
                 {"role": "user", "content": text},
             ]
-            return af.lm_call(msgs, model="gpt-4o-mini")
+            return af.lm_call(msgs, model=TEST_MODEL)
 
         improve_ir = build_ir(improve)("text")
         pf_ir = af.pushforward(improve_ir)
@@ -305,19 +303,19 @@ class TestWhileLoopWithLLM:
         assert len(out_primal) > 0
         assert isinstance(out_tangent, str)
 
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_collect_lm_checkpoints(self):
 
         def process(text):
             step1 = af.lm_call(
                 [{"role": "user", "content": af.format("Summarize: {}", text)}],
-                model="gpt-4o-mini",
+                model=TEST_MODEL,
             )
             step1 = af.checkpoint(step1, collection="steps", name="summary")
 
             step2 = af.lm_call(
                 [{"role": "user", "content": af.format("Translate to Spanish: {}", step1)}],
-                model="gpt-4o-mini",
+                model=TEST_MODEL,
             )
             step2 = af.checkpoint(step2, collection="steps", name="translation")
 
@@ -332,7 +330,7 @@ class TestWhileLoopWithLLM:
         assert "summary" in collected
         assert "translation" in collected
 
-    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    @requires_llm
     def test_refine_then_update(self):
 
         class QualityCheck(af.Struct):
@@ -350,7 +348,7 @@ class TestWhileLoopWithLLM:
                         ),
                     }
                 ],
-                model="gpt-4o",
+                model=TEST_MODEL,
                 struct=QualityCheck,
             )
             return verdict.needs_improvement
@@ -361,7 +359,7 @@ class TestWhileLoopWithLLM:
                     {"role": "system", "content": "Make more professional and formal."},
                     {"role": "user", "content": text},
                 ],
-                model="gpt-4o",
+                model=TEST_MODEL,
             )
             return af.checkpoint(refined, collection="trace", name="draft")
 
