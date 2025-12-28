@@ -13,7 +13,7 @@ class TestIterateUntilImpl:
         body = build_ir(identity)("x")
         goal = build_ir(always_true)("x")
 
-        result, status, n = af.iterate_until(body, "input", goal, max_iters=10)
+        result, status, n = af.while_loop(body, "input", goal, max_iters=10)
         assert result == "input"
         assert status == "goal"
         assert n == 0
@@ -28,7 +28,7 @@ class TestIterateUntilImpl:
         body = build_ir(append_x)("x")
         goal = build_ir(always_false)("x")
 
-        result, status, n = af.iterate_until(body, "a", goal, max_iters=3)
+        result, status, n = af.while_loop(body, "a", goal, max_iters=3)
         assert result == "axxx"
         assert status == "max"
         assert n == 3
@@ -43,7 +43,7 @@ class TestIterateUntilImpl:
         body = build_ir(append_x)("x")
         goal = build_ir(always_false)("x")
 
-        result, status, n = af.iterate_until(body, "input", goal, max_iters=0)
+        result, status, n = af.while_loop(body, "input", goal, max_iters=0)
         assert result == "input"
         assert status == "max"
         assert n == 0
@@ -61,7 +61,7 @@ class TestIterateUntilBatch:
         goal = build_ir(always_false)("x")
 
         def loop(init):
-            return af.iterate_until(body, init, goal, max_iters=2)
+            return af.while_loop(body, init, goal, max_iters=2)
 
         loop_ir = build_ir(loop)("init")
         batched_ir = af.batch(loop_ir, in_axes=list)
@@ -86,7 +86,7 @@ class TestIterateUntilPullback:
         goal = build_ir(always_false)("x")
 
         def loop(init):
-            return af.iterate_until(body, init, goal, max_iters=2)
+            return af.while_loop(body, init, goal, max_iters=2)
 
         loop_ir = build_ir(loop)("init")
         pb_ir = af.pullback(loop_ir)
@@ -111,7 +111,7 @@ class TestIterateUntilPullback:
         goal = build_ir(always_false)("x")
 
         def loop(init):
-            return af.iterate_until(body, init, goal, max_iters=2)
+            return af.while_loop(body, init, goal, max_iters=2)
 
         loop_ir = build_ir(loop)("init")
         pb_ir = af.pullback(loop_ir)
@@ -134,7 +134,7 @@ class TestIterateUntilPullback:
         goal = build_ir(always_true)("x")
 
         def loop(init):
-            return af.iterate_until(body, init, goal, max_iters=10)
+            return af.while_loop(body, init, goal, max_iters=10)
 
         loop_ir = build_ir(loop)("init")
         pb_ir = af.pullback(loop_ir)
@@ -163,7 +163,7 @@ class TestIterateUntilWithCheckpoint:
         goal = build_ir(always_false)("x")
 
         def loop(init):
-            return af.iterate_until(body, init, goal, max_iters=3)
+            return af.while_loop(body, init, goal, max_iters=3)
 
         loop_ir = build_ir(loop)("init")
         result, collected = af.collect(loop_ir, collection="trace")("a")
@@ -185,7 +185,7 @@ class TestIterateUntilValidation:
         goal_ir = build_ir(goal)("x")
 
         try:
-            af.iterate_until(lambda x: x, "init", goal_ir, max_iters=5)
+            af.while_loop(lambda x: x, "init", goal_ir, max_iters=5)
             assert False, "Should have raised"
         except AssertionError as e:
             assert "body must be an IR" in str(e)
@@ -197,7 +197,7 @@ class TestIterateUntilValidation:
         body_ir = build_ir(body)("x")
 
         try:
-            af.iterate_until(body_ir, "init", lambda x: True, max_iters=5)
+            af.while_loop(body_ir, "init", lambda x: True, max_iters=5)
             assert False, "Should have raised"
         except AssertionError as e:
             assert "goal must be an IR" in str(e)
@@ -214,7 +214,7 @@ class TestIterateUntilValidation:
         goal_ir = build_ir(goal)("x")
 
         try:
-            af.iterate_until(body_ir, "init", goal_ir, max_iters=5)
+            af.while_loop(body_ir, "init", goal_ir, max_iters=5)
             assert False, "Should have raised"
         except AssertionError as e:
             assert "identical input/output structure" in str(e)
@@ -230,7 +230,7 @@ class TestIterateUntilValidation:
         goal_ir = build_ir(bad_goal)("x")
 
         try:
-            af.iterate_until(body_ir, "init", goal_ir, max_iters=5)
+            af.while_loop(body_ir, "init", goal_ir, max_iters=5)
             assert False, "Should have raised"
         except AssertionError as e:
             assert "goal must return bool" in str(e)

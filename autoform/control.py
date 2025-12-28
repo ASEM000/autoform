@@ -217,7 +217,7 @@ def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
 # ITERATE UNTIL
 # ==================================================================================================
 
-iterate_until_p = Primitive("iterate_until", tag="control")
+while_loop_p = Primitive("while_loop", tag="control")
 
 
 type State = str
@@ -226,7 +226,7 @@ type Iterations = int
 type Residuals = tuple[State, Status, Iterations]
 
 
-def iterate_until(
+def while_loop(
     body: IR,
     init: Tree,
     goal: IR,
@@ -259,7 +259,7 @@ def iterate_until(
         ...     return verdict.is_good  # Direct attribute access returns bool
         >>> body = af.build_ir(refine)("draft")
         >>> goal = af.build_ir(verify)("draft")
-        >>> result, status, n = af.iterate_until(body, "my text", goal, max_iters=5) # doctest: +SKIP
+        >>> result, status, n = af.while_loop(body, "my text", goal, max_iters=5) # doctest: +SKIP
     """
     assert isinstance(body, IR), f"body must be an IR, got {type(body)}"
     assert isinstance(goal, IR), f"goal must be an IR, got {type(goal)}"
@@ -271,11 +271,11 @@ def iterate_until(
         f"in_struct:  {in_struct}\n"
         f"out_struct: {out_struct}"
     )
-    return iterate_until_p.bind(init, body=body, goal=goal, max_iters=max_iters)
+    return while_loop_p.bind(init, body=body, goal=goal, max_iters=max_iters)
 
 
-@ft.partial(impl_rules.def_rule, iterate_until_p)
-def impl_iterate_until(
+@ft.partial(impl_rules.def_rule, while_loop_p)
+def impl_while_loop(
     in_tree: Tree,
     *,
     body: IR,
@@ -293,8 +293,8 @@ def impl_iterate_until(
     return (state, "max", max_iters)
 
 
-@ft.partial(eval_rules.def_rule, iterate_until_p)
-def eval_iterate_until(
+@ft.partial(eval_rules.def_rule, while_loop_p)
+def eval_while_loop(
     in_tree: Tree,
     *,
     body: IR,
@@ -308,8 +308,8 @@ def eval_iterate_until(
     return (out_state, status, n_iters)
 
 
-@ft.partial(batch_rules.def_rule, iterate_until_p)
-def batch_iterate_until(
+@ft.partial(batch_rules.def_rule, while_loop_p)
+def batch_while_loop(
     batch_size: int,
     in_batched: Tree,
     in_tree: Tree,
@@ -379,8 +379,8 @@ def batch_iterate_until(
     return (states, statuses, iterations), out_batched
 
 
-@ft.partial(pull_fwd_rules.def_rule, iterate_until_p)
-def pullback_fwd_iterate_until(
+@ft.partial(pull_fwd_rules.def_rule, while_loop_p)
+def pullback_fwd_while_loop(
     in_tree: Tree,
     *,
     body: IR,
@@ -403,8 +403,8 @@ def pullback_fwd_iterate_until(
     return (state, "max", max_iters), residuals
 
 
-@ft.partial(pull_bwd_rules.def_rule, iterate_until_p)
-def pullback_bwd_iterate_until(
+@ft.partial(pull_bwd_rules.def_rule, while_loop_p)
+def pullback_bwd_while_loop(
     residuals: Tree,
     out_cotangent: Tree,
     *,
