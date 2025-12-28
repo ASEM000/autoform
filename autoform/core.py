@@ -101,6 +101,8 @@ def is_irlit(x) -> tp.TypeGuard[IRLit]:
 
 
 class Primitive:
+    # NOTE(asem): primitive is a key used for matching against rules
+    # defined in ``InterpreterRuleMapping``
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
@@ -112,7 +114,7 @@ class Primitive:
         return self.name
 
     def bind(self, in_tree: Tree, **params):
-        return get_interp().process(self, in_tree, **params)
+        return get_interp().interpret(self, in_tree, **params)
 
 
 # ==================================================================================================
@@ -213,11 +215,11 @@ class IR[**P, R]:
 
     def __init__(
         self,
-        ireqns: list[IREqn],
+        ireqns: tp.Sequence[IREqn],
         in_irtree: Tree[IRAtom],
         out_irtree: Tree[IRAtom],
     ):
-        self.ireqns = ireqns
+        self.ireqns = tuple(ireqns)
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
@@ -284,11 +286,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 class Interpreter(ABC):
     @abstractmethod
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
 
 
 class EvalInterpreter(Interpreter):
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         return impl_rules[prim](in_tree, **params)
 
 
@@ -300,7 +302,7 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 @contextmanager
-def using_interp[T: Interpreter](interpreter: T) -> tp.Generator[T, None, None]:
+def using_interpreter[T: Interpreter](interpreter: T) -> tp.Generator[T, None, None]:
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -321,23 +323,37 @@ class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> list[IRVar]:
-        def to_in_iratom(x):
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
+        def to_in_iratom(x) -> IRAtom:
+            # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
+            # however, a function can take a constant value as input that is not an input
+            # thus we need to wrap it here
+            # >>> def f(x):
+            # ...     const = "..."
+            # ...     return some_user_func(const)
+            # here const is not reachable by `build_ir` wrapping mechanism and thus
+            # needs to be handled here
             return x if is_iratom(x) else IRLit(x)
 
         in_irtree = treelib.map(to_in_iratom, in_tree)
+
         assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
 
-        def to_eval(x):
+        def to_in_evaltype(x):
+            # NOTE(asem): eval rules accept `Var`/ python types.
+            # `Var` simply denotes a placeholder for a value that will be computed later
             return Var() if is_irvar(x) else x.value
 
-        in_eval_tree = treelib.map(to_eval, in_irtree)
-        out_tree = eval_rules[prim](in_eval_tree, **params)
+        in_evaltree = treelib.map(to_in_evaltype, in_irtree)
+        out_evaltree = eval_rules[prim](in_evaltree, **params)
 
-        def from_eval(x):
+        def to_out_iratom(x) -> IRAtom:
+            # NOTE(asem): eval rules return `Var`/ python types.
+            # `Var` simply denotes a placeholder for a value that will be computed later
+            # this is basically delegated to the user to handle
             return IRVar.fresh() if is_var(x) else IRLit(x)
 
-        out_irtree = treelib.map(from_eval, out_tree, is_leaf=is_var)
+        out_irtree = treelib.map(to_out_iratom, out_evaltree)
         self.ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
         return out_irtree
 
@@ -365,25 +381,29 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
         'Hello, Alice!!'
     """
 
-    def assert_no_iratom(x):
-        assert not is_iratom(x)
+    def assert_usertype(x):
+        assert not is_iratom(x), "Inputs to `build_ir` must be normal python types"
 
-    def preprocess(x):
+    def to_in_iratom(x):
+        # NOTE(asem): user types are converted to IRVar/IRLit
+        # to prepare for tracing.
         return IRVar.fresh() if is_user_type(x) else IRLit(x)
 
-    def postprocess(x):
+    def to_out_iratom(x):
         return x if is_iratom(x) else IRLit(x)
 
     @ft.wraps(func)
     def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
-        in_irtree = treelib.map(preprocess, (args, kwargs), is_leaf=is_user_type)
+        # NOTE(asem): make sure inputs are normal python not iratoms
+        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
-        with using_interp(TracingInterpreter()) as tracer:
+        in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
+
+        with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
-            in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-            out_irtree = treelib.map(postprocess, out_irtree)
-            return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+        out_irtree = treelib.map(to_out_iratom, out_irtree)
+        return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
     return trace
 
@@ -394,13 +414,13 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 
 
 def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
-    """Create a synchronous executor for an IR.
+    """Call an IR.
 
     Args:
-        ir: The IR to execute.
+        ir: The IR to run.
 
     Returns:
-        A callable that executes the IR with the provided arguments.
+        A callable that runs the IR with the provided arguments.
 
     Example:
         >>> import autoform as af

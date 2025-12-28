@@ -145,7 +145,7 @@ class TestInterpreter:
 
     def test_use_interpreter_context(self):
         tracer = af.core.TracingInterpreter()
-        with af.core.using_interp(tracer) as t:
+        with af.core.using_interpreter(tracer) as t:
             assert t is tracer
             af.format("Hello, {}!", af.core.IRVar.fresh())
             assert len(tracer.ireqns) == 1
@@ -154,7 +154,7 @@ class TestInterpreter:
 
     def test_tracing_interpreter_creates_ireqns(self):
         tracer = af.core.TracingInterpreter()
-        with af.core.using_interp(tracer):
+        with af.core.using_interpreter(tracer):
             af.format("Hello, {}!", af.core.IRVar.fresh())
         assert len(tracer.ireqns) == 1
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections import defaultdict
-from autoform.core import Interpreter, get_interp, using_interp
+from autoform.core import Interpreter, get_interp, using_interpreter
 from autoform.core import IR, EvalType
 from autoform.core import (
     Primitive,
@@ -117,12 +117,30 @@ type Collected = dict[tp.Hashable, list[Tree]]
 class CollectInterpreter(Interpreter):
     def __init__(self, *, collection: tp.Hashable):
         self.collection = collection
+        # NOTE(asem): collect into a defaultdict of lists for situations where
+        # a value is checkpointed multiple times (e.g. a value in a loop)
         self.collected: Collected = defaultdict(list)
         self.parent = get_interp()
 
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        # NOTE(asem): no context switch for interception interpreter
-        result = self.parent.process(prim, in_tree, **params)
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        # NOTE(asem): No context switch here. We call parent.interpret() directly
+        # Example: lets say we have a push rule that checkpoints stuff inside it
+        # >>> def pushforward_checkpoint(primal, tangent, ...):
+        # ...     p = checkpoint(primal, ...)    # <- calls checkpoint_p.bind()
+        # ...     t = checkpoint(tangent, ...)   # <- calls checkpoint_p.bind()
+        # ...     return p, t
+        # here we have an interplay between 3 interpreters (collect, eval, and push)
+        # within the rule we have parent=eval (push_impl -> induced PushInterp -> called this rule)
+        # if we do not call collect.
+        # now lets say we call collect, then we induce CollectInterp with parent=eval
+        # now lets say we switch to parent, then we move to eval->push_call.impl->
+        # induce a PushInterp with parent=eval. **at this point collect is lost**.
+        # however, if we simply call previous interpreter (parent) then we will
+        # keep CollectInterpreter as the active interpreter (from using_interpreter at collect).
+        # when push rule calls checkpoint(), it goes through prim.bind() -> get_interp()
+        # -> CollectInterpreter.interpret() and we can observe those nested calls.
+        # this observation applies to other observer interpreters as well.
+        result = self.parent.interpret(prim, in_tree, **params)
         if prim == checkpoint_p and params.get("collection") == self.collection:
             self.collected[params["name"]].append(result)
         return result
@@ -154,7 +172,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
-        with using_interp(CollectInterpreter(collection=collection)) as collector:
+        with using_interpreter(CollectInterpreter(collection=collection)) as collector:
             result = call(ir)(*args, **kwargs)
         return result, collector.collected
 
@@ -173,16 +191,18 @@ class InjectInterpreter(Interpreter):
         self.values = {k: list(reversed(values[k])) for k in values}
         self.parent = get_interp()
 
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         if (
             prim == checkpoint_p
             and params.get("collection") == self.collection
             and (name := params.get("name")) in self.values
-            and self.values[name]  # Non-empty list
+            # NOTE(asem): allow empty values to allow round-tripping
+            and self.values[name]
         ):
             return self.values[name].pop()
-        # NOTE(asem): no context switch for interception interpreter
-        return self.parent.process(prim, in_tree, **params)
+        # NOTE(asem): check the note in CollectInterpreter.interpret for explanation
+        # on why no context switch here.
+        return self.parent.interpret(prim, in_tree, **params)
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
@@ -209,9 +229,12 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         'CACHED'
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(values, dict), f"Expected dict, got {type(values)}"
+    for key in values:
+        assert isinstance(values[key], list), f"Expected list, got {type(values[key])} for {key=}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
-        with using_interp(InjectInterpreter(collection=collection, values=values)):
+        with using_interpreter(InjectInterpreter(collection=collection, values=values)):
             return call(ir)(*args, **kwargs)
 
     return execute
