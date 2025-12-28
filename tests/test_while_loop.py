@@ -241,3 +241,93 @@ class TestWhileLoopWithLLM:
         assert isinstance(final_state, str)
         assert len(final_state) > 0
         assert isinstance(in_cotangent, str)
+
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_batched_lm_calls(self):
+
+        def translate(text):
+            msgs = [
+                {"role": "system", "content": "Translate to French. Return ONLY the translation."},
+                {"role": "user", "content": text},
+            ]
+            return af.lm_call(msgs, model="gpt-4o-mini")
+
+        translate_ir = build_ir(translate)("text")
+        batched_ir = af.batch(translate_ir, in_axes=list)
+
+        inputs = ["Hello", "Goodbye", "Thank you"]
+        results = call(batched_ir)(inputs)
+
+        assert len(results) == 3
+        for r in results:
+            assert isinstance(r, str)
+            assert len(r) > 0
+
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_struct_lm_call(self):
+
+        class Sentiment(af.Struct):
+            positive: bool
+            confidence: float
+            summary: str
+
+        def analyze(text):
+            msgs = [{"role": "user", "content": af.format("Analyze sentiment: {}", text)}]
+            return af.struct_lm_call(msgs, model="gpt-4o-mini", struct=Sentiment)
+
+        analyze_ir = build_ir(analyze)("text")
+        result = call(analyze_ir)("I love this product! It's amazing!")
+
+        assert hasattr(result, "positive")
+        assert hasattr(result, "confidence")
+        assert hasattr(result, "summary")
+        assert isinstance(result.positive, bool)
+
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_pushforward_lm(self):
+
+        def improve(text):
+            msgs = [
+                {"role": "system", "content": "Make more professional."},
+                {"role": "user", "content": text},
+            ]
+            return af.lm_call(msgs, model="gpt-4o-mini")
+
+        improve_ir = build_ir(improve)("text")
+        pf_ir = af.pushforward(improve_ir)
+
+        primal = "hey whats up"
+        tangent = "tangent direction"
+
+        (out_primal, out_tangent) = call(pf_ir)((primal, tangent))
+
+        assert isinstance(out_primal, str)
+        assert len(out_primal) > 0
+        assert isinstance(out_tangent, str)
+
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_collect_lm_checkpoints(self):
+
+        def process(text):
+            step1 = af.lm_call(
+                [{"role": "user", "content": af.format("Summarize: {}", text)}],
+                model="gpt-4o-mini",
+            )
+            step1 = af.checkpoint(step1, collection="steps", name="summary")
+
+            step2 = af.lm_call(
+                [{"role": "user", "content": af.format("Translate to Spanish: {}", step1)}],
+                model="gpt-4o-mini",
+            )
+            step2 = af.checkpoint(step2, collection="steps", name="translation")
+
+            return step2
+
+        process_ir = build_ir(process)("text")
+        result, collected = af.collect(process_ir, collection="steps")(
+            "The quick brown fox jumps over the lazy dog."
+        )
+
+        assert isinstance(result, str)
+        assert "summary" in collected
+        assert "translation" in collected
