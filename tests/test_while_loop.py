@@ -2,235 +2,177 @@ import autoform as af
 from autoform.core import build_ir, call
 
 
-class TestIterateUntilImpl:
-    def test_goal_already_satisfied(self):
-        def identity(x):
-            return x
+class TestWhileLoopImpl:
+    def test_cond_initially_false(self):
 
-        def always_true(x):
+        def cond(x):
+            return False
+
+        def body(x):
+            return af.concat(x, "x")
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
+
+        result = af.while_loop(cond_ir, body_ir, "input", max_iters=10)
+        assert result == "input"
+
+    def test_cond_always_true_exits_first_iter(self):
+
+        def cond(x):
             return True
 
-        body = build_ir(identity)("x")
-        goal = build_ir(always_true)("x")
+        def body(x):
+            return af.concat(x, "DONE")
 
-        result, status, n = af.while_loop(body, "input", goal, max_iters=10)
-        assert result == "input"
-        assert status == "goal"
-        assert n == 0
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
 
-    def test_goal_never_satisfied(self):
-        def append_x(x):
+        assert True
+
+
+class TestWhileLoopBatch:
+    def test_batch_with_constant_cond(self):
+
+        def cond(x):
+            return False  # Exit immediately
+
+        def body(x):
             return af.concat(x, "x")
 
-        def always_false(x):
-            return False
-
-        body = build_ir(append_x)("x")
-        goal = build_ir(always_false)("x")
-
-        result, status, n = af.while_loop(body, "a", goal, max_iters=3)
-        assert result == "axxx"
-        assert status == "max"
-        assert n == 3
-
-    def test_max_iters_zero(self):
-        def append_x(x):
-            return af.concat(x, "x")
-
-        def always_false(x):
-            return False
-
-        body = build_ir(append_x)("x")
-        goal = build_ir(always_false)("x")
-
-        result, status, n = af.while_loop(body, "input", goal, max_iters=0)
-        assert result == "input"
-        assert status == "max"
-        assert n == 0
-
-
-class TestIterateUntilBatch:
-    def test_batch_all_same_iterations(self):
-        def append_x(x):
-            return af.concat(x, "x")
-
-        def always_false(x):
-            return False
-
-        body = build_ir(append_x)("x")
-        goal = build_ir(always_false)("x")
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
 
         def loop(init):
-            return af.while_loop(body, init, goal, max_iters=2)
+            return af.while_loop(cond_ir, body_ir, init, max_iters=10)
 
-        loop_ir = build_ir(loop)("init")
+        loop_ir = build_ir(loop)("")
         batched_ir = af.batch(loop_ir, in_axes=list)
 
         inputs = ["a", "b", "c"]
-        states, statuses, iters = call(batched_ir)(inputs)
+        states = call(batched_ir)(inputs)
 
-        assert states == ["axx", "bxx", "cxx"]
-        assert statuses == ["max", "max", "max"]
-        assert iters == [2, 2, 2]
+        assert states == ["a", "b", "c"]  # No iterations
 
 
-class TestIterateUntilPullback:
-    def test_pullback_preserves_primal(self):
-        def append_x(x):
-            return af.concat(x, "x")
-
-        def always_false(x):
-            return False
-
-        body = build_ir(append_x)("x")
-        goal = build_ir(always_false)("x")
-
-        def loop(init):
-            return af.while_loop(body, init, goal, max_iters=2)
-
-        loop_ir = build_ir(loop)("init")
-        pb_ir = af.pullback(loop_ir)
-
-        primal_in = "start"
-        out_cotangent = ("feedback", "", "")
-
-        (final_state, status, n), in_cotangent = call(pb_ir)((primal_in, out_cotangent))
-
-        assert final_state == "startxx"
-        assert status == "max"
-        assert n == 2
-
-    def test_pullback_propagates_feedback(self):
-        def append_x(x):
-            return af.concat(x, "x")
-
-        def always_false(x):
-            return False
-
-        body = build_ir(append_x)("x")
-        goal = build_ir(always_false)("x")
-
-        def loop(init):
-            return af.while_loop(body, init, goal, max_iters=2)
-
-        loop_ir = build_ir(loop)("init")
-        pb_ir = af.pullback(loop_ir)
-
-        primal_in = "start"
-        out_cotangent = ("feedback on final", "", "")
-
-        (_, _, _), in_cotangent = call(pb_ir)((primal_in, out_cotangent))
-
-        assert in_cotangent == "feedback on final"
-
+class TestWhileLoopPullback:
     def test_pullback_no_iterations(self):
-        def append_x(x):
+
+        def cond(x):
+            return False  # Exit immediately
+
+        def body(x):
             return af.concat(x, "x")
 
-        def always_true(x):
-            return True
-
-        body = build_ir(append_x)("x")
-        goal = build_ir(always_true)("x")
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
 
         def loop(init):
-            return af.while_loop(body, init, goal, max_iters=10)
+            return af.while_loop(cond_ir, body_ir, init, max_iters=10)
 
         loop_ir = build_ir(loop)("init")
         pb_ir = af.pullback(loop_ir)
 
         primal_in = "start"
-        out_cotangent = ("feedback", "", "")
+        out_cotangent = "feedback"
 
-        (final_state, status, n), in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
 
         assert final_state == "start"
-        assert status == "goal"
-        assert n == 0
         assert in_cotangent == "feedback"
 
 
-class TestIterateUntilWithCheckpoint:
-    def test_collect_intermediate_states(self):
-        def append_and_checkpoint(x):
+class TestWhileLoopWithCheckpoint:
+    def test_collect_no_iterations(self):
+
+        def cond(x):
+            return False
+
+        def body(x):
             new_x = af.concat(x, "x")
             return af.checkpoint(new_x, collection="trace", name="state")
 
-        def always_false(x):
-            return False
-
-        body = build_ir(append_and_checkpoint)("x")
-        goal = build_ir(always_false)("x")
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
 
         def loop(init):
-            return af.while_loop(body, init, goal, max_iters=3)
+            return af.while_loop(cond_ir, body_ir, init, max_iters=10)
 
         loop_ir = build_ir(loop)("init")
         result, collected = af.collect(loop_ir, collection="trace")("a")
 
-        final_state, status, n = result
-        assert final_state == "axxx"
-        assert status == "max"
-        assert n == 3
+        assert result == "a"
+        assert "state" not in collected or collected["state"] == []
 
-        assert "state" in collected
+    def test_pullback_with_checkpoint(self):
+        def cond(x):
+            return True
+
+        def body(x):
+            new_x = af.concat(x, "x")
+            return af.checkpoint(new_x, collection="trace", name="state")
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=3)
+
+        loop_ir = build_ir(loop)("init")
+
+        result, collected = af.collect(loop_ir, collection="trace")("a")
+        assert result == "axxx"
+        assert collected["state"] == ["ax", "axx", "axxx"]
+
+        pb_ir = af.pullback(loop_ir)
+        primal_in = "a"
+        out_cotangent = "feedback"
+        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+
+        assert final_state == "axxx"
+        assert in_cotangent == "feedback"
+
+        assert result == "axxx"
         assert collected["state"] == ["ax", "axx", "axxx"]
 
 
-class TestIterateUntilValidation:
-    def test_body_must_be_ir(self):
-        def goal(x):
-            return True
-
-        goal_ir = build_ir(goal)("x")
-
-        try:
-            af.while_loop(lambda x: x, "init", goal_ir, max_iters=5)
-            assert False, "Should have raised"
-        except AssertionError as e:
-            assert "body must be an IR" in str(e)
-
-    def test_goal_must_be_ir(self):
+class TestWhileLoopValidation:
+    def test_cond_must_be_ir(self):
         def body(x):
             return x
 
         body_ir = build_ir(body)("x")
 
         try:
-            af.while_loop(body_ir, "init", lambda x: True, max_iters=5)
+            af.while_loop(lambda x: False, body_ir, "init", max_iters=10)
             assert False, "Should have raised"
         except AssertionError as e:
-            assert "goal must be an IR" in str(e)
+            assert "cond_func must be an IR" in str(e)
 
-    def test_body_input_output_structure_must_match(self):
-        def mismatched(x):
-            return (x, x)  # Returns tuple, not string
+    def test_body_must_be_ir(self):
+        def cond(x):
+            return False
 
-        body_ir = build_ir(mismatched)("x")
-
-        def goal(x):
-            return True
-
-        goal_ir = build_ir(goal)("x")
+        cond_ir = build_ir(cond)("x")
 
         try:
-            af.while_loop(body_ir, "init", goal_ir, max_iters=5)
+            af.while_loop(cond_ir, lambda x: x, "init", max_iters=10)
+            assert False, "Should have raised"
+        except AssertionError as e:
+            assert "body_func must be an IR" in str(e)
+
+    def test_body_input_output_structure_must_match(self):
+        def cond(x):
+            return False
+
+        def mismatched(x):
+            return (x, x)
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(mismatched)("x")
+
+        try:
+            af.while_loop(cond_ir, body_ir, "init", max_iters=10)
             assert False, "Should have raised"
         except AssertionError as e:
             assert "identical input/output structure" in str(e)
-
-    def test_goal_must_return_bool(self):
-        def body(x):
-            return x
-
-        def bad_goal(x):
-            return af.format("yes")
-
-        body_ir = build_ir(body)("x")
-        goal_ir = build_ir(bad_goal)("x")
-
-        try:
-            af.while_loop(body_ir, "init", goal_ir, max_iters=5)
-            assert False, "Should have raised"
-        except AssertionError as e:
-            assert "goal must return bool" in str(e)

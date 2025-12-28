@@ -214,98 +214,72 @@ def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
 
 
 # ==================================================================================================
-# ITERATE UNTIL
+# WHILE LOOP
 # ==================================================================================================
 
 while_loop_p = Primitive("while_loop", tag="control")
 
 
-type State = str
-type Status = str
-type Iterations = int
-type Residuals = tuple[State, Status, Iterations]
+def while_loop(cond_func: IR, body_func: IR, init_val: Tree, *, max_iters: int) -> Tree:
+    """Repeatedly apply ``body_func`` while ``cond_func`` returns True.
 
-
-def while_loop(
-    body: IR,
-    init: Tree,
-    goal: IR,
-    max_iters: int = 10,
-) -> Residuals:
-    """Goal-directed iteration: iterate body until goal is satisfied.
+    - Loop continues while cond_func(state) returns True
+    - body_func is applied each iteration
+    - Returns final state when cond_func returns False or max_iters reached
 
     Args:
-        body: IR for one refinement step, f: X -> X
-        init: Initial state x₀
-        goal: IR that returns truthy when goal is reached, g: X -> bool
-        max_iters: Maximum iterations (safety bound)
+        cond_func: IR that returns bool. Loop continues while True.
+        body_func: IR that transforms state, f: State -> State
+        init_val: Initial state
+        max_iters: Maximum iterations
 
     Returns:
-        (final_state, status, n_iters) where:
-        - final_state: The state when iteration stopped
-        - status: "goal" if goal reached, "max" if bounded
-        - n_iters: Number of iterations executed
+        Final state when cond_func returns False or max_iters reached.
 
     Example:
         >>> import autoform as af
-        >>> def refine(draft):
-        ...     msgs = [{"role": "user", "content": af.format("Improve: {}", draft)}]
-        ...     return af.lm_call(msgs, model="gpt-4o-mini")
-        >>> class Verdict(af.Struct):
-        ...     is_good: bool
-        >>> def verify(draft):
-        ...     msgs = [{"role": "user", "content": af.format("Is good? {}", draft)}]
-        ...     verdict = af.struct_lm_call(msgs, model="gpt-4o-mini", struct=Verdict)
-        ...     return verdict.is_good  # Direct attribute access returns bool
-        >>> body = af.build_ir(refine)("draft")
-        >>> goal = af.build_ir(verify)("draft")
-        >>> result, status, n = af.while_loop(body, "my text", goal, max_iters=5) # doctest: +SKIP
+        >>> def cond(x):
+        ...     return False  # Exit immediately
+        >>> def body(x):
+        ...     return af.concat(x, "x")
+        >>> cond_ir = af.build_ir(cond)("x")
+        >>> body_ir = af.build_ir(body)("x")
+        >>> result = af.while_loop(cond_ir, body_ir, "a", max_iters=10)
+        >>> result
+        'a'
     """
-    assert isinstance(body, IR), f"body must be an IR, got {type(body)}"
-    assert isinstance(goal, IR), f"goal must be an IR, got {type(goal)}"
+    assert isinstance(cond_func, IR), f"cond_func must be an IR, got {type(cond_func)}"
+    assert isinstance(body_func, IR), f"body_func must be an IR, got {type(body_func)}"
 
-    in_struct = treelib.structure(body.in_irtree)
-    out_struct = treelib.structure(body.out_irtree)
+    in_struct = treelib.structure(body_func.in_irtree)
+    out_struct = treelib.structure(body_func.out_irtree)
     assert in_struct == out_struct, (
-        f"body must have identical input/output structure (f: X -> X).\n"
+        f"body_func must have identical input/output structure (f: State -> State).\n"
         f"in_struct:  {in_struct}\n"
         f"out_struct: {out_struct}"
     )
-    return while_loop_p.bind(init, body=body, goal=goal, max_iters=max_iters)
+    return while_loop_p.bind(
+        init_val,
+        cond_func=cond_func,
+        body_func=body_func,
+        max_iters=max_iters,
+    )
 
 
 @ft.partial(impl_rules.def_rule, while_loop_p)
-def impl_while_loop(
-    in_tree: Tree,
-    *,
-    body: IR,
-    goal: IR,
-    max_iters: int,
-) -> Residuals:
-    state: State = in_tree
-    for t in range(max_iters):
-        goal_result = call(goal)(state)
-        assert isinstance(goal_result, bool), "goal must return bool"
-        if goal_result:
-            return (state, "goal", t)
-        state = call(body)(state)
-
-    return (state, "max", max_iters)
+def impl_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
+    state = in_tree
+    for _ in range(max_iters):
+        if not call(cond_func)(state):
+            break
+        state = call(body_func)(state)
+    return state
 
 
 @ft.partial(eval_rules.def_rule, while_loop_p)
-def eval_while_loop(
-    in_tree: Tree,
-    *,
-    body: IR,
-    goal: IR,
-    max_iters: int,
-) -> Residuals:
-    del goal, max_iters
-    out_state = treelib.map(lambda _: Var(), body.out_irtree, is_leaf=is_irvar)
-    status = Var()
-    n_iters = Var()
-    return (out_state, status, n_iters)
+def eval_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
+    del cond_func, max_iters
+    return treelib.map(lambda _: Var(), body_func.out_irtree)
 
 
 @ft.partial(batch_rules.def_rule, while_loop_p)
@@ -314,113 +288,69 @@ def batch_while_loop(
     in_batched: Tree,
     in_tree: Tree,
     *,
-    body: IR,
-    goal: IR,
+    cond_func: IR,
+    body_func: IR,
     max_iters: int,
-) -> tuple[Residuals, Tree[bool]]:
-    # NOTE(asem): the batch rule here is a bit more complicated than others
-    # because it involves breaking the loop when a goal is reached. it would be inefficient
-    # to keep running a maxiters loop for each example regardless of whether it reached the goal
-    # or not. so we keep track of which examples are still alive and only run the loop for them
-    # until all examples reach the goal or maxiters is reached
-
-    # NOTE(asem): unbatch basically extracts an example from
-    # a pytree according to the batch index. one thing to note
-    # if the some part of the pytree mask is not batched, it will be broadcasted
+) -> tuple[Tree, Tree]:
     unbatch_state = ft.partial(unbatch_at, in_tree, in_batched)
     states = [unbatch_state(b) for b in range(batch_size)]
 
-    # NOTE(asem): alive is a list of booleans that indicates which examples are still alive
-    # statuses is a list of strings that indicates the status of each example
-    # iterations is a list of integers that indicates the number of iterations for each example
     alive = [True] * batch_size
+    batched_body = batch(body_func, in_axes=list)
 
-    # NOTE(asem): maybe expose this as an option
-    statuses = ["running"] * batch_size
-    iterations = [0] * batch_size
-
-    batched_body = batch(body, in_axes=list)
-
-    for t in range(max_iters):
+    for _ in range(max_iters):
         alive_idx = [i for i in range(batch_size) if alive[i]]
-
-        # NOTE(asem): all examples are done running
         if not alive_idx:
             break
 
-        # NOTE(asem): goal check on alive examples (not batched)
         alive_states = [states[i] for i in alive_idx]
-        goals = [call(goal)(state) for state in alive_states]
 
-        for i, g in zip(alive_idx, goals, strict=True):
-            assert isinstance(g, bool), "goal must return bool"
-            if g:
+        conds = [call(cond_func)(state) for state in alive_states]
+        for i, c in zip(alive_idx, conds, strict=True):
+            if not c:
                 alive[i] = False
-                statuses[i] = "goal"
-                iterations[i] = t
 
-        # NOTE(asem): batched body application on still-alive examples
         still_alive = [i for i in alive_idx if alive[i]]
         if still_alive:
             still_alive_states = [states[i] for i in still_alive]
             new_states = call(batched_body)(still_alive_states)
             for i, s in zip(still_alive, new_states, strict=True):
                 states[i] = s
-                iterations[i] = t + 1
 
-    # NOTE(asem): mark remaining as max
-    for i in range(batch_size):
-        if statuses[i] == "running":
-            statuses[i] = "max"
-            iterations[i] = max_iters
-
-    # NOTE(asem): return batched outputs
-    out_batched = (True, True, True)  # (states, statuses, iterations) all batched
-    return (states, statuses, iterations), out_batched
+    out_batched = treelib.map(lambda _: True, body_func.out_irtree)
+    return states, out_batched
 
 
 @ft.partial(pull_fwd_rules.def_rule, while_loop_p)
 def pullback_fwd_while_loop(
-    in_tree: Tree,
-    *,
-    body: IR,
-    goal: IR,
-    max_iters: int,
+    in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int
 ) -> tuple[Tree, Tree]:
     state = in_tree
     trajectory = [state]
 
-    for t in range(max_iters):
-        reached = call(goal)(state)
-        if reached:
-            residuals = (trajectory, "goal", t, body, goal)
-            return (state, "goal", t), residuals
-
-        state = call(body)(state)
+    for _ in range(max_iters):
+        if not call(cond_func)(state):
+            break
+        state = call(body_func)(state)
         trajectory.append(state)
 
-    residuals = (trajectory, "max", max_iters, body, goal)
-    return (state, "max", max_iters), residuals
+    residuals = (trajectory, body_func)
+    return state, residuals
 
 
 @ft.partial(pull_bwd_rules.def_rule, while_loop_p)
 def pullback_bwd_while_loop(
-    residuals: Tree,
-    out_cotangent: Tree,
-    *,
-    body: IR,
-    goal: IR,
-    max_iters: int,
+    residuals: Tree, out_cotangent: Tree, *, cond_func: IR, body_func: IR, max_iters: int
 ) -> Tree:
-    trajectory, status, n_iters, _, _ = residuals
-    out_state_cotangent, _, _ = out_cotangent
+    del cond_func, max_iters
+    trajectory, _ = residuals
+    n_iters = len(trajectory) - 1
 
-    cotangent = out_state_cotangent
-    pb_body = pullback(body)
+    cotangent = out_cotangent
+    pb_body = pullback(body_func)
 
     for t in reversed(range(n_iters)):
         state_t = trajectory[t]
-        # NOTE(asem): backprop through body moving from  out_cot -> in_cot
         _, cotangent = call(pb_body)((state_t, cotangent))
 
     return cotangent
