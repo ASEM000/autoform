@@ -331,3 +331,57 @@ class TestWhileLoopWithLLM:
         assert isinstance(result, str)
         assert "summary" in collected
         assert "translation" in collected
+
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_refine_then_update(self):
+
+        class QualityCheck(af.Struct):
+            needs_improvement: bool
+            reason: str
+
+        def cond(text):
+            verdict = af.struct_lm_call(
+                [
+                    {
+                        "role": "user",
+                        "content": af.format(
+                            "Does this text need improvement to be more professional? Text: '{}'",
+                            text,
+                        ),
+                    }
+                ],
+                model="gpt-4o",
+                struct=QualityCheck,
+            )
+            return verdict.needs_improvement
+
+        def body(text):
+            refined = af.lm_call(
+                [
+                    {"role": "system", "content": "Make more professional and formal."},
+                    {"role": "user", "content": text},
+                ],
+                model="gpt-4o",
+            )
+            return af.checkpoint(refined, collection="trace", name="draft")
+
+        cond_ir = build_ir(cond)("...")
+        body_ir = build_ir(body)("...")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=5)
+
+        loop_ir = build_ir(loop)("...")
+        result, collected = af.collect(loop_ir, collection="trace")("yo whats good bro")
+
+        assert isinstance(result, str)
+        assert "draft" in collected
+        assert len(collected["draft"]) <= 5
+
+        if collected["draft"]:
+            updated_drafts = [f"[EDITED] {d}" for d in collected["draft"]]
+            updated_result = af.inject(
+                loop_ir, collection="trace", values={"draft": updated_drafts}
+            )("yo whats good bro")
+
+            assert isinstance(updated_result, str)
