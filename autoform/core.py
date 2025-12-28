@@ -78,21 +78,20 @@ def is_iratom(x) -> tp.TypeGuard[IRAtom]:
 class IRLit[T](IRAtom):
     def __init__(self, value: T, /, **meta):
         assert not is_iratom(value)
-        assert hash(value) is not None  # NOTE(asem): for CSE
+        assert hash(value) is not None
         self.value = value
-        self.meta = meta
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.value!r})"
 
     def __hash__(self) -> int:
-        return hash((self.value, frozenset(self.meta.items()) if self.meta else None))
+        return hash(self.value)
 
 
 class IRZero[T](IRLit[T]): ...
 
 
-def is_irlit(x) -> tp.TypeIs[IRLit]:
+def is_irlit(x) -> tp.TypeGuard[IRLit]:
     return isinstance(x, IRLit)
 
 
