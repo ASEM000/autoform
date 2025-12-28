@@ -1,5 +1,4 @@
 import functools as ft
-
 import autoform as af
 
 
@@ -54,19 +53,18 @@ class TestDCE:
 
         @ft.partial(af.core.eval_rules.def_rule, const_p)
         def eval_const(x):
-            return "constant"
+            return "constant"  # Returns literal, not Var()
 
         def program(x):
-            y = const_p.bind(x)
-            z = af.concat(y, "!")
+            y = const_p.bind(x)  # y = "constant" (literal)
+            z = af.concat(y, "!")  # z = "constant!" (folded at trace time!)
             return z
 
         ir = af.build_ir(program)("x")
         dce = af.dce(ir)
 
         assert len(ir.ireqns) == 2
-        assert len(dce.ireqns) == 1
-        assert dce.ireqns[0].prim.name == "concat"
+        assert len(dce.ireqns) == 0
 
     def test_keeps_all_if_all_used(self):
         def program(x):
@@ -95,7 +93,6 @@ class TestDCE:
 
 class TestDCEWithHigherOrderPrimitives:
     def test_run_ir_inlines_for_dce(self):
-        """run_ir inlines operations, so DCE sees the inner ops directly."""
         inner_ir = af.build_ir(lambda x: af.concat(x, "!"))("x")
 
         def program(x):
@@ -104,13 +101,10 @@ class TestDCEWithHigherOrderPrimitives:
         ir = af.build_ir(program)("input")
         dce = af.dce(ir)
 
-        # Operations are inlined, so we see concat directly
         assert len(dce.ireqns) == 1
         assert dce.ireqns[0].prim.name == "concat"
 
     def test_inlined_dead_code_removed(self):
-        """DCE removes dead code from inlined run_ir."""
-
         def inner(x):
             dead = af.concat(x, "dead")  # This is dead
             live = af.concat(x, "live")  # This is returned

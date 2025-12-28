@@ -4,7 +4,6 @@ from autoform.core import build_ir, call
 
 class TestIterateUntilImpl:
     def test_goal_already_satisfied(self):
-
         def identity(x):
             return x
 
@@ -20,7 +19,6 @@ class TestIterateUntilImpl:
         assert n == 0
 
     def test_goal_never_satisfied(self):
-
         def append_x(x):
             return af.concat(x, "x")
 
@@ -36,7 +34,6 @@ class TestIterateUntilImpl:
         assert n == 3
 
     def test_max_iters_zero(self):
-
         def append_x(x):
             return af.concat(x, "x")
 
@@ -54,7 +51,6 @@ class TestIterateUntilImpl:
 
 class TestIterateUntilBatch:
     def test_batch_all_same_iterations(self):
-
         def append_x(x):
             return af.concat(x, "x")
 
@@ -80,7 +76,6 @@ class TestIterateUntilBatch:
 
 class TestIterateUntilPullback:
     def test_pullback_preserves_primal(self):
-
         def append_x(x):
             return af.concat(x, "x")
 
@@ -106,7 +101,6 @@ class TestIterateUntilPullback:
         assert n == 2
 
     def test_pullback_propagates_feedback(self):
-
         def append_x(x):
             return af.concat(x, "x")
 
@@ -130,7 +124,6 @@ class TestIterateUntilPullback:
         assert in_cotangent == "feedback on final"
 
     def test_pullback_no_iterations(self):
-
         def append_x(x):
             return af.concat(x, "x")
 
@@ -159,7 +152,6 @@ class TestIterateUntilPullback:
 
 class TestIterateUntilWithCheckpoint:
     def test_collect_intermediate_states(self):
-
         def append_and_checkpoint(x):
             new_x = af.concat(x, "x")
             return af.checkpoint(new_x, collection="trace", name="state")
@@ -187,7 +179,6 @@ class TestIterateUntilWithCheckpoint:
 
 class TestIterateUntilValidation:
     def test_body_must_be_ir(self):
-
         def goal(x):
             return True
 
@@ -200,7 +191,6 @@ class TestIterateUntilValidation:
             assert "body must be an IR" in str(e)
 
     def test_goal_must_be_ir(self):
-
         def body(x):
             return x
 
@@ -213,7 +203,6 @@ class TestIterateUntilValidation:
             assert "goal must be an IR" in str(e)
 
     def test_body_input_output_structure_must_match(self):
-
         def mismatched(x):
             return (x, x)  # Returns tuple, not string
 
@@ -231,7 +220,6 @@ class TestIterateUntilValidation:
             assert "identical input/output structure" in str(e)
 
     def test_goal_must_return_bool(self):
-
         def body(x):
             return x
 
