@@ -340,7 +340,6 @@ def batch_iterate_until(
     iterations = [0] * batch_size
 
     batched_body = batch(body, in_axes=list)
-    batched_goal = batch(goal, in_axes=list)
 
     for t in range(max_iters):
         alive_idx = [i for i in range(batch_size) if alive[i]]
@@ -349,13 +348,9 @@ def batch_iterate_until(
         if not alive_idx:
             break
 
-        # NOTE(asem): batched goal check on alive examples
+        # NOTE(asem): goal check on alive examples (not batched)
         alive_states = [states[i] for i in alive_idx]
-        goals = call(batched_goal)(alive_states)
-
-        # Handle case where goal returns literal (not batched)
-        if isinstance(goals, bool):
-            goals = [goals] * len(alive_idx)
+        goals = [call(goal)(state) for state in alive_states]
 
         for i, g in zip(alive_idx, goals, strict=True):
             assert isinstance(g, bool), "goal must return bool"

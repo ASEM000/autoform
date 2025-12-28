@@ -31,7 +31,7 @@ class IRBVar(IRVar): ...
 
 
 # ==================================================================================================
-# BATCHING UTILITIES
+# BATCH
 # ==================================================================================================
 
 
@@ -75,11 +75,45 @@ def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
     return batch_tree
 
 
-# ==================================================================================================
-# BATCH CALL
-# ==================================================================================================
-
 batch_call_p = Primitive("batch_call", tag="transformation")
+
+
+@ft.partial(lru_cache, maxsize=256)
+def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
+    """Transform an IR to process batched inputs.
+
+    Creates a batched version of the IR that processes multiple inputs
+    simultaneously. Use `in_axes` to specify which inputs are batched (type
+    like `list`) vs broadcast (None).
+
+    Args:
+        ir: The IR to transform.
+        in_axes: Axis specification tree matching input structure.
+            - Container type: This input is batched (e.g. list of values).
+            - `None`: This input is broadcast (same value for all batch items).
+
+    Returns:
+        A new IR that takes batched inputs and returns batched outputs.
+
+    Example:
+        >>> import autoform as af
+        >>> def greet(greeting, name):
+        ...     return af.concat(greeting, name)
+        >>> ir = af.build_ir(greet)("Hi", "World")
+        >>> # Batch over names contained in list, broadcast greeting
+        >>> batched = af.batch(ir, in_axes=(None, list))
+        >>> call(batched)(("Hello, ", ["Alice", "Bob", "Carol"]))
+        ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
+    """
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+
+    def make_b(atom):
+        return IRBVar.fresh(source=atom) if is_irvar(atom) else atom
+
+    in_b_irtree = treelib.map(make_b, ir.in_irtree)
+    out_b_irtree = treelib.map(make_b, ir.out_irtree)
+    eqn = IREqn(batch_call_p, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
+    return IR([eqn], in_b_irtree, out_b_irtree)
 
 
 class BatchInterpreter(Interpreter):
@@ -134,9 +168,8 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(eval_rules.def_rule, batch_call_p)
 def eval_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
-    del ir, in_axes
-    is_var = lambda x: isinstance(x, Var)
-    return treelib.map(lambda _: Var(), in_tree, is_leaf=is_var)
+    del in_tree, in_axes
+    return treelib.map(lambda _: Var(), ir.out_irtree)
 
 
 @ft.partial(push_rules.def_rule, batch_call_p)
@@ -222,46 +255,3 @@ def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[I
     new_eqn = ireqn.using(ir=dce(ireqn.params["ir"]))
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
-
-
-# ==================================================================================================
-# BATCH IR TRANSFORMATION
-# ==================================================================================================
-
-
-@ft.partial(lru_cache, maxsize=256)
-def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
-    """Transform an IR to process batched inputs.
-
-    Creates a batched version of the IR that processes multiple inputs
-    simultaneously. Use `in_axes` to specify which inputs are batched (type
-    like `list`) vs broadcast (None).
-
-    Args:
-        ir: The IR to transform.
-        in_axes: Axis specification tree matching input structure.
-            - Container type: This input is batched (e.g. list of values).
-            - `None`: This input is broadcast (same value for all batch items).
-
-    Returns:
-        A new IR that takes batched inputs and returns batched outputs.
-
-    Example:
-        >>> import autoform as af
-        >>> def greet(greeting, name):
-        ...     return af.concat(greeting, name)
-        >>> ir = af.build_ir(greet)("Hi", "World")
-        >>> # Batch over names contained in list, broadcast greeting
-        >>> batched = af.batch(ir, in_axes=(None, list))
-        >>> call(batched)(("Hello, ", ["Alice", "Bob", "Carol"]))
-        ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
-    """
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-
-    def make_b(atom):
-        return IRBVar.fresh(source=atom) if is_irvar(atom) else atom
-
-    in_b_irtree = treelib.map(make_b, ir.in_irtree)
-    out_b_irtree = treelib.map(make_b, ir.out_irtree)
-    eqn = IREqn(batch_call_p, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
-    return IR([eqn], in_b_irtree, out_b_irtree)
