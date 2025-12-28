@@ -15,6 +15,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "myst_parser",
+    "nbsphinx",
 ]
 
 templates_path = ["_templates"]
@@ -37,3 +38,8 @@ myst_enable_extensions = [
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
+
+# nbsphinx settings
+nbsphinx_execute = "never"  # Don't execute notebooks during build
+nbsphinx_allow_errors = True
+exclude_patterns.append("**.ipynb_checkpoints")
