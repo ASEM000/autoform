@@ -1,5 +1,8 @@
+import pytest
+
 import autoform as af
 from autoform.core import build_ir, call
+import os
 
 
 class TestWhileLoopImpl:
@@ -35,7 +38,7 @@ class TestWhileLoopBatch:
     def test_batch_with_constant_cond(self):
 
         def cond(x):
-            return False  # Exit immediately
+            return False
 
         def body(x):
             return af.concat(x, "x")
@@ -52,14 +55,14 @@ class TestWhileLoopBatch:
         inputs = ["a", "b", "c"]
         states = call(batched_ir)(inputs)
 
-        assert states == ["a", "b", "c"]  # No iterations
+        assert states == ["a", "b", "c"]
 
 
 class TestWhileLoopPullback:
     def test_pullback_no_iterations(self):
 
         def cond(x):
-            return False  # Exit immediately
+            return False
 
         def body(x):
             return af.concat(x, "x")
@@ -176,3 +179,65 @@ class TestWhileLoopValidation:
             assert False, "Should have raised"
         except AssertionError as e:
             assert "identical input/output structure" in str(e)
+
+
+class TestWhileLoopWithLLM:
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_refine_text_with_traces(self):
+
+        def cond(x):
+            return True
+
+        def body(text):
+            msgs = [
+                {"role": "system", "content": "Make this text more professional."},
+                {"role": "user", "content": text},
+            ]
+            refined = af.lm_call(msgs, model="gpt-4o")
+            return af.checkpoint(refined, collection="refinements", name="step")
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("text")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=3)
+
+        loop_ir = build_ir(loop)("init")
+
+        result, collected = af.collect(loop_ir, collection="refinements")("hey whats up")
+
+        assert isinstance(result, str)
+        assert len(result) > 0
+        assert "step" in collected
+        assert len(collected["step"]) == 3
+
+    @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="No OpenAI API key")
+    def test_refine_with_pullback(self):
+
+        def cond(x):
+            return True
+
+        def body(text):
+            msgs = [
+                {"role": "system", "content": "Make this text more professional."},
+                {"role": "user", "content": text},
+            ]
+            return af.lm_call(msgs, model="gpt-4o")
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("text")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=2)
+
+        loop_ir = build_ir(loop)("init")
+        pb_ir = af.pullback(loop_ir)
+
+        primal_in = "hey whats up"
+        out_cotangent = "feedback on final output"
+
+        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+
+        assert isinstance(final_state, str)
+        assert len(final_state) > 0
+        assert isinstance(in_cotangent, str)
