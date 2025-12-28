@@ -10,7 +10,7 @@ from autoform.core import call, icall, acall
 
 from autoform.string import format, concat
 from autoform.lm import lm_call, struct_lm_call, Struct
-from autoform.control import stop_gradient, switch
+from autoform.control import stop_gradient, switch, iterate_until
 
 from autoform.utils import PYTREE_NAMESPACE
 
@@ -37,6 +37,7 @@ __all__ = [
     "stop_gradient",
     "checkpoint",
     "switch",
+    "iterate_until",
     # types
     "Struct",
     "PYTREE_NAMESPACE",
