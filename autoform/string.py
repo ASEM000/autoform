@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.core import Var
+from autoform.core import Var, is_var, EvalType
 from autoform.core import (
     Primitive,
     batch_rules,
@@ -40,9 +40,8 @@ def impl_format(in_tree: Tree, *, template: str) -> str:
 
 
 @ft.partial(eval_rules.def_rule, format_p)
-def eval_format(_: Tree, *, template: str) -> Var:
-    del template
-    return Var()
+def eval_format(in_tree: Tree, *, template: str) -> EvalType:
+    return Var() if any(is_var(x) for x in in_tree) else impl_format(in_tree, template=template)
 
 
 @ft.partial(pull_fwd_rules.def_rule, format_p)
@@ -114,9 +113,8 @@ def impl_concat(in_tree: Tree) -> str:
 
 
 @ft.partial(eval_rules.def_rule, concat_p)
-def eval_concat(in_tree: Tree, **params):
-    del in_tree
-    return Var()
+def eval_concat(in_tree: Tree, **params) -> EvalType:
+    return Var() if any(is_var(x) for x in in_tree) else impl_concat(in_tree)
 
 
 @ft.partial(push_rules.def_rule, concat_p)

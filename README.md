@@ -1,6 +1,29 @@
-# autoform
+<table border="0">
+<tr>
+<td width="200" valign="top">
 
-**composable function transformations for LLM programs**
+# `autoform`
+
+**Composable function transformations for LLM programs**
+
+</td>
+<td>
+
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
+[![Documentation](https://readthedocs.org/projects/autoform/badge/?version=latest)](https://autoform.readthedocs.io)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+[![Downloads](https://pepy.tech/badge/autoform)](https://pepy.tech/project/autoform)
+[![DOI](https://zenodo.org/badge/1115015093.svg)](https://doi.org/10.5281/zenodo.18071950)
+[![CodeFactor](https://www.codefactor.io/repository/github/asem000/autoform/badge)](https://www.codefactor.io/repository/github/asem000/autoform)
+[![Commits](https://img.shields.io/github/commit-activity/m/ASEM000/autoform)](https://github.com/ASEM000/autoform/commits)
+[![Snyk](https://snyk.io/test/github/ASEM000/autoform/badge.svg)](https://snyk.io/test/github/ASEM000/autoform)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+</td>
+</tr>
+</table>
 
 > ⚠️ **early development**: API may change.
 

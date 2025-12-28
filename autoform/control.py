@@ -20,6 +20,7 @@ from autoform.core import (
 )
 from autoform.utils import Tree, unbatch_at, pack_user_input, treelib
 from autoform.ad import pullback, zero_cotangent, pushforward
+from autoform.batch import batch
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -210,3 +211,146 @@ def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
     new_eqn = ireqn.using(branches=branches)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
+
+
+# ==================================================================================================
+# WHILE LOOP
+# ==================================================================================================
+
+while_loop_p = Primitive("while_loop", tag="control")
+
+
+def while_loop(cond_func: IR, body_func: IR, init_val: Tree, *, max_iters: int) -> Tree:
+    """Repeatedly apply ``body_func`` while ``cond_func`` returns True.
+
+    - Loop continues while cond_func(state) returns True
+    - body_func is applied each iteration
+    - Returns final state when cond_func returns False or max_iters reached
+
+    Args:
+        cond_func: IR that returns bool. Loop continues while True.
+        body_func: IR that transforms state, f: State -> State
+        init_val: Initial state
+        max_iters: Maximum iterations
+
+    Returns:
+        Final state when cond_func returns False or max_iters reached.
+
+    Example:
+        >>> import autoform as af
+        >>> def cond(x):
+        ...     return False  # Exit immediately
+        >>> def body(x):
+        ...     return af.concat(x, "x")
+        >>> cond_ir = af.build_ir(cond)("x")
+        >>> body_ir = af.build_ir(body)("x")
+        >>> result = af.while_loop(cond_ir, body_ir, "a", max_iters=10)
+        >>> result
+        'a'
+    """
+    assert isinstance(cond_func, IR), f"cond_func must be an IR, got {type(cond_func)}"
+    assert isinstance(body_func, IR), f"body_func must be an IR, got {type(body_func)}"
+
+    in_struct = treelib.structure(body_func.in_irtree)
+    out_struct = treelib.structure(body_func.out_irtree)
+    assert in_struct == out_struct, (
+        f"body_func must have identical input/output structure (f: State -> State).\n"
+        f"in_struct:  {in_struct}\n"
+        f"out_struct: {out_struct}"
+    )
+    return while_loop_p.bind(
+        init_val,
+        cond_func=cond_func,
+        body_func=body_func,
+        max_iters=max_iters,
+    )
+
+
+@ft.partial(impl_rules.def_rule, while_loop_p)
+def impl_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
+    state = in_tree
+    for _ in range(max_iters):
+        if not call(cond_func)(state):
+            break
+        state = call(body_func)(state)
+    return state
+
+
+@ft.partial(eval_rules.def_rule, while_loop_p)
+def eval_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
+    del cond_func, max_iters
+    return treelib.map(lambda _: Var(), body_func.out_irtree)
+
+
+@ft.partial(batch_rules.def_rule, while_loop_p)
+def batch_while_loop(
+    batch_size: int,
+    in_batched: Tree,
+    in_tree: Tree,
+    *,
+    cond_func: IR,
+    body_func: IR,
+    max_iters: int,
+) -> tuple[Tree, Tree]:
+    unbatch_state = ft.partial(unbatch_at, in_tree, in_batched)
+    states = [unbatch_state(b) for b in range(batch_size)]
+
+    alive = [True] * batch_size
+    batched_body = batch(body_func, in_axes=list)
+
+    for _ in range(max_iters):
+        alive_idx = [i for i in range(batch_size) if alive[i]]
+        if not alive_idx:
+            break
+
+        alive_states = [states[i] for i in alive_idx]
+
+        conds = [call(cond_func)(state) for state in alive_states]
+        for i, c in zip(alive_idx, conds, strict=True):
+            if not c:
+                alive[i] = False
+
+        still_alive = [i for i in alive_idx if alive[i]]
+        if still_alive:
+            still_alive_states = [states[i] for i in still_alive]
+            new_states = call(batched_body)(still_alive_states)
+            for i, s in zip(still_alive, new_states, strict=True):
+                states[i] = s
+
+    out_batched = treelib.map(lambda _: True, body_func.out_irtree)
+    return states, out_batched
+
+
+@ft.partial(pull_fwd_rules.def_rule, while_loop_p)
+def pullback_fwd_while_loop(
+    in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int
+) -> tuple[Tree, Tree]:
+    state = in_tree
+    trajectory = [state]
+
+    for _ in range(max_iters):
+        if not call(cond_func)(state):
+            break
+        state = call(body_func)(state)
+        trajectory.append(state)
+
+    residuals = (trajectory, body_func)
+    return state, residuals
+
+
+@ft.partial(pull_bwd_rules.def_rule, while_loop_p)
+def pullback_bwd_while_loop(
+    residuals: Tree, out_cotangent: Tree, *, cond_func: IR, body_func: IR, max_iters: int
+) -> Tree:
+    del cond_func, max_iters
+    trajectory, _ = residuals
+    n_iters = len(trajectory) - 1
+
+    cotangent = out_cotangent
+    pb_body = pullback(body_func)
+
+    for t in reversed(range(n_iters)):
+        state_t = trajectory[t]
+        _, cotangent = call(pb_body)((state_t, cotangent))
+
+    return cotangent

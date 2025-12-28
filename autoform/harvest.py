@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 import typing as tp
+from collections import defaultdict
 from autoform.core import Interpreter, get_interp, using_interp
 from autoform.core import IR, EvalType
 from autoform.core import (
@@ -51,9 +52,9 @@ def checkpoint(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) 
         >>> result
         'Q: What is 6*7? A: 42'
         >>> collected["prompt"]
-        'Q: What is 6*7?'
+        ['Q: What is 6*7?']
         >>> collected["response"]
-        'Q: What is 6*7? A: 42'
+        ['Q: What is 6*7? A: 42']
     """
     assert hash(collection) is not None, "Collection must be hashable"
     assert hash(name) is not None, "Name must be hashable"
@@ -110,20 +111,20 @@ def batch_checkpoint(
 # COLLECT
 # ==================================================================================================
 
-type Collected = dict[tp.Hashable, Tree]
+type Collected = dict[tp.Hashable, list[Tree]]
 
 
 class CollectInterpreter(Interpreter):
     def __init__(self, *, collection: tp.Hashable):
         self.collection = collection
-        self.collected: Collected = {}
+        self.collected: Collected = defaultdict(list)
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         # NOTE(asem): no context switch for interception interpreter
         result = self.parent.process(prim, in_tree, **params)
         if prim == checkpoint_p and params.get("collection") == self.collection:
-            self.collected[params["name"]] = result
+            self.collected[params["name"]].append(result)
         return result
 
 
@@ -136,6 +137,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
     Returns:
         A callable that executes the IR and returns (result, collected_dict).
+        The collected_dict maps names to lists of values.
 
     Example:
         >>> import autoform as af
@@ -146,8 +148,8 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
         >>> result, collected = af.collect(ir, collection="debug")("What?")
         >>> result
         'Q: What? A: 42'
-        >>> collected
-        {'prompt': 'Q: What?'}
+        >>> collected["prompt"]
+        ['Q: What?']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
@@ -165,9 +167,10 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
 
 class InjectInterpreter(Interpreter):
-    def __init__(self, *, collection: tp.Hashable, values: dict[tp.Hashable, Tree]):
+    def __init__(self, *, collection: tp.Hashable, values: dict[tp.Hashable, list[Tree]]):
         self.collection = collection
-        self.values = values
+        # NOTE(asem): reverse the lists to pop from the end to match collect's list output
+        self.values = {k: list(reversed(values[k])) for k in values}
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
@@ -175,8 +178,9 @@ class InjectInterpreter(Interpreter):
             prim == checkpoint_p
             and params.get("collection") == self.collection
             and (name := params.get("name")) in self.values
+            and self.values[name]  # Non-empty list
         ):
-            return self.values[name]
+            return self.values[name].pop()
         # NOTE(asem): no context switch for interception interpreter
         return self.parent.process(prim, in_tree, **params)
 
@@ -184,10 +188,14 @@ class InjectInterpreter(Interpreter):
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
     """Create an injecting executor for an IR.
 
+    Values are consumed from lists in order (matching collect's list output).
+    This allows round-tripping: collect values, then inject them back.
+
     Args:
         ir: The intermediate representation to run.
         collection: The collection to filter checkpoint locations by.
-        values: Dictionary mapping checkpoint names to values to inject.
+        values: Dictionary mapping checkpoint names to lists of values to inject.
+            The lists are consumed from left to right (matching collect's list output).
 
     Returns:
         A callable that executes the IR with injected values.
@@ -197,7 +205,7 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         >>> def program(x):
         ...     return af.checkpoint(af.concat("Hello, ", x), collection="cache", name="greeting")
         >>> ir = af.build_ir(program)("test")
-        >>> af.inject(ir, collection="cache", values={"greeting": "CACHED"})("World")
+        >>> af.inject(ir, collection="cache", values={"greeting": ["CACHED"]})("World")
         'CACHED'
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"

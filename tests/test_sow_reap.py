@@ -76,7 +76,7 @@ class TestRunAndReap:
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "hello"
-        assert collected == {"captured": "hello"}
+        assert collected == {"captured": ["hello"]}
 
     def test_reap_multiple_sows_same_tag(self):
         def func(x):
@@ -88,7 +88,7 @@ class TestRunAndReap:
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("hi")
         assert result == "hi!"
-        assert collected == {"first": "hi", "second": "hi!"}
+        assert collected == {"first": ["hi"], "second": ["hi!"]}
 
     def test_reap_filters_by_tag(self):
         def func(x):
@@ -99,10 +99,10 @@ class TestRunAndReap:
         ir = af.build_ir(func)("test")
 
         _, debug_collected = af.collect(ir, collection="debug")("hello")
-        assert debug_collected == {"debug_val": "hello"}
+        assert debug_collected == {"debug_val": ["hello"]}
 
         _, metrics_collected = af.collect(ir, collection="metrics")("hello")
-        assert metrics_collected == {"metrics_val": "hello"}
+        assert metrics_collected == {"metrics_val": ["hello"]}
 
     def test_reap_empty_when_no_match(self):
         def func(x):
@@ -131,8 +131,8 @@ class TestRunAndReap:
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("What?")
         assert result == "Q: What? A: 42"
-        assert collected["prompt"] == "Q: What?"
-        assert collected["response"] == "Q: What? A: 42"
+        assert collected["prompt"] == ["Q: What?"]
+        assert collected["response"] == ["Q: What? A: 42"]
 
 
 class TestRunAndPlant:
@@ -145,7 +145,7 @@ class TestRunAndPlant:
         result = af.call(ir)("World")
         assert result == "Hello, World"
 
-        result = af.inject(ir, collection="cache", values={"greeting": "CACHED"})("World")
+        result = af.inject(ir, collection="cache", values={"greeting": ["CACHED"]})("World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
@@ -156,7 +156,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject(ir, collection="cache", values={"first": "PLANTED"})("ignored")
+        result = af.inject(ir, collection="cache", values={"first": ["PLANTED"]})("ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
@@ -167,7 +167,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject(ir, collection="cache", values={"val": "CACHED"})("input")
+        result = af.inject(ir, collection="cache", values={"val": ["CACHED"]})("input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
@@ -185,7 +185,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject(ir, collection="cache", values={"other": "PLANTED"})("hello")
+        result = af.inject(ir, collection="cache", values={"other": ["PLANTED"]})("hello")
         assert result == "hello"
 
 
@@ -198,10 +198,10 @@ class TestTransformThenReap:
         pf_ir = af.pushforward(ir)
 
         result, primals = af.collect(pf_ir, collection=("debug", "primal"))(("primal", "tangent"))
-        assert primals == {"val": "primal"}
+        assert primals == {"val": ["primal"]}
 
         result, tangents = af.collect(pf_ir, collection=("debug", "tangent"))(("primal", "tangent"))
-        assert tangents == {"val": "tangent"}
+        assert tangents == {"val": ["tangent"]}
 
     def test_reap_captures_during_pullback(self):
         def func(x):
@@ -211,13 +211,13 @@ class TestTransformThenReap:
         pb_ir = af.pullback(ir)
 
         result, primals = af.collect(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
-        assert primals == {"val": "primal"}
+        assert primals == {"val": ["primal"]}
 
         result, grads = af.collect(pb_ir, collection=("debug", "cotangent"))((
             "primal",
             "cotangent",
         ))
-        assert grads == {"val": "cotangent"}
+        assert grads == {"val": ["cotangent"]}
 
     def test_reap_captures_during_batch(self):
         def func(x):
@@ -227,7 +227,7 @@ class TestTransformThenReap:
         batched = af.batch(ir)
         result, collected = af.collect(batched, collection=("debug", "batch"))(["a", "b", "c"])
         assert result == ["a", "b", "c"]
-        assert collected == {"val": ["a", "b", "c"]}
+        assert collected == {"val": [["a", "b", "c"]]}
 
     def test_reap_captures_in_switch_branches(self):
         def branch_a(x):
@@ -245,7 +245,7 @@ class TestTransformThenReap:
         ir = af.build_ir(func)("input")
         result, collected = af.collect(ir, collection="debug")("hello")
         assert result == "a: hello"
-        assert collected == {"result": "a: hello"}
+        assert collected == {"result": ["a: hello"]}
 
 
 class TestInjectAndDCE:
@@ -260,7 +260,7 @@ class TestInjectAndDCE:
         assert len(ir.ireqns) == 3
 
         def wrapped(x):
-            return af.inject(ir, collection="cache", values={"result": "CACHED"})("ignored")
+            return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
 
@@ -278,15 +278,14 @@ class TestInjectAndDCE:
         ir = af.build_ir(program)("test")
 
         def wrapped(x):
-            return af.inject(ir, collection="cache", values={"result": "CACHED"})("ignored")
+            return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
 
         assert len(traced_ir.ireqns) == 2
 
         optimized_ir = af.dce(traced_ir)
-        assert len(optimized_ir.ireqns) == 1
-        assert optimized_ir.ireqns[0].prim.name == "concat"
+        assert len(optimized_ir.ireqns) == 0
 
         result = af.call(optimized_ir)("any_input")
         assert result == "Got: CACHED"
@@ -303,7 +302,7 @@ class TestInjectAndDCE:
         assert len(ir.ireqns) == 5  # 3 concats + 2 checkpoints
 
         def wrapped(x):
-            return af.inject(ir, collection="cache", values={"first": "CACHED1"})(x)
+            return af.inject(ir, collection="cache", values={"first": ["CACHED1"]})(x)
 
         traced_ir = af.build_ir(wrapped)("example")
         optimized_ir = af.dce(traced_ir)
@@ -320,7 +319,7 @@ class TestInjectAndDCE:
         batched_ir = af.batch(ir)
 
         result = af.inject(
-            batched_ir, collection=("cache", "batch"), values={"result": ["A", "B"]}
+            batched_ir, collection=("cache", "batch"), values={"result": [["A", "B"]]}
         )(["x", "y"])
 
         assert result == ["Got: A", "Got: B"]
