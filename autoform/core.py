@@ -42,31 +42,36 @@ type EvalType = Var | UserType
 # ==================================================================================================
 
 
+# NOTE(asem): atomic IR nodes either variables (placeholders) for user inputs
+# or literals (constants) baked in the IR
 class IRAtom: ...
 
 
 class IRVar(IRAtom):
-    counter = it.count(0)
-    lock = RLock()
+    __slots__ = ("id", "source")
+    # NOTE(asem): global counter for all IRVars (and neighbors)
+    counter: tp.ClassVar[it.count[int]] = it.count(0)
+    lock: tp.ClassVar[RLock] = RLock()
 
-    def __init__(self, id: int, meta: dict | None = None):
-        self.id = id
-        self.meta = meta or {}
+    def __init__(self, /, *, source: IRVar | None = None):
+        self.id = next(self.counter)
+        assert is_irvar(source) or source is None
+        self.source = source
 
     @classmethod
-    def fresh(cls, **meta) -> tp.Self:
+    def fresh(cls, source: IRVar | None = None) -> tp.Self:
         with cls.lock:
-            return cls(next(cls.counter), meta=meta or None)
+            return cls(source=source)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id})"
 
 
-def is_irvar(x) -> tp.TypeIs[IRVar]:
+def is_irvar(x) -> tp.TypeGuard[IRVar]:
     return isinstance(x, IRVar)
 
 
-def is_iratom(x) -> tp.TypeIs[IRAtom]:
+def is_iratom(x) -> tp.TypeGuard[IRAtom]:
     return isinstance(x, IRAtom)
 
 
