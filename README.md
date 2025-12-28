@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Downloads](https://pepy.tech/badge/autoform)](https://pepy.tech/project/autoform)
 [![DOI](https://zenodo.org/badge/1115015093.svg)](https://doi.org/10.5281/zenodo.18071950)
-
+[![CodeFactor](https://www.codefactor.io/repository/github/asem000/autoform/badge)](https://www.codefactor.io/repository/github/asem000/autoform)
 
 **composable function transformations for LLM programs**
 
