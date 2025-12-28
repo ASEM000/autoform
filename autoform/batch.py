@@ -147,7 +147,6 @@ def pushforward_batch_call(
     ir: IR,
     in_axes: Tree,
 ) -> tuple[Tree, Tree]:
-
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -165,7 +164,6 @@ def pullback_fwd_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tr
 
 @ft.partial(pull_bwd_rules.def_rule, batch_call_p)
 def pullback_bwd_batch_call(residuals: Tree, out_cotangent: Tree, *, ir: IR, in_axes: Tree) -> Tree:
-
     p_cols, _ = residuals
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
@@ -221,7 +219,6 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(dce_rules.def_rule, batch_call_p)
 def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-
     new_eqn = ireqn.using(ir=dce(ireqn.params["ir"]))
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
