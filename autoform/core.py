@@ -13,6 +13,46 @@ from threading import RLock
 
 from autoform.utils import Tree, pack_user_input, treelib
 
+__all__ = [
+    # base types
+    "Var",
+    "user_types",
+    # ir atoms
+    "IRAtom",
+    "IRVar",
+    "IRLit",
+    "IRZero",
+    "is_irvar",
+    "is_irlit",
+    "is_iratom",
+    # primitive
+    "Primitive",
+    # rule registries
+    "impl_rules",
+    "eval_rules",
+    "batch_rules",
+    "push_rules",
+    "pull_fwd_rules",
+    "pull_bwd_rules",
+    "iter_rules",
+    "async_rules",
+    "dce_rules",
+    # ir structures
+    "IREqn",
+    "IR",
+    # interpreters
+    "Interpreter",
+    "EvalInterpreter",
+    "TracingInterpreter",
+    "get_interp",
+    "using_interpreter",
+    # ir building and execution
+    "build_ir",
+    "call",
+    "icall",
+    "acall",
+]
+
 # ==================================================================================================
 # BASE TYPES
 # ==================================================================================================
