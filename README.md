@@ -1,6 +1,6 @@
-<table>
+<table border="0">
 <tr>
-<td width="200">
+<td width="200" valign="top">
 
 # `autoform`
 
