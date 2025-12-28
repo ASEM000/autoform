@@ -1,12 +1,6 @@
 # autoform
 
-```{toctree}
-:maxdepth: 2
-:caption: Contents
-
-quickstart
-api
-```
+Composable transformations for LLM programs.
 
 ## Installation
 
@@ -26,8 +20,12 @@ ir = af.build_ir(greet)("name")
 print(af.call(ir)("World"))  # "Hello, World"
 ```
 
-## Indices and tables
+```{toctree}
+:maxdepth: 2
+:caption: Contents
+:hidden:
 
-- {ref}`genindex`
-- {ref}`modindex`
-- {ref}`search`
+quickstart
+internals
+api
+```
