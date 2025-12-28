@@ -318,10 +318,10 @@ class TracingInterpreter(Interpreter):
         self.ireqns: list[IREqn] = []
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> list[IRVar]:
-        def to_ir_atom(x):
+        def to_in_iratom(x):
             return x if is_iratom(x) else IRLit(x)
 
-        in_irtree = treelib.map(to_ir_atom, in_tree)
+        in_irtree = treelib.map(to_in_iratom, in_tree)
         assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
 
         def to_eval(x):
@@ -363,23 +363,22 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 
     def assert_no_iratom(x):
         assert not is_iratom(x)
-        return x
 
-    def populate(x):
+    def preprocess(x):
         return IRVar.fresh() if is_user_type(x) else IRLit(x)
 
-    def assert_ir(x):
-        assert is_iratom(x)
-        return x
+    def postprocess(x):
+        return x if is_iratom(x) else IRLit(x)
 
     @ft.wraps(func)
     def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
         treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
-        in_ir_args, in_ir_kwargs = treelib.map(populate, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(preprocess, (args, kwargs), is_leaf=is_user_type)
+        in_irargs, in_irkwargs = in_irtree
         with using_interp(TracingInterpreter()) as tracer:
-            out_irtree = func(*in_ir_args, **in_ir_kwargs)
-            in_irtree = pack_user_input(*in_ir_args, **in_ir_kwargs)
-            out_irtree = treelib.map(assert_ir, out_irtree)
+            out_irtree = func(*in_irargs, **in_irkwargs)
+            in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
+            out_irtree = treelib.map(postprocess, out_irtree)
             return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
     return trace

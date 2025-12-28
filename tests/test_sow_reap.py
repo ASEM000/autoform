@@ -145,7 +145,7 @@ class TestRunAndPlant:
         result = af.call(ir)("World")
         assert result == "Hello, World"
 
-        result = af.inject(ir, collection="cache", values={"greeting": "CACHED"})("World")
+        result = af.inject(ir, collection="cache", values={"greeting": ["CACHED"]})("World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
@@ -156,7 +156,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject(ir, collection="cache", values={"first": "PLANTED"})("ignored")
+        result = af.inject(ir, collection="cache", values={"first": ["PLANTED"]})("ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
@@ -167,7 +167,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject(ir, collection="cache", values={"val": "CACHED"})("input")
+        result = af.inject(ir, collection="cache", values={"val": ["CACHED"]})("input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
@@ -185,7 +185,7 @@ class TestRunAndPlant:
 
         ir = af.build_ir(func)("test")
 
-        result = af.inject(ir, collection="cache", values={"other": "PLANTED"})("hello")
+        result = af.inject(ir, collection="cache", values={"other": ["PLANTED"]})("hello")
         assert result == "hello"
 
 
@@ -260,7 +260,7 @@ class TestInjectAndDCE:
         assert len(ir.ireqns) == 3
 
         def wrapped(x):
-            return af.inject(ir, collection="cache", values={"result": "CACHED"})("ignored")
+            return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
 
@@ -278,7 +278,7 @@ class TestInjectAndDCE:
         ir = af.build_ir(program)("test")
 
         def wrapped(x):
-            return af.inject(ir, collection="cache", values={"result": "CACHED"})("ignored")
+            return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
 
@@ -303,7 +303,7 @@ class TestInjectAndDCE:
         assert len(ir.ireqns) == 5  # 3 concats + 2 checkpoints
 
         def wrapped(x):
-            return af.inject(ir, collection="cache", values={"first": "CACHED1"})(x)
+            return af.inject(ir, collection="cache", values={"first": ["CACHED1"]})(x)
 
         traced_ir = af.build_ir(wrapped)("example")
         optimized_ir = af.dce(traced_ir)
@@ -320,7 +320,7 @@ class TestInjectAndDCE:
         batched_ir = af.batch(ir)
 
         result = af.inject(
-            batched_ir, collection=("cache", "batch"), values={"result": ["A", "B"]}
+            batched_ir, collection=("cache", "batch"), values={"result": [["A", "B"]]}
         )(["x", "y"])
 
         assert result == ["Got: A", "Got: B"]

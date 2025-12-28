@@ -20,6 +20,7 @@ from autoform.core import (
 )
 from autoform.utils import Tree, unbatch_at, pack_user_input, treelib
 from autoform.ad import pullback, zero_cotangent, pushforward
+from autoform.batch import batch
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -210,3 +211,221 @@ def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
     new_eqn = ireqn.using(branches=branches)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn
+
+
+# ==================================================================================================
+# ITERATE UNTIL
+# ==================================================================================================
+
+iterate_until_p = Primitive("iterate_until", tag="control")
+
+
+type State = str
+type Status = str
+type Iterations = int
+type Residuals = tuple[State, Status, Iterations]
+
+
+def iterate_until(
+    body: IR,
+    init: Tree,
+    goal: IR,
+    max_iters: int = 10,
+) -> Residuals:
+    """Goal-directed iteration: iterate body until goal is satisfied.
+
+    Args:
+        body: IR for one refinement step, f: X -> X
+        init: Initial state x₀
+        goal: IR that returns truthy when goal is reached, g: X -> bool
+        max_iters: Maximum iterations (safety bound)
+
+    Returns:
+        (final_state, status, n_iters) where:
+        - final_state: The state when iteration stopped
+        - status: "goal" if goal reached, "max" if bounded
+        - n_iters: Number of iterations executed
+
+    Example:
+        >>> import autoform as af
+        >>> def refine(draft):
+        ...     msgs = [{"role": "user", "content": af.format("Improve: {}", draft)}]
+        ...     return af.lm_call(msgs, model="gpt-4o-mini")
+        >>> class Verdict(af.Struct):
+        ...     is_good: bool
+        >>> def verify(draft):
+        ...     msgs = [{"role": "user", "content": af.format("Is good? {}", draft)}]
+        ...     verdict = af.struct_lm_call(msgs, model="gpt-4o-mini", struct=Verdict)
+        ...     return verdict.is_good  # Direct attribute access returns bool
+        >>> body = af.build_ir(refine)("draft")
+        >>> goal = af.build_ir(verify)("draft")
+        >>> result, status, n = af.iterate_until(body, "my text", goal, max_iters=5) # doctest: +SKIP
+    """
+    assert isinstance(body, IR), f"body must be an IR, got {type(body)}"
+    assert isinstance(goal, IR), f"goal must be an IR, got {type(goal)}"
+
+    in_struct = treelib.structure(body.in_irtree)
+    out_struct = treelib.structure(body.out_irtree)
+    assert in_struct == out_struct, (
+        f"body must have identical input/output structure (f: X -> X).\n"
+        f"in_struct:  {in_struct}\n"
+        f"out_struct: {out_struct}"
+    )
+    return iterate_until_p.bind(init, body=body, goal=goal, max_iters=max_iters)
+
+
+@ft.partial(impl_rules.def_rule, iterate_until_p)
+def impl_iterate_until(
+    in_tree: Tree,
+    *,
+    body: IR,
+    goal: IR,
+    max_iters: int,
+) -> Residuals:
+    state: State = in_tree
+    for t in range(max_iters):
+        goal_result = call(goal)(state)
+        assert isinstance(goal_result, bool), "goal must return bool"
+        if goal_result:
+            return (state, "goal", t)
+        state = call(body)(state)
+
+    return (state, "max", max_iters)
+
+
+@ft.partial(eval_rules.def_rule, iterate_until_p)
+def eval_iterate_until(
+    in_tree: Tree,
+    *,
+    body: IR,
+    goal: IR,
+    max_iters: int,
+) -> Residuals:
+    del goal, max_iters
+    out_state = treelib.map(lambda _: Var(), body.out_irtree, is_leaf=is_irvar)
+    status = Var()
+    n_iters = Var()
+    return (out_state, status, n_iters)
+
+
+@ft.partial(batch_rules.def_rule, iterate_until_p)
+def batch_iterate_until(
+    batch_size: int,
+    in_batched: Tree,
+    in_tree: Tree,
+    *,
+    body: IR,
+    goal: IR,
+    max_iters: int,
+) -> tuple[Residuals, Tree[bool]]:
+    # NOTE(asem): the batch rule here is a bit more complicated than others
+    # because it involves breaking the loop when a goal is reached. it would be inefficient
+    # to keep running a maxiters loop for each example regardless of whether it reached the goal
+    # or not. so we keep track of which examples are still alive and only run the loop for them
+    # until all examples reach the goal or maxiters is reached
+
+    # NOTE(asem): unbatch basically extracts an example from
+    # a pytree according to the batch index. one thing to note
+    # if the some part of the pytree mask is not batched, it will be broadcasted
+    unbatch_state = ft.partial(unbatch_at, in_tree, in_batched)
+    states = [unbatch_state(b) for b in range(batch_size)]
+
+    # NOTE(asem): alive is a list of booleans that indicates which examples are still alive
+    # statuses is a list of strings that indicates the status of each example
+    # iterations is a list of integers that indicates the number of iterations for each example
+    alive = [True] * batch_size
+
+    # NOTE(asem): maybe expose this as an option
+    statuses = ["running"] * batch_size
+    iterations = [0] * batch_size
+
+    batched_body = batch(body, in_axes=list)
+    batched_goal = batch(goal, in_axes=list)
+
+    for t in range(max_iters):
+        alive_idx = [i for i in range(batch_size) if alive[i]]
+
+        # NOTE(asem): all examples are done running
+        if not alive_idx:
+            break
+
+        # NOTE(asem): batched goal check on alive examples
+        alive_states = [states[i] for i in alive_idx]
+        goals = call(batched_goal)(alive_states)
+
+        # Handle case where goal returns literal (not batched)
+        if isinstance(goals, bool):
+            goals = [goals] * len(alive_idx)
+
+        for i, g in zip(alive_idx, goals, strict=True):
+            assert isinstance(g, bool), "goal must return bool"
+            if g:
+                alive[i] = False
+                statuses[i] = "goal"
+                iterations[i] = t
+
+        # NOTE(asem): batched body application on still-alive examples
+        still_alive = [i for i in alive_idx if alive[i]]
+        if still_alive:
+            still_alive_states = [states[i] for i in still_alive]
+            new_states = call(batched_body)(still_alive_states)
+            for i, s in zip(still_alive, new_states, strict=True):
+                states[i] = s
+                iterations[i] = t + 1
+
+    # NOTE(asem): mark remaining as max
+    for i in range(batch_size):
+        if statuses[i] == "running":
+            statuses[i] = "max"
+            iterations[i] = max_iters
+
+    # NOTE(asem): return batched outputs
+    out_batched = (True, True, True)  # (states, statuses, iterations) all batched
+    return (states, statuses, iterations), out_batched
+
+
+@ft.partial(pull_fwd_rules.def_rule, iterate_until_p)
+def pullback_fwd_iterate_until(
+    in_tree: Tree,
+    *,
+    body: IR,
+    goal: IR,
+    max_iters: int,
+) -> tuple[Tree, Tree]:
+    state = in_tree
+    trajectory = [state]
+
+    for t in range(max_iters):
+        reached = call(goal)(state)
+        if reached:
+            residuals = (trajectory, "goal", t, body, goal)
+            return (state, "goal", t), residuals
+
+        state = call(body)(state)
+        trajectory.append(state)
+
+    residuals = (trajectory, "max", max_iters, body, goal)
+    return (state, "max", max_iters), residuals
+
+
+@ft.partial(pull_bwd_rules.def_rule, iterate_until_p)
+def pullback_bwd_iterate_until(
+    residuals: Tree,
+    out_cotangent: Tree,
+    *,
+    body: IR,
+    goal: IR,
+    max_iters: int,
+) -> Tree:
+    trajectory, status, n_iters, _, _ = residuals
+    out_state_cotangent, _, _ = out_cotangent
+
+    cotangent = out_state_cotangent
+    pb_body = pullback(body)
+
+    for t in reversed(range(n_iters)):
+        state_t = trajectory[t]
+        # NOTE(asem): backprop through body moving from  out_cot -> in_cot
+        _, cotangent = call(pb_body)((state_t, cotangent))
+
+    return cotangent
