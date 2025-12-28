@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 import typing as tp
+from collections import defaultdict
 from autoform.core import Interpreter, get_interp, using_interp
 from autoform.core import IR, EvalType
 from autoform.core import (
@@ -110,20 +111,20 @@ def batch_checkpoint(
 # COLLECT
 # ==================================================================================================
 
-type Collected = dict[tp.Hashable, Tree]
+type Collected = dict[tp.Hashable, list[Tree]]
 
 
 class CollectInterpreter(Interpreter):
     def __init__(self, *, collection: tp.Hashable):
         self.collection = collection
-        self.collected: Collected = {}
+        self.collected: Collected = defaultdict(list)
         self.parent = get_interp()
 
     def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         # NOTE(asem): no context switch for interception interpreter
         result = self.parent.process(prim, in_tree, **params)
         if prim == checkpoint_p and params.get("collection") == self.collection:
-            self.collected[params["name"]] = result
+            self.collected[params["name"]].append(result)
         return result
 
 
@@ -136,6 +137,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
     Returns:
         A callable that executes the IR and returns (result, collected_dict).
+        The collected_dict maps names to lists of values.
 
     Example:
         >>> import autoform as af
@@ -146,8 +148,8 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
         >>> result, collected = af.collect(ir, collection="debug")("What?")
         >>> result
         'Q: What? A: 42'
-        >>> collected
-        {'prompt': 'Q: What?'}
+        >>> collected["prompt"]
+        ['Q: What?']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
