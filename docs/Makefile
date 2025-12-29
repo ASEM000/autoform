@@ -1,6 +1,6 @@
 # Minimal makefile for Sphinx documentation
 
-SPHINXBUILD   ?= python -m sphinx
+SPHINXBUILD   ?= uv run python -m sphinx
 SOURCEDIR     = .
 BUILDDIR      = _build
 
