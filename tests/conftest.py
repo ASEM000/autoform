@@ -1,11 +1,12 @@
 import os
 import pytest
+import importlib
 
 TEST_MODEL = os.environ.get("AUTOFORM_TEST_MODEL", "ollama/llama3:8b")
 
 
 def is_llm_available():
-    try:
+    if importlib.util.find_spec("litellm"):
         import litellm
 
         resp = litellm.completion(
@@ -14,8 +15,6 @@ def is_llm_available():
             max_tokens=5,
         )
         return True
-    except Exception:
-        pass
 
     return bool(
         os.environ.get("OPENAI_API_KEY")
