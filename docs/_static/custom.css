@@ -1,0 +1,13 @@
+/* Custom styles for autoform documentation */
+
+/* Wrap long output in code cells */
+.nboutput .output_area pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Also wrap input cells if needed */
+.nbinput .input_area pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}

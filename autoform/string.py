@@ -14,7 +14,8 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree
+from autoform.utils import Tree, treelib
+from autoform.ad import zero_cotangent
 
 # ==================================================================================================
 # FORMAT
@@ -146,3 +147,82 @@ def batch_concat(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[Tree
 
     result = [concat(*[get(i, b) for i in range(len(cols))]) for b in range(batch_size)]
     return result, True
+
+
+# ==================================================================================================
+# MATCH
+# ==================================================================================================
+
+match_p = Primitive("match", tag="string")
+
+
+def match(a: str, b: str) -> bool:
+    """Check if two strings are equal.
+
+    This is a traceable version of `==` that works correctly during tracing.
+
+    Args:
+        a: First string
+        b: Second string
+
+    Returns:
+        True if strings are equal, False otherwise.
+
+    Example:
+        >>> import autoform as af
+        >>> af.match("yes", "yes")
+        True
+        >>> af.match("yes", "no")
+        False
+    """
+    return match_p.bind((a, b))
+
+
+@ft.partial(impl_rules.def_rule, match_p)
+def impl_match(in_tree: Tree) -> bool:
+    a, b = in_tree
+    return a == b
+
+
+@ft.partial(eval_rules.def_rule, match_p)
+def eval_match(in_tree: Tree) -> EvalType:
+    a, b = in_tree
+    if is_var(a) or is_var(b):
+        return Var()
+    return a == b
+
+
+@ft.partial(batch_rules.def_rule, match_p)
+def batch_match(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[list[bool], bool]:
+    a_col, b_col = in_tree
+    a_batched, b_batched = in_batched
+
+    def get_a(b):
+        return a_col[b] if a_batched else a_col
+
+    def get_b(b):
+        return b_col[b] if b_batched else b_col
+
+    result = [get_a(b) == get_b(b) for b in range(batch_size)]
+    return result, True
+
+
+@ft.partial(push_rules.def_rule, match_p)
+def pushforward_match(primals: Tree, tangents: Tree) -> tuple[bool, Tree]:
+    out_primal = match(*primals)
+    out_tangent = treelib.map(zero_cotangent, primals)
+    return out_primal, out_tangent
+
+
+@ft.partial(pull_fwd_rules.def_rule, match_p)
+def pullback_fwd_match(in_tree: Tree) -> tuple[bool, Tree]:
+    a, b = in_tree
+    out = a == b
+    residuals = (a, b)
+    return out, residuals
+
+
+@ft.partial(pull_bwd_rules.def_rule, match_p)
+def pullback_bwd_match(residuals: Tree, out_cotangent: Tree) -> Tree:
+    del out_cotangent
+    return treelib.map(zero_cotangent, residuals)

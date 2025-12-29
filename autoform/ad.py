@@ -20,7 +20,7 @@ from autoform.core import (
     Var,
     get_interp,
     is_irvar,
-    using_interp,
+    using_interpreter,
 )
 from autoform.core import (
     Primitive,
@@ -46,8 +46,8 @@ class PushforwardInterpreter(Interpreter):
     def __init__(self):
         self.parent = get_interp()
 
-    def process(self, prim: Primitive, in_tree: Tree, **params):
-        with using_interp(self.parent):
+    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+        with using_interpreter(self.parent):
             in_primal, in_tangent = in_tree
             return push_rules[prim](in_primal, in_tangent, **params)
 
@@ -123,7 +123,7 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     treelib.map(write_p, ir.in_irtree, p_in_tree)
     treelib.map(write_t, ir.in_irtree, t_in_tree)
 
-    with using_interp(PushforwardInterpreter()):
+    with using_interpreter(PushforwardInterpreter()):
         for ireqn in ir.ireqns:
             p_in_ireqn = treelib.map(read_p, ireqn.in_irtree)
             t_in_ireqn = treelib.map(read_t, ireqn.in_irtree)
@@ -241,8 +241,8 @@ class PullbackFwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = get_interp()
 
-    def process(self, prim: Primitive, in_tree: Tree, **params):
-        with using_interp(self.parent):
+    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+        with using_interpreter(self.parent):
             return pull_fwd_rules[prim](in_tree, **params)
 
 
@@ -250,8 +250,8 @@ class PullbackBwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = get_interp()
 
-    def process(self, prim: Primitive, in_tree: Tree, **params):
-        with using_interp(self.parent):
+    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+        with using_interpreter(self.parent):
             in_residual, out_cotangent = in_tree
             return pull_bwd_rules[prim](in_residual, out_cotangent, **params)
 
@@ -326,7 +326,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
 
-    with using_interp(PullbackFwdInterpreter()):
+    with using_interpreter(PullbackFwdInterpreter()):
         for i, eqn in enumerate(ir.ireqns):
             p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
             out_p_ireqn, residuals = eqn.prim.bind(p_in_ireqn, **eqn.params)
@@ -335,7 +335,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
     treelib.map(write_c, ir.out_irtree, out_c_tree)
 
-    with using_interp(PullbackBwdInterpreter()):
+    with using_interpreter(PullbackBwdInterpreter()):
         for i, eqn in enumerate(reversed(ir.ireqns)):
             idx = len(ir.ireqns) - 1 - i
             residuals = res_env[idx]

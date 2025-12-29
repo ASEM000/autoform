@@ -9,7 +9,7 @@ from collections.abc import Callable
 from operator import setitem
 
 from autoform.core import call, acall
-from autoform.core import Interpreter, get_interp, using_interp
+from autoform.core import Interpreter, get_interp, using_interpreter
 from autoform.core import IR, IREqn, IRLit, IRVar, Value, Var, is_irvar
 from autoform.core import (
     Primitive,
@@ -121,8 +121,8 @@ class BatchInterpreter(Interpreter):
         self.parent = get_interp()
         self.batch_size = batch_size
 
-    def process(self, prim: Primitive, in_tree: Tree, **params):
-        with using_interp(self.parent):
+    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+        with using_interpreter(self.parent):
             batch_size, in_batched, in_values = in_tree
             return batch_rules[prim](batch_size, in_batched, in_values, **params)
 
@@ -153,7 +153,7 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     treelib.map(write_v, ir.in_irtree, col_tree)
     treelib.map(write_b, ir.in_irtree, in_batched_tree)
 
-    with using_interp(BatchInterpreter(batch_size=batch_size)):
+    with using_interpreter(BatchInterpreter(batch_size=batch_size)):
         for ireqn in ir.ireqns:
             in_vals = treelib.map(read_v, ireqn.in_irtree)
             in_batched = treelib.map(read_b, ireqn.in_irtree)

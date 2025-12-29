@@ -13,6 +13,46 @@ from threading import RLock
 
 from autoform.utils import Tree, pack_user_input, treelib
 
+__all__ = [
+    # base types
+    "Var",
+    "user_types",
+    # ir atoms
+    "IRAtom",
+    "IRVar",
+    "IRLit",
+    "IRZero",
+    "is_irvar",
+    "is_irlit",
+    "is_iratom",
+    # primitive
+    "Primitive",
+    # rule registries
+    "impl_rules",
+    "eval_rules",
+    "batch_rules",
+    "push_rules",
+    "pull_fwd_rules",
+    "pull_bwd_rules",
+    "iter_rules",
+    "async_rules",
+    "dce_rules",
+    # ir structures
+    "IREqn",
+    "IR",
+    # interpreters
+    "Interpreter",
+    "EvalInterpreter",
+    "TracingInterpreter",
+    "get_interp",
+    "using_interpreter",
+    # ir building and execution
+    "build_ir",
+    "call",
+    "icall",
+    "acall",
+]
+
 # ==================================================================================================
 # BASE TYPES
 # ==================================================================================================
@@ -42,52 +82,56 @@ type EvalType = Var | UserType
 # ==================================================================================================
 
 
+# NOTE(asem): atomic IR nodes either variables (placeholders) for user inputs
+# or literals (constants) baked in the IR
 class IRAtom: ...
 
 
 class IRVar(IRAtom):
-    counter = it.count(0)
-    lock = RLock()
+    __slots__ = ("id", "source")
+    # NOTE(asem): global counter for all IRVars (and neighbors)
+    counter: tp.ClassVar[it.count[int]] = it.count(0)
+    lock: tp.ClassVar[RLock] = RLock()
 
-    def __init__(self, id: int, meta: dict | None = None):
-        self.id = id
-        self.meta = meta or {}
+    def __init__(self, /, *, source: IRVar | None = None):
+        self.id = next(self.counter)
+        assert is_irvar(source) or source is None
+        self.source = source
 
     @classmethod
-    def fresh(cls, **meta) -> tp.Self:
+    def fresh(cls, source: IRVar | None = None) -> tp.Self:
         with cls.lock:
-            return cls(next(cls.counter), meta=meta or None)
+            return cls(source=source)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id})"
 
 
-def is_irvar(x) -> tp.TypeIs[IRVar]:
+def is_irvar(x) -> tp.TypeGuard[IRVar]:
     return isinstance(x, IRVar)
 
 
-def is_iratom(x) -> tp.TypeIs[IRAtom]:
+def is_iratom(x) -> tp.TypeGuard[IRAtom]:
     return isinstance(x, IRAtom)
 
 
 class IRLit[T](IRAtom):
     def __init__(self, value: T, /, **meta):
         assert not is_iratom(value)
-        assert hash(value) is not None  # NOTE(asem): for CSE
+        assert hash(value) is not None
         self.value = value
-        self.meta = meta
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.value!r})"
 
     def __hash__(self) -> int:
-        return hash((self.value, frozenset(self.meta.items()) if self.meta else None))
+        return hash(self.value)
 
 
 class IRZero[T](IRLit[T]): ...
 
 
-def is_irlit(x) -> tp.TypeIs[IRLit]:
+def is_irlit(x) -> tp.TypeGuard[IRLit]:
     return isinstance(x, IRLit)
 
 
@@ -97,6 +141,8 @@ def is_irlit(x) -> tp.TypeIs[IRLit]:
 
 
 class Primitive:
+    # NOTE(asem): primitive is a key used for matching against rules
+    # defined in ``InterpreterRuleMapping``
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
@@ -108,7 +154,7 @@ class Primitive:
         return self.name
 
     def bind(self, in_tree: Tree, **params):
-        return get_interp().process(self, in_tree, **params)
+        return get_interp().interpret(self, in_tree, **params)
 
 
 # ==================================================================================================
@@ -209,11 +255,11 @@ class IR[**P, R]:
 
     def __init__(
         self,
-        ireqns: list[IREqn],
+        ireqns: tp.Sequence[IREqn],
         in_irtree: Tree[IRAtom],
         out_irtree: Tree[IRAtom],
     ):
-        self.ireqns = ireqns
+        self.ireqns = tuple(ireqns)
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
 
@@ -280,11 +326,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 class Interpreter(ABC):
     @abstractmethod
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
 
 
 class EvalInterpreter(Interpreter):
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         return impl_rules[prim](in_tree, **params)
 
 
@@ -296,7 +342,7 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 @contextmanager
-def using_interp[T: Interpreter](interpreter: T) -> tp.Generator[T, None, None]:
+def using_interpreter[T: Interpreter](interpreter: T) -> tp.Generator[T, None, None]:
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -317,23 +363,37 @@ class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
-    def process(self, prim: Primitive, in_tree: Tree, **params) -> list[IRVar]:
-        def to_in_iratom(x):
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
+        def to_in_iratom(x) -> IRAtom:
+            # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
+            # however, a function can take a constant value as input that is not an input
+            # thus we need to wrap it here
+            # >>> def f(x):
+            # ...     const = "..."
+            # ...     return some_user_func(const)
+            # here const is not reachable by `build_ir` wrapping mechanism and thus
+            # needs to be handled here
             return x if is_iratom(x) else IRLit(x)
 
         in_irtree = treelib.map(to_in_iratom, in_tree)
+
         assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
 
-        def to_eval(x):
+        def to_in_evaltype(x):
+            # NOTE(asem): eval rules accept `Var`/ python types.
+            # `Var` simply denotes a placeholder for a value that will be computed later
             return Var() if is_irvar(x) else x.value
 
-        in_eval_tree = treelib.map(to_eval, in_irtree)
-        out_tree = eval_rules[prim](in_eval_tree, **params)
+        in_evaltree = treelib.map(to_in_evaltype, in_irtree)
+        out_evaltree = eval_rules[prim](in_evaltree, **params)
 
-        def from_eval(x):
+        def to_out_iratom(x) -> IRAtom:
+            # NOTE(asem): eval rules return `Var`/ python types.
+            # `Var` simply denotes a placeholder for a value that will be computed later
+            # this is basically delegated to the user to handle
             return IRVar.fresh() if is_var(x) else IRLit(x)
 
-        out_irtree = treelib.map(from_eval, out_tree, is_leaf=is_var)
+        out_irtree = treelib.map(to_out_iratom, out_evaltree)
         self.ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
         return out_irtree
 
@@ -350,7 +410,7 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
         func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
 
     Returns:
-        A tracer callable that takes (*args, **kwargs) and returns an IR.
+        A tracer callable that takes ``(*args, **kwargs)`` and returns an IR.
 
     Example:
         >>> import autoform as af
@@ -361,25 +421,29 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
         'Hello, Alice!!'
     """
 
-    def assert_no_iratom(x):
-        assert not is_iratom(x)
+    def assert_usertype(x):
+        assert not is_iratom(x), "Inputs to `build_ir` must be normal python types"
 
-    def preprocess(x):
+    def to_in_iratom(x):
+        # NOTE(asem): user types are converted to IRVar/IRLit
+        # to prepare for tracing.
         return IRVar.fresh() if is_user_type(x) else IRLit(x)
 
-    def postprocess(x):
+    def to_out_iratom(x):
         return x if is_iratom(x) else IRLit(x)
 
     @ft.wraps(func)
     def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        treelib.map(assert_no_iratom, (args, kwargs), is_leaf=is_user_type)
-        in_irtree = treelib.map(preprocess, (args, kwargs), is_leaf=is_user_type)
+        # NOTE(asem): make sure inputs are normal python not iratoms
+        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
-        with using_interp(TracingInterpreter()) as tracer:
+        in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
+
+        with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
-            in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-            out_irtree = treelib.map(postprocess, out_irtree)
-            return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+        out_irtree = treelib.map(to_out_iratom, out_irtree)
+        return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
     return trace
 
@@ -390,13 +454,13 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 
 
 def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
-    """Create a synchronous executor for an IR.
+    """Call an IR.
 
     Args:
-        ir: The IR to execute.
+        ir: The IR to run.
 
     Returns:
-        A callable that executes the IR with the provided arguments.
+        A callable that runs the IR with the provided arguments.
 
     Example:
         >>> import autoform as af

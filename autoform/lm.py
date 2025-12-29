@@ -5,9 +5,8 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 
-import pydantic
 from litellm import acompletion, batch_completion, completion
-
+import pydantic
 from autoform.core import Var
 from autoform.core import (
     Primitive,
@@ -27,6 +26,18 @@ from autoform.utils import Tree, treelib, transpose_batch
 # ==================================================================================================
 
 
+def flatten_struct(obj: pydantic.BaseModel) -> tuple[tuple[tp.Any, ...], tuple[str, ...]]:
+    assert isinstance(obj, pydantic.BaseModel)
+    fields = type(obj).model_fields
+    return (tuple(getattr(obj, k) for k in fields), tuple(fields))
+
+
+def unflatten_struct[T: type[pydantic.BaseModel]](cls: T, keys: tuple[str, ...], children) -> T:
+    assert isinstance(keys, tuple)
+    assert isinstance(children, tuple)
+    return cls.model_construct(**dict(zip(keys, children, strict=True)))
+
+
 class Struct(pydantic.BaseModel):
     """Pydantic BaseModel that is also a PyTree.
 
@@ -39,17 +50,14 @@ class Struct(pydantic.BaseModel):
         ...     answer: int
     """
 
-    def __init_subclass__(k, **kwargs):
+    def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-
-        treelib.register_node(
-            k,
-            lambda x: (tuple(getattr(x, k) for k in k.model_fields), tuple(k.model_fields)),
-            lambda keys, children: k.model_construct(**dict(zip(keys, children, strict=True))),
-        )
+        treelib.register_node(cls, flatten_struct, ft.partial(unflatten_struct, cls))
 
     def __hash__(self):
-        return hash(tuple(getattr(self, k) for k in type(self).model_fields))
+        structure = treelib.structure(self)
+        leaves = tuple(treelib.leaves(self))
+        return hash((structure, leaves))
 
 
 # ==================================================================================================
