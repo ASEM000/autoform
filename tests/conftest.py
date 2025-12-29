@@ -1,12 +1,11 @@
 import os
 import pytest
-import importlib
 
 TEST_MODEL = os.environ.get("AUTOFORM_TEST_MODEL", "ollama/llama3:8b")
 
 
 def is_llm_available():
-    if importlib.util.find_spec("litellm"):
+    try:
         import litellm
 
         resp = litellm.completion(
@@ -15,12 +14,12 @@ def is_llm_available():
             max_tokens=5,
         )
         return True
-
-    return bool(
-        os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or os.environ.get("GEMINI_API_KEY")
-    )
+    except Exception:
+        return bool(
+            os.environ.get("OPENAI_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("GEMINI_API_KEY")
+        )
 
 
 requires_llm = pytest.mark.skipif(not is_llm_available(), reason="No LLM backend available")
