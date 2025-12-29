@@ -13,7 +13,7 @@
 # ---
 
 # %% [markdown]
-# # Autoform Internals
+# # ⚙️ Autoform Internals
 #
 # [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ASEM000/autoform/blob/main/docs/examples/internals.ipynb)
 #
