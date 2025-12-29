@@ -13,7 +13,7 @@
 # ---
 
 # %% [markdown]
-# # Iterative Refinement
+# # 🔄 Iterative Refinement
 #
 # [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ASEM000/autoform/blob/main/docs/examples/iterative_refinement.ipynb)
 #
@@ -40,13 +40,6 @@ MODEL = "openai/gpt-4o-mini"  # or "ollama/llama3.2:3b" for local
 # ## 1. The Problem
 #
 # LLM workflows often require **iterative refinement**: improve text until a quality threshold is met. The challenge: when processing batches, items complete at different rates.
-#
-# | Snippet | Bugs | Standard Batching | Early Exit |
-# |---------|------|-------------------|------------|
-# | 1 | 0 (clean) | 5 calls (4 wasted) | 1 call |
-# | 2 | 1 | 5 calls (3 wasted) | 2 calls |
-# | 3 | 5 | 5 calls | 5 calls |
-# | **Total** | | **15 calls** | **8 calls** |
 
 # %% [markdown]
 # ## 2. Define the State

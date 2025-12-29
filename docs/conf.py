@@ -16,6 +16,7 @@ extensions = [
     "sphinx.ext.intersphinx",  # link to external docs
     "sphinx_autodoc_typehints",  # better type annotations
     "sphinx_copybutton",  # copy button on code blocks
+    "sphinx_design",  # grids, cards, tabs, dropdowns
     "myst_parser",
     "nbsphinx",
 ]
