@@ -178,3 +178,8 @@ progcot/
 experimental/
 
 docs/examples/*.ipynb
+# OS files
+.DS_Store
+
+# uv lock file
+uv.lock
