@@ -18,7 +18,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, unbatch_at, pack_user_input, treelib
+from autoform.utils import Tree, unbatch_at, pack_user_input, treelib, transpose_batch
 from autoform.ad import pullback, zero_cotangent, pushforward
 from autoform.batch import batch
 
@@ -296,7 +296,10 @@ def batch_while_loop(
     states = [unbatch_state(b) for b in range(batch_size)]
 
     alive = [True] * batch_size
-    batched_body = batch(body_func, in_axes=list)
+    cond_in_axes = treelib.map(lambda _: list, cond_func.in_irtree)
+    body_in_axes = treelib.map(lambda _: list, body_func.in_irtree)
+    batched_cond = batch(cond_func, in_axes=cond_in_axes)
+    batched_body = batch(body_func, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         alive_idx = [i for i in range(batch_size) if alive[i]]
@@ -304,8 +307,13 @@ def batch_while_loop(
             break
 
         alive_states = [states[i] for i in alive_idx]
+        n_alive = len(alive_states)
+        cond_batched_in = treelib.map(lambda _: True, cond_func.in_irtree)
+        transposed_cond_in = transpose_batch(n_alive, cond_batched_in, alive_states)
+        conds_batched = call(batched_cond)(transposed_cond_in)
+        cond_out_batched = isinstance(conds_batched, list)
+        conds = [unbatch_at(conds_batched, cond_out_batched, b) for b in range(n_alive)]
 
-        conds = [call(cond_func)(state) for state in alive_states]
         for i, c in zip(alive_idx, conds, strict=True):
             if not c:
                 alive[i] = False
@@ -313,12 +321,18 @@ def batch_while_loop(
         still_alive = [i for i in alive_idx if alive[i]]
         if still_alive:
             still_alive_states = [states[i] for i in still_alive]
-            new_states = call(batched_body)(still_alive_states)
+            n_still_alive = len(still_alive_states)
+            batched_in = treelib.map(lambda _: True, body_func.in_irtree)
+            transposed_in = transpose_batch(n_still_alive, batched_in, still_alive_states)
+            transposed_out = call(batched_body)(transposed_in)
+            batched_out = treelib.map(lambda _: True, body_func.out_irtree)
+            new_states = [unbatch_at(transposed_out, batched_out, b) for b in range(n_still_alive)]
             for i, s in zip(still_alive, new_states, strict=True):
                 states[i] = s
 
     out_batched = treelib.map(lambda _: True, body_func.out_irtree)
-    return states, out_batched
+    out_tree = transpose_batch(batch_size, out_batched, states)
+    return out_tree, out_batched
 
 
 @ft.partial(pull_fwd_rules.def_rule, while_loop_p)
