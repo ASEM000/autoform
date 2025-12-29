@@ -8,7 +8,7 @@ from autoform.harvest import collect, inject, checkpoint
 from autoform.optims import dce, fold
 from autoform.core import call, icall, acall
 
-from autoform.string import format, concat
+from autoform.string import format, concat, match
 from autoform.lm import lm_call, struct_lm_call, Struct
 from autoform.control import stop_gradient, switch, while_loop
 
@@ -32,6 +32,7 @@ __all__ = [
     # primitives (user-facing functions)
     "format",
     "concat",
+    "match",
     "lm_call",
     "struct_lm_call",
     "stop_gradient",
