@@ -27,5 +27,6 @@ print(af.call(ir)("World"))  # "Hello, World"
 
 quickstart
 internals
+iterative_refinement
 api
 ```

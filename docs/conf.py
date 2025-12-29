@@ -28,8 +28,8 @@ html_static_path = ["_static"]
 napoleon_google_docstring = True
 
 # nbsphinx settings
+html_css_files = ["_static/custom.css"]
 nbsphinx_execute = "never"
 nbsphinx_allow_errors = True
-
-# Custom CSS
-html_css_files = ["custom.css"]
+nbsphinx_codecell_lexer = "python3"
+nbsphinx_custom_formats = {".py": ["jupytext.reads", {"fmt": "py:percent"}]}
