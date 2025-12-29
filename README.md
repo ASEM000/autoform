@@ -1,13 +1,9 @@
-<table border="0">
-<tr>
-<td width="200" valign="top">
+
+<div align="center">
 
 # `autoform`
 
 **Composable function transformations for LLM programs**
-
-</td>
-<td>
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
@@ -17,100 +13,103 @@
 [![Downloads](https://pepy.tech/badge/autoform)](https://pepy.tech/project/autoform)
 [![DOI](https://zenodo.org/badge/1115015093.svg)](https://doi.org/10.5281/zenodo.18071950)
 
-</td>
-</tr>
-</table>
+</div>
 
-> ⚠️ **early development**: API may change.
 
 ```bash
 pip install autoform
 ```
 
-## Why
-
-LLM programs are hard to optimize. You write multi-agent pipelines, but:
-- **debugging**: which agent caused the bad output?
-- **optimization**: how do you improve prompts systematically?
-- **batching**: how do you run N inputs without rewriting code?
-
-autoform solves this with **function transformations**. trace once, transform freely.
-
-## Features
-
-| Transform | What it does |
-|-----------|-------------|
-| `build_ir` | trace function → IR (no execution) |
-| `call` | execute IR |
-| `batch` | parallelize over inputs |
-| `pullback` | semantic gradients (feedback → input feedback) |
-| `collect` | capture intermediate values |
-| `inject` | override intermediate values |
-
-transforms compose: `batch(pullback(ir))`, `pullback(pullback(ir))`, etc.
-
 ## Example
 
-Write a multi-agent pipeline once. get **per-agent semantic gradients** on a **batched dataset** in one call.
+Batched semantic gradients: feedback on N outputs → feedback on N inputs.
 
 ```python
 import autoform as af
 
-class Verdict(af.Struct):  # pydantic model for structured output
+def answer(query):
+    return af.lm_call(f"Answer: {query}", model="gpt-4o")
+
+ir = af.build_ir(answer)("...") # trace
+
+# 3 queries + 3 critiques -> 3 answers + 3 improvement hints
+queries = ["What is AI?", "Explain DNS", "Define recursion"]
+critiques = ["too technical", "too long", "perfect"]
+
+batched_pb = af.batch(af.pullback(ir), in_axes=(list, list)) # compose
+
+answers, hints = af.call(batched_pb)((queries, critiques))
+```
+
+Trace once. Batch it. Differentiate it. **Compose them.**
+
+## Why
+
+LLM programs are hard to optimize:
+- **debugging**: which agent caused the bad output?
+- **optimization**: how do you improve prompts systematically?
+- **batching**: how do you run N inputs without rewriting code?
+
+autoform solves this with **function transformations**. Trace once, transform freely.
+
+
+## Full Example
+
+Multi-agent pipeline with checkpoints, batching, gradients, and debugging:
+
+```python
+import autoform as af
+
+class Verdict(af.Struct):
     decision: str
     reasoning: str
 
 def judge_debate(topic: str) -> Verdict:
-    """three agents debate, one judges. we can optimize any of them."""
+    """Three agents debate, one judges."""
+
     # agent 1: argue for
     pro = af.format("Argue FOR: {}", topic)
-    pro = af.checkpoint(pro, collection="debug", name="pro")  # tag for collection
-    msg = dict(role="user", content=pro)
-    pro = af.lm_call([msg], model="gpt-4.1")
+    pro = af.checkpoint(pro, collection="debug", name="pro")
+    msgs = [dict(role="user", content=pro)]
+    pro = af.lm_call(msgs, model="gpt-4o")
 
-    # agent 2: argue against
+    # agent 2: argue against  
     con = af.format("Argue AGAINST: {}", topic)
     con = af.checkpoint(con, collection="debug", name="con")
-    msg = dict(role="user", content=con)
-    con = af.lm_call([msg], model="gpt-4.1")
+    msgs = [dict(role="user", content=con)]
+    con = af.lm_call(msgs, model="gpt-4o")
 
     # agent 3: judge
     prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
     prompt = af.checkpoint(prompt, collection="debug", name="judge")
-    msg = dict(role="user", content=prompt)
-    return af.struct_lm_call([msg], model="gpt-4o", struct=Verdict)
+    msgs = [dict(role="user", content=prompt)]
+    return af.struct_lm_call(msgs, model="gpt-4o", struct=Verdict)
 
-# trace with a dummy input (no executions happens)
-ir = af.build_ir(judge_debate)("...")
+ir = af.build_ir(judge_debate)("...")  # trace (no execution)
 
-# execute
+# run once
 verdict = af.call(ir)("pineapple on pizza")
 
 # batch: parallel topics
-batch = af.batch(ir, in_axes=list)
-verdicts = af.call(batch)(["pineapple on pizza", "cats vs dogs", "morning vs night"])
+batched = af.batch(ir, in_axes=list)
+verdicts = af.call(batched)(["pineapple on pizza", "cats vs dogs", "tabs vs spaces"])
 
-# gradients: feedback on output -> feedback on input
+# gradients: feedback -> input improvement
 pb_ir = af.pullback(ir)
-feedback = Verdict(decision="too one-sided", reasoning="pro was weak")
-verdict, grad = af.call(pb_ir)(("pineapple on pizza", feedback))
+verdict, grad = af.call(pb_ir)(("pineapple on pizza", Verdict(decision="biased", reasoning="pro was weak")))
 
-# batched gradients
-batch_pb = af.batch(pb_ir, in_axes=(list, list))
-
-# collect: capture intermediate values at runtime
+# collect: capture checkpointed values
 verdict, captured = af.collect(ir, collection="debug")("pineapple on pizza")
-# captured: {'pro': 'Argue FOR: ...', 'con': '...', 'judge': '...'}
 
-# inject: override checkpoint outputs with different values
-values = dict(pro="custom argument")
-verdict = af.inject(ir, collection="debug", values=values)("pineapple on pizza")
+# inject: override checkpointed values
+verdict = af.inject(ir, collection="debug", values=captured)("pineapple on pizza")
 
-# transforms compose
-batch_batch = af.batch(af.batch(ir, in_axes=list), in_axes=list)
-grad_grad = af.pullback(af.pullback(ir))
+# explain how batches are placed
+in_axes = (list, Verdict.model_construct(decision=list, reasoning=list))
+
+# compose freely
+batched_grads = af.batch(af.pullback(ir), in_axes=in_axes)
 ```
 
-## More
 
-- [Documentation](https://autoform.readthedocs.io)
+> ⚠️ **early development**: API may change.
