@@ -1,90 +1,113 @@
-# 🚀 autoform
+# `autoform`
 
-Composable transformations for LLM programs.
-
-## 📦 Installation
+**Composable function transformations for LLM programs**
 
 ```bash
 pip install autoform
 ```
 
-## 💡 Core Concepts
+## Example
 
-Autoform traces Python functions into an **IR** (Intermediate Representation), then applies transformations like batching and differentiation.
+Batched semantic gradients: feedback on N outputs → feedback on N inputs.
 
 ```python
 import autoform as af
 
-class Summary(af.Struct):
-    text: str
+def answer(query):
+    return af.lm_call(f"Answer: {query}", model="gpt-4o")
 
-def summarize(topic):
-    prompt = af.format("Summarize {} in one sentence.", topic)
-    return af.struct_lm_call(
-        [dict(role="user", content=prompt)],
-        model="openai/gpt-4o-mini",
-        struct=Summary,
-    )
+ir = af.build_ir(answer)("...") # trace
 
-ir = af.build_ir(summarize)("topic")
-result = af.call(ir)("cats")
-print(result)
-# Summary(text="Cats are domesticated...")
+# 3 queries + 3 critiques -> 3 answers + 3 improvement hints
+queries = ["What is AI?", "Explain DNS", "Define recursion"]
+critiques = ["too technical", "too long", "perfect"]
+
+batched_pb = af.batch(af.pullback(ir), in_axes=(list, list)) # compose
+
+answers, hints = af.call(batched_pb)((queries, critiques))
 ```
 
-## ⚡ Transformations
+Trace once. Batch it. Differentiate it. **Compose them.**
 
-*Process multiple inputs in parallel:*
+## Why
+
+LLM programs are hard to optimize:
+- **debugging**: which agent caused the bad output?
+- **optimization**: how do you improve prompts systematically?
+- **batching**: how do you run N inputs without rewriting code?
+
+autoform solves this with **function transformations**. Trace once, transform freely.
+
+
+## Full Example
+
+Multi-agent pipeline with checkpoints, batching, gradients, and debugging:
 
 ```python
-batched_ir = af.batch(ir, in_axes=list)
-results = af.call(batched_ir)(["cats", "dogs", "birds"])
-# Summary(text=["Cats are...", "Dogs are...", "Birds are..."])
-```
+import autoform as af
 
-*Compute textual gradients - feedback on how to improve inputs:*
+class Verdict(af.Struct):
+    decision: str
+    reasoning: str
 
-```python
+def judge_debate(topic: str) -> Verdict:
+    """Three agents debate, one judges."""
+
+    # agent 1: argue for
+    pro = af.format("Argue FOR: {}", topic)
+    pro = af.checkpoint(pro, collection="debug", name="pro")
+    msgs = [dict(role="user", content=pro)]
+    pro = af.lm_call(msgs, model="gpt-4o")
+
+    # agent 2: argue against  
+    con = af.format("Argue AGAINST: {}", topic)
+    con = af.checkpoint(con, collection="debug", name="con")
+    msgs = [dict(role="user", content=con)]
+    con = af.lm_call(msgs, model="gpt-4o")
+
+    # agent 3: judge
+    prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
+    prompt = af.checkpoint(prompt, collection="debug", name="judge")
+    msgs = [dict(role="user", content=prompt)]
+    return af.struct_lm_call(msgs, model="gpt-4o", struct=Verdict)
+
+ir = af.build_ir(judge_debate)("...")  # trace (no execution)
+
+# run once
+verdict = af.call(ir)("pineapple on pizza")
+
+# batch: parallel topics
+batched = af.batch(ir, in_axes=list)
+verdicts = af.call(batched)(["pineapple on pizza", "cats vs dogs", "tabs vs spaces"])
+
+# gradients: feedback -> input improvement
 pb_ir = af.pullback(ir)
-output, gradient = af.call(pb_ir)(("cats", Summary(text="too short")))
-# gradient = "Try 'domestic cats behavior' for more detail"
+verdict, grad = af.call(pb_ir)(("pineapple on pizza", Verdict(decision="biased", reasoning="pro was weak")))
+
+# collect: capture checkpointed values
+verdict, captured = af.collect(ir, collection="debug")("pineapple on pizza")
+
+# inject: override checkpointed values
+verdict = af.inject(ir, collection="debug", values=captured)("pineapple on pizza")
+
+# explain how batches are placed
+in_axes = (list, Verdict.model_construct(decision=list, reasoning=list))
+
+# compose freely
+batched_grads = af.batch(af.pullback(ir), in_axes=in_axes)
 ```
 
-*Gather values checkpointed during execution:*
-
-```python
-def with_checkpoint(topic):
-    result = summarize(topic)
-    af.checkpoint(result.text, collection="summaries", name="text")
-    return result
-
-ir = af.build_ir(with_checkpoint)("topic")
-output, collected = af.collect(ir, collection="summaries")("cats")
-# collected = {"text": ["Cats are..."]}
-```
-
-*Transformations compose naturally:*
-
-```python
-# Batched pullback - gradients for multiple inputs at once
-batched_pb_ir = af.batch(
-    af.pullback(ir),
-    in_axes=(list, Summary.model_construct(text=list))
-)
-
-outputs, gradients = af.call(batched_pb_ir)((
-    ["cats", "dogs"],
-    Summary.model_construct(text=["too short", "more detail"])
-))
-```
+> ⚠️ **early development**: API may change.
 
 ```{toctree}
 :maxdepth: 2
 :caption: Examples
 :hidden:
 
-examples/internals
+examples/chain_of_thought
+examples/multi_agent_debate
 examples/iterative_refinement
+examples/internals
 ```
 
 ```{toctree}

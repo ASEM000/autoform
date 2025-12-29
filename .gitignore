@@ -177,4 +177,10 @@ playground.py
 progcot/
 experimental/
 
-docs/examples/*.ipynb
+# Jupytext source files - track only .ipynb with outputs
+docs/examples/*.py
+# OS files
+.DS_Store
+
+# uv lock file
+uv.lock
