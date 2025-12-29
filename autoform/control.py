@@ -105,7 +105,7 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
         **kwargs: Keyword arguments passed to the selected branch.
 
     Returns:
-        Result of run_ir(branches[key], *args, **kwargs)
+        Result of ``run_ir(branches[key], *args, **kwargs)``
 
     Raises:
         KeyError: If key is not in branches.

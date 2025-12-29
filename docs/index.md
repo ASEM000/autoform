@@ -22,11 +22,25 @@ print(af.call(ir)("World"))  # "Hello, World"
 
 ```{toctree}
 :maxdepth: 2
-:caption: Contents
+:caption: Getting Started
 :hidden:
 
 quickstart
-internals
-iterative_refinement
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Examples
+:hidden:
+
+examples/internals
+examples/iterative_refinement
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Reference
+:hidden:
+
 api
 ```

@@ -410,7 +410,7 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
         func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
 
     Returns:
-        A tracer callable that takes (*args, **kwargs) and returns an IR.
+        A tracer callable that takes ``(*args, **kwargs)`` and returns an IR.
 
     Example:
         >>> import autoform as af

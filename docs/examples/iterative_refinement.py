@@ -4,8 +4,10 @@
 #     text_representation:
 #       extension: .py
 #       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.18.1
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: af
 #     language: python
 #     name: python3
 # ---
@@ -13,22 +15,31 @@
 # %% [markdown]
 # # Iterative Refinement
 #
-# LLM workflows often require **iterative refinement**: improve text until a quality
-# threshold is met, or fix bugs until the code is clean. The challenge is
-# efficiency—when processing batches, items complete at different rates.
+# [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ASEM000/autoform/blob/main/docs/examples/iterative_refinement.ipynb)
 #
-# This tutorial demonstrates `af.while_loop` with **true early exit**: items that
-# finish stop consuming LLM calls immediately, saving cost and time.
-
-# %%
-import autoform as af
-
-MODEL = "ollama/llama3.2:3b"  # or "openai/gpt-4o-mini"
+# This tutorial demonstrates `af.while_loop` with **true early exit** for iterative LLM workflows.
 
 # %% [markdown]
-# ## The Cost Problem
+# ## Setup (Colab only)
 #
-# Consider reviewing 3 code snippets with a maximum of 5 refinement iterations:
+# Uncomment and run the following cell if running in Google Colab:
+
+# %%
+# # !pip install autoform
+# import os
+# os.environ["OPENAI_API_KEY"] = "your-key-here"
+
+# %%
+from typing import Literal
+
+import autoform as af
+
+MODEL = "openai/gpt-4o-mini"  # or "ollama/llama3.2:3b" for local
+
+# %% [markdown]
+# ## 1. The Problem
+#
+# LLM workflows often require **iterative refinement**: improve text until a quality threshold is met. The challenge: when processing batches, items complete at different rates.
 #
 # | Snippet | Bugs | Standard Batching | Early Exit |
 # |---------|------|-------------------|------------|
@@ -37,23 +48,20 @@ MODEL = "ollama/llama3.2:3b"  # or "openai/gpt-4o-mini"
 # | 3 | 5 | 5 calls | 5 calls |
 # | **Total** | | **15 calls** | **8 calls** |
 
-
 # %% [markdown]
-# ## Implementation
+# ## 2. Define the State
 #
-# ### Define the Loop State
-#
-# The state flows through each iteration. Input and output structures must match.
+# The loop state flows through each iteration. Input and output structures must match.
 
 
 # %%
 class ReviewState(af.Struct):
     code: str
-    has_bugs: str  # "yes" or "no"
+    has_bugs: Literal["yes", "no"]  # constrained to exact values
 
 
 # %% [markdown]
-# ### Define Condition and Body
+# ## 3. Define Condition and Body
 #
 # - **Condition**: Return `True` to continue, `False` to exit
 # - **Body**: Transform state, checkpoint for observability
@@ -77,17 +85,17 @@ def fix_one_bug(state: ReviewState) -> ReviewState:
     messages = [{"role": "user", "content": prompt}]
     result = af.struct_lm_call(messages, model=MODEL, struct=ReviewState)
 
-    # Each checkpoint = one iteration (collected later)
     af.checkpoint(result.code, collection="iterations", name="code")
-
     return result
 
 
 # %% [markdown]
-# ### Build the Loop
+# ## 4. Build the Loop
+#
+# Trace condition and body separately, then compose with `while_loop`:
 
 # %%
-dummy = ReviewState(code="", has_bugs="yes")
+dummy = ReviewState(code="...", has_bugs="yes")
 
 cond_ir = af.build_ir(should_continue)(dummy)
 body_ir = af.build_ir(fix_one_bug)(dummy)
@@ -101,7 +109,7 @@ loop_ir = af.build_ir(review_loop)(dummy)
 print(loop_ir)
 
 # %% [markdown]
-# ### Single Execution
+# ## 5. Single Execution
 
 # %%
 buggy = ReviewState(
@@ -116,7 +124,9 @@ print(result.code)
 print(f"\nIterations: {len(collected.get('code', []))}")
 
 # %% [markdown]
-# ### Batched Execution with Early Exit
+# ## 6. Batched Execution with Early Exit
+#
+# Items that finish early stop consuming LLM calls:
 
 # %%
 batched_ir = af.batch(
@@ -133,7 +143,7 @@ snippets = ReviewState.model_construct(
     has_bugs=["yes", "yes", "yes"],
 )
 
-results, collected = af.collect(batched_ir, collection="iterations")(snippets)
+results, collected = af.collect(batched_ir, collection=("iterations", "batch"))(snippets)
 
 for i, (code, bugs) in enumerate(zip(results.code, results.has_bugs)):
     print(f"Snippet {i + 1}: has_bugs={bugs}")
@@ -142,12 +152,11 @@ for i, (code, bugs) in enumerate(zip(results.code, results.has_bugs)):
 print(f"\nTotal iterations across all items: {len(collected.get('code', []))}")
 
 # %% [markdown]
-# ## Key Points
+# ## Summary
 #
-# | Feature | Benefit |
-# |---------|---------|
-# | True early exit | Items stop LLM calls when done |
-# | Checkpoint collection | Track iteration counts without state bloat |
-# | Composable | `batch`, `pullback`, `collect` all work together |
+# 1. **State**: Define a structured state that flows through iterations
+# 2. **Condition**: Returns `True` to continue, `False` to exit
+# 3. **Body**: Transform state each iteration
+# 4. **Early exit**: Items stop LLM calls when done, saving cost
 #
 # Use `while_loop` for any iterate-until-done pattern: refinement, search, agents.

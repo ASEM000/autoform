@@ -15,7 +15,19 @@
 # %% [markdown]
 # # Autoform Internals
 #
+# [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ASEM000/autoform/blob/main/docs/examples/internals.ipynb)
+#
 # This tutorial teaches autoform's architecture by building a custom primitive from scratch.
+
+# %% [markdown]
+# ## Setup (Colab only)
+#
+# Uncomment and run the following cell if running in Google Colab:
+
+# %%
+# # !pip install autoform
+# import os
+# os.environ["OPENAI_API_KEY"] = "your-key-here"
 
 # %%
 import functools as ft
