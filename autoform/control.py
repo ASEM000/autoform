@@ -365,8 +365,8 @@ def batch_while_loop(
             out_transposed = call(batched_body)(in_transposed)
             out_batched = treelib.map(lambda _: True, body_func.out_irtree)
 
-            for i in still_alive:
-                states[i] = unbatch_at(out_transposed, out_batched, i)
+            for local_idx, batch_idx in enumerate(still_alive):
+                states[batch_idx] = unbatch_at(out_transposed, out_batched, local_idx)
 
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     out_batched = treelib.map(lambda _: True, body_func.out_irtree)
