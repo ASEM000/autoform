@@ -84,12 +84,30 @@ def transpose_batch(
     assert batch_size
     inner_spec = treelib.structure(in_batched, is_leaf=lambda x: isinstance(x, bool))
     outer_spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
-    items = treelib.flatten(in_tree, is_leaf=lambda x: x is not in_tree)[0]
-    leaves_bi = [inner_spec.flatten_up_to(item) for item in items]
-    leaf_ids = {id(leaf) for row in leaves_bi for leaf in row}
-    batch_spec = treelib.structure([object()] * batch_size)
-    leaves_spec = treelib.structure([object()] * inner_spec.num_leaves)
-    is_leaf = lambda x: id(x) in leaf_ids
-    leaves_ib = treelib.transpose(batch_spec, leaves_spec, leaves_bi, is_leaf=is_leaf)
+    first_level_leaves = treelib.leaves(in_tree, is_leaf=lambda x: x is not in_tree)
+
+    # NOTE(asem): flatten_up_to (not leaves) because we want to stop at the boundary
+    # defined by inner_spec. if leaves are containers (e.g., lists), regular leaves()
+    # would descend into them. flatten_up_to respects the spec and stops at each leaf slot.
+    # >>> item = Batch(items=[1, 2, 3], mask=[True, False])
+    # >>> inner_spec = Batch(items=*, mask=*)
+    # >>> treelib.leaves(item) → [1, 2, 3, True, False]
+    # >>> inner_spec.flatten_up_to(item) → [[1, 2, 3], [True, False]]
+    leaves_bi = [inner_spec.flatten_up_to(item) for item in first_level_leaves]
+
+    # NOTE(asem): transpose without indexing
+    # leaf_ids prevents transpose from descending INTO the leaf values.
+    # >>> leaves_bi = [[[1,2], [3,4]], [[5,6], [7,8]]]  # leaves are lists
+    # >>> transpose(leaves_bi) without is_leaf → descends into [1,2]
+    # >>> transpose(leaves_bi) with is_leaf → stops at [1,2]
+    leaf_ids = set(map(id, treelib.leaves(in_tree)))
+
+    leaves_ib = treelib.transpose(
+        treelib.structure([object()] * batch_size),
+        treelib.structure([object()] * inner_spec.num_leaves),
+        leaves_bi,
+        is_leaf=lambda x: id(x) in leaf_ids,
+    )
+
     leaf_batches = [outer_spec.unflatten(col) for col in leaves_ib]
     return inner_spec.unflatten(leaf_batches)
