@@ -42,9 +42,14 @@ def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int) -> Tree:
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
     zipped = zip(flat_in_tree, flat_in_batched, strict=True)
-    # NOTE(asem): batched leaf must support indexing
-    # TODO(asem): use accessors/ or make sure batched leaves support indexing
-    leaves_i = (leaf[b] if is_batched else leaf for leaf, is_batched in zipped)
+
+    def index_struct(node):
+        # NOTE(asem): index a struct without requiring direct
+        # indexing of the struct
+        children, *_ = treelib.flatten_one_level(node)
+        return children[b]
+
+    leaves_i = (index_struct(leaf) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
 

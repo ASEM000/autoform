@@ -371,7 +371,7 @@ def batch_while_loop(
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     out_batched = treelib.map(lambda _: True, body_func.out_irtree)
 
-    # wrap back the state in their original container
+    # NOTE(asem): wrap back the state in their original container
     spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
     states = spec.unflatten(states)
     out_tree = transpose_batch(batch_size, out_batched, states)
