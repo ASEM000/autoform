@@ -154,7 +154,7 @@ class Primitive:
         return self.name
 
     def bind(self, in_tree: Tree, **params):
-        return get_interp().interpret(self, in_tree, **params)
+        return get_interpreter().interpret(self, in_tree, **params)
 
 
 # ==================================================================================================
@@ -350,7 +350,7 @@ def using_interpreter[T: Interpreter](interpreter: T) -> tp.Generator[T, None, N
         active_interpreter.reset(token)
 
 
-def get_interp() -> Interpreter:
+def get_interpreter() -> Interpreter:
     return active_interpreter.get()
 
 

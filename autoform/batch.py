@@ -9,7 +9,7 @@ from collections.abc import Callable
 from operator import setitem
 
 from autoform.core import call, acall
-from autoform.core import Interpreter, get_interp, using_interpreter
+from autoform.core import Interpreter, get_interpreter, using_interpreter
 from autoform.core import IR, IREqn, IRLit, IRVar, Value, Var, is_irvar
 from autoform.core import (
     Primitive,
@@ -118,7 +118,7 @@ def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
 
 class BatchInterpreter(Interpreter):
     def __init__(self, *, batch_size: int):
-        self.parent = get_interp()
+        self.parent = get_interpreter()
         self.batch_size = batch_size
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params):
