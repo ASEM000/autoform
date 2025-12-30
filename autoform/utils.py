@@ -81,7 +81,7 @@ def transpose_batch(
     # leaves_ib = [[1, 3, 5], [2, 4, 6]]  (leaves, batch)
     # leaf_batches = [[1, 3, 5], [2, 4, 6]]
     # result = Point(x=[1, 3, 5], y=[2, 4, 6])
-    assert batch_size
+    assert batch_size, f"{batch_size=} must be > 0"
     inner_spec = treelib.structure(in_batched, is_leaf=lambda x: isinstance(x, bool))
     outer_spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
     first_level_leaves = treelib.leaves(in_tree, is_leaf=lambda x: x is not in_tree)
