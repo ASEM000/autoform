@@ -44,7 +44,7 @@ __all__ = [
     "Interpreter",
     "EvalInterpreter",
     "TracingInterpreter",
-    "get_interp",
+    "get_interpreter",
     "using_interpreter",
     # ir building and execution
     "build_ir",
