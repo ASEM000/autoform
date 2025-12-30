@@ -100,13 +100,13 @@ def transpose_batch(
     # >>> leaves_bi = [[[1,2], [3,4]], [[5,6], [7,8]]]  # leaves are lists
     # >>> transpose(leaves_bi) without is_leaf → descends into [1,2]
     # >>> transpose(leaves_bi) with is_leaf → stops at [1,2]
-    leaf_ids = set(map(id, treelib.leaves(in_tree)))
+    ids = {id(leaf) for row in leaves_bi for leaf in row}
 
     leaves_ib = treelib.transpose(
         treelib.structure([object()] * batch_size),
         treelib.structure([object()] * inner_spec.num_leaves),
         leaves_bi,
-        is_leaf=lambda x: id(x) in leaf_ids,
+        is_leaf=lambda x: id(x) in ids,
     )
 
     leaf_batches = [outer_spec.unflatten(col) for col in leaves_ib]
