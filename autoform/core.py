@@ -434,14 +434,12 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 
     @ft.wraps(func)
     def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        # NOTE(asem): make sure inputs are normal python not iratoms
         treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
         in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
-        in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-
         with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
+        in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
         out_irtree = treelib.map(to_out_iratom, out_irtree)
         return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
@@ -491,6 +489,21 @@ def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
     return execute
 
 
+def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
+    # TODO(asem): open it up for users
+    if not chunks:
+        return None
+    head = chunks[0]
+    if isinstance(head, str):
+        return "".join(chunks)
+    if isinstance(head, list):
+        return list(it.chain.from_iterable(chunks))
+    try:
+        return ft.reduce(lambda a, b: a + b, chunks)
+    except TypeError:
+        return chunks
+
+
 def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     """Create an iterator executor for an IR.
 
@@ -509,19 +522,6 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tp.Iterator[R]:
-        def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
-            if not chunks:
-                return None
-            head = chunks[0]
-            if isinstance(head, str):
-                return "".join(chunks)
-            if isinstance(head, list):
-                return list(it.chain.from_iterable(chunks))
-            try:
-                return ft.reduce(lambda a, b: a + b, chunks)
-            except TypeError:
-                return chunks
-
         in_tree = pack_user_input(*args, **kwargs)
         env: dict[IRVar, Value] = {}
 
