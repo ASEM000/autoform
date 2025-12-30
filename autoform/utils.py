@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections.abc import Callable
-
 import optree.pytree
 
 
@@ -37,12 +36,20 @@ def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int) -> Tree:
     #     >>> unbatch_at(tree_ib, batched, 0)
     #     [1, 'constant']
     spec = treelib.structure(in_batched)
-    leaves_ib = spec.flatten_up_to(in_tree)
-    flat_batched = treelib.leaves(in_batched)
-    leaves_i = [
-        leaf[b] if is_batched else leaf
-        for leaf, is_batched in zip(leaves_ib, flat_batched, strict=True)
-    ]
+    # NOTE(asem): flatten in_tree to match in_batched structure
+    flat_in_tree = spec.flatten_up_to(in_tree)
+    flat_in_batched = treelib.leaves(in_batched)
+    # NOTE(asem): iterate over the flat version and index iff its batched
+    # and broadcast otherwise
+    zipped = zip(flat_in_tree, flat_in_batched, strict=True)
+
+    def index_struct(node):
+        # NOTE(asem): index a struct without requiring direct
+        # indexing of the struct
+        children, *_ = treelib.flatten_one_level(node)
+        return children[b]
+
+    leaves_i = (index_struct(leaf) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
 
@@ -55,27 +62,52 @@ def pack_user_input(*args, **kwargs) -> Tree:
     return args
 
 
-def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: list[Tree]) -> Tree:
-    # Transpose outer(inner) => inner(outer).
-    # Example:
-    #     >>> import typing as tp
-    #     >>> class Point(tp.NamedTuple):
-    #     ...     x: int
-    #     ...     y: int
-    #     >>> batch_size = 3
-    #     >>> in_batched = Point(x=True, y=True)
-    #     >>> in_tree = [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=6)]
-    #     >>> desired = Point(x=[1,3,5], y=[2,4,6])
-    #     >>> transposed = transpose_batch(batch_size, in_batched, in_tree)
-    #     >>> transposed == desired
-    #     True
-    # get spec from in_batched -> Point(*, *)
+def transpose_batch(
+    batch_size: int,
+    in_batched: Tree[bool],
+    in_tree: Tree,
+) -> Tree:
+    # NOTE(asem): AoS -> SoA
+    # Example (used throughout):
+    #   in_tree    = [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=6)]
+    #   in_batched = Point(x=True, y=True)
+    #   batch_size = 3
+    #   desired    = Point(x=[1, 3, 5], y=[2, 4, 6])
+
+    # inner_spec = Point(x=*, y=*)
+    # outer_spec = [*, *, *]
+    # items = [Point(1,2), Point(3,4), Point(5,6)]
+    # leaves_bi = [[1, 2], [3, 4], [5, 6]]  (batch, leaves)
+    # leaves_ib = [[1, 3, 5], [2, 4, 6]]  (leaves, batch)
+    # leaf_batches = [[1, 3, 5], [2, 4, 6]]
+    # result = Point(x=[1, 3, 5], y=[2, 4, 6])
+    assert batch_size, f"{batch_size=} must be > 0"
     inner_spec = treelib.structure(in_batched, is_leaf=lambda x: isinstance(x, bool))
-    # flatten each result -> [[1, 2], [3, 4], [5, 6]]
-    # make each inner result (e.g. [1, 2]) match inner_spec (Point(*, *))
-    leaves_bi = [inner_spec.flatten_up_to(r) for r in in_tree]
-    # transpose leaves -> [[1, 3, 5], [2, 4, 6]]
-    # note that in case batch_size=0 this will still work
-    # it will produce [[], []] which is valid (zip(*...) is invalid here)
-    leaves_ib = [[leaves_bi[b][i] for b in range(batch_size)] for i in range(inner_spec.num_leaves)]
-    return inner_spec.unflatten(leaves_ib)
+    outer_spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
+    first_level_leaves = treelib.leaves(in_tree, is_leaf=lambda x: x is not in_tree)
+
+    # NOTE(asem): flatten_up_to (not leaves) because we want to stop at the boundary
+    # defined by inner_spec. if leaves are containers (e.g., lists), regular leaves()
+    # would descend into them. flatten_up_to respects the spec and stops at each leaf slot.
+    # >>> item = Batch(items=[1, 2, 3], mask=[True, False])
+    # >>> inner_spec = Batch(items=*, mask=*)
+    # >>> treelib.leaves(item) → [1, 2, 3, True, False]
+    # >>> inner_spec.flatten_up_to(item) → [[1, 2, 3], [True, False]]
+    leaves_bi = [inner_spec.flatten_up_to(item) for item in first_level_leaves]
+
+    # NOTE(asem): transpose without indexing
+    # leaf_ids prevents transpose from descending INTO the leaf values.
+    # >>> leaves_bi = [[[1,2], [3,4]], [[5,6], [7,8]]]  # leaves are lists
+    # >>> transpose(leaves_bi) without is_leaf → descends into [1,2]
+    # >>> transpose(leaves_bi) with is_leaf → stops at [1,2]
+    ids = {id(leaf) for row in leaves_bi for leaf in row}
+
+    leaves_ib = treelib.transpose(
+        treelib.structure([object()] * batch_size),
+        treelib.structure([object()] * inner_spec.num_leaves),
+        leaves_bi,
+        is_leaf=lambda x: id(x) in ids,
+    )
+
+    leaf_batches = [outer_spec.unflatten(col) for col in leaves_ib]
+    return inner_spec.unflatten(leaf_batches)

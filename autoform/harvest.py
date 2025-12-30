@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections import defaultdict
-from autoform.core import Interpreter, get_interp, using_interpreter
+from autoform.core import Interpreter, get_interpreter, using_interpreter
 from autoform.core import IR, EvalType
 from autoform.core import (
     Primitive,
@@ -120,7 +120,7 @@ class CollectInterpreter(Interpreter):
         # NOTE(asem): collect into a defaultdict of lists for situations where
         # a value is checkpointed multiple times (e.g. a value in a loop)
         self.collected: Collected = defaultdict(list)
-        self.parent = get_interp()
+        self.parent = get_interpreter()
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         # NOTE(asem): No context switch here. We call parent.interpret() directly
@@ -189,7 +189,7 @@ class InjectInterpreter(Interpreter):
         self.collection = collection
         # NOTE(asem): reverse the lists to pop from the end to match collect's list output
         self.values = {k: list(reversed(values[k])) for k in values}
-        self.parent = get_interp()
+        self.parent = get_interpreter()
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         if (

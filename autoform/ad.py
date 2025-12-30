@@ -18,7 +18,7 @@ from autoform.core import (
     Interpreter,
     Value,
     Var,
-    get_interp,
+    get_interpreter,
     is_irvar,
     using_interpreter,
 )
@@ -44,7 +44,7 @@ pushforward_call_p = Primitive("pushforward_call", tag="transformation")
 
 class PushforwardInterpreter(Interpreter):
     def __init__(self):
-        self.parent = get_interp()
+        self.parent = get_interpreter()
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params):
         with using_interpreter(self.parent):
@@ -239,7 +239,7 @@ def accumulate_cotangents(cotangents: list) -> tp.Any:
 
 class PullbackFwdInterpreter(Interpreter):
     def __init__(self):
-        self.parent = get_interp()
+        self.parent = get_interpreter()
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params):
         with using_interpreter(self.parent):
@@ -248,7 +248,7 @@ class PullbackFwdInterpreter(Interpreter):
 
 class PullbackBwdInterpreter(Interpreter):
     def __init__(self):
-        self.parent = get_interp()
+        self.parent = get_interpreter()
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params):
         with using_interpreter(self.parent):

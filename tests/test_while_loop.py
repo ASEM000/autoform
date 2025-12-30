@@ -100,6 +100,50 @@ class TestWhileLoopBatch:
         # Both get 3 iterations
         assert states == ["a...", "b..."]
 
+    def test_batch_preserves_tuple_container(self):
+        def cond(x):
+            return af.match(x, "")
+
+        def body(x):
+            return af.concat(x, "x")
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=3)
+
+        loop_ir = build_ir(loop)("")
+        batched_ir = af.batch(loop_ir, in_axes=tuple)
+
+        inputs = ("", "a")
+        states = call(batched_ir)(inputs)
+
+        assert states == ("x", "a")
+        assert isinstance(states, tuple)
+
+    def test_batch_preserves_list_container(self):
+        def cond(x):
+            return af.match(x, "")
+
+        def body(x):
+            return af.concat(x, "x")
+
+        cond_ir = build_ir(cond)("x")
+        body_ir = build_ir(body)("x")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=3)
+
+        loop_ir = build_ir(loop)("")
+        batched_ir = af.batch(loop_ir, in_axes=list)
+
+        inputs = ["", "a"]
+        states = call(batched_ir)(inputs)
+
+        assert states == ["x", "a"]
+        assert isinstance(states, list)
+
 
 class TestWhileLoopPullback:
     def test_pullback_no_iterations(self):

@@ -184,3 +184,6 @@ docs/examples/*.py
 
 # uv lock file
 uv.lock
+
+# others
+NOTES.md
