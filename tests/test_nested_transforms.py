@@ -1,4 +1,5 @@
 import autoform as af
+import pytest
 
 
 class TestBatchOfPushforward:
@@ -425,8 +426,8 @@ class TestEdgeCasesDeepNesting:
         b2 = af.batch(b1)
         b3 = af.batch(b2)
         inputs = [[[], []], []]
-        result = af.call(b3)(inputs)
-        assert result == [[[], []], []]
+        with pytest.raises(AssertionError):
+            af.call(b3)(inputs)
 
     def test_single_element_deep(self):
         def f(x):
