@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections import defaultdict
+from collections.abc import Callable
 from autoform.core import Interpreter, get_interpreter, using_interpreter
 from autoform.core import IR, EvalType
 from autoform.core import (
@@ -16,8 +17,20 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree
-from autoform.core import call
+from autoform.utils import Tree, treelib
+from autoform.core import (
+    call,
+    IREqn,
+    IRVar,
+    IRLit,
+    Var,
+    is_iratom,
+    is_irvar,
+    is_var,
+    IRAtom,
+    pack_user_input,
+    is_user_type,
+)
 
 # ==================================================================================================
 # CHECKPOINT
@@ -238,3 +251,118 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
             return call(ir)(*args, **kwargs)
 
     return execute
+
+
+# ==================================================================================================
+# SPLIT
+# ==================================================================================================
+
+
+class SplitInterpreter(Interpreter):
+    def __init__(self, name: tp.Hashable):
+        # NOTE(asem): trace and split interpreter
+        # mostly similar to TraceInterpreter but splits the IR into two parts
+        # at the checkpoint with the given name
+        self.lhs_ireqns: list[IREqn] = []
+        self.rhs_ireqns: list[IREqn] = []
+        self.name = name
+        self.split: bool = False
+
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
+        def to_in_iratom(x) -> IRAtom:
+            # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
+            # however, a function can take a constant value as input that is not an input
+            # thus we need to wrap it here
+            # >>> def f(x):
+            # ...     const = "..."
+            # ...     return some_user_func(const)
+            # here const is not reachable by `build_ir` wrapping mechanism and thus
+            # needs to be handled here
+            return x if is_iratom(x) else IRLit(x)
+
+        in_irtree = treelib.map(to_in_iratom, in_tree)
+
+        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
+
+        def to_in_evaltype(x):
+            # NOTE(asem): eval rules accept `Var`/ python types.
+            # `Var` simply denotes a placeholder for a value that will be computed later
+            return Var() if is_irvar(x) else x.value
+
+        in_evaltree = treelib.map(to_in_evaltype, in_irtree)
+        out_evaltree = eval_rules[prim](in_evaltree, **params)
+
+        def to_out_iratom(x) -> IRAtom:
+            # NOTE(asem): eval rules return `Var`/ python types.
+            # `Var` simply denotes a placeholder for a value that will be computed later
+            # this is basically delegated to the user to handle
+            return IRVar.fresh() if is_var(x) else IRLit(x)
+
+        out_irtree = treelib.map(to_out_iratom, out_evaltree)
+
+        ireqns = self.rhs_ireqns if self.split else self.lhs_ireqns
+        ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
+
+        if prim == checkpoint_p and params.get("name") == self.name:
+            # NOTE(asem): checkpoint belongs to the LHS
+            assert self.split is False, "Cannot split multiple times"
+            self.split = True
+
+        return out_irtree
+
+
+def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> tuple[IR[P, R], IR[P, R]]:
+    """Split a function into left and right IRs at checkpointed name.
+
+    Args:
+        func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
+        name: A unique hashable value.
+
+    Returns:
+        A tracer callable that takes ``(*args, **kwargs)`` and returns a pair of IR
+    """
+    # NOTE(asem): calling split inside a traced function will inline the splitted IRs
+    # >>> def outer(x):
+    # ...     lhs, rhs = split(inner, name="mid")("...")
+    # ...     mid = af.call(lhs)(x)    # lhs equations inline into outer
+    # ...     return af.call(rhs)(mid) # rhs equations inline into outer
+    # >>> ir = af.build_ir(outer)("...")
+    # result is a single flat IR with all equations from lhs and rhs
+
+    def assert_usertype(x):
+        assert not is_iratom(x), "Inputs to `build_ir` must be normal python types"
+
+    def to_in_iratom(x):
+        # NOTE(asem): user types are converted to IRVar/IRLit
+        # to prepare for tracing.
+        return IRVar.fresh() if is_user_type(x) else IRLit(x)
+
+    def to_out_iratom(x):
+        return x if is_iratom(x) else IRLit(x)
+
+    @ft.wraps(func)
+    def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
+        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
+        in_irargs, in_irkwargs = in_irtree
+
+        with using_interpreter(SplitInterpreter(name=name)) as tracer:
+            out_irtree = func(*in_irargs, **in_irkwargs)
+
+        assert tracer.split is True, f"`split` could not find checkpoint matches {name=}"
+
+        lhs_ireqns = tracer.lhs_ireqns
+        lhs_in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
+        lhs_out_irtree = lhs_ireqns[-1].out_irtree
+        lhs = IR(ireqns=lhs_ireqns, in_irtree=lhs_in_irtree, out_irtree=lhs_out_irtree)
+
+        # NOTE(asem): rhs takes checkpoint output as input, wrapped in call-compatible structure
+        # The checkpoint output becomes the new "input" for rhs
+        rhs_ireqns = tracer.rhs_ireqns
+        rhs_in_irtree = pack_user_input(lhs_ireqns[-1].out_irtree)
+        rhs_out_irtree = treelib.map(to_out_iratom, out_irtree)
+        rhs = IR(ireqns=rhs_ireqns, in_irtree=rhs_in_irtree, out_irtree=rhs_out_irtree)
+
+        return lhs, rhs
+
+    return trace

@@ -1,5 +1,7 @@
 import autoform as af
 
+import pytest
+
 
 class TestSow:
     def test_impl_is_identity(self):
@@ -299,7 +301,7 @@ class TestInjectAndDCE:
             return af.concat("final:", saved2)
 
         ir = af.build_ir(program)("test")
-        assert len(ir.ireqns) == 5  # 3 concats + 2 checkpoints
+        assert len(ir.ireqns) == 5
 
         def wrapped(x):
             return af.inject(ir, collection="cache", values={"first": ["CACHED1"]})(x)
@@ -323,3 +325,92 @@ class TestInjectAndDCE:
         )(["x", "y"])
 
         assert result == ["Got: A", "Got: B"]
+
+
+class TestSplit:
+    def test_split_checkpoint_at_end(self):
+
+        def program(x):
+            y = af.checkpoint(af.format("{}", x), collection="debug", name="s")
+            return y
+
+        lhs, rhs = af.split(program, name="s")("...")
+
+        assert len(lhs.ireqns) == 2
+        assert lhs.ireqns[0].prim.name == "format"
+        assert lhs.ireqns[1].prim.name == "checkpoint"
+
+        assert len(rhs.ireqns) == 0
+
+        lhs_result = af.call(lhs)("Test")
+        assert lhs_result == "Test"
+        rhs_result = af.call(rhs)(lhs_result)
+        assert rhs_result == lhs_result
+
+    def test_split_checkpoint_in_middle(self):
+
+        def program(x):
+            y = af.format("Hello {}", x)
+            z = af.checkpoint(y, collection="cache", name="mid")
+            w = af.format("Result: {}", z)
+            return w
+
+        lhs, rhs = af.split(program, name="mid")("...")
+
+        assert len(lhs.ireqns) == 2
+
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "format"
+
+        lhs_result = af.call(lhs)("World")
+        assert lhs_result == "Hello World"
+
+        rhs_result = af.call(rhs)(lhs_result)
+        assert rhs_result == "Result: Hello World"
+
+        ir_full = af.build_ir(program)("x")
+        full_result = af.call(ir_full)("World")
+        assert rhs_result == full_result
+
+    def test_split_composition_equals_full(self):
+
+        def program(x):
+            a = af.format("Step1: {}", x)
+            b = af.checkpoint(a, collection="split", name="step1")
+            c = af.format("Step2: {}", b)
+            d = af.concat(c, "!")
+            return d
+
+        lhs, rhs = af.split(program, name="step1")("...")
+        ir_full = af.build_ir(program)("x")
+
+        for inp in ["a", "hello", "test123"]:
+            lhs_result = af.call(lhs)(inp)
+            rhs_result = af.call(rhs)(lhs_result)
+            full_result = af.call(ir_full)(inp)
+            assert rhs_result == full_result
+
+    def test_split_not_found_raises(self):
+
+        def program(x):
+            return af.format("{}", x)
+
+        with pytest.raises(AssertionError, match="could not find checkpoint"):
+            af.split(program, name="nonexistent")("...")
+
+    def test_split_with_multiple_checkpoints(self):
+
+        def program(x):
+            a = af.checkpoint(x, collection="c", name="first")
+            b = af.format("{}", a)
+            c = af.checkpoint(b, collection="c", name="second")
+            d = af.concat(c, "!")
+            return d
+
+        lhs1, rhs1 = af.split(program, name="first")("...")
+        assert len(lhs1.ireqns) == 1
+        assert len(rhs1.ireqns) == 3
+
+        lhs2, rhs2 = af.split(program, name="second")("...")
+        assert len(lhs2.ireqns) == 3
+        assert len(rhs2.ireqns) == 1
