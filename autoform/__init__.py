@@ -4,7 +4,7 @@ from autoform.core import build_ir
 
 from autoform.ad import pushforward, pullback
 from autoform.batch import batch
-from autoform.harvest import collect, inject, checkpoint
+from autoform.harvest import collect, inject, mark, split
 from autoform.optims import dce, fold
 from autoform.core import call, icall, acall
 
@@ -36,7 +36,8 @@ __all__ = [
     "lm_call",
     "struct_lm_call",
     "stop_gradient",
-    "checkpoint",
+    "mark",
+    "split",
     "switch",
     "while_loop",
     # types

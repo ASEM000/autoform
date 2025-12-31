@@ -55,19 +55,19 @@ def judge_debate(topic: str) -> Verdict:
 
     # agent 1: argue for
     pro = af.format("Argue FOR: {}", topic)
-    pro = af.checkpoint(pro, collection="debug", name="pro")
+    pro = af.mark(pro, collection="debug", name="pro")
     msgs = [dict(role="user", content=pro)]
     pro = af.lm_call(msgs, model="gpt-4o")
 
     # agent 2: argue against  
     con = af.format("Argue AGAINST: {}", topic)
-    con = af.checkpoint(con, collection="debug", name="con")
+    con = af.mark(con, collection="debug", name="con")
     msgs = [dict(role="user", content=con)]
     con = af.lm_call(msgs, model="gpt-4o")
 
     # agent 3: judge
     prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
-    prompt = af.checkpoint(prompt, collection="debug", name="judge")
+    prompt = af.mark(prompt, collection="debug", name="judge")
     msgs = [dict(role="user", content=prompt)]
     return af.struct_lm_call(msgs, model="gpt-4o", struct=Verdict)
 

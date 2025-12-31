@@ -98,8 +98,8 @@ def transpose_batch(
     # NOTE(asem): transpose without indexing
     # leaf_ids prevents transpose from descending INTO the leaf values.
     # >>> leaves_bi = [[[1,2], [3,4]], [[5,6], [7,8]]]  # leaves are lists
-    # >>> transpose(leaves_bi) without is_leaf → descends into [1,2]
-    # >>> transpose(leaves_bi) with is_leaf → stops at [1,2]
+    # >>> transpose(leaves_bi) without is_leaf descends into [1,2]
+    # >>> transpose(leaves_bi) with is_leaf stops at [1,2]
     ids = {id(leaf) for row in leaves_bi for leaf in row}
 
     leaves_ib = treelib.transpose(

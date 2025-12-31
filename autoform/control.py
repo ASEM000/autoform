@@ -95,7 +95,7 @@ def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tre
 switch_p = Primitive("switch", tag="control")
 
 
-def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
+def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
     """Select and execute one of multiple IR branches based on a string key.
 
     Args:
@@ -131,7 +131,7 @@ def switch(key: str, branches: dict[str, IR], *operands, **kw_operands) -> Tree:
     assert all(treelib.structure(branches[key].in_irtree) == tree_struct0 for key in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].out_irtree)
     assert all(treelib.structure(branches[key].out_irtree) == tree_struct0 for key in branches)
-    return switch_p.bind((key, pack_user_input(*operands, **kw_operands)), branches=branches)
+    return switch_p.bind((key, pack_user_input(*args, **kwargs)), branches=branches)
 
 
 @ft.partial(impl_rules.def_rule, switch_p)
