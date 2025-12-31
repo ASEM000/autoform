@@ -319,7 +319,9 @@ def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> tuple[IR[P, R], IR
         name: A unique hashable value.
 
     Returns:
-        A tracer callable that takes ``(*args, **kwargs)`` and returns a pair of IR
+        A tracer callable that, when invoked with ``(*args, **kwargs)`` corresponding
+        to ``func``'s parameters, returns a tuple ``(lhs_ir, rhs_ir)`` of two
+        :class:`IR` objects (left-hand side and right-hand side).
     """
     # NOTE(asem): calling split inside a traced function will inline the splitted IRs
     # >>> def outer(x):
