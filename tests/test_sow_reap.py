@@ -5,35 +5,35 @@ import pytest
 
 class TestSow:
     def test_impl_is_identity(self):
-        result = af.checkpoint("hello", collection="debug", name="test")
+        result = af.mark("hello", collection="debug", name="test")
         assert result == "hello"
 
     def test_ir_build(self):
         def func(x):
-            return af.checkpoint(x, collection="my_tag", name="my_name")
+            return af.mark(x, collection="my_tag", name="my_name")
 
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "checkpoint"
+        assert ir.ireqns[0].prim.name == "mark"
         assert ir.ireqns[0].params["collection"] == "my_tag"
         assert ir.ireqns[0].params["name"] == "my_name"
 
     def test_run_ir(self):
         def func(x):
-            return af.checkpoint(x, collection="test", name="value")
+            return af.mark(x, collection="test", name="value")
 
         ir = af.build_ir(func)("test")
         result = af.call(ir)("hello")
         assert result == "hello"
 
     def test_hashable_tags_and_names(self):
-        assert af.checkpoint("x", collection="str_tag", name="str_name") == "x"
-        assert af.checkpoint("x", collection=42, name=100) == "x"
-        assert af.checkpoint("x", collection=("a", 1), name=("b", 2)) == "x"
+        assert af.mark("x", collection="str_tag", name="str_name") == "x"
+        assert af.mark("x", collection=42, name=100) == "x"
+        assert af.mark("x", collection=("a", 1), name=("b", 2)) == "x"
 
     def test_pushforward_preserves_both(self):
         def func(x):
-            return af.checkpoint(x, collection="test", name="val")
+            return af.mark(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
         pf_ir = af.pushforward(ir)
@@ -43,7 +43,7 @@ class TestSow:
 
     def test_pullback_preserves_cotangent(self):
         def func(x):
-            return af.checkpoint(x, collection="test", name="val")
+            return af.mark(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
         pb_ir = af.pullback(ir)
@@ -53,7 +53,7 @@ class TestSow:
 
     def test_batch(self):
         def func(x):
-            return af.checkpoint(x, collection="test", name="val")
+            return af.mark(x, collection="test", name="val")
 
         ir = af.build_ir(func)("a")
         batched_ir = af.batch(ir)
@@ -62,7 +62,7 @@ class TestSow:
 
     def test_in_chain(self):
         def func(x):
-            sowed = af.checkpoint(x, collection="debug", name="input")
+            sowed = af.mark(x, collection="debug", name="input")
             return af.concat("[", sowed, "]")
 
         ir = af.build_ir(func)("a")
@@ -73,7 +73,7 @@ class TestSow:
 class TestRunAndReap:
     def test_reap_single_sow(self):
         def func(x):
-            return af.checkpoint(x, collection="debug", name="captured")
+            return af.mark(x, collection="debug", name="captured")
 
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("hello")
@@ -82,9 +82,9 @@ class TestRunAndReap:
 
     def test_reap_multiple_sows_same_tag(self):
         def func(x):
-            a = af.checkpoint(x, collection="debug", name="first")
+            a = af.mark(x, collection="debug", name="first")
             b = af.concat(a, "!")
-            c = af.checkpoint(b, collection="debug", name="second")
+            c = af.mark(b, collection="debug", name="second")
             return c
 
         ir = af.build_ir(func)("test")
@@ -94,8 +94,8 @@ class TestRunAndReap:
 
     def test_reap_filters_by_tag(self):
         def func(x):
-            a = af.checkpoint(x, collection="debug", name="debug_val")
-            b = af.checkpoint(a, collection="metrics", name="metrics_val")
+            a = af.mark(x, collection="debug", name="debug_val")
+            b = af.mark(a, collection="metrics", name="metrics_val")
             return b
 
         ir = af.build_ir(func)("test")
@@ -108,7 +108,7 @@ class TestRunAndReap:
 
     def test_reap_empty_when_no_match(self):
         def func(x):
-            return af.checkpoint(x, collection="other", name="val")
+            return af.mark(x, collection="other", name="val")
 
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("hello")
@@ -126,9 +126,9 @@ class TestRunAndReap:
 
     def test_reap_preserves_execution(self):
         def func(x):
-            a = af.checkpoint(af.format("Q: {}", x), collection="debug", name="prompt")
+            a = af.mark(af.format("Q: {}", x), collection="debug", name="prompt")
             response = af.concat(a, " A: 42")
-            return af.checkpoint(response, collection="debug", name="response")
+            return af.mark(response, collection="debug", name="response")
 
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("What?")
@@ -140,7 +140,7 @@ class TestRunAndReap:
 class TestRunAndPlant:
     def test_plant_overrides_sow(self):
         def func(x):
-            return af.checkpoint(af.concat("Hello, ", x), collection="cache", name="greeting")
+            return af.mark(af.concat("Hello, ", x), collection="cache", name="greeting")
 
         ir = af.build_ir(func)("test")
 
@@ -152,8 +152,8 @@ class TestRunAndPlant:
 
     def test_plant_partial(self):
         def func(x):
-            a = af.checkpoint(x, collection="cache", name="first")
-            b = af.checkpoint(af.concat(a, "!"), collection="cache", name="second")
+            a = af.mark(x, collection="cache", name="first")
+            b = af.mark(af.concat(a, "!"), collection="cache", name="second")
             return b
 
         ir = af.build_ir(func)("test")
@@ -163,8 +163,8 @@ class TestRunAndPlant:
 
     def test_plant_filters_by_tag(self):
         def func(x):
-            a = af.checkpoint(x, collection="cache", name="val")
-            b = af.checkpoint(a, collection="other", name="val")
+            a = af.mark(x, collection="cache", name="val")
+            b = af.mark(a, collection="other", name="val")
             return b
 
         ir = af.build_ir(func)("test")
@@ -174,7 +174,7 @@ class TestRunAndPlant:
 
     def test_plant_empty_dict(self):
         def func(x):
-            return af.checkpoint(x, collection="cache", name="val")
+            return af.mark(x, collection="cache", name="val")
 
         ir = af.build_ir(func)("test")
 
@@ -183,7 +183,7 @@ class TestRunAndPlant:
 
     def test_plant_unmatched_name(self):
         def func(x):
-            return af.checkpoint(x, collection="cache", name="val")
+            return af.mark(x, collection="cache", name="val")
 
         ir = af.build_ir(func)("test")
 
@@ -194,7 +194,7 @@ class TestRunAndPlant:
 class TestTransformThenReap:
     def test_reap_captures_during_pushforward(self):
         def func(x):
-            return af.checkpoint(x, collection="debug", name="val")
+            return af.mark(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward(ir)
@@ -207,7 +207,7 @@ class TestTransformThenReap:
 
     def test_reap_captures_during_pullback(self):
         def func(x):
-            return af.checkpoint(x, collection="debug", name="val")
+            return af.mark(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback(ir)
@@ -223,7 +223,7 @@ class TestTransformThenReap:
 
     def test_reap_captures_during_batch(self):
         def func(x):
-            return af.checkpoint(x, collection="debug", name="val")
+            return af.mark(x, collection="debug", name="val")
 
         ir = af.build_ir(func)("test")
         batched = af.batch(ir)
@@ -233,10 +233,10 @@ class TestTransformThenReap:
 
     def test_reap_captures_in_switch_branches(self):
         def branch_a(x):
-            return af.checkpoint(af.concat("a: ", x), collection="debug", name="result")
+            return af.mark(af.concat("a: ", x), collection="debug", name="result")
 
         def branch_b(x):
-            return af.checkpoint(af.concat("b: ", x), collection="debug", name="result")
+            return af.mark(af.concat("b: ", x), collection="debug", name="result")
 
         ir_a = af.build_ir(branch_a)("x")
         ir_b = af.build_ir(branch_b)("x")
@@ -254,7 +254,7 @@ class TestInjectAndDCE:
     def test_inject_trace_creates_literal(self):
         def program(x):
             expensive = af.concat("EXPENSIVE:", x)
-            cached = af.checkpoint(expensive, collection="cache", name="result")
+            cached = af.mark(expensive, collection="cache", name="result")
             return af.concat("Got: ", cached)
 
         ir = af.build_ir(program)("test")
@@ -274,7 +274,7 @@ class TestInjectAndDCE:
     def test_dce_removes_dead_code_after_inject(self):
         def program(x):
             expensive = af.concat("EXPENSIVE:", x)
-            cached = af.checkpoint(expensive, collection="cache", name="result")
+            cached = af.mark(expensive, collection="cache", name="result")
             return af.concat("Got: ", cached)
 
         ir = af.build_ir(program)("test")
@@ -292,12 +292,12 @@ class TestInjectAndDCE:
         result = af.call(optimized_ir)("any_input")
         assert result == "Got: CACHED"
 
-    def test_inject_dce_with_multiple_checkpoints(self):
+    def test_inject_dce_with_multiple_marks(self):
         def program(x):
             step1 = af.concat("step1:", x)
-            saved1 = af.checkpoint(step1, collection="cache", name="first")
+            saved1 = af.mark(step1, collection="cache", name="first")
             step2 = af.concat("step2:", saved1)
-            saved2 = af.checkpoint(step2, collection="cache", name="second")
+            saved2 = af.mark(step2, collection="cache", name="second")
             return af.concat("final:", saved2)
 
         ir = af.build_ir(program)("test")
@@ -314,7 +314,7 @@ class TestInjectAndDCE:
     def test_inject_works_with_nested_transforms(self):
         def program(x):
             expensive = af.concat("EXPENSIVE:", x)
-            cached = af.checkpoint(expensive, collection="cache", name="result")
+            cached = af.mark(expensive, collection="cache", name="result")
             return af.concat("Got: ", cached)
 
         ir = af.build_ir(program)("test")
@@ -328,17 +328,17 @@ class TestInjectAndDCE:
 
 
 class TestSplit:
-    def test_split_checkpoint_at_end(self):
+    def test_split_mark_at_end(self):
 
         def program(x):
-            y = af.checkpoint(af.format("{}", x), collection="debug", name="s")
+            y = af.mark(af.format("{}", x), collection="debug", name="s")
             return y
 
         lhs, rhs = af.split(program, name="s")("...")
 
         assert len(lhs.ireqns) == 2
         assert lhs.ireqns[0].prim.name == "format"
-        assert lhs.ireqns[1].prim.name == "checkpoint"
+        assert lhs.ireqns[1].prim.name == "mark"
 
         assert len(rhs.ireqns) == 0
 
@@ -347,11 +347,11 @@ class TestSplit:
         rhs_result = af.call(rhs)(lhs_result)
         assert rhs_result == lhs_result
 
-    def test_split_checkpoint_in_middle(self):
+    def test_split_mark_in_middle(self):
 
         def program(x):
             y = af.format("Hello {}", x)
-            z = af.checkpoint(y, collection="cache", name="mid")
+            z = af.mark(y, collection="cache", name="mid")
             w = af.format("Result: {}", z)
             return w
 
@@ -376,7 +376,7 @@ class TestSplit:
 
         def program(x):
             a = af.format("Step1: {}", x)
-            b = af.checkpoint(a, collection="split", name="step1")
+            b = af.mark(a, collection="split", name="step1")
             c = af.format("Step2: {}", b)
             d = af.concat(c, "!")
             return d
@@ -395,15 +395,15 @@ class TestSplit:
         def program(x):
             return af.format("{}", x)
 
-        with pytest.raises(AssertionError, match="could not find checkpoint"):
+        with pytest.raises(AssertionError, match="could not find mark"):
             af.split(program, name="nonexistent")("...")
 
-    def test_split_with_multiple_checkpoints(self):
+    def test_split_with_multiple_marks(self):
 
         def program(x):
-            a = af.checkpoint(x, collection="c", name="first")
+            a = af.mark(x, collection="c", name="first")
             b = af.format("{}", a)
-            c = af.checkpoint(b, collection="c", name="second")
+            c = af.mark(b, collection="c", name="second")
             d = af.concat(c, "!")
             return d
 

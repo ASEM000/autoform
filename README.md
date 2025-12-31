@@ -69,19 +69,19 @@ def judge_debate(topic: str) -> Verdict:
 
     # agent 1: argue for
     pro = af.format("Argue FOR: {}", topic)
-    pro = af.checkpoint(pro, collection="debug", name="pro")
+    pro = af.mark(pro, collection="debug", name="pro")
     msgs = [dict(role="user", content=pro)]
     pro = af.lm_call(msgs, model="gpt-4o")
 
     # agent 2: argue against  
     con = af.format("Argue AGAINST: {}", topic)
-    con = af.checkpoint(con, collection="debug", name="con")
+    con = af.mark(con, collection="debug", name="con")
     msgs = [dict(role="user", content=con)]
     con = af.lm_call(msgs, model="gpt-4o")
 
     # agent 3: judge
     prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
-    prompt = af.checkpoint(prompt, collection="debug", name="judge")
+    prompt = af.mark(prompt, collection="debug", name="judge")
     msgs = [dict(role="user", content=prompt)]
     return af.struct_lm_call(msgs, model="gpt-4o", struct=Verdict)
 
@@ -98,10 +98,10 @@ verdicts = af.call(batched)(["pineapple on pizza", "cats vs dogs", "tabs vs spac
 pb_ir = af.pullback(ir)
 verdict, grad = af.call(pb_ir)(("pineapple on pizza", Verdict(decision="biased", reasoning="pro was weak")))
 
-# collect: capture checkpointed values
+# collect: capture marked values
 verdict, captured = af.collect(ir, collection="debug")("pineapple on pizza")
 
-# inject: override checkpointed values
+# inject: override marked values
 verdict = af.inject(ir, collection="debug", values=captured)("pineapple on pizza")
 
 # explain how batches are placed

@@ -172,7 +172,7 @@ class TestWhileLoopPullback:
         assert in_cotangent == "feedback"
 
 
-class TestWhileLoopWithCheckpoint:
+class TestWhileLoopWithMark:
     def test_collect_no_iterations(self):
 
         def cond(x):
@@ -180,7 +180,7 @@ class TestWhileLoopWithCheckpoint:
 
         def body(x):
             new_x = af.concat(x, "x")
-            return af.checkpoint(new_x, collection="trace", name="state")
+            return af.mark(new_x, collection="trace", name="state")
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("x")
@@ -194,13 +194,13 @@ class TestWhileLoopWithCheckpoint:
         assert result == "a"
         assert "state" not in collected or collected["state"] == []
 
-    def test_pullback_with_checkpoint(self):
+    def test_pullback_with_mark(self):
         def cond(x):
             return True
 
         def body(x):
             new_x = af.concat(x, "x")
-            return af.checkpoint(new_x, collection="trace", name="state")
+            return af.mark(new_x, collection="trace", name="state")
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("x")
@@ -281,7 +281,7 @@ class TestWhileLoopWithLLM:
                 {"role": "user", "content": text},
             ]
             refined = af.lm_call(msgs, model=TEST_MODEL)
-            return af.checkpoint(refined, collection="refinements", name="step")
+            return af.mark(refined, collection="refinements", name="step")
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("text")
@@ -393,20 +393,20 @@ class TestWhileLoopWithLLM:
         assert isinstance(out_tangent, str)
 
     @requires_llm
-    def test_collect_lm_checkpoints(self):
+    def test_collect_lm_marks(self):
 
         def process(text):
             step1 = af.lm_call(
                 [{"role": "user", "content": af.format("Summarize: {}", text)}],
                 model=TEST_MODEL,
             )
-            step1 = af.checkpoint(step1, collection="steps", name="summary")
+            step1 = af.mark(step1, collection="steps", name="summary")
 
             step2 = af.lm_call(
                 [{"role": "user", "content": af.format("Translate to Spanish: {}", step1)}],
                 model=TEST_MODEL,
             )
-            step2 = af.checkpoint(step2, collection="steps", name="translation")
+            step2 = af.mark(step2, collection="steps", name="translation")
 
             return step2
 
@@ -450,7 +450,7 @@ class TestWhileLoopWithLLM:
                 ],
                 model=TEST_MODEL,
             )
-            return af.checkpoint(refined, collection="trace", name="draft")
+            return af.mark(refined, collection="trace", name="draft")
 
         cond_ir = build_ir(cond)("...")
         body_ir = build_ir(body)("...")
