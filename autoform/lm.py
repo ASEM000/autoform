@@ -185,7 +185,7 @@ async def async_lm_call(contents: list, *, roles: tuple, model: str) -> str:
 struct_lm_call_p = Primitive("struct_lm_call", tag="lm")
 
 
-def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> str:
+def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:
     """Calls a language model with structured output using response_format.
 
     Uses LLM's built-in JSON mode with a Pydantic schema to extract structured
