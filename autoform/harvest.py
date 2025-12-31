@@ -341,7 +341,7 @@ def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> tuple[IR[P, R], IR
         return x if is_iratom(x) else IRLit(x)
 
     @ft.wraps(func)
-    def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
+    def trace(*args: P.args, **kwargs: P.kwargs) -> tuple[IR, IR]:
         treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
         in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
