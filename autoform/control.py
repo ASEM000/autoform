@@ -350,11 +350,9 @@ def batch_while_loop(
         # NOTE(asem): cond returns scalar bool, batched -> list. use unbatch for consistency.
         out_batched_cond = isinstance(conds_result, list)
         conds = [unbatch_at(conds_result, out_batched_cond, b) for b in range(n_alive)]
-
         # NOTE(asem): mark items as dead if cond returned False
         for idx, c in zip(alive_idx, conds, strict=True):
             alive[idx] = c
-
         # NOTE(asem): run body ONLY on still-alive items
         still_alive = [i for i in alive_idx if alive[i]]
         if still_alive:
@@ -363,19 +361,19 @@ def batch_while_loop(
             in_batched = treelib.map(lambda _: True, body_func.in_irtree)
             in_transposed = transpose_batch(n_still_alive, in_batched, still_alive_states)
             out_transposed = call(batched_body)(in_transposed)
-            out_batched = treelib.map(lambda _: True, body_func.out_irtree)
+            out_batched = treelib.map(is_irvar, body_func.out_irtree)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = unbatch_at(out_transposed, out_batched, local_idx)
-
     # NOTE(asem): transpose final states AoS -> SoA for batched output
-    out_batched = treelib.map(lambda _: True, body_func.out_irtree)
-
-    # NOTE(asem): wrap back the state in their original container
-    spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
-    states = spec.unflatten(states)
+    # only IRVar positions are batched; IRLit positions stay scalar
+    out_batched = treelib.map(is_irvar, body_func.out_irtree)
     out_tree = transpose_batch(batch_size, out_batched, states)
-
+    # NOTE(asem): restore original container type (tuple vs list etc.)
+    # since while_loop preserves structure (State -> State), we can safely
+    # enforce that output structure corresponds to input structure.
+    spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
+    out_tree = spec.unflatten(treelib.leaves(out_tree))
     return out_tree, out_batched
 
 
