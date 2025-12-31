@@ -14,7 +14,6 @@ class Answer(af.Struct):
 
 
 def chain_of_thought(question: str) -> Answer:
-
     # Step 1: Break down the problem
     step1_prompt = af.format("Break down this question into sub-problems:\n{}", question)
     msgs1 = [{"role": "user", "content": step1_prompt}]
@@ -81,7 +80,6 @@ class Position(af.Struct):
 
 
 def debate(topic: str) -> Position:
-
     # Agent 1: Proponent
     pro_prompt = af.format("Argue strongly FOR: {}", topic)
     msgs_pro = [{"role": "user", "content": pro_prompt}]
@@ -136,7 +134,6 @@ class Summary(af.Struct):
 
 
 def summarize(text: str) -> Summary:
-
     prompt = af.format("Summarize this in one sentence:\n{}", text)
     msgs = [{"role": "user", "content": prompt}]
     return af.struct_lm_call(msgs, model=MODEL, struct=Summary)

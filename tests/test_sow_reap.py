@@ -329,7 +329,6 @@ class TestInjectAndDCE:
 
 class TestSplit:
     def test_split_mark_at_end(self):
-
         def program(x):
             y = af.mark(af.format("{}", x), collection="debug", name="s")
             return y
@@ -348,7 +347,6 @@ class TestSplit:
         assert rhs_result == lhs_result
 
     def test_split_mark_in_middle(self):
-
         def program(x):
             y = af.format("Hello {}", x)
             z = af.mark(y, collection="cache", name="mid")
@@ -373,7 +371,6 @@ class TestSplit:
         assert rhs_result == full_result
 
     def test_split_composition_equals_full(self):
-
         def program(x):
             a = af.format("Step1: {}", x)
             b = af.mark(a, collection="split", name="step1")
@@ -391,7 +388,6 @@ class TestSplit:
             assert rhs_result == full_result
 
     def test_split_not_found_raises(self):
-
         def program(x):
             return af.format("{}", x)
 
@@ -399,7 +395,6 @@ class TestSplit:
             af.split(program, name="nonexistent")("...")
 
     def test_split_with_multiple_marks(self):
-
         def program(x):
             a = af.mark(x, collection="c", name="first")
             b = af.format("{}", a)

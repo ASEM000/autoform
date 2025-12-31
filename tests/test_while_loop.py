@@ -5,7 +5,6 @@ from tests.conftest import TEST_MODEL, requires_llm
 
 class TestWhileLoopImpl:
     def test_cond_initially_false(self):
-
         def cond(x):
             return False
 
@@ -19,7 +18,6 @@ class TestWhileLoopImpl:
         assert result == "input"
 
     def test_cond_always_true_exits_first_iter(self):
-
         def cond(x):
             return True
 
@@ -34,7 +32,6 @@ class TestWhileLoopImpl:
 
 class TestWhileLoopBatch:
     def test_batch_with_constant_cond(self):
-
         def cond(x):
             return False
 
@@ -56,7 +53,6 @@ class TestWhileLoopBatch:
         assert states == ["a", "b", "c"]
 
     def test_batch_with_data_dependent_cond(self):
-
         def cond(x):
             return af.match(x, "")
 
@@ -78,7 +74,6 @@ class TestWhileLoopBatch:
         assert states == ["x", "x", "already"]
 
     def test_batch_with_always_true_cond(self):
-
         def cond(x):
             return True
 
@@ -147,7 +142,6 @@ class TestWhileLoopBatch:
 
 class TestWhileLoopPullback:
     def test_pullback_no_iterations(self):
-
         def cond(x):
             return False
 
@@ -174,7 +168,6 @@ class TestWhileLoopPullback:
 
 class TestWhileLoopWithMark:
     def test_collect_no_iterations(self):
-
         def cond(x):
             return False
 
@@ -271,7 +264,6 @@ class TestWhileLoopValidation:
 class TestWhileLoopWithLLM:
     @requires_llm
     def test_refine_text_with_traces(self):
-
         def cond(x):
             return True
 
@@ -300,7 +292,6 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_refine_with_pullback(self):
-
         def cond(x):
             return True
 
@@ -331,7 +322,6 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_batched_lm_calls(self):
-
         def translate(text):
             msgs = [
                 {"role": "system", "content": "Translate to French. Return ONLY the translation."},
@@ -352,7 +342,6 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_struct_lm_call(self):
-
         class Sentiment(af.Struct):
             positive: bool
             confidence: float
@@ -372,7 +361,6 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_pushforward_lm(self):
-
         def improve(text):
             msgs = [
                 {"role": "system", "content": "Make more professional."},
@@ -394,7 +382,6 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_collect_lm_marks(self):
-
         def process(text):
             step1 = af.lm_call(
                 [{"role": "user", "content": af.format("Summarize: {}", text)}],
@@ -421,7 +408,6 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_refine_then_update(self):
-
         class QualityCheck(af.Struct):
             needs_improvement: bool
             reason: str
