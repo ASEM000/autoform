@@ -311,7 +311,7 @@ class SplitInterpreter(Interpreter):
         return out_irtree
 
 
-def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> tuple[IR[P, R], IR[P, R]]:
+def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> Callable[P, tuple[IR, IR]]:
     """Split a function into left and right IRs at marked name.
 
     Args:
