@@ -39,7 +39,7 @@ from autoform.core import (
 mark_p = Primitive("mark", tag="core")
 
 
-def mark(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) -> Tree:
+def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
     """Tag a value with a collection and name for later collection.
 
     `mark` marks a value with a `collection` and `name` (unique identifier)
@@ -48,8 +48,8 @@ def mark(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) -> Tre
 
     Args:
         in_tree: the value to mark (returned unchanged).
-        collection: collection for filtering (e.g., "debug", "cache", "metrics").
         name: unique identifier within the collection namespace.
+        collection: optional collection for filtering (e.g., "debug", "cache", "metrics").
 
     Returns:
         the input value unchanged.
@@ -75,14 +75,14 @@ def mark(in_tree: Tree, /, *, collection: tp.Hashable, name: tp.Hashable) -> Tre
 
 
 @ft.partial(impl_rules.def_rule, mark_p)
-def impl_mark(in_tree: Tree, *, collection: tp.Hashable, name: tp.Hashable) -> Tree:
+def impl_mark(in_tree: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
     del collection, name
     return in_tree
 
 
 @ft.partial(eval_rules.def_rule, mark_p)
 def eval_mark(
-    in_tree: Tree[EvalType], *, collection: tp.Hashable, name: tp.Hashable
+    in_tree: Tree[EvalType], *, name: tp.Hashable, collection: tp.Hashable | None = None
 ) -> Tree[EvalType]:
     del collection, name
     return in_tree
@@ -90,7 +90,7 @@ def eval_mark(
 
 @ft.partial(push_rules.def_rule, mark_p)
 def pushforward_mark(
-    primal: Tree, tangent: Tree, *, collection: tp.Hashable, name: tp.Hashable
+    primal: Tree, tangent: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None
 ) -> tuple[Tree, Tree]:
     p = mark(primal, collection=(collection, "primal"), name=name)
     t = mark(tangent, collection=(collection, "tangent"), name=name)
@@ -99,7 +99,7 @@ def pushforward_mark(
 
 @ft.partial(pull_fwd_rules.def_rule, mark_p)
 def pullback_fwd_mark(
-    in_tree: Tree, *, collection: tp.Hashable, name: tp.Hashable
+    in_tree: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None
 ) -> tuple[Tree, Tree]:
     out = mark(in_tree, collection=(collection, "primal"), name=name)
     return out, out
@@ -107,7 +107,11 @@ def pullback_fwd_mark(
 
 @ft.partial(pull_bwd_rules.def_rule, mark_p)
 def pullback_bwd_mark(
-    in_residuals: Tree, out_cotangent: Tree, *, collection: tp.Hashable, name: tp.Hashable
+    in_residuals: Tree,
+    out_cotangent: Tree,
+    *,
+    name: tp.Hashable,
+    collection: tp.Hashable | None = None,
 ) -> Tree:
     del in_residuals
     return mark(out_cotangent, collection=(collection, "cotangent"), name=name)
@@ -115,8 +119,14 @@ def pullback_bwd_mark(
 
 @ft.partial(batch_rules.def_rule, mark_p)
 def batch_mark(
-    _: int, in_batched: Tree, x: Tree, *, collection: tp.Hashable, name: tp.Hashable
+    batch_size: int,
+    in_batched: Tree,
+    x: Tree,
+    *,
+    name: tp.Hashable,
+    collection: tp.Hashable | None = None,
 ) -> tuple[Tree, Tree]:
+    del batch_size
     return mark(x, collection=(collection, "batch"), name=name), in_batched
 
 
