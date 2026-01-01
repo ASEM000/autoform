@@ -1,7 +1,7 @@
 """IR data structures, primitives, interpreters, and IR building"""
 
 from __future__ import annotations
-from operator import setitem
+
 import functools as ft
 import itertools as it
 import typing as tp
@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
 from contextlib import contextmanager
 from contextvars import ContextVar
+from operator import setitem
 from threading import RLock
 
 from autoform.utils import Tree, pack_user_input, treelib

@@ -48,7 +48,7 @@ class TestMatchBatch:
             return af.match(x, "yes")
 
         ir = build_ir(check)("dummy")
-        batched_ir = af.batch(ir, in_axes=list)
+        batched_ir = af.batch(ir, in_axes=True)
 
         results = call(batched_ir)(["yes", "yes", "yes"])
         assert results == [True, True, True]
@@ -58,7 +58,7 @@ class TestMatchBatch:
             return af.match(x, "yes")
 
         ir = build_ir(check)("dummy")
-        batched_ir = af.batch(ir, in_axes=list)
+        batched_ir = af.batch(ir, in_axes=True)
 
         results = call(batched_ir)(["yes", "no", "yes"])
         assert results == [True, False, True]
@@ -68,7 +68,7 @@ class TestMatchBatch:
             return af.match(a, b)
 
         ir = build_ir(check)("a", "b")
-        batched_ir = af.batch(ir, in_axes=(list, list))
+        batched_ir = af.batch(ir, in_axes=(True, True))
 
         results = call(batched_ir)(["a", "b", "c"], ["a", "x", "c"])
         assert results == [True, False, True]
@@ -78,7 +78,7 @@ class TestMatchBatch:
             return af.match(a, b)
 
         ir = build_ir(check)("a", "b")
-        batched_ir = af.batch(ir, in_axes=(list, None))
+        batched_ir = af.batch(ir, in_axes=(True, False))
 
         results = call(batched_ir)(["target", "other", "target"], "target")
         assert results == [True, False, True]
@@ -172,7 +172,7 @@ class TestMatchComposition:
             return is_yes, msg
 
         ir = build_ir(process)("status")
-        batched_ir = af.batch(ir, in_axes=list)
+        batched_ir = af.batch(ir, in_axes=True)
 
         results = call(batched_ir)(["yes", "no", "yes"])
         is_yes_list, msg_list = results

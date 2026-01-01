@@ -1,4 +1,5 @@
 import functools as ft
+
 import autoform as af
 
 
@@ -188,7 +189,7 @@ class TestDCEWithTransformedIR:
             return y
 
         ir = af.build_ir(program)("x")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
         dce = af.dce(batch)
 
         assert len(dce.ireqns) <= len(batch.ireqns)
@@ -278,7 +279,7 @@ class TestNestedDCE:
         inner_ir = af.build_ir(inner_fn)("test")
         assert len(inner_ir.ireqns) == 2
 
-        batch = af.batch(inner_ir, in_axes=list)
+        batch = af.batch(inner_ir, in_axes=True)
         dce = af.dce(batch)
 
         dced_inner = dce.ireqns[0].params["ir"]
@@ -327,7 +328,7 @@ class TestNestedDCE:
             return af.switch(key, {"a": branch}, x)
 
         outer_ir = af.build_ir(outer_fn)("a", "test")
-        batch = af.batch(outer_ir, in_axes=(None, list))
+        batch = af.batch(outer_ir, in_axes=(False, True))
         dce = af.dce(batch)
 
         batch_inner = dce.ireqns[0].params["ir"]

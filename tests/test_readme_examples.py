@@ -1,6 +1,6 @@
 import functools as ft
-import autoform as af
 
+import autoform as af
 
 shout_p = af.core.Primitive("shout")
 
@@ -83,7 +83,7 @@ class TestCustomPrimitive:
             return shout(x)
 
         ir = af.build_ir(program)("test")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
         result = af.call(batch)(["hello", "world", "test"])
         assert result == ["HELLO", "WORLD", "TEST"]
 
@@ -318,7 +318,7 @@ class TestMultiAgentComposition:
             return af.format("[Processed: {}]", query)
 
         ir = af.build_ir(simple_agent)("test")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
 
         results = af.call(batch)(["query1", "query2", "query3"])
         assert results == ["[Processed: query1]", "[Processed: query2]", "[Processed: query3]"]
@@ -367,7 +367,7 @@ class TestMultiAgentComposition:
 
         ir = af.build_ir(single_agent)("test")
 
-        batch_transformed = af.batch(ir, in_axes=list)
+        batch_transformed = af.batch(ir, in_axes=True)
 
         assert len(batch_transformed.ireqns) == 1
         assert batch_transformed.ireqns[0].prim.name == "batch_call"
@@ -384,7 +384,7 @@ class TestMultiAgentComposition:
         ir = af.build_ir(agent)("test")
 
         pb_ir = af.pullback(ir)
-        batch_pb = af.batch(pb_ir, in_axes=(list, list))
+        batch_pb = af.batch(pb_ir, in_axes=(True, True))
 
         inputs = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]

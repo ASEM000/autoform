@@ -5,11 +5,12 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 
-from litellm import acompletion, batch_completion, completion
 import pydantic
-from autoform.core import Var
+from litellm import acompletion, batch_completion, completion
+
 from autoform.core import (
     Primitive,
+    Var,
     async_rules,
     batch_rules,
     eval_rules,
@@ -19,7 +20,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, treelib, transpose_batch
+from autoform.utils import Tree, transpose_batch, treelib
 
 # ==================================================================================================
 # STRUCT
@@ -185,7 +186,7 @@ async def async_lm_call(contents: list, *, roles: tuple, model: str) -> str:
 struct_lm_call_p = Primitive("struct_lm_call", tag="lm")
 
 
-def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> str:
+def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:
     """Calls a language model with structured output using response_format.
 
     Uses LLM's built-in JSON mode with a Pydantic schema to extract structured

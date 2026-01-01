@@ -39,7 +39,7 @@ class TestTraceBatchIR:
             return af.format("Item: {}", x)
 
         inner_ir = af.build_ir(inner_program)("x")
-        batched_inner_ir = af.batch(inner_ir, in_axes=list)
+        batched_inner_ir = af.batch(inner_ir, in_axes=True)
 
         def program_with_batch(xs):
             return af.call(batched_inner_ir)(xs)
@@ -158,7 +158,7 @@ class TestTransformOfTracedRunIR:
             return af.call(inner_ir)(x)
 
         outer_ir = af.build_ir(program_with_run_ir)("test")
-        batch_outer_ir = af.batch(outer_ir, in_axes=list)
+        batch_outer_ir = af.batch(outer_ir, in_axes=True)
         result = af.call(batch_outer_ir)(["a", "b", "c"])
         assert result == ["<a>", "<b>", "<c>"]
 

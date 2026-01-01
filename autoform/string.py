@@ -4,18 +4,20 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.core import Var, is_var, EvalType
+from autoform.ad import zero_cotangent
 from autoform.core import (
+    EvalType,
     Primitive,
+    Var,
     batch_rules,
     eval_rules,
     impl_rules,
+    is_var,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
 )
 from autoform.utils import Tree, treelib
-from autoform.ad import zero_cotangent
 
 # ==================================================================================================
 # FORMAT

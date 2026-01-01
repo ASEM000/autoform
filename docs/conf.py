@@ -72,7 +72,6 @@ html_css_files = ["_static/custom.css"]
 nbsphinx_execute = "never"
 nbsphinx_allow_errors = True
 nbsphinx_codecell_lexer = "python3"
-nbsphinx_custom_formats = {".py": ["jupytext.reads", {"fmt": "py:percent"}]}
 
 # copybutton settings
 copybutton_prompt_text = r">>> |\.\.\. |\$ "

@@ -1,5 +1,6 @@
-import autoform as af
 import pytest
+
+import autoform as af
 
 
 class TestBatchOfPushforward:
@@ -11,7 +12,7 @@ class TestBatchOfPushforward:
 
         ir = af.build_ir(program)("x")
         pf_ir = af.pushforward(ir)
-        batch_pf_ir = af.batch(pf_ir, in_axes=(list, list))
+        batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
         primals = ["a", "b", "c"]
         tangents = ["da", "db", "dc"]
         result = af.call(batch_pf_ir)(primals, tangents)
@@ -26,7 +27,7 @@ class TestBatchOfPushforward:
 
         ir = af.build_ir(program)("x")
         pf_ir = af.pushforward(ir)
-        batch_pf_ir = af.batch(pf_ir, in_axes=(list, list))
+        batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
         result = af.call(batch_pf_ir)(["a"], ["da"])
         assert result == (["a!"], ["da!"])
 
@@ -40,7 +41,7 @@ class TestBatchOfPullback:
 
         ir = af.build_ir(program)("x")
         pb_ir = af.pullback(ir)
-        batch_pb_ir = af.batch(pb_ir, in_axes=(list, list))
+        batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
         primals = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]
         result = af.call(batch_pb_ir)(primals, cotangents)
@@ -55,7 +56,7 @@ class TestBatchOfPullback:
 
         ir = af.build_ir(program)("x")
         pb_ir = af.pullback(ir)
-        batch_pb_ir = af.batch(pb_ir, in_axes=(list, list))
+        batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
         result = af.call(batch_pb_ir)(["a"], ["g"])
         assert result == (["a!"], ["g"])
 
@@ -243,7 +244,7 @@ class TestMixedDeepNesting:
         ir = af.build_ir(f)("x")
         pb = af.pullback(ir)
         pf = af.pushforward(pb)
-        b = af.batch(pf, in_axes=(list, list))
+        b = af.batch(pf, in_axes=(True, True))
         p_primals = ["a", "b"]
         p_cotangents = ["g1", "g2"]
         t_primals = ["ta", "tb"]
@@ -257,7 +258,7 @@ class TestMixedDeepNesting:
 
         ir = af.build_ir(f)("x")
         pb = af.pullback(ir)
-        b = af.batch(pb, in_axes=(list, list))
+        b = af.batch(pb, in_axes=(True, True))
         pf = af.pushforward(b)
         p_primals = ["a", "b"]
         p_cotangents = ["g1", "g2"]
@@ -289,8 +290,8 @@ class TestMixedDeepNesting:
 
         ir = af.build_ir(f)("x")
         pf = af.pushforward(ir)
-        b1 = af.batch(pf, in_axes=(list, list))
-        b2 = af.batch(b1, in_axes=(list, list))
+        b1 = af.batch(pf, in_axes=(True, True))
+        b2 = af.batch(b1, in_axes=(True, True))
         primals = [["a", "b"], ["c"]]
         tangents = [["ta", "tb"], ["tc"]]
         result = af.call(b2)(primals, tangents)
@@ -350,9 +351,9 @@ class TestAlternatingTransforms:
 
         ir = af.build_ir(f)("x")
         pf1 = af.pushforward(ir)
-        b1 = af.batch(pf1, in_axes=(list, list))
+        b1 = af.batch(pf1, in_axes=(True, True))
         pf2 = af.pushforward(b1)
-        b2 = af.batch(pf2, in_axes=(list, list))
+        b2 = af.batch(pf2, in_axes=(True, True))
         input_tree = (
             (
                 [["a", "b"], ["c", "d"]],
@@ -482,9 +483,9 @@ class TestChainedOperations:
 
         ir = af.build_ir(f)("x")
         pb = af.pullback(ir)
-        b = af.batch(pb, in_axes=(list, list))
+        b = af.batch(pb, in_axes=(True, True))
         pf = af.pushforward(b)
-        b2 = af.batch(pf, in_axes=(list, list))
+        b2 = af.batch(pf, in_axes=(True, True))
         p_p = [["a", "b"]]
         p_c = [["g1", "g2"]]
         t_p = [["ta", "tb"]]

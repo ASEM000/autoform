@@ -36,7 +36,7 @@ ir = af.build_ir(answer)("...") # trace
 queries = ["What is AI?", "Explain DNS", "Define recursion"]
 critiques = ["too technical", "too long", "perfect"]
 
-batched_pb = af.batch(af.pullback(ir), in_axes=(list, list)) # compose
+batched_pb = af.batch(af.pullback(ir), in_axes=(True, True)) # compose
 
 answers, hints = af.call(batched_pb)((queries, critiques))
 ```
@@ -91,7 +91,7 @@ ir = af.build_ir(judge_debate)("...")  # trace (no execution)
 verdict = af.call(ir)("pineapple on pizza")
 
 # batch: parallel topics
-batched = af.batch(ir, in_axes=list)
+batched = af.batch(ir, in_axes=True)
 verdicts = af.call(batched)(["pineapple on pizza", "cats vs dogs", "tabs vs spaces"])
 
 # gradients: feedback -> input improvement
@@ -105,7 +105,7 @@ verdict, captured = af.collect(ir, collection="debug")("pineapple on pizza")
 verdict = af.inject(ir, collection="debug", values=captured)("pineapple on pizza")
 
 # explain how batches are placed
-in_axes = (list, Verdict.model_construct(decision=list, reasoning=list))
+in_axes = (True, Verdict.model_construct(decision=True, reasoning=True))
 
 # compose freely
 batched_grads = af.batch(af.pullback(ir), in_axes=in_axes)

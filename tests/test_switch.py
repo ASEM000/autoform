@@ -1,4 +1,5 @@
 import pytest
+
 import autoform as af
 
 
@@ -196,7 +197,7 @@ class TestSwitchBatch:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        batched_ir = af.batch(ir, in_axes=(None, list))
+        batched_ir = af.batch(ir, in_axes=(False, True))
         result = af.call(batched_ir)("zero", ["a", "b", "c"])
         assert result == ["zero: a", "zero: b", "zero: c"]
 
@@ -210,7 +211,7 @@ class TestSwitchBatch:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        batched_ir = af.batch(ir, in_axes=(list, list))
+        batched_ir = af.batch(ir, in_axes=(True, True))
         result = af.call(batched_ir)(["zero", "one", "zero"], ["a", "b", "c"])
         assert result == ["zero: a", "one: b", "zero: c"]
 
@@ -224,7 +225,7 @@ class TestSwitchBatch:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("zero", "hello")
-        batched_ir = af.batch(ir, in_axes=(list, None))
+        batched_ir = af.batch(ir, in_axes=(True, False))
         result = af.call(batched_ir)(["zero", "one", "one"], "test")
         assert result == ["zero: test", "one: test", "one: test"]
 
@@ -240,7 +241,7 @@ class TestSwitchNestedTransforms:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("a", "hello")
-        batched_ir = af.batch(ir, in_axes=(None, list))
+        batched_ir = af.batch(ir, in_axes=(False, True))
         pf_batched_ir = af.pushforward(batched_ir)
         primals = ("a", ["a", "b"])
         tangents = ("", ["ta", "tb"])
@@ -258,7 +259,7 @@ class TestSwitchNestedTransforms:
             return af.switch(key, branches, x)
 
         ir = af.build_ir(program)("a", "hello")
-        batched_ir = af.batch(ir, in_axes=(None, list))
+        batched_ir = af.batch(ir, in_axes=(False, True))
         pb_batched_ir = af.pullback(batched_ir)
         primals = ("a", ["a", "b"])
         cotangents = ["grad1", "grad2"]

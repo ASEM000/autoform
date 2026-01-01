@@ -1,6 +1,6 @@
-import autoform as af
-
 import pytest
+
+import autoform as af
 
 
 class TestSow:

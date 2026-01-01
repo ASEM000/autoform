@@ -172,7 +172,7 @@ class TestStructInAxes:
 
         ir = af.build_ir(greet)(Person(name="x", sur="y"))
 
-        batch = af.batch(ir, in_axes=Person.model_construct(name=list, sur=None))
+        batch = af.batch(ir, in_axes=Person.model_construct(name=True, sur=False))
 
         result = af.call(batch)(
             # NOTE(asem): model_construct is used to bypass validation for axis spec
@@ -197,7 +197,7 @@ class TestStructInAxes:
             ir,
             # NOTE(asem): basically list is the container to batch over
             # and broadcast tag (None)
-            in_axes=Outer.model_construct(inner=Inner.model_construct(value=list), tag=None),
+            in_axes=Outer.model_construct(inner=Inner.model_construct(value=True), tag=False),
         )
 
         result = af.call(batch)(
@@ -213,8 +213,8 @@ class TestStructInAxes:
             x: str
             y: int
 
-        a1 = A.model_construct(x=list, y=None)
-        a2 = A.model_construct(x=list, y=None)
+        a1 = A.model_construct(x=True, y=False)
+        a2 = A.model_construct(x=True, y=False)
 
         hash(a1)
         hash(a2)
@@ -233,7 +233,7 @@ class TestStructInAxes:
             )
 
         ir = af.build_ir(process)("x")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
         result = af.call(batch)(["1", "2", "3"])
         assert isinstance(result, Output)
         assert result.first == ["A:1", "A:2", "A:3"]
@@ -254,7 +254,7 @@ class TestStructInAxes:
             )
 
         ir = af.build_ir(create)("x")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
         result = af.call(batch)(["a", "b"])
         assert isinstance(result, Outer)
         assert isinstance(result.inner, Inner)
@@ -266,7 +266,7 @@ class TestStructInAxes:
             return af.format("L:{}", x), af.format("R:{}", x)
 
         ir = af.build_ir(dual)("x")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
         result = af.call(batch)(["a", "b"])
         assert result == (["L:a", "L:b"], ["R:a", "R:b"])
 
@@ -275,6 +275,6 @@ class TestStructInAxes:
             return (af.format("A:{}", x), af.format("B:{}", x)), af.format("C:{}", x)
 
         ir = af.build_ir(nested)("x")
-        batch = af.batch(ir, in_axes=list)
+        batch = af.batch(ir, in_axes=True)
         result = af.call(batch)(["1", "2"])
         assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])
