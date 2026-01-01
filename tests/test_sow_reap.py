@@ -434,7 +434,7 @@ class TestSplitpointPreservedThroughTransforms:
         nested_ir = pf_ir.ireqns[0].params["ir"]
         splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
-        assert splitpoints[0].params["name"] == "mid"
+        assert splitpoints[0].params["key"] == "mid"
 
     def test_splitpoint_preserved_after_pullback(self):
         def program(x):
@@ -450,7 +450,7 @@ class TestSplitpointPreservedThroughTransforms:
         nested_ir = pb_ir.ireqns[0].params["ir"]
         splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
-        assert splitpoints[0].params["name"] == "mid"
+        assert splitpoints[0].params["key"] == "mid"
 
     def test_splitpoint_preserved_after_batch(self):
         def program(x):
@@ -466,4 +466,4 @@ class TestSplitpointPreservedThroughTransforms:
         nested_ir = batch_ir.ireqns[0].params["ir"]
         splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
-        assert splitpoints[0].params["name"] == "mid"
+        assert splitpoints[0].params["key"] == "mid"
