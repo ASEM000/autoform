@@ -436,8 +436,7 @@ class TracingInterpreter(Interpreter):
             return Var() if is_irvar(x) else x.value
 
         in_evaltree = treelib.map(to_in_evaltype, in_irtree)
-        eval_rule = eval_rules[prim] if prim in eval_rules else eval_rules.fallback
-        out_evaltree = eval_rule(in_evaltree, **params)
+        out_evaltree = eval_rules[prim](in_evaltree, **params)
 
         def to_out_iratom(x) -> IRAtom:
             # NOTE(asem): eval rules return `Var`/ python types.
