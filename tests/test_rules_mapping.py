@@ -1,6 +1,7 @@
-import threading
 import functools as ft
+import threading
 from collections.abc import Callable
+
 import autoform as af
 
 

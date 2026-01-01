@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 TEST_MODEL = os.environ.get("AUTOFORM_TEST_MODEL", "ollama/llama3:8b")

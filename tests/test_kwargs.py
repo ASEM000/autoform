@@ -1,6 +1,8 @@
-import autoform as af
 import functools as ft
+
 import pytest
+
+import autoform as af
 
 greet_p = af.core.Primitive("greet")
 

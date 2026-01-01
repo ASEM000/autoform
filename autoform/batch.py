@@ -5,26 +5,34 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 import typing as tp
-from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import call, acall
-from autoform.core import Interpreter, get_interpreter, using_interpreter
-from autoform.core import IR, IREqn, IRLit, IRVar, Value, Var, is_irvar
+from autoform.ad import pullback, pushforward
 from autoform.core import (
+    IR,
+    Interpreter,
+    IREqn,
+    IRLit,
+    IRVar,
     Primitive,
+    Value,
+    Var,
+    acall,
     async_rules,
     batch_rules,
+    call,
     dce_rules,
     eval_rules,
+    get_interpreter,
     impl_rules,
+    is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    using_interpreter,
 )
-from autoform.utils import Tree, lru_cache, treelib, transpose_batch
-from autoform.ad import pushforward, pullback
-from autoform.optims import default_dce, dce
+from autoform.optims import dce, default_dce
+from autoform.utils import Tree, lru_cache, transpose_batch, treelib
 
 
 class IRBVar(IRVar): ...
@@ -36,29 +44,25 @@ class IRBVar(IRVar): ...
 
 
 def is_axis_spec(x) -> bool:
-    return x is None or isinstance(x, type)
-
-
-def make_is_batch_leaf(in_axes: Tree) -> Callable[[Tree], bool]:
-    batch_types = tuple(treelib.leaves(in_axes, is_leaf=lambda x: isinstance(x, type)))
-    return (lambda x: isinstance(x, batch_types)) if batch_types else (lambda _: False)
+    """Check if x is a valid axis specification (bool leaf)."""
+    return isinstance(x, bool)
 
 
 def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
-    is_batch_leaf = make_is_batch_leaf(in_axes)
+    # NOTE(asem): infer batch size by finding the first batched (True) position.
+    # in_axes specifies ONLY which positions are batched, not the container type.
+    # The container type is inferred from the actual data in `tree`.
+    #
+    # >>> tree = ReviewState(code=["a", "b", "c"], has_bugs=[T, F, T])
+    # >>> in_axes = ReviewState(code=True, has_bugs=True)
+    # >>> axes_spec = PyTreeSpec(ReviewState(*, *))  # structure with 2 leaves
+    # >>> axes_leaves = [True, True]
+    # >>> tree_leaves = [["a","b","c"], [T,F,T]]  # flattened to match spec
+    # >>> batch_size = len(["a","b","c"]) = 3
+    axes_spec = treelib.structure(in_axes, is_leaf=is_axis_spec)
     axes_leaves = treelib.leaves(in_axes, is_leaf=is_axis_spec)
-    col_leaves = treelib.leaves(tree, is_leaf=is_batch_leaf)
-    return next((len(v) for v, a in zip(col_leaves, axes_leaves) if a is not None), 0)
-
-
-def broadcast_in_axes_prefix(in_axes: Tree, tree: Tree) -> Tree:
-    is_batch_leaf = make_is_batch_leaf(in_axes)
-    is_leaf = lambda x: is_axis_spec(x) or is_batch_leaf(x)
-    return treelib.broadcast_prefix(in_axes, tree, is_leaf=is_leaf)
-
-
-def in_axes_to_batch_tree(in_axes: Tree) -> Tree[bool]:
-    return treelib.map(lambda ax: ax is not None, in_axes, is_leaf=is_axis_spec)
+    tree_leaves = axes_spec.flatten_up_to(tree)
+    return next((len(v) for v, a in zip(tree_leaves, axes_leaves) if a), 0)
 
 
 def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
@@ -79,18 +83,18 @@ batch_call_p = Primitive("batch_call", tag="transformation")
 
 
 @ft.partial(lru_cache, maxsize=256)
-def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
+def batch(ir: IR, in_axes: Tree[bool] = True) -> IR:
     """Transform an IR to process batched inputs.
 
     Creates a batched version of the IR that processes multiple inputs
-    simultaneously. Use `in_axes` to specify which inputs are batched (type
-    like `list`) vs broadcast (None).
+    simultaneously. Use `in_axes` to specify which inputs are batched
+    (True) vs broadcast (False).
 
     Args:
         ir: The IR to transform.
         in_axes: Axis specification tree matching input structure.
-            - Container type: This input is batched (e.g. list of values).
-            - `None`: This input is broadcast (same value for all batch items).
+            - True: This input is batched (a collection of values).
+            - False: This input is broadcast (same value for all batch items).
 
     Returns:
         A new IR that takes batched inputs and returns batched outputs.
@@ -100,8 +104,8 @@ def batch(ir: IR, in_axes: Tree[type | None] = list) -> IR:
         >>> def greet(greeting, name):
         ...     return af.concat(greeting, name)
         >>> ir = af.build_ir(greet)("Hi", "World")
-        >>> # Batch over names contained in list, broadcast greeting
-        >>> batched = af.batch(ir, in_axes=(None, list))
+        >>> # Batch over names, broadcast greeting
+        >>> batched = af.batch(ir, in_axes=(False, True))
         >>> call(batched)(("Hello, ", ["Alice", "Bob", "Carol"]))
         ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
@@ -129,11 +133,16 @@ class BatchInterpreter(Interpreter):
 
 @ft.partial(impl_rules.def_rule, batch_call_p)
 def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
+    # NOTE(asem): in_axes is Tree[bool] specifying which positions are batched.
+    # container type is inferred from actual data, not specified in in_axes.
+    #
+    # >>> in_tree = ReviewState(code=["a","b"], has_bugs=[T,F])  # actual data
+    # >>> in_axes = True  # scalar -> batch everything
+    # >>> in_batched_tree = ReviewState(code=True, has_bugs=True)  # broadcast to match IR
+    # >>> batch_size = 2  # inferred from len(in_tree.code)
     col_tree = in_tree
-    axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
-    in_batched_tree: Tree[bool] = in_axes_to_batch_tree(axes_tree)
-    in_batched_tree = treelib.broadcast_prefix(in_batched_tree, ir.in_irtree)
-    batch_size = infer_batch_size(col_tree, in_axes)
+    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
+    batch_size = infer_batch_size(col_tree, in_batched_tree)
 
     v_env: dict[IRVar, Value | list[Value]] = {}
     b_env: dict[IRVar, bool] = {}
@@ -200,7 +209,7 @@ def pullback_bwd_batch_call(residuals: Tree, out_cotangent: Tree, *, ir: IR, in_
     p_cols, _ = residuals
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
-    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, list))
+    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
     _, in_c_cols = call(batch_pb_ir)((p_cols, out_c_cols))
     return in_c_cols
 
@@ -214,17 +223,22 @@ def batch_batch_call(
     ir: IR,
     in_axes: Tree,
 ) -> tuple[Tree, Tree]:
+    # NOTE(asem): nested batch rule. in_batched tells us which positions are batched.
+    # we use in_batched's structure to flatten the data, index each batch item,
+    # then unflatten back to the original container type.
     col_cols = in_tree
-
-    in_axes_tree = broadcast_in_axes_prefix(in_axes, col_cols)
-    get_is_leaf = make_is_batch_leaf(in_axes_tree)
     batched_ir = batch(ir, in_axes=in_axes)
 
+    batched_spec = treelib.structure(in_batched, is_leaf=is_axis_spec)
+    batched_leaves = treelib.leaves(in_batched, is_leaf=is_axis_spec)
+    col_cols_flat = batched_spec.flatten_up_to(col_cols)
+
     def get(b):
-        get_at_b = lambda v, a: v if a is None else v[b]
-        return treelib.map(get_at_b, col_cols, in_axes_tree, is_leaf=get_is_leaf)
+        indexed = [v[b] if is_b else v for v, is_b in zip(col_cols_flat, batched_leaves)]
+        return batched_spec.unflatten(indexed)
 
     out_bi = [call(batched_ir)(get(b)) for b in range(batch_size)]
+
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
     out_ib = transpose_batch(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -233,16 +247,16 @@ def batch_batch_call(
 @ft.partial(async_rules.def_rule, batch_call_p)
 async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
+    axes_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
+    batch_size = infer_batch_size(col_tree, axes_tree)
 
-    axes_tree = broadcast_in_axes_prefix(in_axes, col_tree)
-    run_is_leaf = make_is_batch_leaf(axes_tree)
-    batch_size = infer_batch_size(col_tree, in_axes)
+    axes_spec = treelib.structure(axes_tree, is_leaf=is_axis_spec)
+    axes_leaves = treelib.leaves(axes_tree, is_leaf=is_axis_spec)
+    col_tree_flat = axes_spec.flatten_up_to(col_tree)
 
     async def run_item(b: int):
-        def get(v, a):
-            return v if a is None else v[b]
-
-        value = treelib.map(get, col_tree, axes_tree, is_leaf=run_is_leaf)
+        indexed = [v[b] if a else v for v, a in zip(col_tree_flat, axes_leaves)]
+        value = axes_spec.unflatten(indexed)
         return await acall(ir)(value)
 
     out_bi = await asyncio.gather(*[run_item(b) for b in range(batch_size)])

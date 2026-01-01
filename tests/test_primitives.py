@@ -1,5 +1,6 @@
-import autoform as af
 import functools as ft
+
+import autoform as af
 
 
 class TestPrimitive:
@@ -347,6 +348,6 @@ class TestRunIRInline:
             return af.call(inner_ir)(x)
 
         outer_ir = af.build_ir(outer)("X")
-        batched_ir = af.batch(outer_ir, in_axes=list)
+        batched_ir = af.batch(outer_ir, in_axes=True)
         result = af.call(batched_ir)(["a", "b", "c"])
         assert result == ["[a]", "[b]", "[c]"]

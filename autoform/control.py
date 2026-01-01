@@ -3,24 +3,31 @@
 from __future__ import annotations
 
 import functools as ft
-from autoform.optims import default_dce, dce
-from autoform.core import call, icall, acall
-from autoform.core import IR, Var, is_irvar, is_user_type, is_iratom
+
+from autoform.ad import pullback, pushforward, zero_cotangent
+from autoform.batch import batch
 from autoform.core import (
+    IR,
     Primitive,
+    Var,
+    acall,
     async_rules,
     batch_rules,
+    call,
     dce_rules,
     eval_rules,
+    icall,
     impl_rules,
+    is_iratom,
+    is_irvar,
+    is_user_type,
     iter_rules,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, unbatch_at, pack_user_input, treelib, transpose_batch
-from autoform.ad import pullback, zero_cotangent, pushforward
-from autoform.batch import batch
+from autoform.optims import dce, default_dce
+from autoform.utils import Tree, pack_user_input, transpose_batch, treelib, unbatch_at
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -328,11 +335,9 @@ def batch_while_loop(
     states = [unbatch_at(in_tree, in_batched, b) for b in range(batch_size)]
     alive = [True] * batch_size
 
-    # NOTE(asem): pre-batch cond and body IRs. list is used as in_axes
-    # because moving from AoS to SoA a list is used (see states) also
-    # list is used rather than the origina container structure
-    cond_in_axes = treelib.map(lambda _: list, cond_func.in_irtree)
-    body_in_axes = treelib.map(lambda _: list, body_func.in_irtree)
+    # NOTE(asem): pre-batch cond and body IRs. True marks all leaves as batched.
+    cond_in_axes = treelib.map(lambda _: True, cond_func.in_irtree)
+    body_in_axes = treelib.map(lambda _: True, body_func.in_irtree)
     batched_cond = batch(cond_func, in_axes=cond_in_axes)
     batched_body = batch(body_func, in_axes=body_in_axes)
 
@@ -369,11 +374,17 @@ def batch_while_loop(
     # only IRVar positions are batched; IRLit positions stay scalar
     out_batched = treelib.map(is_irvar, body_func.out_irtree)
     out_tree = transpose_batch(batch_size, out_batched, states)
-    # NOTE(asem): restore original container type (tuple vs list etc.)
-    # since while_loop preserves structure (State -> State), we can safely
-    # enforce that output structure corresponds to input structure.
-    spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
-    out_tree = spec.unflatten(treelib.leaves(out_tree))
+
+    # NOTE(asem): preserve original container type.
+    # states is always a list, but in_tree may be tuple/etc.
+    # use in_tree's spec to restore the original container type.
+    in_spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
+    out_spec = treelib.structure(out_tree, is_leaf=lambda x: x is not out_tree)
+
+    # NOTE(asem): for SoA -> AoS a list is used to work with batched output here
+    # we have to repack it into the original container type
+    out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
+
     return out_tree, out_batched
 
 

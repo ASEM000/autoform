@@ -8,32 +8,30 @@ from collections import defaultdict
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import call
 from autoform.core import (
     IR,
+    Interpreter,
     IREqn,
     IRLit,
     IRVar,
     IRZero,
-    Interpreter,
+    Primitive,
     Value,
     Var,
-    get_interpreter,
-    is_irvar,
-    using_interpreter,
-)
-from autoform.core import (
-    Primitive,
     batch_rules,
+    call,
     dce_rules,
     eval_rules,
+    get_interpreter,
     impl_rules,
+    is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    using_interpreter,
 )
-from autoform.utils import Tree, unbatch_at, lru_cache, treelib, transpose_batch
-from autoform.optims import default_dce, dce
+from autoform.optims import dce, default_dce
+from autoform.utils import Tree, lru_cache, transpose_batch, treelib, unbatch_at
 
 # ==================================================================================================
 # PUSHFORWARD

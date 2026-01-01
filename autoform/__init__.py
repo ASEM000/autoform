@@ -1,17 +1,13 @@
 """Autoform: Composable function transformations for LLM programs."""
 
-from autoform.core import build_ir
-
-from autoform.ad import pushforward, pullback
+from autoform.ad import pullback, pushforward
 from autoform.batch import batch
-from autoform.harvest import collect, inject, mark, split
-from autoform.optims import dce, fold
-from autoform.core import call, icall, acall
-
-from autoform.string import format, concat, match
-from autoform.lm import lm_call, struct_lm_call, Struct
 from autoform.control import stop_gradient, switch, while_loop
-
+from autoform.core import acall, build_ir, call, icall
+from autoform.harvest import collect, inject, mark, split
+from autoform.lm import Struct, lm_call, struct_lm_call
+from autoform.optims import dce, fold
+from autoform.string import concat, format, match
 from autoform.utils import PYTREE_NAMESPACE
 
 __all__ = [

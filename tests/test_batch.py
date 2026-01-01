@@ -1,5 +1,7 @@
-import pytest
 import functools as ft
+
+import pytest
+
 import autoform as af
 
 
@@ -77,7 +79,7 @@ class TestBatchIRStructure:
             return af.concat(x, x)
 
         ir = af.build_ir(f)("hello")
-        batched_ir = af.batch(ir, in_axes=list)
+        batched_ir = af.batch(ir, in_axes=True)
         assert "in_axes" in batched_ir.ireqns[0].params
 
     def test_has_sub_ir_param(self):
@@ -120,7 +122,7 @@ class TestBatchInAxes:
             return af.format("{}: {}", greeting, name)
 
         ir = af.build_ir(greet)("Asem", "Hi")
-        batched_ir = af.batch(ir, in_axes=(list, None))
+        batched_ir = af.batch(ir, in_axes=(True, False))
         result = af.call(batched_ir)(["Asem", "Zeyad", "Zeyad"], "Hi")
         assert result == ["Hi: Asem", "Hi: Zeyad", "Hi: Zeyad"]
 
@@ -129,7 +131,7 @@ class TestBatchInAxes:
             return af.format("{}: {}", greeting, name)
 
         ir = af.build_ir(greet)("Asem", "Hi")
-        batched_ir = af.batch(ir, in_axes=(None, list))
+        batched_ir = af.batch(ir, in_axes=(False, True))
         result = af.call(batched_ir)("Asem", ["Hi", "Hello", "Hey"])
         assert result == ["Hi: Asem", "Hello: Asem", "Hey: Asem"]
 
@@ -147,7 +149,7 @@ class TestBatchInAxes:
             return af.format("{}: {}", greeting, name)
 
         ir = af.build_ir(greet)("Asem", "Hi")
-        batched_ir = af.batch(ir, in_axes=(list, list))
+        batched_ir = af.batch(ir, in_axes=(True, True))
         result = af.call(batched_ir)(["Asem", "Zeyad"], ["Hi", "Hello"])
         assert result == ["Hi: Asem", "Hello: Zeyad"]
 
@@ -156,7 +158,7 @@ class TestBatchInAxes:
             return af.format("{}: {}", greeting, name)
 
         ir = af.build_ir(greet)("Asem", "Hi")
-        batched_ir = af.batch(ir, in_axes=(None, None))
+        batched_ir = af.batch(ir, in_axes=(False, False))
         result = af.call(batched_ir)("Asem", "Hi")
         assert result == []
 
@@ -178,7 +180,7 @@ class TestBatchAsync:
             return af.format("{}: {}", greeting, name)
 
         ir = af.build_ir(greet)("Asem", "Hi")
-        batched_ir = af.batch(ir, in_axes=(list, None))
+        batched_ir = af.batch(ir, in_axes=(True, False))
         result = await af.acall(batched_ir)(["A", "B"], "Hi")
         assert result == ["Hi: A", "Hi: B"]
 
@@ -188,7 +190,7 @@ class TestBatchUtils:
         from autoform.batch import infer_batch_size
 
         col_tree = (["a", "b"], ["x", "y"])
-        in_axes = list
+        in_axes = True  # Scalar True means whole tree is batched
         batch_size = infer_batch_size(col_tree, in_axes)
         assert batch_size == 2
 
@@ -196,7 +198,7 @@ class TestBatchUtils:
         from autoform.batch import infer_batch_size
 
         col_tree = (["a", "b"], "single")
-        in_axes = (list, None)
+        in_axes = (True, False)  # First batched, second broadcast
         batch_size = infer_batch_size(col_tree, in_axes)
         assert batch_size == 2
 
@@ -204,17 +206,9 @@ class TestBatchUtils:
         from autoform.batch import infer_batch_size
 
         col_tree = ("a", "b")
-        in_axes = (None, None)
+        in_axes = (False, False)
         batch_size = infer_batch_size(col_tree, in_axes)
         assert batch_size == 0
-
-    def test_mixed_axes_tree(self):
-        from autoform.batch import broadcast_in_axes_prefix
-
-        in_axes = (list, None)
-        tree = (["a", "b", "c"], {"x": 1, "y": 2})
-        broadcasted_in_axes = (list, {"x": None, "y": None})
-        assert broadcast_in_axes_prefix(in_axes, tree) == broadcasted_in_axes
 
 
 class TestBatchRuleOutBatched:

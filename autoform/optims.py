@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections import deque
 from operator import setitem
 
-from autoform.core import IR, IREqn, IRLit, IRVar, is_irvar
-from autoform.core import dce_rules, impl_rules
+from autoform.core import IR, IREqn, IRLit, IRVar, dce_rules, impl_rules, is_irvar
 from autoform.utils import Tree, treelib
 
 # ==================================================================================================

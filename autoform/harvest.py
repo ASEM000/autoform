@@ -6,31 +6,33 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 from collections.abc import Callable
-from autoform.core import Interpreter, get_interpreter, using_interpreter
-from autoform.core import IR, EvalType
+
 from autoform.core import (
+    IR,
+    EvalType,
+    Interpreter,
+    IRAtom,
+    IREqn,
+    IRLit,
+    IRVar,
     Primitive,
+    Var,
     batch_rules,
+    call,
     eval_rules,
+    get_interpreter,
     impl_rules,
+    is_iratom,
+    is_irvar,
+    is_user_type,
+    is_var,
+    pack_user_input,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    using_interpreter,
 )
 from autoform.utils import Tree, treelib
-from autoform.core import (
-    call,
-    IREqn,
-    IRVar,
-    IRLit,
-    Var,
-    is_iratom,
-    is_irvar,
-    is_var,
-    IRAtom,
-    pack_user_input,
-    is_user_type,
-)
 
 # ==================================================================================================
 # MARK

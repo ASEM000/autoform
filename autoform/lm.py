@@ -5,11 +5,12 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 
-from litellm import acompletion, batch_completion, completion
 import pydantic
-from autoform.core import Var
+from litellm import acompletion, batch_completion, completion
+
 from autoform.core import (
     Primitive,
+    Var,
     async_rules,
     batch_rules,
     eval_rules,
@@ -19,7 +20,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, treelib, transpose_batch
+from autoform.utils import Tree, transpose_batch, treelib
 
 # ==================================================================================================
 # STRUCT

@@ -5,8 +5,8 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections.abc import Callable
-import optree.pytree
 
+import optree.pytree
 
 # ==================================================================================================
 # PYTREE UTILITIES
@@ -19,6 +19,13 @@ type Tree[T] = tp.Any
 
 def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R]:
     return tp.cast(Callable[P, R], ft.lru_cache(maxsize=maxsize)(func))
+
+
+def index_tree_at(node, b: int):
+    # NOTE(asem): index a struct without indexing support
+    # useful to deal with arbitrary pytrees
+    children, *_ = treelib.flatten_one_level(node)
+    return children[b]
 
 
 def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int) -> Tree:
@@ -37,24 +44,22 @@ def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int) -> Tree:
     #     [1, 'constant']
     spec = treelib.structure(in_batched)
     # NOTE(asem): flatten in_tree to match in_batched structure
+    # Example:
+    #     >>> spec = treelib.structure([1, 2, 3])
+    #     >>> spec.flatten_up_to([1, [2, 3]])
+    #     [[1, 2, 3]]
     flat_in_tree = spec.flatten_up_to(in_tree)
     flat_in_batched = treelib.leaves(in_batched)
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
     zipped = zip(flat_in_tree, flat_in_batched, strict=True)
-
-    def index_struct(node):
-        # NOTE(asem): index a struct without requiring direct
-        # indexing of the struct
-        children, *_ = treelib.flatten_one_level(node)
-        return children[b]
-
-    leaves_i = (index_struct(leaf) if is_batched else leaf for leaf, is_batched in zipped)
+    leaves_i = (index_tree_at(leaf) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
 
 def pack_user_input(*args, **kwargs) -> Tree:
-    # Pack args/kwargs into a single tree for user-bind interface.
+    # NOTE(asem): pack args/kwargs into a single tree for user-bind interface.
+    # useful to avoid dealing with args/kwargs unpacking at the IR level.
     if kwargs:
         return (*args, kwargs)
     if len(args) == 1:
@@ -62,11 +67,7 @@ def pack_user_input(*args, **kwargs) -> Tree:
     return args
 
 
-def transpose_batch(
-    batch_size: int,
-    in_batched: Tree[bool],
-    in_tree: Tree,
-) -> Tree:
+def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: Tree) -> Tree:
     # NOTE(asem): AoS -> SoA
     # Example (used throughout):
     #   in_tree    = [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=6)]
@@ -91,8 +92,8 @@ def transpose_batch(
     # would descend into them. flatten_up_to respects the spec and stops at each leaf slot.
     # >>> item = Batch(items=[1, 2, 3], mask=[True, False])
     # >>> inner_spec = Batch(items=*, mask=*)
-    # >>> treelib.leaves(item) → [1, 2, 3, True, False]
-    # >>> inner_spec.flatten_up_to(item) → [[1, 2, 3], [True, False]]
+    # >>> treelib.leaves(item) -> [1, 2, 3, True, False]
+    # >>> inner_spec.flatten_up_to(item) -> [[1, 2, 3], [True, False]]
     leaves_bi = [inner_spec.flatten_up_to(item) for item in first_level_leaves]
 
     # NOTE(asem): transpose without indexing
@@ -110,4 +111,5 @@ def transpose_batch(
     )
 
     leaf_batches = [outer_spec.unflatten(col) for col in leaves_ib]
-    return inner_spec.unflatten(leaf_batches)
+    result = inner_spec.unflatten(leaf_batches)
+    return result
