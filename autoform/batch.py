@@ -22,6 +22,7 @@ from autoform.core import (
     batch_rules,
     call,
     dce_rules,
+    default_dce,
     eval_rules,
     get_interpreter,
     impl_rules,
@@ -31,7 +32,7 @@ from autoform.core import (
     push_rules,
     using_interpreter,
 )
-from autoform.optims import dce, default_dce
+from autoform.optims import dce
 from autoform.utils import Tree, lru_cache, transpose_batch, treelib
 
 
@@ -44,7 +45,6 @@ class IRBVar(IRVar): ...
 
 
 def is_axis_spec(x) -> bool:
-    """Check if x is a valid axis specification (bool leaf)."""
     return isinstance(x, bool)
 
 

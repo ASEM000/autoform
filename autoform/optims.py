@@ -13,14 +13,6 @@ from autoform.utils import Tree, treelib
 # ==================================================================================================
 
 
-def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    out_vars = set(x for x in treelib.leaves(ireqn.out_irtree) if is_irvar(x))
-    if out_vars.isdisjoint(active_irvars):
-        return True, set(), ireqn  # axe (equation returned but unused)
-    in_vars = set(x for x in treelib.leaves(ireqn.in_irtree) if is_irvar(x))
-    return False, in_vars, ireqn  # (equation unchanged)
-
-
 def dce(ir: IR) -> IR:
     """Remove dead code from an IR.
 
@@ -43,8 +35,7 @@ def dce(ir: IR) -> IR:
     active_ireqns: deque[IREqn] = deque()
 
     for ireqn in reversed(ir.ireqns):
-        dce_rule = dce_rules[ireqn.prim] if ireqn.prim in dce_rules else default_dce
-        can_axe, cur_active, new_eqn = dce_rule(ireqn, active_irvars)
+        can_axe, cur_active, new_eqn = dce_rules[ireqn.prim](ireqn, active_irvars)
 
         if not can_axe:
             active_ireqns.appendleft(new_eqn)

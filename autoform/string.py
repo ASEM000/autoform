@@ -10,6 +10,8 @@ from autoform.core import (
     Primitive,
     Var,
     batch_rules,
+    dce_rules,
+    default_dce,
     eval_rules,
     impl_rules,
     is_var,
@@ -85,6 +87,9 @@ def pushforward_format(primals: Tree, tangents: Tree, *, template: str) -> tuple
     return out_primal, out_tangent
 
 
+dce_rules.def_rule(format_p, default_dce)
+
+
 # ==================================================================================================
 # CONCAT
 # ==================================================================================================
@@ -149,6 +154,9 @@ def batch_concat(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[Tree
 
     result = [concat(*[get(i, b) for i in range(len(cols))]) for b in range(batch_size)]
     return result, True
+
+
+dce_rules.def_rule(concat_p, default_dce)
 
 
 # ==================================================================================================
@@ -228,3 +236,6 @@ def pullback_fwd_match(in_tree: Tree) -> tuple[bool, Tree]:
 def pullback_bwd_match(residuals: Tree, out_cotangent: Tree) -> Tree:
     del out_cotangent
     return treelib.map(zero_cotangent, residuals)
+
+
+dce_rules.def_rule(match_p, default_dce)

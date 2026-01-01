@@ -21,6 +21,7 @@ from autoform.core import (
     batch_rules,
     call,
     dce_rules,
+    default_dce,
     eval_rules,
     get_interpreter,
     impl_rules,
@@ -30,7 +31,7 @@ from autoform.core import (
     push_rules,
     using_interpreter,
 )
-from autoform.optims import dce, default_dce
+from autoform.optims import dce
 from autoform.utils import Tree, lru_cache, transpose_batch, treelib, unbatch_at
 
 # ==================================================================================================
@@ -265,7 +266,7 @@ def pullback(ir: IR) -> IR:
         ir: The IR to transform.
 
     Returns:
-        A new IR: `(primals, output_cotangent) -> (outputs, input_cotangents)`
+        A new IR: `(inputs, output_cotangents) -> (outputs, input_cotangents)`
 
     Example:
         >>> import autoform as af

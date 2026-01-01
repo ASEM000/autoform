@@ -57,4 +57,4 @@ unresolved-import = "ignore"
 
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
-testpaths = ["tests", "autoform"]
+testpaths = ["tests", "autoform", "docs/examples"]

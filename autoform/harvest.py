@@ -19,6 +19,8 @@ from autoform.core import (
     Var,
     batch_rules,
     call,
+    dce_rules,
+    default_dce,
     eval_rules,
     get_interpreter,
     impl_rules,
@@ -130,6 +132,9 @@ def batch_mark(
 ) -> tuple[Tree, Tree]:
     del batch_size
     return mark(x, collection=(collection, "batch"), name=name), in_batched
+
+
+dce_rules.def_rule(mark_p, default_dce)
 
 
 # ==================================================================================================
@@ -293,8 +298,6 @@ class SplitInterpreter(Interpreter):
             return x if is_iratom(x) else IRLit(x)
 
         in_irtree = treelib.map(to_in_iratom, in_tree)
-
-        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
 
         def to_in_evaltype(x):
             # NOTE(asem): eval rules accept `Var`/ python types.

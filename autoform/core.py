@@ -38,6 +38,7 @@ __all__ = [
     "iter_rules",
     "async_rules",
     "dce_rules",
+    "default_dce",
     # ir structures
     "IREqn",
     "IR",
@@ -179,7 +180,6 @@ class InterpreterRuleMapping[T: Callable]:
 
     def __getitem__(self, prim: Primitive) -> T:
         with self.lock:
-            assert prim in self.map, f"No rule found for primitive {prim}"
             return self.map[prim]
 
     def __iter__(self):
@@ -210,6 +210,39 @@ type DCERule = Callable[[IREqn, set[IRVar]], tuple[bool, set[IRVar], IREqn]]
 # ==================================================================================================
 # RULE REGISTRIES
 # ==================================================================================================
+
+
+def default_impl(x, **_):
+    return x
+
+
+def default_eval(x, **_):
+    return x
+
+
+def default_push(primal, tangent, **_):
+    return primal, tangent
+
+
+def default_pull_fwd(x, **_):
+    return x, None
+
+
+def default_pull_bwd(residuals, cotangent, **_):
+    return cotangent
+
+
+def default_batch(batch_size, in_batched, x, **_):
+    return x, in_batched
+
+
+def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    out_vars = set(v for v in treelib.leaves(ireqn.out_irtree) if is_irvar(v))
+    if out_vars.isdisjoint(active_irvars):
+        return True, set(), ireqn  # axe (equation returned but unused)
+    in_vars = set(v for v in treelib.leaves(ireqn.in_irtree) if is_irvar(v))
+    return False, in_vars, ireqn  # keep (equation unchanged)
+
 
 impl_rules = InterpreterRuleMapping[ImplRule]()
 eval_rules = InterpreterRuleMapping[EvalRule]()
@@ -332,7 +365,8 @@ class Interpreter(ABC):
 
 class EvalInterpreter(Interpreter):
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        return impl_rules[prim](in_tree, **params)
+        rule = impl_rules[prim] if prim in impl_rules else impl_rules.fallback
+        return rule(in_tree, **params)
 
 
 # ==================================================================================================
@@ -378,15 +412,14 @@ class TracingInterpreter(Interpreter):
 
         in_irtree = treelib.map(to_in_iratom, in_tree)
 
-        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
-
         def to_in_evaltype(x):
             # NOTE(asem): eval rules accept `Var`/ python types.
             # `Var` simply denotes a placeholder for a value that will be computed later
             return Var() if is_irvar(x) else x.value
 
         in_evaltree = treelib.map(to_in_evaltype, in_irtree)
-        out_evaltree = eval_rules[prim](in_evaltree, **params)
+        eval_rule = eval_rules[prim] if prim in eval_rules else eval_rules.fallback
+        out_evaltree = eval_rule(in_evaltree, **params)
 
         def to_out_iratom(x) -> IRAtom:
             # NOTE(asem): eval rules return `Var`/ python types.
