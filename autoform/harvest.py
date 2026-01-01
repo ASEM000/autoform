@@ -5,42 +5,25 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections import defaultdict
-from collections.abc import Callable
 
 from autoform.core import (
     IR,
     EvalType,
     Interpreter,
-    IRAtom,
-    IREqn,
-    IRLit,
-    IRVar,
     Primitive,
-    Var,
     batch_rules,
     call,
     dce_rules,
-    default_batch,
     default_dce,
-    default_eval,
-    default_impl,
-    default_pull_bwd,
-    default_pull_fwd,
-    default_push,
     eval_rules,
     get_interpreter,
     impl_rules,
-    is_iratom,
-    is_irvar,
-    is_user_type,
-    is_var,
-    pack_user_input,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
     using_interpreter,
 )
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, lru_cache
 
 # ==================================================================================================
 # CHECKPOINT
@@ -184,6 +167,7 @@ class CollectInterpreter(Interpreter):
         return result
 
 
+@ft.partial(lru_cache, maxsize=256)
 def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
     """Collect marked values from an IR.
 

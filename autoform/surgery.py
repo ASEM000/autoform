@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import functools as ft
 import typing as tp
-from collections.abc import Callable
 
 from autoform.core import (
     IR,
@@ -37,6 +37,7 @@ from autoform.core import (
     treelib,
     using_interpreter,
 )
+from autoform.utils import lru_cache
 
 # ==================================================================================================
 # SPLITPOINT
@@ -136,6 +137,7 @@ class SplitInterpreter(Interpreter):
         return out_irtree
 
 
+@ft.partial(lru_cache, maxsize=256)
 def split[**P, R](ir: IR, *, key: tp.Hashable) -> tuple[IR, IR]:
     """Split an IR into left and right IRs at the splitpoint with given key.
 

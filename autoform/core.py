@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from operator import setitem
 from threading import RLock
 
-from autoform.utils import Tree, pack_user_input, treelib
+from autoform.utils import Tree, lru_cache, pack_user_input, treelib
 
 __all__ = [
     # base types
@@ -492,6 +492,7 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 # ==================================================================================================
 
 
+@ft.partial(lru_cache, maxsize=256)
 def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
     """Call an IR.
 
@@ -545,6 +546,7 @@ def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
         return chunks
 
 
+@ft.partial(lru_cache, maxsize=256)
 def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     """Create an iterator executor for an IR.
 
@@ -593,6 +595,7 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     return execute
 
 
+@ft.partial(lru_cache, maxsize=256)
 def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
     """Create an async executor for an IR.
 

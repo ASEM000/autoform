@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import functools as ft
 from collections import deque
 from operator import setitem
 
 from autoform.core import IR, IREqn, IRLit, IRVar, dce_rules, impl_rules, is_irvar
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, lru_cache, treelib
 
 # ==================================================================================================
 # DEAD CODE ELIMINATION
 # ==================================================================================================
 
 
+@ft.partial(lru_cache, maxsize=256)
 def dce(ir: IR) -> IR:
     """Remove dead code from an IR.
 
@@ -49,6 +51,7 @@ def dce(ir: IR) -> IR:
 # ==================================================================================================
 
 
+@ft.partial(lru_cache, maxsize=256)
 def fold(ir: IR) -> IR:
     """Evaluate constant IR subexpressions.
 
