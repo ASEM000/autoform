@@ -53,7 +53,7 @@ def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int) -> Tree:
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
     zipped = zip(flat_in_tree, flat_in_batched, strict=True)
-    leaves_i = (index_tree_at(leaf) if is_batched else leaf for leaf, is_batched in zipped)
+    leaves_i = (index_tree_at(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
 
