@@ -2,25 +2,19 @@
 
 from __future__ import annotations
 
+import functools as ft
 from collections import deque
 from operator import setitem
 
 from autoform.core import IR, IREqn, IRLit, IRVar, dce_rules, impl_rules, is_irvar
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, lru_cache, treelib
 
 # ==================================================================================================
 # DEAD CODE ELIMINATION
 # ==================================================================================================
 
 
-def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
-    out_vars = set(x for x in treelib.leaves(ireqn.out_irtree) if is_irvar(x))
-    if out_vars.isdisjoint(active_irvars):
-        return True, set(), ireqn  # axe (equation returned but unused)
-    in_vars = set(x for x in treelib.leaves(ireqn.in_irtree) if is_irvar(x))
-    return False, in_vars, ireqn  # (equation unchanged)
-
-
+@ft.partial(lru_cache, maxsize=256)
 def dce(ir: IR) -> IR:
     """Remove dead code from an IR.
 
@@ -43,8 +37,8 @@ def dce(ir: IR) -> IR:
     active_ireqns: deque[IREqn] = deque()
 
     for ireqn in reversed(ir.ireqns):
-        dce_rule = dce_rules[ireqn.prim] if ireqn.prim in dce_rules else default_dce
-        can_axe, cur_active, new_eqn = dce_rule(ireqn, active_irvars)
+        # NOTE(asem): dce_rule of hop handles nested IRs
+        can_axe, cur_active, new_eqn = dce_rules[ireqn.prim](ireqn, active_irvars)
 
         if not can_axe:
             active_ireqns.appendleft(new_eqn)
@@ -58,6 +52,7 @@ def dce(ir: IR) -> IR:
 # ==================================================================================================
 
 
+@ft.partial(lru_cache, maxsize=256)
 def fold(ir: IR) -> IR:
     """Evaluate constant IR subexpressions.
 
@@ -97,11 +92,20 @@ def fold(ir: IR) -> IR:
     treelib.map(write, ir.in_irtree, ir.in_irtree)
 
     for ireqn in ir.ireqns:
+        # NOTE(asem): recursively fold nested IRs in HOP params
+        params = {k: fold(v) if isinstance(v, IR) else v for k, v in ireqn.params.items()}
+        ireqn = IREqn(ireqn.prim, ireqn.in_irtree, ireqn.out_irtree, params)
+
         in_irtree = treelib.map(read, ireqn.in_irtree)
+
         if is_const_irtree(in_irtree):
-            out_irtree = run_const_eqn(ireqn, in_irtree)
-            treelib.map(write, ireqn.out_irtree, out_irtree)
+            # NOTE(asem): constant inputs denotes all inputs are literals,
+            # equation can be evaluated without at compile time.
+            const_out_irtree = run_const_eqn(ireqn, in_irtree)
+            treelib.map(write, ireqn.out_irtree, const_out_irtree)
         else:
+            # NOTE(asem): non-constant inputs denotes at least one input is a variable,
+            # equation must be evaluated at runtime.
             treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
             eqns.append(IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.params))
 

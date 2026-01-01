@@ -5,35 +5,35 @@ import autoform as af
 
 class TestSow:
     def test_impl_is_identity(self):
-        result = af.mark("hello", collection="debug", name="test")
+        result = af.checkpoint("hello", key="test", collection="debug")
         assert result == "hello"
 
     def test_ir_build(self):
         def func(x):
-            return af.mark(x, collection="my_tag", name="my_name")
+            return af.checkpoint(x, key="my_name", collection="my_tag")
 
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "mark"
+        assert ir.ireqns[0].prim.name == "checkpoint"
         assert ir.ireqns[0].params["collection"] == "my_tag"
-        assert ir.ireqns[0].params["name"] == "my_name"
+        assert ir.ireqns[0].params["key"] == "my_name"
 
     def test_run_ir(self):
         def func(x):
-            return af.mark(x, collection="test", name="value")
+            return af.checkpoint(x, key="value", collection="test")
 
         ir = af.build_ir(func)("test")
         result = af.call(ir)("hello")
         assert result == "hello"
 
     def test_hashable_tags_and_names(self):
-        assert af.mark("x", collection="str_tag", name="str_name") == "x"
-        assert af.mark("x", collection=42, name=100) == "x"
-        assert af.mark("x", collection=("a", 1), name=("b", 2)) == "x"
+        assert af.checkpoint("x", key="str_name", collection="str_tag") == "x"
+        assert af.checkpoint("x", key=100, collection=42) == "x"
+        assert af.checkpoint("x", key=("b", 2), collection=("a", 1)) == "x"
 
     def test_pushforward_preserves_both(self):
         def func(x):
-            return af.mark(x, collection="test", name="val")
+            return af.checkpoint(x, key="val", collection="test")
 
         ir = af.build_ir(func)("a")
         pf_ir = af.pushforward(ir)
@@ -43,7 +43,7 @@ class TestSow:
 
     def test_pullback_preserves_cotangent(self):
         def func(x):
-            return af.mark(x, collection="test", name="val")
+            return af.checkpoint(x, key="val", collection="test")
 
         ir = af.build_ir(func)("a")
         pb_ir = af.pullback(ir)
@@ -53,7 +53,7 @@ class TestSow:
 
     def test_batch(self):
         def func(x):
-            return af.mark(x, collection="test", name="val")
+            return af.checkpoint(x, key="val", collection="test")
 
         ir = af.build_ir(func)("a")
         batched_ir = af.batch(ir)
@@ -62,7 +62,7 @@ class TestSow:
 
     def test_in_chain(self):
         def func(x):
-            sowed = af.mark(x, collection="debug", name="input")
+            sowed = af.checkpoint(x, key="input", collection="debug")
             return af.concat("[", sowed, "]")
 
         ir = af.build_ir(func)("a")
@@ -73,7 +73,7 @@ class TestSow:
 class TestRunAndReap:
     def test_reap_single_sow(self):
         def func(x):
-            return af.mark(x, collection="debug", name="captured")
+            return af.checkpoint(x, key="captured", collection="debug")
 
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("hello")
@@ -82,9 +82,9 @@ class TestRunAndReap:
 
     def test_reap_multiple_sows_same_tag(self):
         def func(x):
-            a = af.mark(x, collection="debug", name="first")
+            a = af.checkpoint(x, key="first", collection="debug")
             b = af.concat(a, "!")
-            c = af.mark(b, collection="debug", name="second")
+            c = af.checkpoint(b, key="second", collection="debug")
             return c
 
         ir = af.build_ir(func)("test")
@@ -94,8 +94,8 @@ class TestRunAndReap:
 
     def test_reap_filters_by_tag(self):
         def func(x):
-            a = af.mark(x, collection="debug", name="debug_val")
-            b = af.mark(a, collection="metrics", name="metrics_val")
+            a = af.checkpoint(x, key="debug_val", collection="debug")
+            b = af.checkpoint(a, key="metrics_val", collection="metrics")
             return b
 
         ir = af.build_ir(func)("test")
@@ -108,7 +108,7 @@ class TestRunAndReap:
 
     def test_reap_empty_when_no_match(self):
         def func(x):
-            return af.mark(x, collection="other", name="val")
+            return af.checkpoint(x, key="val", collection="other")
 
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("hello")
@@ -126,9 +126,9 @@ class TestRunAndReap:
 
     def test_reap_preserves_execution(self):
         def func(x):
-            a = af.mark(af.format("Q: {}", x), collection="debug", name="prompt")
+            a = af.checkpoint(af.format("Q: {}", x), key="prompt", collection="debug")
             response = af.concat(a, " A: 42")
-            return af.mark(response, collection="debug", name="response")
+            return af.checkpoint(response, key="response", collection="debug")
 
         ir = af.build_ir(func)("test")
         result, collected = af.collect(ir, collection="debug")("What?")
@@ -140,7 +140,7 @@ class TestRunAndReap:
 class TestRunAndPlant:
     def test_plant_overrides_sow(self):
         def func(x):
-            return af.mark(af.concat("Hello, ", x), collection="cache", name="greeting")
+            return af.checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
 
         ir = af.build_ir(func)("test")
 
@@ -152,8 +152,8 @@ class TestRunAndPlant:
 
     def test_plant_partial(self):
         def func(x):
-            a = af.mark(x, collection="cache", name="first")
-            b = af.mark(af.concat(a, "!"), collection="cache", name="second")
+            a = af.checkpoint(x, key="first", collection="cache")
+            b = af.checkpoint(af.concat(a, "!"), key="second", collection="cache")
             return b
 
         ir = af.build_ir(func)("test")
@@ -163,8 +163,8 @@ class TestRunAndPlant:
 
     def test_plant_filters_by_tag(self):
         def func(x):
-            a = af.mark(x, collection="cache", name="val")
-            b = af.mark(a, collection="other", name="val")
+            a = af.checkpoint(x, key="val", collection="cache")
+            b = af.checkpoint(a, key="val", collection="other")
             return b
 
         ir = af.build_ir(func)("test")
@@ -174,7 +174,7 @@ class TestRunAndPlant:
 
     def test_plant_empty_dict(self):
         def func(x):
-            return af.mark(x, collection="cache", name="val")
+            return af.checkpoint(x, key="val", collection="cache")
 
         ir = af.build_ir(func)("test")
 
@@ -183,7 +183,7 @@ class TestRunAndPlant:
 
     def test_plant_unmatched_name(self):
         def func(x):
-            return af.mark(x, collection="cache", name="val")
+            return af.checkpoint(x, key="val", collection="cache")
 
         ir = af.build_ir(func)("test")
 
@@ -194,49 +194,41 @@ class TestRunAndPlant:
 class TestTransformThenReap:
     def test_reap_captures_during_pushforward(self):
         def func(x):
-            return af.mark(x, collection="debug", name="val")
+            return af.checkpoint(x, key="val", collection="debug")
 
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward(ir)
 
-        result, primals = af.collect(pf_ir, collection=("debug", "primal"))(("primal", "tangent"))
-        assert primals == {"val": ["primal"]}
-
-        result, tangents = af.collect(pf_ir, collection=("debug", "tangent"))(("primal", "tangent"))
-        assert tangents == {"val": ["tangent"]}
+        result, collected = af.collect(pf_ir, collection="debug")(("primal", "tangent"))
+        assert collected == {"val": ["primal", "tangent"]}
 
     def test_reap_captures_during_pullback(self):
         def func(x):
-            return af.mark(x, collection="debug", name="val")
+            return af.checkpoint(x, key="val", collection="debug")
 
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback(ir)
 
-        result, primals = af.collect(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
-        assert primals == {"val": ["primal"]}
-
-        result, grads = af.collect(pb_ir, collection=("debug", "cotangent"))((
-            "primal",
-            "cotangent",
-        ))
-        assert grads == {"val": ["cotangent"]}
+        result, collected = af.collect(pb_ir, collection="debug")(("primal", "cotangent"))
+        assert collected == {"val": ["primal", "cotangent"]}
 
     def test_reap_captures_during_batch(self):
         def func(x):
-            return af.mark(x, collection="debug", name="val")
+            return af.checkpoint(x, key="val", collection="debug")
 
         ir = af.build_ir(func)("test")
         batched = af.batch(ir)
-        result, collected = af.collect(batched, collection=("debug", "batch"))(["a", "b", "c"])
+
+        result, collected = af.collect(batched, collection="debug")(["a", "b", "c"])
         assert result == ["a", "b", "c"]
         assert collected == {"val": [["a", "b", "c"]]}
 
     def test_reap_captures_in_switch_branches(self):
         def branch_a(x):
-            return af.mark(af.concat("a: ", x), collection="debug", name="result")
+            return af.checkpoint(af.concat("a: ", x), key="result", collection="debug")
 
         def branch_b(x):
-            return af.mark(af.concat("b: ", x), collection="debug", name="result")
+            return af.checkpoint(af.concat("b: ", x), key="result", collection="debug")
 
         ir_a = af.build_ir(branch_a)("x")
         ir_b = af.build_ir(branch_b)("x")
@@ -254,7 +246,7 @@ class TestInjectAndDCE:
     def test_inject_trace_creates_literal(self):
         def program(x):
             expensive = af.concat("EXPENSIVE:", x)
-            cached = af.mark(expensive, collection="cache", name="result")
+            cached = af.checkpoint(expensive, key="result", collection="cache")
             return af.concat("Got: ", cached)
 
         ir = af.build_ir(program)("test")
@@ -274,7 +266,7 @@ class TestInjectAndDCE:
     def test_dce_removes_dead_code_after_inject(self):
         def program(x):
             expensive = af.concat("EXPENSIVE:", x)
-            cached = af.mark(expensive, collection="cache", name="result")
+            cached = af.checkpoint(expensive, key="result", collection="cache")
             return af.concat("Got: ", cached)
 
         ir = af.build_ir(program)("test")
@@ -295,9 +287,9 @@ class TestInjectAndDCE:
     def test_inject_dce_with_multiple_marks(self):
         def program(x):
             step1 = af.concat("step1:", x)
-            saved1 = af.mark(step1, collection="cache", name="first")
+            saved1 = af.checkpoint(step1, key="first", collection="cache")
             step2 = af.concat("step2:", saved1)
-            saved2 = af.mark(step2, collection="cache", name="second")
+            saved2 = af.checkpoint(step2, key="second", collection="cache")
             return af.concat("final:", saved2)
 
         ir = af.build_ir(program)("test")
@@ -314,15 +306,16 @@ class TestInjectAndDCE:
     def test_inject_works_with_nested_transforms(self):
         def program(x):
             expensive = af.concat("EXPENSIVE:", x)
-            cached = af.mark(expensive, collection="cache", name="result")
+            cached = af.checkpoint(expensive, key="result", collection="cache")
             return af.concat("Got: ", cached)
 
         ir = af.build_ir(program)("test")
         batched_ir = af.batch(ir)
 
-        result = af.inject(
-            batched_ir, collection=("cache", "batch"), values={"result": [["A", "B"]]}
-        )(["x", "y"])
+        result = af.inject(batched_ir, collection="cache", values={"result": [["A", "B"]]})([
+            "x",
+            "y",
+        ])
 
         assert result == ["Got: A", "Got: B"]
 
@@ -330,14 +323,15 @@ class TestInjectAndDCE:
 class TestSplit:
     def test_split_mark_at_end(self):
         def program(x):
-            y = af.mark(af.format("{}", x), collection="debug", name="s")
+            y = af.splitpoint(af.format("{}", x), key="s")
             return y
 
-        lhs, rhs = af.split(program, name="s")("...")
+        ir = af.build_ir(program)("...")
+        lhs, rhs = af.split(ir, key="s")
 
         assert len(lhs.ireqns) == 2
         assert lhs.ireqns[0].prim.name == "format"
-        assert lhs.ireqns[1].prim.name == "mark"
+        assert lhs.ireqns[1].prim.name == "splitpoint"
 
         assert len(rhs.ireqns) == 0
 
@@ -349,11 +343,12 @@ class TestSplit:
     def test_split_mark_in_middle(self):
         def program(x):
             y = af.format("Hello {}", x)
-            z = af.mark(y, collection="cache", name="mid")
+            z = af.splitpoint(y, key="mid")
             w = af.format("Result: {}", z)
             return w
 
-        lhs, rhs = af.split(program, name="mid")("...")
+        ir = af.build_ir(program)("...")
+        lhs, rhs = af.split(ir, key="mid")
 
         assert len(lhs.ireqns) == 2
 
@@ -373,12 +368,13 @@ class TestSplit:
     def test_split_composition_equals_full(self):
         def program(x):
             a = af.format("Step1: {}", x)
-            b = af.mark(a, collection="split", name="step1")
+            b = af.splitpoint(a, key="step1")
             c = af.format("Step2: {}", b)
             d = af.concat(c, "!")
             return d
 
-        lhs, rhs = af.split(program, name="step1")("...")
+        ir = af.build_ir(program)("...")
+        lhs, rhs = af.split(ir, key="step1")
         ir_full = af.build_ir(program)("x")
 
         for inp in ["a", "hello", "test123"]:
@@ -391,21 +387,192 @@ class TestSplit:
         def program(x):
             return af.format("{}", x)
 
-        with pytest.raises(AssertionError, match="could not find mark"):
-            af.split(program, name="nonexistent")("...")
+        ir = af.build_ir(program)("...")
+        with pytest.raises(AssertionError, match="could not find"):
+            af.split(ir, key="nonexistent")
 
     def test_split_with_multiple_marks(self):
         def program(x):
-            a = af.mark(x, collection="c", name="first")
+            a = af.splitpoint(x, key="first")
             b = af.format("{}", a)
-            c = af.mark(b, collection="c", name="second")
+            c = af.splitpoint(b, key="second")
             d = af.concat(c, "!")
             return d
 
-        lhs1, rhs1 = af.split(program, name="first")("...")
+        ir = af.build_ir(program)("...")
+        lhs1, rhs1 = af.split(ir, key="first")
         assert len(lhs1.ireqns) == 1
         assert len(rhs1.ireqns) == 3
 
-        lhs2, rhs2 = af.split(program, name="second")("...")
+        ir2 = af.build_ir(program)("...")
+        lhs2, rhs2 = af.split(ir2, key="second")
         assert len(lhs2.ireqns) == 3
         assert len(rhs2.ireqns) == 1
+
+
+class TestSplitpointPreservedThroughTransforms:
+    def test_splitpoint_preserved_after_pushforward(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pf_ir = af.pushforward(ir)
+
+        assert len(pf_ir.ireqns) == 1
+        assert pf_ir.ireqns[0].prim.name == "pushforward_call"
+        nested_ir = pf_ir.ireqns[0].params["ir"]
+        splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
+        assert len(splitpoints) == 1
+        assert splitpoints[0].params["key"] == "mid"
+
+    def test_splitpoint_preserved_after_pullback(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pb_ir = af.pullback(ir)
+
+        assert len(pb_ir.ireqns) == 1
+        assert pb_ir.ireqns[0].prim.name == "pullback_call"
+        nested_ir = pb_ir.ireqns[0].params["ir"]
+        splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
+        assert len(splitpoints) == 1
+        assert splitpoints[0].params["key"] == "mid"
+
+    def test_splitpoint_preserved_after_batch(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        batch_ir = af.batch(ir, in_axes=True)
+
+        assert len(batch_ir.ireqns) == 1
+        assert batch_ir.ireqns[0].prim.name == "batch_call"
+        nested_ir = batch_ir.ireqns[0].params["ir"]
+        splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
+        assert len(splitpoints) == 1
+        assert splitpoints[0].params["key"] == "mid"
+
+
+class TestSplitOnTransformedIR:
+    """Split on transformed IRs should recursively split nested IRs."""
+
+    def test_split_on_pushforward_ir(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pf_ir = af.pushforward(ir)
+
+        lhs, rhs = af.split(pf_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "pushforward_call"
+        nested_lhs = lhs.ireqns[0].params["ir"]
+
+        assert nested_lhs.ireqns[-1].prim.name == "splitpoint"
+
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "pushforward_call"
+        nested_rhs = rhs.ireqns[0].params["ir"]
+
+        assert len(nested_rhs.ireqns) == 1
+        assert nested_rhs.ireqns[0].prim.name == "concat"
+
+    def test_split_on_pullback_ir(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pb_ir = af.pullback(ir)
+
+        lhs, rhs = af.split(pb_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "pullback_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "pullback_call"
+
+    def test_split_on_batch_ir(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        batch_ir = af.batch(ir, in_axes=True)
+
+        lhs, rhs = af.split(batch_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "batch_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "batch_call"
+
+    def test_split_on_transformed_ir_execution(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+
+        lhs, rhs = af.split(ir, key="mid")
+        assert af.call(lhs)("hello") == "hello!"
+        assert af.call(rhs)("hello!") == "hello!?"
+
+    def test_split_on_double_pushforward(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pf_pf_ir = af.pushforward(af.pushforward(ir))
+
+        lhs, rhs = af.split(pf_pf_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "pushforward_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "pushforward_call"
+
+        inner_lhs = lhs.ireqns[0].params["ir"]
+        inner_rhs = rhs.ireqns[0].params["ir"]
+        assert inner_lhs.ireqns[0].prim.name == "pushforward_call"
+        assert inner_rhs.ireqns[0].prim.name == "pushforward_call"
+
+    def test_split_on_batch_pushforward(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        b_pf_ir = af.batch(af.pushforward(ir), in_axes=True)
+
+        lhs, rhs = af.split(b_pf_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "batch_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "batch_call"
+
+        inner_lhs = lhs.ireqns[0].params["ir"]
+        inner_rhs = rhs.ireqns[0].params["ir"]
+        assert inner_lhs.ireqns[0].prim.name == "pushforward_call"
+        assert inner_rhs.ireqns[0].prim.name == "pushforward_call"
+
+    def test_split_on_triple_nested(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        triple = af.pushforward(af.batch(af.pushforward(ir), in_axes=True))
+
+        lhs, rhs = af.split(triple, key="mid")
+
+        assert lhs.ireqns[0].prim.name == "pushforward_call"
+        assert rhs.ireqns[0].prim.name == "pushforward_call"

@@ -56,6 +56,8 @@ class TestDCE:
         def eval_const(x):
             return "constant"  # Returns literal, not Var()
 
+        af.core.dce_rules.def_rule(const_p, af.core.default_dce)
+
         def program(x):
             y = const_p.bind(x)  # y = "constant" (literal)
             z = af.concat(y, "!")  # z = "constant!" (folded at trace time!)

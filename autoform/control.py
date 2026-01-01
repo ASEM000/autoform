@@ -15,6 +15,7 @@ from autoform.core import (
     batch_rules,
     call,
     dce_rules,
+    default_dce,
     eval_rules,
     icall,
     impl_rules,
@@ -26,7 +27,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.optims import dce, default_dce
+from autoform.optims import dce
 from autoform.utils import Tree, pack_user_input, transpose_batch, treelib, unbatch_at
 
 # ==================================================================================================
@@ -93,6 +94,9 @@ def pullback_bwd_stop_gradient(residuals: Tree, out_cotangent: Tree) -> Tree:
 def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tree, Tree]:
     del batch_size
     return x, in_batched
+
+
+dce_rules.def_rule(stop_gradient_p, default_dce)
 
 
 # ==================================================================================================

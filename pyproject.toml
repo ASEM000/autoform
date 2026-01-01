@@ -37,7 +37,7 @@ indent-width = 4
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["I"]  # isort
+select = ["I", "F401"]  # isort, unused imports
 exclude = [".venv", ".git", ".tox", "build", "dist", "__pycache__", "__pypackages__"]
 
 ignore = [
@@ -57,4 +57,4 @@ unresolved-import = "ignore"
 
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
-testpaths = ["tests", "autoform"]
+testpaths = ["tests", "autoform", "docs/examples"]

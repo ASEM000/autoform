@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from operator import setitem
 from threading import RLock
 
-from autoform.utils import Tree, pack_user_input, treelib
+from autoform.utils import Tree, lru_cache, pack_user_input, treelib
 
 __all__ = [
     # base types
@@ -26,6 +26,7 @@ __all__ = [
     "is_irvar",
     "is_irlit",
     "is_iratom",
+    "iratom_to_evaltype",
     # primitive
     "Primitive",
     # rule registries
@@ -38,6 +39,14 @@ __all__ = [
     "iter_rules",
     "async_rules",
     "dce_rules",
+    # default rules
+    "default_impl",
+    "default_eval",
+    "default_push",
+    "default_pull_fwd",
+    "default_pull_bwd",
+    "default_batch",
+    "default_dce",
     # ir structures
     "IREqn",
     "IR",
@@ -116,6 +125,10 @@ def is_iratom(x) -> tp.TypeGuard[IRAtom]:
     return isinstance(x, IRAtom)
 
 
+def iratom_to_evaltype(x: IRAtom) -> EvalType:
+    return Var() if is_irvar(x) else x.value
+
+
 class IRLit[T](IRAtom):
     def __init__(self, value: T, /, **meta):
         assert not is_iratom(value)
@@ -179,7 +192,8 @@ class InterpreterRuleMapping[T: Callable]:
 
     def __getitem__(self, prim: Primitive) -> T:
         with self.lock:
-            assert prim in self.map, f"No rule found for primitive {prim}"
+            if prim not in self.map:
+                raise KeyError(f"No {type(self).__name__} rule defined for primitive {prim}")
             return self.map[prim]
 
     def __iter__(self):
@@ -210,6 +224,44 @@ type DCERule = Callable[[IREqn, set[IRVar]], tuple[bool, set[IRVar], IREqn]]
 # ==================================================================================================
 # RULE REGISTRIES
 # ==================================================================================================
+
+
+def default_impl(x, **_):
+    return x
+
+
+def default_eval(x, **_):
+    return x
+
+
+def default_push(func, primal, tangent, **params):
+    p = func(primal, **params)
+    t = func(tangent, **params)
+    return p, t
+
+
+def default_pull_fwd(func, x, **params):
+    out = func(x, **params)
+    return out, None
+
+
+def default_pull_bwd(func, residuals, cotangent, **params):
+    del residuals
+    return func(cotangent, **params)
+
+
+def default_batch(func, batch_size, in_batched, x, **params):
+    del batch_size
+    return func(x, **params), in_batched
+
+
+def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+    out_vars = set(v for v in treelib.leaves(ireqn.out_irtree) if is_irvar(v))
+    if out_vars.isdisjoint(active_irvars):
+        return True, set(), ireqn  # axe (equation returned but unused)
+    in_vars = set(v for v in treelib.leaves(ireqn.in_irtree) if is_irvar(v))
+    return False, in_vars, ireqn  # keep (equation unchanged)
+
 
 impl_rules = InterpreterRuleMapping[ImplRule]()
 eval_rules = InterpreterRuleMapping[EvalRule]()
@@ -378,8 +430,6 @@ class TracingInterpreter(Interpreter):
 
         in_irtree = treelib.map(to_in_iratom, in_tree)
 
-        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
-
         def to_in_evaltype(x):
             # NOTE(asem): eval rules accept `Var`/ python types.
             # `Var` simply denotes a placeholder for a value that will be computed later
@@ -452,6 +502,7 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 # ==================================================================================================
 
 
+@ft.partial(lru_cache, maxsize=256)
 def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
     """Call an IR.
 
@@ -505,6 +556,7 @@ def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
         return chunks
 
 
+@ft.partial(lru_cache, maxsize=256)
 def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     """Create an iterator executor for an IR.
 
@@ -553,6 +605,7 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
     return execute
 
 
+@ft.partial(lru_cache, maxsize=256)
 def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
     """Create an async executor for an IR.
 

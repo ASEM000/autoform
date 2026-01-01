@@ -5,52 +5,47 @@ from __future__ import annotations
 import functools as ft
 import typing as tp
 from collections import defaultdict
-from collections.abc import Callable
 
 from autoform.core import (
     IR,
     EvalType,
     Interpreter,
-    IRAtom,
-    IREqn,
-    IRLit,
-    IRVar,
     Primitive,
-    Var,
     batch_rules,
     call,
+    dce_rules,
+    default_batch,
+    default_dce,
+    default_pull_bwd,
+    default_pull_fwd,
+    default_push,
     eval_rules,
     get_interpreter,
     impl_rules,
-    is_iratom,
-    is_irvar,
-    is_user_type,
-    is_var,
-    pack_user_input,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
     using_interpreter,
 )
-from autoform.utils import Tree, treelib
+from autoform.utils import Tree, lru_cache
 
 # ==================================================================================================
-# MARK
+# CHECKPOINT
 # ==================================================================================================
 
-mark_p = Primitive("mark", tag="core")
+checkpoint_p = Primitive("checkpoint", tag="core")
 
 
-def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
-    """Tag a value with a collection and name for later collection.
+def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
+    """Tag a value with a collection and key for later collection.
 
-    `mark` marks a value with a `collection` and `name` (unique identifier)
+    `checkpoint` marks a value with a `collection` and `key` (unique identifier)
     that can be collected by `collect`. It acts as an identity operation in
     normal execution.
 
     Args:
         in_tree: the value to mark (returned unchanged).
-        name: unique identifier within the collection namespace.
+        key: unique identifier within the collection namespace.
         collection: optional collection for filtering (e.g., "debug", "cache", "metrics").
 
     Returns:
@@ -59,9 +54,9 @@ def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     prompt = af.mark(af.format("Q: {}", x), collection="debug", name="prompt")
+        ...     prompt = af.checkpoint(af.format("Q: {}", x), key="prompt", collection="debug")
         ...     response = af.concat(prompt, " A: 42")
-        ...     return af.mark(response, collection="debug", name="response")
+        ...     return af.checkpoint(response, key="response", collection="debug")
         >>> ir = af.build_ir(program)("test")
         >>> result, collected = af.collect(ir, collection="debug")("What is 6*7?")
         >>> result
@@ -72,64 +67,31 @@ def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None 
         ['Q: What is 6*7? A: 42']
     """
     assert hash(collection) is not None, "Collection must be hashable"
-    assert hash(name) is not None, "Name must be hashable"
-    return mark_p.bind(in_tree, collection=collection, name=name)
+    assert hash(key) is not None, "Key must be hashable"
+    return checkpoint_p.bind(in_tree, collection=collection, key=key)
 
 
-@ft.partial(impl_rules.def_rule, mark_p)
-def impl_mark(in_tree: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
-    del collection, name
-    return in_tree
-
-
-@ft.partial(eval_rules.def_rule, mark_p)
-def eval_mark(
-    in_tree: Tree[EvalType], *, name: tp.Hashable, collection: tp.Hashable | None = None
-) -> Tree[EvalType]:
-    del collection, name
-    return in_tree
-
-
-@ft.partial(push_rules.def_rule, mark_p)
-def pushforward_mark(
-    primal: Tree, tangent: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None
-) -> tuple[Tree, Tree]:
-    p = mark(primal, collection=(collection, "primal"), name=name)
-    t = mark(tangent, collection=(collection, "tangent"), name=name)
-    return p, t
-
-
-@ft.partial(pull_fwd_rules.def_rule, mark_p)
-def pullback_fwd_mark(
-    in_tree: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None
-) -> tuple[Tree, Tree]:
-    out = mark(in_tree, collection=(collection, "primal"), name=name)
-    return out, out
-
-
-@ft.partial(pull_bwd_rules.def_rule, mark_p)
-def pullback_bwd_mark(
-    in_residuals: Tree,
-    out_cotangent: Tree,
-    *,
-    name: tp.Hashable,
-    collection: tp.Hashable | None = None,
+@ft.partial(impl_rules.def_rule, checkpoint_p)
+def impl_checkpoint(
+    in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
 ) -> Tree:
-    del in_residuals
-    return mark(out_cotangent, collection=(collection, "cotangent"), name=name)
+    del collection, key
+    return in_tree
 
 
-@ft.partial(batch_rules.def_rule, mark_p)
-def batch_mark(
-    batch_size: int,
-    in_batched: Tree,
-    x: Tree,
-    *,
-    name: tp.Hashable,
-    collection: tp.Hashable | None = None,
-) -> tuple[Tree, Tree]:
-    del batch_size
-    return mark(x, collection=(collection, "batch"), name=name), in_batched
+@ft.partial(eval_rules.def_rule, checkpoint_p)
+def eval_checkpoint(
+    in_tree: Tree[EvalType], *, key: tp.Hashable, collection: tp.Hashable | None = None
+) -> Tree[EvalType]:
+    del collection, key
+    return in_tree
+
+
+push_rules.def_rule(checkpoint_p, ft.partial(default_push, checkpoint))
+pull_fwd_rules.def_rule(checkpoint_p, ft.partial(default_pull_fwd, checkpoint))
+pull_bwd_rules.def_rule(checkpoint_p, ft.partial(default_pull_bwd, checkpoint))
+batch_rules.def_rule(checkpoint_p, ft.partial(default_batch, checkpoint))
+dce_rules.def_rule(checkpoint_p, default_dce)
 
 
 # ==================================================================================================
@@ -150,9 +112,9 @@ class CollectInterpreter(Interpreter):
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         # NOTE(asem): No context switch here. We call parent.interpret() directly
         # Example: lets say we have a push rule that marks stuff inside it
-        # >>> def pushforward_mark(primal, tangent, ...):
-        # ...     p = mark(primal, ...)    # <- calls mark_p.bind()
-        # ...     t = mark(tangent, ...)   # <- calls mark_p.bind()
+        # >>> def pushforward_checkpoint(primal, tangent, ...):
+        # ...     p = checkpoint(primal, ...)    # <- calls checkpoint_p.bind()
+        # ...     t = checkpoint(tangent, ...)   # <- calls checkpoint_p.bind()
         # ...     return p, t
         # here we have an interplay between 3 interpreters (collect, eval, and push)
         # within the rule we have parent=eval (push_impl -> induced PushInterp -> called this rule)
@@ -166,11 +128,12 @@ class CollectInterpreter(Interpreter):
         # -> CollectInterpreter.interpret() and we can observe those nested calls.
         # this observation applies to other observer interpreters as well.
         result = self.parent.interpret(prim, in_tree, **params)
-        if prim == mark_p and params.get("collection") == self.collection:
-            self.collected[params["name"]].append(result)
+        if prim == checkpoint_p and params.get("collection") == self.collection:
+            self.collected[params["key"]].append(result)
         return result
 
 
+@ft.partial(lru_cache, maxsize=256)
 def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
     """Collect marked values from an IR.
 
@@ -218,13 +181,13 @@ class InjectInterpreter(Interpreter):
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         if (
-            prim == mark_p
+            prim == checkpoint_p
             and params.get("collection") == self.collection
-            and (name := params.get("name")) in self.values
+            and (key := params.get("key")) in self.values
             # NOTE(asem): allow empty values to allow round-tripping
-            and self.values[name]
+            and self.values[key]
         ):
-            return self.values[name].pop()
+            return self.values[key].pop()
         # NOTE(asem): check the note in CollectInterpreter.interpret for explanation
         # on why no context switch here.
         return self.parent.interpret(prim, in_tree, **params)
@@ -263,120 +226,3 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
             return call(ir)(*args, **kwargs)
 
     return execute
-
-
-# ==================================================================================================
-# SPLIT
-# ==================================================================================================
-
-
-class SplitInterpreter(Interpreter):
-    def __init__(self, name: tp.Hashable):
-        # NOTE(asem): trace and split interpreter
-        # mostly similar to TraceInterpreter but splits the IR into two parts
-        # at the mark with the given name
-        self.lhs_ireqns: list[IREqn] = []
-        self.rhs_ireqns: list[IREqn] = []
-        self.name = name
-        self.split: bool = False
-
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
-        def to_in_iratom(x) -> IRAtom:
-            # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
-            # however, a function can take a constant value as input that is not an input
-            # thus we need to wrap it here
-            # >>> def f(x):
-            # ...     const = "..."
-            # ...     return some_user_func(const)
-            # here const is not reachable by `build_ir` wrapping mechanism and thus
-            # needs to be handled here
-            return x if is_iratom(x) else IRLit(x)
-
-        in_irtree = treelib.map(to_in_iratom, in_tree)
-
-        assert prim in eval_rules, f"Primitive {prim.name} has no `eval_rule` defined"
-
-        def to_in_evaltype(x):
-            # NOTE(asem): eval rules accept `Var`/ python types.
-            # `Var` simply denotes a placeholder for a value that will be computed later
-            return Var() if is_irvar(x) else x.value
-
-        in_evaltree = treelib.map(to_in_evaltype, in_irtree)
-        out_evaltree = eval_rules[prim](in_evaltree, **params)
-
-        def to_out_iratom(x) -> IRAtom:
-            # NOTE(asem): eval rules return `Var`/ python types.
-            # `Var` simply denotes a placeholder for a value that will be computed later
-            # this is basically delegated to the user to handle
-            return IRVar.fresh() if is_var(x) else IRLit(x)
-
-        out_irtree = treelib.map(to_out_iratom, out_evaltree)
-
-        ireqns = self.rhs_ireqns if self.split else self.lhs_ireqns
-        ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
-
-        if prim == mark_p and params.get("name") == self.name:
-            # NOTE(asem): mark belongs to the LHS
-            assert self.split is False, "Cannot split multiple times"
-            self.split = True
-
-        return out_irtree
-
-
-def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> Callable[P, tuple[IR, IR]]:
-    """Split a function into left and right IRs at marked name.
-
-    Args:
-        func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
-        name: A unique hashable value.
-
-    Returns:
-        A tracer callable that, when invoked with ``(*args, **kwargs)`` corresponding
-        to ``func``'s parameters, returns a tuple ``(lhs_ir, rhs_ir)`` of two
-        :class:`IR` objects (left-hand side and right-hand side).
-    """
-    # NOTE(asem): calling split inside a traced function will inline the splitted IRs
-    # >>> def outer(x):
-    # ...     lhs, rhs = split(inner, name="mid")("...")
-    # ...     mid = af.call(lhs)(x)    # lhs equations inline into outer
-    # ...     return af.call(rhs)(mid) # rhs equations inline into outer
-    # >>> ir = af.build_ir(outer)("...")
-    # result is a single flat IR with all equations from lhs and rhs
-
-    def assert_usertype(x):
-        assert not is_iratom(x), "Inputs to `build_ir` must be normal python types"
-
-    def to_in_iratom(x):
-        # NOTE(asem): user types are converted to IRVar/IRLit
-        # to prepare for tracing.
-        return IRVar.fresh() if is_user_type(x) else IRLit(x)
-
-    def to_out_iratom(x):
-        return x if is_iratom(x) else IRLit(x)
-
-    @ft.wraps(func)
-    def trace(*args: P.args, **kwargs: P.kwargs) -> tuple[IR, IR]:
-        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
-        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
-        in_irargs, in_irkwargs = in_irtree
-
-        with using_interpreter(SplitInterpreter(name=name)) as tracer:
-            out_irtree = func(*in_irargs, **in_irkwargs)
-
-        assert tracer.split is True, f"`split` could not find mark matches {name=}"
-
-        lhs_ireqns = tracer.lhs_ireqns
-        lhs_in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-        lhs_out_irtree = lhs_ireqns[-1].out_irtree
-        lhs = IR(ireqns=lhs_ireqns, in_irtree=lhs_in_irtree, out_irtree=lhs_out_irtree)
-
-        # NOTE(asem): rhs takes mark output as input, wrapped in call-compatible structure
-        # The mark output becomes the new "input" for rhs
-        rhs_ireqns = tracer.rhs_ireqns
-        rhs_in_irtree = pack_user_input(lhs_ireqns[-1].out_irtree)
-        rhs_out_irtree = treelib.map(to_out_iratom, out_irtree)
-        rhs = IR(ireqns=rhs_ireqns, in_irtree=rhs_in_irtree, out_irtree=rhs_out_irtree)
-
-        return lhs, rhs
-
-    return trace

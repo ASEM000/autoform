@@ -21,7 +21,7 @@ class TestIREqnMatchArgs:
 
     def test_match_by_params(self):
         def func(x):
-            return af.mark(x, collection="step1", name="x")
+            return af.checkpoint(x, key="x", collection="step1")
 
         ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
@@ -48,9 +48,9 @@ class TestIREqnMatchArgs:
 
     def test_match_in_loop(self):
         def func(x):
-            a = af.mark(x, collection="step1", name="a")
+            a = af.checkpoint(x, key="a", collection="step1")
             b = af.concat(a, "!")
-            c = af.mark(b, collection="step2", name="c")
+            c = af.checkpoint(b, key="c", collection="step2")
             return c
 
         ir = af.build_ir(func)("test")
@@ -58,27 +58,22 @@ class TestIREqnMatchArgs:
         tags_found = []
         for eqn in ir.ireqns:
             match eqn:
-                case af.core.IREqn(prim=p, params={"collection": tag}) if p == af.harvest.mark_p:
+                case af.core.IREqn(prim=af.harvest.checkpoint_p, params={"collection": tag}):
                     tags_found.append(tag)
 
         assert tags_found == ["step1", "step2"]
 
     def test_match_and_transform(self):
-        """Test matching equations and building a transformed IR."""
-
         def func(x):
-            a = af.mark(x, collection="old_tag", name="a")
+            a = af.checkpoint(x, key="a", collection="old_tag")
             return af.concat(a, "!")
 
         ir = af.build_ir(func)("test")
 
-        # Transform: find sow with old_tag and change to new_tag
         new_eqns = []
         for eqn in ir.ireqns:
             match eqn:
-                case af.core.IREqn(prim=p, params={"collection": "old_tag"}) if (
-                    p == af.harvest.mark_p
-                ):
+                case af.core.IREqn(prim=af.harvest.checkpoint_p, params={"collection": "old_tag"}):
                     new_eqns.append(eqn.using(collection="new_tag"))
                 case _:
                     new_eqns.append(eqn)
@@ -89,9 +84,8 @@ class TestIREqnMatchArgs:
             out_irtree=ir.out_irtree,
         )
 
-        # Verify the tag was changed
         assert new_ir.ireqns[0].params["collection"] == "new_tag"
-        # Verify the IR still works
+
         result = af.call(new_ir)("hello")
         assert result == "hello!"
 
@@ -99,14 +93,14 @@ class TestIREqnMatchArgs:
 class TestIREqnWithParams:
     def test_using_merges(self):
         def func(x):
-            return af.mark(x, collection="old", name="x")
+            return af.checkpoint(x, key="x", collection="old")
 
         ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
         new_eqn = eqn.using(collection="new")
 
-        assert eqn.params["collection"] == "old"  # original unchanged
+        assert eqn.params["collection"] == "old"
         assert new_eqn.params["collection"] == "new"
         assert new_eqn.prim == eqn.prim
         assert new_eqn.in_irtree == eqn.in_irtree
@@ -114,7 +108,7 @@ class TestIREqnWithParams:
 
     def test_using_preserves_fields(self):
         def func(x):
-            return af.mark(x, collection="test", name="x")
+            return af.checkpoint(x, key="x", collection="test")
 
         ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
@@ -128,24 +122,20 @@ class TestIREqnWithParams:
 
 class TestInsertAfterPattern:
     def test_insert_equation_after_match(self):
-        """Test inserting a new equation after a matched one."""
-
         def func(x):
-            a = af.mark(x, collection="insert_here", name="a")
+            a = af.checkpoint(x, key="a", collection="insert_here")
             return af.concat(a, "!")
 
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 2
 
-        # Insert a new sow after the first sow
         new_eqns = []
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
             match eqn:
-                case af.core.IREqn(prim=p, params={"collection": "insert_here"}) if (
-                    p == af.harvest.mark_p
+                case af.core.IREqn(
+                    prim=af.harvest.checkpoint_p, params={"collection": "insert_here"}
                 ):
-                    # Create a new sow equation with the same IO but different tag
                     inserted = eqn.using(collection="inserted")
                     new_eqns.append(inserted)
 
