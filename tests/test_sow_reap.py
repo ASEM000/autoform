@@ -199,11 +199,8 @@ class TestTransformThenReap:
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward(ir)
 
-        result, primals = af.collect(pf_ir, collection=("debug", "primal"))(("primal", "tangent"))
-        assert primals == {"val": ["primal"]}
-
-        result, tangents = af.collect(pf_ir, collection=("debug", "tangent"))(("primal", "tangent"))
-        assert tangents == {"val": ["tangent"]}
+        result, collected = af.collect(pf_ir, collection="debug")(("primal", "tangent"))
+        assert collected == {"val": ["primal", "tangent"]}
 
     def test_reap_captures_during_pullback(self):
         def func(x):
@@ -212,14 +209,8 @@ class TestTransformThenReap:
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback(ir)
 
-        result, primals = af.collect(pb_ir, collection=("debug", "primal"))(("primal", "cotangent"))
-        assert primals == {"val": ["primal"]}
-
-        result, grads = af.collect(pb_ir, collection=("debug", "cotangent"))((
-            "primal",
-            "cotangent",
-        ))
-        assert grads == {"val": ["cotangent"]}
+        result, collected = af.collect(pb_ir, collection="debug")(("primal", "cotangent"))
+        assert collected == {"val": ["primal", "cotangent"]}
 
     def test_reap_captures_during_batch(self):
         def func(x):
@@ -227,7 +218,8 @@ class TestTransformThenReap:
 
         ir = af.build_ir(func)("test")
         batched = af.batch(ir)
-        result, collected = af.collect(batched, collection=("debug", "batch"))(["a", "b", "c"])
+
+        result, collected = af.collect(batched, collection="debug")(["a", "b", "c"])
         assert result == ["a", "b", "c"]
         assert collected == {"val": [["a", "b", "c"]]}
 
@@ -320,9 +312,11 @@ class TestInjectAndDCE:
         ir = af.build_ir(program)("test")
         batched_ir = af.batch(ir)
 
-        result = af.inject(
-            batched_ir, collection=("cache", "batch"), values={"result": [["A", "B"]]}
-        )(["x", "y"])
+        # With default rules, inject uses "cache" directly
+        result = af.inject(batched_ir, collection="cache", values={"result": [["A", "B"]]})([
+            "x",
+            "y",
+        ])
 
         assert result == ["Got: A", "Got: B"]
 
@@ -460,7 +454,6 @@ class TestSplitpointPreservedThroughTransforms:
         ir = af.build_ir(program)("x")
         batch_ir = af.batch(ir, in_axes=True)
 
-        # Batch wraps in batch_call, splitpoint is in nested IR
         assert len(batch_ir.ireqns) == 1
         assert batch_ir.ireqns[0].prim.name == "batch_call"
         nested_ir = batch_ir.ireqns[0].params["ir"]

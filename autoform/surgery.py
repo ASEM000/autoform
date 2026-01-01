@@ -74,10 +74,10 @@ def splitpoint(in_tree: Tree, /, *, key: tp.Hashable) -> Tree:
 
 impl_rules.def_rule(splitpoint_p, default_impl)
 eval_rules.def_rule(splitpoint_p, default_eval)
-push_rules.def_rule(splitpoint_p, default_push)
-pull_fwd_rules.def_rule(splitpoint_p, default_pull_fwd)
-pull_bwd_rules.def_rule(splitpoint_p, default_pull_bwd)
-batch_rules.def_rule(splitpoint_p, default_batch)
+push_rules.def_rule(splitpoint_p, ft.partial(default_push, splitpoint))
+pull_fwd_rules.def_rule(splitpoint_p, ft.partial(default_pull_fwd, splitpoint))
+pull_bwd_rules.def_rule(splitpoint_p, ft.partial(default_pull_bwd, splitpoint))
+batch_rules.def_rule(splitpoint_p, ft.partial(default_batch, splitpoint))
 dce_rules.def_rule(splitpoint_p, default_dce)
 
 
@@ -88,9 +88,6 @@ dce_rules.def_rule(splitpoint_p, default_dce)
 
 class SplitInterpreter(Interpreter):
     def __init__(self, key: tp.Hashable):
-        # NOTE(asem): trace and split interpreter
-        # mostly similar to TraceInterpreter but splits the IR into two parts
-        # at the mark with the given key
         self.lhs_ireqns: list[IREqn] = []
         self.rhs_ireqns: list[IREqn] = []
         self.key = key
@@ -98,30 +95,23 @@ class SplitInterpreter(Interpreter):
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
         def to_in_iratom(x) -> IRAtom:
-            # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
-            # however, a function can take a constant value as input that is not an input
-            # thus we need to wrap it here
-            # >>> def f(x):
-            # ...     const = "..."
-            # ...     return some_user_func(const)
-            # here const is not reachable by `build_ir` wrapping mechanism and thus
-            # needs to be handled here
             return x if is_iratom(x) else IRLit(x)
 
         in_irtree = treelib.map(to_in_iratom, in_tree)
 
+        # Recursively process nested IRs in params (HOPs like pushforward_call)
+        for value in params.values():
+            if isinstance(value, IR):
+                for eqn in value.ireqns:
+                    self.interpret(eqn.prim, eqn.in_irtree, **eqn.params)
+
         def to_in_evaltype(x):
-            # NOTE(asem): eval rules accept `Var`/ python types.
-            # `Var` simply denotes a placeholder for a value that will be computed later
             return Var() if is_irvar(x) else x.value
 
         in_evaltree = treelib.map(to_in_evaltype, in_irtree)
         out_evaltree = eval_rules[prim](in_evaltree, **params)
 
         def to_out_iratom(x) -> IRAtom:
-            # NOTE(asem): eval rules return `Var`/ python types.
-            # `Var` simply denotes a placeholder for a value that will be computed later
-            # this is basically delegated to the user to handle
             return IRVar.fresh() if is_var(x) else IRLit(x)
 
         out_irtree = treelib.map(to_out_iratom, out_evaltree)
@@ -130,7 +120,6 @@ class SplitInterpreter(Interpreter):
         ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
 
         if prim == splitpoint_p and params.get("key") == self.key:
-            # NOTE(asem): splitpoint belongs to the LHS
             assert self.split is False, "Cannot split multiple times"
             self.split = True
 

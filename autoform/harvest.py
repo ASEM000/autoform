@@ -14,7 +14,11 @@ from autoform.core import (
     batch_rules,
     call,
     dce_rules,
+    default_batch,
     default_dce,
+    default_pull_bwd,
+    default_pull_fwd,
+    default_push,
     eval_rules,
     get_interpreter,
     impl_rules,
@@ -83,48 +87,10 @@ def eval_checkpoint(
     return in_tree
 
 
-@ft.partial(push_rules.def_rule, checkpoint_p)
-def pushforward_checkpoint(
-    primal: Tree, tangent: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
-) -> tuple[Tree, Tree]:
-    p = checkpoint(primal, key=key, collection=(collection, "primal"))
-    t = checkpoint(tangent, key=key, collection=(collection, "tangent"))
-    return p, t
-
-
-@ft.partial(pull_fwd_rules.def_rule, checkpoint_p)
-def pullback_fwd_checkpoint(
-    in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
-) -> tuple[Tree, Tree]:
-    out = checkpoint(in_tree, key=key, collection=(collection, "primal"))
-    return out, out
-
-
-@ft.partial(pull_bwd_rules.def_rule, checkpoint_p)
-def pullback_bwd_checkpoint(
-    in_residuals: Tree,
-    out_cotangent: Tree,
-    *,
-    key: tp.Hashable,
-    collection: tp.Hashable | None = None,
-) -> Tree:
-    del in_residuals
-    return checkpoint(out_cotangent, key=key, collection=(collection, "cotangent"))
-
-
-@ft.partial(batch_rules.def_rule, checkpoint_p)
-def batch_checkpoint(
-    batch_size: int,
-    in_batched: Tree,
-    x: Tree,
-    *,
-    key: tp.Hashable,
-    collection: tp.Hashable | None = None,
-) -> tuple[Tree, Tree]:
-    del batch_size
-    return checkpoint(x, key=key, collection=(collection, "batch")), in_batched
-
-
+push_rules.def_rule(checkpoint_p, ft.partial(default_push, checkpoint))
+pull_fwd_rules.def_rule(checkpoint_p, ft.partial(default_pull_fwd, checkpoint))
+pull_bwd_rules.def_rule(checkpoint_p, ft.partial(default_pull_bwd, checkpoint))
+batch_rules.def_rule(checkpoint_p, ft.partial(default_batch, checkpoint))
 dce_rules.def_rule(checkpoint_p, default_dce)
 
 

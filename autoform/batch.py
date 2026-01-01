@@ -16,7 +16,6 @@ from autoform.core import (
     IRVar,
     Primitive,
     Value,
-    Var,
     acall,
     async_rules,
     batch_rules,
@@ -26,6 +25,7 @@ from autoform.core import (
     eval_rules,
     get_interpreter,
     impl_rules,
+    iratom_to_evaltype,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -177,8 +177,7 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 @ft.partial(eval_rules.def_rule, batch_call_p)
 def eval_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
-    del in_tree, in_axes
-    return treelib.map(lambda _: Var(), ir.out_irtree)
+    return treelib.map(iratom_to_evaltype, ir.out_irtree)
 
 
 @ft.partial(push_rules.def_rule, batch_call_p)

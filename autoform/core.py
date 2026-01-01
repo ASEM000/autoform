@@ -26,6 +26,7 @@ __all__ = [
     "is_irvar",
     "is_irlit",
     "is_iratom",
+    "iratom_to_evaltype",
     # primitive
     "Primitive",
     # rule registries
@@ -122,6 +123,10 @@ def is_irvar(x) -> tp.TypeGuard[IRVar]:
 
 def is_iratom(x) -> tp.TypeGuard[IRAtom]:
     return isinstance(x, IRAtom)
+
+
+def iratom_to_evaltype(x: IRAtom) -> EvalType:
+    return Var() if is_irvar(x) else x.value
 
 
 class IRLit[T](IRAtom):
@@ -227,20 +232,25 @@ def default_eval(x, **_):
     return x
 
 
-def default_push(primal, tangent, **_):
-    return primal, tangent
+def default_push(func, primal, tangent, **params):
+    p = func(primal, **params)
+    t = func(tangent, **params)
+    return p, t
 
 
-def default_pull_fwd(x, **_):
-    return x, None
+def default_pull_fwd(func, x, **params):
+    out = func(x, **params)
+    return out, None
 
 
-def default_pull_bwd(residuals, cotangent, **_):
-    return cotangent
+def default_pull_bwd(func, residuals, cotangent, **params):
+    del residuals
+    return func(cotangent, **params)
 
 
-def default_batch(batch_size, in_batched, x, **_):
-    return x, in_batched
+def default_batch(func, batch_size, in_batched, x, **params):
+    del batch_size
+    return func(x, **params), in_batched
 
 
 def default_dce(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:

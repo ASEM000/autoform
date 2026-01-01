@@ -17,7 +17,6 @@ from autoform.core import (
     IRZero,
     Primitive,
     Value,
-    Var,
     batch_rules,
     call,
     dce_rules,
@@ -25,6 +24,7 @@ from autoform.core import (
     eval_rules,
     get_interpreter,
     impl_rules,
+    iratom_to_evaltype,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -138,11 +138,8 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
 @ft.partial(eval_rules.def_rule, pushforward_call_p)
 def eval_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
-    del ir
-    p_tree, t_tree = in_tree
-    p_out = treelib.map(lambda _: Var(), p_tree, is_leaf=lambda x: isinstance(x, Var))
-    t_out = treelib.map(lambda _: Var(), t_tree, is_leaf=lambda x: isinstance(x, Var))
-    return p_out, t_out
+    out = treelib.map(iratom_to_evaltype, ir.out_irtree)
+    return out, out
 
 
 @ft.partial(push_rules.def_rule, pushforward_call_p)
@@ -349,11 +346,8 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
 @ft.partial(eval_rules.def_rule, pullback_call_p)
 def eval_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
-    del ir
-    in_p, out_c = in_tree
-    is_var = lambda x: isinstance(x, Var)
-    out_p = treelib.map(lambda _: Var(), out_c, is_leaf=is_var)
-    in_c = treelib.map(lambda _: Var(), in_p, is_leaf=is_var)
+    out_p = treelib.map(iratom_to_evaltype, ir.out_irtree)
+    in_c = treelib.map(iratom_to_evaltype, ir.in_irtree)
     return out_p, in_c
 
 
