@@ -122,7 +122,6 @@ class TestIREqnWithParams:
 
 class TestInsertAfterPattern:
     def test_insert_equation_after_match(self):
-
         def func(x):
             a = af.checkpoint(x, key="a", collection="insert_here")
             return af.concat(a, "!")

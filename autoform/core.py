@@ -192,6 +192,8 @@ class InterpreterRuleMapping[T: Callable]:
 
     def __getitem__(self, prim: Primitive) -> T:
         with self.lock:
+            if prim not in self.map:
+                raise KeyError(f"No {type(self).__name__} rule defined for primitive {prim}")
             return self.map[prim]
 
     def __iter__(self):
@@ -382,8 +384,7 @@ class Interpreter(ABC):
 
 class EvalInterpreter(Interpreter):
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        rule = impl_rules[prim] if prim in impl_rules else impl_rules.fallback
-        return rule(in_tree, **params)
+        return impl_rules[prim](in_tree, **params)
 
 
 # ==================================================================================================
