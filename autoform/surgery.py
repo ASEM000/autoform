@@ -7,16 +7,9 @@ import typing as tp
 
 from autoform.core import (
     IR,
-    Interpreter,
-    IRAtom,
     IREqn,
-    IRLit,
-    IRVar,
     Primitive,
-    Tree,
-    Var,
     batch_rules,
-    call,
     dce_rules,
     default_batch,
     default_dce,
@@ -27,15 +20,10 @@ from autoform.core import (
     default_push,
     eval_rules,
     impl_rules,
-    is_iratom,
-    is_irvar,
-    is_var,
     pack_user_input,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    treelib,
-    using_interpreter,
 )
 from autoform.utils import lru_cache
 
@@ -86,58 +74,60 @@ dce_rules.def_rule(splitpoint_p, default_dce)
 # ==================================================================================================
 
 
-class SplitInterpreter(Interpreter):
-    def __init__(self, key: tp.Hashable):
-        self.lhs_ireqns: list[IREqn] = []
-        self.rhs_ireqns: list[IREqn] = []
-        self.key = key
-        self.split: bool = False
+def maybe_split(ir: IR, key: tp.Hashable) -> tuple[IR, IR] | None:
+    for idx, eqn in enumerate(ir.ireqns):
+        if eqn.prim == splitpoint_p and eqn.params.get("key") == key:
+            # NOTE(asem): splitpoint at top level. split ir.ireqns at idx.
+            # def program(x):
+            #     y = splitpoint(concat(x, "!"), key="mid")
+            #     return concat(y, "?")
+            # split(ir, key="mid")
+            #   lhs: [concat, splitpoint], rhs: [concat]
+            lhs_eqns = list(ir.ireqns[: idx + 1])
+            rhs_eqns = list(ir.ireqns[idx + 1 :])
+            lhs = IR(lhs_eqns, ir.in_irtree, lhs_eqns[-1].out_irtree)
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
-        def to_in_iratom(x) -> IRAtom:
-            return x if is_iratom(x) else IRLit(x)
+            # NOTE(asem): if rhs is empty, splitpoint at the end of ir (use lhs.out_irtree)
+            rhs_in_irtree = pack_user_input(lhs.out_irtree)
+            rhs_out_irtree = ([lhs] + rhs_eqns)[-1].out_irtree
+            rhs = IR(rhs_eqns, rhs_in_irtree, rhs_out_irtree)
+            return lhs, rhs
 
-        in_irtree = treelib.map(to_in_iratom, in_tree)
+        # NOTE(asem): check if splitpoint is inside a nested IR (HOP).
+        for irkey in filter(lambda k: isinstance(eqn.params[k], IR), eqn.params):
+            result = maybe_split(eqn.params[irkey], key)
 
-        # Recursively process nested IRs in params (HOPs like pushforward_call)
-        for value in params.values():
-            if isinstance(value, IR):
-                for eqn in value.ireqns:
-                    self.interpret(eqn.prim, eqn.in_irtree, **eqn.params)
+            if result is None:
+                continue
 
-        def to_in_evaltype(x):
-            return Var() if is_irvar(x) else x.value
+            inner_lhs, inner_rhs = result
+            # NOTE(asem): recursively split nested_ir, wrap each half in HOP.
+            # def program(x):
+            #     y = splitpoint(concat(x, "!"), key="mid")
+            #     return concat(y, "?")
+            # split(pushforward(ir), key="mid")
+            #   lhs: [pushforward_call(nested_lhs)]
+            #   rhs: [pushforward_call(nested_rhs)]
+            lhs_hop = eqn.using(**{irkey: inner_lhs})
+            rhs_hop = eqn.using(**{irkey: inner_rhs})
 
-        in_evaltree = treelib.map(to_in_evaltype, in_irtree)
-        out_evaltree = eval_rules[prim](in_evaltree, **params)
+            before: list[IREqn] = list(ir.ireqns[:idx])
+            after: list[IREqn] = list(ir.ireqns[idx + 1 :])
 
-        def to_out_iratom(x) -> IRAtom:
-            return IRVar.fresh() if is_var(x) else IRLit(x)
+            lhs = IR(before + [lhs_hop], ir.in_irtree, lhs_hop.out_irtree)
 
-        out_irtree = treelib.map(to_out_iratom, out_evaltree)
+            # NOTE(asem): if rhs is empty, splitpoint at the end of ir.
+            rhs_in_irtree = pack_user_input(lhs.out_irtree)
+            rhs_out_irtree = ([rhs_hop] + after)[-1].out_irtree if after else lhs.out_irtree
+            rhs = IR([rhs_hop] + after, rhs_in_irtree, rhs_out_irtree)
+            return lhs, rhs
 
-        ireqns = self.rhs_ireqns if self.split else self.lhs_ireqns
-        ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
-
-        if prim == splitpoint_p and params.get("key") == self.key:
-            assert self.split is False, "Cannot split multiple times"
-            self.split = True
-
-        return out_irtree
+    return None
 
 
 @ft.partial(lru_cache, maxsize=256)
 def split[**P, R](ir: IR, *, key: tp.Hashable) -> tuple[IR, IR]:
     """Split an IR into left and right IRs at the splitpoint with given key.
-
-    Args:
-        ir: The intermediate representation to split.
-        key: The key of the splitpoint to split at.
-
-    Returns:
-        A tuple (lhs_ir, rhs_ir) of two IR objects. The lhs_ir contains all
-        equations up to and including the splitpoint. The rhs_ir contains
-        all equations after the splitpoint.
 
     Example:
         >>> import autoform as af
@@ -151,22 +141,7 @@ def split[**P, R](ir: IR, *, key: tp.Hashable) -> tuple[IR, IR]:
         >>> af.call(rhs)("hello!")
         'hello!?'
     """
-
     assert isinstance(ir, IR), f"`split` expected an IR, got {type(ir)}"
-
-    with using_interpreter(SplitInterpreter(key=key)) as tracer:
-        call(ir)(ir.in_irtree)
-
-    assert tracer.split is True, f"`split` could not find splitpoint with {key=}"
-
-    lhs_ireqns = tracer.lhs_ireqns
-    lhs_in_irtree = ir.in_irtree
-    lhs_out_irtree = lhs_ireqns[-1].out_irtree
-    lhs = IR(ireqns=lhs_ireqns, in_irtree=lhs_in_irtree, out_irtree=lhs_out_irtree)
-
-    rhs_ireqns = tracer.rhs_ireqns
-    rhs_in_irtree = pack_user_input(lhs_ireqns[-1].out_irtree)
-    rhs_out_irtree = tracer.rhs_ireqns[-1].out_irtree if rhs_ireqns else lhs_out_irtree
-    rhs = IR(ireqns=rhs_ireqns, in_irtree=rhs_in_irtree, out_irtree=rhs_out_irtree)
-
-    return lhs, rhs
+    result = maybe_split(ir, key)
+    assert result is not None, f"`split` could not find splitpoint with {key=}"
+    return result

@@ -312,7 +312,6 @@ class TestInjectAndDCE:
         ir = af.build_ir(program)("test")
         batched_ir = af.batch(ir)
 
-        # With default rules, inject uses "cache" directly
         result = af.inject(batched_ir, collection="cache", values={"result": [["A", "B"]]})([
             "x",
             "y",
@@ -412,8 +411,6 @@ class TestSplit:
 
 
 class TestSplitpointPreservedThroughTransforms:
-    """Verify splitpoint_p is preserved through all transforms."""
-
     def test_splitpoint_preserved_after_pushforward(self):
         def program(x):
             y = af.splitpoint(af.concat(x, "!"), key="mid")
@@ -422,7 +419,6 @@ class TestSplitpointPreservedThroughTransforms:
         ir = af.build_ir(program)("x")
         pf_ir = af.pushforward(ir)
 
-        # Pushforward wraps in pushforward_call, splitpoint is in nested IR
         assert len(pf_ir.ireqns) == 1
         assert pf_ir.ireqns[0].prim.name == "pushforward_call"
         nested_ir = pf_ir.ireqns[0].params["ir"]
@@ -438,7 +434,6 @@ class TestSplitpointPreservedThroughTransforms:
         ir = af.build_ir(program)("x")
         pb_ir = af.pullback(ir)
 
-        # Pullback wraps in pullback_call, splitpoint is in nested IR
         assert len(pb_ir.ireqns) == 1
         assert pb_ir.ireqns[0].prim.name == "pullback_call"
         nested_ir = pb_ir.ireqns[0].params["ir"]
@@ -460,3 +455,124 @@ class TestSplitpointPreservedThroughTransforms:
         splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
         assert splitpoints[0].params["key"] == "mid"
+
+
+class TestSplitOnTransformedIR:
+    """Split on transformed IRs should recursively split nested IRs."""
+
+    def test_split_on_pushforward_ir(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pf_ir = af.pushforward(ir)
+
+        lhs, rhs = af.split(pf_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "pushforward_call"
+        nested_lhs = lhs.ireqns[0].params["ir"]
+
+        assert nested_lhs.ireqns[-1].prim.name == "splitpoint"
+
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "pushforward_call"
+        nested_rhs = rhs.ireqns[0].params["ir"]
+
+        assert len(nested_rhs.ireqns) == 1
+        assert nested_rhs.ireqns[0].prim.name == "concat"
+
+    def test_split_on_pullback_ir(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pb_ir = af.pullback(ir)
+
+        lhs, rhs = af.split(pb_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "pullback_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "pullback_call"
+
+    def test_split_on_batch_ir(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        batch_ir = af.batch(ir, in_axes=True)
+
+        lhs, rhs = af.split(batch_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "batch_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "batch_call"
+
+    def test_split_on_transformed_ir_execution(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+
+        lhs, rhs = af.split(ir, key="mid")
+        assert af.call(lhs)("hello") == "hello!"
+        assert af.call(rhs)("hello!") == "hello!?"
+
+    def test_split_on_double_pushforward(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        pf_pf_ir = af.pushforward(af.pushforward(ir))
+
+        lhs, rhs = af.split(pf_pf_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "pushforward_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "pushforward_call"
+
+        inner_lhs = lhs.ireqns[0].params["ir"]
+        inner_rhs = rhs.ireqns[0].params["ir"]
+        assert inner_lhs.ireqns[0].prim.name == "pushforward_call"
+        assert inner_rhs.ireqns[0].prim.name == "pushforward_call"
+
+    def test_split_on_batch_pushforward(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        b_pf_ir = af.batch(af.pushforward(ir), in_axes=True)
+
+        lhs, rhs = af.split(b_pf_ir, key="mid")
+
+        assert len(lhs.ireqns) == 1
+        assert lhs.ireqns[0].prim.name == "batch_call"
+        assert len(rhs.ireqns) == 1
+        assert rhs.ireqns[0].prim.name == "batch_call"
+
+        inner_lhs = lhs.ireqns[0].params["ir"]
+        inner_rhs = rhs.ireqns[0].params["ir"]
+        assert inner_lhs.ireqns[0].prim.name == "pushforward_call"
+        assert inner_rhs.ireqns[0].prim.name == "pushforward_call"
+
+    def test_split_on_triple_nested(self):
+        def program(x):
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
+            return af.concat(y, "?")
+
+        ir = af.build_ir(program)("x")
+        triple = af.pushforward(af.batch(af.pushforward(ir), in_axes=True))
+
+        lhs, rhs = af.split(triple, key="mid")
+
+        assert lhs.ireqns[0].prim.name == "pushforward_call"
+        assert rhs.ireqns[0].prim.name == "pushforward_call"
