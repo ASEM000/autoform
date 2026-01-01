@@ -330,11 +330,11 @@ class TestInjectAndDCE:
 class TestSplit:
     def test_split_mark_at_end(self):
         def program(x):
-            y = af.splitpoint(af.format("{}", x), name="s")
+            y = af.splitpoint(af.format("{}", x), key="s")
             return y
 
         ir = af.build_ir(program)("...")
-        lhs, rhs = af.split(ir, name="s")
+        lhs, rhs = af.split(ir, key="s")
 
         assert len(lhs.ireqns) == 2
         assert lhs.ireqns[0].prim.name == "format"
@@ -350,12 +350,12 @@ class TestSplit:
     def test_split_mark_in_middle(self):
         def program(x):
             y = af.format("Hello {}", x)
-            z = af.splitpoint(y, name="mid")
+            z = af.splitpoint(y, key="mid")
             w = af.format("Result: {}", z)
             return w
 
         ir = af.build_ir(program)("...")
-        lhs, rhs = af.split(ir, name="mid")
+        lhs, rhs = af.split(ir, key="mid")
 
         assert len(lhs.ireqns) == 2
 
@@ -375,13 +375,13 @@ class TestSplit:
     def test_split_composition_equals_full(self):
         def program(x):
             a = af.format("Step1: {}", x)
-            b = af.splitpoint(a, name="step1")
+            b = af.splitpoint(a, key="step1")
             c = af.format("Step2: {}", b)
             d = af.concat(c, "!")
             return d
 
         ir = af.build_ir(program)("...")
-        lhs, rhs = af.split(ir, name="step1")
+        lhs, rhs = af.split(ir, key="step1")
         ir_full = af.build_ir(program)("x")
 
         for inp in ["a", "hello", "test123"]:
@@ -396,23 +396,23 @@ class TestSplit:
 
         ir = af.build_ir(program)("...")
         with pytest.raises(AssertionError, match="could not find"):
-            af.split(ir, name="nonexistent")
+            af.split(ir, key="nonexistent")
 
     def test_split_with_multiple_marks(self):
         def program(x):
-            a = af.splitpoint(x, name="first")
+            a = af.splitpoint(x, key="first")
             b = af.format("{}", a)
-            c = af.splitpoint(b, name="second")
+            c = af.splitpoint(b, key="second")
             d = af.concat(c, "!")
             return d
 
         ir = af.build_ir(program)("...")
-        lhs1, rhs1 = af.split(ir, name="first")
+        lhs1, rhs1 = af.split(ir, key="first")
         assert len(lhs1.ireqns) == 1
         assert len(rhs1.ireqns) == 3
 
         ir2 = af.build_ir(program)("...")
-        lhs2, rhs2 = af.split(ir2, name="second")
+        lhs2, rhs2 = af.split(ir2, key="second")
         assert len(lhs2.ireqns) == 3
         assert len(rhs2.ireqns) == 1
 
@@ -422,7 +422,7 @@ class TestSplitpointPreservedThroughTransforms:
 
     def test_splitpoint_preserved_after_pushforward(self):
         def program(x):
-            y = af.splitpoint(af.concat(x, "!"), name="mid")
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
             return af.concat(y, "?")
 
         ir = af.build_ir(program)("x")
@@ -438,7 +438,7 @@ class TestSplitpointPreservedThroughTransforms:
 
     def test_splitpoint_preserved_after_pullback(self):
         def program(x):
-            y = af.splitpoint(af.concat(x, "!"), name="mid")
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
             return af.concat(y, "?")
 
         ir = af.build_ir(program)("x")
@@ -454,7 +454,7 @@ class TestSplitpointPreservedThroughTransforms:
 
     def test_splitpoint_preserved_after_batch(self):
         def program(x):
-            y = af.splitpoint(af.concat(x, "!"), name="mid")
+            y = af.splitpoint(af.concat(x, "!"), key="mid")
             return af.concat(y, "?")
 
         ir = af.build_ir(program)("x")
