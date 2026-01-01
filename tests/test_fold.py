@@ -120,3 +120,50 @@ class TestFoldIRExecution:
 
         result = af.call(folded)("anything")
         assert result == "hello world"
+
+
+class TestFoldOnTransformedIR:
+    def test_fold_on_pushforward(self):
+        def program(x):
+            constant = af.concat("hello", " world")
+            return af.concat(x, constant)
+
+        ir = af.build_ir(program)("input")
+        pf_ir = af.pushforward(ir)
+
+        nested_ir = pf_ir.ireqns[0].params["ir"]
+        assert len(nested_ir.ireqns) == 2
+
+        folded = af.fold(pf_ir)
+        folded_nested = folded.ireqns[0].params["ir"]
+        assert len(folded_nested.ireqns) == 1
+
+    def test_fold_on_batch(self):
+        def program(x):
+            constant = af.format("{}, {}", "a", "b")
+            return af.concat(x, constant)
+
+        ir = af.build_ir(program)("input")
+        batch_ir = af.batch(ir, in_axes=True)
+
+        nested_ir = batch_ir.ireqns[0].params["ir"]
+        assert len(nested_ir.ireqns) == 2
+
+        folded = af.fold(batch_ir)
+        folded_nested = folded.ireqns[0].params["ir"]
+        assert len(folded_nested.ireqns) == 1
+
+    def test_fold_on_double_nested(self):
+        def program(x):
+            constant = af.concat("a", "b")
+            return af.concat(x, constant)
+
+        ir = af.build_ir(program)("input")
+        double = af.pushforward(af.pushforward(ir))
+
+        folded = af.fold(double)
+
+        inner1 = folded.ireqns[0].params["ir"]
+        inner2 = inner1.ireqns[0].params["ir"]
+
+        assert len(inner2.ireqns) == 1

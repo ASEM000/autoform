@@ -37,6 +37,7 @@ def dce(ir: IR) -> IR:
     active_ireqns: deque[IREqn] = deque()
 
     for ireqn in reversed(ir.ireqns):
+        # NOTE(asem): dce_rule of hop handles nested IRs
         can_axe, cur_active, new_eqn = dce_rules[ireqn.prim](ireqn, active_irvars)
 
         if not can_axe:
@@ -91,11 +92,20 @@ def fold(ir: IR) -> IR:
     treelib.map(write, ir.in_irtree, ir.in_irtree)
 
     for ireqn in ir.ireqns:
+        # NOTE(asem): recursively fold nested IRs in HOP params
+        params = {k: fold(v) if isinstance(v, IR) else v for k, v in ireqn.params.items()}
+        ireqn = IREqn(ireqn.prim, ireqn.in_irtree, ireqn.out_irtree, params)
+
         in_irtree = treelib.map(read, ireqn.in_irtree)
+
         if is_const_irtree(in_irtree):
-            out_irtree = run_const_eqn(ireqn, in_irtree)
-            treelib.map(write, ireqn.out_irtree, out_irtree)
+            # NOTE(asem): constant inputs denotes all inputs are literals,
+            # equation can be evaluated without at compile time.
+            const_out_irtree = run_const_eqn(ireqn, in_irtree)
+            treelib.map(write, ireqn.out_irtree, const_out_irtree)
         else:
+            # NOTE(asem): non-constant inputs denotes at least one input is a variable,
+            # equation must be evaluated at runtime.
             treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
             eqns.append(IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.params))
 
