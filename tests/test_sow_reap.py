@@ -333,7 +333,8 @@ class TestSplit:
             y = af.splitpoint(af.format("{}", x), name="s")
             return y
 
-        lhs, rhs = af.split(program, name="s")("...")
+        ir = af.build_ir(program)("...")
+        lhs, rhs = af.split(ir, name="s")
 
         assert len(lhs.ireqns) == 2
         assert lhs.ireqns[0].prim.name == "format"
@@ -353,7 +354,8 @@ class TestSplit:
             w = af.format("Result: {}", z)
             return w
 
-        lhs, rhs = af.split(program, name="mid")("...")
+        ir = af.build_ir(program)("...")
+        lhs, rhs = af.split(ir, name="mid")
 
         assert len(lhs.ireqns) == 2
 
@@ -378,7 +380,8 @@ class TestSplit:
             d = af.concat(c, "!")
             return d
 
-        lhs, rhs = af.split(program, name="step1")("...")
+        ir = af.build_ir(program)("...")
+        lhs, rhs = af.split(ir, name="step1")
         ir_full = af.build_ir(program)("x")
 
         for inp in ["a", "hello", "test123"]:
@@ -391,8 +394,9 @@ class TestSplit:
         def program(x):
             return af.format("{}", x)
 
+        ir = af.build_ir(program)("...")
         with pytest.raises(AssertionError, match="could not find"):
-            af.split(program, name="nonexistent")("...")
+            af.split(ir, name="nonexistent")
 
     def test_split_with_multiple_marks(self):
         def program(x):
@@ -402,11 +406,13 @@ class TestSplit:
             d = af.concat(c, "!")
             return d
 
-        lhs1, rhs1 = af.split(program, name="first")("...")
+        ir = af.build_ir(program)("...")
+        lhs1, rhs1 = af.split(ir, name="first")
         assert len(lhs1.ireqns) == 1
         assert len(rhs1.ireqns) == 3
 
-        lhs2, rhs2 = af.split(program, name="second")("...")
+        ir2 = af.build_ir(program)("...")
+        lhs2, rhs2 = af.split(ir2, name="second")
         assert len(lhs2.ireqns) == 3
         assert len(rhs2.ireqns) == 1
 

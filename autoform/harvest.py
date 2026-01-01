@@ -375,60 +375,44 @@ class SplitInterpreter(Interpreter):
         return out_irtree
 
 
-def split[**P, R](func: Callable[P, R], name: tp.Hashable) -> Callable[P, tuple[IR, IR]]:
-    """Split a function into left and right IRs at marked name.
+def split[**P, R](ir: IR, *, name: tp.Hashable) -> tuple[IR, IR]:
+    """Split an IR into left and right IRs at the splitpoint with given name.
 
     Args:
-        func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
-        name: A unique hashable value.
+        ir: The intermediate representation to split.
+        name: The name of the splitpoint to split at.
 
     Returns:
-        A tracer callable that, when invoked with ``(*args, **kwargs)`` corresponding
-        to ``func``'s parameters, returns a tuple ``(lhs_ir, rhs_ir)`` of two
-        :class:`IR` objects (left-hand side and right-hand side).
+        A tuple (lhs_ir, rhs_ir) of two IR objects. The lhs_ir contains all
+        equations up to and including the splitpoint. The rhs_ir contains
+        all equations after the splitpoint.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     y = af.splitpoint(af.concat(x, "!"), name="mid")
+        ...     return af.concat(y, "?")
+        >>> ir = af.build_ir(program)("x")
+        >>> lhs, rhs = af.split(ir, name="mid")
+        >>> af.call(lhs)("hello")
+        'hello!'
+        >>> af.call(rhs)("hello!")
+        'hello!?'
     """
-    # NOTE(asem): calling split inside a traced function will inline the splitted IRs
-    # >>> def outer(x):
-    # ...     lhs, rhs = split(inner, name="mid")("...")
-    # ...     mid = af.call(lhs)(x)    # lhs equations inline into outer
-    # ...     return af.call(rhs)(mid) # rhs equations inline into outer
-    # >>> ir = af.build_ir(outer)("...")
-    # result is a single flat IR with all equations from lhs and rhs
 
-    def assert_usertype(x):
-        assert not is_iratom(x), "Inputs to `build_ir` must be normal python types"
+    with using_interpreter(SplitInterpreter(name=name)) as tracer:
+        call(ir)(ir.in_irtree)
 
-    def to_in_iratom(x):
-        # NOTE(asem): user types are converted to IRVar/IRLit
-        # to prepare for tracing.
-        return IRVar.fresh() if is_user_type(x) else IRLit(x)
+    assert tracer.split is True, f"`split` could not find splitpoint with {name=}"
 
-    def to_out_iratom(x):
-        return x if is_iratom(x) else IRLit(x)
+    lhs_ireqns = tracer.lhs_ireqns
+    lhs_in_irtree = ir.in_irtree
+    lhs_out_irtree = lhs_ireqns[-1].out_irtree
+    lhs = IR(ireqns=lhs_ireqns, in_irtree=lhs_in_irtree, out_irtree=lhs_out_irtree)
 
-    @ft.wraps(func)
-    def trace(*args: P.args, **kwargs: P.kwargs) -> tuple[IR, IR]:
-        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
-        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
-        in_irargs, in_irkwargs = in_irtree
+    rhs_ireqns = tracer.rhs_ireqns
+    rhs_in_irtree = pack_user_input(lhs_ireqns[-1].out_irtree)
+    rhs_out_irtree = tracer.rhs_ireqns[-1].out_irtree if rhs_ireqns else lhs_out_irtree
+    rhs = IR(ireqns=rhs_ireqns, in_irtree=rhs_in_irtree, out_irtree=rhs_out_irtree)
 
-        with using_interpreter(SplitInterpreter(name=name)) as tracer:
-            out_irtree = func(*in_irargs, **in_irkwargs)
-
-        assert tracer.split is True, f"`split` could not find mark matches {name=}"
-
-        lhs_ireqns = tracer.lhs_ireqns
-        lhs_in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-        lhs_out_irtree = lhs_ireqns[-1].out_irtree
-        lhs = IR(ireqns=lhs_ireqns, in_irtree=lhs_in_irtree, out_irtree=lhs_out_irtree)
-
-        # NOTE(asem): rhs takes mark output as input, wrapped in call-compatible structure
-        # The mark output becomes the new "input" for rhs
-        rhs_ireqns = tracer.rhs_ireqns
-        rhs_in_irtree = pack_user_input(lhs_ireqns[-1].out_irtree)
-        rhs_out_irtree = treelib.map(to_out_iratom, out_irtree)
-        rhs = IR(ireqns=rhs_ireqns, in_irtree=rhs_in_irtree, out_irtree=rhs_out_irtree)
-
-        return lhs, rhs
-
-    return trace
+    return lhs, rhs
