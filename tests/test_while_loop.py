@@ -175,7 +175,7 @@ class TestWhileLoopWithMark:
 
         def body(x):
             new_x = af.concat(x, "x")
-            return af.mark(new_x, collection="trace", name="state")
+            return af.checkpoint(new_x, key="state", collection="trace")
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("x")
@@ -195,7 +195,7 @@ class TestWhileLoopWithMark:
 
         def body(x):
             new_x = af.concat(x, "x")
-            return af.mark(new_x, collection="trace", name="state")
+            return af.checkpoint(new_x, key="state", collection="trace")
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("x")
@@ -276,7 +276,7 @@ class TestWhileLoopWithLLM:
                 {"role": "user", "content": text},
             ]
             refined = af.lm_call(msgs, model=TEST_MODEL)
-            return af.mark(refined, collection="refinements", name="step")
+            return af.checkpoint(refined, key="step", collection="refinements")
 
         cond_ir = build_ir(cond)("x")
         body_ir = build_ir(body)("text")
@@ -390,13 +390,13 @@ class TestWhileLoopWithLLM:
                 [{"role": "user", "content": af.format("Summarize: {}", text)}],
                 model=TEST_MODEL,
             )
-            step1 = af.mark(step1, collection="steps", name="summary")
+            step1 = af.checkpoint(step1, key="summary", collection="steps")
 
             step2 = af.lm_call(
                 [{"role": "user", "content": af.format("Translate to Spanish: {}", step1)}],
                 model=TEST_MODEL,
             )
-            step2 = af.mark(step2, collection="steps", name="translation")
+            step2 = af.checkpoint(step2, key="translation", collection="steps")
 
             return step2
 
@@ -439,7 +439,7 @@ class TestWhileLoopWithLLM:
                 ],
                 model=TEST_MODEL,
             )
-            return af.mark(refined, collection="trace", name="draft")
+            return af.checkpoint(refined, key="draft", collection="trace")
 
         cond_ir = build_ir(cond)("...")
         body_ir = build_ir(body)("...")

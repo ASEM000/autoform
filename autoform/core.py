@@ -38,6 +38,13 @@ __all__ = [
     "iter_rules",
     "async_rules",
     "dce_rules",
+    # default rules
+    "default_impl",
+    "default_eval",
+    "default_push",
+    "default_pull_fwd",
+    "default_pull_bwd",
+    "default_batch",
     "default_dce",
     # ir structures
     "IREqn",

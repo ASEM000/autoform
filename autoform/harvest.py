@@ -20,7 +20,13 @@ from autoform.core import (
     batch_rules,
     call,
     dce_rules,
+    default_batch,
     default_dce,
+    default_eval,
+    default_impl,
+    default_pull_bwd,
+    default_pull_fwd,
+    default_push,
     eval_rules,
     get_interpreter,
     impl_rules,
@@ -37,22 +43,22 @@ from autoform.core import (
 from autoform.utils import Tree, treelib
 
 # ==================================================================================================
-# MARK
+# CHECKPOINT
 # ==================================================================================================
 
-mark_p = Primitive("mark", tag="core")
+checkpoint_p = Primitive("checkpoint", tag="core")
 
 
-def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
-    """Tag a value with a collection and name for later collection.
+def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
+    """Tag a value with a collection and key for later collection.
 
-    `mark` marks a value with a `collection` and `name` (unique identifier)
+    `checkpoint` marks a value with a `collection` and `key` (unique identifier)
     that can be collected by `collect`. It acts as an identity operation in
     normal execution.
 
     Args:
         in_tree: the value to mark (returned unchanged).
-        name: unique identifier within the collection namespace.
+        key: unique identifier within the collection namespace.
         collection: optional collection for filtering (e.g., "debug", "cache", "metrics").
 
     Returns:
@@ -61,9 +67,9 @@ def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     prompt = af.mark(af.format("Q: {}", x), collection="debug", name="prompt")
+        ...     prompt = af.checkpoint(af.format("Q: {}", x), key="prompt", collection="debug")
         ...     response = af.concat(prompt, " A: 42")
-        ...     return af.mark(response, collection="debug", name="response")
+        ...     return af.checkpoint(response, key="response", collection="debug")
         >>> ir = af.build_ir(program)("test")
         >>> result, collected = af.collect(ir, collection="debug")("What is 6*7?")
         >>> result
@@ -74,67 +80,110 @@ def mark(in_tree: Tree, /, *, name: tp.Hashable, collection: tp.Hashable | None 
         ['Q: What is 6*7? A: 42']
     """
     assert hash(collection) is not None, "Collection must be hashable"
-    assert hash(name) is not None, "Name must be hashable"
-    return mark_p.bind(in_tree, collection=collection, name=name)
+    assert hash(key) is not None, "Key must be hashable"
+    return checkpoint_p.bind(in_tree, collection=collection, key=key)
 
 
-@ft.partial(impl_rules.def_rule, mark_p)
-def impl_mark(in_tree: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
-    del collection, name
+@ft.partial(impl_rules.def_rule, checkpoint_p)
+def impl_checkpoint(
+    in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
+) -> Tree:
+    del collection, key
     return in_tree
 
 
-@ft.partial(eval_rules.def_rule, mark_p)
-def eval_mark(
-    in_tree: Tree[EvalType], *, name: tp.Hashable, collection: tp.Hashable | None = None
+@ft.partial(eval_rules.def_rule, checkpoint_p)
+def eval_checkpoint(
+    in_tree: Tree[EvalType], *, key: tp.Hashable, collection: tp.Hashable | None = None
 ) -> Tree[EvalType]:
-    del collection, name
+    del collection, key
     return in_tree
 
 
-@ft.partial(push_rules.def_rule, mark_p)
-def pushforward_mark(
-    primal: Tree, tangent: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None
+@ft.partial(push_rules.def_rule, checkpoint_p)
+def pushforward_checkpoint(
+    primal: Tree, tangent: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
 ) -> tuple[Tree, Tree]:
-    p = mark(primal, collection=(collection, "primal"), name=name)
-    t = mark(tangent, collection=(collection, "tangent"), name=name)
+    p = checkpoint(primal, key=key, collection=(collection, "primal"))
+    t = checkpoint(tangent, key=key, collection=(collection, "tangent"))
     return p, t
 
 
-@ft.partial(pull_fwd_rules.def_rule, mark_p)
-def pullback_fwd_mark(
-    in_tree: Tree, *, name: tp.Hashable, collection: tp.Hashable | None = None
+@ft.partial(pull_fwd_rules.def_rule, checkpoint_p)
+def pullback_fwd_checkpoint(
+    in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
 ) -> tuple[Tree, Tree]:
-    out = mark(in_tree, collection=(collection, "primal"), name=name)
+    out = checkpoint(in_tree, key=key, collection=(collection, "primal"))
     return out, out
 
 
-@ft.partial(pull_bwd_rules.def_rule, mark_p)
-def pullback_bwd_mark(
+@ft.partial(pull_bwd_rules.def_rule, checkpoint_p)
+def pullback_bwd_checkpoint(
     in_residuals: Tree,
     out_cotangent: Tree,
     *,
-    name: tp.Hashable,
+    key: tp.Hashable,
     collection: tp.Hashable | None = None,
 ) -> Tree:
     del in_residuals
-    return mark(out_cotangent, collection=(collection, "cotangent"), name=name)
+    return checkpoint(out_cotangent, key=key, collection=(collection, "cotangent"))
 
 
-@ft.partial(batch_rules.def_rule, mark_p)
-def batch_mark(
+@ft.partial(batch_rules.def_rule, checkpoint_p)
+def batch_checkpoint(
     batch_size: int,
     in_batched: Tree,
     x: Tree,
     *,
-    name: tp.Hashable,
+    key: tp.Hashable,
     collection: tp.Hashable | None = None,
 ) -> tuple[Tree, Tree]:
     del batch_size
-    return mark(x, collection=(collection, "batch"), name=name), in_batched
+    return checkpoint(x, key=key, collection=(collection, "batch")), in_batched
 
 
-dce_rules.def_rule(mark_p, default_dce)
+dce_rules.def_rule(checkpoint_p, default_dce)
+
+
+# ==================================================================================================
+# SPLITPOINT
+# ==================================================================================================
+
+splitpoint_p = Primitive("splitpoint", tag="core")
+
+
+def splitpoint(in_tree: Tree, /, *, name: tp.Hashable) -> Tree:
+    """Mark a split point for IR splitting.
+
+    Used with `split()` to divide an IR into left and right portions.
+
+    Args:
+        in_tree: the value to mark as split point (returned unchanged).
+        name: unique identifier for the split point.
+
+    Returns:
+        the input value unchanged.
+
+    Example:
+        >>> import autoform as af
+        >>> def pipeline(x):
+        ...     step1 = af.concat(x, "!")
+        ...     step1 = af.splitpoint(step1, name="mid")
+        ...     step2 = af.concat(step1, "?")
+        ...     return step2
+        >>> lhs, rhs = af.split(pipeline, name="mid")("hello")
+    """
+    assert hash(name) is not None, "Name must be hashable"
+    return splitpoint_p.bind(in_tree, name=name)
+
+
+impl_rules.def_rule(splitpoint_p, default_impl)
+eval_rules.def_rule(splitpoint_p, default_eval)
+push_rules.def_rule(splitpoint_p, default_push)
+pull_fwd_rules.def_rule(splitpoint_p, default_pull_fwd)
+pull_bwd_rules.def_rule(splitpoint_p, default_pull_bwd)
+batch_rules.def_rule(splitpoint_p, default_batch)
+dce_rules.def_rule(splitpoint_p, default_dce)
 
 
 # ==================================================================================================
@@ -155,9 +204,9 @@ class CollectInterpreter(Interpreter):
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         # NOTE(asem): No context switch here. We call parent.interpret() directly
         # Example: lets say we have a push rule that marks stuff inside it
-        # >>> def pushforward_mark(primal, tangent, ...):
-        # ...     p = mark(primal, ...)    # <- calls mark_p.bind()
-        # ...     t = mark(tangent, ...)   # <- calls mark_p.bind()
+        # >>> def pushforward_checkpoint(primal, tangent, ...):
+        # ...     p = checkpoint(primal, ...)    # <- calls checkpoint_p.bind()
+        # ...     t = checkpoint(tangent, ...)   # <- calls checkpoint_p.bind()
         # ...     return p, t
         # here we have an interplay between 3 interpreters (collect, eval, and push)
         # within the rule we have parent=eval (push_impl -> induced PushInterp -> called this rule)
@@ -171,8 +220,8 @@ class CollectInterpreter(Interpreter):
         # -> CollectInterpreter.interpret() and we can observe those nested calls.
         # this observation applies to other observer interpreters as well.
         result = self.parent.interpret(prim, in_tree, **params)
-        if prim == mark_p and params.get("collection") == self.collection:
-            self.collected[params["name"]].append(result)
+        if prim == checkpoint_p and params.get("collection") == self.collection:
+            self.collected[params["key"]].append(result)
         return result
 
 
@@ -223,13 +272,13 @@ class InjectInterpreter(Interpreter):
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
         if (
-            prim == mark_p
+            prim == checkpoint_p
             and params.get("collection") == self.collection
-            and (name := params.get("name")) in self.values
+            and (key := params.get("key")) in self.values
             # NOTE(asem): allow empty values to allow round-tripping
-            and self.values[name]
+            and self.values[key]
         ):
-            return self.values[name].pop()
+            return self.values[key].pop()
         # NOTE(asem): check the note in CollectInterpreter.interpret for explanation
         # on why no context switch here.
         return self.parent.interpret(prim, in_tree, **params)
@@ -318,8 +367,8 @@ class SplitInterpreter(Interpreter):
         ireqns = self.rhs_ireqns if self.split else self.lhs_ireqns
         ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
 
-        if prim == mark_p and params.get("name") == self.name:
-            # NOTE(asem): mark belongs to the LHS
+        if prim == splitpoint_p and params.get("name") == self.name:
+            # NOTE(asem): splitpoint belongs to the LHS
             assert self.split is False, "Cannot split multiple times"
             self.split = True
 
