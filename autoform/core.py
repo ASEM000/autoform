@@ -130,7 +130,7 @@ def iratom_to_evaltype(x: IRAtom) -> EvalType:
 
 
 class IRLit[T](IRAtom):
-    def __init__(self, value: T, /, **meta):
+    def __init__(self, value: T):
         assert not is_iratom(value)
         assert hash(value) is not None
         self.value = value
@@ -177,6 +177,17 @@ class Primitive:
 
 
 class InterpreterRuleMapping[T: Callable]:
+    # NOTE(asem): rule mapping is a mapping from primitives to rules
+    # that define how to interpret the primitive in the IR. rule definition
+    # are separated from primitive (i.e. no prim.def_impl, def_...) as rules themselves
+    # are open for user-extension.
+    rules: tp.ClassVar[dict[InterpreterRuleMapping, dict[Primitive, T]]] = {}
+
+    def __new__(cls, /, *args, **kwargs):
+        self = super().__new__(cls, *args, **kwargs)
+        cls.rules[self] = {}
+        return self
+
     def __init__(self):
         self.map: dict[Primitive, T] = {}
         self.lock = RLock()
