@@ -130,6 +130,9 @@ def iratom_to_evaltype(x: IRAtom) -> EvalType:
 
 
 class IRLit[T](IRAtom):
+    # NOTE(asem): IRLit wraps leaf-level values in pytrees. so non-hashable mutable structures
+    # like lists/dicts are not seen at this level.
+    # for more discussion see https://docs.jax.dev/en/latest/internals/constants.html
     def __init__(self, value: T):
         assert not is_iratom(value)
         assert hash(value) is not None
@@ -291,6 +294,7 @@ dce_rules = InterpreterRuleMapping[DCERule]()
 
 
 class IREqn:
+    # TODO(asem): maybe hash by some other than identity
     __slots__ = ("prim", "in_irtree", "out_irtree", "params")
     __match_args__ = ("prim", "in_irtree", "out_irtree", "params")
 
