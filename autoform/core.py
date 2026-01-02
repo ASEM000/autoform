@@ -655,3 +655,39 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
         return treelib.map(read, ir.out_irtree)
 
     return execute
+
+
+# ==================================================================================================
+# EFFECTS
+# ==================================================================================================
+
+
+class Effect:
+    __slots__ = "key"
+
+    def __init__(self, *, key: tp.Hashable):
+        self.key = key
+
+
+class EffectHandler(Interpreter, ABC):
+    handles: tp.ClassVar[tuple[type[Effect], ...]] = ()
+
+    def __init__(self):
+        self.parent = get_interpreter()
+
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        if prim.tag == "effect":
+            if (effect := params.get("effect")) is not None and isinstance(effect, self.handles):
+                result = self.handle(effect, in_tree)
+                return self.parent.interpret(prim, result, **params)
+        return self.parent.interpret(prim, in_tree, **params)
+
+    @abstractmethod
+    def handle(self, effect: Effect, value: tp.Any) -> tp.Any: ...
+
+
+@contextmanager
+def using_handler(handler: EffectHandler) -> tp.Generator[EffectHandler, None, None]:
+    assert isinstance(handler, EffectHandler), "Handler must be an instance of EffectHandler"
+    with using_interpreter(handler):
+        yield handler

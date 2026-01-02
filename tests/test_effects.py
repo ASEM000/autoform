@@ -1,5 +1,5 @@
 import autoform as af
-from autoform.effects import using_handler
+from autoform.core import using_handler
 from autoform.harvest import CollectHandler, InjectHandler, checkpoint
 
 
