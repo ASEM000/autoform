@@ -180,17 +180,6 @@ class Primitive:
 
 
 class InterpreterRuleMapping[T: Callable]:
-    # NOTE(asem): rule mapping is a mapping from primitives to rules
-    # that define how to interpret the primitive in the IR. rule definition
-    # are separated from primitive (i.e. no prim.def_impl, def_...) as rules themselves
-    # are open for user-extension.
-    rules: tp.ClassVar[dict[InterpreterRuleMapping, dict[Primitive, T]]] = {}
-
-    def __new__(cls, /, *args, **kwargs):
-        self = super().__new__(cls, *args, **kwargs)
-        cls.rules[self] = {}
-        return self
-
     def __init__(self):
         self.map: dict[Primitive, T] = {}
         self.lock = RLock()
