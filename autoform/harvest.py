@@ -57,7 +57,7 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
 
 
 # ==================================================================================================
-# HANDLERS
+# COLLECT
 # ==================================================================================================
 
 
@@ -74,27 +74,6 @@ class CollectHandler(EffectHandler):
             self.collected[effect.key].append(value)
         return value
 
-
-class InjectHandler(EffectHandler):
-    handles = (Checkpoint,)
-
-    def __init__(
-        self, *, collection: tp.Hashable | None = None, values: dict[tp.Hashable, list[tp.Any]]
-    ):
-        super().__init__()
-        self.collection = collection
-        self.values = {k: list(reversed(v)) for k, v in values.items()}
-
-    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
-        if self.collection is None or effect.collection == self.collection:
-            if effect.key in self.values and self.values[effect.key]:
-                return self.values[effect.key].pop()
-        return value
-
-
-# ==================================================================================================
-# COLLECT
-# ==================================================================================================
 
 type Collected = dict[tp.Hashable, list[Tree]]
 
@@ -136,6 +115,23 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 # ==================================================================================================
 # INJECT
 # ==================================================================================================
+
+
+class InjectHandler(EffectHandler):
+    handles = (Checkpoint,)
+
+    def __init__(
+        self, *, collection: tp.Hashable | None = None, values: dict[tp.Hashable, list[tp.Any]]
+    ):
+        super().__init__()
+        self.collection = collection
+        self.values = {k: list(reversed(v)) for k, v in values.items()}
+
+    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
+        if self.collection is None or effect.collection == self.collection:
+            if effect.key in self.values and self.values[effect.key]:
+                return self.values[effect.key].pop()
+        return value
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
