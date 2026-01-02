@@ -130,7 +130,10 @@ def iratom_to_evaltype(x: IRAtom) -> EvalType:
 
 
 class IRLit[T](IRAtom):
-    def __init__(self, value: T, /, **meta):
+    # NOTE(asem): IRLit wraps leaf-level values in pytrees. so non-hashable mutable structures
+    # like lists/dicts are not seen at this level.
+    # for more discussion see https://docs.jax.dev/en/latest/internals/constants.html
+    def __init__(self, value: T):
         assert not is_iratom(value)
         assert hash(value) is not None
         self.value = value
@@ -280,6 +283,7 @@ dce_rules = InterpreterRuleMapping[DCERule]()
 
 
 class IREqn:
+    # TODO(asem): maybe hash by some other than identity
     __slots__ = ("prim", "in_irtree", "out_irtree", "params")
     __match_args__ = ("prim", "in_irtree", "out_irtree", "params")
 
@@ -297,6 +301,10 @@ class IREqn:
 
     def __setitem__(self, _, __):
         raise TypeError("IREqn is immutable")
+
+    @property
+    def effect(self) -> Effect | None:
+        return self.params.get("effect")
 
     def using(self, **kwargs) -> IREqn:
         return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
@@ -647,3 +655,39 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
         return treelib.map(read, ir.out_irtree)
 
     return execute
+
+
+# ==================================================================================================
+# EFFECTS
+# ==================================================================================================
+
+
+class Effect:
+    __slots__ = "key"
+
+    def __init__(self, *, key: tp.Hashable):
+        self.key = key
+
+
+class EffectHandler(Interpreter, ABC):
+    handles: tp.ClassVar[tuple[type[Effect], ...]] = ()
+
+    def __init__(self):
+        self.parent = get_interpreter()
+
+    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+        if prim.tag == "effect":
+            if (effect := params.get("effect")) is not None and isinstance(effect, self.handles):
+                result = self.handle(effect, in_tree)
+                return self.parent.interpret(prim, result, **params)
+        return self.parent.interpret(prim, in_tree, **params)
+
+    @abstractmethod
+    def handle(self, effect: Effect, value: tp.Any) -> tp.Any: ...
+
+
+@contextmanager
+def using_handler(handler: EffectHandler) -> tp.Generator[EffectHandler, None, None]:
+    assert isinstance(handler, EffectHandler), "Handler must be an instance of EffectHandler"
+    with using_interpreter(handler):
+        yield handler

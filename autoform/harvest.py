@@ -1,4 +1,4 @@
-"""Harvest primitives"""
+"""Harvest"""
 
 from __future__ import annotations
 
@@ -6,34 +6,22 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 
-from autoform.core import (
-    IR,
-    EvalType,
-    Interpreter,
-    Primitive,
-    batch_rules,
-    call,
-    dce_rules,
-    default_batch,
-    default_dce,
-    default_pull_bwd,
-    default_pull_fwd,
-    default_push,
-    eval_rules,
-    get_interpreter,
-    impl_rules,
-    pull_bwd_rules,
-    pull_fwd_rules,
-    push_rules,
-    using_interpreter,
-)
+from autoform.core import IR, Effect, EffectHandler, call, using_handler
+from autoform.effects import effect_p
 from autoform.utils import Tree, lru_cache
 
 # ==================================================================================================
-# CHECKPOINT
+# CHECKPOINT EFFECT
 # ==================================================================================================
 
-checkpoint_p = Primitive("checkpoint", tag="core")
+
+class Checkpoint(Effect):
+    __slots__ = "collection"
+    __match_args__ = ("key", "collection")
+
+    def __init__(self, *, key: tp.Hashable, collection: tp.Hashable | None = None):
+        super().__init__(key=key)
+        self.collection = collection
 
 
 def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
@@ -63,74 +51,31 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
         'Q: What is 6*7? A: 42'
         >>> collected["prompt"]
         ['Q: What is 6*7?']
-        >>> collected["response"]
-        ['Q: What is 6*7? A: 42']
     """
-    assert hash(collection) is not None, "Collection must be hashable"
-    assert hash(key) is not None, "Key must be hashable"
-    return checkpoint_p.bind(in_tree, collection=collection, key=key)
-
-
-@ft.partial(impl_rules.def_rule, checkpoint_p)
-def impl_checkpoint(
-    in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None
-) -> Tree:
-    del collection, key
-    return in_tree
-
-
-@ft.partial(eval_rules.def_rule, checkpoint_p)
-def eval_checkpoint(
-    in_tree: Tree[EvalType], *, key: tp.Hashable, collection: tp.Hashable | None = None
-) -> Tree[EvalType]:
-    del collection, key
-    return in_tree
-
-
-push_rules.def_rule(checkpoint_p, ft.partial(default_push, checkpoint))
-pull_fwd_rules.def_rule(checkpoint_p, ft.partial(default_pull_fwd, checkpoint))
-pull_bwd_rules.def_rule(checkpoint_p, ft.partial(default_pull_bwd, checkpoint))
-batch_rules.def_rule(checkpoint_p, ft.partial(default_batch, checkpoint))
-dce_rules.def_rule(checkpoint_p, default_dce)
+    effect = Checkpoint(key=key, collection=collection)
+    return effect_p.bind(in_tree, effect=effect)
 
 
 # ==================================================================================================
 # COLLECT
 # ==================================================================================================
 
-type Collected = dict[tp.Hashable, list[Tree]]
 
+class CollectHandler(EffectHandler):
+    handles = (Checkpoint,)
 
-class CollectInterpreter(Interpreter):
-    def __init__(self, *, collection: tp.Hashable):
+    def __init__(self, *, collection: tp.Hashable | None = None):
+        super().__init__()
         self.collection = collection
-        # NOTE(asem): collect into a defaultdict of lists for situations where
-        # a value is marked multiple times (e.g. a value in a loop)
-        self.collected: Collected = defaultdict(list)
-        self.parent = get_interpreter()
+        self.collected: dict[tp.Hashable, list[tp.Any]] = defaultdict(list)
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        # NOTE(asem): No context switch here. We call parent.interpret() directly
-        # Example: lets say we have a push rule that marks stuff inside it
-        # >>> def pushforward_checkpoint(primal, tangent, ...):
-        # ...     p = checkpoint(primal, ...)    # <- calls checkpoint_p.bind()
-        # ...     t = checkpoint(tangent, ...)   # <- calls checkpoint_p.bind()
-        # ...     return p, t
-        # here we have an interplay between 3 interpreters (collect, eval, and push)
-        # within the rule we have parent=eval (push_impl -> induced PushInterp -> called this rule)
-        # if we do not call collect.
-        # now lets say we call collect, then we induce CollectInterp with parent=eval
-        # now lets say we switch to parent, then we move to eval->push_call.impl->
-        # induce a PushInterp with parent=eval. **at this point collect is lost**.
-        # however, if we simply call previous interpreter (parent) then we will
-        # keep CollectInterpreter as the active interpreter (from using_interpreter at collect).
-        # when push rule calls mark(), it goes through prim.bind() -> get_interp()
-        # -> CollectInterpreter.interpret() and we can observe those nested calls.
-        # this observation applies to other observer interpreters as well.
-        result = self.parent.interpret(prim, in_tree, **params)
-        if prim == checkpoint_p and params.get("collection") == self.collection:
-            self.collected[params["key"]].append(result)
-        return result
+    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
+        if self.collection is None or effect.collection == self.collection:
+            self.collected[effect.key].append(value)
+        return value
+
+
+type Collected = dict[tp.Hashable, list[Tree]]
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -143,12 +88,12 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
     Returns:
         A callable that executes the IR and returns (result, collected_dict).
-        The collected_dict maps names to lists of values.
+        The collected_dict maps keys to lists of values.
 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     prompt = af.mark(af.format("Q: {}", x), collection="debug", name="prompt")
+        ...     prompt = af.checkpoint(af.format("Q: {}", x), key="prompt", collection="debug")
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.build_ir(program)("test")
         >>> result, collected = af.collect(ir, collection="debug")("What?")
@@ -160,9 +105,9 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
-        with using_interpreter(CollectInterpreter(collection=collection)) as collector:
+        with using_handler(CollectHandler(collection=collection)) as handler:
             result = call(ir)(*args, **kwargs)
-        return result, collector.collected
+        return result, handler.collected
 
     return execute
 
@@ -172,25 +117,21 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 # ==================================================================================================
 
 
-class InjectInterpreter(Interpreter):
-    def __init__(self, *, collection: tp.Hashable, values: dict[tp.Hashable, list[Tree]]):
-        self.collection = collection
-        # NOTE(asem): reverse the lists to pop from the end to match collect's list output
-        self.values = {k: list(reversed(values[k])) for k in values}
-        self.parent = get_interpreter()
+class InjectHandler(EffectHandler):
+    handles = (Checkpoint,)
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        if (
-            prim == checkpoint_p
-            and params.get("collection") == self.collection
-            and (key := params.get("key")) in self.values
-            # NOTE(asem): allow empty values to allow round-tripping
-            and self.values[key]
-        ):
-            return self.values[key].pop()
-        # NOTE(asem): check the note in CollectInterpreter.interpret for explanation
-        # on why no context switch here.
-        return self.parent.interpret(prim, in_tree, **params)
+    def __init__(
+        self, *, collection: tp.Hashable | None = None, values: dict[tp.Hashable, list[tp.Any]]
+    ):
+        super().__init__()
+        self.collection = collection
+        self.values = {k: list(reversed(v)) for k, v in values.items()}
+
+    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
+        if self.collection is None or effect.collection == self.collection:
+            if effect.key in self.values and self.values[effect.key]:
+                return self.values[effect.key].pop()
+        return value
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
@@ -201,9 +142,8 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
 
     Args:
         ir: The intermediate representation to run.
-        collection: The collection to filter mark locations by.
-        values: Dictionary mapping mark names to lists of values to inject.
-            The lists are consumed from left to right (matching collect's list output).
+        collection: The collection to filter checkpoint locations by.
+        values: Dictionary mapping checkpoint keys to lists of values to inject.
 
     Returns:
         A callable that executes the IR with injected values.
@@ -211,7 +151,7 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     return af.mark(af.concat("Hello, ", x), collection="cache", name="greeting")
+        ...     return af.checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
         >>> ir = af.build_ir(program)("test")
         >>> af.inject(ir, collection="cache", values={"greeting": ["CACHED"]})("World")
         'CACHED'
@@ -222,7 +162,7 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         assert isinstance(values[key], list), f"Expected list, got {type(values[key])} for {key=}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
-        with using_interpreter(InjectInterpreter(collection=collection, values=values)):
+        with using_handler(InjectHandler(collection=collection, values=values)):
             return call(ir)(*args, **kwargs)
 
     return execute

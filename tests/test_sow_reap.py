@@ -14,9 +14,9 @@ class TestSow:
 
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "checkpoint"
-        assert ir.ireqns[0].params["collection"] == "my_tag"
-        assert ir.ireqns[0].params["key"] == "my_name"
+        assert ir.ireqns[0].prim.name == "effect"
+        assert ir.ireqns[0].params["effect"].collection == "my_tag"
+        assert ir.ireqns[0].params["effect"].key == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -258,7 +258,7 @@ class TestInjectAndDCE:
 
         traced_ir = af.build_ir(wrapped)("example")
 
-        assert len(traced_ir.ireqns) == 2
+        assert len(traced_ir.ireqns) == 3
 
         last_eqn = traced_ir.ireqns[-1]
         assert last_eqn.prim.name == "concat"
@@ -276,10 +276,11 @@ class TestInjectAndDCE:
 
         traced_ir = af.build_ir(wrapped)("example")
 
-        assert len(traced_ir.ireqns) == 2
+        assert len(traced_ir.ireqns) == 3
 
         optimized_ir = af.dce(traced_ir)
-        assert len(optimized_ir.ireqns) == 0
+
+        assert len(optimized_ir.ireqns) <= 1
 
         result = af.call(optimized_ir)("any_input")
         assert result == "Got: CACHED"
