@@ -313,6 +313,10 @@ class IREqn:
     def __setitem__(self, _, __):
         raise TypeError("IREqn is immutable")
 
+    @property
+    def effect(self) -> Effect | None:
+        return self.params.get("effect")
+
     def using(self, **kwargs) -> IREqn:
         return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
 
