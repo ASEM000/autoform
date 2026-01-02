@@ -1,6 +1,5 @@
-"""Tests for pattern matching and replace on IR structures."""
-
 import autoform as af
+from autoform.harvest import Checkpoint
 
 
 class TestIREqnMatchArgs:
@@ -26,9 +25,9 @@ class TestIREqnMatchArgs:
         ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
-        match eqn:
-            case af.core.IREqn(params={"collection": tag}):
-                matched_tag = tag
+        match eqn.effect:
+            case Checkpoint(key=key, collection=collection):
+                matched_tag = collection
             case _:
                 matched_tag = None
 
@@ -57,9 +56,9 @@ class TestIREqnMatchArgs:
 
         tags_found = []
         for eqn in ir.ireqns:
-            match eqn:
-                case af.core.IREqn(prim=af.harvest.checkpoint_p, params={"collection": tag}):
-                    tags_found.append(tag)
+            match eqn.effect:
+                case Checkpoint(key=_, collection=collection):
+                    tags_found.append(collection)
 
         assert tags_found == ["step1", "step2"]
 
@@ -72,9 +71,10 @@ class TestIREqnMatchArgs:
 
         new_eqns = []
         for eqn in ir.ireqns:
-            match eqn:
-                case af.core.IREqn(prim=af.harvest.checkpoint_p, params={"collection": "old_tag"}):
-                    new_eqns.append(eqn.using(collection="new_tag"))
+            match eqn.effect:
+                case Checkpoint(key=key, collection="old_tag"):
+                    new_effect = Checkpoint(key=key, collection="new_tag")
+                    new_eqns.append(eqn.using(effect=new_effect))
                 case _:
                     new_eqns.append(eqn)
 
@@ -84,7 +84,7 @@ class TestIREqnMatchArgs:
             out_irtree=ir.out_irtree,
         )
 
-        assert new_ir.ireqns[0].params["collection"] == "new_tag"
+        assert new_ir.ireqns[0].effect.collection == "new_tag"
 
         result = af.call(new_ir)("hello")
         assert result == "hello!"
@@ -98,10 +98,11 @@ class TestIREqnWithParams:
         ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
-        new_eqn = eqn.using(collection="new")
+        new_effect = Checkpoint(key="x", collection="new")
+        new_eqn = eqn.using(effect=new_effect)
 
-        assert eqn.params["collection"] == "old"
-        assert new_eqn.params["collection"] == "new"
+        assert eqn.effect.collection == "old"
+        assert new_eqn.effect.collection == "new"
         assert new_eqn.prim == eqn.prim
         assert new_eqn.in_irtree == eqn.in_irtree
         assert new_eqn.out_irtree == eqn.out_irtree
@@ -132,11 +133,10 @@ class TestInsertAfterPattern:
         new_eqns = []
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
-            match eqn:
-                case af.core.IREqn(
-                    prim=af.harvest.checkpoint_p, params={"collection": "insert_here"}
-                ):
-                    inserted = eqn.using(collection="inserted")
+            match eqn.effect:
+                case Checkpoint(key=key, collection="insert_here"):
+                    new_effect = Checkpoint(key=key, collection="inserted")
+                    inserted = eqn.using(effect=new_effect)
                     new_eqns.append(inserted)
 
         new_ir = af.core.IR(
@@ -146,8 +146,8 @@ class TestInsertAfterPattern:
         )
 
         assert len(new_ir.ireqns) == 3
-        assert new_ir.ireqns[0].params["collection"] == "insert_here"
-        assert new_ir.ireqns[1].params["collection"] == "inserted"
+        assert new_ir.ireqns[0].effect.collection == "insert_here"
+        assert new_ir.ireqns[1].effect.collection == "inserted"
         assert new_ir.ireqns[2].prim == af.string.concat_p
 
 

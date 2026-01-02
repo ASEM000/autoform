@@ -26,7 +26,7 @@ __all__ = [
     "inject",
     "dce",
     "fold",
-    # primitives (user-facing functions)
+    # primitives
     "format",
     "concat",
     "match",
