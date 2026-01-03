@@ -15,7 +15,7 @@ from autoform.utils import Tree, lru_cache
 # ==================================================================================================
 
 
-class Checkpoint(Effect):
+class CheckpointEffect(Effect):
     __slots__ = "collection"
     __match_args__ = ("key", "collection")
 
@@ -52,7 +52,7 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    effect = Checkpoint(key=key, collection=collection)
+    effect = CheckpointEffect(key=key, collection=collection)
     return effect_p.bind(in_tree, effect=effect)
 
 
@@ -62,14 +62,14 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
 
 
 class CollectHandler(EffectHandler):
-    handles = (Checkpoint,)
+    handles = {CheckpointEffect}
 
     def __init__(self, *, collection: tp.Hashable | None = None):
         super().__init__()
         self.collection = collection
         self.collected: dict[tp.Hashable, list[tp.Any]] = defaultdict(list)
 
-    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
+    def handle(self, effect: CheckpointEffect, value: tp.Any) -> tp.Any:
         if self.collection is None or effect.collection == self.collection:
             self.collected[effect.key].append(value)
         return value
@@ -118,7 +118,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
 
 class InjectHandler(EffectHandler):
-    handles = (Checkpoint,)
+    handles = {CheckpointEffect}
 
     def __init__(
         self, *, collection: tp.Hashable | None = None, values: dict[tp.Hashable, list[tp.Any]]
@@ -127,7 +127,7 @@ class InjectHandler(EffectHandler):
         self.collection = collection
         self.values = {k: list(reversed(v)) for k, v in values.items()}
 
-    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
+    def handle(self, effect: CheckpointEffect, value: tp.Any) -> tp.Any:
         if self.collection is None or effect.collection == self.collection:
             if effect.key in self.values and self.values[effect.key]:
                 return self.values[effect.key].pop()

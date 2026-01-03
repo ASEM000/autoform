@@ -692,7 +692,7 @@ class Effect:
 
 
 class EffectHandler(Interpreter, ABC):
-    handles: tp.ClassVar[tuple[type[Effect], ...]] = ()
+    handles: tp.ClassVar[set[type[Effect]]] = set()
 
     def __init__(self):
         self.parent = get_interpreter()
@@ -701,7 +701,7 @@ class EffectHandler(Interpreter, ABC):
         if any(issubclass(t, EffectTag) for t in prim.tag):
             effect = params.get("effect")
 
-            if isinstance(effect, self.handles):
+            if isinstance(effect, tuple(self.handles)):
                 in_tree = self.handle(effect, in_tree)
 
         # NOTE(asem): use passthrough (self.parent.interpret) instead of

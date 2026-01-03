@@ -1,6 +1,6 @@
 import autoform as af
 from autoform.control import ControlTag
-from autoform.harvest import Checkpoint
+from autoform.harvest import CheckpointEffect
 from autoform.string import StringTag
 
 
@@ -28,7 +28,7 @@ class TestIREqnMatchArgs:
         eqn = ir.ireqns[0]
 
         match eqn.effect:
-            case Checkpoint(key=key, collection=collection):
+            case CheckpointEffect(key=key, collection=collection):
                 matched_tag = collection
             case _:
                 matched_tag = None
@@ -59,7 +59,7 @@ class TestIREqnMatchArgs:
         tags_found = []
         for eqn in ir.ireqns:
             match eqn.effect:
-                case Checkpoint(key=_, collection=collection):
+                case CheckpointEffect(key=_, collection=collection):
                     tags_found.append(collection)
 
         assert tags_found == ["step1", "step2"]
@@ -74,8 +74,8 @@ class TestIREqnMatchArgs:
         new_eqns = []
         for eqn in ir.ireqns:
             match eqn.effect:
-                case Checkpoint(key=key, collection="old_tag"):
-                    new_effect = Checkpoint(key=key, collection="new_tag")
+                case CheckpointEffect(key=key, collection="old_tag"):
+                    new_effect = CheckpointEffect(key=key, collection="new_tag")
                     new_eqns.append(eqn.using(effect=new_effect))
                 case _:
                     new_eqns.append(eqn)
@@ -100,7 +100,7 @@ class TestIREqnWithParams:
         ir = af.build_ir(func)("test")
         eqn = ir.ireqns[0]
 
-        new_effect = Checkpoint(key="x", collection="new")
+        new_effect = CheckpointEffect(key="x", collection="new")
         new_eqn = eqn.using(effect=new_effect)
 
         assert eqn.effect.collection == "old"
@@ -136,8 +136,8 @@ class TestInsertAfterPattern:
         for eqn in ir.ireqns:
             new_eqns.append(eqn)
             match eqn.effect:
-                case Checkpoint(key=key, collection="insert_here"):
-                    new_effect = Checkpoint(key=key, collection="inserted")
+                case CheckpointEffect(key=key, collection="insert_here"):
+                    new_effect = CheckpointEffect(key=key, collection="inserted")
                     inserted = eqn.using(effect=new_effect)
                     new_eqns.append(inserted)
 
