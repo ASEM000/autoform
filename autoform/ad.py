@@ -16,6 +16,7 @@ from autoform.core import (
     IRVar,
     IRZero,
     Primitive,
+    TransformationTag,
     Value,
     batch_rules,
     call,
@@ -34,11 +35,15 @@ from autoform.core import (
 from autoform.optims import dce
 from autoform.utils import Tree, lru_cache, transpose_batch, treelib, unbatch_at
 
+
+class ADTag(TransformationTag): ...
+
+
 # ==================================================================================================
 # PUSHFORWARD
 # ==================================================================================================
 
-pushforward_call_p = Primitive("pushforward_call", tag="transformation")
+pushforward_call_p = Primitive("pushforward_call", tag={ADTag})
 
 
 class PushforwardInterpreter(Interpreter):
@@ -196,7 +201,7 @@ def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool,
 # PULLBACK
 # ==================================================================================================
 
-pullback_call_p = Primitive("pullback_call", tag="transformation")
+pullback_call_p = Primitive("pullback_call", tag={ADTag})
 
 
 zero_cotangents_map: dict[type, Callable[[], tp.Any]] = {}

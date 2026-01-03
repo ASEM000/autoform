@@ -9,6 +9,7 @@ from autoform.core import (
     IR,
     IREqn,
     Primitive,
+    PrimitiveTag,
     batch_rules,
     dce_rules,
     default_batch,
@@ -27,11 +28,15 @@ from autoform.core import (
 )
 from autoform.utils import lru_cache
 
+
+class SurgeryTag(PrimitiveTag): ...
+
+
 # ==================================================================================================
 # SPLITPOINT
 # ==================================================================================================
 
-splitpoint_p = Primitive("splitpoint", tag="core")
+splitpoint_p = Primitive("splitpoint", tag={SurgeryTag})
 
 
 def splitpoint(in_tree: Tree, /, *, key: tp.Hashable) -> Tree:

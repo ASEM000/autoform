@@ -27,6 +27,10 @@ __all__ = [
     "is_irlit",
     "is_iratom",
     "iratom_to_evaltype",
+    # tags
+    "PrimitiveTag",
+    "EffectTag",
+    "TransformationTag",
     # primitive
     "Primitive",
     # rule registries
@@ -153,6 +157,19 @@ def is_irlit(x) -> tp.TypeGuard[IRLit]:
 
 
 # ==================================================================================================
+# TAG
+# ==================================================================================================
+
+
+# NOTE(asem): tags are used to group primitives into categories
+# to be later targeted by effect handlers, ...
+class PrimitiveTag: ...
+
+
+class TransformationTag(PrimitiveTag): ...
+
+
+# ==================================================================================================
 # PRIMITIVE
 # ==================================================================================================
 
@@ -163,9 +180,11 @@ class Primitive:
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
-    def __init__(self, name: str, tag: tp.Hashable | None = None):
+    def __init__(self, name: str, tag: set[type[PrimitiveTag]] | None = None):
+        assert isinstance(name, str), f"Invalid name type: {type(name)=}"
+        assert tag is None or all(issubclass(t, PrimitiveTag) for t in tag), f"Invalid tag: {tag=}"
         self.name = name
-        self.tag = tag
+        self.tag: frozenset[type[PrimitiveTag]] = frozenset(tag) if tag else frozenset()
 
     def __repr__(self) -> str:
         return self.name
@@ -662,6 +681,9 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
 # ==================================================================================================
 
 
+class EffectTag(PrimitiveTag): ...
+
+
 class Effect:
     __slots__ = "key"
 
@@ -676,10 +698,31 @@ class EffectHandler(Interpreter, ABC):
         self.parent = get_interpreter()
 
     def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        if prim.tag == "effect":
-            if (effect := params.get("effect")) is not None and isinstance(effect, self.handles):
-                result = self.handle(effect, in_tree)
-                return self.parent.interpret(prim, result, **params)
+        if any(issubclass(t, EffectTag) for t in prim.tag):
+            effect = params.get("effect")
+
+            if isinstance(effect, self.handles):
+                in_tree = self.handle(effect, in_tree)
+
+        # NOTE(asem): use passthrough (self.parent.interpret) instead of
+        # using_interpreter(self.parent). this is critical because:
+        #
+        # consider collect(batch(ir)) with checkpoints inside:
+        #   active_interpreter = CollectHandler
+        #   CollectHandler.parent = BatchInterpreter
+        #   BatchInterpreter.parent = EvalInterpreter
+        #
+        # with passthrough:
+        #   CollectHandler.interpret() calls self.parent.interpret(...)
+        #   this is a direct method call and active_interpreter is unchanged.
+        #   when BatchInterpreter does prim.bind() for nested primitives
+        #   get_interpreter() still returns CollectHandler.
+        #   so nested effects re-enter through CollectHandler and are collected.
+        #
+        # with using_interpreter(parent):
+        #   active_interpreter is temporarily set to BatchInterpreter.
+        #   when BatchInterpreter does prim.bind() for nested primitives,
+        #   get_interpreter() returns BatchInterpreter and CollectHandler is bypassed.
         return self.parent.interpret(prim, in_tree, **params)
 
     @abstractmethod

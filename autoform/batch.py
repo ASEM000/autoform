@@ -15,6 +15,7 @@ from autoform.core import (
     IRLit,
     IRVar,
     Primitive,
+    TransformationTag,
     Value,
     acall,
     async_rules,
@@ -35,13 +36,15 @@ from autoform.core import (
 from autoform.optims import dce
 from autoform.utils import Tree, lru_cache, transpose_batch, treelib
 
+# ==================================================================================================
+# BATCH
+# ==================================================================================================
+
 
 class IRBVar(IRVar): ...
 
 
-# ==================================================================================================
-# BATCH
-# ==================================================================================================
+class BatchTag(TransformationTag): ...
 
 
 def is_axis_spec(x) -> bool:
@@ -79,7 +82,7 @@ def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
     return batch_tree
 
 
-batch_call_p = Primitive("batch_call", tag="transformation")
+batch_call_p = Primitive("batch_call", tag={BatchTag})
 
 
 @ft.partial(lru_cache, maxsize=256)

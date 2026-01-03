@@ -1,5 +1,7 @@
 import autoform as af
+from autoform.control import ControlTag
 from autoform.harvest import Checkpoint
+from autoform.string import StringTag
 
 
 class TestIREqnMatchArgs:
@@ -169,7 +171,7 @@ class TestIRMatchArgs:
         match ir:
             case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
                 assert prim == af.string.concat_p
-                assert prim.tag == "string"
+                assert StringTag in prim.tag
                 assert len(af.utils.treelib.leaves(in_tree)) == 2
             case _:
                 assert False, "Pattern should match single equation"
@@ -192,7 +194,9 @@ class TestIRMatchArgs:
         ir = af.build_ir(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR([af.core.IREqn(af.core.Primitive(name, "string"), _, _, _)], _, _):
+            case af.core.IR([af.core.IREqn(af.core.Primitive(name, tag), _, _, _)], _, _) if (
+                StringTag in tag
+            ):
                 assert name == "concat"
             case _:
                 assert False, "Pattern should match string-tagged primitive"
@@ -224,8 +228,8 @@ class TestIRMatchArgs:
 
         match ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Primitive("switch", "control"), _, _, params)], _, _
-            ):
+                [af.core.IREqn(af.core.Primitive("switch", tag), _, _, params)], _, _
+            ) if ControlTag in tag:
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
                 assert "b" in branch_dict
@@ -254,7 +258,7 @@ class TestIRMatchArgs:
         ir = af.build_ir(program)("World", "!")
 
         match ir:
-            case af.core.IR(eqns, _, _) if all(e.prim.tag == "string" for e in eqns):
+            case af.core.IR(eqns, _, _) if all(StringTag in e.prim.tag for e in eqns):
                 all_string = True
             case _:
                 all_string = False

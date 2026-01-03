@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools as ft
 
 from autoform.core import (
+    EffectTag,
     Primitive,
     batch_rules,
     dce_rules,
@@ -22,7 +23,7 @@ from autoform.core import (
     push_rules,
 )
 
-effect_p = Primitive("effect", tag="effect")
+effect_p = Primitive("effect", tag={EffectTag})
 
 
 def effect(x, **p):
