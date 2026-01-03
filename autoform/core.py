@@ -692,6 +692,11 @@ class Effect:
 
 
 class EffectHandler(Interpreter, ABC):
+    # NOTE(asem): EffectHandler is a pass-through interpreter + hook for
+    # handling marked effects at execution/tracing.
+    # whereas transformations (batch, pushforward, pullback) which rewrite
+    # IR structure and have per-primitive rule registries.
+    # where effect handlers intercept values during execution/tracing.
     handles: tp.ClassVar[set[type[Effect]]] = set()
 
     def __init__(self):
