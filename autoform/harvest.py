@@ -6,9 +6,18 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 
-from autoform.core import IR, Effect, EffectHandler, call, using_handler
+from autoform.core import IR, Effect, EffectInterpreter, call, using_interpreter
 from autoform.effects import effect_p
 from autoform.utils import Tree, lru_cache
+
+__all__ = [
+    "CheckpointEffect",
+    "checkpoint",
+    "collect",
+    "inject",
+    "CollectHandler",
+    "InjectHandler",
+]
 
 # ==================================================================================================
 # CHECKPOINT EFFECT
@@ -61,7 +70,10 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
 # ==================================================================================================
 
 
-class CollectHandler(EffectHandler):
+type Collected = dict[tp.Hashable, list[Tree]]
+
+
+class CollectInterpreter(EffectInterpreter):
     handles = {CheckpointEffect}
 
     def __init__(self, *, collection: tp.Hashable | None = None):
@@ -69,13 +81,11 @@ class CollectHandler(EffectHandler):
         self.collection = collection
         self.collected: dict[tp.Hashable, list[tp.Any]] = defaultdict(list)
 
-    def handle(self, effect: CheckpointEffect, value: tp.Any) -> tp.Any:
+    def handle(self, effect: Effect, value: tp.Any):
+        result = yield value  # result is being sent by the interpreter
         if self.collection is None or effect.collection == self.collection:
-            self.collected[effect.key].append(value)
-        return value
-
-
-type Collected = dict[tp.Hashable, list[Tree]]
+            self.collected[effect.key].append(result)
+        return result
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -105,7 +115,8 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
-        with using_handler(CollectHandler(collection=collection)) as handler:
+        handler = CollectInterpreter(collection=collection)
+        with using_interpreter(handler):
             result = call(ir)(*args, **kwargs)
         return result, handler.collected
 
@@ -117,7 +128,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 # ==================================================================================================
 
 
-class InjectHandler(EffectHandler):
+class InjectInterpreter(EffectInterpreter):
     handles = {CheckpointEffect}
 
     def __init__(
@@ -125,13 +136,13 @@ class InjectHandler(EffectHandler):
     ):
         super().__init__()
         self.collection = collection
-        self.values = {k: list(reversed(v)) for k, v in values.items()}
+        self.cache = {k: list(reversed(v)) for k, v in values.items()}
 
-    def handle(self, effect: CheckpointEffect, value: tp.Any) -> tp.Any:
-        if self.collection is None or effect.collection == self.collection:
-            if effect.key in self.values and self.values[effect.key]:
-                return self.values[effect.key].pop()
-        return value
+    def handle(self, effect: Effect, value: tp.Any):
+        if effect.collection == self.collection:
+            if effect.key in self.cache and self.cache[effect.key]:
+                return self.cache[effect.key].pop()
+        return (yield value)
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
@@ -157,12 +168,9 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         'CACHED'
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-    assert isinstance(values, dict), f"Expected dict, got {type(values)}"
-    for key in values:
-        assert isinstance(values[key], list), f"Expected list, got {type(values[key])} for {key=}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
-        with using_handler(InjectHandler(collection=collection, values=values)):
+        with using_interpreter(InjectInterpreter(collection=collection, values=values)):
             return call(ir)(*args, **kwargs)
 
     return execute
