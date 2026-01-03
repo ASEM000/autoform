@@ -33,7 +33,7 @@ class CheckpointEffect(Effect):
         self.collection = collection
 
 
-def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
+def checkpoint(value: Tree, /, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
     """Tag a value with a collection and key for later collection.
 
     `checkpoint` marks a value with a `collection` and `key` (unique identifier)
@@ -41,7 +41,7 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
     normal execution.
 
     Args:
-        in_tree: the value to mark (returned unchanged).
+        value: the value to mark (returned unchanged).
         key: unique identifier within the collection namespace.
         collection: optional collection for filtering (e.g., "debug", "cache", "metrics").
 
@@ -62,7 +62,7 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
         ['Q: What is 6*7?']
     """
     effect = CheckpointEffect(key=key, collection=collection)
-    return effect_p.bind(in_tree, effect=effect)
+    return effect_p.bind(value, effect=effect)
 
 
 # ==================================================================================================
