@@ -15,8 +15,8 @@ class TestSow:
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "effect"
-        assert ir.ireqns[0].params["effect"].collection == "my_tag"
-        assert ir.ireqns[0].params["effect"].key == "my_name"
+        assert ir.ireqns[0].effect.collection == "my_tag"
+        assert ir.ireqns[0].effect.key == "my_name"
 
     def test_run_ir(self):
         def func(x):

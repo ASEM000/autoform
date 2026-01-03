@@ -189,8 +189,8 @@ class Primitive:
     def __repr__(self) -> str:
         return self.name
 
-    def bind(self, in_tree: Tree, /, **params):
-        return get_interpreter().interpret(self, in_tree, **params)
+    def bind(self, value: Tree, /, **params):
+        return get_interpreter().interpret(self, value, **params)
 
 
 # ==================================================================================================
@@ -302,31 +302,32 @@ dce_rules = InterpreterRuleMapping[DCERule]()
 
 
 class IREqn:
-    # TODO(asem): maybe hash by some other than identity
-    __slots__ = ("prim", "in_irtree", "out_irtree", "params")
-    __match_args__ = ("prim", "in_irtree", "out_irtree", "params")
+    __slots__ = ("prim", "in_irtree", "out_irtree", "effect", "params")
+    __match_args__ = ("prim", "in_irtree", "out_irtree", "effect", "params")
 
     def __init__(
         self,
         prim: Primitive,
         in_irtree: Tree[IRAtom],
         out_irtree: Tree[IRAtom],
+        effect: Effect | None = None,
         params: dict | None = None,
     ):
-        self.params = params if params is not None else {}
         self.prim = prim
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
+        self.effect = effect
+        self.params = params if params is not None else {}
 
     def __setitem__(self, _, __):
         raise TypeError("IREqn is immutable")
 
-    @property
-    def effect(self) -> Effect | None:
-        return self.params.get("effect")
+    def bind(self, in_tree: Tree, /, **params):
+        with using_effect(self.effect):
+            return self.prim.bind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
+        return IREqn(self.prim, self.in_irtree, self.out_irtree, self.effect, self.params | kwargs)
 
 
 class IR[**P, R]:
@@ -390,10 +391,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         lhs = format_tree(ireqn.out_irtree)
         rhs = format_tree(ireqn.in_irtree)
         params_str = ", ".join(f"{k}={v!r}" for k, v in (ireqn.params or {}).items())
+        effect_str = f" @{ireqn.effect!r}" if ireqn.effect else ""
         if params_str:
-            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}, {params_str})")
+            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}, {params_str}){effect_str}")
         else:
-            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs})")
+            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}){effect_str}")
 
     lines.append("}")
     return "\n".join(lines)
@@ -435,6 +437,29 @@ def get_interpreter() -> Interpreter:
 
 
 # ==================================================================================================
+# EFFECT CONTEXT
+# ==================================================================================================
+
+active_effect: ContextVar[Effect | None] = ContextVar("active_effect", default=None)
+
+
+@contextmanager
+def using_effect(effect: Effect | None):
+    if effect is None:
+        yield
+        return
+    token = active_effect.set(effect)
+    try:
+        yield
+    finally:
+        active_effect.reset(token)
+
+
+def get_effect() -> Effect | None:
+    return active_effect.get()
+
+
+# ==================================================================================================
 # TRACING INTERPRETER
 # ==================================================================================================
 
@@ -472,7 +497,8 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh() if is_var(x) else IRLit(x)
 
         out_irtree = treelib.map(to_out_iratom, out_evaltree)
-        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
+        effect = get_effect()
+        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, effect, params))
         return out_irtree
 
 
@@ -561,7 +587,7 @@ def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
 
         for ireqn in ir.ireqns:
             in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
-            out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            out_ireqn_tree = ireqn.bind(in_ireqn_tree, **ireqn.params)
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         return treelib.map(read, ir.out_irtree)
 
@@ -625,7 +651,7 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
                     yield chunk
                 out_ireqn_tree = out_treespec.unflatten(map(accumulate_chunks, acc))
             else:
-                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+                out_ireqn_tree = ireqn.bind(in_ireqn_tree, **ireqn.params)
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         yield treelib.map(read, ir.out_irtree)
 
@@ -669,7 +695,7 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
                 async_rule = async_rules[ireqn.prim]
                 out_ireqn_tree = await async_rule(in_ireqn_tree, **ireqn.params)
             else:
-                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+                out_ireqn_tree = ireqn.bind(in_ireqn_tree, **ireqn.params)
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         return treelib.map(read, ir.out_irtree)
 
@@ -722,7 +748,7 @@ class EffectInterpreter(Interpreter, ABC):
 
     @tp.final
     def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
-        effect = params.get("effect")
+        effect = get_effect()
 
         if effect is None or not isinstance(effect, tuple(self.handles)):
             return self.parent.interpret(prim, in_tree, **params)

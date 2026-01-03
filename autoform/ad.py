@@ -23,6 +23,7 @@ from autoform.core import (
     dce_rules,
     default_dce,
     eval_rules,
+    get_effect,
     get_interpreter,
     impl_rules,
     iratom_to_evaltype,
@@ -95,7 +96,8 @@ def pushforward(ir: IR) -> IR:
     out_p_irtree = treelib.map(make_p, ir.out_irtree)
     out_t_irtree = treelib.map(make_t, ir.out_irtree)
     out_irtree = (out_p_irtree, out_t_irtree)
-    eqn = IREqn(pushforward_call_p, in_irtree, out_irtree, dict(ir=ir))
+    effect = get_effect()
+    eqn = IREqn(pushforward_call_p, in_irtree, out_irtree, effect, dict(ir=ir))
     return IR([eqn], in_irtree, out_irtree)
 
 
@@ -132,7 +134,7 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
             p_in_ireqn = treelib.map(read_p, ireqn.in_irtree)
             t_in_ireqn = treelib.map(read_t, ireqn.in_irtree)
             in_tree = (p_in_ireqn, t_in_ireqn)
-            out_p_ireqn, out_t_ireqn = ireqn.prim.bind(in_tree, **ireqn.params)
+            out_p_ireqn, out_t_ireqn = ireqn.bind(in_tree, **ireqn.params)
             treelib.map(write_p, ireqn.out_irtree, out_p_ireqn)
             treelib.map(write_t, ireqn.out_irtree, out_t_ireqn)
 
@@ -296,7 +298,8 @@ def pullback(ir: IR) -> IR:
     out_p = treelib.map(make_p, ir.out_irtree)
     in_c = treelib.map(make_c, ir.in_irtree)
     out_irtree = (out_p, in_c)
-    eqn = IREqn(pullback_call_p, in_irtree, out_irtree, dict(ir=ir))
+    effect = get_effect()
+    eqn = IREqn(pullback_call_p, in_irtree, out_irtree, effect, dict(ir=ir))
     return IR([eqn], in_irtree, out_irtree)
 
 
@@ -330,7 +333,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
     with using_interpreter(PullbackFwdInterpreter()):
         for i, eqn in enumerate(ir.ireqns):
             p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
-            out_p_ireqn, residuals = eqn.prim.bind(p_in_ireqn, **eqn.params)
+            out_p_ireqn, residuals = eqn.bind(p_in_ireqn, **eqn.params)
             res_env[i] = residuals
             treelib.map(write_p, eqn.out_irtree, out_p_ireqn)
 
@@ -341,7 +344,7 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
             idx = len(ir.ireqns) - 1 - i
             residuals = res_env[idx]
             out_c_ireqn = treelib.map(read_c, eqn.out_irtree)
-            c_in_ireqn = eqn.prim.bind((residuals, out_c_ireqn), **eqn.params)
+            c_in_ireqn = eqn.bind((residuals, out_c_ireqn), **eqn.params)
             treelib.map(write_c, eqn.in_irtree, c_in_ireqn)
 
     out_p_tree = treelib.map(read_p, ir.out_irtree)

@@ -94,7 +94,7 @@ def fold(ir: IR) -> IR:
     for ireqn in ir.ireqns:
         # NOTE(asem): recursively fold nested IRs in HOP params
         params = {k: fold(v) if isinstance(v, IR) else v for k, v in ireqn.params.items()}
-        ireqn = IREqn(ireqn.prim, ireqn.in_irtree, ireqn.out_irtree, params)
+        ireqn = IREqn(ireqn.prim, ireqn.in_irtree, ireqn.out_irtree, ireqn.effect, params)
 
         in_irtree = treelib.map(read, ireqn.in_irtree)
 
@@ -107,7 +107,7 @@ def fold(ir: IR) -> IR:
             # NOTE(asem): non-constant inputs denotes at least one input is a variable,
             # equation must be evaluated at runtime.
             treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
-            eqns.append(IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.params))
+            eqns.append(IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, ireqn.params))
 
     out_irtree = treelib.map(read, ir.out_irtree)
 

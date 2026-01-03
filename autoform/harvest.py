@@ -6,7 +6,7 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 
-from autoform.core import IR, Effect, EffectInterpreter, call, using_interpreter
+from autoform.core import IR, Effect, EffectInterpreter, call, using_effect, using_interpreter
 from autoform.effects import effect_p
 from autoform.utils import Tree, lru_cache
 
@@ -61,8 +61,8 @@ def checkpoint(value: Tree, /, *, key: tp.Hashable, collection: tp.Hashable | No
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    effect = CheckpointEffect(key=key, collection=collection)
-    return effect_p.bind(value, effect=effect)
+    with using_effect(CheckpointEffect(key=key, collection=collection)):
+        return effect_p.bind(value)
 
 
 # ==================================================================================================

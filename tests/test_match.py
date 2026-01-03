@@ -43,7 +43,7 @@ class TestIREqnMatchArgs:
         eqn = ir.ireqns[0]
 
         match eqn:
-            case af.core.IREqn(prim, in_tree, out_tree, params):
+            case af.core.IREqn(prim, in_tree, out_tree, effect, params):
                 assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
@@ -76,7 +76,11 @@ class TestIREqnMatchArgs:
             match eqn.effect:
                 case CheckpointEffect(key=key, collection="old_tag"):
                     new_effect = CheckpointEffect(key=key, collection="new_tag")
-                    new_eqns.append(eqn.using(effect=new_effect))
+                    new_eqns.append(
+                        af.core.IREqn(
+                            eqn.prim, eqn.in_irtree, eqn.out_irtree, new_effect, eqn.params
+                        )
+                    )
                 case _:
                     new_eqns.append(eqn)
 
@@ -101,7 +105,7 @@ class TestIREqnWithParams:
         eqn = ir.ireqns[0]
 
         new_effect = CheckpointEffect(key="x", collection="new")
-        new_eqn = eqn.using(effect=new_effect)
+        new_eqn = af.core.IREqn(eqn.prim, eqn.in_irtree, eqn.out_irtree, new_effect, eqn.params)
 
         assert eqn.effect.collection == "old"
         assert new_eqn.effect.collection == "new"
@@ -138,7 +142,9 @@ class TestInsertAfterPattern:
             match eqn.effect:
                 case CheckpointEffect(key=key, collection="insert_here"):
                     new_effect = CheckpointEffect(key=key, collection="inserted")
-                    inserted = eqn.using(effect=new_effect)
+                    inserted = af.core.IREqn(
+                        eqn.prim, eqn.in_irtree, eqn.out_irtree, new_effect, eqn.params
+                    )
                     new_eqns.append(inserted)
 
         new_ir = af.core.IR(
@@ -169,7 +175,7 @@ class TestIRMatchArgs:
         ir = af.build_ir(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
+            case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, effect, params)], _, _):
                 assert prim == af.string.concat_p
                 assert StringTag in prim.tag
                 assert len(af.utils.treelib.leaves(in_tree)) == 2
@@ -207,7 +213,9 @@ class TestIRMatchArgs:
 
         match pf_ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Primitive("pushforward_call", _), _, _, params)], _, _
+                [af.core.IREqn(af.core.Primitive("pushforward_call", _), _, _, effect, params)],
+                _,
+                _,
             ):
                 nested = params["ir"]
                 assert isinstance(nested, af.core.IR)
@@ -228,7 +236,7 @@ class TestIRMatchArgs:
 
         match ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Primitive("switch", tag), _, _, params)], _, _
+                [af.core.IREqn(af.core.Primitive("switch", tag), _, _, effect, params)], _, _
             ) if ControlTag in tag:
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
