@@ -61,6 +61,8 @@ def checkpoint(value: Tree, /, *, key: tp.Hashable, collection: tp.Hashable | No
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
+    # NOTE(asem): in principle `use_effect` can be used with any program slice.
+    # a dedicated primitives is just for convenience.
     with using_effect(CheckpointEffect(key=key, collection=collection)):
         return effect_p.bind(value)
 
