@@ -1,6 +1,10 @@
 import autoform as af
-from autoform.core import using_handler
-from autoform.harvest import CollectHandler, InjectHandler, checkpoint
+from autoform.core import using_interpreter
+from autoform.harvest import (
+    CollectInterpreter,
+    InjectInterpreter,
+    checkpoint,
+)
 
 
 class TestEffectBasics:
@@ -26,11 +30,12 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectInterpreter(collection="debug")
+        with using_interpreter(handler):
             result = af.call(ir)("hello")
 
         assert result == "hello"
-        assert h.collected == {"val": ["hello"]}
+        assert handler.collected == {"val": ["hello"]}
 
     def test_collect_filters_by_collection(self):
         def func(x):
@@ -40,12 +45,13 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectInterpreter(collection="debug")
+        with using_interpreter(handler):
             result = af.call(ir)("hello")
 
         assert result == "hello"
-        assert h.collected == {"debug_val": ["hello"]}
-        assert "other_val" not in h.collected
+        assert handler.collected == {"debug_val": ["hello"]}
+        assert "other_val" not in handler.collected
 
     def test_collect_all_when_no_collection_filter(self):
         def func(x):
@@ -55,10 +61,11 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler()) as h:
-            result = af.call(ir)("hello")
+        handler = CollectInterpreter()
+        with using_interpreter(handler):
+            af.call(ir)("hello")
 
-        assert h.collected == {"a": ["hello"], "b": ["hello"]}
+        assert handler.collected == {"a": ["hello"], "b": ["hello"]}
 
 
 class TestInjectHandler:
@@ -68,11 +75,13 @@ class TestInjectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="cache")):
+        handler = CollectInterpreter(collection="cache")
+        with using_interpreter(handler):
             normal = af.call(ir)("World")
         assert normal == "Hello, World"
 
-        with using_handler(InjectHandler(collection="cache", values={"greeting": ["CACHED"]})):
+        handler = InjectInterpreter(collection="cache", values={"greeting": ["CACHED"]})
+        with using_interpreter(handler):
             injected = af.call(ir)("World")
         assert injected == "CACHED"
 
@@ -84,7 +93,8 @@ class TestInjectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(InjectHandler(collection="cache", values={"first": ["INJECTED"]})):
+        handler = InjectInterpreter(collection="cache", values={"first": ["INJECTED"]})
+        with using_interpreter(handler):
             result = af.call(ir)("ignored")
 
         assert result == "INJECTED!"
@@ -98,11 +108,12 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         batched = af.batch(ir)
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectInterpreter(collection="debug")
+        with using_interpreter(handler):
             result = af.call(batched)(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
-        assert h.collected == {"val": [["a", "b", "c"]]}
+        assert handler.collected == {"val": [["a", "b", "c"]]}
 
     def test_effects_through_pushforward(self):
         def func(x):
@@ -111,12 +122,13 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward(ir)
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectInterpreter(collection="debug")
+        with using_interpreter(handler):
             primal, tangent = af.call(pf_ir)(("primal", "tangent"))
 
         assert primal == "primal"
         assert tangent == "tangent"
-        assert h.collected == {"val": ["primal", "tangent"]}
+        assert handler.collected == {"val": ["primal", "tangent"]}
 
     def test_effects_through_pullback(self):
         def func(x):
@@ -125,12 +137,13 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback(ir)
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectInterpreter(collection="debug")
+        with using_interpreter(handler):
             primal, cotangent = af.call(pb_ir)(("primal", "cotangent"))
 
         assert primal == "primal"
         assert cotangent == "cotangent"
-        assert h.collected == {"val": ["primal", "cotangent"]}
+        assert handler.collected == {"val": ["primal", "cotangent"]}
 
 
 class TestHandlerComposition:
@@ -142,10 +155,12 @@ class TestHandlerComposition:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="debug")) as debug_h:
-            with using_handler(CollectHandler(collection="cache")) as cache_h:
+        debug_handler = CollectInterpreter(collection="debug")
+        with using_interpreter(debug_handler):
+            cache_handler = CollectInterpreter(collection="cache")
+            with using_interpreter(cache_handler):
                 result = af.call(ir)("hello")
 
         assert result == "hello"
-        assert debug_h.collected == {"debug": ["hello"]}
-        assert cache_h.collected == {"cache": ["hello"]}
+        assert debug_handler.collected == {"debug": ["hello"]}
+        assert cache_handler.collected == {"cache": ["hello"]}

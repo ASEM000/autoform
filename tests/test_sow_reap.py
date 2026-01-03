@@ -257,8 +257,7 @@ class TestInjectAndDCE:
             return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
-
-        assert len(traced_ir.ireqns) == 3
+        assert len(traced_ir.ireqns) == 2
 
         last_eqn = traced_ir.ireqns[-1]
         assert last_eqn.prim.name == "concat"
@@ -275,8 +274,7 @@ class TestInjectAndDCE:
             return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
-
-        assert len(traced_ir.ireqns) == 3
+        assert len(traced_ir.ireqns) == 2
 
         optimized_ir = af.dce(traced_ir)
 
