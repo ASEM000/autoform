@@ -764,6 +764,7 @@ class EffectInterpreter(Interpreter, ABC):
             # NOTE(asem): skip: handler returned without yield.
             # >>> def handle(self, effect, value):
             # ...     return self.cache[effect.key]
+            # ...     yield
             return e.value
 
         # NOTE(asem): delegate to parent interpreter.
