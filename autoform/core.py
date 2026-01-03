@@ -691,51 +691,72 @@ class Effect:
         self.key = key
 
 
-class EffectHandler(Interpreter, ABC):
-    # NOTE(asem): EffectHandler is a pass-through interpreter + hook for
-    # handling marked effects at execution/tracing.
-    # whereas transformations (batch, pushforward, pullback) which rewrite
-    # IR structure and have per-primitive rule registries.
-    # where effect handlers intercept values during execution/tracing.
+class EffectInterpreter(Interpreter, ABC):
+    # NOTE(asem): single continuation style effect handler
+    #
+    # pass-through (observe only)
+    # >>> def handle(self, effect, value):
+    # ...     return (yield value)
+    #
+    # pre-process input
+    # >>> def handle(self, effect, value):
+    # ...     return (yield transform(value))
+    #
+    # post-process output
+    # >>> def handle(self, effect, value):
+    # ...     result = yield value
+    # ...     return transform(result)
+    #
+    # both
+    # >>> def handle(self, effect, value):
+    # ...     result = yield transform(value)
+    # ...     return transform(result)
     handles: tp.ClassVar[set[type[Effect]]] = set()
 
     def __init__(self):
         self.parent = get_interpreter()
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        assert cls.interpret is EffectInterpreter.interpret
+
+    @tp.final
     def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
-        if any(issubclass(t, EffectTag) for t in prim.tag):
-            effect = params.get("effect")
+        effect = params.get("effect")
 
-            if isinstance(effect, tuple(self.handles)):
-                in_tree = self.handle(effect, in_tree)
+        if effect is None or not isinstance(effect, tuple(self.handles)):
+            return self.parent.interpret(prim, in_tree, **params)
 
-        # NOTE(asem): use passthrough (self.parent.interpret) instead of
-        # using_interpreter(self.parent). this is critical because:
-        #
-        # consider collect(batch(ir)) with checkpoints inside:
-        #   active_interpreter = CollectHandler
-        #   CollectHandler.parent = BatchInterpreter
-        #   BatchInterpreter.parent = EvalInterpreter
-        #
-        # with passthrough:
-        #   CollectHandler.interpret() calls self.parent.interpret(...)
-        #   this is a direct method call and active_interpreter is unchanged.
-        #   when BatchInterpreter does prim.bind() for nested primitives
-        #   get_interpreter() still returns CollectHandler.
-        #   so nested effects re-enter through CollectHandler and are collected.
-        #
-        # with using_interpreter(parent):
-        #   active_interpreter is temporarily set to BatchInterpreter.
-        #   when BatchInterpreter does prim.bind() for nested primitives,
-        #   get_interpreter() returns BatchInterpreter and CollectHandler is bypassed.
-        return self.parent.interpret(prim, in_tree, **params)
+        gen = self.handle(effect, in_tree)
+
+        try:
+            # NOTE(asem): pre-processing: handler can modify input via yield.
+            # >>> def handle(self, effect, value):
+            # ...     return (yield transform(value))
+            modified_input = next(gen)
+        except StopIteration as e:
+            # NOTE(asem): skip: handler returned without yield.
+            # >>> def handle(self, effect, value):
+            # ...     return self.cache[effect.key]
+            return e.value
+
+        # NOTE(asem): delegate to parent interpreter.
+        assert self.parent is not None
+        result = self.parent.interpret(prim, modified_input, **params)
+
+        # NOTE(asem): post-processing: handler receives result via send().
+        # >>> def handle(self, effect, value):
+        # ...     result = yield value
+        # ...     self.collected.append(result)  # observe
+        # ...     return post_process(result)    # modify output
+        try:
+            gen.send(result)
+        except StopIteration as e:
+            # NOTE(asem): generator returned (finished)
+            # StopIteration.value contains the return value.
+            return e.value
+
+        return result
 
     @abstractmethod
-    def handle(self, effect: Effect, value: tp.Any) -> tp.Any: ...
-
-
-@contextmanager
-def using_handler(handler: EffectHandler) -> tp.Generator[EffectHandler, None, None]:
-    assert isinstance(handler, EffectHandler), "Handler must be an instance of EffectHandler"
-    with using_interpreter(handler):
-        yield handler
+    def handle(self, effect: Effect, value: tp.Any) -> tp.Generator[tp.Any, tp.Any, tp.Any]: ...
