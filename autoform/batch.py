@@ -128,7 +128,7 @@ class BatchInterpreter(Interpreter):
         self.parent = get_interpreter()
         self.batch_size = batch_size
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             batch_size, in_batched, in_values = in_tree
             return batch_rules[prim](batch_size, in_batched, in_values, **params)

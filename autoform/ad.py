@@ -50,7 +50,7 @@ class PushforwardInterpreter(Interpreter):
     def __init__(self):
         self.parent = get_interpreter()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             in_primal, in_tangent = in_tree
             return push_rules[prim](in_primal, in_tangent, **params)
@@ -242,7 +242,7 @@ class PullbackFwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = get_interpreter()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return pull_fwd_rules[prim](in_tree, **params)
 
@@ -251,7 +251,7 @@ class PullbackBwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = get_interpreter()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             in_residual, out_cotangent = in_tree
             return pull_bwd_rules[prim](in_residual, out_cotangent, **params)

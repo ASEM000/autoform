@@ -189,7 +189,7 @@ class Primitive:
     def __repr__(self) -> str:
         return self.name
 
-    def bind(self, in_tree: Tree, **params):
+    def bind(self, in_tree: Tree, /, **params):
         return get_interpreter().interpret(self, in_tree, **params)
 
 
@@ -406,11 +406,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 class Interpreter(ABC):
     @abstractmethod
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> tp.Any: ...
 
 
 class EvalInterpreter(Interpreter):
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
         return impl_rules[prim](in_tree, **params)
 
 
@@ -443,7 +443,7 @@ class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRAtom]:
         def to_in_iratom(x) -> IRAtom:
             # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
             # however, a function can take a constant value as input that is not an input
@@ -702,7 +702,7 @@ class EffectHandler(Interpreter, ABC):
     def __init__(self):
         self.parent = get_interpreter()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
         if any(issubclass(t, EffectTag) for t in prim.tag):
             effect = params.get("effect")
 
