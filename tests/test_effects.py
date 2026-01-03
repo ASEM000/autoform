@@ -1,5 +1,5 @@
 import autoform as af
-from autoform.core import using_interpreter
+from autoform.core import Effect, EffectInterpreter, using_effect, using_interpreter
 from autoform.harvest import (
     CollectInterpreter,
     InjectInterpreter,
@@ -164,3 +164,121 @@ class TestHandlerComposition:
         assert result == "hello"
         assert debug_handler.collected == {"debug": ["hello"]}
         assert cache_handler.collected == {"cache": ["hello"]}
+
+
+class TestMultiShotContinuation:
+    def test_multi_shot_collects_all(self):
+
+        class MultiEffect(Effect):
+            pass
+
+        class MultiShotHandler(EffectInterpreter):
+            handles = {MultiEffect}
+
+            def __init__(self, alternatives: list):
+                super().__init__()
+                self.alternatives = alternatives
+                self.results = []
+
+            def handle(self, effect, in_tree):
+                for v in self.alternatives:
+                    result = yield (v, in_tree[1])
+                    self.results.append(result)
+                return self.results[-1]
+                yield
+
+        def program(x):
+            with using_effect(MultiEffect(key="multi")):
+                return af.concat(x, "!")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        handler = MultiShotHandler(alternatives=["A", "B", "C"])
+        with using_interpreter(handler):
+            result = af.call(ir)("ignored")
+
+        assert handler.results == ["A!", "B!", "C!"]
+        assert result == "C!"
+
+    def test_multi_shot_aggregation(self):
+
+        class AggregateEffect(Effect):
+            pass
+
+        class AggregatingHandler(EffectInterpreter):
+            handles = {AggregateEffect}
+
+            def handle(self, effect, in_tree):
+                results = []
+                for suffix in ["!", "?", "."]:
+                    left, _ = in_tree
+                    result = yield (left + suffix, "")
+                    results.append(result)
+                return " | ".join(results)
+                yield
+
+        def program(x):
+            with using_effect(AggregateEffect(key="agg")):
+                return af.concat(x, " appended")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        handler = AggregatingHandler()
+        with using_interpreter(handler):
+            result = af.call(ir)("Hello")
+
+        assert result == "Hello! | Hello? | Hello."
+
+    def test_single_shot_still_works(self):
+
+        class SingleEffect(Effect):
+            pass
+
+        class SingleShotHandler(EffectInterpreter):
+            handles = {SingleEffect}
+
+            def handle(self, effect, in_tree):
+                left, right = in_tree
+                result = yield (left.upper(), right)
+                return result + " modified"
+                yield
+
+        def program(x):
+            with using_effect(SingleEffect(key="single")):
+                return af.concat(x, " world")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        handler = SingleShotHandler()
+        with using_interpreter(handler):
+            result = af.call(ir)("hello")
+
+        assert result == "HELLO world modified"
+
+    def test_skip_still_works(self):
+
+        class SkipEffect(Effect):
+            pass
+
+        class SkipHandler(EffectInterpreter):
+            handles = {SkipEffect}
+
+            def handle(self, effect, value):
+                return "SKIPPED"
+                yield
+
+        def program(x):
+            with using_effect(SkipEffect(key="skip")):
+                return af.concat(x, " should not appear")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        handler = SkipHandler()
+        with using_interpreter(handler):
+            result = af.call(ir)("ignored")
+
+        assert result == "SKIPPED"

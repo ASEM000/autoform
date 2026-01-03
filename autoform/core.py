@@ -720,6 +720,11 @@ class Effect:
 class EffectInterpreter(Interpreter, ABC):
     # NOTE(asem): single continuation style effect handler
     #
+    # skip (replace value, no continuation)
+    # >>> def handle(self, effect, value):
+    # ...     return replacement
+    # ...     yield
+    #
     # pass-through (observe only)
     # >>> def handle(self, effect, value):
     # ...     return (yield value)
@@ -754,36 +759,24 @@ class EffectInterpreter(Interpreter, ABC):
             return self.parent.interpret(prim, in_tree, **params)
 
         gen = self.handle(effect, in_tree)
+        result = None
 
-        try:
-            # NOTE(asem): pre-processing: handler can modify input via yield.
-            # >>> def handle(self, effect, value):
-            # ...     return (yield transform(value))
-            modified_input = next(gen)
-        except StopIteration as e:
-            # NOTE(asem): skip: handler returned without yield.
-            # >>> def handle(self, effect, value):
-            # ...     return self.cache[effect.key]
-            # ...     yield
-            return e.value
-
-        # NOTE(asem): delegate to parent interpreter.
-        assert self.parent is not None
-        result = self.parent.interpret(prim, modified_input, **params)
-
-        # NOTE(asem): post-processing: handler receives result via send().
+        # NOTE(asem):
+        # the handler can yield multiple times, each yield invokes the continuation.
         # >>> def handle(self, effect, value):
-        # ...     result = yield value
-        # ...     self.collected.append(result)  # observe
-        # ...     return post_process(result)    # modify output
-        try:
-            gen.send(result)
-        except StopIteration as e:
-            # NOTE(asem): generator returned (finished)
-            # StopIteration.value contains the return value.
-            return e.value
+        # ...     results = []
+        # ...     for v in (...):
+        # ...         result = yield v
+        # ...         results.append(result)
+        # ...     return best(results)
+        # ...     yield
+        while True:
+            try:
+                modified_input = next(gen) if result is None else gen.send(result)
+            except StopIteration as e:
+                return e.value
 
-        return result
+            result = self.parent.interpret(prim, modified_input, **params)
 
     @abstractmethod
     def handle(self, effect: Effect, value: tp.Any) -> tp.Generator[tp.Any, tp.Any, tp.Any]: ...
