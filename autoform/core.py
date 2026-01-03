@@ -707,9 +707,6 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
 # ==================================================================================================
 
 
-class EffectTag(PrimitiveTag): ...
-
-
 class Effect:
     __slots__ = "key"
 
