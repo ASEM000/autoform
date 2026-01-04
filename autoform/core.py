@@ -29,7 +29,6 @@ __all__ = [
     "iratom_to_evaltype",
     # tags
     "PrimitiveTag",
-    "EffectTag",
     "TransformationTag",
     # primitive
     "Primitive",
