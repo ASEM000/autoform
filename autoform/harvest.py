@@ -6,7 +6,7 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 
-from autoform.core import IR, Effect, EffectHandler, call, using_handler
+from autoform.core import IR, Effect, call, using_effect, using_effect_handler
 from autoform.effects import effect_p
 from autoform.utils import Tree, lru_cache
 
@@ -15,16 +15,16 @@ from autoform.utils import Tree, lru_cache
 # ==================================================================================================
 
 
-class Checkpoint(Effect):
-    __slots__ = "collection"
+class CheckpointEffect(Effect):
+    __slots__ = ("key", "collection")
     __match_args__ = ("key", "collection")
 
     def __init__(self, *, key: tp.Hashable, collection: tp.Hashable | None = None):
-        super().__init__(key=key)
+        self.key = key
         self.collection = collection
 
 
-def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
+def checkpoint(value: Tree, /, *, key: tp.Hashable, collection: tp.Hashable | None = None) -> Tree:
     """Tag a value with a collection and key for later collection.
 
     `checkpoint` marks a value with a `collection` and `key` (unique identifier)
@@ -32,7 +32,7 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
     normal execution.
 
     Args:
-        in_tree: the value to mark (returned unchanged).
+        value: the value to mark (returned unchanged).
         key: unique identifier within the collection namespace.
         collection: optional collection for filtering (e.g., "debug", "cache", "metrics").
 
@@ -52,8 +52,8 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    effect = Checkpoint(key=key, collection=collection)
-    return effect_p.bind(in_tree, effect=effect)
+    with using_effect(CheckpointEffect(key=key, collection=collection)):
+        return effect_p.bind(value)
 
 
 # ==================================================================================================
@@ -61,21 +61,20 @@ def checkpoint(in_tree: Tree, *, key: tp.Hashable, collection: tp.Hashable | Non
 # ==================================================================================================
 
 
-class CollectHandler(EffectHandler):
-    handles = (Checkpoint,)
+type Collected = dict[tp.Hashable, list[Tree]]
 
-    def __init__(self, *, collection: tp.Hashable | None = None):
-        super().__init__()
+
+class CollectHandler:
+    def __init__(self, *, collection: tp.Hashable):
         self.collection = collection
         self.collected: dict[tp.Hashable, list[tp.Any]] = defaultdict(list)
 
-    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
-        if self.collection is None or effect.collection == self.collection:
-            self.collected[effect.key].append(value)
-        return value
-
-
-type Collected = dict[tp.Hashable, list[Tree]]
+    def __call__(self, effect: CheckpointEffect, in_tree: tp.Any):
+        result = yield in_tree
+        if self.collection is ... or effect.collection == self.collection:
+            self.collected[effect.key].append(result)
+        return result
+        yield
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -84,7 +83,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
     Args:
         ir: The intermediate representation to run.
-        collection: The collection to filter marked values by.
+        collection: The collection to filter marked values by. If `...`, collect all values.
 
     Returns:
         A callable that executes the IR and returns (result, collected_dict).
@@ -105,7 +104,8 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
-        with using_handler(CollectHandler(collection=collection)) as handler:
+        handler = CollectHandler(collection=collection)
+        with using_effect_handler({CheckpointEffect: handler}):
             result = call(ir)(*args, **kwargs)
         return result, handler.collected
 
@@ -117,21 +117,16 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 # ==================================================================================================
 
 
-class InjectHandler(EffectHandler):
-    handles = (Checkpoint,)
-
-    def __init__(
-        self, *, collection: tp.Hashable | None = None, values: dict[tp.Hashable, list[tp.Any]]
-    ):
-        super().__init__()
+class InjectHandler:
+    def __init__(self, *, collection: tp.Hashable, values: Collected):
         self.collection = collection
-        self.values = {k: list(reversed(v)) for k, v in values.items()}
+        self.cache = {k: list(reversed(v)) for k, v in values.items()}
 
-    def handle(self, effect: Checkpoint, value: tp.Any) -> tp.Any:
-        if self.collection is None or effect.collection == self.collection:
-            if effect.key in self.values and self.values[effect.key]:
-                return self.values[effect.key].pop()
-        return value
+    def __call__(self, effect: CheckpointEffect, in_tree: tp.Any):
+        if effect.collection == self.collection:
+            if effect.key in self.cache and self.cache[effect.key]:
+                return self.cache[effect.key].pop()
+        return (yield in_tree)
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
@@ -157,12 +152,13 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         'CACHED'
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-    assert isinstance(values, dict), f"Expected dict, got {type(values)}"
+    assert isinstance(values, dict)
     for key in values:
-        assert isinstance(values[key], list), f"Expected list, got {type(values[key])} for {key=}"
+        assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
-        with using_handler(InjectHandler(collection=collection, values=values)):
+        handler = InjectHandler(collection=collection, values=values)
+        with using_effect_handler({CheckpointEffect: handler}):
             return call(ir)(*args, **kwargs)
 
     return execute

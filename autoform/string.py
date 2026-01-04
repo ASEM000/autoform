@@ -8,6 +8,7 @@ from autoform.ad import zero_cotangent
 from autoform.core import (
     EvalType,
     Primitive,
+    PrimitiveTag,
     Var,
     batch_rules,
     dce_rules,
@@ -21,11 +22,15 @@ from autoform.core import (
 )
 from autoform.utils import Tree, treelib
 
+
+class StringTag(PrimitiveTag): ...
+
+
 # ==================================================================================================
 # FORMAT
 # ==================================================================================================
 
-format_p = Primitive("format", tag="string")
+format_p = Primitive("format", tag={StringTag})
 
 
 def format(template: str, *args) -> str:
@@ -94,7 +99,7 @@ dce_rules.def_rule(format_p, default_dce)
 # CONCAT
 # ==================================================================================================
 
-concat_p = Primitive("concat", tag="string")
+concat_p = Primitive("concat", tag={StringTag})
 
 
 def concat(*args) -> str:
@@ -163,7 +168,7 @@ dce_rules.def_rule(concat_p, default_dce)
 # MATCH
 # ==================================================================================================
 
-match_p = Primitive("match", tag="string")
+match_p = Primitive("match", tag={StringTag})
 
 
 def match(a: str, b: str) -> bool:

@@ -15,8 +15,8 @@ class TestSow:
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "effect"
-        assert ir.ireqns[0].params["effect"].collection == "my_tag"
-        assert ir.ireqns[0].params["effect"].key == "my_name"
+        assert ir.ireqns[0].effect.collection == "my_tag"
+        assert ir.ireqns[0].effect.key == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -257,8 +257,7 @@ class TestInjectAndDCE:
             return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
-
-        assert len(traced_ir.ireqns) == 3
+        assert len(traced_ir.ireqns) == 2
 
         last_eqn = traced_ir.ireqns[-1]
         assert last_eqn.prim.name == "concat"
@@ -275,8 +274,7 @@ class TestInjectAndDCE:
             return af.inject(ir, collection="cache", values={"result": ["CACHED"]})("ignored")
 
         traced_ir = af.build_ir(wrapped)("example")
-
-        assert len(traced_ir.ireqns) == 3
+        assert len(traced_ir.ireqns) == 2
 
         optimized_ir = af.dce(traced_ir)
 

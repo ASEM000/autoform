@@ -15,6 +15,7 @@ from autoform.core import (
     IRLit,
     IRVar,
     Primitive,
+    TransformationTag,
     Value,
     acall,
     async_rules,
@@ -23,6 +24,7 @@ from autoform.core import (
     dce_rules,
     default_dce,
     eval_rules,
+    get_effect,
     get_interpreter,
     impl_rules,
     iratom_to_evaltype,
@@ -35,13 +37,15 @@ from autoform.core import (
 from autoform.optims import dce
 from autoform.utils import Tree, lru_cache, transpose_batch, treelib
 
+# ==================================================================================================
+# BATCH
+# ==================================================================================================
+
 
 class IRBVar(IRVar): ...
 
 
-# ==================================================================================================
-# BATCH
-# ==================================================================================================
+class BatchTag(TransformationTag): ...
 
 
 def is_axis_spec(x) -> bool:
@@ -79,7 +83,7 @@ def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
     return batch_tree
 
 
-batch_call_p = Primitive("batch_call", tag="transformation")
+batch_call_p = Primitive("batch_call", tag={BatchTag})
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -116,7 +120,8 @@ def batch(ir: IR, in_axes: Tree[bool] = True) -> IR:
 
     in_b_irtree = treelib.map(make_b, ir.in_irtree)
     out_b_irtree = treelib.map(make_b, ir.out_irtree)
-    eqn = IREqn(batch_call_p, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
+    effect = get_effect()
+    eqn = IREqn(batch_call_p, in_b_irtree, out_b_irtree, effect, dict(ir=ir, in_axes=in_axes))
     return IR([eqn], in_b_irtree, out_b_irtree)
 
 
@@ -125,7 +130,7 @@ class BatchInterpreter(Interpreter):
         self.parent = get_interpreter()
         self.batch_size = batch_size
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params):
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             batch_size, in_batched, in_values = in_tree
             return batch_rules[prim](batch_size, in_batched, in_values, **params)
@@ -167,7 +172,7 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
             in_vals = treelib.map(read_v, ireqn.in_irtree)
             in_batched = treelib.map(read_b, ireqn.in_irtree)
             in_tree = (batch_size, in_batched, in_vals)
-            out_vals, out_batched = ireqn.prim.bind(in_tree, **ireqn.params)
+            out_vals, out_batched = ireqn.bind(in_tree, **ireqn.params)
             treelib.map(write_v, ireqn.out_irtree, out_vals)
             out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
             treelib.map(write_b, ireqn.out_irtree, out_batched)

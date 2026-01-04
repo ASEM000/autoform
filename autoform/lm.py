@@ -10,6 +10,7 @@ from litellm import acompletion, batch_completion, completion
 
 from autoform.core import (
     Primitive,
+    PrimitiveTag,
     Var,
     async_rules,
     batch_rules,
@@ -21,6 +22,10 @@ from autoform.core import (
     push_rules,
 )
 from autoform.utils import Tree, transpose_batch, treelib
+
+
+class LMTag(PrimitiveTag): ...
+
 
 # ==================================================================================================
 # STRUCT
@@ -65,7 +70,7 @@ class Struct(pydantic.BaseModel):
 # LM CALL
 # ==================================================================================================
 
-lm_call_p = Primitive("lm_call", tag="lm")
+lm_call_p = Primitive("lm_call", tag={LMTag})
 
 
 def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
@@ -183,7 +188,7 @@ async def async_lm_call(contents: list, *, roles: tuple, model: str) -> str:
 # STRUCT LM CALL
 # ==================================================================================================
 
-struct_lm_call_p = Primitive("struct_lm_call", tag="lm")
+struct_lm_call_p = Primitive("struct_lm_call", tag={LMTag})
 
 
 def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:

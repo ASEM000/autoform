@@ -1,6 +1,11 @@
 import autoform as af
-from autoform.core import using_handler
-from autoform.harvest import CollectHandler, InjectHandler, checkpoint
+from autoform.core import Effect, using_effect, using_effect_handler
+from autoform.harvest import (
+    CheckpointEffect,
+    CollectHandler,
+    InjectHandler,
+    checkpoint,
+)
 
 
 class TestEffectBasics:
@@ -15,8 +20,8 @@ class TestEffectBasics:
         ir = af.build_ir(func)("test")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "effect"
-        assert ir.ireqns[0].params["effect"].key == "my_key"
-        assert ir.ireqns[0].params["effect"].collection == "my_col"
+        assert ir.ireqns[0].effect.key == "my_key"
+        assert ir.ireqns[0].effect.collection == "my_col"
 
 
 class TestCollectHandler:
@@ -26,11 +31,12 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(ir)("hello")
 
         assert result == "hello"
-        assert h.collected == {"val": ["hello"]}
+        assert handler.collected == {"val": ["hello"]}
 
     def test_collect_filters_by_collection(self):
         def func(x):
@@ -40,12 +46,13 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(ir)("hello")
 
         assert result == "hello"
-        assert h.collected == {"debug_val": ["hello"]}
-        assert "other_val" not in h.collected
+        assert handler.collected == {"debug_val": ["hello"]}
+        assert "other_val" not in handler.collected
 
     def test_collect_all_when_no_collection_filter(self):
         def func(x):
@@ -55,10 +62,11 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler()) as h:
-            result = af.call(ir)("hello")
+        handler = CollectHandler(collection=...)
+        with using_effect_handler({CheckpointEffect: handler}):
+            af.call(ir)("hello")
 
-        assert h.collected == {"a": ["hello"], "b": ["hello"]}
+        assert handler.collected == {"a": ["hello"], "b": ["hello"]}
 
 
 class TestInjectHandler:
@@ -68,11 +76,13 @@ class TestInjectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="cache")):
+        handler = CollectHandler(collection="cache")
+        with using_effect_handler({CheckpointEffect: handler}):
             normal = af.call(ir)("World")
         assert normal == "Hello, World"
 
-        with using_handler(InjectHandler(collection="cache", values={"greeting": ["CACHED"]})):
+        handler = InjectHandler(collection="cache", values={"greeting": ["CACHED"]})
+        with using_effect_handler({CheckpointEffect: handler}):
             injected = af.call(ir)("World")
         assert injected == "CACHED"
 
@@ -84,7 +94,8 @@ class TestInjectHandler:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(InjectHandler(collection="cache", values={"first": ["INJECTED"]})):
+        handler = InjectHandler(collection="cache", values={"first": ["INJECTED"]})
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(ir)("ignored")
 
         assert result == "INJECTED!"
@@ -98,11 +109,12 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         batched = af.batch(ir)
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(batched)(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
-        assert h.collected == {"val": [["a", "b", "c"]]}
+        assert handler.collected == {"val": [["a", "b", "c"]]}
 
     def test_effects_through_pushforward(self):
         def func(x):
@@ -111,12 +123,13 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward(ir)
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             primal, tangent = af.call(pf_ir)(("primal", "tangent"))
 
         assert primal == "primal"
         assert tangent == "tangent"
-        assert h.collected == {"val": ["primal", "tangent"]}
+        assert handler.collected == {"val": ["primal", "tangent"]}
 
     def test_effects_through_pullback(self):
         def func(x):
@@ -125,12 +138,13 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback(ir)
 
-        with using_handler(CollectHandler(collection="debug")) as h:
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             primal, cotangent = af.call(pb_ir)(("primal", "cotangent"))
 
         assert primal == "primal"
         assert cotangent == "cotangent"
-        assert h.collected == {"val": ["primal", "cotangent"]}
+        assert handler.collected == {"val": ["primal", "cotangent"]}
 
 
 class TestHandlerComposition:
@@ -142,10 +156,115 @@ class TestHandlerComposition:
 
         ir = af.build_ir(func)("test")
 
-        with using_handler(CollectHandler(collection="debug")) as debug_h:
-            with using_handler(CollectHandler(collection="cache")) as cache_h:
+        debug_handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: debug_handler}):
+            cache_handler = CollectHandler(collection="cache")
+            with using_effect_handler({CheckpointEffect: cache_handler}):
                 result = af.call(ir)("hello")
 
         assert result == "hello"
-        assert debug_h.collected == {"debug": ["hello"]}
-        assert cache_h.collected == {"cache": ["hello"]}
+        assert debug_handler.collected == {"debug": ["hello"]}
+        assert cache_handler.collected == {"cache": ["hello"]}
+
+
+class TestMultiShotContinuation:
+    def test_multi_shot_collects_all(self):
+
+        class MultiEffect(Effect):
+            pass
+
+        class MultiShotHandler:
+            def __init__(self, alternatives: list):
+                self.alternatives = alternatives
+                self.results = []
+
+            def __call__(self, effect, in_tree):
+                for v in self.alternatives:
+                    result = yield (v, in_tree[1])
+                    self.results.append(result)
+                return self.results[-1]
+                yield
+
+        def program(x):
+            with using_effect(MultiEffect()):
+                return af.concat(x, "!")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        handler = MultiShotHandler(alternatives=["A", "B", "C"])
+        with using_effect_handler({MultiEffect: handler}):
+            result = af.call(ir)("ignored")
+
+        assert handler.results == ["A!", "B!", "C!"]
+        assert result == "C!"
+
+    def test_multi_shot_aggregation(self):
+
+        class AggregateEffect(Effect):
+            pass
+
+        def aggregating_handler(effect, in_tree):
+            results = []
+            for suffix in ["!", "?", "."]:
+                left, _ = in_tree
+                result = yield (left + suffix, "")
+                results.append(result)
+            return " | ".join(results)
+            yield
+
+        def program(x):
+            with using_effect(AggregateEffect()):
+                return af.concat(x, " appended")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        with using_effect_handler({AggregateEffect: aggregating_handler}):
+            result = af.call(ir)("Hello")
+
+        assert result == "Hello! | Hello? | Hello."
+
+    def test_single_shot_still_works(self):
+
+        class SingleEffect(Effect):
+            pass
+
+        def single_shot_handler(effect, in_tree):
+            left, right = in_tree
+            result = yield (left.upper(), right)
+            return result + " modified"
+            yield
+
+        def program(x):
+            with using_effect(SingleEffect()):
+                return af.concat(x, " world")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        with using_effect_handler({SingleEffect: single_shot_handler}):
+            result = af.call(ir)("hello")
+
+        assert result == "HELLO world modified"
+
+    def test_skip_still_works(self):
+
+        class SkipEffect(Effect):
+            pass
+
+        def skip_handler(effect, value):
+            return "SKIPPED"
+            yield
+
+        def program(x):
+            with using_effect(SkipEffect()):
+                return af.concat(x, " should not appear")
+            return x
+
+        ir = af.build_ir(program)("test")
+
+        with using_effect_handler({SkipEffect: skip_handler}):
+            result = af.call(ir)("ignored")
+
+        assert result == "SKIPPED"

@@ -27,6 +27,9 @@ __all__ = [
     "is_irlit",
     "is_iratom",
     "iratom_to_evaltype",
+    # tags
+    "PrimitiveTag",
+    "TransformationTag",
     # primitive
     "Primitive",
     # rule registries
@@ -153,6 +156,19 @@ def is_irlit(x) -> tp.TypeGuard[IRLit]:
 
 
 # ==================================================================================================
+# TAG
+# ==================================================================================================
+
+
+# NOTE(asem): tags are used to group primitives into categories
+# to be later targeted by effect handlers, ...
+class PrimitiveTag: ...
+
+
+class TransformationTag(PrimitiveTag): ...
+
+
+# ==================================================================================================
 # PRIMITIVE
 # ==================================================================================================
 
@@ -163,15 +179,17 @@ class Primitive:
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
-    def __init__(self, name: str, tag: tp.Hashable | None = None):
+    def __init__(self, name: str, tag: set[type[PrimitiveTag]] | None = None):
+        assert isinstance(name, str), f"Invalid name type: {type(name)=}"
+        assert tag is None or all(issubclass(t, PrimitiveTag) for t in tag), f"Invalid tag: {tag=}"
         self.name = name
-        self.tag = tag
+        self.tag: frozenset[type[PrimitiveTag]] = frozenset(tag) if tag else frozenset()
 
     def __repr__(self) -> str:
         return self.name
 
-    def bind(self, in_tree: Tree, **params):
-        return get_interpreter().interpret(self, in_tree, **params)
+    def bind(self, value: Tree, /, **params):
+        return get_interpreter().interpret(self, value, **params)
 
 
 # ==================================================================================================
@@ -283,31 +301,32 @@ dce_rules = InterpreterRuleMapping[DCERule]()
 
 
 class IREqn:
-    # TODO(asem): maybe hash by some other than identity
-    __slots__ = ("prim", "in_irtree", "out_irtree", "params")
-    __match_args__ = ("prim", "in_irtree", "out_irtree", "params")
+    __slots__ = ("prim", "in_irtree", "out_irtree", "effect", "params")
+    __match_args__ = ("prim", "in_irtree", "out_irtree", "effect", "params")
 
     def __init__(
         self,
         prim: Primitive,
         in_irtree: Tree[IRAtom],
         out_irtree: Tree[IRAtom],
+        effect: Effect | None = None,
         params: dict | None = None,
     ):
-        self.params = params if params is not None else {}
         self.prim = prim
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
+        self.effect = effect
+        self.params = params if params is not None else {}
 
     def __setitem__(self, _, __):
         raise TypeError("IREqn is immutable")
 
-    @property
-    def effect(self) -> Effect | None:
-        return self.params.get("effect")
+    def bind(self, in_tree: Tree, /, **params):
+        with using_effect(self.effect):
+            return self.prim.bind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        return IREqn(self.prim, self.in_irtree, self.out_irtree, self.params | kwargs)
+        return IREqn(self.prim, self.in_irtree, self.out_irtree, self.effect, self.params | kwargs)
 
 
 class IR[**P, R]:
@@ -371,10 +390,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         lhs = format_tree(ireqn.out_irtree)
         rhs = format_tree(ireqn.in_irtree)
         params_str = ", ".join(f"{k}={v!r}" for k, v in (ireqn.params or {}).items())
+        effect_str = f" @{ireqn.effect!r}" if ireqn.effect else ""
         if params_str:
-            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}, {params_str})")
+            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}, {params_str}){effect_str}")
         else:
-            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs})")
+            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}){effect_str}")
 
     lines.append("}")
     return "\n".join(lines)
@@ -387,11 +407,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 class Interpreter(ABC):
     @abstractmethod
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> tp.Any: ...
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> tp.Any: ...
 
 
 class EvalInterpreter(Interpreter):
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
         return impl_rules[prim](in_tree, **params)
 
 
@@ -416,6 +436,121 @@ def get_interpreter() -> Interpreter:
 
 
 # ==================================================================================================
+# EFFECT CONTEXT
+# ==================================================================================================
+
+
+class Effect: ...
+
+
+active_effect: ContextVar[Effect | None] = ContextVar("active_effect", default=None)
+
+
+@contextmanager
+def using_effect(effect: Effect | None):
+    if effect is None:
+        yield
+        return
+    token = active_effect.set(effect)
+    try:
+        yield
+    finally:
+        active_effect.reset(token)
+
+
+def get_effect() -> Effect | None:
+    return active_effect.get()
+
+
+# ==================================================================================================
+# EFFECT INTERPRETER
+# ==================================================================================================
+
+
+class EffectInterpreter(Interpreter, ABC):
+    # NOTE(asem): handler patterns (callable-based, not methods)
+    #
+    # skip (replace value, no continuation)
+    # >>> def handler(effect, in_tree):
+    # ...     return replacement
+    # ...     yield
+    #
+    # pass-through (observe only)
+    # >>> def handler(effect, in_tree):
+    # ...     return (yield in_tree)
+    #
+    # pre-process input
+    # >>> def handler(effect, in_tree):
+    # ...     return (yield transform(in_tree))
+    #
+    # post-process output
+    # >>> def handler(effect, in_tree):
+    # ...     result = yield in_tree
+    # ...     return transform(result)
+    def __init__(self, handlers: dict[type[Effect], Handler]):
+        self.parent = get_interpreter()
+        self.handlers = handlers
+
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+        effect = get_effect()
+        handler = self.handlers.get(type(effect)) if effect else None
+
+        if handler is None:
+            return self.parent.interpret(prim, in_tree, **params)
+
+        gen = handler(effect, in_tree)
+        result = None
+
+        # NOTE(asem):
+        # the handler can yield multiple times, each yield invokes the continuation.
+        # >>> def handler(effect, in_tree):
+        # ...     results = []
+        # ...     for v in (...):
+        # ...         result = yield v
+        # ...         results.append(result)
+        # ...     return best(results)
+        # ...     yield
+        while True:
+            try:
+                modified_input = next(gen) if result is None else gen.send(result)
+            except StopIteration as e:
+                return e.value
+
+            result = self.parent.interpret(prim, modified_input, **params)
+
+
+# ==================================================================================================
+# EFFECT HANDLER MAPPING
+# ==================================================================================================
+
+
+Handler = tp.Callable[[Effect, Tree], tp.Generator[tp.Any, tp.Any, tp.Any]]
+
+
+@contextmanager
+def using_effect_handler(handlers: dict[type[Effect], Handler]):
+    """Context manager for activating effect handlers.
+
+    Args:
+        handlers: Mapping from Effect type to handler callable.
+
+    Example:
+        >>> def my_handler(effect, in_tree):
+        ...     result = yield in_tree
+        ...     return result
+        ...     yield
+        >>> with using_effect_handler({MyEffect: my_handler}):  # doctest: +SKIP
+        ...     result = af.call(ir)(x)
+    """
+    assert isinstance(handlers, dict), f"Expected dict, got {type(handlers)}"
+    for effect_key in handlers:
+        assert issubclass(effect_key, Effect), f"Expected Effect, got {effect_key}"
+
+    with using_interpreter(EffectInterpreter(handlers)):
+        yield
+
+
+# ==================================================================================================
 # TRACING INTERPRETER
 # ==================================================================================================
 
@@ -424,7 +559,7 @@ class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree[IRAtom]:
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRAtom]:
         def to_in_iratom(x) -> IRAtom:
             # NOTE(asem): function inputs are injected with IRVar/IRLit by `build_ir`
             # however, a function can take a constant value as input that is not an input
@@ -453,7 +588,8 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh() if is_var(x) else IRLit(x)
 
         out_irtree = treelib.map(to_out_iratom, out_evaltree)
-        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, params))
+        effect = get_effect()
+        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, effect, params))
         return out_irtree
 
 
@@ -542,7 +678,7 @@ def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
 
         for ireqn in ir.ireqns:
             in_ireqn_tree = treelib.map(read, ireqn.in_irtree)
-            out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+            out_ireqn_tree = ireqn.bind(in_ireqn_tree, **ireqn.params)
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         return treelib.map(read, ir.out_irtree)
 
@@ -606,7 +742,7 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
                     yield chunk
                 out_ireqn_tree = out_treespec.unflatten(map(accumulate_chunks, acc))
             else:
-                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+                out_ireqn_tree = ireqn.bind(in_ireqn_tree, **ireqn.params)
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         yield treelib.map(read, ir.out_irtree)
 
@@ -650,44 +786,8 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
                 async_rule = async_rules[ireqn.prim]
                 out_ireqn_tree = await async_rule(in_ireqn_tree, **ireqn.params)
             else:
-                out_ireqn_tree = ireqn.prim.bind(in_ireqn_tree, **ireqn.params)
+                out_ireqn_tree = ireqn.bind(in_ireqn_tree, **ireqn.params)
             treelib.map(write, ireqn.out_irtree, out_ireqn_tree)
         return treelib.map(read, ir.out_irtree)
 
     return execute
-
-
-# ==================================================================================================
-# EFFECTS
-# ==================================================================================================
-
-
-class Effect:
-    __slots__ = "key"
-
-    def __init__(self, *, key: tp.Hashable):
-        self.key = key
-
-
-class EffectHandler(Interpreter, ABC):
-    handles: tp.ClassVar[tuple[type[Effect], ...]] = ()
-
-    def __init__(self):
-        self.parent = get_interpreter()
-
-    def interpret(self, prim: Primitive, in_tree: Tree, **params) -> Tree:
-        if prim.tag == "effect":
-            if (effect := params.get("effect")) is not None and isinstance(effect, self.handles):
-                result = self.handle(effect, in_tree)
-                return self.parent.interpret(prim, result, **params)
-        return self.parent.interpret(prim, in_tree, **params)
-
-    @abstractmethod
-    def handle(self, effect: Effect, value: tp.Any) -> tp.Any: ...
-
-
-@contextmanager
-def using_handler(handler: EffectHandler) -> tp.Generator[EffectHandler, None, None]:
-    assert isinstance(handler, EffectHandler), "Handler must be an instance of EffectHandler"
-    with using_interpreter(handler):
-        yield handler

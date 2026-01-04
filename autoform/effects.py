@@ -1,4 +1,16 @@
-"""Effects system"""
+"""Effects"""
+
+# NOTE(asem): effects provide a way to intercept primitive evaluation
+# with custom behavior, without defining new primitives or rules. the handler
+# intercepts during execution, not during transformations (pushforward,
+# pullback, batch) - those still use standard rules.
+#
+# a handler communicates with the interpreter using a generator pattern:
+#   yield in_tree  -> invoke the primitive, receive result
+#   return result  -> return final value to caller
+#
+# this enables: logging, caching, multi-shot continuations value injection, and other
+# runtime behaviors hard to achieve with standard rules.
 
 from __future__ import annotations
 
@@ -6,6 +18,7 @@ import functools as ft
 
 from autoform.core import (
     Primitive,
+    PrimitiveTag,
     batch_rules,
     dce_rules,
     default_batch,
@@ -22,7 +35,11 @@ from autoform.core import (
     push_rules,
 )
 
-effect_p = Primitive("effect", tag="effect")
+
+class EffectTag(PrimitiveTag): ...
+
+
+effect_p = Primitive("effect", tag={EffectTag})
 
 
 def effect(x, **p):
