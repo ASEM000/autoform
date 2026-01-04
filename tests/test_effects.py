@@ -1,6 +1,5 @@
 import autoform as af
-from autoform.core import Effect, using_effect
-from autoform.effects import using_effect_handler
+from autoform.core import Effect, using_effect, using_effect_handler
 from autoform.harvest import (
     CheckpointEffect,
     CollectHandler,

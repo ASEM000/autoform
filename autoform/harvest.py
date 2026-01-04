@@ -6,8 +6,8 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 
-from autoform.core import IR, Effect, call, using_effect
-from autoform.effects import effect_p, using_effect_handler
+from autoform.core import IR, Effect, call, using_effect, using_effect_handler
+from autoform.effects import effect_p
 from autoform.utils import Tree, lru_cache
 
 # ==================================================================================================
