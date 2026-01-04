@@ -107,21 +107,20 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
 
 
 @ft.partial(impl_rules.def_rule, lm_call_p)
-def impl_lm_call(contents: list, /, *, roles: tuple[str, ...], model: str) -> str:
+def impl_lm_call(contents: list, /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = completion(messages=messages, model=model)
     return resp.choices[0].message.content
 
 
 @ft.partial(eval_rules.def_rule, lm_call_p)
-def eval_lm_call(in_tree: Tree, /, **params) -> EvalType:
-    # TODO(asem): fix this
+def eval_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
     return Var()
 
 
 @ft.partial(push_rules.def_rule, lm_call_p)
 def pushforward_lm_call(
-    primals: tuple, tangents: tuple, /, *, roles: tuple, model: str
+    primals: tuple, tangents: tuple, /, *, roles: list[str], model: str
 ) -> tuple[Tree, Tree]:
     p_messages = [dict(role=r, content=c) for r, c in zip(roles, primals, strict=True)]
     t_messages = [dict(role=r, content=c) for r, c in zip(roles, tangents, strict=True)]
@@ -131,7 +130,7 @@ def pushforward_lm_call(
 
 
 @ft.partial(pull_fwd_rules.def_rule, lm_call_p)
-def pullback_fwd_lm_call(contents: list, /, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_call(contents: list, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model)
     out = resp.choices[0].message.content
@@ -141,7 +140,7 @@ def pullback_fwd_lm_call(contents: list, /, *, roles: tuple, model: str) -> tupl
 
 @ft.partial(pull_bwd_rules.def_rule, lm_call_p)
 def pullback_bwd_lm_call(
-    residuals: tuple, out_cotangent: Tree, /, *, roles: tuple, model: str
+    residuals: tuple, out_cotangent: Tree, /, *, roles: list[str], model: str
 ) -> list:
     contents, output = residuals
     grads = []
@@ -180,7 +179,7 @@ def iter_lm_call(contents: list, /, *, roles: list[str], model: str) -> tp.Itera
 
 
 @ft.partial(async_rules.def_rule, lm_call_p)
-async def async_lm_call(contents: list, /, *, roles: tuple, model: str) -> str:
+async def async_lm_call(contents: list, /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await acompletion(messages=messages, model=model)
     return resp.choices[0].message.content
