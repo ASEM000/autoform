@@ -473,29 +473,24 @@ def get_effect() -> Effect | None:
 
 
 class EffectInterpreter(Interpreter, ABC):
-    # NOTE(asem): single continuation style effect handler
+    # NOTE(asem): handler patterns (callable-based, not methods)
     #
     # skip (replace value, no continuation)
-    # >>> def handle(self, effect, value):
+    # >>> def handler(effect, in_tree):
     # ...     return replacement
     # ...     yield
     #
     # pass-through (observe only)
-    # >>> def handle(self, effect, value):
-    # ...     return (yield value)
+    # >>> def handler(effect, in_tree):
+    # ...     return (yield in_tree)
     #
     # pre-process input
-    # >>> def handle(self, effect, value):
-    # ...     return (yield transform(value))
+    # >>> def handler(effect, in_tree):
+    # ...     return (yield transform(in_tree))
     #
     # post-process output
-    # >>> def handle(self, effect, value):
-    # ...     result = yield value
-    # ...     return transform(result)
-    #
-    # both
-    # >>> def handle(self, effect, value):
-    # ...     result = yield transform(value)
+    # >>> def handler(effect, in_tree):
+    # ...     result = yield in_tree
     # ...     return transform(result)
     def __init__(self, handlers: dict[type[Effect], Handler]):
         self.parent = get_interpreter()
