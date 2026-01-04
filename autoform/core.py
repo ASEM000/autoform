@@ -441,11 +441,7 @@ def get_interpreter() -> Interpreter:
 # ==================================================================================================
 
 
-class Effect:
-    __slots__ = "key"
-
-    def __init__(self, *, key: tp.Hashable):
-        self.key = key
+class Effect: ...
 
 
 active_effect: ContextVar[Effect | None] = ContextVar("active_effect", default=None)

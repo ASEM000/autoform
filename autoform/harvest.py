@@ -16,11 +16,11 @@ from autoform.utils import Tree, lru_cache
 
 
 class CheckpointEffect(Effect):
-    __slots__ = "collection"
+    __slots__ = ("key", "collection")
     __match_args__ = ("key", "collection")
 
     def __init__(self, *, key: tp.Hashable, collection: tp.Hashable | None = None):
-        super().__init__(key=key)
+        self.key = key
         self.collection = collection
 
 

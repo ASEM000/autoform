@@ -186,7 +186,7 @@ class TestMultiShotContinuation:
                 yield
 
         def program(x):
-            with using_effect(MultiEffect(key="multi")):
+            with using_effect(MultiEffect()):
                 return af.concat(x, "!")
             return x
 
@@ -214,7 +214,7 @@ class TestMultiShotContinuation:
             yield
 
         def program(x):
-            with using_effect(AggregateEffect(key="agg")):
+            with using_effect(AggregateEffect()):
                 return af.concat(x, " appended")
             return x
 
@@ -237,7 +237,7 @@ class TestMultiShotContinuation:
             yield
 
         def program(x):
-            with using_effect(SingleEffect(key="single")):
+            with using_effect(SingleEffect()):
                 return af.concat(x, " world")
             return x
 
@@ -258,7 +258,7 @@ class TestMultiShotContinuation:
             yield
 
         def program(x):
-            with using_effect(SkipEffect(key="skip")):
+            with using_effect(SkipEffect()):
                 return af.concat(x, " should not appear")
             return x
 
