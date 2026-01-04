@@ -6,18 +6,9 @@ import functools as ft
 import typing as tp
 from collections import defaultdict
 
-from autoform.core import IR, Effect, EffectInterpreter, call, using_effect, using_interpreter
-from autoform.effects import effect_p
+from autoform.core import IR, Effect, call, using_effect
+from autoform.effects import effect_p, using_effect_handler
 from autoform.utils import Tree, lru_cache
-
-__all__ = [
-    "CheckpointEffect",
-    "checkpoint",
-    "collect",
-    "inject",
-    "CollectHandler",
-    "InjectHandler",
-]
 
 # ==================================================================================================
 # CHECKPOINT EFFECT
@@ -61,8 +52,6 @@ def checkpoint(value: Tree, /, *, key: tp.Hashable, collection: tp.Hashable | No
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    # NOTE(asem): in principle `use_effect` can be used with any program slice.
-    # a dedicated primitives is just for convenience.
     with using_effect(CheckpointEffect(key=key, collection=collection)):
         return effect_p.bind(value)
 
@@ -75,19 +64,17 @@ def checkpoint(value: Tree, /, *, key: tp.Hashable, collection: tp.Hashable | No
 type Collected = dict[tp.Hashable, list[Tree]]
 
 
-class CollectInterpreter(EffectInterpreter):
-    handles = {CheckpointEffect}
-
-    def __init__(self, *, collection: tp.Hashable | None = None):
-        super().__init__()
+class CollectHandler:
+    def __init__(self, *, collection: tp.Hashable):
         self.collection = collection
         self.collected: dict[tp.Hashable, list[tp.Any]] = defaultdict(list)
 
-    def handle(self, effect: Effect, value: tp.Any):
-        result = yield value  # result is being sent by the interpreter
-        if self.collection is None or effect.collection == self.collection:
+    def __call__(self, effect: CheckpointEffect, in_tree: tp.Any):
+        result = yield in_tree
+        if self.collection is ... or effect.collection == self.collection:
             self.collected[effect.key].append(result)
         return result
+        yield
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -96,7 +83,7 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 
     Args:
         ir: The intermediate representation to run.
-        collection: The collection to filter marked values by.
+        collection: The collection to filter marked values by. If `...`, collect all values.
 
     Returns:
         A callable that executes the IR and returns (result, collected_dict).
@@ -117,8 +104,8 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> tuple[R, Collected]:
-        handler = CollectInterpreter(collection=collection)
-        with using_interpreter(handler):
+        handler = CollectHandler(collection=collection)
+        with using_effect_handler({CheckpointEffect: handler}):
             result = call(ir)(*args, **kwargs)
         return result, handler.collected
 
@@ -130,21 +117,16 @@ def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[
 # ==================================================================================================
 
 
-class InjectInterpreter(EffectInterpreter):
-    handles = {CheckpointEffect}
-
-    def __init__(
-        self, *, collection: tp.Hashable | None = None, values: dict[tp.Hashable, list[tp.Any]]
-    ):
-        super().__init__()
+class InjectHandler:
+    def __init__(self, *, collection: tp.Hashable, values: Collected):
         self.collection = collection
         self.cache = {k: list(reversed(v)) for k, v in values.items()}
 
-    def handle(self, effect: Effect, value: tp.Any):
+    def __call__(self, effect: CheckpointEffect, in_tree: tp.Any):
         if effect.collection == self.collection:
             if effect.key in self.cache and self.cache[effect.key]:
                 return self.cache[effect.key].pop()
-        return (yield value)
+        return (yield in_tree)
 
 
 def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
@@ -172,7 +154,8 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
-        with using_interpreter(InjectInterpreter(collection=collection, values=values)):
+        handler = InjectHandler(collection=collection, values=values)
+        with using_effect_handler({CheckpointEffect: handler}):
             return call(ir)(*args, **kwargs)
 
     return execute

@@ -1,8 +1,10 @@
 import autoform as af
-from autoform.core import Effect, EffectInterpreter, using_effect, using_interpreter
+from autoform.core import Effect, using_effect
+from autoform.effects import using_effect_handler
 from autoform.harvest import (
-    CollectInterpreter,
-    InjectInterpreter,
+    CheckpointEffect,
+    CollectHandler,
+    InjectHandler,
     checkpoint,
 )
 
@@ -30,8 +32,8 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        handler = CollectInterpreter(collection="debug")
-        with using_interpreter(handler):
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(ir)("hello")
 
         assert result == "hello"
@@ -45,8 +47,8 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        handler = CollectInterpreter(collection="debug")
-        with using_interpreter(handler):
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(ir)("hello")
 
         assert result == "hello"
@@ -61,8 +63,8 @@ class TestCollectHandler:
 
         ir = af.build_ir(func)("test")
 
-        handler = CollectInterpreter()
-        with using_interpreter(handler):
+        handler = CollectHandler(collection=...)
+        with using_effect_handler({CheckpointEffect: handler}):
             af.call(ir)("hello")
 
         assert handler.collected == {"a": ["hello"], "b": ["hello"]}
@@ -75,13 +77,13 @@ class TestInjectHandler:
 
         ir = af.build_ir(func)("test")
 
-        handler = CollectInterpreter(collection="cache")
-        with using_interpreter(handler):
+        handler = CollectHandler(collection="cache")
+        with using_effect_handler({CheckpointEffect: handler}):
             normal = af.call(ir)("World")
         assert normal == "Hello, World"
 
-        handler = InjectInterpreter(collection="cache", values={"greeting": ["CACHED"]})
-        with using_interpreter(handler):
+        handler = InjectHandler(collection="cache", values={"greeting": ["CACHED"]})
+        with using_effect_handler({CheckpointEffect: handler}):
             injected = af.call(ir)("World")
         assert injected == "CACHED"
 
@@ -93,8 +95,8 @@ class TestInjectHandler:
 
         ir = af.build_ir(func)("test")
 
-        handler = InjectInterpreter(collection="cache", values={"first": ["INJECTED"]})
-        with using_interpreter(handler):
+        handler = InjectHandler(collection="cache", values={"first": ["INJECTED"]})
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(ir)("ignored")
 
         assert result == "INJECTED!"
@@ -108,8 +110,8 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         batched = af.batch(ir)
 
-        handler = CollectInterpreter(collection="debug")
-        with using_interpreter(handler):
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             result = af.call(batched)(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
@@ -122,8 +124,8 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         pf_ir = af.pushforward(ir)
 
-        handler = CollectInterpreter(collection="debug")
-        with using_interpreter(handler):
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             primal, tangent = af.call(pf_ir)(("primal", "tangent"))
 
         assert primal == "primal"
@@ -137,8 +139,8 @@ class TestEffectsWithTransforms:
         ir = af.build_ir(func)("test")
         pb_ir = af.pullback(ir)
 
-        handler = CollectInterpreter(collection="debug")
-        with using_interpreter(handler):
+        handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: handler}):
             primal, cotangent = af.call(pb_ir)(("primal", "cotangent"))
 
         assert primal == "primal"
@@ -155,10 +157,10 @@ class TestHandlerComposition:
 
         ir = af.build_ir(func)("test")
 
-        debug_handler = CollectInterpreter(collection="debug")
-        with using_interpreter(debug_handler):
-            cache_handler = CollectInterpreter(collection="cache")
-            with using_interpreter(cache_handler):
+        debug_handler = CollectHandler(collection="debug")
+        with using_effect_handler({CheckpointEffect: debug_handler}):
+            cache_handler = CollectHandler(collection="cache")
+            with using_effect_handler({CheckpointEffect: cache_handler}):
                 result = af.call(ir)("hello")
 
         assert result == "hello"
@@ -172,15 +174,12 @@ class TestMultiShotContinuation:
         class MultiEffect(Effect):
             pass
 
-        class MultiShotHandler(EffectInterpreter):
-            handles = {MultiEffect}
-
+        class MultiShotHandler:
             def __init__(self, alternatives: list):
-                super().__init__()
                 self.alternatives = alternatives
                 self.results = []
 
-            def handle(self, effect, in_tree):
+            def __call__(self, effect, in_tree):
                 for v in self.alternatives:
                     result = yield (v, in_tree[1])
                     self.results.append(result)
@@ -195,7 +194,7 @@ class TestMultiShotContinuation:
         ir = af.build_ir(program)("test")
 
         handler = MultiShotHandler(alternatives=["A", "B", "C"])
-        with using_interpreter(handler):
+        with using_effect_handler({MultiEffect: handler}):
             result = af.call(ir)("ignored")
 
         assert handler.results == ["A!", "B!", "C!"]
@@ -206,17 +205,14 @@ class TestMultiShotContinuation:
         class AggregateEffect(Effect):
             pass
 
-        class AggregatingHandler(EffectInterpreter):
-            handles = {AggregateEffect}
-
-            def handle(self, effect, in_tree):
-                results = []
-                for suffix in ["!", "?", "."]:
-                    left, _ = in_tree
-                    result = yield (left + suffix, "")
-                    results.append(result)
-                return " | ".join(results)
-                yield
+        def aggregating_handler(effect, in_tree):
+            results = []
+            for suffix in ["!", "?", "."]:
+                left, _ = in_tree
+                result = yield (left + suffix, "")
+                results.append(result)
+            return " | ".join(results)
+            yield
 
         def program(x):
             with using_effect(AggregateEffect(key="agg")):
@@ -225,8 +221,7 @@ class TestMultiShotContinuation:
 
         ir = af.build_ir(program)("test")
 
-        handler = AggregatingHandler()
-        with using_interpreter(handler):
+        with using_effect_handler({AggregateEffect: aggregating_handler}):
             result = af.call(ir)("Hello")
 
         assert result == "Hello! | Hello? | Hello."
@@ -236,14 +231,11 @@ class TestMultiShotContinuation:
         class SingleEffect(Effect):
             pass
 
-        class SingleShotHandler(EffectInterpreter):
-            handles = {SingleEffect}
-
-            def handle(self, effect, in_tree):
-                left, right = in_tree
-                result = yield (left.upper(), right)
-                return result + " modified"
-                yield
+        def single_shot_handler(effect, in_tree):
+            left, right = in_tree
+            result = yield (left.upper(), right)
+            return result + " modified"
+            yield
 
         def program(x):
             with using_effect(SingleEffect(key="single")):
@@ -252,8 +244,7 @@ class TestMultiShotContinuation:
 
         ir = af.build_ir(program)("test")
 
-        handler = SingleShotHandler()
-        with using_interpreter(handler):
+        with using_effect_handler({SingleEffect: single_shot_handler}):
             result = af.call(ir)("hello")
 
         assert result == "HELLO world modified"
@@ -263,12 +254,9 @@ class TestMultiShotContinuation:
         class SkipEffect(Effect):
             pass
 
-        class SkipHandler(EffectInterpreter):
-            handles = {SkipEffect}
-
-            def handle(self, effect, value):
-                return "SKIPPED"
-                yield
+        def skip_handler(effect, value):
+            return "SKIPPED"
+            yield
 
         def program(x):
             with using_effect(SkipEffect(key="skip")):
@@ -277,8 +265,7 @@ class TestMultiShotContinuation:
 
         ir = af.build_ir(program)("test")
 
-        handler = SkipHandler()
-        with using_interpreter(handler):
+        with using_effect_handler({SkipEffect: skip_handler}):
             result = af.call(ir)("ignored")
 
         assert result == "SKIPPED"

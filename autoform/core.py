@@ -497,23 +497,23 @@ class EffectInterpreter(Interpreter, ABC):
     # >>> def handle(self, effect, value):
     # ...     result = yield transform(value)
     # ...     return transform(result)
-    handles: tp.ClassVar[set[type[Effect]]] = set()
-
-    def __init__(self):
+    def __init__(self, handlers: dict[type[Effect], Handler]):
         self.parent = get_interpreter()
+        self.handlers = handlers
 
     def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
         effect = get_effect()
+        handler = self.handlers.get(type(effect)) if effect else None
 
-        if effect is None or not isinstance(effect, tuple(self.handles)):
+        if handler is None:
             return self.parent.interpret(prim, in_tree, **params)
 
-        gen = self.handle(effect, in_tree)
+        gen = handler(effect, in_tree)
         result = None
 
         # NOTE(asem):
         # the handler can yield multiple times, each yield invokes the continuation.
-        # >>> def handle(self, effect, value):
+        # >>> def handler(effect, in_tree):
         # ...     results = []
         # ...     for v in (...):
         # ...         result = yield v
