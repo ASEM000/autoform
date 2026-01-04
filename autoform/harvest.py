@@ -152,6 +152,9 @@ def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.
         'CACHED'
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(values, dict)
+    for key in values:
+        assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
     def execute(*args: P.args, **kwargs: P.kwargs) -> R:
         handler = InjectHandler(collection=collection, values=values)
