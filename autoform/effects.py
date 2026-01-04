@@ -42,7 +42,7 @@ class EffectTag(PrimitiveTag): ...
 effect_p = Primitive("effect", tag={EffectTag})
 
 
-def effect(x, **p):
+def effect(x, /, **p):
     return effect_p.bind(x, **p)
 
 

@@ -202,7 +202,7 @@ class InterpreterRuleMapping[T: Callable]:
         self.map: dict[Primitive, T] = {}
         self.lock = RLock()
 
-    def def_rule(self, prim: Primitive, rule: T) -> T:
+    def def_rule(self, prim: Primitive, rule: T, /) -> T:
         assert isinstance(prim, Primitive), f"Expected primitive, got {prim}"
         assert isinstance(rule, Callable), f"Expected callable, got {rule}"
         assert prim not in self.map, f"Rule for primitive {prim} already defined"
@@ -598,7 +598,7 @@ class TracingInterpreter(Interpreter):
 # ==================================================================================================
 
 
-def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
+def build_ir[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
     """Build an IR from a function by tracing its execution.
 
     Args:
@@ -647,7 +647,7 @@ def build_ir[**P, R](func: Callable[P, R]) -> Callable[P, IR[P, R]]:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def call[**P, R](ir: IR[P, R]) -> tp.Callable[P, R]:
+def call[**P, R](ir: IR[P, R], /) -> tp.Callable[P, R]:
     """Call an IR.
 
     Args:
@@ -701,7 +701,7 @@ def accumulate_chunks(chunks: list[tp.Any]) -> tp.Any:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
+def icall[**P, R](ir: IR[P, R], /) -> tp.Callable[P, tp.Iterator[R]]:
     """Create an iterator executor for an IR.
 
     Args:
@@ -750,7 +750,7 @@ def icall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Iterator[R]]:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
+def acall[**P, R](ir: IR[P, R], /) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R]]:
     """Create an async executor for an IR.
 
     Args:

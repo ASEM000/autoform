@@ -21,14 +21,14 @@ def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R
     return tp.cast(Callable[P, R], ft.lru_cache(maxsize=maxsize)(func))
 
 
-def index_tree_at(node, b: int):
+def index_tree_at(node: Tree, b: int, /) -> Tree:
     # NOTE(asem): index a struct without indexing support
     # useful to deal with arbitrary pytrees
     children, *_ = treelib.flatten_one_level(node)
     return children[b]
 
 
-def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int) -> Tree:
+def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # Extract item at index b from batched leaves, broadcast non-batched.
     # Inverse of transpose_batch: extracts a single item from each batched leaf
     # while keeping non-batched leaves unchanged.
@@ -67,7 +67,7 @@ def pack_user_input(*args, **kwargs) -> Tree:
     return args
 
 
-def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: Tree) -> Tree:
+def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -> Tree:
     # NOTE(asem): AoS -> SoA
     # Example (used throughout):
     #   in_tree    = [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=6)]

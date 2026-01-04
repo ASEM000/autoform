@@ -42,7 +42,7 @@ class ControlTag(PrimitiveTag): ...
 stop_gradient_p = Primitive("stop_gradient", tag={ControlTag})
 
 
-def stop_gradient(x: Tree) -> Tree:
+def stop_gradient(x: Tree, /) -> Tree:
     """Stops the gradient flow through the input during backpropagation.
 
     Args:
@@ -68,35 +68,35 @@ def stop_gradient(x: Tree) -> Tree:
 
 
 @ft.partial(impl_rules.def_rule, stop_gradient_p)
-def impl_stop_gradient(x: Tree) -> Tree:
+def impl_stop_gradient(x: Tree, /) -> Tree:
     return x
 
 
 @ft.partial(eval_rules.def_rule, stop_gradient_p)
-def eval_stop_gradient(x: Tree) -> Tree:
+def eval_stop_gradient(x: Tree, /) -> Tree:
     return x
 
 
 @ft.partial(push_rules.def_rule, stop_gradient_p)
-def pushforward_stop_gradient(primal: Tree, tangent: Tree) -> tuple[Tree, Tree]:
+def pushforward_stop_gradient(primal: Tree, tangent: Tree, /) -> tuple[Tree, Tree]:
     zero_tangent = treelib.map(zero_cotangent, primal)
     return primal, zero_tangent
 
 
 @ft.partial(pull_fwd_rules.def_rule, stop_gradient_p)
-def pullback_fwd_stop_gradient(x: Tree) -> tuple[Tree, Tree]:
+def pullback_fwd_stop_gradient(x: Tree, /) -> tuple[Tree, Tree]:
     residuals = x
     return x, residuals
 
 
 @ft.partial(pull_bwd_rules.def_rule, stop_gradient_p)
-def pullback_bwd_stop_gradient(residuals: Tree, out_cotangent: Tree) -> Tree:
+def pullback_bwd_stop_gradient(residuals: Tree, out_cotangent: Tree, /) -> Tree:
     del out_cotangent
     return treelib.map(zero_cotangent, residuals)
 
 
 @ft.partial(batch_rules.def_rule, stop_gradient_p)
-def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree) -> tuple[Tree, Tree]:
+def batch_stop_gradient(batch_size: int, in_batched: Tree, x: Tree, /) -> tuple[Tree, Tree]:
     del batch_size
     return x, in_batched
 
@@ -151,13 +151,13 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
 
 
 @ft.partial(impl_rules.def_rule, switch_p)
-def impl_switch(in_tree, *, branches: dict[str, IR]):
+def impl_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = in_tree
     return call(branches[key])(operands)
 
 
 @ft.partial(eval_rules.def_rule, switch_p)
-def eval_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
+def eval_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
     del in_tree
     key0 = next(iter(branches))
     branch0 = branches[key0]
@@ -165,14 +165,14 @@ def eval_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
 
 
 @ft.partial(push_rules.def_rule, switch_p)
-def pushforward_switch(primals, tangents, *, branches: dict[str, IR]):
+def pushforward_switch(primals, tangents, /, *, branches: dict[str, IR]):
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = pushforward(branches[key])
     return call(pf_ir)((p_operands, t_operands))
 
 
 @ft.partial(pull_fwd_rules.def_rule, switch_p)
-def pullback_fwd_switch(in_tree, *, branches: dict[str, IR]) -> tuple[Tree, Tree]:
+def pullback_fwd_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, Tree]:
     key, operands = in_tree
     out = call(branches[key])(operands)
     residuals = (key, operands)
@@ -180,7 +180,7 @@ def pullback_fwd_switch(in_tree, *, branches: dict[str, IR]) -> tuple[Tree, Tree
 
 
 @ft.partial(pull_bwd_rules.def_rule, switch_p)
-def pullback_bwd_switch(residuals, out_cotangent, *, branches: dict[str, IR]):
+def pullback_bwd_switch(residuals, out_cotangent, /, *, branches: dict[str, IR]):
     key, operands = residuals
     pb_ir = pullback(branches[key])
     _, c_operands = call(pb_ir)((operands, out_cotangent))
@@ -192,6 +192,7 @@ def batch_switch(
     batch_size: int,
     in_batched,
     in_tree,
+    /,
     *,
     branches: dict[str, IR],
 ) -> tuple[Tree, bool]:
@@ -206,7 +207,7 @@ def batch_switch(
 
 
 @ft.partial(iter_rules.def_rule, switch_p)
-def iter_switch(in_tree, *, branches: dict[str, IR]):
+def iter_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = in_tree
     *chunks, _ = icall(branches[key])(operands)
     for chunk in chunks:
@@ -214,13 +215,13 @@ def iter_switch(in_tree, *, branches: dict[str, IR]):
 
 
 @ft.partial(async_rules.def_rule, switch_p)
-async def async_switch(in_tree, *, branches: dict[str, IR]) -> Tree:
+async def async_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
     key, operands = in_tree
     return await acall(branches[key])(operands)
 
 
 @ft.partial(dce_rules.def_rule, switch_p)
-def dce_switch(ireqn, active_irvars) -> tuple[bool, set, object]:
+def dce_switch(ireqn, active_irvars, /) -> tuple[bool, set, object]:
     for k in (branches := dict(ireqn.params["branches"])):
         branches[k] = dce(branches[k])
 
@@ -283,7 +284,7 @@ def while_loop(cond_func: IR, body_func: IR, init_val: Tree, *, max_iters: int) 
 
 
 @ft.partial(impl_rules.def_rule, while_loop_p)
-def impl_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
+def impl_while_loop(in_tree: Tree, /, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
     state = in_tree
     for _ in range(max_iters):
         if not call(cond_func)(state):
@@ -293,7 +294,7 @@ def impl_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: i
 
 
 @ft.partial(eval_rules.def_rule, while_loop_p)
-def eval_while_loop(in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
+def eval_while_loop(in_tree: Tree, /, *, cond_func: IR, body_func: IR, max_iters: int) -> Tree:
     del cond_func, max_iters
     return treelib.map(lambda _: Var(), body_func.out_irtree)
 
@@ -303,6 +304,7 @@ def batch_while_loop(
     batch_size: int,
     in_batched: Tree,
     in_tree: Tree,
+    /,
     *,
     cond_func: IR,
     body_func: IR,
@@ -399,7 +401,7 @@ def batch_while_loop(
 
 @ft.partial(pull_fwd_rules.def_rule, while_loop_p)
 def pullback_fwd_while_loop(
-    in_tree: Tree, *, cond_func: IR, body_func: IR, max_iters: int
+    in_tree: Tree, /, *, cond_func: IR, body_func: IR, max_iters: int
 ) -> tuple[Tree, Tree]:
     state = in_tree
     trajectory = [state]
@@ -416,7 +418,7 @@ def pullback_fwd_while_loop(
 
 @ft.partial(pull_bwd_rules.def_rule, while_loop_p)
 def pullback_bwd_while_loop(
-    residuals: Tree, out_cotangent: Tree, *, cond_func: IR, body_func: IR, max_iters: int
+    residuals: Tree, out_cotangent: Tree, /, *, cond_func: IR, body_func: IR, max_iters: int
 ) -> Tree:
     del cond_func, max_iters
     trajectory, _ = residuals

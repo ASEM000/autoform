@@ -9,6 +9,7 @@ import pydantic
 from litellm import acompletion, batch_completion, completion
 
 from autoform.core import (
+    EvalType,
     Primitive,
     PrimitiveTag,
     Var,
@@ -73,7 +74,7 @@ class Struct(pydantic.BaseModel):
 lm_call_p = Primitive("lm_call", tag={LMTag})
 
 
-def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
+def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     """Calls a language model with the given messages and model name using Litellm.
 
     Args:
@@ -106,20 +107,20 @@ def lm_call(messages: list[dict[str, str]], *, model: str) -> str:
 
 
 @ft.partial(impl_rules.def_rule, lm_call_p)
-def impl_lm_call(contents: list, *, roles: tuple[str, ...], model: str) -> str:
+def impl_lm_call(contents: list, /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = completion(messages=messages, model=model)
     return resp.choices[0].message.content
 
 
 @ft.partial(eval_rules.def_rule, lm_call_p)
-def eval_lm_call(in_tree: Tree, **params) -> Var:
+def eval_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
     return Var()
 
 
 @ft.partial(push_rules.def_rule, lm_call_p)
 def pushforward_lm_call(
-    primals: tuple, tangents: tuple, *, roles: tuple, model: str
+    primals: tuple, tangents: tuple, /, *, roles: list[str], model: str
 ) -> tuple[Tree, Tree]:
     p_messages = [dict(role=r, content=c) for r, c in zip(roles, primals, strict=True)]
     t_messages = [dict(role=r, content=c) for r, c in zip(roles, tangents, strict=True)]
@@ -129,7 +130,7 @@ def pushforward_lm_call(
 
 
 @ft.partial(pull_fwd_rules.def_rule, lm_call_p)
-def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_call(contents: list, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model)
     out = resp.choices[0].message.content
@@ -139,7 +140,7 @@ def pullback_fwd_lm_call(contents: list, *, roles: tuple, model: str) -> tuple[T
 
 @ft.partial(pull_bwd_rules.def_rule, lm_call_p)
 def pullback_bwd_lm_call(
-    residuals: tuple, out_cotangent: Tree, *, roles: tuple, model: str
+    residuals: tuple, out_cotangent: Tree, /, *, roles: list[str], model: str
 ) -> list:
     contents, output = residuals
     grads = []
@@ -158,7 +159,7 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 
 @ft.partial(batch_rules.def_rule, lm_call_p)
 def batch_lm_call(
-    batch_size: int, in_batched: Tree, contents: list, *, roles: tuple, model: str
+    batch_size: int, in_batched: Tree, contents: list, /, *, roles: list[str], model: str
 ) -> tuple[Tree, Tree]:
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
@@ -169,7 +170,7 @@ def batch_lm_call(
 
 
 @ft.partial(iter_rules.def_rule, lm_call_p)
-def iter_lm_call(contents: list, *, roles: tuple, model: str) -> tp.Iterator[str]:
+def iter_lm_call(contents: list, /, *, roles: list[str], model: str) -> tp.Iterator[str]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, stream=True)
     for chunk in resp:
@@ -178,7 +179,7 @@ def iter_lm_call(contents: list, *, roles: tuple, model: str) -> tp.Iterator[str
 
 
 @ft.partial(async_rules.def_rule, lm_call_p)
-async def async_lm_call(contents: list, *, roles: tuple, model: str) -> str:
+async def async_lm_call(contents: list, /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await acompletion(messages=messages, model=model)
     return resp.choices[0].message.content
@@ -226,11 +227,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
 @ft.partial(impl_rules.def_rule, struct_lm_call_p)
 def impl_struct_lm_call(
-    contents: list,
-    *,
-    roles: tuple,
-    model: str,
-    struct: type[Struct],
+    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, response_format=struct)
@@ -238,17 +235,15 @@ def impl_struct_lm_call(
 
 
 @ft.partial(eval_rules.def_rule, struct_lm_call_p)
-def eval_struct_lm_call(in_tree: Tree, *, struct: type[Struct], **params) -> Tree:
+def eval_struct_lm_call(
+    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+) -> Tree:
     return struct.model_construct(**{k: Var() for k in struct.model_fields})
 
 
 @ft.partial(pull_fwd_rules.def_rule, struct_lm_call_p)
 def pullback_fwd_struct_lm_call(
-    contents: list,
-    *,
-    roles: tuple,
-    model: str,
-    struct: type[Struct],
+    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, response_format=struct)
@@ -259,12 +254,7 @@ def pullback_fwd_struct_lm_call(
 
 @ft.partial(pull_bwd_rules.def_rule, struct_lm_call_p)
 def pullback_bwd_struct_lm_call(
-    residuals: tuple,
-    out_cotangent: Tree,
-    *,
-    roles: tuple,
-    model: str,
-    struct: type[Struct],
+    residuals: tuple, out_cotangent: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> list:
     contents, output = residuals
     grads = []
@@ -286,8 +276,9 @@ def batch_struct_lm_call(
     batch_size: int,
     in_batched: Tree,
     contents: list,
+    /,
     *,
-    roles: tuple,
+    roles: list[str],
     model: str,
     struct: type[Struct],
 ) -> tuple[Tree, Tree]:
@@ -304,11 +295,7 @@ def batch_struct_lm_call(
 
 @ft.partial(iter_rules.def_rule, struct_lm_call_p)
 def iter_struct_lm_call(
-    contents: list,
-    *,
-    roles: tuple,
-    model: str,
-    struct: type[Struct],
+    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> tp.Iterator[str]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = completion(messages=messages, model=model, response_format=struct, stream=True)
@@ -319,11 +306,7 @@ def iter_struct_lm_call(
 
 @ft.partial(async_rules.def_rule, struct_lm_call_p)
 async def async_struct_lm_call(
-    contents: list,
-    *,
-    roles: tuple,
-    model: str,
-    struct: type[Struct],
+    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await acompletion(messages=messages, model=model, response_format=struct)
