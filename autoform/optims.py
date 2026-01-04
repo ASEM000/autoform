@@ -15,7 +15,7 @@ from autoform.utils import Tree, lru_cache, treelib
 
 
 @ft.partial(lru_cache, maxsize=256)
-def dce(ir: IR) -> IR:
+def dce(ir: IR, /) -> IR:
     """Remove dead code from an IR.
 
     Performs backward pass to identify which equations contribute to output.
@@ -53,7 +53,7 @@ def dce(ir: IR) -> IR:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def fold(ir: IR) -> IR:
+def fold(ir: IR, /) -> IR:
     """Evaluate constant IR subexpressions.
 
     Replaces equations with all-literal inputs with their computed values.

@@ -58,7 +58,7 @@ class PushforwardInterpreter(Interpreter):
 
 
 @ft.partial(lru_cache, maxsize=256)
-def pushforward(ir: IR) -> IR:
+def pushforward(ir: IR, /) -> IR:
     """Transform an IR to compute primals and tangents (forward-mode AD).
 
     Creates a new IR that propagates tangent (perturbation) vectors alongside
@@ -108,7 +108,7 @@ class IRTVar(IRVar): ...
 
 
 @ft.partial(impl_rules.def_rule, pushforward_call_p)
-def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, t_in_tree) = in_tree
 
     p_env: dict[IRVar, Value] = {}
@@ -144,13 +144,13 @@ def impl_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
 
 @ft.partial(eval_rules.def_rule, pushforward_call_p)
-def eval_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def eval_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     out = treelib.map(iratom_to_evaltype, ir.out_irtree)
     return out, out
 
 
 @ft.partial(push_rules.def_rule, pushforward_call_p)
-def pushforward_pushforward_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def pushforward_pushforward_call(primals: Tree, tangents: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
     pf_ir = pushforward(ir)
     p_out = call(pf_ir)((p_in, t_in))
@@ -159,7 +159,7 @@ def pushforward_pushforward_call(primals: Tree, tangents: Tree, *, ir: IR) -> tu
 
 
 @ft.partial(pull_fwd_rules.def_rule, pushforward_call_p)
-def pullback_fwd_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def pullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in) = in_tree
     pf_ir = pushforward(ir)
     p_out, t_out = call(pf_ir)((p_in, t_in))
@@ -168,7 +168,7 @@ def pullback_fwd_pushforward_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]
 
 
 @ft.partial(pull_bwd_rules.def_rule, pushforward_call_p)
-def pullback_bwd_pushforward_call(residuals: Tree, out_cotangent: Tree, *, ir: IR) -> Tree:
+def pullback_bwd_pushforward_call(residuals: Tree, out_cotangent: Tree, /, *, ir: IR) -> Tree:
     in_p, in_t = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
@@ -179,7 +179,7 @@ def pullback_bwd_pushforward_call(residuals: Tree, out_cotangent: Tree, *, ir: I
 
 @ft.partial(batch_rules.def_rule, pushforward_call_p)
 def batch_pushforward_call(
-    batch_size: int, in_batched: Tree[bool], in_tree: Tree, *, ir: IR
+    batch_size: int, in_batched: Tree[bool], in_tree: Tree, /, *, ir: IR
 ) -> tuple[Tree, Tree]:
     (p_cols, t_cols), (p_batched, t_batched) = in_tree, in_batched
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)
@@ -192,7 +192,9 @@ def batch_pushforward_call(
 
 
 @ft.partial(dce_rules.def_rule, pushforward_call_p)
-def dce_pushforward_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+def dce_pushforward_call(
+    ireqn: IREqn, active_irvars: set[IRVar], /
+) -> tuple[bool, set[IRVar], IREqn]:
     dced_ir = dce(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
@@ -260,7 +262,7 @@ class PullbackBwdInterpreter(Interpreter):
 
 
 @ft.partial(lru_cache, maxsize=256)
-def pullback(ir: IR) -> IR:
+def pullback(ir: IR, /) -> IR:
     """Transform an IR to compute outputs and input cotangents (reverse-mode AD).
 
     Creates a new IR that computes gradients by backpropagating cotangent
@@ -307,7 +309,7 @@ class IRCVar(IRVar): ...
 
 
 @ft.partial(impl_rules.def_rule, pullback_call_p)
-def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, out_c_tree) = in_tree
 
     p_env: dict[IRVar, Value] = {}
@@ -353,14 +355,14 @@ def impl_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
 
 @ft.partial(eval_rules.def_rule, pullback_call_p)
-def eval_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def eval_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     out_p = treelib.map(iratom_to_evaltype, ir.out_irtree)
     in_c = treelib.map(iratom_to_evaltype, ir.in_irtree)
     return out_p, in_c
 
 
 @ft.partial(push_rules.def_rule, pullback_call_p)
-def pushforward_pullback_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def pushforward_pullback_call(primals: Tree, tangents: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
     pb_ir = pullback(ir)
     out_p, in_c = call(pb_ir)((p_in, c_out))
@@ -369,7 +371,7 @@ def pushforward_pullback_call(primals: Tree, tangents: Tree, *, ir: IR) -> tuple
 
 
 @ft.partial(pull_fwd_rules.def_rule, pullback_call_p)
-def pullback_fwd_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def pullback_fwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
     pb_ir = pullback(ir)
     out_p, in_c = call(pb_ir)((p_in, c_out))
@@ -378,7 +380,7 @@ def pullback_fwd_pullback_call(in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
 
 
 @ft.partial(pull_bwd_rules.def_rule, pullback_call_p)
-def pullback_bwd_pullback_call(residuals: Tree, out_cotangent: Tree, *, ir: IR) -> Tree:
+def pullback_bwd_pullback_call(residuals: Tree, out_cotangent: Tree, /, *, ir: IR) -> Tree:
     p_in, c_out, _, _ = residuals
     out_c_p, in_c_c = out_cotangent
     pb_ir = pullback(ir)
@@ -388,7 +390,9 @@ def pullback_bwd_pullback_call(residuals: Tree, out_cotangent: Tree, *, ir: IR) 
 
 
 @ft.partial(batch_rules.def_rule, pullback_call_p)
-def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -> tuple[Tree, Tree]:
+def batch_pullback_call(
+    size: int, in_batched: Tree, in_tree: Tree, /, *, ir: IR
+) -> tuple[Tree, Tree]:
     (p_cols, out_c_cols) = in_tree
     (p_batched, c_batched) = in_batched
     unbatch_p = ft.partial(unbatch_at, p_cols, p_batched)
@@ -401,7 +405,7 @@ def batch_pullback_call(size: int, in_batched: Tree, in_tree: Tree, *, ir: IR) -
 
 
 @ft.partial(dce_rules.def_rule, pullback_call_p)
-def dce_pullback_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+def dce_pullback_call(ireqn: IREqn, active_irvars: set[IRVar], /) -> tuple[bool, set[IRVar], IREqn]:
     dced_ir = dce(ireqn.params["ir"])
     new_eqn = ireqn.using(ir=dced_ir)
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)

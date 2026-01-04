@@ -87,7 +87,7 @@ batch_call_p = Primitive("batch_call", tag={BatchTag})
 
 
 @ft.partial(lru_cache, maxsize=256)
-def batch(ir: IR, in_axes: Tree[bool] = True) -> IR:
+def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     """Transform an IR to process batched inputs.
 
     Creates a batched version of the IR that processes multiple inputs
@@ -137,7 +137,7 @@ class BatchInterpreter(Interpreter):
 
 
 @ft.partial(impl_rules.def_rule, batch_call_p)
-def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
+def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # NOTE(asem): in_axes is Tree[bool] specifying which positions are batched.
     # container type is inferred from actual data, not specified in in_axes.
     #
@@ -181,7 +181,7 @@ def impl_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 
 @ft.partial(eval_rules.def_rule, batch_call_p)
-def eval_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
+def eval_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     return treelib.map(iratom_to_evaltype, ir.out_irtree)
 
 
@@ -189,6 +189,7 @@ def eval_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 def pushforward_batch_call(
     primals: Tree,
     tangents: Tree,
+    /,
     *,
     ir: IR,
     in_axes: Tree,
@@ -200,7 +201,7 @@ def pushforward_batch_call(
 
 
 @ft.partial(pull_fwd_rules.def_rule, batch_call_p)
-def pullback_fwd_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+def pullback_fwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
     col_tree = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
     out_cols = call(batched_ir)(col_tree)
@@ -209,7 +210,9 @@ def pullback_fwd_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> tuple[Tr
 
 
 @ft.partial(pull_bwd_rules.def_rule, batch_call_p)
-def pullback_bwd_batch_call(residuals: Tree, out_cotangent: Tree, *, ir: IR, in_axes: Tree) -> Tree:
+def pullback_bwd_batch_call(
+    residuals: Tree, out_cotangent: Tree, /, *, ir: IR, in_axes: Tree
+) -> Tree:
     p_cols, _ = residuals
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
@@ -223,6 +226,7 @@ def batch_batch_call(
     batch_size: int,
     in_batched: Tree,
     in_tree: Tree,
+    /,
     *,
     ir: IR,
     in_axes: Tree,
@@ -249,7 +253,7 @@ def batch_batch_call(
 
 
 @ft.partial(async_rules.def_rule, batch_call_p)
-async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
+async def async_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
     axes_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
     batch_size = infer_batch_size(col_tree, axes_tree)
@@ -269,7 +273,7 @@ async def async_batch_call(in_tree: Tree, *, ir: IR, in_axes: Tree) -> Tree:
 
 
 @ft.partial(dce_rules.def_rule, batch_call_p)
-def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar]) -> tuple[bool, set[IRVar], IREqn]:
+def dce_batch_call(ireqn: IREqn, active_irvars: set[IRVar], /) -> tuple[bool, set[IRVar], IREqn]:
     new_eqn = ireqn.using(ir=dce(ireqn.params["ir"]))
     can_axe, used_ins, _ = default_dce(ireqn, active_irvars)
     return can_axe, used_ins, new_eqn

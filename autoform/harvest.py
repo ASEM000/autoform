@@ -78,7 +78,7 @@ class CollectHandler:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def collect[**P, R](ir: IR, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
+def collect[**P, R](ir: IR, /, *, collection: tp.Hashable) -> tp.Callable[P, tuple[R, Collected]]:
     """Collect marked values from an IR.
 
     Args:
@@ -129,7 +129,7 @@ class InjectHandler:
         return (yield in_tree)
 
 
-def inject[**P, R](ir: IR, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
+def inject[**P, R](ir: IR, /, *, collection: tp.Hashable, values: Collected) -> tp.Callable[P, R]:
     """Create an injecting executor for an IR.
 
     Values are consumed from lists in order (matching collect's list output).

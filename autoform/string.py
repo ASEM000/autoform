@@ -45,23 +45,23 @@ def format(template: str, *args) -> str:
 
 
 @ft.partial(impl_rules.def_rule, format_p)
-def impl_format(in_tree: Tree, *, template: str) -> str:
+def impl_format(in_tree: Tree, /, *, template: str) -> str:
     return template.format(*in_tree)
 
 
 @ft.partial(eval_rules.def_rule, format_p)
-def eval_format(in_tree: Tree, *, template: str) -> EvalType:
+def eval_format(in_tree: Tree, /, *, template: str) -> EvalType:
     return Var() if any(is_var(x) for x in in_tree) else impl_format(in_tree, template=template)
 
 
 @ft.partial(pull_fwd_rules.def_rule, format_p)
-def pullback_fwd_format(in_tree: Tree, *, template: str) -> tuple[Tree, Tree]:
+def pullback_fwd_format(in_tree: Tree, /, *, template: str) -> tuple[Tree, Tree]:
     out = template.format(*in_tree)
     return out, len(in_tree)
 
 
 @ft.partial(pull_bwd_rules.def_rule, format_p)
-def pullback_bwd_format(residuals: Tree, out_cotangent: Tree, *, template: str) -> Tree:
+def pullback_bwd_format(residuals: Tree, out_cotangent: Tree, /, *, template: str) -> Tree:
     del template
     n = residuals
     return tuple([out_cotangent] * n)
@@ -72,6 +72,7 @@ def batch_format(
     batch_size: int,
     in_batched: Tree,
     in_tree: Tree,
+    /,
     *,
     template: str,
 ) -> tuple[Tree, Tree]:
@@ -86,7 +87,7 @@ def batch_format(
 
 
 @ft.partial(push_rules.def_rule, format_p)
-def pushforward_format(primals: Tree, tangents: Tree, *, template: str) -> tuple[Tree, Tree]:
+def pushforward_format(primals: Tree, tangents: Tree, /, *, template: str) -> tuple[Tree, Tree]:
     out_primal = format(template, *primals)
     out_tangent = format(template, *tangents)
     return out_primal, out_tangent
@@ -121,34 +122,34 @@ def concat(*args) -> str:
 
 
 @ft.partial(impl_rules.def_rule, concat_p)
-def impl_concat(in_tree: Tree) -> str:
+def impl_concat(in_tree: Tree, /) -> str:
     return "".join(in_tree)
 
 
 @ft.partial(eval_rules.def_rule, concat_p)
-def eval_concat(in_tree: Tree, **params) -> EvalType:
+def eval_concat(in_tree: Tree, /) -> EvalType:
     return Var() if any(is_var(x) for x in in_tree) else impl_concat(in_tree)
 
 
 @ft.partial(push_rules.def_rule, concat_p)
-def pushforward_concat(primals: Tree, tangents: Tree) -> tuple[Tree, Tree]:
+def pushforward_concat(primals: Tree, tangents: Tree, /) -> tuple[Tree, Tree]:
     return concat(*primals), concat(*tangents)
 
 
 @ft.partial(pull_fwd_rules.def_rule, concat_p)
-def pullback_fwd_concat(in_tree: Tree) -> tuple[Tree, Tree]:
+def pullback_fwd_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     out = concat(*in_tree)
     return out, len(in_tree)
 
 
 @ft.partial(pull_bwd_rules.def_rule, concat_p)
-def pullback_bwd_concat(residuals: Tree, out_cotangent: Tree) -> Tree:
+def pullback_bwd_concat(residuals: Tree, out_cotangent: Tree, /) -> Tree:
     n = residuals
     return tuple([out_cotangent] * n)
 
 
 @ft.partial(batch_rules.def_rule, concat_p)
-def batch_concat(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[Tree, Tree]:
+def batch_concat(batch_size: int, in_batched: Tree, in_tree: Tree, /) -> tuple[Tree, Tree]:
     cols = tuple(in_tree)
     batched = tuple(in_batched)
     if batch_size == 0:
@@ -171,7 +172,7 @@ dce_rules.def_rule(concat_p, default_dce)
 match_p = Primitive("match", tag={StringTag})
 
 
-def match(a: str, b: str) -> bool:
+def match(a: str, b: str, /) -> bool:
     """Check if two strings are equal.
 
     This is a traceable version of `==` that works correctly during tracing.
@@ -194,13 +195,13 @@ def match(a: str, b: str) -> bool:
 
 
 @ft.partial(impl_rules.def_rule, match_p)
-def impl_match(in_tree: Tree) -> bool:
+def impl_match(in_tree: Tree, /) -> bool:
     a, b = in_tree
     return a == b
 
 
 @ft.partial(eval_rules.def_rule, match_p)
-def eval_match(in_tree: Tree) -> EvalType:
+def eval_match(in_tree: Tree, /) -> EvalType:
     a, b = in_tree
     if is_var(a) or is_var(b):
         return Var()
@@ -208,7 +209,7 @@ def eval_match(in_tree: Tree) -> EvalType:
 
 
 @ft.partial(batch_rules.def_rule, match_p)
-def batch_match(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[list[bool], bool]:
+def batch_match(batch_size: int, in_batched: Tree, in_tree: Tree, /) -> tuple[list[bool], bool]:
     a_col, b_col = in_tree
     a_batched, b_batched = in_batched
 
@@ -223,14 +224,14 @@ def batch_match(batch_size: int, in_batched: Tree, in_tree: Tree) -> tuple[list[
 
 
 @ft.partial(push_rules.def_rule, match_p)
-def pushforward_match(primals: Tree, tangents: Tree) -> tuple[bool, Tree]:
+def pushforward_match(primals: Tree, tangents: Tree, /) -> tuple[bool, Tree]:
     out_primal = match(*primals)
     out_tangent = treelib.map(zero_cotangent, primals)
     return out_primal, out_tangent
 
 
 @ft.partial(pull_fwd_rules.def_rule, match_p)
-def pullback_fwd_match(in_tree: Tree) -> tuple[bool, Tree]:
+def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     a, b = in_tree
     out = a == b
     residuals = (a, b)
@@ -238,7 +239,7 @@ def pullback_fwd_match(in_tree: Tree) -> tuple[bool, Tree]:
 
 
 @ft.partial(pull_bwd_rules.def_rule, match_p)
-def pullback_bwd_match(residuals: Tree, out_cotangent: Tree) -> Tree:
+def pullback_bwd_match(residuals: Tree, out_cotangent: Tree, /) -> Tree:
     del out_cotangent
     return treelib.map(zero_cotangent, residuals)
 
