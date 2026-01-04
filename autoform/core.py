@@ -440,6 +440,14 @@ def get_interpreter() -> Interpreter:
 # EFFECT CONTEXT
 # ==================================================================================================
 
+
+class Effect:
+    __slots__ = "key"
+
+    def __init__(self, *, key: tp.Hashable):
+        self.key = key
+
+
 active_effect: ContextVar[Effect | None] = ContextVar("active_effect", default=None)
 
 
@@ -457,6 +465,68 @@ def using_effect(effect: Effect | None):
 
 def get_effect() -> Effect | None:
     return active_effect.get()
+
+
+# ==================================================================================================
+# EFFECT INTERPRETER
+# ==================================================================================================
+
+
+class EffectInterpreter(Interpreter, ABC):
+    # NOTE(asem): single continuation style effect handler
+    #
+    # skip (replace value, no continuation)
+    # >>> def handle(self, effect, value):
+    # ...     return replacement
+    # ...     yield
+    #
+    # pass-through (observe only)
+    # >>> def handle(self, effect, value):
+    # ...     return (yield value)
+    #
+    # pre-process input
+    # >>> def handle(self, effect, value):
+    # ...     return (yield transform(value))
+    #
+    # post-process output
+    # >>> def handle(self, effect, value):
+    # ...     result = yield value
+    # ...     return transform(result)
+    #
+    # both
+    # >>> def handle(self, effect, value):
+    # ...     result = yield transform(value)
+    # ...     return transform(result)
+    handles: tp.ClassVar[set[type[Effect]]] = set()
+
+    def __init__(self):
+        self.parent = get_interpreter()
+
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+        effect = get_effect()
+
+        if effect is None or not isinstance(effect, tuple(self.handles)):
+            return self.parent.interpret(prim, in_tree, **params)
+
+        gen = self.handle(effect, in_tree)
+        result = None
+
+        # NOTE(asem):
+        # the handler can yield multiple times, each yield invokes the continuation.
+        # >>> def handle(self, effect, value):
+        # ...     results = []
+        # ...     for v in (...):
+        # ...         result = yield v
+        # ...         results.append(result)
+        # ...     return best(results)
+        # ...     yield
+        while True:
+            try:
+                modified_input = next(gen) if result is None else gen.send(result)
+            except StopIteration as e:
+                return e.value
+
+            result = self.parent.interpret(prim, modified_input, **params)
 
 
 # ==================================================================================================
@@ -700,80 +770,3 @@ def acall[**P, R](ir: IR[P, R]) -> tp.Callable[P, tp.Coroutine[tp.Any, tp.Any, R
         return treelib.map(read, ir.out_irtree)
 
     return execute
-
-
-# ==================================================================================================
-# EFFECTS
-# ==================================================================================================
-
-
-class Effect:
-    __slots__ = "key"
-
-    def __init__(self, *, key: tp.Hashable):
-        self.key = key
-
-
-class EffectInterpreter(Interpreter, ABC):
-    # NOTE(asem): single continuation style effect handler
-    #
-    # skip (replace value, no continuation)
-    # >>> def handle(self, effect, value):
-    # ...     return replacement
-    # ...     yield
-    #
-    # pass-through (observe only)
-    # >>> def handle(self, effect, value):
-    # ...     return (yield value)
-    #
-    # pre-process input
-    # >>> def handle(self, effect, value):
-    # ...     return (yield transform(value))
-    #
-    # post-process output
-    # >>> def handle(self, effect, value):
-    # ...     result = yield value
-    # ...     return transform(result)
-    #
-    # both
-    # >>> def handle(self, effect, value):
-    # ...     result = yield transform(value)
-    # ...     return transform(result)
-    handles: tp.ClassVar[set[type[Effect]]] = set()
-
-    def __init__(self):
-        self.parent = get_interpreter()
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        assert cls.interpret is EffectInterpreter.interpret
-
-    @tp.final
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
-        effect = get_effect()
-
-        if effect is None or not isinstance(effect, tuple(self.handles)):
-            return self.parent.interpret(prim, in_tree, **params)
-
-        gen = self.handle(effect, in_tree)
-        result = None
-
-        # NOTE(asem):
-        # the handler can yield multiple times, each yield invokes the continuation.
-        # >>> def handle(self, effect, value):
-        # ...     results = []
-        # ...     for v in (...):
-        # ...         result = yield v
-        # ...         results.append(result)
-        # ...     return best(results)
-        # ...     yield
-        while True:
-            try:
-                modified_input = next(gen) if result is None else gen.send(result)
-            except StopIteration as e:
-                return e.value
-
-            result = self.parent.interpret(prim, modified_input, **params)
-
-    @abstractmethod
-    def handle(self, effect: Effect, value: tp.Any) -> tp.Generator[tp.Any, tp.Any, tp.Any]: ...
