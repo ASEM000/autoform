@@ -1,0 +1,66 @@
+[project]
+name = "autoform"
+version = "0.1.0"
+description = "Composable function transformations for LLM programs"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "litellm>=1.80.9",
+    "optree>=0.18.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "pytest-benchmark>=5.0.0",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-book-theme>=1.1.4",
+    "sphinx-autodoc-typehints>=2.0",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.5",
+    "myst-parser>=2.0,<4.0",
+    "nbsphinx>=0.9.8",
+    "jupytext>=1.16.0",
+]
+notebook = [
+    "ipykernel>=7.1.0",
+    "jupyterlab>=4.5.1",
+]
+
+[tool.ruff]
+preview = true
+line-length = 100
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["I", "F401"]  # isort, unused imports
+exclude = [".venv", ".git", ".tox", "build", "dist", "__pycache__", "__pypackages__"]
+
+ignore = [
+    "E731", # Do not assign a lambda expression, use a def.
+    "F841", # Local variable is assigned to but never used.
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["autoform"]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["tests", "autoform", "docs/examples"]
+python_files = ["test_*.py", "bench_*.py"]
+filterwarnings = [
+    "ignore:Pydantic serializer warnings:UserWarning",
+    "ignore:enable_cleanup_closed:DeprecationWarning",
+]
