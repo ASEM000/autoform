@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools as ft
+
 from autoform.ad import zero_cotangent
 from autoform.core import (
     EvalType,
@@ -17,7 +18,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, asyncify, treelib, rebatch, unbatch_at
+from autoform.utils import Tree, asyncify, rebatch, treelib, unbatch_at
 
 
 class StringTag(PrimitiveTag): ...

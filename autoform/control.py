@@ -30,10 +30,10 @@ from autoform.utils import (
     Tree,
     asyncify,
     pack_user_input,
+    rebatch,
     transpose_batch,
     treelib,
     unbatch_at,
-    rebatch,
 )
 
 
@@ -545,7 +545,7 @@ async def abatch_while_loop(
 
     out_batched = treelib.map(is_irvar, body_ir.out_irtree)
     out_tree = transpose_batch(batch_size, out_batched, states)
-    
+
     flat_out_tree, *_ = treelib.flatten_one_level(out_tree)
     out_tree = rebatch(init_val, in_batched, flat_out_tree)
 

@@ -23,7 +23,7 @@ from autoform.core import (
     using_effect,
 )
 from autoform.effects import effect_p
-from autoform.utils import Struct, Tree, transpose_batch, treelib, rebatch
+from autoform.utils import Struct, Tree, rebatch, transpose_batch, treelib
 
 
 class LMTag(PrimitiveTag): ...

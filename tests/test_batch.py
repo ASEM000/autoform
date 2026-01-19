@@ -3,6 +3,7 @@ import functools as ft
 import pytest
 
 import autoform as af
+from autoform.utils import rebatch
 
 
 class TestBatchBasic:
@@ -546,3 +547,63 @@ class TestTransposeBatch:
         out = transpose_batch(2, out_batched, results)
         assert out.x == [1, 3]
         assert out.y == [2, 4]
+
+
+class TestRebatch:
+    def test_list_to_list(self):
+        in_tree = (["a", "b", "c"],)
+        in_batched = (True,)
+        results = ["x", "y", "z"]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == ["x", "y", "z"]
+
+    def test_tuple_to_tuple(self):
+        in_tree = (("a", "b", "c"),)
+        in_batched = (True,)
+        results = ["x", "y", "z"]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == ("x", "y", "z")
+
+    def test_mixed_batched_uses_first(self):
+        in_tree = (("a", "b"), "broadcast")
+        in_batched = (True, False)
+        results = ["x", "y"]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == ("x", "y")
+
+    def test_no_batched_returns_list(self):
+        in_tree = ("a", "b")
+        in_batched = (False, False)
+        results = ["x", "y"]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == ["x", "y"]
+
+    def test_nested_tuple(self):
+        in_tree = ((("a", "b", "c"),),)
+        in_batched = ((True,),)
+        results = ["x", "y", "z"]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == ("x", "y", "z")
+
+    def test_struct_container(self):
+        class Point(af.Struct):
+            x: int
+            y: int
+
+        in_tree = ([Point(x=1, y=2), Point(x=3, y=4)],)
+        in_batched = (True,)
+        results = [Point(x=10, y=20), Point(x=30, y=40)]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == [Point(x=10, y=20), Point(x=30, y=40)]
+
+    def test_struct_with_tuple_field(self):
+        from autoform.utils import rebatch
+
+        class Batch(af.Struct):
+            codes: tuple
+
+        in_tree = (Batch(codes=("a", "b", "c")),)
+        in_batched = (True,)
+        results = [("x", "y", "z")]
+        out = rebatch(in_tree, in_batched, results)
+        assert out == Batch(codes=("x", "y", "z"))
