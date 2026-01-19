@@ -23,7 +23,7 @@ from autoform.core import (
     using_effect,
 )
 from autoform.effects import effect_p
-from autoform.utils import Struct, Tree, rebatch, transpose_batch, treelib
+from autoform.utils import Struct, Tree, batch_transpose, rebatch, treelib
 
 
 class LMTag(PrimitiveTag): ...
@@ -375,7 +375,7 @@ def batch_struct_lm_call(
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
     results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = transpose_batch(batch_size, out_batched, results)
+    out_ib = batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
 
 
@@ -394,7 +394,7 @@ async def abatch_struct_lm_call(
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = transpose_batch(batch_size, out_batched, list(results))
+    out_ib = batch_transpose(batch_size, out_batched, list(results))
     return out_ib, out_batched
 
 

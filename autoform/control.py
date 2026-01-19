@@ -29,11 +29,11 @@ from autoform.optims import dce, dce_rules, default_dce
 from autoform.utils import (
     Tree,
     asyncify,
+    batch_index,
+    batch_transpose,
     pack_user_input,
     rebatch,
-    transpose_batch,
     treelib,
-    unbatch_at,
 )
 
 
@@ -227,7 +227,7 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
-    unbatch = ft.partial(unbatch_at, operands_col, operands_batched)
+    unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
     def run_ir_at(b):
         return call(branches[key_col[b] if key_batched else key_col])(unbatch(b))
@@ -240,7 +240,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
-    unbatch = ft.partial(unbatch_at, operands_col, operands_batched)
+    unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
     async def run_ir_at(b):
         return await acall(branches[key_col[b] if key_batched else key_col])(unbatch(b))
@@ -450,7 +450,7 @@ def batch_while_loop(
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
     # and keep track of which items are not done. initially everything is alive
-    states = [unbatch_at(init_val, in_batched, b) for b in range(batch_size)]
+    states = [batch_index(init_val, in_batched, b) for b in range(batch_size)]
     alive = [True] * batch_size
 
     # NOTE(asem): pre-batch cond and body IRs. True marks all leaves as batched.
@@ -468,11 +468,11 @@ def batch_while_loop(
         n_alive = len(alive_states)
         in_batched_cond = treelib.map(lambda _: True, cond_ir.in_irtree)
         # NOTE(asem): move from AoS to SoA for alive states
-        in_transposed_cond = transpose_batch(n_alive, in_batched_cond, alive_states)
+        in_transposed_cond = batch_transpose(n_alive, in_batched_cond, alive_states)
         conds_result = call(batched_cond)(in_transposed_cond)
         # NOTE(asem): cond returns scalar bool, batched -> list. use unbatch for consistency.
         out_batched_cond = isinstance(conds_result, list)
-        conds = [unbatch_at(conds_result, out_batched_cond, b) for b in range(n_alive)]
+        conds = [batch_index(conds_result, out_batched_cond, b) for b in range(n_alive)]
         # NOTE(asem): mark items as dead if cond returned False
         for idx, c in zip(alive_idx, conds, strict=True):
             alive[idx] = c
@@ -482,16 +482,16 @@ def batch_while_loop(
             still_alive_states = [states[i] for i in still_alive]
             n_still_alive = len(still_alive_states)
             in_batched = treelib.map(lambda _: True, body_ir.in_irtree)
-            in_transposed = transpose_batch(n_still_alive, in_batched, still_alive_states)
+            in_transposed = batch_transpose(n_still_alive, in_batched, still_alive_states)
             out_transposed = call(batched_body)(in_transposed)
             out_batched = treelib.map(is_irvar, body_ir.out_irtree)
 
             for local_idx, batch_idx in enumerate(still_alive):
-                states[batch_idx] = unbatch_at(out_transposed, out_batched, local_idx)
+                states[batch_idx] = batch_index(out_transposed, out_batched, local_idx)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     # only IRVar positions are batched; IRLit positions stay scalar
     out_batched = treelib.map(is_irvar, body_ir.out_irtree)
-    out_tree = transpose_batch(batch_size, out_batched, states)
+    out_tree = batch_transpose(batch_size, out_batched, states)
     in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
 
@@ -504,7 +504,7 @@ async def abatch_while_loop(
     batch_size, in_batched, init_val = in_tree
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
-    states = [unbatch_at(init_val, in_batched, b) for b in range(batch_size)]
+    states = [batch_index(init_val, in_batched, b) for b in range(batch_size)]
     alive = [True] * batch_size
 
     # NOTE(asem): pre-batch cond and body IRs
@@ -520,10 +520,10 @@ async def abatch_while_loop(
         alive_states = [states[i] for i in alive_idx]
         n_alive = len(alive_states)
         in_batched_cond = treelib.map(lambda _: True, cond_ir.in_irtree)
-        in_transposed_cond = transpose_batch(n_alive, in_batched_cond, alive_states)
+        in_transposed_cond = batch_transpose(n_alive, in_batched_cond, alive_states)
         conds_result = await acall(batched_cond)(in_transposed_cond)
         out_batched_cond = isinstance(conds_result, list)
-        conds = [unbatch_at(conds_result, out_batched_cond, b) for b in range(n_alive)]
+        conds = [batch_index(conds_result, out_batched_cond, b) for b in range(n_alive)]
 
         for idx, c in zip(alive_idx, conds, strict=True):
             alive[idx] = c
@@ -533,15 +533,15 @@ async def abatch_while_loop(
             still_alive_states = [states[i] for i in still_alive]
             n_still_alive = len(still_alive_states)
             in_batched_body = treelib.map(lambda _: True, body_ir.in_irtree)
-            in_transposed = transpose_batch(n_still_alive, in_batched_body, still_alive_states)
+            in_transposed = batch_transpose(n_still_alive, in_batched_body, still_alive_states)
             out_transposed = await acall(batched_body)(in_transposed)
             out_batched_body = treelib.map(is_irvar, body_ir.out_irtree)
 
             for local_idx, batch_idx in enumerate(still_alive):
-                states[batch_idx] = unbatch_at(out_transposed, out_batched_body, local_idx)
+                states[batch_idx] = batch_index(out_transposed, out_batched_body, local_idx)
 
     out_batched = treelib.map(is_irvar, body_ir.out_irtree)
-    out_tree = transpose_batch(batch_size, out_batched, states)
+    out_tree = batch_transpose(batch_size, out_batched, states)
     in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
     return out_tree, out_batched

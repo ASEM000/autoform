@@ -35,14 +35,74 @@ def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R
     return cast(Callable[P, R], ft.lru_cache(maxsize=maxsize)(func))
 
 
-def index_tree_at(node: Tree, b: int, /) -> Tree:
+def tree_index(node: Tree, b: int, /) -> Tree:
     # NOTE(asem): index a struct without indexing support
     # useful to deal with arbitrary pytrees
     children, *_ = treelib.flatten_one_level(node)
     return children[b]
 
 
-def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
+def flatten_struct(obj: pydantic.BaseModel) -> tuple[tuple[Any, ...], tuple[str, ...]]:
+    assert isinstance(obj, pydantic.BaseModel)
+    fields = type(obj).model_fields
+    return (tuple(getattr(obj, k) for k in fields), tuple(fields))
+
+
+def unflatten_struct[T: type[pydantic.BaseModel]](cls: T, keys: tuple[str, ...], children) -> T:
+    assert isinstance(keys, tuple)
+    assert isinstance(children, tuple)
+    return cls.model_construct(**dict(zip(keys, children, strict=True)))
+
+
+class Struct(pydantic.BaseModel):
+    """Pydantic BaseModel that is also a PyTree.
+
+    Auto-sets subclasses as pytrees.
+    Uses ``model_construct`` in unflatten to skip validation.
+
+    Example:
+        >>> class Answer(Struct):
+        ...     reasoning: str
+        ...     answer: int
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        treelib.register_node(cls, flatten_struct, ft.partial(unflatten_struct, cls))
+
+    def __hash__(self):
+        structure = treelib.structure(self)
+        leaves = tuple(treelib.leaves(self))
+        return hash((structure, leaves))
+
+    def __eq__(self, other):
+        if not isinstance(other, Struct):
+            return False
+        lhs_structure = treelib.structure(self)
+        rhs_structure = treelib.structure(other)
+        if lhs_structure != rhs_structure:
+            return False
+        lhs_flat = treelib.leaves(self)
+        rhs_flat = treelib.leaves(other)
+        return lhs_flat == rhs_flat
+
+
+def pack_user_input(*args, **kwargs) -> Tree:
+    # NOTE(asem): pack args/kwargs into a single tree for user-bind interface.
+    # useful to avoid dealing with args/kwargs unpacking at the IR level.
+    if kwargs:
+        return (*args, kwargs)
+    if len(args) == 1:
+        return args[0]
+    return args
+
+
+# ==================================================================================================
+# BATCH UTILITIES
+# ==================================================================================================
+
+
+def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # Extract item at index b from batched leaves, broadcast non-batched.
     # Inverse of transpose_batch: extracts a single item from each batched leaf
     # while keeping non-batched leaves unchanged.
@@ -67,18 +127,8 @@ def unbatch_at(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
     zipped = zip(flat_in_tree, flat_in_batched, strict=True)
-    leaves_i = (index_tree_at(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
+    leaves_i = (tree_index(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
-
-
-def pack_user_input(*args, **kwargs) -> Tree:
-    # NOTE(asem): pack args/kwargs into a single tree for user-bind interface.
-    # useful to avoid dealing with args/kwargs unpacking at the IR level.
-    if kwargs:
-        return (*args, kwargs)
-    if len(args) == 1:
-        return args[0]
-    return args
 
 
 def rebatch(in_tree: Tree, in_batched: Tree[bool], out_flat: list, /) -> Tree:
@@ -99,7 +149,7 @@ def rebatch(in_tree: Tree, in_batched: Tree[bool], out_flat: list, /) -> Tree:
     return out_flat
 
 
-def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -> Tree:
+def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -> Tree:
     # NOTE(asem): AoS -> SoA
     # Example (used throughout):
     #   in_tree    = [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=6)]
@@ -147,7 +197,7 @@ def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -
     return result
 
 
-def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
+def batch_infer_size(tree: Tree, in_axes: Tree) -> int:
     # NOTE(asem): infer batch size by finding the first batched (True) position.
     # in_axes specifies ONLY which positions are batched, not the container type.
     # The container type is inferred from the actual data in `tree`.
@@ -163,53 +213,3 @@ def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
     axes_leaves = treelib.leaves(in_axes, is_leaf=is_axis_spec)
     tree_leaves = axes_spec.flatten_up_to(tree)
     return next((len(v) for v, a in zip(tree_leaves, axes_leaves) if a), 0)
-
-
-# ==================================================================================================
-# STRUCT
-# ==================================================================================================
-
-
-def flatten_struct(obj: pydantic.BaseModel) -> tuple[tuple[Any, ...], tuple[str, ...]]:
-    assert isinstance(obj, pydantic.BaseModel)
-    fields = type(obj).model_fields
-    return (tuple(getattr(obj, k) for k in fields), tuple(fields))
-
-
-def unflatten_struct[T: type[pydantic.BaseModel]](cls: T, keys: tuple[str, ...], children) -> T:
-    assert isinstance(keys, tuple)
-    assert isinstance(children, tuple)
-    return cls.model_construct(**dict(zip(keys, children, strict=True)))
-
-
-class Struct(pydantic.BaseModel):
-    """Pydantic BaseModel that is also a PyTree.
-
-    Auto-sets subclasses as pytrees.
-    Uses ``model_construct`` in unflatten to skip validation.
-
-    Example:
-        >>> class Answer(Struct):
-        ...     reasoning: str
-        ...     answer: int
-    """
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        treelib.register_node(cls, flatten_struct, ft.partial(unflatten_struct, cls))
-
-    def __hash__(self):
-        structure = treelib.structure(self)
-        leaves = tuple(treelib.leaves(self))
-        return hash((structure, leaves))
-
-    def __eq__(self, other):
-        if not isinstance(other, Struct):
-            return False
-        lhs_structure = treelib.structure(self)
-        rhs_structure = treelib.structure(other)
-        if lhs_structure != rhs_structure:
-            return False
-        lhs_flat = treelib.leaves(self)
-        rhs_flat = treelib.leaves(other)
-        return lhs_flat == rhs_flat
