@@ -35,9 +35,6 @@ class StreamEffect(Effect):
     def __init__(self, text: str):
         self.text = text
 
-    def __repr__(self):
-        return f"StreamEffect({self.text!r})"
-
 
 # ==================================================================================================
 # LM CALL

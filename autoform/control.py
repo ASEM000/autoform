@@ -492,11 +492,8 @@ def batch_while_loop(
     # only IRVar positions are batched; IRLit positions stay scalar
     out_batched = treelib.map(is_irvar, body_ir.out_irtree)
     out_tree = transpose_batch(batch_size, out_batched, states)
-
-    # NOTE(asem): preserve original container type.
-    # states is always a list, but init_val may be tuple/etc.
-    flat_out_tree, *_ = treelib.flatten_one_level(out_tree)
-    out_tree = rebatch(init_val, in_batched, flat_out_tree)
+    in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
+    out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
 
     return out_tree, out_batched
 
@@ -545,10 +542,8 @@ async def abatch_while_loop(
 
     out_batched = treelib.map(is_irvar, body_ir.out_irtree)
     out_tree = transpose_batch(batch_size, out_batched, states)
-
-    flat_out_tree, *_ = treelib.flatten_one_level(out_tree)
-    out_tree = rebatch(init_val, in_batched, flat_out_tree)
-
+    in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
+    out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
     return out_tree, out_batched
 
 
