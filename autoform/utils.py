@@ -81,6 +81,24 @@ def pack_user_input(*args, **kwargs) -> Tree:
     return args
 
 
+def rebatch(in_tree: Tree, in_batched: Tree[bool], out_flat: list, /) -> Tree:
+    # NOTE(asem): wrap results in the container type inferred from the first batched input.
+    # Example:
+    #     >>> in_tree = ("a", "b", "c")
+    #     >>> in_batched = True
+    #     >>> rebatch(in_tree, in_batched, ["x", "y", "z"])
+    #     ('x', 'y', 'z')
+    is_bool = lambda x: isinstance(x, bool)
+    spec = treelib.structure(in_batched, is_leaf=is_bool)
+    batched_leaves = treelib.leaves(in_batched, is_leaf=is_bool)
+    tree_leaves = spec.flatten_up_to(in_tree)
+    for v, b in zip(tree_leaves, batched_leaves, strict=True):
+        if b:
+            container_spec = treelib.structure(v, is_leaf=lambda x: x is not v)
+            return container_spec.unflatten(out_flat)
+    return out_flat
+
+
 def transpose_batch(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -> Tree:
     # NOTE(asem): AoS -> SoA
     # Example (used throughout):

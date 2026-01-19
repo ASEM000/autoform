@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools as ft
 from autoform.ad import zero_cotangent
 from autoform.core import (
     EvalType,
@@ -16,7 +17,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, asyncify, treelib
+from autoform.utils import Tree, asyncify, treelib, rebatch, unbatch_at
 
 
 class StringTag(PrimitiveTag): ...
@@ -69,14 +70,9 @@ def pullback_bwd_format(in_tree: Tree, /, *, template: str) -> Tree:
 
 def batch_format(in_tree: Tree, /, *, template: str) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
-    args = tuple(in_values)
-    args_batched = tuple(in_batched)
-
-    def get(i, b):
-        return args[i][b] if args_batched[i] else args[i]
-
-    result = [template.format(*[get(i, b) for i in range(len(args))]) for b in range(batch_size)]
-    return result, True
+    unbatch = ft.partial(unbatch_at, in_values, in_batched)
+    result = [template.format(*unbatch(b)) for b in range(batch_size)]
+    return rebatch(in_values, in_batched, result), True
 
 
 impl_rules.set(format_p, impl_format)
@@ -142,16 +138,9 @@ def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
 
 def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
-    cols = tuple(in_values)
-    batched = tuple(in_batched)
-    if batch_size == 0:
-        return [], True
-
-    def get(i, b):
-        return cols[i][b] if batched[i] else cols[i]
-
-    result = [concat(*[get(i, b) for i in range(len(cols))]) for b in range(batch_size)]
-    return result, True
+    unbatch = ft.partial(unbatch_at, in_values, in_batched)
+    result = [concat(*unbatch(b)) for b in range(batch_size)]
+    return rebatch(in_values, in_batched, result), True
 
 
 impl_rules.set(concat_p, impl_concat)
@@ -230,17 +219,9 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
-    a_col, b_col = in_values
-    a_batched, b_batched = in_batched
-
-    def get_a(b):
-        return a_col[b] if a_batched else a_col
-
-    def get_b(b):
-        return b_col[b] if b_batched else b_col
-
-    result = [get_a(b) == get_b(b) for b in range(batch_size)]
-    return result, True
+    unbatch = ft.partial(unbatch_at, in_values, in_batched)
+    result = [match(*unbatch(b)) for b in range(batch_size)]
+    return rebatch(in_values, in_batched, result), True
 
 
 impl_rules.set(match_p, impl_match)

@@ -26,7 +26,15 @@ from autoform.core import (
     push_rules,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, asyncify, pack_user_input, transpose_batch, treelib, unbatch_at
+from autoform.utils import (
+    Tree,
+    asyncify,
+    pack_user_input,
+    transpose_batch,
+    treelib,
+    unbatch_at,
+    rebatch,
+)
 
 
 class ControlTag(PrimitiveTag): ...
@@ -219,25 +227,26 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
-    unbatch_operands = ft.partial(unbatch_at, operands_col, operands_batched)
+    unbatch = ft.partial(unbatch_at, operands_col, operands_batched)
 
     def run_ir_at(b):
-        return call(branches[key_col[b] if key_batched else key_col])(unbatch_operands(b))
+        return call(branches[key_col[b] if key_batched else key_col])(unbatch(b))
 
-    return [run_ir_at(b) for b in range(batch_size)], True
+    result = [run_ir_at(b) for b in range(batch_size)]
+    return rebatch(in_values, in_batched, result), True
 
 
 async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
-    unbatch_operands = ft.partial(unbatch_at, operands_col, operands_batched)
+    unbatch = ft.partial(unbatch_at, operands_col, operands_batched)
 
     async def run_ir_at(b):
-        return await acall(branches[key_col[b] if key_batched else key_col])(unbatch_operands(b))
+        return await acall(branches[key_col[b] if key_batched else key_col])(unbatch(b))
 
     results = await asyncio.gather(*[run_ir_at(b) for b in range(batch_size)])
-    return list(results), True
+    return rebatch(in_values, in_batched, list(results)), True
 
 
 impl_rules.set(switch_p, impl_switch)
@@ -486,13 +495,8 @@ def batch_while_loop(
 
     # NOTE(asem): preserve original container type.
     # states is always a list, but init_val may be tuple/etc.
-    # use init_val's spec to restore the original container type.
-    in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
-    out_spec = treelib.structure(out_tree, is_leaf=lambda x: x is not out_tree)
-
-    # NOTE(asem): for SoA -> AoS a list is used to work with batched output here
-    # we have to repack it into the original container type
-    out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
+    flat_out_tree, *_ = treelib.flatten_one_level(out_tree)
+    out_tree = rebatch(init_val, in_batched, flat_out_tree)
 
     return out_tree, out_batched
 
@@ -541,9 +545,9 @@ async def abatch_while_loop(
 
     out_batched = treelib.map(is_irvar, body_ir.out_irtree)
     out_tree = transpose_batch(batch_size, out_batched, states)
-
-    in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
-    out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
+    
+    flat_out_tree, *_ = treelib.flatten_one_level(out_tree)
+    out_tree = rebatch(init_val, in_batched, flat_out_tree)
 
     return out_tree, out_batched
 
