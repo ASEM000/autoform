@@ -597,7 +597,6 @@ class TestRebatch:
         assert out == [Point(x=10, y=20), Point(x=30, y=40)]
 
     def test_struct_with_tuple_field(self):
-
         class Batch(af.Struct):
             codes: tuple
 

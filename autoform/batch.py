@@ -31,7 +31,7 @@ from autoform.core import (
     using_interpreter,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, transpose_batch, treelib
+from autoform.utils import Tree, infer_batch_size, transpose_batch, treelib
 
 # ==================================================================================================
 # BATCH
@@ -43,23 +43,6 @@ class BatchTag(TransformationTag): ...
 
 def is_axis_spec(x) -> bool:
     return isinstance(x, bool)
-
-
-def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
-    # NOTE(asem): infer batch size by finding the first batched (True) position.
-    # in_axes specifies ONLY which positions are batched, not the container type.
-    # The container type is inferred from the actual data in `tree`.
-    #
-    # >>> tree = ReviewState(code=["a", "b", "c"], has_bugs=[T, F, T])
-    # >>> in_axes = ReviewState(code=True, has_bugs=True)
-    # >>> axes_spec = PyTreeSpec(ReviewState(*, *))  # structure with 2 leaves
-    # >>> axes_leaves = [True, True]
-    # >>> tree_leaves = [["a","b","c"], [T,F,T]]  # flattened to match spec
-    # >>> batch_size = len(["a","b","c"]) = 3
-    axes_spec = treelib.structure(in_axes, is_leaf=is_axis_spec)
-    axes_leaves = treelib.leaves(in_axes, is_leaf=is_axis_spec)
-    tree_leaves = axes_spec.flatten_up_to(tree)
-    return next((len(v) for v, a in zip(tree_leaves, axes_leaves) if a), 0)
 
 
 def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
