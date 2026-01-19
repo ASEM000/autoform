@@ -375,7 +375,7 @@ def sched[**P, R](ir: IR[P, R], /, *, cond: Callable[[IREqn], bool] | None = Non
     out_ireqns: list[IREqn] = []
     cond = (lambda _: True) if cond is None else cond
 
-    def schedule_if_ir(leaf):
+    def recurse(leaf):
         return sched(leaf, cond=cond) if isinstance(leaf, IR) else leaf
 
     def make_gather(ireqns: list[IREqn]) -> IREqn:
@@ -385,7 +385,7 @@ def sched[**P, R](ir: IR[P, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         return IREqn(gather_p, in_irtree, out_irtree, params=dict(irs=irs))
 
     for level in levels:
-        ireqns = [ireqn.using(**treelib.map(schedule_if_ir, ireqn.params)) for ireqn in level]
+        ireqns = [ireqn.using(**treelib.map(recurse, ireqn.params)) for ireqn in level]
         seq_ireqns = [ireqn for ireqn in ireqns if not cond(ireqn)]
         par_ireqns = [ireqn for ireqn in ireqns if cond(ireqn)]
         out_ireqns.extend([make_gather(par_ireqns)] if len(par_ireqns) > 1 else par_ireqns)

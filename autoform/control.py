@@ -494,7 +494,6 @@ def batch_while_loop(
     out_tree = batch_transpose(batch_size, out_batched, states)
     in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(treelib.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
-
     return out_tree, out_batched
 
 

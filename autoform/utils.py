@@ -113,16 +113,14 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     #     in_batched: tree of bools indicating which leaves are batched.
     #     b: index to extract from batched leaves.
 
-    # Example:
-    #     >>> in_tree, in_batched = [[1, 2, 3], "constant"], [True, False]
-    #     >>> batch_index(in_tree, in_batched, 0)
-    #     [1, 'constant']
+    # >>> in_tree, in_batched = [[1, 2, 3], "constant"], [True, False]
+    # >>> batch_index(in_tree, in_batched, 0)
+    # [1, 'constant']
     spec = treelib.structure(in_batched)
     # NOTE(asem): flatten in_tree to match in_batched structure
-    # Example:
-    #     >>> spec = treelib.structure([1, 2, 3])
-    #     >>> spec.flatten_up_to([1, [2, 3]])
-    #     [[1, 2, 3]]
+    # >>> spec = treelib.structure([1, 2, 3])
+    # >>> spec.flatten_up_to([1, [2, 3]])
+    # [[1, 2, 3]]
     flat_in_tree = spec.flatten_up_to(in_tree)
     flat_in_batched = treelib.leaves(in_batched)
     # NOTE(asem): iterate over the flat version and index iff its batched
@@ -134,19 +132,22 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
 
 def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec:
     # NOTE(asem): return the common container pytreespec of batched leaves.
-    # Example:
-    #     >>> in_tree = ("a", "b", "c")
-    #     >>> in_batched = True
-    #     >>> batch_repack(in_tree, in_batched, ["x", "y", "z"])
-    #     ('x', 'y', 'z')
+    # >>> in_tree = ("a", "b", "c")
+    # >>> in_batched = True
+    # >>> batch_repack(in_tree, in_batched, ["x", "y", "z"])
+    # ('x', 'y', 'z')
+
+    # NOTE(asem): this function will error if the batch continer types are mismatched
+    # this design choice is ensure that a \optimes b over a consistent batch container type
+    # will be wrapped in the same container type. otherwise, we have to pick one container type
+    # arbitrarily which can lead to confusing behavior.
     is_axis_spec = lambda x: isinstance(x, bool)
     spec = treelib.structure(in_batched, is_leaf=is_axis_spec)
     batched_leaves = treelib.leaves(in_batched, is_leaf=is_axis_spec)
     tree_leaves = spec.flatten_up_to(in_tree)
     specs = []
     for v, b in zip(tree_leaves, batched_leaves, strict=True):
-        if b:
-            specs.append(treelib.structure(v, is_leaf=lambda x: x is not v))
+        b and specs.append(treelib.structure(v, is_leaf=lambda x: x is not v))
     assert len(specs), "No batched leaves found to infer container type."
     s0, *rest = specs
     assert all(s0 == s for s in rest), "Mismatched container types among batched leaves."
