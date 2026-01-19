@@ -527,8 +527,7 @@ async def abatch_while_loop(
         for idx, c in zip(alive_idx, conds, strict=True):
             alive[idx] = c
 
-        still_alive = [i for i in alive_idx if alive[i]]
-        if still_alive:
+        if still_alive := [i for i in alive_idx if alive[i]]:
             still_alive_states = [states[i] for i in still_alive]
             n_still_alive = len(still_alive_states)
             in_batched_body = treelib.map(lambda _: True, body_ir.in_irtree)

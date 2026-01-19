@@ -150,6 +150,8 @@ def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec:
         b and specs.append(treelib.structure(v, is_leaf=lambda x: x is not v))
     assert len(specs), "No batched leaves found to infer container type."
     s0, *rest = specs
+    # NOTE(asem): ensure all batched leaves have the same container type
+    # this avoids ambiguity during batch repack of the output.
     assert all(s0 == s for s in rest), "Mismatched container types among batched leaves."
     return s0
 
