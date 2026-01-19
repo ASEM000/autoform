@@ -3,8 +3,7 @@ import functools as ft
 import pytest
 
 import autoform as af
-from autoform.batch import batch_infer_size
-from autoform.utils import batch_transpose, rebatch
+from autoform.utils import batch_spec, batch_transpose
 
 
 class TestBatchBasic:
@@ -222,20 +221,20 @@ class TestBatchUtils:
     def test_basic_axes_tree(self):
         col_tree = (["a", "b"], ["x", "y"])
         in_axes = True
-        batch_size = batch_infer_size(col_tree, in_axes)
+        batch_size = batch_spec(col_tree, in_axes).num_children
         assert batch_size == 2
 
     def test_broadcast_axes_tree(self):
         col_tree = (["a", "b"], "single")
         in_axes = (True, False)
-        batch_size = batch_infer_size(col_tree, in_axes)
+        batch_size = batch_spec(col_tree, in_axes).num_children
         assert batch_size == 2
 
-    def test_no_batched_returns_zero(self):
+    def test_no_batched_returns_error(self):
         col_tree = ("a", "b")
         in_axes = (False, False)
-        batch_size = batch_infer_size(col_tree, in_axes)
-        assert batch_size == 0
+        with pytest.raises(AssertionError):
+            batch_spec(col_tree, in_axes).num_children
 
 
 class TestBatchRuleOutBatched:
@@ -345,13 +344,12 @@ class TestBatchBroadcasting:
         batch_size = 0
         in_batched = (False, False)
         in_values = ("a", "b")
-        out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
-            batch_size,
-            in_batched,
-            in_values,
-        ))
-        assert out_vals == []
-        assert out_batched
+        with pytest.raises(AssertionError):
+            out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
+                batch_size,
+                in_batched,
+                in_values,
+            ))
 
 
 class TestBatchRuleOutBatchedValidation:
@@ -536,40 +534,40 @@ class TestTransposeBatch:
         assert out.y == [2, 4]
 
 
-class TestRebatch:
+class TestBatchSpec:
     def test_list_to_list(self):
         in_tree = (["a", "b", "c"],)
         in_batched = (True,)
         results = ["x", "y", "z"]
-        out = rebatch(in_tree, in_batched, results)
+        out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == ["x", "y", "z"]
 
     def test_tuple_to_tuple(self):
         in_tree = (("a", "b", "c"),)
         in_batched = (True,)
         results = ["x", "y", "z"]
-        out = rebatch(in_tree, in_batched, results)
+        out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == ("x", "y", "z")
 
     def test_mixed_batched_uses_first(self):
         in_tree = (("a", "b"), "broadcast")
         in_batched = (True, False)
         results = ["x", "y"]
-        out = rebatch(in_tree, in_batched, results)
+        out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == ("x", "y")
 
     def test_no_batched_returns_list(self):
         in_tree = ("a", "b")
         in_batched = (False, False)
         results = ["x", "y"]
-        out = rebatch(in_tree, in_batched, results)
-        assert out == ["x", "y"]
+        with pytest.raises(AssertionError):
+            out = batch_spec(in_tree, in_batched).unflatten(results)
 
     def test_nested_tuple(self):
         in_tree = ((("a", "b", "c"),),)
         in_batched = ((True,),)
         results = ["x", "y", "z"]
-        out = rebatch(in_tree, in_batched, results)
+        out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == ("x", "y", "z")
 
     def test_struct_container(self):
@@ -580,7 +578,7 @@ class TestRebatch:
         in_tree = ([Point(x=1, y=2), Point(x=3, y=4)],)
         in_batched = (True,)
         results = [Point(x=10, y=20), Point(x=30, y=40)]
-        out = rebatch(in_tree, in_batched, results)
+        out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == [Point(x=10, y=20), Point(x=30, y=40)]
 
     def test_struct_with_tuple_field(self):
@@ -590,5 +588,5 @@ class TestRebatch:
         in_tree = (Batch(codes=("a", "b", "c")),)
         in_batched = (True,)
         results = [("x", "y", "z")]
-        out = rebatch(in_tree, in_batched, results)
+        out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == Batch(codes=("x", "y", "z"))

@@ -30,9 +30,9 @@ from autoform.utils import (
     Tree,
     asyncify,
     batch_index,
+    batch_spec,
     batch_transpose,
     pack_user_input,
-    rebatch,
     treelib,
 )
 
@@ -233,7 +233,7 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
         return call(branches[key_col[b] if key_batched else key_col])(unbatch(b))
 
     result = [run_ir_at(b) for b in range(batch_size)]
-    return rebatch(in_values, in_batched, result), True
+    return batch_spec(in_values, in_batched).unflatten(result), True
 
 
 async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
@@ -246,7 +246,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
         return await acall(branches[key_col[b] if key_batched else key_col])(unbatch(b))
 
     results = await asyncio.gather(*[run_ir_at(b) for b in range(batch_size)])
-    return rebatch(in_values, in_batched, list(results)), True
+    return batch_spec(in_values, in_batched).unflatten(results), True
 
 
 impl_rules.set(switch_p, impl_switch)

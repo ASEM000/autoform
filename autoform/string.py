@@ -18,7 +18,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import Tree, asyncify, batch_index, rebatch, treelib
+from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
 
 
 class StringTag(PrimitiveTag): ...
@@ -73,7 +73,7 @@ def batch_format(in_tree: Tree, /, *, template: str) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [template.format(*unbatch(b)) for b in range(batch_size)]
-    return rebatch(in_values, in_batched, result), True
+    return batch_spec(in_values, in_batched).unflatten(result), True
 
 
 impl_rules.set(format_p, impl_format)
@@ -141,7 +141,7 @@ def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [concat(*unbatch(b)) for b in range(batch_size)]
-    return rebatch(in_values, in_batched, result), True
+    return batch_spec(in_values, in_batched).unflatten(result), True
 
 
 impl_rules.set(concat_p, impl_concat)
@@ -222,7 +222,7 @@ def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [match(*unbatch(b)) for b in range(batch_size)]
-    return rebatch(in_values, in_batched, result), True
+    return batch_spec(in_values, in_batched).unflatten(result), True
 
 
 impl_rules.set(match_p, impl_match)

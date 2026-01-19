@@ -31,7 +31,7 @@ from autoform.core import (
     using_interpreter,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, batch_infer_size, batch_transpose, treelib
+from autoform.utils import Tree, batch_spec, batch_transpose, treelib
 
 # ==================================================================================================
 # BATCH
@@ -125,8 +125,8 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # >>> batch_size = 2  # inferred from len(in_tree.code)
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
-    batch_size = batch_infer_size(col_tree, in_batched_tree)
-    assert batch_size, "batch requires at least one batched input"
+    batch_size = batch_spec(col_tree, in_batched_tree).num_children
+    assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Value | list[Value]] = {}
     b_env: dict[IRVar, bool] = {}
@@ -162,8 +162,8 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
-    batch_size = batch_infer_size(col_tree, in_batched_tree)
-    assert batch_size, "batch requires at least one batched input"
+    batch_size = batch_spec(col_tree, in_batched_tree).num_children
+    assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Value | list[Value]] = {}
     b_env: dict[IRVar, bool] = {}

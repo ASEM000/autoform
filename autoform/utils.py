@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import optree.pytree
 import pydantic
+from optree import PyTreeSpec
 
 # ==================================================================================================
 # ASYNC UTILITIES
@@ -108,13 +109,13 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # while keeping non-batched leaves unchanged.
 
     # Args:
-    #     tree_ib: tree with batched leaves (index-batch order, each leaf is a list).
-    #     batched: tree of bools indicating which leaves are batched.
+    #     in_tree: tree with batched leaves (index-batch order, each leaf is a list).
+    #     in_batched: tree of bools indicating which leaves are batched.
     #     b: index to extract from batched leaves.
 
     # Example:
-    #     >>> tree_ib, batched = [[1, 2, 3], "constant"], [True, False]
-    #     >>> unbatch_at(tree_ib, batched, 0)
+    #     >>> in_tree, in_batched = [[1, 2, 3], "constant"], [True, False]
+    #     >>> batch_index(in_tree, in_batched, 0)
     #     [1, 'constant']
     spec = treelib.structure(in_batched)
     # NOTE(asem): flatten in_tree to match in_batched structure
@@ -131,22 +132,25 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     return spec.unflatten(leaves_i)
 
 
-def rebatch(in_tree: Tree, in_batched: Tree[bool], out_flat: list, /) -> Tree:
-    # NOTE(asem): wrap results in the container type inferred from the first batched input.
+def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec:
+    # NOTE(asem): return the common container pytreespec of batched leaves.
     # Example:
     #     >>> in_tree = ("a", "b", "c")
     #     >>> in_batched = True
-    #     >>> rebatch(in_tree, in_batched, ["x", "y", "z"])
+    #     >>> batch_repack(in_tree, in_batched, ["x", "y", "z"])
     #     ('x', 'y', 'z')
-    is_bool = lambda x: isinstance(x, bool)
-    spec = treelib.structure(in_batched, is_leaf=is_bool)
-    batched_leaves = treelib.leaves(in_batched, is_leaf=is_bool)
+    is_axis_spec = lambda x: isinstance(x, bool)
+    spec = treelib.structure(in_batched, is_leaf=is_axis_spec)
+    batched_leaves = treelib.leaves(in_batched, is_leaf=is_axis_spec)
     tree_leaves = spec.flatten_up_to(in_tree)
+    specs = []
     for v, b in zip(tree_leaves, batched_leaves, strict=True):
         if b:
-            container_spec = treelib.structure(v, is_leaf=lambda x: x is not v)
-            return container_spec.unflatten(out_flat)
-    return out_flat
+            specs.append(treelib.structure(v, is_leaf=lambda x: x is not v))
+    assert len(specs), "No batched leaves found to infer container type."
+    s0, *rest = specs
+    assert all(s0 == s for s in rest), "Mismatched container types among batched leaves."
+    return s0
 
 
 def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -> Tree:
@@ -195,21 +199,3 @@ def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -
     leaf_batches = [outer_spec.unflatten(col) for col in leaves_ib]
     result = inner_spec.unflatten(leaf_batches)
     return result
-
-
-def batch_infer_size(tree: Tree, in_axes: Tree) -> int:
-    # NOTE(asem): infer batch size by finding the first batched (True) position.
-    # in_axes specifies ONLY which positions are batched, not the container type.
-    # The container type is inferred from the actual data in `tree`.
-    #
-    # >>> tree = ReviewState(code=["a", "b", "c"], has_bugs=[T, F, T])
-    # >>> in_axes = ReviewState(code=True, has_bugs=True)
-    # >>> axes_spec = PyTreeSpec(ReviewState(*, *))  # structure with 2 leaves
-    # >>> axes_leaves = [True, True]
-    # >>> tree_leaves = [["a","b","c"], [T,F,T]]  # flattened to match spec
-    # >>> batch_size = len(["a","b","c"]) = 3
-    is_axis_spec = lambda x: isinstance(x, bool)
-    axes_spec = treelib.structure(in_axes, is_leaf=is_axis_spec)
-    axes_leaves = treelib.leaves(in_axes, is_leaf=is_axis_spec)
-    tree_leaves = axes_spec.flatten_up_to(tree)
-    return next((len(v) for v, a in zip(tree_leaves, axes_leaves) if a), 0)
