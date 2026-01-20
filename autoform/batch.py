@@ -31,7 +31,7 @@ from autoform.core import (
     using_interpreter,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, transpose_batch, treelib
+from autoform.utils import Tree, batch_spec, batch_transpose, treelib
 
 # ==================================================================================================
 # BATCH
@@ -43,23 +43,6 @@ class BatchTag(TransformationTag): ...
 
 def is_axis_spec(x) -> bool:
     return isinstance(x, bool)
-
-
-def infer_batch_size(tree: Tree, in_axes: Tree) -> int:
-    # NOTE(asem): infer batch size by finding the first batched (True) position.
-    # in_axes specifies ONLY which positions are batched, not the container type.
-    # The container type is inferred from the actual data in `tree`.
-    #
-    # >>> tree = ReviewState(code=["a", "b", "c"], has_bugs=[T, F, T])
-    # >>> in_axes = ReviewState(code=True, has_bugs=True)
-    # >>> axes_spec = PyTreeSpec(ReviewState(*, *))  # structure with 2 leaves
-    # >>> axes_leaves = [True, True]
-    # >>> tree_leaves = [["a","b","c"], [T,F,T]]  # flattened to match spec
-    # >>> batch_size = len(["a","b","c"]) = 3
-    axes_spec = treelib.structure(in_axes, is_leaf=is_axis_spec)
-    axes_leaves = treelib.leaves(in_axes, is_leaf=is_axis_spec)
-    tree_leaves = axes_spec.flatten_up_to(tree)
-    return next((len(v) for v, a in zip(tree_leaves, axes_leaves) if a), 0)
 
 
 def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
@@ -142,8 +125,8 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # >>> batch_size = 2  # inferred from len(in_tree.code)
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
-    batch_size = infer_batch_size(col_tree, in_batched_tree)
-    assert batch_size, "batch requires at least one batched input"
+    batch_size = batch_spec(col_tree, in_batched_tree).num_children
+    assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Value | list[Value]] = {}
     b_env: dict[IRVar, bool] = {}
@@ -179,8 +162,8 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
-    batch_size = infer_batch_size(col_tree, in_batched_tree)
-    assert batch_size, "batch requires at least one batched input"
+    batch_size = batch_spec(col_tree, in_batched_tree).num_children
+    assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Value | list[Value]] = {}
     b_env: dict[IRVar, bool] = {}
@@ -287,7 +270,7 @@ def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, 
     out_bi = [call(batched_ir)(get(b)) for b in range(batch_size)]
 
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
-    out_ib = transpose_batch(batch_size, out_batched, out_bi)
+    out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
@@ -306,7 +289,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple
     out_bi = await asyncio.gather(*[acall(batched_ir)(get(b)) for b in range(batch_size)])
 
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
-    out_ib = transpose_batch(batch_size, out_batched, list(out_bi))
+    out_ib = batch_transpose(batch_size, out_batched, list(out_bi))
     return out_ib, out_batched
 
 

@@ -23,7 +23,7 @@ from autoform.core import (
     using_effect,
 )
 from autoform.effects import effect_p
-from autoform.utils import Struct, Tree, transpose_batch, treelib
+from autoform.utils import Struct, Tree, batch_spec, batch_transpose, treelib
 
 
 class LMTag(PrimitiveTag): ...
@@ -34,9 +34,6 @@ class StreamEffect(Effect):
 
     def __init__(self, text: str):
         self.text = text
-
-    def __repr__(self):
-        return f"StreamEffect({self.text!r})"
 
 
 # ==================================================================================================
@@ -197,7 +194,8 @@ def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tr
 
     batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
     responses = batch_completion(messages=batched_messages, model=model)
-    return [resp.choices[0].message.content for resp in responses], True
+    result = [resp.choices[0].message.content for resp in responses]
+    return batch_spec(contents, in_batched).unflatten(result), True
 
 
 async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
@@ -212,7 +210,7 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
         return resp.choices[0].message.content
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
-    return list(results), True
+    return batch_spec(contents, in_batched).unflatten(results), True
 
 
 impl_rules.set(lm_call_p, impl_lm_call)
@@ -377,7 +375,7 @@ def batch_struct_lm_call(
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
     results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = transpose_batch(batch_size, out_batched, results)
+    out_ib = batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
 
 
@@ -396,7 +394,7 @@ async def abatch_struct_lm_call(
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = transpose_batch(batch_size, out_batched, list(results))
+    out_ib = batch_transpose(batch_size, out_batched, list(results))
     return out_ib, out_batched
 
 

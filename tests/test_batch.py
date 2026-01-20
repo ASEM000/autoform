@@ -3,6 +3,7 @@ import functools as ft
 import pytest
 
 import autoform as af
+from autoform.utils import batch_spec, batch_transpose
 
 
 class TestBatchBasic:
@@ -218,28 +219,22 @@ class TestBatchInAxes:
 
 class TestBatchUtils:
     def test_basic_axes_tree(self):
-        from autoform.batch import infer_batch_size
-
         col_tree = (["a", "b"], ["x", "y"])
         in_axes = True
-        batch_size = infer_batch_size(col_tree, in_axes)
+        batch_size = batch_spec(col_tree, in_axes).num_children
         assert batch_size == 2
 
     def test_broadcast_axes_tree(self):
-        from autoform.batch import infer_batch_size
-
         col_tree = (["a", "b"], "single")
         in_axes = (True, False)
-        batch_size = infer_batch_size(col_tree, in_axes)
+        batch_size = batch_spec(col_tree, in_axes).num_children
         assert batch_size == 2
 
-    def test_no_batched_returns_zero(self):
-        from autoform.batch import infer_batch_size
-
+    def test_no_batched_returns_error(self):
         col_tree = ("a", "b")
         in_axes = (False, False)
-        batch_size = infer_batch_size(col_tree, in_axes)
-        assert batch_size == 0
+        with pytest.raises(AssertionError):
+            batch_spec(col_tree, in_axes).num_children
 
 
 class TestBatchRuleOutBatched:
@@ -349,13 +344,12 @@ class TestBatchBroadcasting:
         batch_size = 0
         in_batched = (False, False)
         in_values = ("a", "b")
-        out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
-            batch_size,
-            in_batched,
-            in_values,
-        ))
-        assert out_vals == []
-        assert out_batched
+        with pytest.raises(AssertionError):
+            out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
+                batch_size,
+                in_batched,
+                in_values,
+            ))
 
 
 class TestBatchRuleOutBatchedValidation:
@@ -511,38 +505,88 @@ class TestBatchRuleOutBatchedValidation:
 
 class TestTransposeBatch:
     def test_list_structure(self):
-        from autoform.utils import transpose_batch
-
         results = [["a", "x"], ["b", "y"], ["c", "z"]]
         out_batched = [True, True]
-        out = transpose_batch(3, out_batched, results)
+        out = batch_transpose(3, out_batched, results)
         assert out == [["a", "b", "c"], ["x", "y", "z"]]
 
     def test_tuple_structure(self):
-        from autoform.utils import transpose_batch
-
         results = [("a", "x"), ("b", "y")]
         out_batched = (True, True)
-        out = transpose_batch(2, out_batched, results)
+        out = batch_transpose(2, out_batched, results)
         assert out == (["a", "b"], ["x", "y"])
 
     def test_dict_structure(self):
-        from autoform.utils import transpose_batch
-
         results = [{"a": 1, "b": 2}, {"a": 3, "b": 4}]
         out_batched = {"a": True, "b": True}
-        out = transpose_batch(2, out_batched, results)
+        out = batch_transpose(2, out_batched, results)
         assert out == {"a": [1, 3], "b": [2, 4]}
 
     def test_struct_structure(self):
-        from autoform.utils import transpose_batch
-
         class Point(af.Struct):
             x: int
             y: int
 
         results = [Point(x=1, y=2), Point(x=3, y=4)]
         out_batched = Point(x=True, y=True)
-        out = transpose_batch(2, out_batched, results)
+        out = batch_transpose(2, out_batched, results)
         assert out.x == [1, 3]
         assert out.y == [2, 4]
+
+
+class TestBatchSpec:
+    def test_list_to_list(self):
+        in_tree = (["a", "b", "c"],)
+        in_batched = (True,)
+        results = ["x", "y", "z"]
+        out = batch_spec(in_tree, in_batched).unflatten(results)
+        assert out == ["x", "y", "z"]
+
+    def test_tuple_to_tuple(self):
+        in_tree = (("a", "b", "c"),)
+        in_batched = (True,)
+        results = ["x", "y", "z"]
+        out = batch_spec(in_tree, in_batched).unflatten(results)
+        assert out == ("x", "y", "z")
+
+    def test_mixed_batched_uses_first(self):
+        in_tree = (("a", "b"), "broadcast")
+        in_batched = (True, False)
+        results = ["x", "y"]
+        out = batch_spec(in_tree, in_batched).unflatten(results)
+        assert out == ("x", "y")
+
+    def test_no_batched_returns_list(self):
+        in_tree = ("a", "b")
+        in_batched = (False, False)
+        results = ["x", "y"]
+        with pytest.raises(AssertionError):
+            out = batch_spec(in_tree, in_batched).unflatten(results)
+
+    def test_nested_tuple(self):
+        in_tree = ((("a", "b", "c"),),)
+        in_batched = ((True,),)
+        results = ["x", "y", "z"]
+        out = batch_spec(in_tree, in_batched).unflatten(results)
+        assert out == ("x", "y", "z")
+
+    def test_struct_container(self):
+        class Point(af.Struct):
+            x: int
+            y: int
+
+        in_tree = ([Point(x=1, y=2), Point(x=3, y=4)],)
+        in_batched = (True,)
+        results = [Point(x=10, y=20), Point(x=30, y=40)]
+        out = batch_spec(in_tree, in_batched).unflatten(results)
+        assert out == [Point(x=10, y=20), Point(x=30, y=40)]
+
+    def test_struct_with_tuple_field(self):
+        class Batch(af.Struct):
+            codes: tuple
+
+        in_tree = (Batch(codes=("a", "b", "c")),)
+        in_batched = (True,)
+        results = [("x", "y", "z")]
+        out = batch_spec(in_tree, in_batched).unflatten(results)
+        assert out == Batch(codes=("x", "y", "z"))

@@ -101,8 +101,7 @@ def dce[**P, R](
     defined_vars: set[IRVar] = set(in_vars)
     for kept in active_ireqns:
         for atom in treelib.leaves(kept.out_irtree):
-            if is_irvar(atom):
-                defined_vars.add(atom)
+            is_irvar(atom) and defined_vars.add(atom)
 
     def sanitize_out_leaf(atom: IRAtom, used: bool) -> IRAtom:
         if not is_irvar(atom):
@@ -174,7 +173,7 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
     def read(atom):
         return env[atom] if is_irvar(atom) else atom
 
-    def fold_if_ir(leaf):
+    def recurse(leaf):
         return fold(leaf) if isinstance(leaf, IR) else leaf
 
     treelib.map(write, ir.in_irtree, ir.in_irtree)
@@ -189,7 +188,7 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
         # $1 = eqn1["a, "b] => folded
         # $2 = eqn2[$1, $0] => still references folded $1 and must be updated
 
-        folded_params = treelib.map(fold_if_ir, ireqn.params)
+        folded_params = treelib.map(recurse, ireqn.params)
         in_irtree = treelib.map(read, ireqn.in_irtree)
 
         if is_const_irtree(in_irtree) and ireqn.effect is None:
