@@ -130,8 +130,9 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     return spec.unflatten(leaves_i)
 
 
-def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec:
+def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
     # NOTE(asem): return the common container pytreespec of batched leaves.
+    # returns None if no leaves are batched.
     # >>> in_tree = ("a", "b", "c")
     # >>> in_batched = True
     # >>> batch_repack(in_tree, in_batched, ["x", "y", "z"])
@@ -148,7 +149,8 @@ def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec:
     specs = []
     for v, b in zip(tree_leaves, batched_leaves, strict=True):
         b and specs.append(treelib.structure(v, is_leaf=lambda x: x is not v))
-    assert len(specs), "No batched leaves found to infer container type."
+    if not specs:
+        return None
     s0, *rest = specs
     # NOTE(asem): ensure all batched leaves have the same container type
     # this avoids ambiguity during batch repack of the output.

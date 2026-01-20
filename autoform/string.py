@@ -85,14 +85,17 @@ def pullback_bwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...
 
 def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
+
+    if (spec := batch_spec(in_values, in_batched)) is None:
+        return impl_format(in_values, template=template, keys=keys), False
+
     unbatch = ft.partial(batch_index, in_values, in_batched)
 
     def format_at(b: int) -> str:
-        unbatched = unbatch(b)
-        return impl_format(unbatched, template=template, keys=keys)
+        return impl_format(unbatch(b), template=template, keys=keys)
 
     result = [format_at(b) for b in range(batch_size)]
-    return batch_spec(in_values, in_batched).unflatten(result), True
+    return spec.unflatten(result), True
 
 
 impl_rules.set(format_p, impl_format)
@@ -158,9 +161,11 @@ def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
 
 def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
+    if (spec := batch_spec(in_values, in_batched)) is None:
+        return impl_concat(in_values), False
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [concat(*unbatch(b)) for b in range(batch_size)]
-    return batch_spec(in_values, in_batched).unflatten(result), True
+    return spec.unflatten(result), True
 
 
 impl_rules.set(concat_p, impl_concat)
@@ -239,9 +244,11 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
+    if (spec := batch_spec(in_values, in_batched)) is None:
+        return impl_match(in_values), False
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [match(*unbatch(b)) for b in range(batch_size)]
-    return batch_spec(in_values, in_batched).unflatten(result), True
+    return spec.unflatten(result), True
 
 
 impl_rules.set(match_p, impl_match)

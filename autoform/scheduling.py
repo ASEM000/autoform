@@ -29,7 +29,7 @@ from autoform.core import (
     push_rules,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, asyncify, lru_cache, treelib
+from autoform.utils import Tree, asyncify, batch_spec, lru_cache, treelib
 
 
 class SchedulingTag(PrimitiveTag): ...
@@ -157,21 +157,41 @@ async def apull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
 
 def batch_gather(
     in_tree: tuple[int, list[bool], list[Tree]], /, *, irs: list[IR]
-) -> tuple[list[Tree], list[bool]]:
+) -> tuple[list[Tree], list[Tree[bool]]]:
     batch_size, in_batched, inputs = in_tree
-    batched_irs = [batch(ir, in_axes=ib) for ir, ib in zip(irs, in_batched, strict=True)]
-    results = impl_gather(inputs, irs=batched_irs)
-    out_batched = [True for _ in irs]
+
+    results: list[Tree] = []
+    out_batched: list[Tree[bool]] = []
+
+    for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
+        if batch_spec(inp, inp_batched) is None:
+            results.append(call(ir)(inp))
+            out_batched.append(treelib.map(lambda _: False, ir.out_irtree))
+        else:
+            batched_ir = batch(ir, in_axes=inp_batched)
+            results.append(call(batched_ir)(inp))
+            out_batched.append(treelib.map(lambda _: True, ir.out_irtree))
+
     return results, out_batched
 
 
 async def abatch_gather(
     in_tree: tuple[int, list[bool], list[Tree]], /, *, irs: list[IR]
-) -> tuple[list[Tree], list[bool]]:
+) -> tuple[list[Tree], list[Tree[bool]]]:
     batch_size, in_batched, inputs = in_tree
-    batched_irs = [batch(ir, in_axes=ib) for ir, ib in zip(irs, in_batched, strict=True)]
-    results = await aimpl_gather(inputs, irs=batched_irs)
-    out_batched = [True for _ in irs]
+
+    results: list[Tree] = []
+    out_batched: list[Tree[bool]] = []
+
+    for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
+        if batch_spec(inp, inp_batched) is None:
+            results.append(await acall(ir)(inp))
+            out_batched.append(treelib.map(lambda _: False, ir.out_irtree))
+        else:
+            batched_ir = batch(ir, in_axes=inp_batched)
+            results.append(await acall(batched_ir)(inp))
+            out_batched.append(treelib.map(lambda _: True, ir.out_irtree))
+
     return results, out_batched
 
 

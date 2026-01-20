@@ -23,7 +23,7 @@ from autoform.core import (
     using_effect,
 )
 from autoform.effects import effect_p
-from autoform.utils import Struct, Tree, batch_spec, batch_transpose, treelib
+from autoform.utils import Struct, Tree, batch_index, batch_spec, batch_transpose, treelib
 
 
 class LMTag(PrimitiveTag): ...
@@ -189,28 +189,38 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -
 def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
-    def get_message(i: int, b: int) -> dict[str, str]:
-        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+    if (spec := batch_spec(contents, in_batched)) is None:
+        return impl_lm_call(contents, roles=roles, model=model), False
 
-    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
+    unbatch = ft.partial(batch_index, contents, in_batched)
+    batched_messages = [
+        [dict(role=r, content=c) for r, c in zip(roles, unbatch(b), strict=True)]
+        for b in range(batch_size)
+    ]
     responses = batch_completion(messages=batched_messages, model=model)
     result = [resp.choices[0].message.content for resp in responses]
-    return batch_spec(contents, in_batched).unflatten(result), True
+    out_tree = spec.unflatten(result)
+    out_batched = treelib.map(lambda _: True, out_tree)
+    return out_tree, out_batched
 
 
 async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
-    def get_message(i: int, b: int) -> dict[str, str]:
-        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+    if (spec := batch_spec(contents, in_batched)) is None:
+        return await aimpl_lm_call(contents, roles=roles, model=model), False
+
+    unbatch = ft.partial(batch_index, contents, in_batched)
 
     async def run_completion(b: int) -> str:
-        messages = [get_message(i, b) for i in range(len(roles))]
+        messages = [dict(role=r, content=c) for r, c in zip(roles, unbatch(b), strict=True)]
         resp = await acompletion(messages=messages, model=model)
         return resp.choices[0].message.content
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
-    return batch_spec(contents, in_batched).unflatten(results), True
+    out_tree = spec.unflatten(results)
+    out_batched = treelib.map(lambda _: True, out_tree)
+    return out_tree, out_batched
 
 
 impl_rules.set(lm_call_p, impl_lm_call)
@@ -368,10 +378,16 @@ def batch_struct_lm_call(
 ) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
-    def get_message(i: int, b: int) -> dict[str, str]:
-        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+    if batch_spec(contents, in_batched) is None:
+        result = impl_struct_lm_call(contents, roles=roles, model=model, struct=struct)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
 
-    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
+    unbatch = ft.partial(batch_index, contents, in_batched)
+    batched_messages = [
+        [dict(role=r, content=c) for r, c in zip(roles, unbatch(b), strict=True)]
+        for b in range(batch_size)
+    ]
     responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
     results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, results[0])
@@ -384,11 +400,15 @@ async def abatch_struct_lm_call(
 ) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
-    def get_message(i: int, b: int) -> dict[str, str]:
-        return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
+    if batch_spec(contents, in_batched) is None:
+        result = await aimpl_struct_lm_call(contents, roles=roles, model=model, struct=struct)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
+    unbatch = ft.partial(batch_index, contents, in_batched)
 
     async def run_completion(b: int) -> Struct:
-        messages = [get_message(i, b) for i in range(len(roles))]
+        messages = [dict(role=r, content=c) for r, c in zip(roles, unbatch(b), strict=True)]
         resp = await acompletion(messages=messages, model=model, response_format=struct)
         return struct.model_validate_json(resp.choices[0].message.content)
 

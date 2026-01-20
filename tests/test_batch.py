@@ -213,8 +213,8 @@ class TestBatchInAxes:
 
         ir = af.trace(greet)("Asem", "Hi")
         batched_ir = af.batch(ir, in_axes=(False, False))
-        with pytest.raises(AssertionError):
-            af.call(batched_ir)("Asem", "Hi")
+        result = af.call(batched_ir)("Asem", "Hi")
+        assert result == "Hi: Asem"
 
 
 class TestBatchUtils:
@@ -230,11 +230,11 @@ class TestBatchUtils:
         batch_size = batch_spec(col_tree, in_axes).num_children
         assert batch_size == 2
 
-    def test_no_batched_returns_error(self):
+    def test_no_batched_returns_none(self):
         col_tree = ("a", "b")
         in_axes = (False, False)
-        with pytest.raises(AssertionError):
-            batch_spec(col_tree, in_axes).num_children
+        spec = batch_spec(col_tree, in_axes)
+        assert spec is None
 
 
 class TestBatchRuleOutBatched:
@@ -344,12 +344,13 @@ class TestBatchBroadcasting:
         batch_size = 0
         in_batched = (False, False)
         in_values = ("a", "b")
-        with pytest.raises(AssertionError):
-            out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
-                batch_size,
-                in_batched,
-                in_values,
-            ))
+        out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
+            batch_size,
+            in_batched,
+            in_values,
+        ))
+        assert out_vals == "ab"
+        assert out_batched is False
 
 
 class TestBatchRuleOutBatchedValidation:
@@ -556,12 +557,11 @@ class TestBatchSpec:
         out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == ("x", "y")
 
-    def test_no_batched_returns_list(self):
+    def test_no_batched_returns_none(self):
         in_tree = ("a", "b")
         in_batched = (False, False)
-        results = ["x", "y"]
-        with pytest.raises(AssertionError):
-            out = batch_spec(in_tree, in_batched).unflatten(results)
+        spec = batch_spec(in_tree, in_batched)
+        assert spec is None
 
     def test_nested_tuple(self):
         in_tree = ((("a", "b", "c"),),)
@@ -590,3 +590,91 @@ class TestBatchSpec:
         results = [("x", "y", "z")]
         out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == Batch(codes=("x", "y", "z"))
+
+
+class TestBatchRuleAllUnbatched:
+    def test_format_all_unbatched(self):
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "world")
+        out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
+            (batch_size, in_batched, in_values), template="{} {}", keys=()
+        )
+        assert out_vals == "hello world"
+        assert out_batched is False
+
+    def test_concat_all_unbatched(self):
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "world")
+        out_vals, out_batched = af.core.batch_rules.get(af.string.concat_p)((
+            batch_size,
+            in_batched,
+            in_values,
+        ))
+        assert out_vals == "helloworld"
+        assert out_batched is False
+
+    def test_match_all_unbatched(self):
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "hello")
+        out_vals, out_batched = af.core.batch_rules.get(af.string.match_p)((
+            batch_size,
+            in_batched,
+            in_values,
+        ))
+        assert out_vals is True
+        assert out_batched is False
+
+    def test_match_all_unbatched_not_equal(self):
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "world")
+        out_vals, out_batched = af.core.batch_rules.get(af.string.match_p)((
+            batch_size,
+            in_batched,
+            in_values,
+        ))
+        assert out_vals is False
+        assert out_batched is False
+
+
+class TestBatchWithMixedAxes:
+    def test_two_outputs_mixed_batching(self):
+        def program(x, y):
+            return af.format("x={}", x), af.format("y={}", y)
+
+        ir = af.trace(program)("...", "...")
+        batched_ir = af.batch(ir, in_axes=(True, False))
+        result = af.call(batched_ir)(["a", "b", "c"], "constant")
+        assert result == (["x=a", "x=b", "x=c"], "y=constant")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_two_outputs_mixed_batching_async(self):
+        def program(x, y):
+            return af.format("x={}", x), af.format("y={}", y)
+
+        ir = af.trace(program)("...", "...")
+        batched_ir = af.batch(ir, in_axes=(True, False))
+        result = await af.acall(batched_ir)(["a", "b", "c"], "constant")
+        assert result == (["x=a", "x=b", "x=c"], "y=constant")
+
+    def test_chained_with_broadcast(self):
+        def program(x, prefix):
+            prefixed = af.concat(prefix, x)
+            return af.format("[{}]", prefixed)
+
+        ir = af.trace(program)("...", "...")
+        batched_ir = af.batch(ir, in_axes=(True, False))
+        result = af.call(batched_ir)(["a", "b", "c"], ">>")
+        assert result == ["[>>a]", "[>>b]", "[>>c]"]
+
+    def test_multiple_uses_of_broadcast_input(self):
+        def program(x, sep):
+            return af.concat(af.concat(x, sep), x)
+
+        ir = af.trace(program)("...", "...")
+        batched_ir = af.batch(ir, in_axes=(True, False))
+        result = af.call(batched_ir)(["a", "b"], "-")
+        assert result == ["a-a", "b-b"]

@@ -435,3 +435,62 @@ class TestSwitchComplexBranches:
         for i in range(5):
             result = af.call(ir)(f"branch{i}", "hello")
             assert result == f"branch{i}: hello"
+
+
+class TestSwitchBatchAllUnbatched:
+    def test_switch_batch_all_unbatched(self):
+        branches = {
+            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+        }
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("a", "hello")
+        out_vals, out_batched = af.core.batch_rules.get(af.control.switch_p)(
+            (batch_size, in_batched, in_values), branches=branches
+        )
+        assert out_vals == "A: hello"
+        assert out_batched is False
+
+    def test_switch_batch_key_batched_operand_unbatched(self):
+        branches = {
+            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+        }
+
+        def program(key, x):
+            return af.switch(key, branches, x)
+
+        ir = af.trace(program)("a", "hello")
+        batched_ir = af.batch(ir, in_axes=(True, False))
+        result = af.call(batched_ir)(["a", "b", "a"], "test")
+        assert result == ["A: test", "B: test", "A: test"]
+
+    def test_switch_batch_key_unbatched_operand_batched(self):
+        branches = {
+            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+        }
+
+        def program(key, x):
+            return af.switch(key, branches, x)
+
+        ir = af.trace(program)("a", "hello")
+        batched_ir = af.batch(ir, in_axes=(False, True))
+        result = af.call(batched_ir)("a", ["x", "y", "z"])
+        assert result == ["A: x", "A: y", "A: z"]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_switch_batch_all_unbatched_async(self):
+        branches = {
+            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+        }
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("b", "world")
+        out_vals, out_batched = await af.core.batch_rules.aget(af.control.switch_p)(
+            (batch_size, in_batched, in_values), branches=branches
+        )
+        assert out_vals == "B: world"
+        assert out_batched is False
