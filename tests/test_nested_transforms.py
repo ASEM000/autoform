@@ -678,3 +678,94 @@ class TestChainedOperations:
         t_c = [["tg1", "tg2"]]
         result = af.call(b2)(((p_p, p_c), (t_p, t_c)))
         assert result is not None
+
+
+class TestBatchOfPushforwardAllUnbatched:
+    def test_pushforward_batch_all_unbatched(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("x")
+        pf_ir = af.pushforward(ir)
+
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "tangent")
+
+        out_vals, out_batched = af.core.batch_rules.get(af.ad.pushforward_call_p)(
+            (batch_size, in_batched, in_values), ir=ir
+        )
+        assert out_vals == ("hello!", "tangent")
+        assert out_batched == (False, False)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pushforward_batch_all_unbatched_async(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("x")
+
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "tangent")
+
+        out_vals, out_batched = await af.core.batch_rules.aget(af.ad.pushforward_call_p)(
+            (batch_size, in_batched, in_values), ir=ir
+        )
+        assert out_vals == ("hello!", "tangent")
+        assert out_batched == (False, False)
+
+    def test_pushforward_batch_primals_batched_tangents_unbatched(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("x")
+        pf_ir = af.pushforward(ir)
+        batch_pf_ir = af.batch(pf_ir, in_axes=(True, False))
+        result = af.call(batch_pf_ir)(["a", "b", "c"], "t")
+        assert result == (["a!", "b!", "c!"], ["t", "t", "t"])
+
+
+class TestBatchOfPullbackAllUnbatched:
+    def test_pullback_batch_all_unbatched(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("x")
+
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "cotangent")
+
+        out_vals, out_batched = af.core.batch_rules.get(af.ad.pullback_call_p)(
+            (batch_size, in_batched, in_values), ir=ir
+        )
+        assert out_vals == ("hello!", "cotangent")
+        assert out_batched == (False, False)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_batch_all_unbatched_async(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("x")
+
+        batch_size = 3
+        in_batched = (False, False)
+        in_values = ("hello", "cotangent")
+
+        out_vals, out_batched = await af.core.batch_rules.aget(af.ad.pullback_call_p)(
+            (batch_size, in_batched, in_values), ir=ir
+        )
+        assert out_vals == ("hello!", "cotangent")
+        assert out_batched == (False, False)
+
+    def test_pullback_batch_primals_batched_cotangents_unbatched(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("x")
+        pb_ir = af.pullback(ir)
+        batch_pb_ir = af.batch(pb_ir, in_axes=(True, False))
+        result = af.call(batch_pb_ir)(["a", "b", "c"], "g")
+        assert result == (["a!", "b!", "c!"], ["g", "g", "g"])

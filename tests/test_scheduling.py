@@ -171,6 +171,31 @@ class TestGatherWithBatch:
         result = await af.acall(batched_ir)(["A", "B", "C"])
         assert result == [["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"]]
 
+    def test_batch_gather_mixed_axes(self):
+        ir1 = af.trace(lambda x: af.format("[{}]", x))("sample")
+        ir2 = af.trace(lambda x: af.format("<{}>", x))("sample")
+
+        def program(x, y):
+            return af.gather([(ir1, x), (ir2, y)])
+
+        prog_ir = af.trace(program)("x", "y")
+        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        result = af.call(batched_ir)(["A", "B", "C"], "STATIC")
+        assert result == [["[A]", "[B]", "[C]"], "<STATIC>"]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_batch_gather_mixed_axes_async(self):
+        ir1 = af.trace(lambda x: af.format("[{}]", x))("sample")
+        ir2 = af.trace(lambda x: af.format("<{}>", x))("sample")
+
+        def program(x, y):
+            return af.gather([(ir1, x), (ir2, y)])
+
+        prog_ir = af.trace(program)("x", "y")
+        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        result = await af.acall(batched_ir)(["X", "Y"], "STATIC")
+        assert result == [["[X]", "[Y]"], "<STATIC>"]
+
 
 class TestGatherWithDCE:
     def test_gather_kept_when_used(self):
@@ -1229,3 +1254,75 @@ class TestToposortLevelsWithEffects:
 
         assert len(levels) == 2
         assert has_parallel
+
+
+class TestGatherBatchAllUnbatched:
+    def test_gather_batch_all_unbatched(self):
+        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
+        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
+        irs = [ir1, ir2]
+
+        batch_size = 3
+        in_batched = [False, False]
+        in_values = ["hello", "world"]
+
+        out_vals, out_batched = af.core.batch_rules.get(af.scheduling.gather_p)(
+            (batch_size, in_batched, in_values), irs=irs
+        )
+        assert out_vals == ["[hello]", "<world>"]
+        assert out_batched == [False, False]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_gather_batch_all_unbatched_async(self):
+        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
+        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
+        irs = [ir1, ir2]
+
+        batch_size = 3
+        in_batched = [False, False]
+        in_values = ["hello", "world"]
+
+        out_vals, out_batched = await af.core.batch_rules.aget(af.scheduling.gather_p)(
+            (batch_size, in_batched, in_values), irs=irs
+        )
+        assert out_vals == ["[hello]", "<world>"]
+        assert out_batched == [False, False]
+
+    def test_gather_batch_single_ir_unbatched(self):
+        ir = af.trace(lambda x: af.format("[{}]", x))("a")
+        irs = [ir]
+
+        batch_size = 3
+        in_batched = [False]
+        in_values = ["hello"]
+
+        out_vals, out_batched = af.core.batch_rules.get(af.scheduling.gather_p)(
+            (batch_size, in_batched, in_values), irs=irs
+        )
+        assert out_vals == ["[hello]"]
+        assert out_batched == [False]
+
+    def test_gather_integration_mixed_batched(self):
+        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
+        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
+
+        def program(x, y):
+            return af.gather([(ir1, x), (ir2, y)])
+
+        prog_ir = af.trace(program)("a", "b")
+        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        result = af.call(batched_ir)(["a", "b"], "constant")
+        assert result == [["[a]", "[b]"], "<constant>"]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_gather_integration_mixed_batched_async(self):
+        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
+        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
+
+        def program(x, y):
+            return af.gather([(ir1, x), (ir2, y)])
+
+        prog_ir = af.trace(program)("a", "b")
+        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        result = await af.acall(batched_ir)(["a", "b"], "constant")
+        assert result == [["[a]", "[b]"], "<constant>"]

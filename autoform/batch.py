@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools as ft
 from operator import setitem
 from typing import cast
 
@@ -31,7 +32,7 @@ from autoform.core import (
     using_interpreter,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, batch_spec, batch_transpose, treelib
+from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, treelib
 
 # ==================================================================================================
 # BATCH
@@ -125,7 +126,17 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # >>> batch_size = 2  # inferred from len(in_tree.code)
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
-    batch_size = batch_spec(col_tree, in_batched_tree).num_children
+
+    if (spec := batch_spec(col_tree, in_batched_tree)) is None:
+        return call(ir)(col_tree)
+
+    batch_size = spec.num_children
+    # NOTE(asem): this case can be something like
+    # >>> def program(x):
+    # ...     return af.format("constant string")
+    # >>> ir = af.trace(program)("input")
+    # >>> batched = af.batch(ir, in_axes=True)
+    # >>> call(batched)([])
     assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Value | list[Value]] = {}
@@ -162,7 +173,11 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
-    batch_size = batch_spec(col_tree, in_batched_tree).num_children
+
+    if (spec := batch_spec(col_tree, in_batched_tree)) is None:
+        return await acall(ir)(col_tree)
+
+    batch_size = spec.num_children
     assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Value | list[Value]] = {}
@@ -192,7 +207,6 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
             treelib.map(write_v, ireqn.out_irtree, out_vals)
             out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
             treelib.map(write_b, ireqn.out_irtree, out_batched)
-
     return treelib.map(read_v, ir.out_irtree)
 
 
@@ -258,17 +272,8 @@ def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, 
     # we use in_batched's structure to flatten the data, index each batch item,
     # then unflatten back to the original container type.
     batched_ir = batch(ir, in_axes=in_axes)
-
-    batched_spec = treelib.structure(in_batched, is_leaf=is_axis_spec)
-    batched_leaves = treelib.leaves(in_batched, is_leaf=is_axis_spec)
-    col_cols_flat = batched_spec.flatten_up_to(col_cols)
-
-    def get(b):
-        indexed = [v[b] if is_b else v for v, is_b in zip(col_cols_flat, batched_leaves)]
-        return batched_spec.unflatten(indexed)
-
-    out_bi = [call(batched_ir)(get(b)) for b in range(batch_size)]
-
+    unbatch = ft.partial(batch_index, col_cols, in_batched)
+    out_bi = [call(batched_ir)(unbatch(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -277,17 +282,8 @@ def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, 
 async def abatch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
     batch_size, in_batched, col_cols = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
-
-    batched_spec = treelib.structure(in_batched, is_leaf=is_axis_spec)
-    batched_leaves = treelib.leaves(in_batched, is_leaf=is_axis_spec)
-    col_cols_flat = batched_spec.flatten_up_to(col_cols)
-
-    def get(b):
-        indexed = [v[b] if is_b else v for v, is_b in zip(col_cols_flat, batched_leaves)]
-        return batched_spec.unflatten(indexed)
-
-    out_bi = await asyncio.gather(*[acall(batched_ir)(get(b)) for b in range(batch_size)])
-
+    unbatch = ft.partial(batch_index, col_cols, in_batched)
+    out_bi = await asyncio.gather(*[acall(batched_ir)(unbatch(b)) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, ir.out_irtree)
     out_ib = batch_transpose(batch_size, out_batched, list(out_bi))
     return out_ib, out_batched

@@ -34,7 +34,7 @@ from autoform.core import (
     using_interpreter,
 )
 from autoform.optims import dce, dce_rules, default_dce
-from autoform.utils import Tree, batch_index, batch_transpose, lru_cache, treelib
+from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_cache, treelib
 
 
 class ADTag(TransformationTag): ...
@@ -254,6 +254,12 @@ async def apullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
 def batch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
+
+    if batch_spec(in_values, in_batched) is None:
+        result = impl_pushforward_call(in_values, ir=ir)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_t = ft.partial(batch_index, t_cols, t_batched)
     pf_ir = pushforward(ir)
@@ -264,16 +270,20 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
 
 async def abatch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    batch_size, in_batched, in_values = in_tree
+    bs, in_batched, in_values = in_tree
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
+
+    if batch_spec(in_values, in_batched) is None:
+        result = await aimpl_pushforward_call(in_values, ir=ir)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_t = ft.partial(batch_index, t_cols, t_batched)
     pf_ir = pushforward(ir)
-    out_bi = await asyncio.gather(*[
-        acall(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(batch_size)
-    ])
+    out_bi = await asyncio.gather(*[acall(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(bs)])
     out_batched = treelib.map(lambda _: True, pf_ir.out_irtree)
-    out_ib = batch_transpose(batch_size, out_batched, list(out_bi))
+    out_ib = batch_transpose(bs, out_batched, list(out_bi))
     return out_ib, out_batched
 
 
@@ -547,6 +557,12 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     size, in_batched, in_values = in_tree
     (p_cols, out_c_cols) = in_values
     (p_batched, c_batched) = in_batched
+
+    if batch_spec(in_values, in_batched) is None:
+        result = impl_pullback_call(in_values, ir=ir)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_c = ft.partial(batch_index, out_c_cols, c_batched)
     pb_ir = pullback(ir)
@@ -560,6 +576,12 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]
     size, in_batched, in_values = in_tree
     (p_cols, out_c_cols) = in_values
     (p_batched, c_batched) = in_batched
+
+    if batch_spec(in_values, in_batched) is None:
+        result = await aimpl_pullback_call(in_values, ir=ir)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_c = ft.partial(batch_index, out_c_cols, c_batched)
     pb_ir = pullback(ir)
