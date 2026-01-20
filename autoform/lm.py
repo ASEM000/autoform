@@ -5,8 +5,18 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 from io import StringIO
+from typing import TypedDict, Unpack
 
-from litellm import acompletion, batch_completion, completion, get_model_info
+from litellm import acompletion, completion, get_model_info
+
+
+class LMConfig(TypedDict, total=False):
+    # NOTE(asem): check https://docs.litellm.ai/docs/completion/input
+    # TODO(asem): add more later
+    model: str
+    max_completion_tokens: int
+    temperature: float
+
 
 from autoform.core import (
     Effect,
@@ -52,12 +62,12 @@ FEEDBACK ON OUTPUT: {out_cotangent}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
 
 
-def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
+def lm_call(messages: list[dict[str, str]], /, **lmconfig: Unpack[LMConfig]) -> str:
     """Calls a language model with the given messages and model name using Litellm.
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The name of the language model to use (e.g., "gpt-3.5-turbo").
+        **lmconfig: Additional parameters passed to litellm (model, temperature, etc.).
 
     Returns:
         The content of the model's response as a string.
@@ -68,7 +78,12 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     greeting = af.format("Hello, {}!", name)
         ...     system_message = dict(role="system", content="translate the greeting to Korean")
         ...     user_message = dict(role="user", content=greeting)
-        ...     greeting = af.lm_call([system_message, user_message], model="gpt-3.5-turbo")
+        ...     greeting = af.lm_call(
+        ...         [system_message, user_message],
+        ...         model="gpt-4o",
+        ...         temperature=0.7,
+        ...         max_completion_tokens=100,
+        ...     )
         ...     return greeting
         >>> ir = af.trace(ir)("World") # doctest: +SKIP
         >>> result = ir.call("Alice") # doctest: +SKIP
@@ -79,9 +94,11 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         assert "role" in m, f"message must have a 'role' key, got {m.keys()=}"
         assert "content" in m, f"message must have a 'content' key, got {m.keys()=}"
 
+    for k in lmconfig:
+        assert k in LMConfig.__annotations__, f"Invalid lmconfig key: {k}"
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
-    return lm_call_p.bind(contents, roles=roles, model=model)
+    return lm_call_p.bind(contents, roles=roles, lmconfig=lmconfig)
 
 
 @ft.lru_cache(maxsize=256)
@@ -91,11 +108,11 @@ def can_lm_stream(model: str) -> bool:
     return supports_streaming
 
 
-def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
+def impl_lm_call(contents: list[str], /, *, roles: list[str], lmconfig: LMConfig) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
 
-    if not can_lm_stream(model):
-        response = completion(messages=messages, model=model)
+    if not can_lm_stream(lmconfig["model"]):
+        response = completion(messages=messages, **lmconfig)
         return response.choices[0].message.content
 
     # NOTE(asem): stream under effect handler context by default for all lm calls
@@ -103,7 +120,7 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
     # as effectful equations makes any equation immovable.
     # downside of this approach is streaming is not possible if lm_call is transformed.
     buffer = StringIO()
-    for chunk in completion(messages=messages, model=model, stream=True):
+    for chunk in completion(messages=messages, stream=True, **lmconfig):
         text = chunk.choices[0].delta.content or ""
         buffer.write(text)
         with using_effect(StreamEffect(text)):
@@ -113,92 +130,103 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
     return buffer.getvalue()
 
 
-async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
+async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], lmconfig: LMConfig) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    response = await acompletion(messages=messages, model=model)
+    response = await acompletion(messages=messages, **lmconfig)
     return response.choices[0].message.content
 
 
-def eval_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
+def eval_lm_call(in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig) -> EvalType:
     return Var(str)
 
 
-def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
+def pushforward_lm_call(
+    in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig
+) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_messages = [dict(role=r, content=c) for r, c in zip(roles, primals, strict=True)]
     t_messages = [dict(role=r, content=c) for r, c in zip(roles, tangents, strict=True)]
-    p_resp = completion(messages=p_messages, model=model)
-    t_resp = completion(messages=t_messages, model=model)
+    p_resp = completion(messages=p_messages, **lmconfig)
+    t_resp = completion(messages=t_messages, **lmconfig)
     return p_resp.choices[0].message.content, t_resp.choices[0].message.content
 
 
-async def apush_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
+async def apush_lm_call(
+    in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig
+) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
 
     async def run_completion(contents: list[str]) -> str:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-        resp = await acompletion(messages=messages, model=model)
+        resp = await acompletion(messages=messages, **lmconfig)
         return resp.choices[0].message.content
 
     p_resp, t_resp = await asyncio.gather(run_completion(primals), run_completion(tangents))
     return p_resp, t_resp
 
 
-def pullback_fwd_lm_call(contents: list, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_call(
+    contents: list, /, *, roles: list[str], lmconfig: LMConfig
+) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    resp = completion(messages=messages, model=model)
+    resp = completion(messages=messages, **lmconfig)
     out = resp.choices[0].message.content
     residuals = (contents, out)
     return out, residuals
 
 
 async def apull_fwd_lm_call(
-    contents: list, /, *, roles: list[str], model: str
+    contents: list, /, *, roles: list[str], lmconfig: LMConfig
 ) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    resp = await acompletion(messages=messages, model=model)
+    resp = await acompletion(messages=messages, **lmconfig)
     out = resp.choices[0].message.content
     residuals = (contents, out)
     return out, residuals
 
 
-def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> list:
+def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig) -> list:
     residuals, out_cotangent = in_tree
     contents, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
+        resp = completion(messages=[dict(role="user", content=grad_prompt)], **lmconfig)
         grads.append(resp.choices[0].message.content)
     return grads
 
 
-async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> list:
+async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig) -> list:
     residuals, out_cotangent = in_tree
     contents, out = residuals
 
     async def compute_grad(content: str) -> str:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        resp = await acompletion(messages=[dict(role="user", content=grad_prompt)], model=model)
+        resp = await acompletion(messages=[dict(role="user", content=grad_prompt)], **lmconfig)
         return resp.choices[0].message.content
 
     grads = await asyncio.gather(*[compute_grad(c) for c in contents])
     return list(grads)
 
 
-def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
+def batch_lm_call(in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
 
-    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
-    responses = batch_completion(messages=batched_messages, model=model)
-    result = [resp.choices[0].message.content for resp in responses]
-    return batch_spec(contents, in_batched).unflatten(result), True
+    def run_completion(b: int) -> str:
+        messages = [get_message(i, b) for i in range(len(roles))]
+        resp = completion(messages=messages, **lmconfig)
+        return resp.choices[0].message.content
+
+    results = [run_completion(b) for b in range(batch_size)]
+    return batch_spec(contents, in_batched).unflatten(results), True
 
 
-async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
+async def abatch_lm_call(
+    in_tree: Tree, /, *, roles: list[str], lmconfig: LMConfig
+) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
     def get_message(i: int, b: int) -> dict[str, str]:
@@ -206,7 +234,7 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
 
     async def run_completion(b: int) -> str:
         messages = [get_message(i, b) for i in range(len(roles))]
-        resp = await acompletion(messages=messages, model=model)
+        resp = await acompletion(messages=messages, **lmconfig)
         return resp.choices[0].message.content
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
@@ -232,7 +260,9 @@ batch_rules.aset(lm_call_p, abatch_lm_call)
 struct_lm_call_p = Primitive("struct_lm_call", tag={LMTag})
 
 
-def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:
+def struct_lm_call(
+    messages: list[dict[str, str]], *, struct: type[Struct], **lmconfig: Unpack[LMConfig]
+) -> Struct:
     """Calls a language model with structured output using response_format.
 
     Uses LLM's built-in JSON mode with a Pydantic schema to extract structured
@@ -240,11 +270,13 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The name of the language model to use.
         struct: A Pydantic model subclassing `Struct` for the output schema.
+        **lmconfig: Additional parameters passed to litellm.
+            See LMConfig for available options (model, temperature, max_completion_tokens, etc.).
 
     Returns:
         A validated instance of the struct type.
+
 
     Example:
         >>> import autoform as af
@@ -260,41 +292,43 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         4
     """
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
+    for key in lmconfig:
+        assert key in LMConfig.__annotations__, f"Invalid lmconfig key: {key}"
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
-    return struct_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
+    return struct_lm_call_p.bind(contents, roles=roles, struct=struct, lmconfig=lmconfig)
 
 
 def impl_struct_lm_call(
-    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
+    contents: list, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    resp = completion(messages=messages, model=model, response_format=struct)
+    resp = completion(messages=messages, response_format=struct, **lmconfig)
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
 async def aimpl_struct_lm_call(
-    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
+    contents: list, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    resp = await acompletion(messages=messages, model=model, response_format=struct)
+    resp = await acompletion(messages=messages, response_format=struct, **lmconfig)
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
 def eval_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> Tree:
     return struct.model_construct(**{k: Var(str) for k in struct.model_fields})
 
 
 def pushforward_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_messages = [dict(role=r, content=c) for r, c in zip(roles, primals, strict=True)]
     t_messages = [dict(role=r, content=c) for r, c in zip(roles, tangents, strict=True)]
-    p_resp = completion(messages=p_messages, model=model, response_format=struct)
-    t_resp = completion(messages=t_messages, model=model, response_format=struct)
+    p_resp = completion(messages=p_messages, response_format=struct, **lmconfig)
+    t_resp = completion(messages=t_messages, response_format=struct, **lmconfig)
     return (
         struct.model_validate_json(p_resp.choices[0].message.content),
         struct.model_validate_json(t_resp.choices[0].message.content),
@@ -302,13 +336,13 @@ def pushforward_struct_lm_call(
 
 
 async def apush_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
 
     async def run_completion(contents: list) -> Struct:
         messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-        resp = await acompletion(messages=messages, model=model, response_format=struct)
+        resp = await acompletion(messages=messages, response_format=struct, **lmconfig)
         return struct.model_validate_json(resp.choices[0].message.content)
 
     p_resp, t_resp = await asyncio.gather(run_completion(primals), run_completion(tangents))
@@ -316,47 +350,47 @@ async def apush_struct_lm_call(
 
 
 def pullback_fwd_struct_lm_call(
-    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
+    contents: list, /, *, roles: list[str], struct: type[Struct], kwargs: LMConfig
 ) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    resp = completion(messages=messages, model=model, response_format=struct)
+    resp = completion(messages=messages, response_format=struct, **kwargs)
     out = struct.model_validate_json(resp.choices[0].message.content)
     residuals = (contents, out)
     return out, residuals
 
 
 async def apull_fwd_struct_lm_call(
-    contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
+    contents: list, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> tuple[Tree, Tree]:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    resp = await acompletion(messages=messages, model=model, response_format=struct)
+    resp = await acompletion(messages=messages, response_format=struct, **lmconfig)
     out = struct.model_validate_json(resp.choices[0].message.content)
     residuals = (contents, out)
     return out, residuals
 
 
 def pullback_bwd_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> list:
     residuals, out_cotangent = in_tree
     contents, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        resp = completion(messages=[dict(role="user", content=grad_prompt)], model=model)
+        resp = completion(messages=[dict(role="user", content=grad_prompt)], **lmconfig)
         grads.append(resp.choices[0].message.content)
     return grads
 
 
 async def apull_bwd_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> list:
     residuals, out_cotangent = in_tree
     contents, out = residuals
 
     async def compute_grad(content: str) -> str:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        resp = await acompletion(messages=[dict(role="user", content=grad_prompt)], model=model)
+        resp = await acompletion(messages=[dict(role="user", content=grad_prompt)], **lmconfig)
         return resp.choices[0].message.content
 
     grads = await asyncio.gather(*[compute_grad(c) for c in contents])
@@ -364,23 +398,26 @@ async def apull_bwd_struct_lm_call(
 
 
 def batch_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
 
-    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
-    responses = batch_completion(messages=batched_messages, model=model, response_format=struct)
-    results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
+    def run_completion(b: int) -> Struct:
+        messages = [get_message(i, b) for i in range(len(roles))]
+        resp = completion(messages=messages, response_format=struct, **lmconfig)
+        return struct.model_validate_json(resp.choices[0].message.content)
+
+    results = [run_completion(b) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, results[0])
     out_ib = batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
 
 
 async def abatch_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
+    in_tree: Tree, /, *, roles: list[str], struct: type[Struct], lmconfig: LMConfig
 ) -> tuple[Tree, Tree]:
     batch_size, in_batched, contents = in_tree
 
@@ -389,7 +426,7 @@ async def abatch_struct_lm_call(
 
     async def run_completion(b: int) -> Struct:
         messages = [get_message(i, b) for i in range(len(roles))]
-        resp = await acompletion(messages=messages, model=model, response_format=struct)
+        resp = await acompletion(messages=messages, response_format=struct, **lmconfig)
         return struct.model_validate_json(resp.choices[0].message.content)
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])

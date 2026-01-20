@@ -189,7 +189,7 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
         # $2 = eqn2[$1, $0] => still references folded $1 and must be updated
 
         folded_params = treelib.map(recurse, ireqn.params)
-        in_irtree = treelib.map(read, ireqn.in_irtree) 
+        in_irtree = treelib.map(read, ireqn.in_irtree)
 
         if ireqn.effect or not is_const_irtree(in_irtree):
             # NOTE(asem): cannot fold effectful equations or non-constant equations
