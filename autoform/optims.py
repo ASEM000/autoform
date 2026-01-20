@@ -189,17 +189,27 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
         # $2 = eqn2[$1, $0] => still references folded $1 and must be updated
 
         folded_params = treelib.map(recurse, ireqn.params)
-        in_irtree = treelib.map(read, ireqn.in_irtree)
+        in_irtree = treelib.map(read, ireqn.in_irtree) 
 
-        if is_const_irtree(in_irtree) and ireqn.effect is None:
+        if ireqn.effect or not is_const_irtree(in_irtree):
+            # NOTE(asem): cannot fold effectful equations or non-constant equations
+            # just update in_irtree and continue
+            # even if checkpointed equation is constant, it can not be folded away
+            # for example
+            # >>> def program(x):
+            # ...     constant = af.format("{}, {}", "a", "b")
+            # ...     checkpointed = af.checkpoint(constant, key="val")
+            # ...     return checkpointed
+            # if checkpointed eqn was folded, the checkpoint effect would be lost
+            # and inject would fail to inject a different value at runtime.
+            treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
+            ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, folded_params)
+            ireqns.append(ireqn)
+        else:
             in_ireqn_tree = treelib.map(lambda x: x.value, in_irtree)
             out_ireqn_tree = ireqn.bind(in_ireqn_tree, **folded_params)
             out_ireqn_lit_tree = treelib.map(IRLit, out_ireqn_tree)
             treelib.map(write, ireqn.out_irtree, out_ireqn_lit_tree)
-        else:
-            treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
-            ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, folded_params)
-            ireqns.append(ireqn)
 
     out_irtree = treelib.map(read, ir.out_irtree)
     return IR(ireqns, ir.in_irtree, out_irtree)

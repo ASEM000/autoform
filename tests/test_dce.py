@@ -75,10 +75,10 @@ class TestDCE:
             return z
 
         ir = af.trace(program)("x")
-        dce = af.dce(ir)
-
+        folded = af.fold(ir)
+        dced = af.dce(folded)
         assert len(ir.ireqns) == 2
-        assert len(dce.ireqns) == 0
+        assert len(dced.ireqns) == 0
 
     def test_keeps_all_if_all_used(self):
         def program(x):
