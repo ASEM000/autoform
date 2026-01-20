@@ -184,11 +184,13 @@ class TestFoldWithEffects:
     def test_folds_constant_but_keeps_effectful_equation(self):
         def program(x):
             pure_constant = af.concat("a", "b")
-            checkpointed = af.checkpoint(af.format("{}", "constant"), key="val")
-            return af.concat(af.concat(pure_constant, checkpointed), x)
+            y = af.format("{}", "constant")
+            checkpointed = af.checkpoint(y, key="val")
+            z = af.concat(pure_constant, checkpointed)
+            return af.concat(z, x)
 
         ir = af.trace(program)("input")
         folded = af.fold(ir)
-        assert len(folded.ireqns) == 2
         effectful_eqns = [e for e in folded.ireqns if e.effect is not None]
+        assert len(folded.ireqns) == 3
         assert len(effectful_eqns) == 1

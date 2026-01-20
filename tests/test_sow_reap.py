@@ -293,10 +293,8 @@ class TestInjectAndDCE:
 
         traced_ir = af.trace(wrapped)("example")
         assert len(traced_ir.ireqns) == 2
-
         optimized_ir = af.dce(traced_ir)
-
-        assert len(optimized_ir.ireqns) == 0
+        assert len(optimized_ir.ireqns) == 1
 
         result = af.call(optimized_ir)("any_input")
         assert result == "Got: CACHED"

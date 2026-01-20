@@ -243,7 +243,7 @@ class TestBatchRuleOutBatched:
         in_batched = (True,)
         in_values = (["a", "b"],)
         out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
-            (batch_size, in_batched, in_values), template="{}"
+            (batch_size, in_batched, in_values), template="{}", keys=()
         )
         assert out_batched
         assert out_vals == ["a", "b"]
@@ -335,7 +335,7 @@ class TestBatchBroadcasting:
         in_batched = (True, False)
         in_values = (["Alice", "Bob"], "Hello")
         out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
-            (batch_size, in_batched, in_values), template="{1}, {0}!"
+            (batch_size, in_batched, in_values), template="{1}, {0}!", keys=()
         )
         assert out_vals == ["Hello, Alice!", "Hello, Bob!"]
         assert out_batched

@@ -31,48 +31,67 @@ class StringTag(PrimitiveTag): ...
 format_p = Primitive("format", tag={StringTag})
 
 
-def format(template: str, *args) -> str:
-    """Format a string template with arguments.
+def format(template: str, *args, **kwargs) -> str:
+    """Format a string template with positional and/or keyword arguments.
 
     Example:
         >>> import autoform as af
         >>> af.format("Hello, {}!", "World")
         'Hello, World!'
+        >>> af.format("Hello, {name}!", name="World")
+        'Hello, World!'
+        >>> af.format("{0}, {name}!", "Hi", name="World")
+        'Hi, World!'
     """
-    return format_p.bind(args, template=template)
+    in_tree = (*args, *tuple(kwargs.values()))
+    return format_p.bind(in_tree, template=template, keys=tuple(kwargs))
 
 
-def impl_format(in_tree: Tree, /, *, template: str) -> str:
-    return template.format(*in_tree)
+def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> str:
+    n_args = len(in_tree) - len(keys)
+    args, kwargs_values = in_tree[:n_args], in_tree[n_args:]
+    kwargs = dict(zip(keys, kwargs_values))
+    return template.format(*args, **kwargs)
 
 
-def eval_format(in_tree: Tree, /, *, template: str) -> EvalType:
-    return Var(str) if any(is_var(x) for x in in_tree) else impl_format(in_tree, template=template)
+def eval_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
+    return Var(str)
 
 
-def pushforward_format(in_tree: Tree, /, *, template: str) -> tuple[Tree, Tree]:
+def pushforward_format(
+    in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
+) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
-    out_primal = format(template, *primals)
-    out_tangent = format(template, *tangents)
+    out_primal = impl_format(primals, template=template, keys=keys)
+    out_tangent = impl_format(tangents, template=template, keys=keys)
     return out_primal, out_tangent
 
 
-def pullback_fwd_format(in_tree: Tree, /, *, template: str) -> tuple[Tree, Tree]:
-    out = template.format(*in_tree)
+def pullback_fwd_format(
+    in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
+) -> tuple[Tree, Tree]:
+    out = impl_format(in_tree, template=template, keys=keys)
     return out, len(in_tree)
 
 
-def pullback_bwd_format(in_tree: Tree, /, *, template: str) -> Tree:
+def pullback_bwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> Tree:
     del template
-    residuals, out_cotangent = in_tree
-    n = residuals
-    return tuple([out_cotangent] * n)
+    n_args_kwargs, out_cotangent = in_tree
+    n_args = n_args_kwargs - len(keys)
+    args_cotangent = tuple([out_cotangent] * n_args)
+    kwargs_values_cotangent = tuple([out_cotangent] * len(keys))
+    return (*args_cotangent, *kwargs_values_cotangent)
 
 
-def batch_format(in_tree: Tree, /, *, template: str) -> tuple[Tree, Tree]:
+def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    result = [template.format(*unbatch(b)) for b in range(batch_size)]
+
+    def format_at(b: int) -> str:
+        unbatched = unbatch(b)
+        return impl_format(unbatched, template=template, keys=keys)
+
+    result = [format_at(b) for b in range(batch_size)]
     return batch_spec(in_values, in_batched).unflatten(result), True
 
 
@@ -118,7 +137,7 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 
 def eval_concat(in_tree: Tree, /) -> EvalType:
-    return Var(str) if any(is_var(x) for x in in_tree) else impl_concat(in_tree)
+    return Var(str)
 
 
 def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
