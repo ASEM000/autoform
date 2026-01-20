@@ -84,7 +84,7 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test")
         params = built_ir.ireqns[0].params
-        assert params["lmconfig"]["model"] == "gpt-4o"
+        assert params["config"]["model"] == "gpt-4o"
         assert params["struct"] is Answer
         assert params["roles"] == ["user"]
 
