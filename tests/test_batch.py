@@ -213,7 +213,6 @@ class TestBatchInAxes:
 
         ir = af.trace(greet)("Asem", "Hi")
         batched_ir = af.batch(ir, in_axes=(False, False))
-        # With all unbatched inputs, the result is unbatched (same as calling original IR)
         result = af.call(batched_ir)("Asem", "Hi")
         assert result == "Hi: Asem"
 
