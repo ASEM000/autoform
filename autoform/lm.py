@@ -7,7 +7,7 @@ import functools as ft
 from io import StringIO
 from typing import TypedDict, Unpack
 
-from litellm import acompletion, completion, get_model_info
+from litellm import acompletion, batch_completion, completion, get_model_info
 
 
 class LMConfig(TypedDict, total=False):
@@ -94,6 +94,7 @@ def lm_call(messages: list[dict[str, str]], /, **config: Unpack[LMConfig]) -> st
         assert "role" in m, f"message must have a 'role' key, got {m.keys()=}"
         assert "content" in m, f"message must have a 'content' key, got {m.keys()=}"
 
+    assert "model" in config, "model must be specified in lm_call config"
     for k in config:
         assert k in LMConfig.__annotations__, f"Invalid config key: {k}"
     roles = [m["role"] for m in messages]
@@ -215,13 +216,11 @@ def batch_lm_call(in_tree: Tree, /, *, roles: list[str], config: LMConfig) -> tu
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
 
-    def run_completion(b: int) -> str:
-        messages = [get_message(i, b) for i in range(len(roles))]
-        resp = completion(messages=messages, **config)
-        return resp.choices[0].message.content
-
-    results = [run_completion(b) for b in range(batch_size)]
-    return batch_spec(contents, in_batched).unflatten(results), True
+    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
+    responses = batch_completion(messages=batched_messages, **config)
+    result = [resp.choices[0].message.content for resp in responses]
+    out_batched = treelib.map(lambda _: True, result[0])
+    return batch_spec(contents, in_batched).unflatten(result), out_batched
 
 
 async def abatch_lm_call(
@@ -238,7 +237,8 @@ async def abatch_lm_call(
         return resp.choices[0].message.content
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
-    return batch_spec(contents, in_batched).unflatten(results), True
+    out_batched = treelib.map(lambda _: True, results[0])
+    return batch_spec(contents, in_batched).unflatten(results), out_batched
 
 
 impl_rules.set(lm_call_p, impl_lm_call)
@@ -292,6 +292,7 @@ def struct_lm_call(
         4
     """
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
+    assert "model" in config, "model must be specified in lm_call config"
     for key in config:
         assert key in LMConfig.__annotations__, f"Invalid config key: {key}"
     roles = [m["role"] for m in messages]
@@ -405,12 +406,9 @@ def batch_struct_lm_call(
     def get_message(i: int, b: int) -> dict[str, str]:
         return dict(role=roles[i], content=contents[i][b] if in_batched[i] else contents[i])
 
-    def run_completion(b: int) -> Struct:
-        messages = [get_message(i, b) for i in range(len(roles))]
-        resp = completion(messages=messages, response_format=struct, **config)
-        return struct.model_validate_json(resp.choices[0].message.content)
-
-    results = [run_completion(b) for b in range(batch_size)]
+    batched_messages = [[get_message(i, b) for i in range(len(roles))] for b in range(batch_size)]
+    responses = batch_completion(messages=batched_messages, response_format=struct, **config)
+    results = [struct.model_validate_json(resp.choices[0].message.content) for resp in responses]
     out_batched = treelib.map(lambda _: True, results[0])
     out_ib = batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
