@@ -24,12 +24,8 @@ docs = [
     "sphinx-design>=0.5",
     "myst-parser>=2.0,<4.0",
     "nbsphinx>=0.9.8",
-    "jupytext>=1.16.0",
 ]
-notebook = [
-    "ipykernel>=7.1.0",
-    "jupyterlab>=4.5.1",
-]
+
 
 [tool.ruff]
 preview = true
