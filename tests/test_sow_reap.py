@@ -343,9 +343,9 @@ class TestSplit:
         ir = af.trace(program)("...")
         lhs, rhs = af.split(ir, key="s")
 
-        assert len(lhs.ireqns) == 2
+        # splitpoint is stripped from result
+        assert len(lhs.ireqns) == 1
         assert lhs.ireqns[0].prim.name == "format"
-        assert lhs.ireqns[1].prim.name == "splitpoint"
 
         assert len(rhs.ireqns) == 0
 
@@ -364,7 +364,7 @@ class TestSplit:
         ir = af.trace(program)("...")
         lhs, rhs = af.split(ir, key="mid")
 
-        assert len(lhs.ireqns) == 2
+        assert len(lhs.ireqns) == 1  # splitpoint stripped
 
         assert len(rhs.ireqns) == 1
         assert rhs.ireqns[0].prim.name == "format"
@@ -415,13 +415,13 @@ class TestSplit:
 
         ir = af.trace(program)("...")
         lhs1, rhs1 = af.split(ir, key="first")
-        assert len(lhs1.ireqns) == 1
-        assert len(rhs1.ireqns) == 3
+        assert len(lhs1.ireqns) == 0  # splitpoint at start, nothing before it
+        assert len(rhs1.ireqns) == 3  # format, splitpoint("second"), concat
 
         ir2 = af.trace(program)("...")
         lhs2, rhs2 = af.split(ir2, key="second")
-        assert len(lhs2.ireqns) == 3
-        assert len(rhs2.ireqns) == 1
+        assert len(lhs2.ireqns) == 2  # splitpoint("first"), format - splitpoint("second") stripped
+        assert len(rhs2.ireqns) == 1  # concat
 
 
 class TestSplitpointPreservedThroughTransforms:
@@ -487,8 +487,8 @@ class TestSplitOnTransformedIR:
         assert len(lhs.ireqns) == 1
         assert lhs.ireqns[0].prim.name == "pushforward_call"
         nested_lhs = lhs.ireqns[0].params["ir"]
-
-        assert nested_lhs.ireqns[-1].prim.name == "splitpoint"
+        # splitpoint stripped, last equation is concat
+        assert nested_lhs.ireqns[-1].prim.name == "concat"
 
         assert len(rhs.ireqns) == 1
         assert rhs.ireqns[0].prim.name == "pushforward_call"
