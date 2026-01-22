@@ -117,6 +117,10 @@ class IRVar[T: type](IRAtom):
     def fresh(cls, *, type: T, source: IRVar | None = None) -> Self:
         with cls.lock:
             return cls(source=source, type=type)
+    
+    def __repr__(self) -> str:
+        source = f", source={self.source!r}" if self.source else ""
+        return f"{type(self).__name__}[{self.type.__name__}](id={self.id}{source})"
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
