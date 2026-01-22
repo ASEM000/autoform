@@ -118,6 +118,10 @@ class IRVar[T: type](IRAtom):
         with cls.lock:
             return cls(source=source, type=type)
 
+    def __repr__(self) -> str:
+        source = f", source={self.source!r}" if self.source else ""
+        return f"{type(self).__name__}[{self.type.__name__}](id={self.id}{source})"
+
 
 def is_irvar(x) -> TypeGuard[IRVar]:
     return isinstance(x, IRVar)

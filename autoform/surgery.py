@@ -115,15 +115,27 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
             #     y = splitpoint(concat(x, "!"), key="mid")
             #     return concat(y, "?")
             # split(ir, key="mid")
-            #   lhs: [concat, splitpoint], rhs: [concat]
-            lhs_eqns = list(ir.ireqns[: idx + 1])
-            rhs_eqns = list(ir.ireqns[idx + 1 :])
-            lhs = IR(lhs_eqns, ir.in_irtree, lhs_eqns[-1].out_irtree)
+            #   lhs: [concat], rhs: [concat]  (splitpoint stripped)
+            #   boundary = splitpoint's OUTPUT (y), so rhs equations still reference it
+            lhs_ireqns = list(ir.ireqns[:idx])  # exclude splitpoint
+            rhs_ireqns = list(ir.ireqns[idx + 1 :])
 
-            # NOTE(asem): if rhs is empty, splitpoint at the end of ir (use lhs.out_irtree)
-            rhs_in_irtree = pack_user_input(lhs.out_irtree)
-            rhs_out_irtree = ([lhs] + rhs_eqns)[-1].out_irtree
-            rhs = IR(rhs_eqns, rhs_in_irtree, rhs_out_irtree)
+            # NOTE(asem): use splitpoint's output as the boundary
+            # This works because rhs equations reference splitpoint's output variable
+            lhs_out = lhs_ireqns[-1].out_irtree if lhs_ireqns else ir.in_irtree
+            lhs = IR(lhs_ireqns, ir.in_irtree, lhs_out)
+
+            rhs_in_irtree = pack_user_input(ireqn.out_irtree)
+            # NOTE(asem): in case rhs_ireqn is empty
+            # >>> def program(x):
+            # ...   y = concat(x, x)
+            # ...   z = splitpoint(y, key="mid")
+            # >>> split(ir, key="mid")
+            #   lhs: [concat], rhs: []
+            # in here rhs in_irtree = splitpoint out_irtree
+            # and out_irtree = splitpoint out_irtree still
+            rhs_out_irtree = ([ireqn] + rhs_ireqns)[-1].out_irtree
+            rhs = IR(rhs_ireqns, rhs_in_irtree, rhs_out_irtree)
             return lhs, rhs
 
         # NOTE(asem): check if splitpoint is inside a nested IR (HOP).
@@ -173,6 +185,14 @@ def split[**P, R](ir: IR, /, *, key: Hashable) -> tuple[IR, IR]:
         'hello!'
         >>> af.call(rhs)("hello!")
         'hello!?'
+
+    To merge the split IRs back together, retrace with splitpoint::
+
+        >>> def merged(x):
+        ...     y = lhs.call(x)
+        ...     z = af.splitpoint(y, key="mid")
+        ...     return rhs.call(z)
+        >>> merged_ir = af.trace(merged)("...")
     """
     assert isinstance(ir, IR), f"`split` expected an IR, got {type(ir)}"
     result = maybe_split(ir, key)
