@@ -8,6 +8,9 @@ on:
     paths:
       - '**/*.ipynb'
 
+permissions:
+  contents: write
+
 jobs:
   badges:
     runs-on: ubuntu-latest
