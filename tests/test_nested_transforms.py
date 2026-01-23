@@ -769,3 +769,191 @@ class TestBatchOfPullbackAllUnbatched:
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, False))
         result = af.call(batch_pb_ir)(["a", "b", "c"], "g")
         assert result == (["a!", "b!", "c!"], ["g", "g", "g"])
+
+
+class TestPullbackOfPushforward:
+    def test_pullback_of_pushforward(self):
+        def f(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(f)("x")
+        pf_ir = af.pushforward(ir)
+        pb_pf_ir = af.pullback(pf_ir)
+        primal = "hello"
+        tangent = "world"
+        out_cotangent_p = "grad_p"
+        out_cotangent_t = "grad_t"
+        result = af.call(pb_pf_ir)(((primal, tangent), (out_cotangent_p, out_cotangent_t)))
+        (out_p, out_t), (in_c_p, in_c_t) = result
+
+        assert out_p == "hello!"
+        assert out_t == "world"
+        assert in_c_p == "grad_p"
+        assert in_c_t == "grad_t"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_of_pushforward_async(self):
+        def f(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(f)("x")
+        pf_ir = af.pushforward(ir)
+        pb_pf_ir = af.pullback(pf_ir)
+        primal = "hello"
+        tangent = "world"
+        out_cotangent_p = "grad_p"
+        out_cotangent_t = "grad_t"
+        result = await af.acall(pb_pf_ir)(((primal, tangent), (out_cotangent_p, out_cotangent_t)))
+        (out_p, out_t), (in_c_p, in_c_t) = result
+
+        assert out_p == "hello!"
+        assert out_t == "world"
+        assert in_c_p == "grad_p"
+        assert in_c_t == "grad_t"
+
+    def test_pullback_of_pushforward_format(self):
+        def f(x):
+            return af.format("[{}]", x)
+
+        ir = af.trace(f)("x")
+        pf_ir = af.pushforward(ir)
+        pb_pf_ir = af.pullback(pf_ir)
+        result = af.call(pb_pf_ir)((("a", "ta"), ("gp", "gt")))
+        (out_p, out_t), (in_c_p, in_c_t) = result
+
+        assert out_p == "[a]"
+        assert out_t == "[ta]"
+        assert in_c_p == "gp"
+        assert in_c_t == "gt"
+
+    def test_pullback_of_pushforward_two_args(self):
+        def f(x, y):
+            return af.concat(x, y)
+
+        ir = af.trace(f)("a", "b")
+        pf_ir = af.pushforward(ir)
+        pb_pf_ir = af.pullback(pf_ir)
+        primals = ("hello", " world")
+        tangents = ("t1", "t2")
+        out_cotangent = ("gp", "gt")
+        result = af.call(pb_pf_ir)(((primals, tangents), out_cotangent))
+        (out_p, out_t), (in_c_p, in_c_t) = result
+
+        assert out_p == "hello world"
+        assert out_t == "t1t2"
+        assert in_c_p == ("gp", "gp")
+        assert in_c_t == ("gt", "gt")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_of_pushforward_two_args_async(self):
+        def f(x, y):
+            return af.concat(x, y)
+
+        ir = af.trace(f)("a", "b")
+        pf_ir = af.pushforward(ir)
+        pb_pf_ir = af.pullback(pf_ir)
+        primals = ("hello", " world")
+        tangents = ("t1", "t2")
+        out_cotangent = ("gp", "gt")
+        result = await af.acall(pb_pf_ir)(((primals, tangents), out_cotangent))
+        (out_p, out_t), (in_c_p, in_c_t) = result
+
+        assert out_p == "hello world"
+        assert out_t == "t1t2"
+        assert in_c_p == ("gp", "gp")
+        assert in_c_t == ("gt", "gt")
+
+
+class TestPullbackOfPullback:
+    def test_pullback_of_pullback(self):
+        def f(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(f)("x")
+        pb_ir = af.pullback(ir)
+        pb_pb_ir = af.pullback(pb_ir)
+        primal = "hello"
+        cotangent = "grad"
+        out_c_p = "gg_p"
+        out_c_c = "gg_c"
+        result = af.call(pb_pb_ir)(((primal, cotangent), (out_c_p, out_c_c)))
+        (out_p, in_c), (in_c_p, in_c_cout) = result
+
+        assert out_p == "hello!"
+        assert in_c == "grad"
+        assert in_c_p == "gg_p"
+        assert in_c_cout == "gg_c"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_of_pullback_async(self):
+        def f(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(f)("x")
+        pb_ir = af.pullback(ir)
+        pb_pb_ir = af.pullback(pb_ir)
+        primal = "hello"
+        cotangent = "grad"
+        out_c_p = "gg_p"
+        out_c_c = "gg_c"
+        result = await af.acall(pb_pb_ir)(((primal, cotangent), (out_c_p, out_c_c)))
+        (out_p, in_c), (in_c_p, in_c_cout) = result
+
+        assert out_p == "hello!"
+        assert in_c == "grad"
+        assert in_c_p == "gg_p"
+        assert in_c_cout == "gg_c"
+
+    def test_pullback_of_pullback_format(self):
+        def f(x):
+            return af.format("<{}>", x)
+
+        ir = af.trace(f)("x")
+        pb_ir = af.pullback(ir)
+        pb_pb_ir = af.pullback(pb_ir)
+        result = af.call(pb_pb_ir)((("a", "g"), ("cp", "cc")))
+        (out_p, in_c), (in_c_p, in_c_cout) = result
+
+        assert out_p == "<a>"
+        assert in_c == "g"
+        assert in_c_p == "cp"
+        assert in_c_cout == "<cc>"
+
+    def test_pullback_of_pullback_two_args(self):
+        def f(x, y):
+            return af.concat(x, y)
+
+        ir = af.trace(f)("a", "b")
+        pb_ir = af.pullback(ir)
+        pb_pb_ir = af.pullback(pb_ir)
+        primals = ("hello", " world")
+        cotangent = "grad"
+        out_c_p = "cp"
+        out_c_c = ("cc_x", "cc_y")
+        result = af.call(pb_pb_ir)(((primals, cotangent), (out_c_p, out_c_c)))
+        (out_p, in_c), (in_c_primals, in_c_cout) = result
+
+        assert out_p == "hello world"
+        assert in_c == ("grad", "grad")
+        assert in_c_primals == ("cp", "cp")
+        assert in_c_cout == "cc_xcc_y"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_of_pullback_two_args_async(self):
+        def f(x, y):
+            return af.concat(x, y)
+
+        ir = af.trace(f)("a", "b")
+        pb_ir = af.pullback(ir)
+        pb_pb_ir = af.pullback(pb_ir)
+        primals = ("hello", " world")
+        cotangent = "grad"
+        out_c_p = "cp"
+        out_c_c = ("cc_x", "cc_y")
+        result = await af.acall(pb_pb_ir)(((primals, cotangent), (out_c_p, out_c_c)))
+        (out_p, in_c), (in_c_primals, in_c_cout) = result
+
+        assert out_p == "hello world"
+        assert in_c == ("grad", "grad")
+        assert in_c_primals == ("cp", "cp")
+        assert in_c_cout == "cc_xcc_y"

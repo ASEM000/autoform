@@ -237,17 +237,17 @@ def pullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
     _, in_c_p = call(pb_ir)((in_p, out_c_p))
-    _, in_c_t = call(pb_ir)((in_t, out_c_t))
+    _, in_c_t = call(pb_ir)((in_p, out_c_t))
     return (in_c_p, in_c_t)
 
 
 async def apullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     residuals, out_cotangent = in_tree
-    in_p, in_t = residuals
+    in_p, _in_t = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
     _, in_c_p = await acall(pb_ir)((in_p, out_c_p))
-    _, in_c_t = await acall(pb_ir)((in_t, out_c_t))
+    _, in_c_t = await acall(pb_ir)((in_p, out_c_t))
     return (in_c_p, in_c_t)
 
 
@@ -539,8 +539,9 @@ def pullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     out_c_p, in_c_c = out_cotangent
     pb_ir = pullback(ir)
     _, in_c_p = call(pb_ir)((p_in, out_c_p))
-    _, in_c_c = call(pb_ir)((p_in, in_c_c))
-    return (in_c_p, in_c_c)
+    pf_ir = pushforward(ir)
+    _, in_c_cout = call(pf_ir)((p_in, in_c_c))
+    return (in_c_p, in_c_cout)
 
 
 async def apullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
@@ -549,8 +550,9 @@ async def apullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     out_c_p, in_c_c = out_cotangent
     pb_ir = pullback(ir)
     _, in_c_p = await acall(pb_ir)((p_in, out_c_p))
-    _, in_c_c = await acall(pb_ir)((p_in, in_c_c))
-    return (in_c_p, in_c_c)
+    pf_ir = pushforward(ir)
+    _, in_c_cout = await acall(pf_ir)((p_in, in_c_c))
+    return (in_c_p, in_c_cout)
 
 
 def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
