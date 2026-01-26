@@ -102,7 +102,16 @@ batched_grads = af.batch(af.pullback(ir), in_axes=in_axes)
 > ⚠️ **early development**: API may change.
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:hidden:
+:caption: Tutorials
+:glob:
+
+tutorials/*
+```
+
+```{toctree}
+:maxdepth: 1
 :caption: Examples
 :hidden:
 
@@ -113,7 +122,7 @@ examples/internals
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :caption: Reference
 :hidden:
 
