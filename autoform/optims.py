@@ -228,6 +228,12 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
     the same result. Two equations are duplicates if they apply the same
     primitive to the same inputs with the same params.
 
+    Warning:
+        This will deduplicate stochastic primitives like ``lm_call``.
+        Two ``lm_call`` equations with identical inputs will be merged
+        into one, so the program will only sample once. Use this
+        intentionally to enforce scoped referential transparency.
+
     Example:
         >>> import autoform as af
         >>> def program(x):
