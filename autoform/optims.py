@@ -7,7 +7,7 @@ from collections import deque
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import IR, IRAtom, IREqn, IRLit, IRVar, Primitive, is_irvar, is_iratom
+from autoform.core import IR, IRAtom, IREqn, IRLit, IRVar, Primitive, is_iratom, is_irvar
 from autoform.utils import Tree, lru_cache, treelib
 
 # ==================================================================================================
@@ -263,7 +263,7 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
 
     def write(atom, value):
         is_irvar(atom) and setitem(env, atom, value)
-    
+
     def read(atom):
         return env[atom] if is_irvar(atom) else atom
 
@@ -303,8 +303,6 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
             treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
             seen[key] = ireqn
             ireqns.append(ireqn)
-    
+
     out_irtree = treelib.map(read, ir.out_irtree)
     return IR[P, R](ireqns, ir.in_irtree, out_irtree)
-            
-

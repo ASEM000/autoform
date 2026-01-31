@@ -203,7 +203,7 @@ class TestMultiShotContinuation:
                 self.alternatives = alternatives
                 self.results = []
 
-            def __call__(self, effect, in_tree):
+            def __call__(self, effect, prim, in_tree, /):
                 for v in self.alternatives:
                     result = yield (v, in_tree[1])
                     self.results.append(result)
@@ -228,7 +228,7 @@ class TestMultiShotContinuation:
         class AggregateEffect(Effect):
             pass
 
-        def aggregating_handler(effect, in_tree):
+        def aggregating_handler(effect, prim, in_tree, /):
             results = []
             for suffix in ["!", "?", "."]:
                 left, _ = in_tree
@@ -253,7 +253,7 @@ class TestMultiShotContinuation:
         class SingleEffect(Effect):
             pass
 
-        def single_shot_handler(effect, in_tree):
+        def single_shot_handler(effect, prim, in_tree, /):
             left, right = in_tree
             result = yield (left.upper(), right)
             return result + " modified"
@@ -275,7 +275,7 @@ class TestMultiShotContinuation:
         class SkipEffect(Effect):
             pass
 
-        def skip_handler(effect, value):
+        def skip_handler(effect, prim, value, /):
             return "SKIPPED"
             yield
 
@@ -290,3 +290,29 @@ class TestMultiShotContinuation:
             result = af.call(ir)("ignored")
 
         assert result == "SKIPPED"
+
+    def test_handler_receives_prim_and_params(self):
+        class InspectEffect(Effect):
+            pass
+
+        captured = {}
+
+        def inspect_handler(effect, prim, in_tree, /, **params):
+            captured["prim_name"] = prim.name
+            captured["params"] = params
+            return (yield in_tree)
+
+        def program(x):
+            with using_effect(InspectEffect()):
+                return af.format("hello {}", x)
+            return x
+
+        ir = af.trace(program)("test")
+
+        with using_interpreter(EffectInterpreter((InspectEffect, inspect_handler))):
+            result = af.call(ir)("world")
+
+        assert result == "hello world"
+        assert captured["prim_name"] == "format"
+        assert "template" in captured["params"]
+        assert captured["params"]["template"] == "hello {}"

@@ -90,7 +90,7 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     """
     collected: Collected = defaultdict(list)
 
-    def collector(effect: CheckpointEffect, in_tree: Any):
+    def collector(effect: CheckpointEffect, prim, in_tree: Any, /):
         result = yield in_tree
         if collection is ... or effect.collection == collection:
             collected[effect.key].append(result)
@@ -134,7 +134,7 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
 
     cache = {k: deque(values[k]) for k in values}
 
-    def injector(effect: CheckpointEffect, in_tree: Any):
+    def injector(effect: CheckpointEffect, prim, in_tree: Any, /):
         if effect.collection == collection:
             if effect.key in cache and cache[effect.key]:
                 return cache[effect.key].popleft()
