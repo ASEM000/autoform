@@ -361,27 +361,28 @@ def using_effect[T: Effect](effect: T | None) -> Generator[T | None, None, None]
         active_effect.reset(token)
 
 
-type Handler = Callable[[Effect, Tree], Generator[Any, Any, Any]]
+type Handler = Callable[..., Generator[Any, Any, Any]]
 
 
 class EffectInterpreter(Interpreter, ABC):
     # NOTE(asem): handler patterns (callable-based, not methods)
+    # handler signature mirrors interpret: handler(effect, prim, in_tree, /, **params)
     #
     # skip (replace value, no continuation)
-    # >>> def handler(effect, in_tree):
+    # >>> def handler(effect, prim, in_tree, /):
     # ...     return replacement
     # ...     yield
     #
     # pass-through (observe only)
-    # >>> def handler(effect, in_tree):
+    # >>> def handler(effect, prim, in_tree, /):
     # ...     return (yield in_tree)
     #
     # pre-process input
-    # >>> def handler(effect, in_tree):
+    # >>> def handler(effect, prim, in_tree, /):
     # ...     return (yield transform(in_tree))
     #
     # post-process output
-    # >>> def handler(effect, in_tree):
+    # >>> def handler(effect, prim, in_tree, /, **params):
     # ...     result = yield in_tree
     # ...     return transform(result)
     def __init__(self, *handlers: tuple[type[Effect], Handler]):
@@ -400,12 +401,12 @@ class EffectInterpreter(Interpreter, ABC):
         if handler is None:
             return self.parent.interpret(prim, in_tree, **params)
 
-        gen = handler(effect, in_tree)
+        gen = handler(effect, prim, in_tree, **params)
         result = None
 
         # NOTE(asem):
         # the handler can yield multiple times, each yield invokes the continuation.
-        # >>> def handler(effect, in_tree):
+        # >>> def handler(effect, prim, in_tree, /, **params):
         # ...     results = []
         # ...     for v in (...):
         # ...         result = yield v
@@ -427,7 +428,7 @@ class EffectInterpreter(Interpreter, ABC):
         if handler is None:
             return await self.parent.ainterpret(prim, in_tree, **params)
 
-        gen = handler(effect, in_tree)
+        gen = handler(effect, prim, in_tree, **params)
         result = None
 
         # NOTE(asem): same generator protocol as sync, but uses ainterpret for continuation
