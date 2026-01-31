@@ -188,6 +188,18 @@ class TestDedupWithEffects:
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 3
 
+    def test_does_not_deduplicate_identical_effects(self):
+        def program(x):
+            a = af.checkpoint(x, key="same", collection="cache")
+            b = af.checkpoint(x, key="same", collection="cache")
+            return af.concat(a, b)
+
+        ir = af.trace(program)("test")
+        mem = af.dedup(ir)
+
+        assert len(ir.ireqns) == 3
+        assert len(mem.ireqns) == 3
+
 
 class TestDedupWithTransformedIR:
     def test_dedup_on_pushforward(self):

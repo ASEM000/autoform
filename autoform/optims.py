@@ -282,7 +282,16 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
         memoized_params = treelib.map(recurse, ireqn.params)
         ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, memoized_params)
 
-        if (key := make_key(ireqn)) in seen:
+        if ireqn.effect:
+            # NOTE(asem): never deduplicate effectful equations.
+            # >>> def program(x):
+            # ...     a = af.checkpoint(x, key="k", collection="c")
+            # ...     b = af.checkpoint(x, key="k", collection="c")
+            # ...     return af.concat(a, b)
+            # both checkpoints must fire at runtime.
+            treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
+            ireqns.append(ireqn)
+        elif (key := make_key(ireqn)) in seen:
             treelib.map(write, ireqn.out_irtree, seen[key].out_irtree)
         else:
             treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
