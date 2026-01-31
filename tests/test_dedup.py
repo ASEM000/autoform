@@ -1,7 +1,7 @@
 import autoform as af
 
 
-class TestMemoize:
+class TestDedup:
     def test_removes_duplicate_equation(self):
         def program(x):
             a = af.concat(x, "!")
@@ -9,7 +9,7 @@ class TestMemoize:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 2
@@ -21,7 +21,7 @@ class TestMemoize:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 3
@@ -35,7 +35,7 @@ class TestMemoize:
             return af.concat(v2, v4)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 5
         assert len(mem.ireqns) == 3
@@ -47,7 +47,7 @@ class TestMemoize:
             return b
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(mem.ireqns) == 1
         out_leaves = af.utils.treelib.leaves(mem.out_irtree)
@@ -61,7 +61,7 @@ class TestMemoize:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         original = af.call(ir)("hello")
         memoized = af.call(mem)("hello")
@@ -77,7 +77,7 @@ class TestMemoize:
             return af.concat(v2, v4)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         original = af.call(ir)("world")
         memoized = af.call(mem)("world")
@@ -85,13 +85,13 @@ class TestMemoize:
         assert original == memoized == "hello world!hello world!"
 
 
-class TestMemoizeEdgeCases:
+class TestDedupEdgeCases:
     def test_empty_ir(self):
         def program(x):
             return x
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 0
         assert len(mem.ireqns) == 0
@@ -101,7 +101,7 @@ class TestMemoizeEdgeCases:
             return af.concat(x, "!")
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 1
         assert len(mem.ireqns) == 1
@@ -114,7 +114,7 @@ class TestMemoizeEdgeCases:
             return c
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == len(mem.ireqns)
 
@@ -126,7 +126,7 @@ class TestMemoizeEdgeCases:
             return (a, b, c)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 1
@@ -142,7 +142,7 @@ class TestMemoizeEdgeCases:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 4
         assert len(mem.ireqns) == 4
@@ -154,7 +154,7 @@ class TestMemoizeEdgeCases:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 3
@@ -166,7 +166,7 @@ class TestMemoizeEdgeCases:
             return af.concat(a, b)
 
         ir = af.trace(program)("a", "b")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 2
@@ -175,7 +175,7 @@ class TestMemoizeEdgeCases:
         assert result == "hello worldhello world"
 
 
-class TestMemoizeWithEffects:
+class TestDedupWithEffects:
     def test_does_not_deduplicate_different_effects(self):
         def program(x):
             a = af.checkpoint(x, key="first", collection="cache")
@@ -183,14 +183,14 @@ class TestMemoizeWithEffects:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
 
         assert len(ir.ireqns) == 3
         assert len(mem.ireqns) == 3
 
 
-class TestMemoizeWithTransformedIR:
-    def test_memoize_on_pushforward(self):
+class TestDedupWithTransformedIR:
+    def test_dedup_on_pushforward(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -198,11 +198,11 @@ class TestMemoizeWithTransformedIR:
 
         ir = af.trace(program)("test")
         pf_ir = af.pushforward(ir)
-        mem = af.memoize(pf_ir)
+        mem = af.dedup(pf_ir)
 
         assert len(mem.ireqns) <= len(pf_ir.ireqns)
 
-    def test_memoize_on_pullback(self):
+    def test_dedup_on_pullback(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -210,11 +210,11 @@ class TestMemoizeWithTransformedIR:
 
         ir = af.trace(program)("test")
         pb_ir = af.pullback(ir)
-        mem = af.memoize(pb_ir)
+        mem = af.dedup(pb_ir)
 
         assert len(mem.ireqns) <= len(pb_ir.ireqns)
 
-    def test_memoize_on_batch(self):
+    def test_dedup_on_batch(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -222,13 +222,13 @@ class TestMemoizeWithTransformedIR:
 
         ir = af.trace(program)("test")
         batch_ir = af.batch(ir, in_axes=True)
-        mem = af.memoize(batch_ir)
+        mem = af.dedup(batch_ir)
 
         assert len(mem.ireqns) <= len(batch_ir.ireqns)
 
 
-class TestNestedMemoize:
-    def test_pushforward_memoizes_inner_ir(self):
+class TestNestedDedup:
+    def test_pushforward_dedups_inner_ir(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -236,12 +236,12 @@ class TestNestedMemoize:
 
         ir = af.trace(program)("test")
         pf_ir = af.pushforward(ir)
-        mem = af.memoize(pf_ir)
+        mem = af.dedup(pf_ir)
 
         inner_ir = mem.ireqns[0].params["ir"]
         assert len(inner_ir.ireqns) == 2
 
-    def test_pullback_memoizes_inner_ir(self):
+    def test_pullback_dedups_inner_ir(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -249,12 +249,12 @@ class TestNestedMemoize:
 
         ir = af.trace(program)("test")
         pb_ir = af.pullback(ir)
-        mem = af.memoize(pb_ir)
+        mem = af.dedup(pb_ir)
 
         inner_ir = mem.ireqns[0].params["ir"]
         assert len(inner_ir.ireqns) == 2
 
-    def test_batch_memoizes_inner_ir(self):
+    def test_batch_dedups_inner_ir(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -262,12 +262,12 @@ class TestNestedMemoize:
 
         ir = af.trace(program)("test")
         batch_ir = af.batch(ir, in_axes=True)
-        mem = af.memoize(batch_ir)
+        mem = af.dedup(batch_ir)
 
         inner_ir = mem.ireqns[0].params["ir"]
         assert len(inner_ir.ireqns) == 2
 
-    def test_deeply_nested_memoize(self):
+    def test_deeply_nested_dedup(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -275,15 +275,15 @@ class TestNestedMemoize:
 
         ir = af.trace(program)("test")
         double = af.pushforward(af.pushforward(ir))
-        mem = af.memoize(double)
+        mem = af.dedup(double)
 
         inner1 = mem.ireqns[0].params["ir"]
         inner2 = inner1.ireqns[0].params["ir"]
         assert len(inner2.ireqns) == 2
 
 
-class TestMemoizeComposition:
-    def test_memoize_then_dce(self):
+class TestDedupComposition:
+    def test_dedup_then_dce(self):
         def program(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -291,7 +291,7 @@ class TestMemoizeComposition:
             return af.concat(a, b)
 
         ir = af.trace(program)("test")
-        mem = af.memoize(ir)
+        mem = af.dedup(ir)
         dced = af.dce(mem)
 
         assert len(ir.ireqns) == 4
@@ -301,7 +301,7 @@ class TestMemoizeComposition:
         result = af.call(dced)("hi")
         assert result == "hi!hi!"
 
-    def test_fold_then_memoize(self):
+    def test_fold_then_dedup(self):
         def program(x):
             a = af.concat("hello", " world")
             b = af.concat("hello", " world")
@@ -309,7 +309,7 @@ class TestMemoizeComposition:
 
         ir = af.trace(program)("test")
         folded = af.fold(ir)
-        mem = af.memoize(folded)
+        mem = af.dedup(folded)
 
         assert len(mem.ireqns) <= len(folded.ireqns)
 

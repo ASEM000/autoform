@@ -216,17 +216,17 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
 
 
 # ==================================================================================================
-# MEMOIZATION
+# DEDUPLICATION
 # ==================================================================================================
 
 
 @ft.partial(lru_cache, maxsize=256)
-def memoize[**P, R](ir: IR[P, R]) -> IR[P, R]:
+def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
     """Eliminate duplicate equations via global value numbering.
 
     Ensures that a primitive called twice with the same arguments produces
-    the same result.Two equations are duplicates if they apply the same primitive 
-    to the same inputs with the same params.
+    the same result. Two equations are duplicates if they apply the same
+    primitive to the same inputs with the same params.
 
     Example:
         >>> import autoform as af
@@ -237,8 +237,8 @@ def memoize[**P, R](ir: IR[P, R]) -> IR[P, R]:
         >>> ir = af.trace(program)("test")
         >>> len(ir.ireqns)
         3
-        >>> mem = af.memoize(ir)
-        >>> len(mem.ireqns)
+        >>> deduped = af.dedup(ir)
+        >>> len(deduped.ireqns)
         2
     """
 
@@ -246,7 +246,7 @@ def memoize[**P, R](ir: IR[P, R]) -> IR[P, R]:
     env: dict[IRVar, IRVar] = {}
 
     def recurse(leaf):
-        return memoize(leaf) if isinstance(leaf, IR) else leaf
+        return dedup(leaf) if isinstance(leaf, IR) else leaf
 
     def make_key(ireqn: IREqn):
         flat_in_tree, in_struct = treelib.flatten(ireqn.in_irtree, is_leaf=is_iratom)
