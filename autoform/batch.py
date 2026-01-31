@@ -97,7 +97,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     in_b_irtree = treelib.map(make_b, ir.in_irtree)
     out_b_irtree = treelib.map(make_b, ir.out_irtree)
     effect = active_effect.get()
-    eqn = IREqn(batch_call_p, in_b_irtree, out_b_irtree, effect, dict(ir=ir, in_axes=in_axes))
+    eqn = IREqn(batch_call_p, effect, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
     return IR([eqn], in_b_irtree, out_b_irtree)
 
 

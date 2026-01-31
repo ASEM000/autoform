@@ -197,25 +197,25 @@ class Primitive:
 
 
 class IREqn:
-    __slots__ = ("prim", "in_irtree", "out_irtree", "effect", "params")
-    __match_args__ = ("prim", "in_irtree", "out_irtree", "effect", "params")
+    __slots__ = ("prim", "effect", "in_irtree", "out_irtree", "params")
+    __match_args__ = ("prim", "effect", "in_irtree", "out_irtree", "params")
 
     def __init__(
         self,
         prim: Primitive,
+        effect: Effect | None,
         in_irtree: Tree[IRAtom],
         out_irtree: Tree[IRAtom],
-        effect: Effect | None = None,
         params: dict | None = None,
     ):
         assert isinstance(prim, Primitive)
-        assert treelib.all(treelib.map(is_iratom, (in_irtree, out_irtree)))
         assert isinstance(effect, Effect) or effect is None
+        assert treelib.all(treelib.map(is_iratom, (in_irtree, out_irtree)))
         assert isinstance(params, dict) or params is None
         self.prim = prim
+        self.effect = effect
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
-        self.effect = effect
         self.params = params if params is not None else {}
 
     def bind(self, in_tree: Tree, /, **params):
@@ -227,7 +227,7 @@ class IREqn:
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        return IREqn(self.prim, self.in_irtree, self.out_irtree, self.effect, self.params | kwargs)
+        return IREqn(self.prim, self.effect, self.in_irtree, self.out_irtree, self.params | kwargs)
 
 
 class IR[**P, R]:
@@ -366,23 +366,23 @@ type Handler = Callable[..., Generator[Any, Any, Any]]
 
 class EffectInterpreter(Interpreter, ABC):
     # NOTE(asem): handler patterns (callable-based, not methods)
-    # handler signature mirrors interpret: handler(effect, prim, in_tree, /, **params)
+    # handler signature: handler(prim, effect, in_tree, /, **params)
     #
     # skip (replace value, no continuation)
-    # >>> def handler(effect, prim, in_tree, /):
+    # >>> def handler(prim, effect, in_tree, /):
     # ...     return replacement
     # ...     yield
     #
     # pass-through (observe only)
-    # >>> def handler(effect, prim, in_tree, /):
+    # >>> def handler(prim, effect, in_tree, /):
     # ...     return (yield in_tree)
     #
     # pre-process input
-    # >>> def handler(effect, prim, in_tree, /):
+    # >>> def handler(prim, effect, in_tree, /):
     # ...     return (yield transform(in_tree))
     #
     # post-process output
-    # >>> def handler(effect, prim, in_tree, /, **params):
+    # >>> def handler(prim, effect, in_tree, /, **params):
     # ...     result = yield in_tree
     # ...     return transform(result)
     def __init__(self, *handlers: tuple[type[Effect], Handler]):
@@ -401,12 +401,12 @@ class EffectInterpreter(Interpreter, ABC):
         if handler is None:
             return self.parent.interpret(prim, in_tree, **params)
 
-        gen = handler(effect, prim, in_tree, **params)
+        gen = handler(prim, effect, in_tree, **params)
         result = None
 
         # NOTE(asem):
         # the handler can yield multiple times, each yield invokes the continuation.
-        # >>> def handler(effect, prim, in_tree, /, **params):
+        # >>> def handler(prim, effect, in_tree, /, **params):
         # ...     results = []
         # ...     for v in (...):
         # ...         result = yield v
@@ -428,7 +428,7 @@ class EffectInterpreter(Interpreter, ABC):
         if handler is None:
             return await self.parent.ainterpret(prim, in_tree, **params)
 
-        gen = handler(effect, prim, in_tree, **params)
+        gen = handler(prim, effect, in_tree, **params)
         result = None
 
         # NOTE(asem): same generator protocol as sync, but uses ainterpret for continuation
@@ -470,7 +470,7 @@ class TracingInterpreter(Interpreter):
 
         out_irtree = treelib.map(to_out_iratom, out_evaltree)
         effect = active_effect.get()
-        self.ireqns.append(IREqn(prim, in_irtree, out_irtree, effect, params))
+        self.ireqns.append(IREqn(prim, effect, in_irtree, out_irtree, params))
         return out_irtree
 
     async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRAtom]:
