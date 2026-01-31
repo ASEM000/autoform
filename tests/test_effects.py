@@ -203,7 +203,7 @@ class TestMultiShotContinuation:
                 self.alternatives = alternatives
                 self.results = []
 
-            def __call__(self, effect, prim, in_tree, /):
+            def __call__(self, prim, effect, in_tree, /):
                 for v in self.alternatives:
                     result = yield (v, in_tree[1])
                     self.results.append(result)
@@ -228,7 +228,7 @@ class TestMultiShotContinuation:
         class AggregateEffect(Effect):
             pass
 
-        def aggregating_handler(effect, prim, in_tree, /):
+        def aggregating_handler(prim, effect, in_tree, /):
             results = []
             for suffix in ["!", "?", "."]:
                 left, _ = in_tree
@@ -253,7 +253,7 @@ class TestMultiShotContinuation:
         class SingleEffect(Effect):
             pass
 
-        def single_shot_handler(effect, prim, in_tree, /):
+        def single_shot_handler(prim, effect, in_tree, /):
             left, right = in_tree
             result = yield (left.upper(), right)
             return result + " modified"
@@ -275,7 +275,7 @@ class TestMultiShotContinuation:
         class SkipEffect(Effect):
             pass
 
-        def skip_handler(effect, prim, value, /):
+        def skip_handler(prim, effect, value, /):
             return "SKIPPED"
             yield
 
@@ -297,7 +297,7 @@ class TestMultiShotContinuation:
 
         captured = {}
 
-        def inspect_handler(effect, prim, in_tree, /, **params):
+        def inspect_handler(prim, effect, in_tree, /, **params):
             captured["prim_name"] = prim.name
             captured["params"] = params
             return (yield in_tree)

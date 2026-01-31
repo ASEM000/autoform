@@ -203,7 +203,7 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
             # if checkpointed eqn was folded, the checkpoint effect would be lost
             # and inject would fail to inject a different value at runtime.
             treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
-            ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, folded_params)
+            ireqn = IREqn(ireqn.prim, ireqn.effect, in_irtree, ireqn.out_irtree, folded_params)
             ireqns.append(ireqn)
         else:
             in_ireqn_tree = treelib.map(lambda x: x.value, in_irtree)
@@ -286,7 +286,7 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
         # v3 is eliminated and env[v3] = v1
         in_irtree = treelib.map(read, ireqn.in_irtree)
         memoized_params = treelib.map(recurse, ireqn.params)
-        ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, memoized_params)
+        ireqn = IREqn(ireqn.prim, ireqn.effect, in_irtree, ireqn.out_irtree, memoized_params)
 
         if ireqn.effect:
             # NOTE(asem): never deduplicate effectful equations.

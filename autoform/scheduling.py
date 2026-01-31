@@ -402,7 +402,7 @@ def sched[**P, R](ir: IR[P, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         irs = [IR([ireqn], ireqn.in_irtree, ireqn.out_irtree) for ireqn in ireqns]
         in_irtree = [ireqn.in_irtree for ireqn in ireqns]
         out_irtree = [ireqn.out_irtree for ireqn in ireqns]
-        return IREqn(gather_p, in_irtree, out_irtree, params=dict(irs=irs))
+        return IREqn(gather_p, None, in_irtree, out_irtree, dict(irs=irs))
 
     for level in levels:
         ireqns = [ireqn.using(**treelib.map(recurse, ireqn.params)) for ireqn in level]
