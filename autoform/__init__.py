@@ -6,7 +6,7 @@ from autoform.control import stop_gradient, switch, while_loop
 from autoform.core import acall, atrace, call, trace
 from autoform.harvest import checkpoint, collect, inject
 from autoform.lm import lm_call, struct_lm_call
-from autoform.optims import dce, fold
+from autoform.optims import dce, fold, memoize
 from autoform.scheduling import depends, gather, sched
 from autoform.string import concat, format, match
 from autoform.surgery import split, splitpoint
@@ -27,6 +27,7 @@ __all__ = [
     "inject",
     "dce",
     "fold",
+    "memoize",
     "sched",
     # primitives
     "format",

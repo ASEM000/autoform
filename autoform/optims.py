@@ -7,7 +7,7 @@ from collections import deque
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import IR, IRAtom, IREqn, IRLit, IRVar, Primitive, is_irvar
+from autoform.core import IR, IRAtom, IREqn, IRLit, IRVar, Primitive, is_irvar, is_iratom
 from autoform.utils import Tree, lru_cache, treelib
 
 # ==================================================================================================
@@ -213,3 +213,79 @@ def fold[**P, R](ir: IR[P, R], /) -> IR[P, R]:
 
     out_irtree = treelib.map(read, ir.out_irtree)
     return IR(ireqns, ir.in_irtree, out_irtree)
+
+
+# ==================================================================================================
+# MEMOIZATION
+# ==================================================================================================
+
+
+@ft.partial(lru_cache, maxsize=256)
+def memoize[**P, R](ir: IR[P, R]) -> IR[P, R]:
+    """Eliminate duplicate equations via global value numbering.
+
+    Ensures that a primitive called twice with the same arguments produces
+    the same result.Two equations are duplicates if they apply the same primitive 
+    to the same inputs with the same params.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     a = af.concat(x, "!")
+        ...     b = af.concat(x, "!")  # duplicate
+        ...     return af.concat(a, b)
+        >>> ir = af.trace(program)("test")
+        >>> len(ir.ireqns)
+        3
+        >>> mem = af.memoize(ir)
+        >>> len(mem.ireqns)
+        2
+    """
+
+    seen: dict[int, IREqn] = {}
+    env: dict[IRVar, IRVar] = {}
+
+    def make_key(ireqn: IREqn):
+        flat_in_tree, in_struct = treelib.flatten(ireqn.in_irtree, is_leaf=is_iratom)
+        in_tree_key = tuple(flat_in_tree), in_struct
+        flat_params, params_struct = treelib.flatten(ireqn.params)
+        params_key = tuple(flat_params), params_struct
+        return hash((ireqn.prim, in_tree_key, params_key, ireqn.effect))
+
+    def write(atom, value):
+        is_irvar(atom) and setitem(env, atom, value)
+    
+    def read(atom):
+        return env[atom] if is_irvar(atom) else atom
+
+    ireqns: list[IREqn] = []
+
+    treelib.map(write, ir.in_irtree, ir.in_irtree)
+
+    for ireqn in ir.ireqns:
+        # NOTE(asem): in_irtree must be canonicalized for every equation so that
+        # (a) kept equations reference valid (non-eliminated) vars, and
+        # (b) the key reflects transitive equivalences.
+        # consider the following case:
+        # def program(x):
+        #     v1 = af.format("poem about {}", x)
+        #     v2 = af.lm_call(v1)
+        #     v3 = af.format("poem about {}", x)  # duplicate of v1
+        #     v4 = af.lm_call(v3)                 # duplicate of v2 (transitively)
+        #     return af.concat(v2, v4)
+        #
+        # v3 is eliminated and env[v3] = v1
+        in_irtree = treelib.map(read, ireqn.in_irtree)
+        ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, ireqn.params)
+
+        if (key := make_key(ireqn)) in seen:
+            treelib.map(write, ireqn.out_irtree, seen[key].out_irtree)
+        else:
+            treelib.map(write, ireqn.out_irtree, ireqn.out_irtree)
+            seen[key] = ireqn
+            ireqns.append(ireqn)
+    
+    out_irtree = treelib.map(read, ir.out_irtree)
+    return IR[P, R](ireqns, ir.in_irtree, out_irtree)
+            
+
