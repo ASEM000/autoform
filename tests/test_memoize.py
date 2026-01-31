@@ -227,6 +227,61 @@ class TestMemoizeWithTransformedIR:
         assert len(mem.ireqns) <= len(batch_ir.ireqns)
 
 
+class TestNestedMemoize:
+    def test_pushforward_memoizes_inner_ir(self):
+        def program(x):
+            a = af.concat(x, "!")
+            b = af.concat(x, "!")
+            return af.concat(a, b)
+
+        ir = af.trace(program)("test")
+        pf_ir = af.pushforward(ir)
+        mem = af.memoize(pf_ir)
+
+        inner_ir = mem.ireqns[0].params["ir"]
+        assert len(inner_ir.ireqns) == 2
+
+    def test_pullback_memoizes_inner_ir(self):
+        def program(x):
+            a = af.concat(x, "!")
+            b = af.concat(x, "!")
+            return af.concat(a, b)
+
+        ir = af.trace(program)("test")
+        pb_ir = af.pullback(ir)
+        mem = af.memoize(pb_ir)
+
+        inner_ir = mem.ireqns[0].params["ir"]
+        assert len(inner_ir.ireqns) == 2
+
+    def test_batch_memoizes_inner_ir(self):
+        def program(x):
+            a = af.concat(x, "!")
+            b = af.concat(x, "!")
+            return af.concat(a, b)
+
+        ir = af.trace(program)("test")
+        batch_ir = af.batch(ir, in_axes=True)
+        mem = af.memoize(batch_ir)
+
+        inner_ir = mem.ireqns[0].params["ir"]
+        assert len(inner_ir.ireqns) == 2
+
+    def test_deeply_nested_memoize(self):
+        def program(x):
+            a = af.concat(x, "!")
+            b = af.concat(x, "!")
+            return af.concat(a, b)
+
+        ir = af.trace(program)("test")
+        double = af.pushforward(af.pushforward(ir))
+        mem = af.memoize(double)
+
+        inner1 = mem.ireqns[0].params["ir"]
+        inner2 = inner1.ireqns[0].params["ir"]
+        assert len(inner2.ireqns) == 2
+
+
 class TestMemoizeComposition:
     def test_memoize_then_dce(self):
         def program(x):

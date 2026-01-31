@@ -245,6 +245,9 @@ def memoize[**P, R](ir: IR[P, R]) -> IR[P, R]:
     seen: dict[int, IREqn] = {}
     env: dict[IRVar, IRVar] = {}
 
+    def recurse(leaf):
+        return memoize(leaf) if isinstance(leaf, IR) else leaf
+
     def make_key(ireqn: IREqn):
         flat_in_tree, in_struct = treelib.flatten(ireqn.in_irtree, is_leaf=is_iratom)
         in_tree_key = tuple(flat_in_tree), in_struct
@@ -276,7 +279,8 @@ def memoize[**P, R](ir: IR[P, R]) -> IR[P, R]:
         #
         # v3 is eliminated and env[v3] = v1
         in_irtree = treelib.map(read, ireqn.in_irtree)
-        ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, ireqn.params)
+        memoized_params = treelib.map(recurse, ireqn.params)
+        ireqn = IREqn(ireqn.prim, in_irtree, ireqn.out_irtree, ireqn.effect, memoized_params)
 
         if (key := make_key(ireqn)) in seen:
             treelib.map(write, ireqn.out_irtree, seen[key].out_irtree)
