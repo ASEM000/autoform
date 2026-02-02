@@ -200,8 +200,7 @@ def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tr
     responses = batch_completion(messages=batched_messages, model=model)
     result = [resp.choices[0].message.content for resp in responses]
     out_tree = spec.unflatten(result)
-    out_batched = treelib.map(lambda _: True, out_tree)
-    return out_tree, out_batched
+    return out_tree, True
 
 
 async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
@@ -219,8 +218,7 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
     out_tree = spec.unflatten(results)
-    out_batched = treelib.map(lambda _: True, out_tree)
-    return out_tree, out_batched
+    return out_tree, True
 
 
 impl_rules.set(lm_call_p, impl_lm_call)
