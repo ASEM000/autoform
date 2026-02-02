@@ -392,7 +392,11 @@ class EffectInterpreter(Interpreter, ABC):
             eff_type, _ = handler
             assert issubclass(eff_type, Effect), f"Invalid effect type: {eff_type}"
         self.parent = active_interpreter.get()
-        self.handlers = dict(handlers)
+        self.handlers: dict[type[Effect], Handler] = dict(handlers)
+        # NOTE(asem): there are 2 cases where default handler is used:
+        # 1. no active effect (effect is None) => type(None) is not in handlers map because
+        # we make sure effect type is always a subclass of Effect.
+        # 2. active effect exists but no handler registered for its type => fallback to default.
         self.default = default
 
     def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
