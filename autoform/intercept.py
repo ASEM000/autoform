@@ -7,7 +7,9 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
-from autoform.core import Effect, EffectInterpreter, using_effect, using_interpreter
+from optree import PyTreeSpec
+
+from autoform.core import Effect, EffectInterpreter, Primitive, using_effect, using_interpreter
 from autoform.effects import effect_p
 from autoform.utils import Tree, treelib
 
@@ -171,14 +173,11 @@ def memoize() -> Generator[None, None, None]:
         'hello!hello!'
     """
 
-    cache: dict[Hashable, Tree] = {}
+    cache: dict[tuple[Primitive, Effect | None, tuple[Tree, ...], PyTreeSpec], Tree] = {}
 
-    def make_key(prim, effect: CheckpointEffect, in_tree: Any, /, **params) -> Hashable:
-        flat_in_tree, in_struct = treelib.flatten(in_tree)
-        in_tree_key = tuple(flat_in_tree), in_struct
-        flat_params, params_struct = treelib.flatten(params)
-        params_key = tuple(flat_params), params_struct
-        return (prim, in_tree_key, params_key, effect)
+    def make_key(prim, effect: CheckpointEffect, in_tree: Any, /, **params):
+        flat, struct = treelib.flatten((in_tree, params))
+        return (prim, effect, tuple(flat), struct)
 
     def handler(prim, effect, in_tree, /, **params):
         key = make_key(prim, effect, in_tree, **params)
