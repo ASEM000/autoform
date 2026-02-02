@@ -156,10 +156,6 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
 def memoize() -> Generator[None, None, None]:
     """Cache primitive results within the context.
 
-    Unlike `dedup`, which eliminates duplicates at trace time by rewriting
-    the IR, `memoize` caches at runtime and works across repeated calls
-    to the same IR.
-
     Example:
         >>> import autoform as af
         >>> def program(x):
@@ -175,7 +171,7 @@ def memoize() -> Generator[None, None, None]:
 
     cache: dict[tuple[Primitive, Effect | None, tuple[Tree, ...], PyTreeSpec], Tree] = {}
 
-    def make_key(prim, effect: CheckpointEffect, in_tree: Any, /, **params):
+    def make_key(prim, effect: Effect | None, in_tree: Any, /, **params):
         flat, struct = treelib.flatten((in_tree, params))
         return (prim, effect, tuple(flat), struct)
 

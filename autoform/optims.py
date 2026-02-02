@@ -230,9 +230,6 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
     the same result. Two equations are duplicates if they apply the same
     primitive to the same inputs with the same params.
 
-    Unlike `memoize`, which caches at runtime, `dedup` rewrites the IR
-    at trace time so duplicate equations are removed before execution.
-
     Warning:
         This will deduplicate stochastic primitives like ``lm_call``.
         Two ``lm_call`` equations with identical inputs will be merged
