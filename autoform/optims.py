@@ -262,7 +262,7 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
         in_tree_key = tuple(flat_in_tree), in_struct
         flat_params, params_struct = treelib.flatten(ireqn.params)
         params_key = tuple(flat_params), params_struct
-        return hash((ireqn.prim, in_tree_key, params_key, ireqn.effect))
+        return (ireqn.prim, in_tree_key, params_key, ireqn.effect)
 
     def write(atom, value):
         is_irvar(atom) and setitem(env, atom, value)
