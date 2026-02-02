@@ -76,8 +76,8 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
     for m in messages:
         assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
-        assert "role" in m, f"message must have a 'role' key, got {m.keys()=}"
-        assert "content" in m, f"message must have a 'content' key, got {m.keys()=}"
+        assert "role" in m, f"message must have a 'role' key, got {m=}"
+        assert "content" in m, f"message must have a 'content' key, got {m=}"
 
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
@@ -200,8 +200,7 @@ def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tr
     responses = batch_completion(messages=batched_messages, model=model)
     result = [resp.choices[0].message.content for resp in responses]
     out_tree = spec.unflatten(result)
-    out_batched = treelib.map(lambda _: True, out_tree)
-    return out_tree, out_batched
+    return out_tree, True
 
 
 async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
@@ -219,8 +218,7 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
 
     results = await asyncio.gather(*[run_completion(b) for b in range(batch_size)])
     out_tree = spec.unflatten(results)
-    out_batched = treelib.map(lambda _: True, out_tree)
-    return out_tree, out_batched
+    return out_tree, True
 
 
 impl_rules.set(lm_call_p, impl_lm_call)
@@ -270,6 +268,11 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         4
     """
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
+    for m in messages:
+        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
+        assert "role" in m, f"message must have a 'role' key, got {m=}"
+        assert "content" in m, f"message must have a 'content' key, got {m=}"
+
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
     return struct_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
