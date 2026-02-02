@@ -316,3 +316,259 @@ class TestMultiShotContinuation:
         assert captured["prim_name"] == "format"
         assert "template" in captured["params"]
         assert captured["params"]["template"] == "hello {}"
+
+
+class TestDefaultHandler:
+    def test_passthrough(self):
+        def handler(prim, effect, in_tree, /, **params):
+            return (yield in_tree)
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("hello")
+
+        assert result == "hello!"
+
+    def test_skip(self):
+        def handler(prim, effect, in_tree, /, **params):
+            return "SKIPPED"
+            yield
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("hello")
+
+        assert result == "SKIPPED"
+
+    def test_post_process(self):
+        def handler(prim, effect, in_tree, /, **params):
+            result = yield in_tree
+            return result + " (intercepted)"
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("hello")
+
+        assert result == "hello! (intercepted)"
+
+    def test_pre_process(self):
+        def handler(prim, effect, in_tree, /, **params):
+            left, right = in_tree
+            return (yield (left.upper(), right))
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("hello")
+
+        assert result == "HELLO!"
+
+    def test_effect_is_none_for_plain_primitives(self):
+        captured_effects = []
+
+        def handler(prim, effect, in_tree, /, **params):
+            captured_effects.append(effect)
+            return (yield in_tree)
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            af.call(ir)("hello")
+
+        assert captured_effects == [None]
+
+    def test_receives_prim_and_params(self):
+        captured = {}
+
+        def handler(prim, effect, in_tree, /, **params):
+            captured["prim_name"] = prim.name
+            captured["params"] = params
+            return (yield in_tree)
+
+        def func(x):
+            return af.format("hello {}", x)
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("world")
+
+        assert result == "hello world"
+        assert captured["prim_name"] == "format"
+        assert captured["params"]["template"] == "hello {}"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_passthrough_async(self):
+        def handler(prim, effect, in_tree, /, **params):
+            return (yield in_tree)
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = await af.acall(ir)("hello")
+
+        assert result == "hello!"
+
+
+class TestDefaultHandlerInterceptsAll:
+    def test_intercepts_every_primitive(self):
+        seen_prims = []
+
+        def handler(prim, effect, in_tree, /, **params):
+            seen_prims.append(prim.name)
+            return (yield in_tree)
+
+        def func(x):
+            a = af.format("hello {}", x)
+            return af.concat(a, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("world")
+
+        assert result == "hello world!"
+        assert seen_prims == ["format", "concat"]
+
+    def test_intercepts_effect_primitives_too(self):
+        seen_prims = []
+
+        def handler(prim, effect, in_tree, /, **params):
+            seen_prims.append(prim.name)
+            return (yield in_tree)
+
+        def func(x):
+            a = af.concat(x, "!")
+            return checkpoint(a, key="val", collection="debug")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=handler)):
+            result = af.call(ir)("hello")
+
+        assert result == "hello!"
+        assert "concat" in seen_prims
+        assert "effect" in seen_prims
+
+
+class TestDefaultWithSpecificHandlers:
+    def test_specific_handler_takes_priority(self):
+        class MyEffect(Effect):
+            pass
+
+        default_calls = []
+        specific_calls = []
+
+        def default(prim, effect, in_tree, /, **params):
+            default_calls.append(prim.name)
+            return (yield in_tree)
+
+        def specific(prim, effect, in_tree, /):
+            specific_calls.append(prim.name)
+            return (yield in_tree)
+
+        def func(x):
+            a = af.concat(x, "!")
+            with using_effect(MyEffect()):
+                b = af.concat(a, "?")
+            return b
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter((MyEffect, specific), default=default)):
+            result = af.call(ir)("hello")
+
+        assert result == "hello!?"
+        assert "concat" in default_calls
+        assert "concat" in specific_calls
+        assert len(default_calls) == 1
+        assert len(specific_calls) == 1
+
+    def test_default_handles_unmatched_effects(self):
+        class UnhandledEffect(Effect):
+            pass
+
+        default_calls = []
+
+        def default(prim, effect, in_tree, /, **params):
+            default_calls.append((prim.name, type(effect).__name__))
+            return (yield in_tree)
+
+        def func(x):
+            with using_effect(UnhandledEffect()):
+                return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=default)):
+            result = af.call(ir)("hello")
+
+        assert result == "hello!"
+        assert default_calls == [("concat", "UnhandledEffect")]
+
+    def test_composes_with_collect(self):
+        seen_prims = []
+
+        def default(prim, effect, in_tree, /, **params):
+            seen_prims.append(prim.name)
+            return (yield in_tree)
+
+        def func(x):
+            a = af.concat(x, "!")
+            return checkpoint(a, key="val", collection="debug")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=default)):
+            with af.collect(collection="debug") as collected:
+                result = af.call(ir)("hello")
+
+        assert result == "hello!"
+        assert collected == {"val": ["hello!"]}
+        assert "concat" in seen_prims
+
+
+class TestDefaultHandlerBackwardCompat:
+    def test_no_default_falls_through(self):
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=None)):
+            result = af.call(ir)("hello")
+
+        assert result == "hello!"
+
+    def test_existing_code_without_default(self):
+        def func(x):
+            return checkpoint(x, key="val", collection="debug")
+
+        ir = af.trace(func)("test")
+
+        with af.collect(collection="debug") as collected:
+            result = af.call(ir)("hello")
+
+        assert result == "hello"
+        assert collected == {"val": ["hello"]}
