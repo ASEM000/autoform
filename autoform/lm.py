@@ -76,8 +76,8 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
     for m in messages:
         assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
-        assert "role" in m, f"message must have a 'role' key, got {m.keys()=}"
-        assert "content" in m, f"message must have a 'content' key, got {m.keys()=}"
+        assert "role" in m, f"message must have a 'role' key, got {m=}"
+        assert "content" in m, f"message must have a 'content' key, got {m=}"
 
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
@@ -268,6 +268,11 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         4
     """
     assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
+    for m in messages:
+        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
+        assert "role" in m, f"message must have a 'role' key, got {m=}"
+        assert "content" in m, f"message must have a 'content' key, got {m=}"
+
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
     return struct_lm_call_p.bind(contents, roles=roles, model=model, struct=struct)
