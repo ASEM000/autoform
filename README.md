@@ -1,117 +1,102 @@
-
 <div align="center">
 
 # `autoform`
 
-**Composable function transformations for LLM programs**
+**Trace once. Transform freely.**
+
+Composable function transformations for LM programs.
+
+*Think [JAX](https://github.com/jax-ml/jax), but for LM programs.*
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
 [![Documentation](https://readthedocs.org/projects/autoform/badge/?version=latest)](https://autoform.readthedocs.io)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Downloads](https://pepy.tech/badge/autoform)](https://pepy.tech/project/autoform)
-[![DOI](https://zenodo.org/badge/1115015093.svg)](https://doi.org/10.5281/zenodo.18071950)
+
+[Quickstart](#quickstart) · [Transforms](#transforms) · [Concurrency](#concurrency) · [Debugging](#debugging) · [Docs](https://autoform.readthedocs.io)
 
 </div>
 
-
 ```bash
-pip install autoform
+pip install git+https://github.com/ASEM000/autoform.git
 ```
 
-## Example
-
-Batched semantic gradients: feedback on N outputs to feedback on N inputs.
-
+## Quickstart
 ```python
 import autoform as af
 
-def answer(query):
-    return af.lm_call(f"Answer: {query}", model="gpt-4o")
+def explain(topic: str) -> str:
+    prompt = af.format("Explain {} in one paragraph.", topic)
+    msg = dict(role="user", content=prompt)
+    return af.lm_call([msg], model="gpt-4o")
 
-ir = af.trace(answer)("...") # trace
-
-# 3 queries + 3 critiques -> 3 answers + 3 improvement hints
-queries = ["What is AI?", "Explain DNS", "Define recursion"]
-critiques = ["too technical", "too long", "perfect"]
-
-batched_pb = af.batch(af.pullback(ir), in_axes=(True, True)) # compose
-
-answers, hints = af.call(batched_pb)((queries, critiques))
+ir = af.trace(explain)("...")  # capture structure, no execution
 ```
 
-Trace once. Batch it. Differentiate it. **Compose them.**
-
-## Why
-
-LLM programs are hard to optimize:
-- **debugging**: which agent caused the bad output?
-- **optimization**: how do you improve prompts systematically?
-- **batching**: how do you run N inputs without rewriting code?
-
-autoform solves this with **function transformations**. Trace once, transform freely.
-
-
-## Full Example
-
-Multi-agent pipeline with checkpoints, batching, gradients, and debugging:
-
+Now transform it:
 ```python
-import autoform as af
+# execute
+output = ir.call("quantum entanglement")
 
-class Verdict(af.Struct):
-    decision: str
-    reasoning: str
+# batch: n inputs
+outputs = af.batch(ir).call(["DNA", "gravity", "recursion"])
 
-def judge_debate(topic: str) -> Verdict:
-    """Three agents debate, one judges."""
+# differentiate: critique output and get input prompt improvement hint  
+output, hint = af.pullback(ir).call(("quantum entanglement", "too technical"))
 
-    # agent 1: argue for
-    pro = af.format("Argue FOR: {}", topic)
-    pro = af.checkpoint(pro, key="pro", collection="debug")
-    msgs = [dict(role="user", content=pro)]
-    pro = af.lm_call(msgs, model="gpt-4o")
+# compose: batched differentiation
+topics = ["DNA", "gravity", "recursion"]
+critiques = ["too technical", "too brief", "too abstract"]
+outputs, hints = af.batch(af.pullback(ir)).call((topics, critiques))
+```
 
-    # agent 2: argue against  
-    con = af.format("Argue AGAINST: {}", topic)
-    con = af.checkpoint(con, key="con", collection="debug")
-    msgs = [dict(role="user", content=con)]
-    con = af.lm_call(msgs, model="gpt-4o")
+The last line is the point: `batch(pullback(ir))`, transformations compose.
 
-    # agent 3: judge
-    prompt = af.format("PRO: {}\nCON: {}\nWho wins?", pro, con)
-    prompt = af.checkpoint(prompt, key="judge", collection="debug")
-    msgs = [dict(role="user", content=prompt)]
-    return af.struct_lm_call(msgs, model="gpt-4o", struct=Verdict)
+## Transforms
 
-ir = af.trace(judge_debate)("...")  # trace (no execution)
+| Transform | What it does |
+|-----------|--------------|
+| `trace` | Capture program as IR |
+| `call` / `acall` | Execute (sync / async) |
+| `batch` | Vectorize over inputs |
+| `pullback` | Backprop feedback |
+| `collect` / `inject` | Checkpoint and replay |
+| `sched` | Auto-concurrent execution |
+| `dce` / `fold` | Optimize IR |
 
-# run once
-verdict = af.call(ir)("pineapple on pizza")
+## Concurrency
 
-# batch: parallel topics
-batched = af.batch(ir, in_axes=True)
-verdicts = af.call(batched)(["pineapple on pizza", "cats vs dogs", "tabs vs spaces"])
+`sched` finds independent LM calls. `acall` runs them concurrently.
+```python
+scheduled = af.sched(ir)
+result = await scheduled.acall("input") # acall for async
+```
 
-# gradients: feedback -> input improvement
-pb_ir = af.pullback(ir)
-verdict, grad = af.call(pb_ir)(("pineapple on pizza", Verdict(decision="biased", reasoning="pro was weak")))
+## Debugging
 
-# collect: capture checkpoint values
+Checkpoint intermediate values. Replay with modifications.
+```python
+def pipeline(x: str) -> str:
+    msg1 = dict(role="user", content=x)
+    step1 = af.lm_call([msg1], model="gpt-4o")
+    step1 = af.checkpoint(step1, key="step1", collection="debug")
+    
+    msg2 = dict(role="user", content=step1)
+    step2 = af.lm_call([msg2], model="gpt-4o")
+    return step2
+
+ir = af.trace(pipeline)("...")
+
+# capture
 with af.collect(collection="debug") as captured:
-    verdict = af.call(ir)("pineapple on pizza")
+    result = ir.call("input")
 
-# inject: override checkpoint values
-with af.inject(collection="debug", values=captured):
-    verdict = af.call(ir)("pineapple on pizza")
-
-# explain how batches are placed
-in_axes = (True, Verdict.model_construct(decision=True, reasoning=True))
-
-# compose freely
-batched_grads = af.batch(af.pullback(ir), in_axes=in_axes)
+# replay with different step1
+with af.inject(collection="debug", values={"step1": ["modified"]}):
+    result = ir.call("input")
 ```
 
+---
 
-> ⚠️ **early development**: API may change.
+> ⚠️ **Early development**: API may change.
