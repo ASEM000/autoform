@@ -2,9 +2,7 @@ import pytest
 
 import autoform as af
 from autoform.core import Effect, EffectInterpreter, using_effect, using_interpreter
-from autoform.harvest import (
-    checkpoint,
-)
+from autoform.intercept import checkpoint
 
 
 class TestEffectBasics:

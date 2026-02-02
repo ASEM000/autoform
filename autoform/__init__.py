@@ -4,7 +4,7 @@ from autoform.ad import pullback, pushforward
 from autoform.batch import batch
 from autoform.control import stop_gradient, switch, while_loop
 from autoform.core import acall, atrace, call, trace
-from autoform.harvest import checkpoint, collect, inject
+from autoform.intercept import checkpoint, collect, inject, memoize
 from autoform.lm import lm_call, struct_lm_call
 from autoform.optims import dce, dedup, fold
 from autoform.scheduling import depends, gather, sched
@@ -29,6 +29,7 @@ __all__ = [
     "fold",
     "dedup",
     "sched",
+    "memoize",
     # primitives
     "format",
     "concat",

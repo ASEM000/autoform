@@ -1,6 +1,8 @@
 import pytest
 
 import autoform as af
+from autoform.core import EffectInterpreter, using_interpreter
+from autoform.intercept import checkpoint
 
 
 class TestSow:
@@ -471,8 +473,6 @@ class TestSplitpointPreservedThroughTransforms:
 
 
 class TestSplitOnTransformedIR:
-    """Split on transformed IRs should recursively split nested IRs."""
-
     def test_split_on_pushforward_ir(self):
         def program(x):
             y = af.splitpoint(af.concat(x, "!"), key="mid")
@@ -589,3 +589,224 @@ class TestSplitOnTransformedIR:
 
         assert lhs.ireqns[0].prim.name == "pushforward_call"
         assert rhs.ireqns[0].prim.name == "pushforward_call"
+
+
+class TestMemoizeBasic:
+    def test_memoize_caches_duplicate_calls(self):
+        call_count = 0
+
+        def counting_handler(prim, effect, in_tree, /, **params):
+            nonlocal call_count
+            call_count += 1
+            return (yield in_tree)
+
+        def func(x):
+            a = af.concat(x, "!")
+            b = af.concat(x, "!")
+            return af.concat(a, b)
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=counting_handler)):
+            with af.memoize():
+                result = af.call(ir)("hello")
+
+        assert result == "hello!hello!"
+        assert call_count == 2
+
+    def test_memoize_returns_correct_result(self):
+        def func(x):
+            a = af.concat(x, "!")
+            return a
+
+        ir = af.trace(func)("test")
+
+        with af.memoize():
+            result = af.call(ir)("hello")
+
+        assert result == "hello!"
+
+    def test_memoize_different_inputs_not_cached(self):
+        call_count = 0
+
+        def counting_handler(prim, effect, in_tree, /, **params):
+            nonlocal call_count
+            call_count += 1
+            return (yield in_tree)
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=counting_handler)):
+            with af.memoize():
+                r1 = af.call(ir)("hello")
+                r2 = af.call(ir)("world")
+
+        assert r1 == "hello!"
+        assert r2 == "world!"
+        assert call_count == 2
+
+
+class TestMemoizeWithEffects:
+    def test_memoize_with_checkpoint(self):
+        def func(x):
+            a = checkpoint(af.concat(x, "!"), key="val", collection="debug")
+            return a
+
+        ir = af.trace(func)("test")
+
+        with af.memoize():
+            with af.collect(collection="debug") as collected:
+                result = af.call(ir)("hello")
+
+        assert result == "hello!"
+        assert collected == {"val": ["hello!"]}
+
+    def test_memoize_does_not_merge_different_effects(self):
+        def func(x):
+            a = checkpoint(x, key="first", collection="debug")
+            b = checkpoint(x, key="second", collection="debug")
+            return af.concat(a, b)
+
+        ir = af.trace(func)("test")
+
+        with af.memoize():
+            with af.collect(collection="debug") as collected:
+                result = af.call(ir)("hi")
+
+        assert result == "hihi"
+        assert "first" in collected
+        assert "second" in collected
+
+
+class TestMemoizeMultipleCalls:
+    def test_memoize_across_multiple_ir_calls(self):
+        call_count = 0
+
+        def counting_handler(prim, effect, in_tree, /, **params):
+            nonlocal call_count
+            call_count += 1
+            return (yield in_tree)
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=counting_handler)):
+            with af.memoize():
+                r1 = af.call(ir)("hello")
+                r2 = af.call(ir)("hello")
+
+        assert r1 == "hello!"
+        assert r2 == "hello!"
+        assert call_count == 1
+
+    def test_memoize_scope_is_context(self):
+        call_count = 0
+
+        def counting_handler(prim, effect, in_tree, /, **params):
+            nonlocal call_count
+            call_count += 1
+            return (yield in_tree)
+
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+
+        with using_interpreter(EffectInterpreter(default=counting_handler)):
+            with af.memoize():
+                af.call(ir)("hello")
+
+            with af.memoize():
+                af.call(ir)("hello")
+
+        assert call_count == 2
+
+
+class TestMemoizeTransformedIRs:
+    def count_misses(self, ir, *inputs):
+        call_count = 0
+
+        def counting_handler(prim, effect, in_tree, /, **params):
+            nonlocal call_count
+            call_count += 1
+            return (yield in_tree)
+
+        results = []
+        with using_interpreter(EffectInterpreter(default=counting_handler)):
+            with af.memoize():
+                for inp in inputs:
+                    results.append(af.call(ir)(inp))
+        return results, call_count
+
+    def test_memoize_batched_ir(self):
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+        batched = af.batch(ir)
+
+        (r1, r2), misses = self.count_misses(batched, ["a", "b"], ["a", "b"])
+
+        assert r1 == ["a!", "b!"]
+        assert r2 == ["a!", "b!"]
+
+        assert misses == 3
+
+    def test_memoize_pushforward_ir(self):
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+        pf_ir = af.pushforward(ir)
+
+        (r1, r2), misses = self.count_misses(pf_ir, ("primal", "tangent"), ("primal", "tangent"))
+
+        assert r1 == r2
+        assert misses == 3
+
+    def test_memoize_pullback_ir(self):
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+        pb_ir = af.pullback(ir)
+
+        (r1, r2), misses = self.count_misses(
+            pb_ir, ("primal", "cotangent"), ("primal", "cotangent")
+        )
+
+        assert r1 == r2
+        assert misses == 2
+
+    def test_memoize_batched_different_inputs(self):
+        def func(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(func)("test")
+        batched = af.batch(ir)
+
+        (r1, r2), misses = self.count_misses(batched, ["a", "b"], ["c", "d"])
+
+        assert r1 == ["a!", "b!"]
+        assert r2 == ["c!", "d!"]
+        assert misses == 6
+
+    def test_memoize_deduped_ir(self):
+        def func(x):
+            a = af.concat(x, "!")
+            b = af.concat(x, "!")
+            return af.concat(a, b)
+
+        ir = af.trace(func)("test")
+        deduped = af.dedup(ir)
+
+        (r1, r2), misses = self.count_misses(deduped, "hello", "hello")
+
+        assert r1 == "hello!hello!"
+        assert r2 == "hello!hello!"
+        assert misses == 2

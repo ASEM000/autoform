@@ -1,6 +1,6 @@
 import autoform as af
 from autoform.control import ControlTag
-from autoform.harvest import CheckpointEffect
+from autoform.intercept import CheckpointEffect
 from autoform.string import StringTag
 
 

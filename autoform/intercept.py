@@ -1,4 +1,4 @@
-"""Harvest"""
+"""Intercept"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 from autoform.core import Effect, EffectInterpreter, using_effect, using_interpreter
 from autoform.effects import effect_p
-from autoform.utils import Tree
+from autoform.utils import Tree, treelib
 
 # ==================================================================================================
 # CHECKPOINT EFFECT
@@ -142,4 +142,51 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
         return out_tree
 
     with using_interpreter(EffectInterpreter((CheckpointEffect, injector))):
+        yield
+
+
+# ==================================================================================================
+# MEMOIZE
+# ==================================================================================================
+
+
+@contextmanager
+def memoize() -> Generator[None, None, None]:
+    """Cache primitive results within the context.
+
+    Unlike `dedup`, which eliminates duplicates at trace time by rewriting
+    the IR, `memoize` caches at runtime and works across repeated calls
+    to the same IR.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     a = af.concat(x, "!")
+        ...     b = af.concat(x, "!")  # same call, will be cached
+        ...     return af.concat(a, b)
+        >>> ir = af.trace(program)("test")
+        >>> with af.memoize():
+        ...     result = af.call(ir)("hello")
+        >>> result
+        'hello!hello!'
+    """
+
+    cache: dict[Hashable, Tree] = {}
+
+    def make_key(prim, effect: CheckpointEffect, in_tree: Any, /, **params) -> Hashable:
+        flat_in_tree, in_struct = treelib.flatten(in_tree)
+        in_tree_key = tuple(flat_in_tree), in_struct
+        flat_params, params_struct = treelib.flatten(params)
+        params_key = tuple(flat_params), params_struct
+        return (prim, in_tree_key, params_key, effect)
+
+    def handler(prim, effect, in_tree, /, **params):
+        key = make_key(prim, effect, in_tree, **params)
+        if key in cache:
+            return cache[key]
+        out_tree = yield in_tree
+        cache[key] = out_tree
+        return out_tree
+
+    with using_interpreter(EffectInterpreter(default=handler)):
         yield
