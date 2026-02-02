@@ -385,20 +385,24 @@ class EffectInterpreter(Interpreter, ABC):
     # >>> def handler(prim, effect, in_tree, /, **params):
     # ...     result = yield in_tree
     # ...     return transform(result)
-    def __init__(self, *handlers: tuple[type[Effect], Handler]):
+    def __init__(self, *handlers: tuple[type[Effect], Handler], default: Handler | None = None):
         for handler in handlers:
             msg = "handlers must be (EffectType, handler) pairs"
             assert isinstance(handler, Sequence) and len(handler) == 2, msg
             eff_type, _ = handler
             assert issubclass(eff_type, Effect), f"Invalid effect type: {eff_type}"
         self.parent = active_interpreter.get()
-        self.handlers = dict(handlers)
+        self.handlers: dict[type[Effect], Handler] = dict(handlers)
+        # NOTE(asem): there are 2 cases where default handler is used:
+        # 1. no active effect (effect is None) => type(None) is not in handlers map because
+        # we make sure effect type is always a subclass of Effect.
+        # 2. active effect exists but no handler registered for its type => fallback to default.
+        self.default = default
 
     def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
         effect = active_effect.get()
-        handler = self.handlers.get(type(effect)) if effect else None
 
-        if handler is None:
+        if (handler := self.handlers.get(type(effect), self.default)) is None:
             return self.parent.interpret(prim, in_tree, **params)
 
         gen = handler(prim, effect, in_tree, **params)
@@ -423,9 +427,8 @@ class EffectInterpreter(Interpreter, ABC):
 
     async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
         effect = active_effect.get()
-        handler = self.handlers.get(type(effect)) if effect else None
 
-        if handler is None:
+        if (handler := self.handlers.get(type(effect), self.default)) is None:
             return await self.parent.ainterpret(prim, in_tree, **params)
 
         gen = handler(prim, effect, in_tree, **params)
