@@ -25,7 +25,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.optims import dce, dce_rules, default_dce
+from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import (
     Tree,
     asyncify,
