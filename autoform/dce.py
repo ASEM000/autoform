@@ -37,7 +37,7 @@ def dce[**P, R](
     Args:
         ir: The IR to optimize.
         out_used: A pytree of bool matching the ir output pytree that denotes which output is used.
-        keep_effects: Whether to keep equations with side effects even if their outputs are not used.
+        keep_effects: keep equations with effects (e.g. checkpoint) even if their outputs are not used.
 
     Example:
         >>> import autoform as af
