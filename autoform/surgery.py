@@ -57,11 +57,6 @@ def splitpoint(in_tree: Tree, /, *, key: Hashable) -> Tree:
     return splitpoint_p.bind(in_tree, key=key)
 
 
-# ==================================================================================================
-# SPLITPOINT RULES
-# ==================================================================================================
-
-
 def impl_splitpoint(x, /, **_):
     return x
 
