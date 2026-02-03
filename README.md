@@ -11,10 +11,8 @@ Composable function transformations for LM programs.
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
-[![Documentation](https://readthedocs.org/projects/autoform/badge/?version=latest)](https://autoform.readthedocs.io)
-[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 
-[Quickstart](#quickstart) · [Transforms](#transforms) · [Concurrency](#concurrency) · [Debugging](#debugging) · [Docs](https://autoform.readthedocs.io)
+[Quickstart](#quickstart) - [Transforms](#transforms) - [Concurrency](#concurrency) - [Debugging](#debugging) - [Docs](https://autoform.readthedocs.io)
 
 </div>
 
@@ -42,8 +40,11 @@ output = ir.call("quantum entanglement")
 # batch: n inputs
 outputs = af.batch(ir).call(["DNA", "gravity", "recursion"])
 
-# differentiate: critique output and get input prompt improvement hint  
-output, hint = af.pullback(ir).call(("quantum entanglement", "too technical"))
+# pushforward: propagate input perturbations forward
+output, tangent = af.pushforward(ir).call(("quantum entanglement", "add more examples"))
+
+# pullback: propagate output feedback backward
+output, grad = af.pullback(ir).call(("quantum entanglement", "too technical"))
 
 # compose: batched differentiation
 topics = ["DNA", "gravity", "recursion"]
@@ -57,13 +58,10 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 
 | Transform | What it does |
 |-----------|--------------|
-| `trace` | Capture program as IR |
-| `call` / `acall` | Execute (sync / async) |
 | `batch` | Vectorize over inputs |
-| `pullback` | Backprop feedback |
-| `collect` / `inject` | Checkpoint and replay |
+| `pushforward` | Forward-mode AD |
+| `pullback` | Reverse-mode AD |
 | `sched` | Auto-concurrent execution |
-| `dce` | Optimize IR |
 
 ## Concurrency
 
@@ -75,7 +73,7 @@ result = await scheduled.acall("input") # acall for async
 
 ## Debugging
 
-Checkpoint intermediate values. Replay with modifications.
+Checkpoint intermediate values. Substitute on re-execution.
 ```python
 def pipeline(x: str) -> str:
     msg1 = dict(role="user", content=x)
@@ -92,7 +90,7 @@ ir = af.trace(pipeline)("...")
 with af.collect(collection="debug") as captured:
     result = ir.call("input")
 
-# replay with different step1
+# substitute step1 value
 with af.inject(collection="debug", values=dict(step1=["modified"])):
     result = ir.call("input")
 ```

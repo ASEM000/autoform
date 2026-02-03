@@ -1,13 +1,44 @@
 /* Custom styles for autoform documentation */
 
-/* Wrap long output in code cells */
+/* Nav bar color - GitHub dark */
+:root {
+    --mainNavColor: #0051ff;
+}
+
+/* Wider content area */
+div.document div.documentwrapper {
+    max-width: 60rem;
+}
+
+div.button_nav_wrapper div.button_nav {
+    max-width: 60rem;
+}
+
+/* Wrap long lines in code blocks */
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Wrap long output in notebook cells */
 .nboutput .output_area pre {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
-/* Also wrap input cells if needed */
 .nbinput .input_area pre {
     white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Wrap long API signatures */
+dl.py dt {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.sig {
+    white-space: normal;
     word-wrap: break-word;
 }

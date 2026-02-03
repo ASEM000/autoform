@@ -18,8 +18,7 @@ dev = [
 ]
 docs = [
     "sphinx>=7.0",
-    "sphinx-book-theme>=1.1.4",
-    "sphinx-autodoc-typehints>=2.0",
+    "piccolo-theme>=0.24.0",
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
     "myst-parser>=2.0,<4.0",
@@ -31,15 +30,18 @@ notebook = [
     "jupyterlab>=4.5.1",
 ]
 
+[tool.setuptools.packages.find]
+include = ["autoform*"]
+
 [tool.ruff]
 preview = true
 line-length = 100
 indent-width = 4
 target-version = "py312"
+exclude = [".venv", ".git", ".tox", "build", "dist", "__pycache__", "__pypackages__", "docs/_build"]
 
 [tool.ruff.lint]
 select = ["I", "F401"]  # isort, unused imports
-exclude = [".venv", ".git", ".tox", "build", "dist", "__pycache__", "__pypackages__"]
 
 ignore = [
     "E731", # Do not assign a lambda expression, use a def.
