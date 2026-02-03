@@ -63,7 +63,7 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 | `pullback` | Backprop feedback |
 | `collect` / `inject` | Checkpoint and replay |
 | `sched` | Auto-concurrent execution |
-| `dce` / `fold` | Optimize IR |
+| `dce` | Optimize IR |
 
 ## Concurrency
 
@@ -93,7 +93,7 @@ with af.collect(collection="debug") as captured:
     result = ir.call("input")
 
 # replay with different step1
-with af.inject(collection="debug", values={"step1": ["modified"]}):
+with af.inject(collection="debug", values=dict(step1=["modified"])):
     result = ir.call("input")
 ```
 

@@ -78,13 +78,13 @@ class TestStructLmCall:
         def ir(prompt: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 struct=Answer,
             )
 
         built_ir = af.trace(ir)("test")
         params = built_ir.ireqns[0].params
-        assert params["model"] == "gpt-4o-mini"
+        assert params["model"] == "gpt-4o"
         assert params["struct"] is Answer
         assert params["roles"] == ["user"]
 

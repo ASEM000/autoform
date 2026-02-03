@@ -28,7 +28,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.optims import dce, dce_rules, default_dce
+from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import Tree, asyncify, batch_spec, lru_cache, treelib
 
 
@@ -378,8 +378,8 @@ def sched[**P, R](ir: IR[P, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> def parallel_calls(x):
         ...     msg1 = [dict(role="user", content=af.format("Q1: {}", x))]
         ...     msg2 = [dict(role="user", content=af.format("Q2: {}", x))]
-        ...     a = af.lm_call(msg1, model="gpt-4o-mini")
-        ...     b = af.lm_call(msg2, model="gpt-4o-mini")
+        ...     a = af.lm_call(msg1, model="gpt-4o")
+        ...     b = af.lm_call(msg2, model="gpt-4o")
         ...     return af.concat(a, b)
         >>>
         >>> ir = af.trace(parallel_calls)("input")

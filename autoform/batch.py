@@ -31,7 +31,7 @@ from autoform.core import (
     push_rules,
     using_interpreter,
 )
-from autoform.optims import dce, dce_rules, default_dce
+from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, treelib
 
 # ==================================================================================================

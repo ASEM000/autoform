@@ -1,5 +1,3 @@
-import functools as ft
-
 import pytest
 
 import autoform as af
@@ -55,30 +53,6 @@ class TestDCE:
 
         with pytest.raises(AssertionError):
             af.dce(bad_ir, out_used=True)
-
-    def test_removes_constant_folded_equation(self):
-        const_p = af.core.Primitive("test_const_fold")
-
-        @ft.partial(af.core.impl_rules.set, const_p)
-        def impl(x):
-            return "constant"
-
-        @ft.partial(af.core.eval_rules.set, const_p)
-        def eval_const(x):
-            return "constant"
-
-        af.optims.dce_rules[const_p] = af.optims.default_dce
-
-        def program(x):
-            y = const_p.bind(x)
-            z = af.concat(y, "!")
-            return z
-
-        ir = af.trace(program)("x")
-        folded = af.fold(ir)
-        dced = af.dce(folded)
-        assert len(ir.ireqns) == 2
-        assert len(dced.ireqns) == 0
 
     def test_keeps_all_if_all_used(self):
         def program(x):

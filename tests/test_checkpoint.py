@@ -1,8 +1,8 @@
 import pytest
 
 import autoform as af
+from autoform.checkpoint import checkpoint
 from autoform.core import EffectInterpreter, using_interpreter
-from autoform.intercept import checkpoint
 
 
 class TestSow:
@@ -795,18 +795,3 @@ class TestMemoizeTransformedIRs:
         assert r1 == ["a!", "b!"]
         assert r2 == ["c!", "d!"]
         assert misses == 6
-
-    def test_memoize_deduped_ir(self):
-        def func(x):
-            a = af.concat(x, "!")
-            b = af.concat(x, "!")
-            return af.concat(a, b)
-
-        ir = af.trace(func)("test")
-        deduped = af.dedup(ir)
-
-        (r1, r2), misses = self.count_misses(deduped, "hello", "hello")
-
-        assert r1 == "hello!hello!"
-        assert r2 == "hello!hello!"
-        assert misses == 2
