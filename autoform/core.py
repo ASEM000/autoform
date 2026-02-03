@@ -148,6 +148,9 @@ class IRLit[T](IRAtom):
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.value!r})"
 
+    def __eq__(self, other) -> bool:
+        return isinstance(other, IRLit) and self.value == other.value
+
     def __hash__(self) -> int:
         return hash(self.value)
 

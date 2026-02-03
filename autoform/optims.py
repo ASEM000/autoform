@@ -7,7 +7,9 @@ from collections import deque
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.core import IR, IRAtom, IREqn, IRLit, IRVar, Primitive, is_iratom, is_irvar
+from optree import PyTreeSpec
+
+from autoform.core import IR, Effect, IRAtom, IREqn, IRLit, IRVar, Primitive, is_iratom, is_irvar
 from autoform.utils import Tree, lru_cache, treelib
 
 # ==================================================================================================
@@ -248,18 +250,15 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
         2
     """
 
-    seen: dict[int, IREqn] = {}
+    seen: dict[tuple[Primitive, Effect | None, tuple[Tree, ...], PyTreeSpec], IREqn] = {}
     env: dict[IRVar, IRVar] = {}
 
     def recurse(leaf):
         return dedup(leaf) if isinstance(leaf, IR) else leaf
 
     def make_key(ireqn: IREqn):
-        flat_in_tree, in_struct = treelib.flatten(ireqn.in_irtree, is_leaf=is_iratom)
-        in_tree_key = tuple(flat_in_tree), in_struct
-        flat_params, params_struct = treelib.flatten(ireqn.params)
-        params_key = tuple(flat_params), params_struct
-        return hash((ireqn.prim, in_tree_key, params_key, ireqn.effect))
+        flat, struct = treelib.flatten((ireqn.in_irtree, ireqn.params), is_leaf=is_iratom)
+        return (ireqn.prim, ireqn.effect, tuple(flat), struct)
 
     def write(atom, value):
         is_irvar(atom) and setitem(env, atom, value)
@@ -285,8 +284,8 @@ def dedup[**P, R](ir: IR[P, R]) -> IR[P, R]:
         #
         # v3 is eliminated and env[v3] = v1
         in_irtree = treelib.map(read, ireqn.in_irtree)
-        memoized_params = treelib.map(recurse, ireqn.params)
-        ireqn = IREqn(ireqn.prim, ireqn.effect, in_irtree, ireqn.out_irtree, memoized_params)
+        deduped_params = treelib.map(recurse, ireqn.params)
+        ireqn = IREqn(ireqn.prim, ireqn.effect, in_irtree, ireqn.out_irtree, deduped_params)
 
         if ireqn.effect:
             # NOTE(asem): never deduplicate effectful equations.
