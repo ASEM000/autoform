@@ -36,10 +36,10 @@ preview = true
 line-length = 100
 indent-width = 4
 target-version = "py312"
+exclude = [".venv", ".git", ".tox", "build", "dist", "__pycache__", "__pypackages__", "docs/_build"]
 
 [tool.ruff.lint]
 select = ["I", "F401"]  # isort, unused imports
-exclude = [".venv", ".git", ".tox", "build", "dist", "__pycache__", "__pypackages__"]
 
 ignore = [
     "E731", # Do not assign a lambda expression, use a def.
