@@ -30,6 +30,9 @@ notebook = [
     "jupyterlab>=4.5.1",
 ]
 
+[tool.setuptools.packages.find]
+include = ["autoform*"]
+
 [tool.ruff]
 preview = true
 line-length = 100
