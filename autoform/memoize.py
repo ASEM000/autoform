@@ -27,6 +27,19 @@ def memoize() -> Generator[None, None, None]:
         ...     result = af.call(ir)("hello")
         >>> result
         'hello!hello!'
+
+    Tracing a program with `memoize` will act as compile-time deduplication of
+    identical primitive calls.
+
+    Example:
+        >>> def program(x):
+        ...     with af.memoize():
+        ...         a = af.concat(x, "!")
+        ...         b = af.concat(x, "!")  # same call, will be cached
+        ...         return a, b
+        >>> ir = af.trace(program)("test")
+        >>> len(ir.ireqns)
+        1
     """
 
     cache: dict[tuple[Primitive, Effect | None, tuple[Tree, ...], PyTreeSpec], Tree] = {}

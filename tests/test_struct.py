@@ -63,7 +63,7 @@ class TestStructLmCall:
         def ir(prompt: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=Answer,
             )
 
@@ -78,13 +78,13 @@ class TestStructLmCall:
         def ir(prompt: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=Answer,
             )
 
         built_ir = af.trace(ir)("test")
         params = built_ir.ireqns[0].params
-        assert params["model"] == "gpt-4o"
+        assert params["model"] == "gpt-5.2"
         assert params["struct"] is Answer
         assert params["roles"] == ["user"]
 
@@ -96,7 +96,7 @@ class TestStructLmCall:
         def ir(prompt: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=Answer,
             )
 
@@ -111,7 +111,7 @@ class TestStructLmCall:
         def ir(prompt: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=Answer,
             )
 
@@ -127,7 +127,7 @@ class TestStructLmCall:
         try:
             af.struct_lm_call(
                 [dict(role="user", content="test")],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=NotAStruct,
             )
             assert False, "Should have raised AssertionError"
@@ -144,13 +144,13 @@ class TestStructLmCall:
         def ir(prompt: str):
             step1 = af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=Step1,
             )
             refined = af.utils.treelib.map(lambda x: af.format("[refined] {}", x), step1)
             step2 = af.struct_lm_call(
                 [dict(role="user", content=refined.draft)],
-                model="gpt-4o",
+                model="gpt-5.2",
                 struct=Step2,
             )
             return step2

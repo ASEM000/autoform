@@ -57,7 +57,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The name of the language model to use (e.g., "gpt-3.5-turbo").
+        model: The name of the language model to use (e.g., "gpt-5.2").
 
     Returns:
         The content of the model's response as a string.
@@ -68,7 +68,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     greeting = af.format("Hello, {}!", name)
         ...     system_message = dict(role="system", content="translate the greeting to Korean")
         ...     user_message = dict(role="user", content=greeting)
-        ...     greeting = af.lm_call([system_message, user_message], model="gpt-3.5-turbo")
+        ...     greeting = af.lm_call([system_message, user_message], model="gpt-5.2")
         ...     return greeting
         >>> ir = af.trace(ir)("World") # doctest: +SKIP
         >>> result = ir.call("Alice") # doctest: +SKIP
@@ -261,7 +261,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         ...     answer: int
         >>> def solver(question):
         ...     messages = [{"role": "user", "content": question}]
-        ...     return af.struct_lm_call(messages, model="gpt-4o", struct=Answer)
+        ...     return af.struct_lm_call(messages, model="gpt-5.2", struct=Answer)
         >>> ir = af.trace(solver)("What is 2+2?")  # doctest: +SKIP
         >>> result = ir.call("What is 2+2?")  # doctest: +SKIP
         >>> result.answer  # doctest: +SKIP

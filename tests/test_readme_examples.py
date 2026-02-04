@@ -257,7 +257,7 @@ class TestTextGradStylePullback:
                 {"role": "system", "content": "You are a research assistant."},
                 {"role": "user", "content": topic},
             ]
-            return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
+            return textgrad_style_lm_call(messages, model="openai/gpt-5.2", struct=ResearchNotes)
 
         ir = af.trace(program)("test topic")
         assert len(ir.ireqns) == 1
@@ -273,7 +273,7 @@ class TestTextGradStylePullback:
                 {"role": "user", "content": af.format("Research this topic: {}", topic)},
             ]
             notes = textgrad_style_lm_call(
-                research_messages, model="openai/gpt-4o", struct=ResearchNotes
+                research_messages, model="openai/gpt-5.2", struct=ResearchNotes
             )
 
             writer_messages = [
@@ -283,7 +283,9 @@ class TestTextGradStylePullback:
                 },
                 {"role": "user", "content": af.format("Notes: {}", notes.key_points)},
             ]
-            article = textgrad_style_lm_call(writer_messages, model="openai/gpt-4o", struct=Article)
+            article = textgrad_style_lm_call(
+                writer_messages, model="openai/gpt-5.2", struct=Article
+            )
 
             return article
 
@@ -298,7 +300,7 @@ class TestTextGradStylePullback:
             messages = [
                 {"role": "user", "content": af.format("Research: {}", topic)},
             ]
-            return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
+            return textgrad_style_lm_call(messages, model="openai/gpt-5.2", struct=ResearchNotes)
 
         ir = af.trace(pipeline)("test")
         pb_ir = af.pullback(ir)
@@ -358,7 +360,7 @@ class TestMultiAgentComposition:
             messages = [
                 {"role": "user", "content": af.format("Analyze: {}", topic)},
             ]
-            return textgrad_style_lm_call(messages, model="openai/gpt-4o", struct=ResearchNotes)
+            return textgrad_style_lm_call(messages, model="openai/gpt-5.2", struct=ResearchNotes)
 
         ir = af.trace(single_agent)("test")
 
