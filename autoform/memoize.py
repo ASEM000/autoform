@@ -10,7 +10,7 @@ from optree import PyTreeSpec
 from autoform.core import Interpreter, Primitive, active_interpreter, using_interpreter
 from autoform.utils import Tree, treelib
 
-CacheKey = tuple[Primitive, tuple[Tree, ...], PyTreeSpec]
+type CacheKey = tuple[Primitive, tuple[Tree, ...], PyTreeSpec]
 
 
 def make_key(prim: Primitive, in_tree: Tree, /, **params) -> CacheKey:
@@ -55,7 +55,7 @@ def memoize() -> Generator[None, None, None]:
         'hello!hello!'
 
     Tracing a program with `memoize` will act as compile-time deduplication of
-    identical primitive calls.
+    identical primitive calls (including stochastic primitives like :func:`lm_call`).
 
     Example:
         >>> def program(x):
