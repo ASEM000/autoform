@@ -2,7 +2,21 @@ import pytest
 
 import autoform as af
 from autoform.checkpoint import checkpoint
-from autoform.core import EffectInterpreter, using_interpreter
+from autoform.core import Interpreter, active_interpreter, using_interpreter
+
+
+class CountingInterpreter(Interpreter):
+    def __init__(self):
+        self.parent = active_interpreter.get()
+        self.call_count = 0
+
+    def interpret(self, prim, in_tree, /, **params):
+        self.call_count += 1
+        return self.parent.interpret(prim, in_tree, **params)
+
+    async def ainterpret(self, prim, in_tree, /, **params):
+        self.call_count += 1
+        return await self.parent.ainterpret(prim, in_tree, **params)
 
 
 class TestSow:
@@ -593,13 +607,6 @@ class TestSplitOnTransformedIR:
 
 class TestMemoizeBasic:
     def test_memoize_caches_duplicate_calls(self):
-        call_count = 0
-
-        def counting_handler(prim, effect, in_tree, /, **params):
-            nonlocal call_count
-            call_count += 1
-            return (yield in_tree)
-
         def func(x):
             a = af.concat(x, "!")
             b = af.concat(x, "!")
@@ -607,12 +614,13 @@ class TestMemoizeBasic:
 
         ir = af.trace(func)("test")
 
-        with using_interpreter(EffectInterpreter(default=counting_handler)):
+        counter = CountingInterpreter()
+        with using_interpreter(counter):
             with af.memoize():
                 result = af.call(ir)("hello")
 
         assert result == "hello!hello!"
-        assert call_count == 2
+        assert counter.call_count == 2
 
     def test_memoize_returns_correct_result(self):
         def func(x):
@@ -627,26 +635,20 @@ class TestMemoizeBasic:
         assert result == "hello!"
 
     def test_memoize_different_inputs_not_cached(self):
-        call_count = 0
-
-        def counting_handler(prim, effect, in_tree, /, **params):
-            nonlocal call_count
-            call_count += 1
-            return (yield in_tree)
-
         def func(x):
             return af.concat(x, "!")
 
         ir = af.trace(func)("test")
 
-        with using_interpreter(EffectInterpreter(default=counting_handler)):
+        counter = CountingInterpreter()
+        with using_interpreter(counter):
             with af.memoize():
                 r1 = af.call(ir)("hello")
                 r2 = af.call(ir)("world")
 
         assert r1 == "hello!"
         assert r2 == "world!"
-        assert call_count == 2
+        assert counter.call_count == 2
 
 
 class TestMemoizeWithEffects:
@@ -683,65 +685,47 @@ class TestMemoizeWithEffects:
 
 class TestMemoizeMultipleCalls:
     def test_memoize_across_multiple_ir_calls(self):
-        call_count = 0
-
-        def counting_handler(prim, effect, in_tree, /, **params):
-            nonlocal call_count
-            call_count += 1
-            return (yield in_tree)
-
         def func(x):
             return af.concat(x, "!")
 
         ir = af.trace(func)("test")
 
-        with using_interpreter(EffectInterpreter(default=counting_handler)):
+        counter = CountingInterpreter()
+        with using_interpreter(counter):
             with af.memoize():
                 r1 = af.call(ir)("hello")
                 r2 = af.call(ir)("hello")
 
         assert r1 == "hello!"
         assert r2 == "hello!"
-        assert call_count == 1
+        assert counter.call_count == 1
 
     def test_memoize_scope_is_context(self):
-        call_count = 0
-
-        def counting_handler(prim, effect, in_tree, /, **params):
-            nonlocal call_count
-            call_count += 1
-            return (yield in_tree)
-
         def func(x):
             return af.concat(x, "!")
 
         ir = af.trace(func)("test")
 
-        with using_interpreter(EffectInterpreter(default=counting_handler)):
+        counter = CountingInterpreter()
+        with using_interpreter(counter):
             with af.memoize():
                 af.call(ir)("hello")
 
             with af.memoize():
                 af.call(ir)("hello")
 
-        assert call_count == 2
+        assert counter.call_count == 2
 
 
 class TestMemoizeTransformedIRs:
     def count_misses(self, ir, *inputs):
-        call_count = 0
-
-        def counting_handler(prim, effect, in_tree, /, **params):
-            nonlocal call_count
-            call_count += 1
-            return (yield in_tree)
-
+        counter = CountingInterpreter()
         results = []
-        with using_interpreter(EffectInterpreter(default=counting_handler)):
+        with using_interpreter(counter):
             with af.memoize():
                 for inp in inputs:
                     results.append(af.call(ir)(inp))
-        return results, call_count
+        return results, counter.call_count
 
     def test_memoize_batched_ir(self):
         def func(x):
