@@ -190,7 +190,8 @@ def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tr
     batch_size, in_batched, contents = in_tree
 
     if (spec := batch_spec(contents, in_batched)) is None:
-        return impl_lm_call(contents, roles=roles, model=model), False
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+        return lm_call(messages, model=model), False
 
     unbatch = ft.partial(batch_index, contents, in_batched)
     batched_messages = [
@@ -207,7 +208,8 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
     batch_size, in_batched, contents = in_tree
 
     if (spec := batch_spec(contents, in_batched)) is None:
-        return await aimpl_lm_call(contents, roles=roles, model=model), False
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+        return lm_call(messages, model=model), False
 
     unbatch = ft.partial(batch_index, contents, in_batched)
 
@@ -382,7 +384,8 @@ def batch_struct_lm_call(
     batch_size, in_batched, contents = in_tree
 
     if batch_spec(contents, in_batched) is None:
-        result = impl_struct_lm_call(contents, roles=roles, model=model, struct=struct)
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+        result = struct_lm_call(messages, model=model, struct=struct)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
@@ -404,7 +407,8 @@ async def abatch_struct_lm_call(
     batch_size, in_batched, contents = in_tree
 
     if batch_spec(contents, in_batched) is None:
-        result = await aimpl_struct_lm_call(contents, roles=roles, model=model, struct=struct)
+        messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+        result = struct_lm_call(messages, model=model, struct=struct)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 

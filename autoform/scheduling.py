@@ -105,7 +105,7 @@ def push_gather(
     primals, tangents = in_tree
     pf_irs = [pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
-    results = impl_gather(pf_inputs, irs=pf_irs)
+    results = gather([(ir, inp) for ir, inp in zip(pf_irs, pf_inputs, strict=True)])
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
@@ -116,7 +116,7 @@ async def apush_gather(
     primals, tangents = in_tree
     pf_irs = [pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
-    results = await aimpl_gather(pf_inputs, irs=pf_irs)
+    results = gather([(ir, inp) for ir, inp in zip(pf_irs, pf_inputs, strict=True)])
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
@@ -124,7 +124,7 @@ async def apush_gather(
 def pull_fwd_gather(
     in_tree: list[Tree], /, *, irs: list[IR]
 ) -> tuple[list[Tree], tuple[list[Tree], list[IR]]]:
-    results = impl_gather(in_tree, irs=irs)
+    results = gather([(ir, inp) for ir, inp in zip(irs, in_tree, strict=True)])
     residuals = (in_tree, irs)
     return results, residuals
 
@@ -132,7 +132,7 @@ def pull_fwd_gather(
 async def apull_fwd_gather(
     in_tree: list[Tree], /, *, irs: list[IR]
 ) -> tuple[list[Tree], tuple[list[Tree], list[IR]]]:
-    results = await aimpl_gather(in_tree, irs=irs)
+    results = gather([(ir, inp) for ir, inp in zip(irs, in_tree, strict=True)])
     residuals = (in_tree, irs)
     return results, residuals
 
@@ -142,7 +142,7 @@ def pull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
     inputs, _ = residuals
     pb_irs = [pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
-    results = impl_gather(pb_inputs, irs=pb_irs)
+    results = gather([(ir, inp) for ir, inp in zip(pb_irs, pb_inputs, strict=True)])
     return [cot for _, cot in results]
 
 
@@ -151,7 +151,7 @@ async def apull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
     inputs, _ = residuals
     pb_irs = [pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
-    results = await aimpl_gather(pb_inputs, irs=pb_irs)
+    results = gather([(ir, inp) for ir, inp in zip(pb_irs, pb_inputs, strict=True)])
     return [cot for _, cot in results]
 
 

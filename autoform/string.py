@@ -43,13 +43,12 @@ def format(template: str, *args, **kwargs) -> str:
         >>> af.format("{0}, {name}!", "Hi", name="World")
         'Hi, World!'
     """
-    in_tree = (*args, *tuple(kwargs.values()))
+    in_tree = (args, tuple(kwargs.values()))
     return format_p.bind(in_tree, template=template, keys=tuple(kwargs))
 
 
 def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> str:
-    n_args = len(in_tree) - len(keys)
-    args, kwargs_values = in_tree[:n_args], in_tree[n_args:]
+    args, kwargs_values = in_tree
     kwargs = dict(zip(keys, kwargs_values))
     return template.format(*args, **kwargs)
 
@@ -61,38 +60,41 @@ def eval_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> Ev
 def pushforward_format(
     in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
 ) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    out_primal = impl_format(primals, template=template, keys=keys)
-    out_tangent = impl_format(tangents, template=template, keys=keys)
-    return out_primal, out_tangent
+    (p_args, p_kwargs_values), (t_args, t_kwargs_values) = in_tree
+    p_out = format(template, *p_args, **dict(zip(keys, p_kwargs_values)))
+    t_out = format(template, *t_args, **dict(zip(keys, t_kwargs_values)))
+    return p_out, t_out
 
 
 def pullback_fwd_format(
     in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
 ) -> tuple[Tree, Tree]:
-    out = impl_format(in_tree, template=template, keys=keys)
-    return out, len(in_tree)
+    args, kwargs_values = in_tree
+    out = format(template, *args, **dict(zip(keys, kwargs_values)))
+    residuals = (len(args), len(kwargs_values))
+    return out, residuals
 
 
 def pullback_bwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> Tree:
-    del template
-    n_args_kwargs, out_cotangent = in_tree
-    n_args = n_args_kwargs - len(keys)
+    del template, keys
+    (n_args, n_kwargs), out_cotangent = in_tree
     args_cotangent = tuple([out_cotangent] * n_args)
-    kwargs_values_cotangent = tuple([out_cotangent] * len(keys))
-    return (*args_cotangent, *kwargs_values_cotangent)
+    kwargs_cotangent = tuple([out_cotangent] * n_kwargs)
+    return (args_cotangent, kwargs_cotangent)
 
 
 def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
 
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return impl_format(in_values, template=template, keys=keys), False
+        args, kwargs_values = in_values
+        return format(template, *args, **dict(zip(keys, kwargs_values))), False
 
     unbatch = ft.partial(batch_index, in_values, in_batched)
 
     def format_at(b: int) -> str:
-        return impl_format(unbatch(b), template=template, keys=keys)
+        args, kwargs_values = unbatch(b)
+        return format(template, *args, **dict(zip(keys, kwargs_values)))
 
     result = [format_at(b) for b in range(batch_size)]
     return spec.unflatten(result), True
@@ -162,7 +164,7 @@ def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
 def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return impl_concat(in_values), False
+        return concat(*in_values), False
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [concat(*unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
@@ -245,7 +247,7 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return impl_match(in_values), False
+        return match(*in_values), False
     unbatch = ft.partial(batch_index, in_values, in_batched)
     result = [match(*unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True

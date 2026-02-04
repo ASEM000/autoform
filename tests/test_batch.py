@@ -240,8 +240,8 @@ class TestBatchUtils:
 class TestBatchRuleOutBatched:
     def test_format_out_batched_is_scalar(self):
         batch_size = 2
-        in_batched = (True,)
-        in_values = (["a", "b"],)
+        in_batched = ((True,), ())
+        in_values = ((["a", "b"],), ())
         out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
             (batch_size, in_batched, in_values), template="{}", keys=()
         )
@@ -332,8 +332,8 @@ class TestBatchBroadcasting:
 
     def test_format_mixed_batched(self):
         batch_size = 2
-        in_batched = (True, False)
-        in_values = (["Alice", "Bob"], "Hello")
+        in_batched = ((True, False), ())
+        in_values = ((["Alice", "Bob"], "Hello"), ())
         out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
             (batch_size, in_batched, in_values), template="{1}, {0}!", keys=()
         )
@@ -595,8 +595,8 @@ class TestBatchSpec:
 class TestBatchRuleAllUnbatched:
     def test_format_all_unbatched(self):
         batch_size = 3
-        in_batched = (False, False)
-        in_values = ("hello", "world")
+        in_batched = ((False, False), ())
+        in_values = (("hello", "world"), ())
         out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
             (batch_size, in_batched, in_values), template="{} {}", keys=()
         )

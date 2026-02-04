@@ -98,6 +98,16 @@ def pack_user_input(*args, **kwargs) -> Tree:
     return args
 
 
+def unpack_user_input(operands: Tree) -> tuple[tuple, dict]:
+    match operands:
+        case (*args, dict() as kwargs):
+            return tuple(args), kwargs
+        case tuple() as args:
+            return args, {}
+        case arg:
+            return (arg,), {}
+
+
 # ==================================================================================================
 # BATCH UTILITIES
 # ==================================================================================================
