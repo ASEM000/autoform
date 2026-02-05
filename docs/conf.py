@@ -26,7 +26,6 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "**.ipynb_checkpoints",
-    "examples/*.py",  # use .ipynb only
     "conf.py",  # config, not docs
 ]
 master_doc = "index"
