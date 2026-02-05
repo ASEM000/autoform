@@ -105,7 +105,7 @@ def push_gather(
     primals, tangents = in_tree
     pf_irs = [pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
-    results = gather([(ir, inp) for ir, inp in zip(pf_irs, pf_inputs, strict=True)])
+    results = gather_p.bind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
@@ -116,7 +116,7 @@ async def apush_gather(
     primals, tangents = in_tree
     pf_irs = [pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
-    results = gather([(ir, inp) for ir, inp in zip(pf_irs, pf_inputs, strict=True)])
+    results = await gather_p.abind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
@@ -124,7 +124,7 @@ async def apush_gather(
 def pull_fwd_gather(
     in_tree: list[Tree], /, *, irs: list[IR]
 ) -> tuple[list[Tree], tuple[list[Tree], list[IR]]]:
-    results = gather([(ir, inp) for ir, inp in zip(irs, in_tree, strict=True)])
+    results = gather_p.bind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
@@ -132,7 +132,7 @@ def pull_fwd_gather(
 async def apull_fwd_gather(
     in_tree: list[Tree], /, *, irs: list[IR]
 ) -> tuple[list[Tree], tuple[list[Tree], list[IR]]]:
-    results = gather([(ir, inp) for ir, inp in zip(irs, in_tree, strict=True)])
+    results = await gather_p.abind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
@@ -142,7 +142,7 @@ def pull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
     inputs, _ = residuals
     pb_irs = [pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
-    results = gather([(ir, inp) for ir, inp in zip(pb_irs, pb_inputs, strict=True)])
+    results = gather_p.bind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
@@ -151,7 +151,7 @@ async def apull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
     inputs, _ = residuals
     pb_irs = [pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
-    results = gather([(ir, inp) for ir, inp in zip(pb_irs, pb_inputs, strict=True)])
+    results = await gather_p.abind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
@@ -321,12 +321,14 @@ def eval_depends(in_tree: DependsType[Tree], /) -> Tree:
 
 def push_depends(in_tree: tuple[DependsType[Tree], DependsType[Tree]], /) -> tuple[Tree, Tree]:
     (primal_value, primal_deps), (tangent_value, tangent_deps) = in_tree
-    return depends(primal_value, *primal_deps), depends(tangent_value, *tangent_deps)
+    p_out = depends_p.bind((primal_value, primal_deps))
+    t_out = depends_p.bind((tangent_value, tangent_deps))
+    return p_out, t_out
 
 
 def pull_fwd_depends(in_tree: DependsType[Tree], /) -> tuple[Tree, DependsType[Tree]]:
     value, deps = in_tree
-    return depends(value, *deps), in_tree
+    return depends_p.bind((value, deps)), in_tree
 
 
 def pull_bwd_depends(in_tree: tuple[DependsType[Tree], Tree], /) -> DependsType[Tree]:
@@ -338,7 +340,7 @@ def batch_depends(
     in_tree: tuple[int, tuple[bool, tuple[bool, ...]], DependsType[Tree]], /
 ) -> tuple[Tree, bool]:
     _, (value_batched, _), (value, deps) = in_tree
-    return depends(value, *deps), value_batched
+    return depends_p.bind((value, deps)), value_batched
 
 
 impl_rules.set(depends_p, impl_depends)
