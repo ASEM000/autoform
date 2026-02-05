@@ -42,9 +42,11 @@ class TestBuildIR:
         ir = af.trace(program)("World")
         assert len(ir.ireqns) == 1
         eqn = ir.ireqns[0]
-        assert len(eqn.in_irtree) == 1
+        args, kwargs_values = eqn.in_irtree
+        assert len(args) == 1
+        assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
-        assert isinstance(eqn.in_irtree[0], af.core.IRVar)
+        assert isinstance(args[0], af.core.IRVar)
         assert af.call(ir)("Alice") == "Hello, Alice!"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -55,9 +57,11 @@ class TestBuildIR:
         ir = await af.atrace(program)("World")
         assert len(ir.ireqns) == 1
         eqn = ir.ireqns[0]
-        assert len(eqn.in_irtree) == 1
+        args, kwargs_values = eqn.in_irtree
+        assert len(args) == 1
+        assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
-        assert isinstance(eqn.in_irtree[0], af.core.IRVar)
+        assert isinstance(args[0], af.core.IRVar)
         assert await af.acall(ir)("Alice") == "Hello, Alice!"
 
     def test_multiple_operations(self):

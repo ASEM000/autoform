@@ -229,7 +229,7 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     key_batched, operands_batched = in_batched
 
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return impl_switch(in_values, branches=branches), False
+        return switch_p.bind(in_values, branches=branches), False
 
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
@@ -246,7 +246,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
     key_batched, operands_batched = in_batched
 
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return await aimpl_switch(in_values, branches=branches), False
+        return await switch_p.abind(in_values, branches=branches), False
 
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
 

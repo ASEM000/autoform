@@ -27,7 +27,7 @@ import autoform as af
 def explain(topic: str) -> str:
     prompt = af.format("Explain {} in one paragraph.", topic)
     msg = dict(role="user", content=prompt)
-    return af.lm_call([msg], model="gpt-4o")
+    return af.lm_call([msg], model="gpt-5.2")
 
 ir = af.trace(explain)("...")  # capture structure, no execution
 ```
@@ -77,11 +77,11 @@ Checkpoint intermediate values. Substitute on re-execution.
 ```python
 def pipeline(x: str) -> str:
     msg1 = dict(role="user", content=x)
-    step1 = af.lm_call([msg1], model="gpt-4o")
+    step1 = af.lm_call([msg1], model="gpt-5.2")
     step1 = af.checkpoint(step1, key="step1", collection="debug")
     
     msg2 = dict(role="user", content=step1)
-    step2 = af.lm_call([msg2], model="gpt-4o")
+    step2 = af.lm_call([msg2], model="gpt-5.2")
     return step2
 
 ir = af.trace(pipeline)("...")

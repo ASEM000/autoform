@@ -256,7 +256,8 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
 
     if batch_spec(in_values, in_batched) is None:
-        result = impl_pushforward_call(in_values, ir=ir)
+        pf_ir = pushforward(ir)
+        result = call(pf_ir)(in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
@@ -274,7 +275,8 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tr
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
 
     if batch_spec(in_values, in_batched) is None:
-        result = await aimpl_pushforward_call(in_values, ir=ir)
+        pf_ir = pushforward(ir)
+        result = await acall(pf_ir)(in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
@@ -561,7 +563,8 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_batched, c_batched) = in_batched
 
     if batch_spec(in_values, in_batched) is None:
-        result = impl_pullback_call(in_values, ir=ir)
+        pb_ir = pullback(ir)
+        result = call(pb_ir)(in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
@@ -580,7 +583,8 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]
     (p_batched, c_batched) = in_batched
 
     if batch_spec(in_values, in_batched) is None:
-        result = await aimpl_pullback_call(in_values, ir=ir)
+        pb_ir = pullback(ir)
+        result = await acall(pb_ir)(in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
