@@ -34,7 +34,6 @@ from autoform.utils import (
     batch_transpose,
     pack_user_input,
     treelib,
-    unpack_user_input,
 )
 
 
@@ -230,9 +229,7 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     key_batched, operands_batched = in_batched
 
     if (spec := batch_spec(in_values, in_batched)) is None:
-        key, operands = in_values
-        args, kwargs = unpack_user_input(operands)
-        return switch(key, branches, *args, **kwargs), False
+        return switch_p.bind(in_values, branches=branches), False
 
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
@@ -249,9 +246,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
     key_batched, operands_batched = in_batched
 
     if (spec := batch_spec(in_values, in_batched)) is None:
-        key, operands = in_values
-        args, kwargs = unpack_user_input(operands)
-        return switch(key, branches, *args, **kwargs), False
+        return await switch_p.abind(in_values, branches=branches), False
 
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
