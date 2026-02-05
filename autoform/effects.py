@@ -51,21 +51,21 @@ def eval_effect(x, /, **_):
 
 def push_effect(in_tree, /, **params):
     primal, tangent = in_tree
-    return effect(primal, **params), effect(tangent, **params)
+    return effect_p.bind(primal, **params), effect_p.bind(tangent, **params)
 
 
 def pull_fwd_effect(x, /, **params):
-    return effect(x, **params), None
+    return effect_p.bind(x, **params), None
 
 
 def pull_bwd_effect(in_tree, /, **params):
     _, cotangent = in_tree
-    return effect(cotangent, **params)
+    return effect_p.bind(cotangent, **params)
 
 
 def batch_effect(in_tree, /, **params):
     _, in_batched, x = in_tree
-    return effect(x, **params), in_batched
+    return effect_p.bind(x, **params), in_batched
 
 
 impl_rules.set(effect_p, impl_effect)
