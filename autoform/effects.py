@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import functools as ft
+
 from autoform.core import (
     Primitive,
     PrimitiveTag,
@@ -24,7 +26,7 @@ from autoform.core import (
     pull_fwd_rules,
     push_rules,
 )
-from autoform.utils import asyncify
+from autoform.utils import asyncify, batch_index, batch_spec, batch_transpose
 
 # ==================================================================================================
 # EFFECT
@@ -64,8 +66,29 @@ def pull_bwd_effect(in_tree, /, **params):
 
 
 def batch_effect(in_tree, /, **params):
-    _, in_batched, x = in_tree
-    return effect_p.bind(x, **params), in_batched
+    batch_size, in_batched, x = in_tree
+
+    if batch_spec(x, in_batched) is None:
+        return effect_p.bind(x, **params), False
+
+    unbatch = ft.partial(batch_index, x, in_batched)
+    out_bi = [effect_p.bind(unbatch(b), **params) for b in range(batch_size)]
+    out_batched = in_batched
+    out_ib = batch_transpose(batch_size, out_batched, out_bi)
+    return out_ib, out_batched
+
+
+async def abatch_effect(in_tree, /, **params):
+    batch_size, in_batched, x = in_tree
+
+    if batch_spec(x, in_batched) is None:
+        return await effect_p.abind(x, **params), False
+
+    unbatch = ft.partial(batch_index, x, in_batched)
+    out_bi = [await effect_p.abind(unbatch(b), **params) for b in range(batch_size)]
+    out_batched = in_batched
+    out_ib = batch_transpose(batch_size, out_batched, out_bi)
+    return out_ib, out_batched
 
 
 impl_rules.set(effect_p, impl_effect)
@@ -78,4 +101,4 @@ pull_fwd_rules.aset(effect_p, asyncify(pull_fwd_effect))
 pull_bwd_rules.set(effect_p, pull_bwd_effect)
 pull_bwd_rules.aset(effect_p, asyncify(pull_bwd_effect))
 batch_rules.set(effect_p, batch_effect)
-batch_rules.aset(effect_p, asyncify(batch_effect))
+batch_rules.aset(effect_p, abatch_effect)
