@@ -60,9 +60,9 @@ def eval_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> Ev
 def pushforward_format(
     in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
 ) -> tuple[Tree, Tree]:
-    (p_args, p_kwargs_values), (t_args, t_kwargs_values) = in_tree
-    p_out = format(template, *p_args, **dict(zip(keys, p_kwargs_values)))
-    t_out = format(template, *t_args, **dict(zip(keys, t_kwargs_values)))
+    primals, tangents = in_tree
+    p_out = format_p.bind(primals, template=template, keys=keys)
+    t_out = format_p.bind(tangents, template=template, keys=keys)
     return p_out, t_out
 
 
@@ -70,7 +70,7 @@ def pullback_fwd_format(
     in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
 ) -> tuple[Tree, Tree]:
     args, kwargs_values = in_tree
-    out = format(template, *args, **dict(zip(keys, kwargs_values)))
+    out = format_p.bind(in_tree, template=template, keys=keys)
     residuals = (len(args), len(kwargs_values))
     return out, residuals
 
@@ -87,16 +87,11 @@ def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> t
     batch_size, in_batched, in_values = in_tree
 
     if (spec := batch_spec(in_values, in_batched)) is None:
-        args, kwargs_values = in_values
-        return format(template, *args, **dict(zip(keys, kwargs_values))), False
+        return format_p.bind(in_values, template=template, keys=keys), False
 
     unbatch = ft.partial(batch_index, in_values, in_batched)
-
-    def format_at(b: int) -> str:
-        args, kwargs_values = unbatch(b)
-        return format(template, *args, **dict(zip(keys, kwargs_values)))
-
-    result = [format_at(b) for b in range(batch_size)]
+    bind = ft.partial(format_p.bind, template=template, keys=keys)
+    result = [bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
@@ -147,11 +142,11 @@ def eval_concat(in_tree: Tree, /) -> EvalType:
 
 def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
-    return concat(*primals), concat(*tangents)
+    return concat_p.bind(primals), concat_p.bind(tangents)
 
 
 def pullback_fwd_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
-    out = concat(*in_tree)
+    out = concat_p.bind(in_tree)
     return out, len(in_tree)
 
 
@@ -164,9 +159,9 @@ def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
 def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return concat(*in_values), False
+        return concat_p.bind(in_values), False
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    result = [concat(*unbatch(b)) for b in range(batch_size)]
+    result = [concat_p.bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
@@ -226,15 +221,14 @@ def eval_match(in_tree: Tree, /) -> EvalType:
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
-    out_primal = match(*primals)
+    out_primal = match_p.bind(primals)
     out_tangent = treelib.map(zero_cotangent, primals)
     return out_primal, out_tangent
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
-    a, b = in_tree
-    out = a == b
-    residuals = (a, b)
+    out = match_p.bind(in_tree)
+    residuals = in_tree
     return out, residuals
 
 
@@ -247,9 +241,9 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
     if (spec := batch_spec(in_values, in_batched)) is None:
-        return match(*in_values), False
+        return match_p.bind(in_values), False
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    result = [match(*unbatch(b)) for b in range(batch_size)]
+    result = [match_p.bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
