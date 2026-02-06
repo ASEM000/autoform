@@ -252,7 +252,7 @@ class TestTransformThenReap:
         with af.collect(collection="debug") as collected:
             result = af.call(batched)(["a", "b", "c"])
         assert result == ["a", "b", "c"]
-        assert collected == {"val": [["a", "b", "c"]]}
+        assert collected == {"val": ["a", "b", "c"]}
 
     def test_reap_captures_in_switch_branches(self):
         def branch_a(x):
@@ -344,7 +344,7 @@ class TestInjectAndDCE:
         ir = af.trace(program)("test")
         batched_ir = af.batch(ir)
 
-        with af.inject(collection="cache", values={"result": [["A", "B"]]}):
+        with af.inject(collection="cache", values={"result": ["A", "B"]}):
             result = af.call(batched_ir)(["x", "y"])
 
         assert result == ["Got: A", "Got: B"]

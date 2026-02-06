@@ -117,6 +117,10 @@ def pushforward(ir: IR, /) -> IR:
     out_p_irtree = treelib.map(make_p, ir.out_irtree)
     out_t_irtree = treelib.map(make_t, ir.out_irtree)
     out_irtree = (out_p_irtree, out_t_irtree)
+    # NOTE(asem): effect on the wrapper IREqn is unused at execution time.
+    # impl_pushforward_call never reads active_effect, and no EffectInterpreter
+    # handler targets pushforward_call_p. inner IREqns carry their own effects
+    # and restore them via ireqn.bind().
     effect = active_effect.get()
     ireqn = IREqn(pushforward_call_p, effect, in_irtree, out_irtree, dict(ir=ir))
     return IR([ireqn], in_irtree, out_irtree)
@@ -404,6 +408,10 @@ def pullback(ir: IR, /) -> IR:
     out_p = treelib.map(make_p, ir.out_irtree)
     in_c = treelib.map(make_c, ir.in_irtree)
     out_irtree = (out_p, in_c)
+    # NOTE(asem): effect on the wrapper IREqn is unused at execution time.
+    # impl_pullback_call never reads active_effect, and no EffectInterpreter
+    # handler targets pullback_call_p. inner IREqns carry their own effects
+    # and restore them via ireqn.bind().
     effect = active_effect.get()
     ireqn = IREqn(pullback_call_p, effect, in_irtree, out_irtree, dict(ir=ir))
     return IR([ireqn], in_irtree, out_irtree)

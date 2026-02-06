@@ -128,7 +128,7 @@ class TestEffectsWithTransforms:
             result = af.call(batched)(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
-        assert collected == {"val": [["a", "b", "c"]]}
+        assert collected == {"val": ["a", "b", "c"]}
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_effects_through_batch_async(self):
@@ -142,7 +142,7 @@ class TestEffectsWithTransforms:
             result = await af.acall(batched)(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
-        assert collected == {"val": [["a", "b", "c"]]}
+        assert collected == {"val": ["a", "b", "c"]}
 
     def test_effects_through_pushforward(self):
         def func(x):

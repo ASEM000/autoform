@@ -96,6 +96,10 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
 
     in_b_irtree = treelib.map(make_b, ir.in_irtree)
     out_b_irtree = treelib.map(make_b, ir.out_irtree)
+    # NOTE(asem): effect on the wrapper IREqn is unused at execution time.
+    # impl_batch_call never reads active_effect, and no EffectInterpreter handler
+    # targets batch_call_p. inner IREqns carry their own effects and restore them
+    # via ireqn.bind(). captured here only to preserve the IR structure contract.
     effect = active_effect.get()
     eqn = IREqn(batch_call_p, effect, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
     return IR([eqn], in_b_irtree, out_b_irtree)
