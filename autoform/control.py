@@ -228,7 +228,7 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
 
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if batch_spec(in_values, in_batched) is None:
         return switch_p.bind(in_values, branches=branches), False
 
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
@@ -236,8 +236,10 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     def run_ir_at(b):
         return call(branches[key_col[b] if key_batched else key_col])(unbatch(b))
 
-    result = [run_ir_at(b) for b in range(batch_size)]
-    return spec.unflatten(result), True
+    results = [run_ir_at(b) for b in range(batch_size)]
+    out_batched = treelib.map(lambda _: True, results[0])
+    out_tree = batch_transpose(batch_size, out_batched, results)
+    return out_tree, out_batched
 
 
 async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
@@ -245,7 +247,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
 
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if batch_spec(in_values, in_batched) is None:
         return await switch_p.abind(in_values, branches=branches), False
 
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
@@ -254,7 +256,9 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
         return await acall(branches[key_col[b] if key_batched else key_col])(unbatch(b))
 
     results = await asyncio.gather(*[run_ir_at(b) for b in range(batch_size)])
-    return spec.unflatten(results), True
+    out_batched = treelib.map(lambda _: True, results[0])
+    out_tree = batch_transpose(batch_size, out_batched, results)
+    return out_tree, out_batched
 
 
 impl_rules.set(switch_p, impl_switch)
