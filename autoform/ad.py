@@ -237,7 +237,7 @@ async def apullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[T
 
 def pullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     residuals, out_cotangent = in_tree
-    in_p, in_t = residuals
+    in_p, _ = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
     _, in_c_p = call(pb_ir)((in_p, out_c_p))
@@ -247,7 +247,7 @@ def pullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
 
 async def apullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     residuals, out_cotangent = in_tree
-    in_p, _in_t = residuals
+    in_p, _ = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
     _, in_c_p = await acall(pb_ir)((in_p, out_c_p))
