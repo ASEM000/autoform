@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 from operator import setitem
-from typing import cast
+from typing import Any, cast
 
 from autoform.ad import pullback, pushforward
 from autoform.core import (
@@ -16,7 +16,6 @@ from autoform.core import (
     IRVar,
     Primitive,
     TransformationTag,
-    Value,
     acall,
     active_effect,
     active_interpreter,
@@ -143,16 +142,16 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # >>> call(batched)([])
     assert batch_size, "batch size must be > 0"
 
-    v_env: dict[IRVar, Value | list[Value]] = {}
+    v_env: dict[IRVar, Any] = {}
     b_env: dict[IRVar, bool] = {}
 
-    def write_v(atom, value: Value | list[Value]):
+    def write_v(atom, value: Any):
         is_irvar(atom) and setitem(v_env, atom, value)
 
     def write_b(atom, is_batched: bool):
         is_irvar(atom) and setitem(b_env, atom, is_batched)
 
-    def read_v(atom) -> Value | list[Value]:
+    def read_v(atom) -> Any:
         return v_env[atom] if is_irvar(atom) else cast(IRLit, atom).value
 
     def read_b(atom) -> bool:
@@ -184,16 +183,16 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     batch_size = spec.num_children
     assert batch_size, "batch size must be > 0"
 
-    v_env: dict[IRVar, Value | list[Value]] = {}
+    v_env: dict[IRVar, Any] = {}
     b_env: dict[IRVar, bool] = {}
 
-    def write_v(atom, value: Value | list[Value]):
+    def write_v(atom, value: Any):
         is_irvar(atom) and setitem(v_env, atom, value)
 
     def write_b(atom, is_batched: bool):
         is_irvar(atom) and setitem(b_env, atom, is_batched)
 
-    def read_v(atom) -> Value | list[Value]:
+    def read_v(atom) -> Any:
         return v_env[atom] if is_irvar(atom) else cast(IRLit, atom).value
 
     def read_b(atom) -> bool:

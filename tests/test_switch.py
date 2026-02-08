@@ -197,7 +197,7 @@ class TestSwitchPushforward:
 class TestSwitchPullback:
     def test_pullback_key_zero(self):
         def is_zero_cotangent(val):
-            return val == "" or (hasattr(val, "items") and len(val.items) == 0)
+            return af.ad.is_zero(val)
 
         branches = {
             "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
@@ -218,7 +218,7 @@ class TestSwitchPullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_key_zero_async(self):
         def is_zero_cotangent(val):
-            return val == "" or (hasattr(val, "items") and len(val.items) == 0)
+            return af.ad.is_zero(val)
 
         branches = {
             "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
@@ -238,7 +238,7 @@ class TestSwitchPullback:
 
     def test_pullback_key_one(self):
         def is_zero_cotangent(val):
-            return val == "" or (hasattr(val, "items") and len(val.items) == 0)
+            return af.ad.is_zero(val)
 
         branches = {
             "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),

@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 from operator import setitem
 
-from autoform.ad import pullback, pushforward, zero_cotangent
+from autoform.ad import Zero, pullback, pushforward
 from autoform.batch import batch
 from autoform.core import (
     IR,
@@ -333,7 +333,7 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> tuple[Tree, DependsType[T
 
 def pull_bwd_depends(in_tree: tuple[DependsType[Tree], Tree], /) -> DependsType[Tree]:
     (_, deps), out_cotangent = in_tree
-    return out_cotangent, treelib.map(zero_cotangent, deps)
+    return out_cotangent, treelib.map(lambda d: Zero(type(d)), deps)
 
 
 def batch_depends(

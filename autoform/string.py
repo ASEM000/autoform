@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.ad import zero_cotangent
+from autoform.ad import Zero, materialize
 from autoform.core import (
     EvalType,
     Primitive,
@@ -61,6 +61,7 @@ def pushforward_format(
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_out = format_p.bind(primals, template=template, keys=keys)
+    tangents = materialize(tangents)
     t_out = format_p.bind(tangents, template=template, keys=keys)
     return p_out, t_out
 
@@ -141,6 +142,7 @@ def eval_concat(in_tree: Tree, /) -> EvalType:
 
 def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
+    tangents = materialize(tangents)
     return concat_p.bind(primals), concat_p.bind(tangents)
 
 
@@ -218,8 +220,7 @@ def eval_match(in_tree: Tree, /) -> EvalType:
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    out_tangent = treelib.map(zero_cotangent, primals)
-    return out_primal, out_tangent
+    return out_primal, Zero(bool)
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -231,7 +232,7 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return treelib.map(zero_cotangent, residuals)
+    return treelib.map(lambda r: Zero(type(r)), residuals)
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
