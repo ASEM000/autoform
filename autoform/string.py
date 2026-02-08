@@ -13,7 +13,6 @@ from autoform.core import (
     batch_rules,
     eval_rules,
     impl_rules,
-    is_var,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -213,10 +212,7 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 
 def eval_match(in_tree: Tree, /) -> EvalType:
-    a, b = in_tree
-    if is_var(a) or is_var(b):
-        return Var(bool)
-    return a == b
+    return Var(bool)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
