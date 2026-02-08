@@ -374,8 +374,8 @@ class TestCotangentHelpers:
         class CustomType:
             pass
 
-        with pytest.raises(AssertionError):
-            af.ad.zero_cotangent(CustomType())
+        result = af.ad.zero_cotangent(CustomType())
+        assert result == ""
 
     def test_accumulate_cotangents_single(self):
         result = af.ad.accumulate_cotangents(["hello"])

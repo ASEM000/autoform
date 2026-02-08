@@ -273,7 +273,7 @@ async def aimpl_struct_lm_call(
 def eval_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Tree:
-    return struct.model_construct(**{k: Var(str) for k in struct.model_fields})
+    return struct.model_construct(**{k: Var(v.annotation) for k, v in struct.model_fields.items()})
 
 
 def pushforward_struct_lm_call(

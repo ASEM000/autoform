@@ -1,5 +1,6 @@
 import autoform as af
-from autoform.core import call, trace
+from autoform.core import Var, call, trace
+from autoform.string import eval_match
 
 
 class TestMatchBasic:
@@ -183,24 +184,18 @@ class TestMatchComposition:
 
 class TestEvalMatch:
     def test_eval_match_concrete_equal(self):
-        from autoform.core import Var
-        from autoform.string import eval_match
 
         result = eval_match(("yes", "yes"))
         assert isinstance(result, Var)
         assert result.type is bool
 
     def test_eval_match_concrete_unequal(self):
-        from autoform.core import Var
-        from autoform.string import eval_match
 
         result = eval_match(("yes", "no"))
         assert isinstance(result, Var)
         assert result.type is bool
 
     def test_eval_match_with_var_returns_var(self):
-        from autoform.core import Var
-        from autoform.string import eval_match
 
         result = eval_match((Var(str), "yes"))
         assert isinstance(result, Var)

@@ -40,17 +40,14 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_c
 class ADTag(TransformationTag): ...
 
 
-zero_registry: dict[type, Any] = {}
-zero_registry[str] = ""
+zero_registry: defaultdict[type, Any] = defaultdict(lambda: "")
 
 
 def zero_cotangent(example):
-    assert type(example) in zero_registry, f"No zero cotangent seted for type {type(example)}"
     return zero_registry[type(example)]
 
 
 def zero_tangent(example):
-    assert type(example) in zero_registry, f"No zero tangent seted for type {type(example)}"
     return zero_registry[type(example)]
 
 
