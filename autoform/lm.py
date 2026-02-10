@@ -8,6 +8,7 @@ from io import StringIO
 
 from litellm import acompletion, completion, get_model_info
 
+from autoform.ad import materialize
 from autoform.core import (
     Effect,
     EvalType,
@@ -126,12 +127,14 @@ def eval_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
 def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_resp = lm_call_p.bind(primals, roles=roles, model=model)
+    tangents = materialize(tangents)
     t_resp = lm_call_p.bind(tangents, roles=roles, model=model)
     return p_resp, t_resp
 
 
 async def apush_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
+    tangents = materialize(tangents)
     abind = ft.partial(lm_call_p.abind, roles=roles, model=model)
     p_resp, t_resp = await asyncio.gather(abind(primals), abind(tangents))
     return p_resp, t_resp
@@ -153,6 +156,7 @@ async def apull_fwd_lm_call(
 
 def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> list:
     residuals, out_cotangent = in_tree
+    out_cotangent = materialize(out_cotangent)
     contents, out = residuals
     grads = []
     for content in contents:
@@ -163,6 +167,7 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> l
 
 async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> list:
     residuals, out_cotangent = in_tree
+    out_cotangent = materialize(out_cotangent)
     contents, out = residuals
 
     async def grad(c):
@@ -273,7 +278,9 @@ async def aimpl_struct_lm_call(
 def eval_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Tree:
-    return struct.model_construct(**{k: Var(str) for k in struct.model_fields})
+    fields = struct.model_fields
+    # TODO(asem): fix the type extraction here
+    return struct.model_construct(**{k: Var(fields[k].annotation) for k in fields})
 
 
 def pushforward_struct_lm_call(
@@ -281,6 +288,7 @@ def pushforward_struct_lm_call(
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_resp = struct_lm_call_p.bind(primals, roles=roles, model=model, struct=struct)
+    tangents = materialize(tangents)
     t_resp = struct_lm_call_p.bind(tangents, roles=roles, model=model, struct=struct)
     return p_resp, t_resp
 
@@ -289,6 +297,7 @@ async def apush_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
+    tangents = materialize(tangents)
     abind = ft.partial(struct_lm_call_p.abind, roles=roles, model=model, struct=struct)
     p_resp, t_resp = await asyncio.gather(abind(primals), abind(tangents))
     return p_resp, t_resp
@@ -314,6 +323,7 @@ def pullback_bwd_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> list:
     residuals, out_cotangent = in_tree
+    out_cotangent = materialize(out_cotangent)
     contents, out = residuals
     grads = []
     for content in contents:
@@ -326,6 +336,7 @@ async def apull_bwd_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> list:
     residuals, out_cotangent = in_tree
+    out_cotangent = materialize(out_cotangent)
     contents, out = residuals
 
     async def grad(c):

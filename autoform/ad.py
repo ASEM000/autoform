@@ -9,6 +9,17 @@ from collections.abc import Callable
 from operator import setitem
 from typing import Any
 
+__all__ = [
+    "Zero",
+    "is_zero",
+    "zero_registry",
+    "materialize",
+    "accumulate_cotangents",
+    "cotangent_accumulators",
+    "pushforward",
+    "pullback",
+]
+
 from autoform.core import (
     IR,
     Interpreter,
@@ -18,9 +29,7 @@ from autoform.core import (
     IRVar,
     Primitive,
     TransformationTag,
-    Value,
     acall,
-    active_effect,
     active_interpreter,
     batch_rules,
     call,
@@ -40,18 +49,52 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_c
 class ADTag(TransformationTag): ...
 
 
+# ==================================================================================================
+# ZERO
+# ==================================================================================================
+
+
+class Zero:
+    __slots__ = "type"
+
+    def __init__(self, type: type, /):
+        self.type = type
+
+    def __repr__(self):
+        return f"Zero({self.type.__name__})"
+
+    def __eq__(self, other):
+        return isinstance(other, Zero) and self.type == other.type
+
+    def __hash__(self):
+        return hash(("Zero", self.type))
+
+
+def is_zero(x) -> bool:
+    return isinstance(x, Zero)
+
+
 zero_registry: dict[type, Any] = {}
 zero_registry[str] = ""
 
 
-def zero_cotangent(example):
-    assert type(example) in zero_registry, f"No zero cotangent seted for type {type(example)}"
-    return zero_registry[type(example)]
+def materialize(x: Tree, /) -> Tree:
+    """Replace each Zero leaf in a pytree with its concrete zero value.
 
+    Raises:
+        TypeError: If a ``Zero`` has a type with no registered concrete
+            zero (e.g. ``Zero(bool)``). This indicates an invalid gradient
+            path through a non-differentiable type.
+    """
 
-def zero_tangent(example):
-    assert type(example) in zero_registry, f"No zero tangent seted for type {type(example)}"
-    return zero_registry[type(example)]
+    def map_func(x):
+        if not is_zero(x):
+            return x
+        if x.type not in zero_registry:
+            raise TypeError(f"Cannot materialize Zero({x.type.__name__})")
+        return zero_registry[x.type]
+
+    return treelib.map(map_func, x, is_leaf=is_zero)
 
 
 # ==================================================================================================
@@ -78,8 +121,8 @@ class PushforwardInterpreter(Interpreter):
 def pushforward(ir: IR, /) -> IR:
     """Transform an IR to compute primals and tangents (forward-mode AD).
 
-    Creates a new IR that propagates tangent (perturbation) vectors alongside
-    primal values. Useful for computing Jacobian-vector products (JVPs).
+    Creates a new IR that propagates tangent (perturbation) alongside
+    primal values.
 
     Args:
         ir: The IR to transform.
@@ -108,7 +151,7 @@ def pushforward(ir: IR, /) -> IR:
         return (
             IRVar.fresh(type=atom.type, source=atom)
             if is_irvar(atom)
-            else IRLit(zero_tangent(atom.value))
+            else IRLit(Zero(type(atom.value)))
         )
 
     p_in_irtree = treelib.map(make_p, ir.in_irtree)
@@ -117,32 +160,27 @@ def pushforward(ir: IR, /) -> IR:
     out_p_irtree = treelib.map(make_p, ir.out_irtree)
     out_t_irtree = treelib.map(make_t, ir.out_irtree)
     out_irtree = (out_p_irtree, out_t_irtree)
-    # NOTE(asem): effect on the wrapper IREqn is unused at execution time.
-    # impl_pushforward_call never reads active_effect, and no EffectInterpreter
-    # handler targets pushforward_call_p. inner IREqns carry their own effects
-    # and restore them via ireqn.bind().
-    effect = active_effect.get()
-    ireqn = IREqn(pushforward_call_p, effect, in_irtree, out_irtree, dict(ir=ir))
+    ireqn = IREqn(pushforward_call_p, None, in_irtree, out_irtree, dict(ir=ir))
     return IR([ireqn], in_irtree, out_irtree)
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, t_in_tree) = in_tree
 
-    p_env: dict[IRVar, Value] = {}
-    t_env: dict[IRVar, Value] = {}
+    p_env: dict[IRVar, Any] = {}
+    t_env: dict[IRVar, Any] = {}
 
-    def write_p(atom: IRAtom, value: Value):
+    def write_p(atom: IRAtom, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def write_t(atom: IRAtom, value: Value):
+    def write_t(atom: IRAtom, value: Any):
         is_irvar(atom) and setitem(t_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Value:
+    def read_p(atom: IRAtom) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def read_t(atom: IRAtom) -> Value:
-        return t_env[atom] if is_irvar(atom) else zero_tangent(atom.value)
+    def read_t(atom: IRAtom) -> Any:
+        return t_env[atom] if is_irvar(atom) else Zero(type(atom.value))
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
     treelib.map(write_t, ir.in_irtree, t_in_tree)
@@ -164,20 +202,20 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, t_in_tree) = in_tree
 
-    p_env: dict[IRVar, Value] = {}
-    t_env: dict[IRVar, Value] = {}
+    p_env: dict[IRVar, Any] = {}
+    t_env: dict[IRVar, Any] = {}
 
-    def write_p(atom: IRAtom, value: Value):
+    def write_p(atom: IRAtom, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def write_t(atom: IRAtom, value: Value):
+    def write_t(atom: IRAtom, value: Any):
         is_irvar(atom) and setitem(t_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Value:
+    def read_p(atom: IRAtom) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def read_t(atom: IRAtom) -> Value:
-        return t_env[atom] if is_irvar(atom) else zero_tangent(atom.value)
+    def read_t(atom: IRAtom) -> Any:
+        return t_env[atom] if is_irvar(atom) else Zero(type(atom.value))
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
     treelib.map(write_t, ir.in_irtree, t_in_tree)
@@ -327,16 +365,17 @@ cotangent_accumulators: dict[type, Callable[[list], Any]] = {}
 cotangent_accumulators[str] = lambda cs: "".join(cs)
 
 
-def accumulate_cotangents(cotangents: list):
-    if not cotangents:
-        return ""
-    if len(cotangents) == 1:
-        return cotangents[0]
-    first, *_ = cotangents
-    for typ, acc in cotangent_accumulators.items():
+def accumulate_cotangents(cotangents: list[Any]) -> Any:
+    non_zero = [c for c in cotangents if not is_zero(c)]
+    if not non_zero:
+        return cotangents[0]  # all zeros — return first (preserves type)
+    if len(non_zero) == 1:
+        return non_zero[0]
+    first, *_ = non_zero
+    for typ in cotangent_accumulators:
         if isinstance(first, typ):
-            return acc(cotangents)
-    return sum(cotangents[1:], cotangents[0])
+            return cotangent_accumulators[typ](non_zero)
+    return sum(non_zero[1:], non_zero[0])
 
 
 class PullbackFwdInterpreter(Interpreter):
@@ -370,7 +409,7 @@ def pullback(ir: IR, /) -> IR:
     """Transform an IR to compute outputs and input cotangents (reverse-mode AD).
 
     Creates a new IR that computes gradients by backpropagating cotangent
-    (adjoint) vectors. Useful for computing vector-Jacobian products (VJPs).
+    (adjoint).
 
     Args:
         ir: The IR to transform.
@@ -399,7 +438,7 @@ def pullback(ir: IR, /) -> IR:
         return (
             IRVar.fresh(type=atom.type, source=atom)
             if is_irvar(atom)
-            else IRLit(zero_cotangent(atom.value))
+            else IRLit(Zero(type(atom.value)))
         )
 
     in_p = treelib.map(make_p, ir.in_irtree)
@@ -408,52 +447,51 @@ def pullback(ir: IR, /) -> IR:
     out_p = treelib.map(make_p, ir.out_irtree)
     in_c = treelib.map(make_c, ir.in_irtree)
     out_irtree = (out_p, in_c)
-    # NOTE(asem): effect on the wrapper IREqn is unused at execution time.
-    # impl_pullback_call never reads active_effect, and no EffectInterpreter
-    # handler targets pullback_call_p. inner IREqns carry their own effects
-    # and restore them via ireqn.bind().
-    effect = active_effect.get()
-    ireqn = IREqn(pullback_call_p, effect, in_irtree, out_irtree, dict(ir=ir))
+    ireqn = IREqn(pullback_call_p, None, in_irtree, out_irtree, dict(ir=ir))
     return IR([ireqn], in_irtree, out_irtree)
 
 
 def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, out_c_tree) = in_tree
 
-    p_env: dict[IRVar, Value] = {}
+    p_env: dict[IRVar, Any] = {}
     res_env: dict[int, Tree] = {}
-    c_env: defaultdict[IRVar, list] = defaultdict(list)
+    c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
-    def write_p(atom: IRAtom, value: Value):
+    def write_p(atom: IRAtom, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Value:
+    def read_p(atom: IRAtom) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def write_c(atom: IRAtom, value: Value):
+    def write_c(atom: IRAtom, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
 
-    def read_c(atom: IRAtom) -> Value:
-        return accumulate_cotangents(c_env[atom]) if is_irvar(atom) else zero_cotangent(atom.value)
+    def read_c(atom: IRAtom) -> Any:
+        if not is_irvar(atom):
+            return Zero(type(atom.value))
+        if not (cs := c_env[atom]):
+            return Zero(atom.type)
+        return accumulate_cotangents(cs)
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
 
     with using_interpreter(PullbackFwdInterpreter()):
-        for i, eqn in enumerate(ir.ireqns):
-            p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
-            out_p_ireqn, residuals = eqn.bind(p_in_ireqn, **eqn.params)
+        for i, ireqn in enumerate(ir.ireqns):
+            p_in_ireqn = treelib.map(read_p, ireqn.in_irtree)
+            out_p_ireqn, residuals = ireqn.bind(p_in_ireqn, **ireqn.params)
             res_env[i] = residuals
-            treelib.map(write_p, eqn.out_irtree, out_p_ireqn)
+            treelib.map(write_p, ireqn.out_irtree, out_p_ireqn)
 
     treelib.map(write_c, ir.out_irtree, out_c_tree)
 
     with using_interpreter(PullbackBwdInterpreter()):
-        for i, eqn in enumerate(reversed(ir.ireqns)):
+        for i, ireqn in enumerate(reversed(ir.ireqns)):
             idx = len(ir.ireqns) - 1 - i
             residuals = res_env[idx]
-            out_c_ireqn = treelib.map(read_c, eqn.out_irtree)
-            c_in_ireqn = eqn.bind((residuals, out_c_ireqn), **eqn.params)
-            treelib.map(write_c, eqn.in_irtree, c_in_ireqn)
+            out_c_ireqn = treelib.map(read_c, ireqn.out_irtree)
+            c_in_ireqn = ireqn.bind((residuals, out_c_ireqn), **ireqn.params)
+            treelib.map(write_c, ireqn.in_irtree, c_in_ireqn)
 
     out_p_tree = treelib.map(read_p, ir.out_irtree)
     in_c_tree = treelib.map(read_c, ir.in_irtree)
@@ -463,40 +501,44 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in_tree, out_c_tree) = in_tree
 
-    p_env: dict[IRVar, Value] = {}
+    p_env: dict[IRVar, Any] = {}
     res_env: dict[int, Tree] = {}
-    c_env: defaultdict[IRVar, list] = defaultdict(list)
+    c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
-    def write_p(atom: IRAtom, value: Value):
+    def write_p(atom: IRAtom, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Value:
+    def read_p(atom: IRAtom) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def write_c(atom: IRAtom, value: Value):
+    def write_c(atom: IRAtom, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
 
-    def read_c(atom):
-        return accumulate_cotangents(c_env[atom]) if is_irvar(atom) else zero_cotangent(atom.value)
+    def read_c(atom: IRAtom) -> Any:
+        if not is_irvar(atom):
+            return Zero(type(atom.value))
+        if not (cs := c_env[atom]):
+            return Zero(atom.type)
+        return accumulate_cotangents(cs)
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
 
     with using_interpreter(PullbackFwdInterpreter()):
-        for i, eqn in enumerate(ir.ireqns):
-            p_in_ireqn = treelib.map(read_p, eqn.in_irtree)
-            out_p_ireqn, residuals = await eqn.abind(p_in_ireqn, **eqn.params)
+        for i, ireqn in enumerate(ir.ireqns):
+            p_in_ireqn = treelib.map(read_p, ireqn.in_irtree)
+            out_p_ireqn, residuals = await ireqn.abind(p_in_ireqn, **ireqn.params)
             res_env[i] = residuals
-            treelib.map(write_p, eqn.out_irtree, out_p_ireqn)
+            treelib.map(write_p, ireqn.out_irtree, out_p_ireqn)
 
     treelib.map(write_c, ir.out_irtree, out_c_tree)
 
     with using_interpreter(PullbackBwdInterpreter()):
-        for i, eqn in enumerate(reversed(ir.ireqns)):
+        for i, ireqn in enumerate(reversed(ir.ireqns)):
             idx = len(ir.ireqns) - 1 - i
             residuals = res_env[idx]
-            out_c_ireqn = treelib.map(read_c, eqn.out_irtree)
-            c_in_ireqn = await eqn.abind((residuals, out_c_ireqn), **eqn.params)
-            treelib.map(write_c, eqn.in_irtree, c_in_ireqn)
+            out_c_ireqn = treelib.map(read_c, ireqn.out_irtree)
+            c_in_ireqn = await ireqn.abind((residuals, out_c_ireqn), **ireqn.params)
+            treelib.map(write_c, ireqn.in_irtree, c_in_ireqn)
 
     out_p_tree = treelib.map(read_p, ir.out_irtree)
     in_c_tree = treelib.map(read_c, ir.in_irtree)

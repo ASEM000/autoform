@@ -70,7 +70,6 @@ __all__ = [
 user_types: set[type] = {str}
 
 type UserType = str
-type Value = str
 
 
 def is_user_type(x) -> bool:
@@ -295,7 +294,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     for ireqn in ir.ireqns:
         lhs = format_tree(ireqn.out_irtree)
         rhs = format_tree(ireqn.in_irtree)
-        params_str = ", ".join(f"{k}={v!r}" for k, v in (ireqn.params or {}).items())
+        params_str = ", ".join(f"{k}={ireqn.params[k]!r}" for k in (ireqn.params or {}))
         effect_str = f" @{ireqn.effect!r}" if ireqn.effect else ""
         if params_str:
             lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}, {params_str}){effect_str}")
@@ -591,9 +590,9 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
     def func(*args: P.args, **kwargs: P.kwargs) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
         in_tree = pack_user_input(*args, **kwargs)
-        env: dict[IRVar, Value] = {}
+        env: dict[IRVar, Any] = {}
 
-        def read(atom: IRAtom) -> Value:
+        def read(atom: IRAtom) -> Any:
             return env[atom] if is_irvar(atom) else cast(IRLit, atom).value
 
         def write(atom: IRAtom, value):
@@ -630,9 +629,9 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
     async def func(*args: P.args, **kwargs: P.kwargs) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
         in_tree = pack_user_input(*args, **kwargs)
-        env: dict[IRVar, Value] = {}
+        env: dict[IRVar, Any] = {}
 
-        def read(atom: IRAtom) -> Value:
+        def read(atom: IRAtom) -> Any:
             return env[atom] if is_irvar(atom) else cast(IRLit, atom).value
 
         def write(atom: IRAtom, value):

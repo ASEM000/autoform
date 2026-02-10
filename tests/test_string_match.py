@@ -1,5 +1,6 @@
 import autoform as af
-from autoform.core import call, trace
+from autoform.core import Var, call, trace
+from autoform.string import eval_match
 
 
 class TestMatchBasic:
@@ -92,13 +93,11 @@ class TestMatchPushforward:
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
 
-        primal = "yes"
-        tangent = "tangent_input"
-
-        out_primal, out_tangent = call(pf_ir)((primal, tangent))
+        out_primal, out_tangent = call(pf_ir)(("yes", "tangent_input"))
 
         assert out_primal is True
-        assert out_tangent == ("", "")
+        assert af.ad.is_zero(out_tangent)
+        assert out_tangent.type is bool
 
     def test_pushforward_match_false_case(self):
         def check(x):
@@ -107,13 +106,11 @@ class TestMatchPushforward:
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
 
-        primal = "no"
-        tangent = "tangent_input"
-
-        out_primal, out_tangent = call(pf_ir)((primal, tangent))
+        out_primal, out_tangent = call(pf_ir)(("no", "tangent_input"))
 
         assert out_primal is False
-        assert out_tangent == ("", "")
+        assert af.ad.is_zero(out_tangent)
+        assert out_tangent.type is bool
 
 
 class TestMatchPullback:
@@ -124,13 +121,11 @@ class TestMatchPullback:
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
 
-        primal_in = "yes"
-        out_cotangent = "feedback"
-
-        out_primal, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        out_primal, in_cotangent = call(pb_ir)(("yes", "feedback"))
 
         assert out_primal is True
-        assert in_cotangent == ""
+        assert af.ad.is_zero(in_cotangent)
+        assert in_cotangent.type is str
 
     def test_pullback_match_false_case(self):
         def check(x):
@@ -139,13 +134,11 @@ class TestMatchPullback:
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
 
-        primal_in = "no"
-        out_cotangent = "feedback"
-
-        out_primal, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        out_primal, in_cotangent = call(pb_ir)(("no", "feedback"))
 
         assert out_primal is False
-        assert in_cotangent == ""
+        assert af.ad.is_zero(in_cotangent)
+        assert in_cotangent.type is str
 
 
 class TestMatchComposition:
@@ -183,20 +176,18 @@ class TestMatchComposition:
 
 class TestEvalMatch:
     def test_eval_match_concrete_equal(self):
-        from autoform.string import eval_match
 
         result = eval_match(("yes", "yes"))
-        assert result is True
+        assert isinstance(result, Var)
+        assert result.type is bool
 
     def test_eval_match_concrete_unequal(self):
-        from autoform.string import eval_match
 
         result = eval_match(("yes", "no"))
-        assert result is False
+        assert isinstance(result, Var)
+        assert result.type is bool
 
     def test_eval_match_with_var_returns_var(self):
-        from autoform.core import Var
-        from autoform.string import eval_match
 
         result = eval_match((Var(str), "yes"))
         assert isinstance(result, Var)

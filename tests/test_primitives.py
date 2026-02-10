@@ -200,7 +200,7 @@ class TestStopGradient:
         pf_ir = af.pushforward(ir)
         primal_out, tangent_out = af.call(pf_ir)(("primal", "tangent"))
         assert primal_out == "primal"
-        assert tangent_out == "" or (hasattr(tangent_out, "items") and len(tangent_out.items) == 0)
+        assert af.ad.is_zero(tangent_out)
 
     def test_pullback_zeros_cotangent(self):
         def func(x):
@@ -210,9 +210,7 @@ class TestStopGradient:
         pb_ir = af.pullback(ir)
         primal_out, cotangent_in = af.call(pb_ir)(("primal", "cotangent"))
         assert primal_out == "primal"
-        assert cotangent_in == "" or (
-            hasattr(cotangent_in, "items") and len(cotangent_in.items) == 0
-        )
+        assert af.ad.is_zero(cotangent_in)
 
     def test_batch(self):
         def func(x):
@@ -224,9 +222,6 @@ class TestStopGradient:
         assert result == ["a", "b", "c"]
 
     def test_in_chain_stops_gradient(self):
-        def is_zero_cotangent(val):
-            return val == "" or (hasattr(val, "items") and len(val.items) == 0)
-
         def func(x, y):
             stopped = af.stop_gradient(x)
             return af.concat(stopped, y)
@@ -234,7 +229,7 @@ class TestStopGradient:
         ir = af.trace(func)("a", "b")
         pb_ir = af.pullback(ir)
         _, (cotangent_x, cotangent_y) = af.call(pb_ir)((("a", "b"), "grad"))
-        assert is_zero_cotangent(cotangent_x)
+        assert af.ad.is_zero(cotangent_x)
         assert cotangent_y == "grad"
 
     def test_chained_with_format(self):
@@ -255,17 +250,14 @@ class TestStopGradient:
         assert result == ("hello", "world")
 
     def test_tree_pullback_zeros_all(self):
-        def is_zero_cotangent(val):
-            return val == "" or (hasattr(val, "items") and len(val.items) == 0)
-
         def func(x):
             return af.stop_gradient(x)
 
         ir = af.trace(func)(("a", "b"))
         pb_ir = af.pullback(ir)
         _, cotangent_in = af.call(pb_ir)((("p1", "p2"), ("c1", "c2")))
-        assert is_zero_cotangent(cotangent_in[0])
-        assert is_zero_cotangent(cotangent_in[1])
+        assert af.ad.is_zero(cotangent_in[0])
+        assert af.ad.is_zero(cotangent_in[1])
 
 
 class TestRunIRInline:
@@ -366,16 +358,22 @@ class TestRunIRInline:
 
 
 class TestCotangentHelpers:
-    def test_zero_cotangent_with_seted_type(self):
-        result = af.ad.zero_cotangent("example")
-        assert result == ""
+    def test_zero_str(self):
+        z = af.ad.Zero(str)
+        assert af.ad.is_zero(z)
+        assert z.type is str
+        assert af.ad.materialize(z) == ""
 
-    def test_zero_cotangent_with_unseted_type(self):
-        class CustomType:
-            pass
+    def test_zero_non_differentiable_type(self):
+        z = af.ad.Zero(bool)
+        assert af.ad.is_zero(z)
+        assert z.type is bool
+        with pytest.raises(TypeError):
+            af.ad.materialize(z)
 
-        with pytest.raises(AssertionError):
-            af.ad.zero_cotangent(CustomType())
+    def test_zero_equality(self):
+        assert af.ad.Zero(str) == af.ad.Zero(str)
+        assert af.ad.Zero(str) != af.ad.Zero(bool)
 
     def test_accumulate_cotangents_single(self):
         result = af.ad.accumulate_cotangents(["hello"])
@@ -384,6 +382,10 @@ class TestCotangentHelpers:
     def test_accumulate_cotangents_strings(self):
         result = af.ad.accumulate_cotangents(["a", "b", "c"])
         assert result == "abc"
+
+    def test_accumulate_cotangents_all_zeros(self):
+        result = af.ad.accumulate_cotangents([af.ad.Zero(str), af.ad.Zero(str)])
+        assert af.ad.is_zero(result)
 
     def test_accumulate_cotangents_unseted_type_uses_sum(self):
         result = af.ad.accumulate_cotangents([1, 2, 3])
@@ -404,7 +406,8 @@ class TestLiteralZeroing:
         t_lit, t_var = tangent_in
 
         assert isinstance(t_lit, af.core.IRLit)
-        assert t_lit.value == ""
+        assert af.ad.is_zero(t_lit.value)
+        assert t_lit.value.type is str
         assert isinstance(t_var, af.core.IRVar)
 
     def test_pushforward_zeros_literal_output_tangent(self):
@@ -423,7 +426,7 @@ class TestLiteralZeroing:
         t_out_var, t_out_lit = tangent_out
 
         assert isinstance(t_out_lit, af.core.IRLit)
-        assert t_out_lit.value == ""
+        assert af.ad.is_zero(t_out_lit.value)
         assert isinstance(t_out_var, af.core.IRVar)
 
     def test_pullback_zeros_literal_output_cotangent(self):
@@ -437,7 +440,7 @@ class TestLiteralZeroing:
         c_out_var, c_out_lit = cotangent_out
 
         assert isinstance(c_out_lit, af.core.IRLit)
-        assert c_out_lit.value == ""
+        assert af.ad.is_zero(c_out_lit.value)
 
     def test_pullback_zeros_literal_input_cotangent(self):
         lit = af.core.IRLit("constant_input")
@@ -452,4 +455,4 @@ class TestLiteralZeroing:
         c_in_lit, c_in_var = cotangent_in
 
         assert isinstance(c_in_lit, af.core.IRLit)
-        assert c_in_lit.value == ""
+        assert af.ad.is_zero(c_in_lit.value)

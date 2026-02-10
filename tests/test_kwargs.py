@@ -26,6 +26,7 @@ def eval_greet(in_tree) -> af.core.Var:
 @ft.partial(af.core.push_rules.set, greet_p)
 def pushforward_greet(in_tree):
     primals, tangents = in_tree
+    tangents = af.ad.materialize(tangents)
     return impl_greet(primals), impl_greet(tangents)
 
 
@@ -43,8 +44,8 @@ def pullback_bwd_greet(residuals, out_cotangent):
             return (
                 out_cotangent,
                 {
-                    "greeting": af.ad.zero_cotangent(greeting),
-                    "punctuation": af.ad.zero_cotangent(punct),
+                    "greeting": af.ad.Zero(type(greeting)),
+                    "punctuation": af.ad.Zero(type(punct)),
                 },
             )
 

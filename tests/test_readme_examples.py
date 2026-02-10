@@ -22,6 +22,7 @@ def eval_shout(text) -> af.core.Var:
 @ft.partial(af.core.push_rules.set, shout_p)
 def push_shout(in_tree: tuple[str, str]) -> tuple[str, str]:
     primal, tangent = in_tree
+    tangent = af.ad.materialize(tangent)
     return primal.upper(), tangent.upper()
 
 
@@ -210,6 +211,7 @@ def push_textgrad_style_lm_call(in_tree, *, roles: tuple, model: str, struct: ty
     affect the outputs.
     """
     primals, tangents = in_tree
+    tangents = af.ad.materialize(tangents)
     p_out = af.core.impl_rules[af.struct_lm_call_p](
         primals, roles=roles, model=model, struct=struct
     )

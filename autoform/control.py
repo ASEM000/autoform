@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 
-from autoform.ad import pullback, pushforward, zero_cotangent
+from autoform.ad import Zero, is_zero, pullback, pushforward
 from autoform.batch import batch
 from autoform.core import (
     IR,
@@ -82,8 +82,8 @@ def eval_stop_gradient(x: Tree, /) -> Tree:
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> tuple[Tree, Tree]:
     primal, tangent = in_tree
-    zero_tangent = treelib.map(zero_cotangent, primal)
-    return primal, zero_tangent
+    zero_t = treelib.map(lambda p: Zero(type(p)) if not is_zero(p) else p, primal)
+    return primal, zero_t
 
 
 def pullback_fwd_stop_gradient(x: Tree, /) -> tuple[Tree, Tree]:
@@ -94,7 +94,7 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> tuple[Tree, Tree]:
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return treelib.map(zero_cotangent, residuals)
+    return treelib.map(lambda r: Zero(type(r)) if not is_zero(r) else r, residuals)
 
 
 def batch_stop_gradient(in_tree: Tree, /) -> tuple[Tree, Tree]:
@@ -212,7 +212,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = residuals
     pb_ir = pullback(branches[key])
     _, c_operands = call(pb_ir)((operands, out_cotangent))
-    return (zero_cotangent(key), c_operands)
+    return (Zero(str), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
@@ -220,7 +220,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = residuals
     pb_ir = pullback(branches[key])
     _, c_operands = await acall(pb_ir)((operands, out_cotangent))
-    return (zero_cotangent(key), c_operands)
+    return (Zero(str), c_operands)
 
 
 def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
@@ -275,7 +275,8 @@ batch_rules.aset(switch_p, abatch_switch)
 
 
 def dce_switch(ireqn: IREqn, out_used: Tree[bool], /) -> tuple[IREqn, Tree[bool]]:
-    branches = {k: dce(v, out_used=out_used) for k, v in ireqn.params["branches"].items()}
+    branches: dict[str, IR] = ireqn.params["branches"]
+    branches = {k: dce(branches[k], out_used=out_used) for k in branches}
     new_eqn = ireqn.using(branches=branches)
     return default_dce(new_eqn, out_used)
 
@@ -309,7 +310,7 @@ def while_loop(cond_ir: IR, body_ir: IR, init_val: Tree, *, max_iters: int) -> T
     Example:
         >>> import autoform as af
         >>> def cond(x):
-        ...     return False  # Exit immediately
+        ...     return af.match(x, "stop") # loop while x does not equal "stop"
         >>> def body(x):
         ...     return af.concat(x, "x")
         >>> cond_ir = af.trace(cond)("x")
