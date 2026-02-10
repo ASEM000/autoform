@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.ad import Zero, materialize
+from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
     EvalType,
     Primitive,
@@ -232,7 +232,7 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return treelib.map(lambda r: Zero(type(r)), residuals)
+    return treelib.map(lambda r: r if is_zero(r) else Zero(type(r)), residuals)
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
