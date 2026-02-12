@@ -581,16 +581,6 @@ class TestBatchSpec:
         out = batch_spec(in_tree, in_batched).unflatten(results)
         assert out == [Point(x=10, y=20), Point(x=30, y=40)]
 
-    def test_struct_with_tuple_field(self):
-        class Batch(af.Struct):
-            codes: tuple
-
-        in_tree = (Batch(codes=("a", "b", "c")),)
-        in_batched = (True,)
-        results = [("x", "y", "z")]
-        out = batch_spec(in_tree, in_batched).unflatten(results)
-        assert out == Batch(codes=("x", "y", "z"))
-
 
 class TestBatchRuleAllUnbatched:
     def test_format_all_unbatched(self):

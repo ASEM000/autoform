@@ -24,7 +24,15 @@ from autoform.core import (
     using_effect,
 )
 from autoform.effects import effect_p
-from autoform.utils import Struct, Tree, batch_index, batch_spec, batch_transpose, treelib
+from autoform.utils import (
+    Struct,
+    Tree,
+    batch_index,
+    batch_spec,
+    batch_transpose,
+    struct_type_tree,
+    treelib,
+)
 
 
 class LMTag(PrimitiveTag): ...
@@ -224,13 +232,13 @@ struct_lm_call_p = Primitive("struct_lm_call", tag={LMTag})
 def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:
     """Calls a language model with structured output using response_format.
 
-    Uses LLM's built-in JSON mode with a Pydantic schema to extract structured
+    Uses LLM's built-in JSON mode with a schema to extract structured
     data. The model response is automatically parsed and validated.
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
         model: The name of the language model to use.
-        struct: A Pydantic model subclassing `Struct` for the output schema.
+        struct: A ``Struct`` subclass defining the output schema.
 
     Returns:
         A validated instance of the struct type.
@@ -278,9 +286,7 @@ async def aimpl_struct_lm_call(
 def eval_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Tree:
-    fields = struct.model_fields
-    # TODO(asem): fix the type extraction here
-    return struct.model_construct(**{k: Var(fields[k].annotation) for k in fields})
+    return treelib.map(Var, struct_type_tree(struct))
 
 
 def pushforward_struct_lm_call(
