@@ -139,6 +139,9 @@ tool_branches = dict(
     done=af.trace(done)("...", "..."),
 )
 
+def cond(state: State):
+    return af.match(state.status, "continue")
+
 def body(state: State):
     messages = [
         dict(role="system", content="You are a tool-use agent."),
@@ -147,6 +150,9 @@ def body(state: State):
     d = af.struct_lm_call(messages, model="gpt-5.2", struct=Decision)
     new_history = af.switch(d.tool, tool_branches, d.args, state.history)
     return State(history=new_history, result=d.answer, status=d.status)
+
+cond_ir = af.trace(cond)(State(history="...", result="", status="..."))
+body_ir = af.trace(body)(State(history="...", result="", status="..."))
 
 def agent(question: str):
     init = State(history=question, result="", status="continue")
