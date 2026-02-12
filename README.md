@@ -65,10 +65,37 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 
 ## Concurrency
 
-`sched` finds independent LM calls. `acall` runs them concurrently.
+`sched` analyzes the IR's dependency graph, groups independent LM calls into parallel stages, and `acall` runs each stage concurrently.
+
+```mermaid
+flowchart LR
+    subgraph before["sequential"]
+        direction TB
+        A1[format] --> B1[LLM explain]
+        A2[format] --> B2[LLM facts]
+        B1 --> C1[format]
+        B2 --> C1
+        C1 --> D1[LLM synthesize]
+    end
+
+    before -- "sched" --> after
+
+    subgraph after["scheduled"]
+        direction TB
+        A3[format] & A4[format]
+        subgraph "gather (concurrent)"
+            B3[LLM explain] & B4[LLM facts]
+        end
+        A3 --> B3
+        A4 --> B4
+        B3 & B4 --> C2[format]
+        C2 --> D2[LLM synthesize]
+    end
+```
+
 ```python
-scheduled = af.sched(ir)
-result = await scheduled.acall("input") # acall for async
+scheduled = af.sched(ir)               # groups independent LLM calls into gather stages
+result = await scheduled.acall("DNA")   # runs each gather stage concurrently
 ```
 
 ## Debugging
