@@ -602,3 +602,232 @@ class TestStructEquality:
         o3 = Outer(inner=Inner(v="world"), name="test")
         assert o1 == o2
         assert o1 != o3
+
+
+class TestStructFrozen:
+    def test_frozen_blocks_setattr(self):
+        class Point(af.Struct):
+            x: int
+            y: int
+
+        p = Point(x=1, y=2)
+        with pytest.raises(Exception):
+            p.x = 99
+
+    def test_unflatten_bypasses_frozen(self):
+        class Point(af.Struct):
+            x: int
+            y: int
+
+        p = Point(x=1, y=2)
+        spec = af.utils.treelib.structure(p)
+        restored = spec.unflatten([10, 20])
+        assert restored.x == 10
+        assert restored.y == 20
+
+    def test_model_construct_bypasses_frozen(self):
+        class Point(af.Struct):
+            x: int
+            y: int
+
+        p = Point.model_construct(x=True, y=False)
+        assert p.x is True
+        assert p.y is False
+
+    def test_map_on_frozen_struct(self):
+        class Pair(af.Struct):
+            a: str
+            b: str
+
+        p = Pair(a="hello", b="world")
+        mapped = af.utils.treelib.map(str.upper, p)
+        assert mapped.a == "HELLO"
+        assert mapped.b == "WORLD"
+
+
+class TestStructComplex:
+    def test_deeply_nested_3_levels(self):
+        class L3(af.Struct):
+            val: str
+
+        class L2(af.Struct):
+            child: L3
+            tag: int
+
+        class L1(af.Struct):
+            nested: L2
+            name: str
+
+        obj = L1(nested=L2(child=L3(val="deep"), tag=42), name="root")
+        leaves = af.utils.treelib.leaves(obj)
+        assert leaves == ["deep", 42, "root"]
+
+        spec = af.utils.treelib.structure(obj)
+        restored = spec.unflatten(["new", 99, "top"])
+        assert restored.nested.child.val == "new"
+        assert restored.nested.tag == 99
+        assert restored.name == "top"
+
+    def test_struct_with_all_field_types(self):
+        class Inner(af.Struct):
+            v: str
+
+        class Kitchen(af.Struct):
+            scalar_str: str
+            scalar_int: int
+            scalar_float: float
+            scalar_bool: bool
+            literal_field: Literal["a", "b", "c"]
+            list_field: Annotated[list[int], Len(2, 2)]
+            nested: Inner
+
+        obj = Kitchen(
+            scalar_str="hello",
+            scalar_int=1,
+            scalar_float=3.14,
+            scalar_bool=True,
+            literal_field="a",
+            list_field=[10, 20],
+            nested=Inner(v="inner"),
+        )
+        leaves = af.utils.treelib.leaves(obj)
+        assert leaves == ["hello", 1, 3.14, True, "a", 10, 20, "inner"]
+
+    def test_type_tree_deeply_nested(self):
+        class L3(af.Struct):
+            x: str
+            y: Annotated[list[int], Len(2, 2)]
+
+        class L2(af.Struct):
+            child: L3
+            flag: Literal[True, False]
+
+        class L1(af.Struct):
+            nested: L2
+
+        tt = af.utils.struct_type_tree(L1)
+        tt_leaves = af.utils.treelib.leaves(tt)
+        assert tt_leaves == [str, int, int, bool]
+
+    def test_list_of_structs_type_tree(self):
+        class Item(af.Struct):
+            name: str
+            score: int
+
+        class Batch(af.Struct):
+            items: Annotated[list[Item], Len(3, 3)]
+
+        tt = af.utils.struct_type_tree(Batch)
+        tt_leaves = af.utils.treelib.leaves(tt)
+        assert tt_leaves == [str, int, str, int, str, int]
+
+    def test_struct_roundtrip_flatten_unflatten(self):
+        class Inner(af.Struct):
+            x: str
+
+        class Outer(af.Struct):
+            a: int
+            inner: Inner
+            items: Annotated[list[str], Len(2, 2)]
+
+        original = Outer(a=42, inner=Inner(x="hello"), items=["p", "q"])
+        leaves, spec = af.utils.treelib.flatten(original)
+        restored = spec.unflatten(leaves)
+        assert original == restored
+
+    def test_struct_trace_with_nested_access(self):
+        class Inner(af.Struct):
+            value: str
+
+        class Outer(af.Struct):
+            inner: Inner
+            label: str
+
+        def program(o: Outer) -> str:
+            return af.format("{}: {}", o.label, o.inner.value)
+
+        ir = af.trace(program)(Outer(inner=Inner(value="x"), label="y"))
+        result = af.call(ir)(Outer(inner=Inner(value="world"), label="hello"))
+        assert result == "hello: world"
+
+    def test_struct_trace_with_list_field_access(self):
+        class WithList(af.Struct):
+            tag: str
+            items: Annotated[list[str], Len(3, 3)]
+
+        def program(w: WithList) -> str:
+            return af.format("{}: {}, {}, {}", w.tag, w.items[0], w.items[1], w.items[2])
+
+        ir = af.trace(program)(WithList(tag="t", items=["a", "b", "c"]))
+        result = af.call(ir)(WithList(tag="label", items=["x", "y", "z"]))
+        assert result == "label: x, y, z"
+
+    def test_batch_struct_input_with_list_field(self):
+        class Record(af.Struct):
+            name: str
+            tags: Annotated[list[str], Len(2, 2)]
+
+        def summarize(r: Record) -> str:
+            return af.format("{}={},{}", r.name, r.tags[0], r.tags[1])
+
+        ir = af.trace(summarize)(Record(name="x", tags=["a", "b"]))
+        batch = af.batch(
+            ir,
+            in_axes=Record.model_construct(name=True, tags=[False, False]),
+        )
+        result = af.call(batch)(
+            Record.model_construct(name=["Alice", "Bob"], tags=["p", "q"]),
+        )
+        assert result == ["Alice=p,q", "Bob=p,q"]
+
+    def test_pushforward_through_nested_struct(self):
+        class Pair(af.Struct):
+            a: str
+            b: str
+
+        def program(p: Pair) -> str:
+            return af.format("[{},{}]", p.a, p.b)
+
+        ir = af.trace(program)(Pair(a="x", b="y"))
+        pf_ir = af.pushforward(ir)
+        primal, tangent = af.call(pf_ir)((
+            Pair(a="hello", b="world"),
+            Pair(a="delta_a", b="delta_b"),
+        ))
+        assert primal == "[hello,world]"
+        assert tangent == "[delta_a,delta_b]"
+
+    def test_pullback_through_nested_struct(self):
+        class Pair(af.Struct):
+            a: str
+            b: str
+
+        def program(p: Pair) -> str:
+            return af.format("[{},{}]", p.a, p.b)
+
+        ir = af.trace(program)(Pair(a="x", b="y"))
+        pb_ir = af.pullback(ir)
+        output, grad = af.call(pb_ir)((Pair(a="hello", b="world"), "feedback"))
+        assert output == "[hello,world]"
+        assert isinstance(grad, Pair)
+
+    def test_struct_lm_call_nested_struct_traces(self):
+        class Inner(af.Struct):
+            detail: str
+
+        class Outer(af.Struct):
+            summary: str
+            inner: Inner
+            tags: Annotated[list[str], Len(2, 2)]
+
+        def program(prompt: str):
+            return af.struct_lm_call(
+                [dict(role="user", content=prompt)],
+                model="gpt-5.2",
+                struct=Outer,
+            )
+
+        ir = af.trace(program)("test")
+        assert len(ir.ireqns) == 1
+        tt_leaves = af.utils.treelib.leaves(af.utils.struct_type_tree(Outer))
+        assert tt_leaves == [str, str, str, str]
