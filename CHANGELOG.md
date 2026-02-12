@@ -1,5 +1,19 @@
 # Changelog
 
+## vnext (unreleased)
+
+### Breaking Changes
+
+  - `Struct` fields are now restricted to leaf types (`str`, `int`, `float`, `bool`), `Struct` subclasses, `Literal[v, ...]`, and fixed-size containers (`Annotated[list[T], Len(n, n)]`). Previously dyamic containers (e.g., `list`, `dict`) and unions were allowed, but they complicate static analysis and tracing. Use nested `Struct`s for complex data.
+
+  - `Struct` instances are now **frozen** (immutable). Direct attribute assignment after construction raises an error. Use `model_construct()` or pytree `unflatten` for bypass semantics (e.g., tracing, batch axes).
+
+### Improvements
+
+  - `check_struct_field_type` raises descriptive `TypeError` messages at class definition time, pinpointing the exact field and why its type is invalid.
+
+  - `struct_type_tree(cls)` builds a cached pytree with types as leaves, used by `eval_struct_lm_call` to produce `Var` trees in a single `treelib.map` call instead of manual recursion.
+
 ## v0.2.0 (February 7, 2026)
 
 ### New Features
