@@ -56,12 +56,16 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 
 ## Transforms
 
+<div align="center">
+
 | Transform | What it does |
 |-----------|--------------|
 | `batch` | Vectorize over inputs |
 | `pushforward` | Forward-mode AD |
 | `pullback` | Reverse-mode AD |
 | `sched` | Auto-concurrent execution |
+
+</div>
 
 ## Concurrency
 
