@@ -1,4 +1,94 @@
+from typing import Annotated, Literal
+
+import pytest
+from annotated_types import Len
+
 import autoform as af
+
+
+class TestStructFieldValidation:
+    def test_leaf_types_accepted(self):
+        class Valid(af.Struct):
+            a: str
+            b: int
+            c: float
+            d: bool
+
+    def test_nested_struct_accepted(self):
+        class Inner(af.Struct):
+            x: str
+
+        class Outer(af.Struct):
+            inner: Inner
+
+    def test_literal_str_accepted(self):
+        class WithLiteral(af.Struct):
+            status: Literal["active", "inactive"]
+
+    def test_literal_int_accepted(self):
+        class WithLiteral(af.Struct):
+            priority: Literal[1, 2, 3]
+
+    def test_literal_bool_accepted(self):
+        class WithLiteral(af.Struct):
+            flag: Literal[True, False]
+
+    def test_struct_field_accepted(self):
+        class Inner(af.Struct):
+            x: str
+
+        class Outer(af.Struct):
+            inner: Inner
+            name: str
+
+    def test_array_str_accepted(self):
+        class WithArray(af.Struct):
+            items: Annotated[list[str], Len(3, 3)]
+
+    def test_array_int_accepted(self):
+        class WithArray(af.Struct):
+            scores: Annotated[list[int], Len(2, 2)]
+
+    def test_array_struct_accepted(self):
+        class Inner(af.Struct):
+            x: str
+
+        class WithArray(af.Struct):
+            items: Annotated[list[Inner], Len(2, 2)]
+
+    def test_array_literal_accepted(self):
+        class WithArray(af.Struct):
+            tags: Annotated[list[Literal["a", "b"]], Len(3, 3)]
+
+    def test_mixed_literal_rejected(self):
+        with pytest.raises(TypeError, match="Literal values must share one type"):
+
+            class Bad(af.Struct):
+                value: Literal["a", 1]
+
+    def test_list_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                items: list[str]
+
+    def test_dict_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                data: dict[str, int]
+
+    def test_tuple_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                items: tuple[str, str]
+
+    def test_optional_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                value: str | None
 
 
 class TestStruct:
@@ -52,6 +142,26 @@ class TestStruct:
         o = Outer(inner=Inner(value="hello"), name="test")
         leaves = af.utils.treelib.leaves(o)
         assert leaves == ["hello", "test"]
+
+    def test_struct_with_array_leaves(self):
+        class WithArray(af.Struct):
+            name: str
+            scores: Annotated[list[int], Len(3, 3)]
+
+        a = WithArray(name="alice", scores=[10, 20, 30])
+        leaves = af.utils.treelib.leaves(a)
+        assert leaves == ["alice", 10, 20, 30]
+
+    def test_struct_with_array_unflatten(self):
+        class WithArray(af.Struct):
+            tag: str
+            items: Annotated[list[str], Len(2, 2)]
+
+        a = WithArray(tag="x", items=["a", "b"])
+        spec = af.utils.treelib.structure(a)
+        restored = spec.unflatten(["y", "c", "d"])
+        assert restored.tag == "y"
+        assert restored.items == ["c", "d"]
 
 
 class TestStructLmCall:
@@ -133,6 +243,21 @@ class TestStructLmCall:
             assert False, "Should have raised AssertionError"
         except AssertionError as e:
             assert "Struct" in str(e)
+
+    def test_struct_lm_call_with_array_field(self):
+        class WithArray(af.Struct):
+            items: Annotated[list[str], Len(3, 3)]
+
+        def ir(prompt: str):
+            return af.struct_lm_call(
+                [dict(role="user", content=prompt)],
+                model="gpt-5.2",
+                struct=WithArray,
+            )
+
+        built_ir = af.trace(ir)("test")
+        assert len(built_ir.ireqns) == 1
+        assert built_ir.ireqns[0].prim.name == "struct_lm_call"
 
     def test_struct_lm_call_with_map_chain(self):
         class Step1(af.Struct):
@@ -275,6 +400,152 @@ class TestStructInAxes:
         batch = af.batch(ir, in_axes=True)
         result = af.call(batch)(["1", "2"])
         assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])
+
+
+class TestStructFieldValidationErrors:
+    def test_literal_non_leaf_base_rejected(self):
+        with pytest.raises(TypeError, match="Literal base type must be str/int/float/bool"):
+
+            class Bad(af.Struct):
+                value: Literal[b"bytes"]
+
+    def test_annotated_list_no_len_rejected(self):
+        with pytest.raises(TypeError, match="No ``Len`` constraint"):
+
+            class Bad(af.Struct):
+                items: Annotated[list[str], "some marker"]
+
+    def test_annotated_list_variable_len_rejected(self):
+        with pytest.raises(TypeError, match="must be fixed size"):
+
+            class Bad(af.Struct):
+                items: Annotated[list[str], Len(1, 5)]
+
+    def test_annotated_bare_list_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                items: Annotated[list, Len(3, 3)]
+
+    def test_tuple_non_ellipsis_rejected(self):
+        with pytest.raises(TypeError, match="tuple must be tuple\\[T, \\.\\.\\.\\] form"):
+
+            class Bad(af.Struct):
+                items: Annotated[tuple[str, int], Len(2, 2)]
+
+    def test_tuple_ellipsis_accepted(self):
+        class Valid(af.Struct):
+            items: Annotated[tuple[str, ...], Len(3, 3)]
+
+    def test_annotated_non_container_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                value: Annotated[str, "description"]
+
+    def test_nested_container_bad_element_rejected(self):
+        with pytest.raises(TypeError, match="invalid type"):
+
+            class Bad(af.Struct):
+                items: Annotated[list[dict], Len(2, 2)]
+
+
+class TestTypeTree:
+    def test_scalar_fields(self):
+        class Simple(af.Struct):
+            a: str
+            b: int
+            c: float
+            d: bool
+
+        tt = af.utils.struct_type_tree(Simple)
+        assert isinstance(tt, Simple)
+        assert tt.a is str
+        assert tt.b is int
+        assert tt.c is float
+        assert tt.d is bool
+
+    def test_nested_struct(self):
+        class Inner(af.Struct):
+            x: str
+
+        class Outer(af.Struct):
+            inner: Inner
+            tag: int
+
+        tt = af.utils.struct_type_tree(Outer)
+        assert isinstance(tt, Outer)
+        assert isinstance(tt.inner, Inner)
+        assert tt.inner.x is str
+        assert tt.tag is int
+
+    def test_literal_resolves_to_base_type(self):
+        class WithLiteral(af.Struct):
+            status: Literal["a", "b"]
+            priority: Literal[1, 2, 3]
+
+        tt = af.utils.struct_type_tree(WithLiteral)
+        assert tt.status is str
+        assert tt.priority is int
+
+    def test_list_container(self):
+        class WithList(af.Struct):
+            scores: Annotated[list[int], Len(3, 3)]
+
+        tt = af.utils.struct_type_tree(WithList)
+        assert isinstance(tt.scores, list)
+        assert len(tt.scores) == 3
+        assert all(t is int for t in tt.scores)
+
+    def test_tuple_container(self):
+        class WithTuple(af.Struct):
+            tags: Annotated[tuple[str, ...], Len(2, 2)]
+
+        tt = af.utils.struct_type_tree(WithTuple)
+        assert isinstance(tt.tags, tuple)
+        assert len(tt.tags) == 2
+        assert all(t is str for t in tt.tags)
+
+    def test_nested_struct_in_list(self):
+        class Inner(af.Struct):
+            v: str
+
+        class Outer(af.Struct):
+            items: Annotated[list[Inner], Len(2, 2)]
+
+        tt = af.utils.struct_type_tree(Outer)
+        assert isinstance(tt.items, list)
+        assert len(tt.items) == 2
+        assert all(isinstance(item, Inner) for item in tt.items)
+        assert all(item.v is str for item in tt.items)
+
+    def test_type_tree_map_produces_vars(self):
+        class Answer(af.Struct):
+            text: str
+            score: int
+
+        tt = af.utils.struct_type_tree(Answer)
+        mapped = af.utils.treelib.map(lambda tp: f"Var({tp.__name__})", tt)
+        assert isinstance(mapped, Answer)
+        assert mapped.text == "Var(str)"
+        assert mapped.score == "Var(int)"
+
+    def test_type_tree_leaves_match_pytree_leaves(self):
+        class Inner(af.Struct):
+            x: str
+
+        class Outer(af.Struct):
+            inner: Inner
+            scores: Annotated[list[int], Len(2, 2)]
+            tag: str
+
+        tt_leaves = af.utils.treelib.leaves(af.utils.struct_type_tree(Outer))
+        assert tt_leaves == [str, int, int, str]
+
+        # same count as real instance leaves
+        real = Outer(inner=Inner(x="hi"), scores=[1, 2], tag="t")
+        real_leaves = af.utils.treelib.leaves(real)
+        assert len(tt_leaves) == len(real_leaves)
 
 
 class TestStructEquality:
