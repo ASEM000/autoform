@@ -12,7 +12,7 @@ Composable function transformations for LM programs.
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
 
-[Quickstart](#quickstart) - [Transforms](#transforms) - [Concurrency](#concurrency) - [Debugging](#debugging) - [Docs](https://autoform.readthedocs.io)
+[Quickstart](#quickstart) - [Transforms](#transforms) - [Concurrency](#concurrency) - [Debugging](#debugging) - [Agent](#agent) - [Docs](https://autoform.readthedocs.io)
 
 </div>
 
@@ -56,6 +56,8 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 
 ## Transforms
 
+<div align="center">
+
 | Transform | What it does |
 |-----------|--------------|
 | `batch` | Vectorize over inputs |
@@ -63,12 +65,41 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 | `pullback` | Reverse-mode AD |
 | `sched` | Auto-concurrent execution |
 
+</div>
+
 ## Concurrency
 
-`sched` finds independent LM calls. `acall` runs them concurrently.
+`sched` analyzes the IR's dependency graph, groups independent LM calls into parallel stages, and `acall` runs each stage concurrently.
+
+```mermaid
+flowchart LR
+    subgraph before["sequential"]
+        direction TB
+        A1[format] --> B1[LLM explain]
+        A2[format] --> B2[LLM facts]
+        B1 --> C1[format]
+        B2 --> C1
+        C1 --> D1[LLM synthesize]
+    end
+
+    before -- "sched" --> after
+
+    subgraph after["scheduled"]
+        direction TB
+        A3[format] & A4[format]
+        subgraph "gather (concurrent)"
+            B3[LLM explain] & B4[LLM facts]
+        end
+        A3 --> B3
+        A4 --> B4
+        B3 & B4 --> C2[format]
+        C2 --> D2[LLM synthesize]
+    end
+```
+
 ```python
-scheduled = af.sched(ir)
-result = await scheduled.acall("input") # acall for async
+scheduled = af.sched(ir)               # groups independent LLM calls into gather stages
+result = await scheduled.acall("DNA")   # runs each gather stage concurrently
 ```
 
 ## Debugging
@@ -93,6 +124,77 @@ with af.collect(collection="debug") as captured:
 # substitute step1 value
 with af.inject(collection="debug", values=dict(step1=["modified"])):
     result = ir.call("input")
+```
+
+## Agent
+
+Trace a tool-use agent once, then differentiate, batch, or schedule it with no code changes. Because the agent is a pure traced function, `pullback` propagates natural-language feedback backward through every LLM call, and `batch` vectorizes over inputs. Compose them: `batch(pullback(ir))` gives batched prompt optimization of the full agent graph.
+
+```mermaid
+flowchart TD
+    Q([question]) --> cond{cond}
+    cond -- continue --> LLM
+    cond -- done --> result([result])
+
+    subgraph body
+        LLM -- Decision --> SW{switch tool}
+        subgraph "traced branches"
+            SW --> search[search] & calc[calc] & dn[done]
+        end
+        search & calc & dn --> nh(new_history)
+    end
+
+    nh -- State --> cond
+```
+
+```python
+from typing import Literal
+import autoform as af
+
+# Struct: a tree node; each field becomes an IR leaf during tracing.
+class Decision(af.Struct):
+    tool: Literal["search", "calc", "done"]
+    args: str
+    answer: str
+    status: Literal["continue", "done"]
+
+class State(af.Struct):
+    history: str
+    result: str
+    status: Literal["continue", "done"]
+
+# each tool branch is traced independently; switch dispatches at runtime.
+tool_branches = dict(
+    search=af.trace(search)("...", "..."),  # (args, history) -> new_history
+    calc=af.trace(calc)("...", "..."),
+    done=af.trace(done)("...", "..."),
+)
+
+def cond(state: State):
+    return af.match(state.status, "continue")
+
+def body(state: State):
+    messages = [
+        dict(role="system", content="You are a tool-use agent."),
+        dict(role="user", content=state.history),
+    ]
+    d = af.struct_lm_call(messages, model="gpt-5.2", struct=Decision)
+    new_history = af.switch(d.tool, tool_branches, d.args, state.history)
+    return State(history=new_history, result=d.answer, status=d.status)
+
+cond_ir = af.trace(cond)(State(history="...", result="", status="..."))
+body_ir = af.trace(body)(State(history="...", result="", status="..."))
+
+def agent(question: str):
+    init = State(history=question, result="", status="continue")
+    return af.while_loop(cond_ir, body_ir, init, max_iters=5).result
+
+agent_ir = af.trace(agent)("...")
+
+# pullback: propagate text feedback backward through every LLM call
+# batch: vectorize over multiple questions
+# compose them: batched prompt optimization of the full agent
+af.batch(af.pullback(agent_ir))
 ```
 
 ---
