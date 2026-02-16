@@ -92,7 +92,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
         ir, inp = pair
         return await acall(ir)(inp)
 
-    return list(await asyncio.gather(*[run(pair) for pair in zip(irs, in_tree, strict=True)]))
+    return await asyncio.gather(*[run(pair) for pair in zip(irs, in_tree, strict=True)])
 
 
 def eval_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:

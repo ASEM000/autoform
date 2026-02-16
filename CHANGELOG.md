@@ -8,6 +8,23 @@
 
   - `Struct` instances are now **frozen** (immutable). Direct attribute assignment after construction raises an error. Use `model_construct()` or pytree `unflatten` for bypass semantics (e.g., tracing, batch axes).
 
+### New Features
+
+  - `using_router` context manager to set `litellm.Router`. Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
+
+    ```python
+    import autoform as af
+    from litellm import Router
+    model_list = [dict(model_name="gpt-5.2", litellm_params=dict(model="gpt-5.2", tpm=100_000, rpm=1_000))]
+    router = Router(
+        model_list=model_list,
+        max_parallel_requests=10,
+    )
+    with af.using_router(router):
+        result = af.call(ir)(inputs)
+    ```
+
+
 ### Improvements
 
   - `check_struct_field_type` raises descriptive `TypeError` messages at class definition time, pinpointing the exact field and why its type is invalid.

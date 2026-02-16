@@ -6,7 +6,7 @@ from autoform.checkpoint import checkpoint, collect, inject
 from autoform.control import stop_gradient, switch, while_loop
 from autoform.core import acall, atrace, call, trace
 from autoform.dce import dce
-from autoform.lm import lm_call, struct_lm_call
+from autoform.lm import lm_call, struct_lm_call, using_router
 from autoform.memoize import memoize
 from autoform.scheduling import depends, gather, sched
 from autoform.string import concat, format, match
@@ -20,6 +20,7 @@ __all__ = [
     # execution
     "call",
     "acall",
+    "using_router",
     # transformations
     "pushforward",
     "pullback",
