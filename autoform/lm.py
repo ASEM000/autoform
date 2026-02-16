@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import functools as ft
+from collections.abc import Awaitable, Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from io import StringIO
+from typing import Any, Protocol, runtime_checkable
 
 from litellm import acompletion, completion, get_model_info
 
@@ -33,6 +37,44 @@ from autoform.utils import (
     struct_type_tree,
     treelib,
 )
+
+
+@runtime_checkable
+class LMRouter(Protocol):
+    def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any: ...
+    def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> Awaitable[Any]: ...
+
+
+active_router: ContextVar[LMRouter | None] = ContextVar("active_router", default=None)
+
+
+@contextmanager
+def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, None]:
+    """Set the LM router for all lm primitives.
+
+    The router must expose ``.completion()`` and ``.acompletion()`` matching
+    litellm's call signature (e.g. ``litellm.Router``).
+    Pass ``None`` to revert to direct litellm calls.
+
+    See https://docs.litellm.ai/docs/routing for details.
+
+    Example:
+        >>> import autoform as af
+        >>> from litellm import Router
+        >>> router = Router(
+        ...     model_list=[
+        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-4")),
+        ...     ],
+        ...     max_parallel_requests=10,
+        ... )
+        >>> with af.using_router(router):
+        ...     af.call(ir)(inputs)
+    """
+    token = active_router.set(router)
+    try:
+        yield router
+    finally:
+        active_router.reset(token)
 
 
 class LMTag(PrimitiveTag): ...
@@ -102,9 +144,10 @@ def can_lm_stream(model: str) -> bool:
 
 def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    _completion = client.completion if (client := active_router.get()) is not None else completion
 
     if not can_lm_stream(model):
-        response = completion(messages=messages, model=model)
+        response = _completion(messages=messages, model=model)
         return response.choices[0].message.content
 
     # NOTE(asem): stream under effect handler context by default for all lm calls
@@ -112,7 +155,7 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
     # as effectful equations makes any equation immovable.
     # downside of this approach is streaming is not possible if lm_call is transformed.
     buffer = StringIO()
-    for chunk in completion(messages=messages, model=model, stream=True):
+    for chunk in _completion(messages=messages, model=model, stream=True):
         text = chunk.choices[0].delta.content or ""
         buffer.write(text)
         with using_effect(StreamEffect(text)):
@@ -124,7 +167,8 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
 
 async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    response = await acompletion(messages=messages, model=model)
+    acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
+    response = await acomp(messages=messages, model=model)
     return response.choices[0].message.content
 
 
@@ -182,7 +226,7 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
         return await lm_call_p.abind([prompt], roles=["user"], model=model)
 
-    return list(await asyncio.gather(*[grad(c) for c in contents]))
+    return await asyncio.gather(*[grad(c) for c in contents])
 
 
 def batch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
@@ -271,7 +315,8 @@ def impl_struct_lm_call(
     contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    resp = completion(messages=messages, model=model, response_format=struct)
+    comp = client.completion if (client := active_router.get()) is not None else completion
+    resp = comp(messages=messages, model=model, response_format=struct)
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
@@ -279,7 +324,8 @@ async def aimpl_struct_lm_call(
     contents: list, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Struct:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    resp = await acompletion(messages=messages, model=model, response_format=struct)
+    acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
+    resp = await acomp(messages=messages, model=model, response_format=struct)
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
@@ -349,7 +395,7 @@ async def apull_bwd_struct_lm_call(
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
         return await lm_call_p.abind([prompt], roles=["user"], model=model)
 
-    return list(await asyncio.gather(*[grad(c) for c in contents]))
+    return await asyncio.gather(*[grad(c) for c in contents])
 
 
 def batch_struct_lm_call(
