@@ -144,10 +144,10 @@ def can_lm_stream(model: str) -> bool:
 
 def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    _completion = client.completion if (client := active_router.get()) is not None else completion
+    comp = client.completion if (client := active_router.get()) is not None else completion
 
     if not can_lm_stream(model):
-        response = _completion(messages=messages, model=model)
+        response = comp(messages=messages, model=model)
         return response.choices[0].message.content
 
     # NOTE(asem): stream under effect handler context by default for all lm calls
@@ -155,7 +155,7 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
     # as effectful equations makes any equation immovable.
     # downside of this approach is streaming is not possible if lm_call is transformed.
     buffer = StringIO()
-    for chunk in _completion(messages=messages, model=model, stream=True):
+    for chunk in comp(messages=messages, model=model, stream=True):
         text = chunk.choices[0].delta.content or ""
         buffer.write(text)
         with using_effect(StreamEffect(text)):
