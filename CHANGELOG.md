@@ -29,11 +29,16 @@
 
 ### Improvements
 
-  - `check_struct_field_type` raises descriptive `TypeError` messages at class definition time, pinpointing the exact field and why its type is invalid.
-
-  - `struct_type_tree(cls)` builds a cached pytree with types as leaves, used by `eval_struct_lm_call` to produce `Var` trees in a single `treelib.map` call instead of manual recursion.
-
   - `trace` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
+
+  - `concat` and `match` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
+
+    ```python
+    def bad(x, y, z):
+        return af.concat(x, y, z)
+
+    af.trace(bad)("a", "b", 1)  # AssertionError during tracing
+    ```
 
   - `split` now returns the value marked by `splitpoint`, even when unrelated equations appear before the splitpoint. previously `lhs` could incorrectly return the output of the last preceding equation instead of the marked value.
 
