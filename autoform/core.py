@@ -163,6 +163,12 @@ def is_irlit(x) -> TypeGuard[IRLit]:
     return isinstance(x, IRLit)
 
 
+def input_to_iratom(x, /) -> IRVar:
+    assert not is_iratom(x), "Inputs to `trace` must be normal python types"
+    assert is_user_type(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
+    return IRVar.fresh(type=type(x))
+
+
 # ==================================================================================================
 # PRIMITIVE
 # ==================================================================================================
@@ -506,17 +512,12 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
     """
     assert not inspect.iscoroutinefunction(func), "`trace` only supports sync functions"
 
-    def to_in_iratom(x):
-        assert not is_iratom(x), "Inputs to `trace` must be normal python types"
-        assert is_user_type(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(type=type(x))
-
     def to_out_iratom(x):
         return x if is_iratom(x) else IRLit(x)
 
     @ft.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(input_to_iratom, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
         with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
