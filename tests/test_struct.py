@@ -750,6 +750,18 @@ class TestStructComplex:
         result = af.call(ir)(Outer(inner=Inner(value="world"), label="hello"))
         assert result == "hello: world"
 
+    def test_struct_trace_with_int_field_is_dynamic(self):
+        class Counter(af.Struct):
+            name: str
+            count: int
+
+        def program(counter: Counter) -> str:
+            return af.format("{}: {}", counter.name, counter.count)
+
+        ir = af.trace(program)(Counter(name="cats", count=1))
+        result = af.call(ir)(Counter(name="dogs", count=2))
+        assert result == "dogs: 2"
+
     def test_struct_trace_with_list_field_access(self):
         class WithList(af.Struct):
             tag: str
