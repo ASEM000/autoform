@@ -102,7 +102,8 @@ class TestKwargsPushforward:
         match ir.in_irtree:
             case (x, {"repeat": repeat}):
                 assert isinstance(x, af.core.IRVar)
-                assert isinstance(repeat, af.core.IRLit)
+                assert isinstance(repeat, af.core.IRVar)
+                assert repeat.type is int
 
 
 class TestKwargsPullback:

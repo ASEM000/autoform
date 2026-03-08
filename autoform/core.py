@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools as ft
+import inspect
 import itertools as it
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Generator, Sequence
@@ -67,9 +68,9 @@ __all__ = [
 # BASE TYPES
 # ==================================================================================================
 
-user_types: set[type] = {str}
+user_types: set[type] = {str, int, float, bool}
 
-type UserType = str
+type UserType = str | int | float | bool
 
 
 def is_user_type(x) -> bool:
@@ -88,6 +89,10 @@ def is_var(x) -> TypeGuard[Var]:
 
 
 type EvalType = Var | UserType
+
+
+def typeof(x: EvalType, /) -> type:
+    return x.type if is_var(x) else type(x)
 
 
 # ==================================================================================================
@@ -156,6 +161,12 @@ class IRLit[T](IRAtom):
 
 def is_irlit(x) -> TypeGuard[IRLit]:
     return isinstance(x, IRLit)
+
+
+def input_to_iratom(x, /) -> IRVar:
+    assert not is_iratom(x), "Inputs to `trace` must be normal python types"
+    assert is_user_type(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
+    return IRVar.fresh(type=type(x))
 
 
 # ==================================================================================================
@@ -486,7 +497,7 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
     """Build an IR from a sync function by tracing its execution.
 
     Args:
-        func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
+        func: A sync callable that uses autoform primitives (format, concat, lm_call, etc.).
 
     Returns:
         A tracer callable that takes ``(*args, **kwargs)`` and returns an IR.
@@ -499,20 +510,14 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
         >>> af.call(ir)("Alice", "!")
         'Hello, Alice!!'
     """
-
-    def assert_usertype(x):
-        assert not is_iratom(x), "Inputs to `trace` must be normal python types"
-
-    def to_in_iratom(x):
-        return IRVar.fresh(type=type(x)) if is_user_type(x) else IRLit(x)
+    assert not inspect.iscoroutinefunction(func), "`trace` only supports sync functions"
 
     def to_out_iratom(x):
         return x if is_iratom(x) else IRLit(x)
 
     @ft.wraps(func)
-    def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
-        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
+        in_irtree = treelib.map(input_to_iratom, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
         with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
@@ -520,49 +525,7 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
         out_irtree = treelib.map(to_out_iratom, out_irtree)
         return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
-    return trace
-
-
-def atrace[**P, R](func: Callable[P, Awaitable[R]], /) -> Callable[P, Awaitable[IR[P, R]]]:
-    """Build an IR from an async function by tracing its execution.
-
-    Args:
-        func: An async callable that uses autoform primitives (format, concat, lm_call, etc.).
-
-    Returns:
-        A tracer callable that takes ``(*args, **kwargs)`` and returns a coroutine yielding an IR.
-
-    Example:
-        >>> import autoform as af
-        >>> import asyncio
-        >>> async def greet(name, punctuation):
-        ...     return af.format("Hello, {}{}!", name, punctuation)
-        >>> ir = asyncio.run(af.atrace(greet)("World", "?"))
-        >>> af.call(ir)("Alice", "!")
-        'Hello, Alice!!'
-    """
-
-    def assert_usertype(x):
-        assert not is_iratom(x), "Inputs to `trace` must be normal python types"
-
-    def to_in_iratom(x):
-        return IRVar.fresh(type=type(x)) if is_user_type(x) else IRLit(x)
-
-    def to_out_iratom(x):
-        return x if is_iratom(x) else IRLit(x)
-
-    @ft.wraps(func)
-    async def trace(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        treelib.map(assert_usertype, (args, kwargs), is_leaf=is_user_type)
-        in_irtree = treelib.map(to_in_iratom, (args, kwargs), is_leaf=is_user_type)
-        in_irargs, in_irkwargs = in_irtree
-        with using_interpreter(TracingInterpreter()) as tracer:
-            out_irtree = await func(*in_irargs, **in_irkwargs)
-        in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-        out_irtree = treelib.map(to_out_iratom, out_irtree)
-        return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
-
-    return trace
+    return wrapper
 
 
 # ==================================================================================================

@@ -8,6 +8,8 @@
 
   - `Struct` instances are now **frozen** (immutable). Direct attribute assignment after construction raises an error. Use `model_construct()` or pytree `unflatten` for bypass semantics (e.g., tracing, batch axes).
 
+  - `trace` now accepts only sync functions. `atrace` has been removed. Async code must be synchronized or wrapped before tracing.
+
 ### New Features
 
   - `using_router` context manager to set `litellm.Router`. Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
@@ -27,9 +29,16 @@
 
 ### Improvements
 
-  - `check_struct_field_type` raises descriptive `TypeError` messages at class definition time, pinpointing the exact field and why its type is invalid.
+  - `trace` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
 
-  - `struct_type_tree(cls)` builds a cached pytree with types as leaves, used by `eval_struct_lm_call` to produce `Var` trees in a single `treelib.map` call instead of manual recursion.
+  - `concat` and `match` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
+
+    ```python
+    def bad(x, y, z):
+        return af.concat(x, y, z)
+
+    af.trace(bad)("a", "b", 1)  # AssertionError during tracing
+    ```
 
   - `split` now returns the value marked by `splitpoint`, even when unrelated equations appear before the splitpoint. previously `lhs` could incorrectly return the output of the last preceding equation instead of the marked value.
 

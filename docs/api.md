@@ -6,7 +6,6 @@ Tracing and execution.
 
 ```{eval-rst}
 .. autofunction:: autoform.trace
-.. autofunction:: autoform.atrace
 .. autofunction:: autoform.call
 .. autofunction:: autoform.acall
 ```
