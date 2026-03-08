@@ -394,6 +394,37 @@ class TestSplit:
         full_result = af.call(ir_full)("World")
         assert rhs_result == full_result
 
+    def test_split_returns_marked_value_not_last_preceding_value(self):
+        def program(x):
+            marked = af.concat(x, "a")
+            af.concat(x, "b")
+            marked = af.splitpoint(marked, key="mid")
+            return marked
+
+        ir = af.trace(program)("...")
+        lhs, rhs = af.split(ir, key="mid")
+
+        lhs_result = af.call(lhs)("q")
+        assert lhs_result == "qa"
+
+        rhs_result = af.call(rhs)(lhs_result)
+        assert rhs_result == lhs_result
+        assert rhs_result == af.call(ir)("q")
+
+    def test_split_rhs_with_extra_stuff_fails_on_execution(self):
+        def program(x):
+            y = af.concat(x, "a")
+            z = af.concat(x, "b")
+            y = af.splitpoint(y, key="mid")
+            return af.concat(y, z)
+
+        ir = af.trace(program)("...")
+        lhs, rhs = af.split(ir, key="mid")
+
+        assert af.call(lhs)("q") == "qa"
+        with pytest.raises(KeyError):
+            af.call(rhs)("qa")
+
     def test_split_composition_equals_full(self):
         def program(x):
             a = af.format("Step1: {}", x)

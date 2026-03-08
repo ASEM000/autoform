@@ -31,6 +31,8 @@
 
   - `struct_type_tree(cls)` builds a cached pytree with types as leaves, used by `eval_struct_lm_call` to produce `Var` trees in a single `treelib.map` call instead of manual recursion.
 
+  - `split` now returns the value marked by `splitpoint`, even when unrelated equations appear before the splitpoint. previously `lhs` could incorrectly return the output of the last preceding equation instead of the marked value.
+
 ## v0.2.0 (February 7, 2026)
 
 ### New Features

@@ -111,13 +111,20 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
             #     return concat(y, "?")
             # split(ir, key="mid")
             #   lhs: [concat], rhs: [concat]  (splitpoint stripped)
-            #   boundary = splitpoint's OUTPUT (y), so rhs equations still reference it
+            #   lhs returns splitpoint's input value, rhs receives it in splitpoint's output slot
             lhs_ireqns = list(ir.ireqns[:idx])  # exclude splitpoint
             rhs_ireqns = list(ir.ireqns[idx + 1 :])
 
-            # NOTE(asem): use splitpoint's output as the boundary
-            # This works because rhs equations reference splitpoint's output variable
-            lhs_out = lhs_ireqns[-1].out_irtree if lhs_ireqns else ir.in_irtree
+            # NOTE(asem): lhs must return the value marked by the splitpoint itself.
+            # it cannot return splitpoint's output var because the splitpoint equation
+            # is stripped from lhs, while rhs still reads that output slot as its input.
+            # >>> def program(x):
+            # ...   y = concat(x, "a")
+            # ...   z = concat(x, "b")
+            # ...   y = splitpoint(y, key="mid")
+            # ...   return y
+            # if lhs returned the last preceding equation output, it would return z, not y.
+            lhs_out = ireqn.in_irtree
             lhs = IR(lhs_ireqns, ir.in_irtree, lhs_out)
 
             rhs_in_irtree = pack_user_input(ireqn.out_irtree)
