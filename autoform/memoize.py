@@ -7,7 +7,13 @@ from contextlib import contextmanager
 
 from optree import PyTreeSpec
 
-from autoform.core import Interpreter, Primitive, active_interpreter, using_interpreter
+from autoform.core import (
+    Interpreter,
+    Primitive,
+    active_effect,
+    active_interpreter,
+    using_interpreter,
+)
 from autoform.utils import Tree, treelib
 
 type CacheKey = tuple[Primitive, tuple[Tree, ...], PyTreeSpec]
@@ -24,18 +30,18 @@ class MemoizingInterpreter(Interpreter):
         self.cache: dict[CacheKey, Tree] = {}
 
     def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
-        if (key := make_key(prim, in_tree, **params)) in self.cache:
-            return self.cache[key]
-        result = self.parent.interpret(prim, in_tree, **params)
-        self.cache[key] = result
-        return result
+        if active_effect.get() is not None:
+            return self.parent.interpret(prim, in_tree, **params)
+        if (key := make_key(prim, in_tree, **params)) not in self.cache:
+            self.cache[key] = self.parent.interpret(prim, in_tree, **params)
+        return self.cache[key]
 
     async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
-        if (key := make_key(prim, in_tree, **params)) in self.cache:
-            return self.cache[key]
-        result = await self.parent.ainterpret(prim, in_tree, **params)
-        self.cache[key] = result
-        return result
+        if active_effect.get() is not None:
+            return await self.parent.ainterpret(prim, in_tree, **params)
+        if (key := make_key(prim, in_tree, **params)) not in self.cache:
+            self.cache[key] = await self.parent.ainterpret(prim, in_tree, **params)
+        return self.cache[key]
 
 
 @contextmanager
@@ -56,6 +62,7 @@ def memoize() -> Generator[None, None, None]:
 
     Tracing a program with `memoize` will act as compile-time deduplication of
     identical primitive calls (including stochastic primitives like :func:`lm_call`).
+    effectful primitives are not memoized.
 
     Example:
         >>> def program(x):

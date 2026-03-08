@@ -713,6 +713,35 @@ class TestMemoizeWithEffects:
         assert "first" in collected
         assert "second" in collected
 
+    def test_memoize_inside_trace_does_not_dedup_effectful_calls(self):
+        def func(x):
+            with af.memoize():
+                a = checkpoint(x, key="first", collection="debug")
+                b = checkpoint(x, key="second", collection="debug")
+                return af.concat(a, b)
+
+        ir = af.trace(func)("test")
+
+        effect_eqns = [eqn for eqn in ir.ireqns if eqn.effect is not None]
+        assert len(effect_eqns) == 2
+        assert effect_eqns[0].effect.key == "first"
+        assert effect_eqns[1].effect.key == "second"
+
+    def test_memoize_outside_collect_does_not_skip_effects(self):
+        def func(x):
+            return checkpoint(x, key="val", collection="debug")
+
+        ir = af.trace(func)("test")
+
+        with af.collect(collection="debug") as collected:
+            with af.memoize():
+                r1 = af.call(ir)("hello")
+                r2 = af.call(ir)("hello")
+
+        assert r1 == "hello"
+        assert r2 == "hello"
+        assert collected == {"val": ["hello", "hello"]}
+
 
 class TestMemoizeMultipleCalls:
     def test_memoize_across_multiple_ir_calls(self):
