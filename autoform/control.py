@@ -310,14 +310,14 @@ def while_loop(cond_ir: IR, body_ir: IR, init_val: Tree, *, max_iters: int) -> T
     Example:
         >>> import autoform as af
         >>> def cond(x):
-        ...     return af.match(x, "stop") # loop while x does not equal "stop"
+        ...     return af.match(x, "go")
         >>> def body(x):
-        ...     return af.concat(x, "x")
-        >>> cond_ir = af.trace(cond)("x")
-        >>> body_ir = af.trace(body)("x")
-        >>> result = af.while_loop(cond_ir, body_ir, "a", max_iters=10)
+        ...     return "stop"
+        >>> cond_ir = af.trace(cond)("...")
+        >>> body_ir = af.trace(body)("...")
+        >>> result = af.while_loop(cond_ir, body_ir, "go", max_iters=10)
         >>> result
-        'a'
+        'stop'
     """
     assert isinstance(cond_ir, IR), f"cond_ir must be an IR, got {type(cond_ir)}"
     assert isinstance(body_ir, IR), f"body_ir must be an IR, got {type(body_ir)}"

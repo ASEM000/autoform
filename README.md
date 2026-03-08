@@ -61,15 +61,15 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 | Transform | What it does |
 |-----------|--------------|
 | `batch` | Vectorize over inputs |
-| `pushforward` | Forward-mode AD |
-| `pullback` | Reverse-mode AD |
+| `pushforward` | Forward-mode-like transform |
+| `pullback` | Reverse-mode-like transform |
 | `sched` | Auto-concurrent execution |
 
 </div>
 
 ## Concurrency
 
-`sched` analyzes the IR's dependency graph, groups independent LM calls into parallel stages, and `acall` runs each stage concurrently.
+`sched` analyzes the IR's dependency graph, groups independent equations into parallel stages, and `acall` runs each stage concurrently.
 
 ```mermaid
 flowchart LR
@@ -98,7 +98,7 @@ flowchart LR
 ```
 
 ```python
-scheduled = af.sched(ir)               # groups independent LLM calls into gather stages
+scheduled = af.sched(ir)               # groups independent equations into gather stages
 result = await scheduled.acall("DNA")   # runs each gather stage concurrently
 ```
 
