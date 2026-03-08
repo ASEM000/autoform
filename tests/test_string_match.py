@@ -1,3 +1,5 @@
+import pytest
+
 import autoform as af
 from autoform.core import Var, call, trace
 from autoform.string import eval_match
@@ -15,6 +17,9 @@ class TestMatchBasic:
 
     def test_match_empty_vs_nonempty(self):
         assert af.match("", "x") is False
+
+    def test_match_rejects_non_string_input(self):
+        assert af.match("yes", 1) is False
 
 
 class TestMatchTraced:
@@ -41,6 +46,13 @@ class TestMatchTraced:
         ir = trace(check)("dummy")
         assert call(ir)("target") is True
         assert call(ir)("other") is False
+
+    def test_traced_match_rejects_non_string_input(self):
+        def check(a, b):
+            return af.match(a, b)
+
+        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+            trace(check)("yes", 1)
 
 
 class TestMatchBatch:
@@ -197,3 +209,7 @@ class TestEvalMatch:
 
         result = eval_match((Var(str), Var(str)))
         assert isinstance(result, Var)
+
+    def test_eval_match_rejects_non_string_input(self):
+        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+            eval_match(("yes", 1))

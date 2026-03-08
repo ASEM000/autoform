@@ -102,6 +102,10 @@ class TestConcatPrimitive:
         result = af.concat("A", "B")
         assert result == "AB"
 
+    def test_concat_rejects_non_string_input(self):
+        with pytest.raises(TypeError):
+            af.concat("A", 1)
+
     def test_concat_ir(self):
         def func(x, y):
             return af.concat(x, y)
@@ -109,6 +113,13 @@ class TestConcatPrimitive:
         ir = af.trace(func)("a", "b")
         assert len(ir.ireqns) == 1
         assert ir.ireqns[0].prim.name == "concat"
+
+    def test_concat_trace_rejects_non_string_input(self):
+        def func(x, y, z):
+            return af.concat(x, y, z)
+
+        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+            af.trace(func)("a", "b", 1)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_concat_ir_async(self):

@@ -16,6 +16,7 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    typeof,
 )
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
 
@@ -137,6 +138,7 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 
 def eval_concat(in_tree: Tree, /) -> EvalType:
+    assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
     return Var(str)
 
 
@@ -214,6 +216,7 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 
 def eval_match(in_tree: Tree, /) -> EvalType:
+    assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
     return Var(bool)
 
 
