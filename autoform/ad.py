@@ -663,9 +663,9 @@ batch_rules.aset(pullback_call_p, abatch_pullback_call)
 
 
 def dce_pullback_call(ireqn: IREqn, out_used: Tree[bool], /) -> tuple[IREqn, Tree[bool]]:
-    # TODO(asem): take another look here
-    outputs_used, _ = out_used
-    new_eqn = ireqn.using(ir=dce(ireqn.params["ir"], out_used=outputs_used))
+    out, in_cot = out_used
+    inner_ir = ireqn.params["ir"] if treelib.any(in_cot) else dce(ireqn.params["ir"], out_used=out)
+    new_eqn = ireqn.using(ir=inner_ir)
     return default_dce(new_eqn, out_used)
 
 

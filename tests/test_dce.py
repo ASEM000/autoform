@@ -297,10 +297,26 @@ class TestNestedDCE:
         assert len(inner_ir.ireqns) == 2
 
         pb_ir = af.pullback(inner_ir)
-        dce = af.dce(pb_ir)
+        dce = af.dce(pb_ir, out_used=(True, False))
 
         dced_inner = dce.ireqns[0].params["ir"]
         assert len(dced_inner.ireqns) == 1
+
+    def test_pullback_call_keeps_inner_ir_when_cotangent_is_used(self):
+        def inner_fn(x):
+            dead = af.concat(x, " DEAD")
+            live = af.concat(x, " LIVE")
+            return live
+
+        inner_ir = af.trace(inner_fn)("test")
+        assert len(inner_ir.ireqns) == 2
+
+        pb_ir = af.pullback(inner_ir)
+        dce = af.dce(pb_ir, out_used=(False, True))
+
+        dced_inner = dce.ireqns[0].params["ir"]
+        assert len(dced_inner.ireqns) == 2
+        assert af.call(dce)(("x", "cot")) == ("x LIVE", "cot")
 
     def test_deeply_nested_dce(self):
         def branch_fn(x):
