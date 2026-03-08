@@ -4,14 +4,35 @@ import autoform as af
 
 
 class TestBuildIR:
-    def test_trace_int_input_is_dynamic(self):
+    def test_trace_scalar_input_is_dynamic(self):
         def program(x):
             return af.format("{}", x)
 
-        ir = af.trace(program)(1)
-        assert isinstance(ir.in_irtree, af.core.IRVar)
-        assert ir.in_irtree.type is int
-        assert af.call(ir)(2) == "2"
+        cases = [
+            (1, 2, "2"),
+            (1.5, 2.5, "2.5"),
+            (True, False, "False"),
+        ]
+
+        for traced, runtime, expected in cases:
+            ir = af.trace(program)(traced)
+            assert isinstance(ir.in_irtree, af.core.IRVar)
+            assert ir.in_irtree.type is type(traced)
+            assert af.call(ir)(runtime) == expected
+
+    def test_trace_dict_input_with_scalar_leaves(self):
+        def program(payload):
+            return af.format(
+                "{} {} {} {}",
+                payload["name"],
+                payload["count"],
+                payload["score"],
+                payload["active"],
+            )
+
+        ir = af.trace(program)({"name": "cats", "count": 1, "score": 1.5, "active": True})
+        result = af.call(ir)({"name": "dogs", "count": 2, "score": 2.5, "active": False})
+        assert result == "dogs 2 2.5 False"
 
     def test_trace_unsupported_input_leaf_errors(self):
         class Opaque:

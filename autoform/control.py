@@ -65,7 +65,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         >>> pb_ir = af.pullback(ir)
         >>> _, (cotangent_x, cotangent_y) = call(pb_ir)((("a", "b"), "grad"))
         >>> cotangent_x
-        ''
+        Zero(str)
         >>> cotangent_y
         'grad'
     """

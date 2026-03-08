@@ -60,14 +60,14 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
 
     Example:
         >>> import autoform as af
-        >>> from litellm import Router
-        >>> router = Router(
+        >>> from litellm import Router  # doctest: +SKIP
+        >>> router = Router(  # doctest: +SKIP
         ...     model_list=[
         ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-4")),
         ...     ],
         ...     max_parallel_requests=10,
         ... )
-        >>> with af.using_router(router):
+        >>> with af.using_router(router):  # doctest: +SKIP
         ...     af.call(ir)(inputs)
     """
     assert router is None or isinstance(router, LMRouter), f"Expected LMRouter or None."
