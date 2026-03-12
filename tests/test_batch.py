@@ -503,6 +503,31 @@ class TestBatchRuleOutBatchedValidation:
         result = af.call(batched_ir)(["a", "b"])
         assert result == (["a", "b"], ["constant", "constant"])
 
+    def test_hop_broadcasts_scalar_output(self):
+        mixed_p = af.core.Primitive("mixed_batch_boundary")
+
+        @ft.partial(af.core.impl_rules.set, mixed_p)
+        def impl(x):
+            return (x, "constant")
+
+        @ft.partial(af.core.eval_rules.set, mixed_p)
+        def eval_rule(x):
+            return (af.core.Var(str), af.core.Var(str))
+
+        @ft.partial(af.core.batch_rules.set, mixed_p)
+        def batch_rule(in_tree):
+            batch_size, in_batched, x = in_tree
+            vals = [x[i] for i in range(batch_size)]
+            return (vals, "constant"), (True, False)
+
+        def program(x):
+            return mixed_p.bind(x)
+
+        ir = af.trace(program)("a")
+        batched_ir = af.batch(ir)
+        result = af.call(batched_ir)(["a", "b"])
+        assert result == (["a", "b"], ["constant", "constant"])
+
 
 class TestTransposeBatch:
     def test_list_structure(self):
@@ -638,7 +663,7 @@ class TestBatchWithMixedAxes:
         ir = af.trace(program)("...", "...")
         batched_ir = af.batch(ir, in_axes=(True, False))
         result = af.call(batched_ir)(["a", "b", "c"], "constant")
-        assert result == (["x=a", "x=b", "x=c"], "y=constant")
+        assert result == (["x=a", "x=b", "x=c"], ["y=constant", "y=constant", "y=constant"])
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_two_outputs_mixed_batching_async(self):
@@ -648,7 +673,7 @@ class TestBatchWithMixedAxes:
         ir = af.trace(program)("...", "...")
         batched_ir = af.batch(ir, in_axes=(True, False))
         result = await af.acall(batched_ir)(["a", "b", "c"], "constant")
-        assert result == (["x=a", "x=b", "x=c"], "y=constant")
+        assert result == (["x=a", "x=b", "x=c"], ["y=constant", "y=constant", "y=constant"])
 
     def test_chained_with_broadcast(self):
         def program(x, prefix):

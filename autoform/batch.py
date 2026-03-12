@@ -59,6 +59,18 @@ def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
     return batch_tree
 
 
+def broadcast_batch_out(spec, out_tree: Tree, out_batched_tree: Tree[bool], /) -> Tree:
+    batch_size = spec.num_children
+    out_spec = treelib.structure(out_batched_tree, is_leaf=is_axis_spec)
+    flat_out = out_spec.flatten_up_to(out_tree)
+    flat_out_b = treelib.leaves(out_batched_tree, is_leaf=is_axis_spec)
+
+    def broadcast_leaf(v, b):
+        return v if b else spec.unflatten([v] * batch_size)
+
+    return out_spec.unflatten(map(broadcast_leaf, flat_out, flat_out_b))
+
+
 batch_call_p = Primitive("batch_call", tag={BatchTag})
 
 
@@ -120,13 +132,12 @@ class BatchInterpreter(Interpreter):
 
 
 def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
-    # NOTE(asem): in_axes is Tree[bool] specifying which positions are batched.
-    # container type is inferred from actual data, not specified in in_axes.
-    #
-    # >>> in_tree = ReviewState(code=["a","b"], has_bugs=[T,F])  # actual data
-    # >>> in_axes = True  # scalar -> batch everything
-    # >>> in_batched_tree = ReviewState(code=True, has_bugs=True)  # broadcast to match IR
-    # >>> batch_size = 2  # inferred from len(in_tree.code)
+    # NOTE(asem): ``in_axes`` only marks which leaves are batched.
+    # the actual batch container comes from runtime data.
+    # >>> in_tree = ReviewState(code=["a", "b"], has_bugs=[True, False])
+    # >>> in_axes = True
+    # >>> in_batched_tree = ReviewState(code=True, has_bugs=True)
+    # >>> batch_size = 2
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
 
@@ -169,8 +180,9 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
             treelib.map(write_v, ireqn.out_irtree, out_vals)
             out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
             treelib.map(write_b, ireqn.out_irtree, out_batched)
-
-    return treelib.map(read_v, ir.out_irtree)
+    out_vals = treelib.map(read_v, ir.out_irtree)
+    out_batched = treelib.map(read_b, ir.out_irtree)
+    return broadcast_batch_out(spec, out_vals, out_batched)
 
 
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
@@ -210,7 +222,9 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
             treelib.map(write_v, ireqn.out_irtree, out_vals)
             out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
             treelib.map(write_b, ireqn.out_irtree, out_batched)
-    return treelib.map(read_v, ir.out_irtree)
+    out_vals = treelib.map(read_v, ir.out_irtree)
+    out_batched = treelib.map(read_b, ir.out_irtree)
+    return broadcast_batch_out(spec, out_vals, out_batched)
 
 
 def eval_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
