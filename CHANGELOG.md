@@ -42,6 +42,19 @@
 
   - `split` now returns the value marked by `splitpoint`, even when unrelated equations appear before the splitpoint. previously `lhs` could incorrectly return the output of the last preceding equation instead of the marked value.
 
+  - `batch` now preserves its batch axis at the HOP boundary. if an inner batch rule returns a scalar leaf, the HOP broadcasts it back into the common batch container instead of dropping the axis on that output.
+
+    ```python
+    def program(x, y):
+        return af.format("x={}", x), af.format("y={}", y)
+
+    ir = af.trace(program)("...", "...")
+    batched = af.batch(ir, in_axes=(True, False))
+
+    af.call(batched)(["a", "b"], "constant")
+    # (["x=a", "x=b"], ["y=constant", "y=constant"])
+    ```
+
 ## v0.2.0 (February 7, 2026)
 
 ### New Features
