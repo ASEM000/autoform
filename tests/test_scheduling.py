@@ -181,7 +181,7 @@ class TestGatherWithBatch:
         prog_ir = af.trace(program)("x", "y")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
         result = af.call(batched_ir)(["A", "B", "C"], "STATIC")
-        assert result == [["[A]", "[B]", "[C]"], "<STATIC>"]
+        assert result == [["[A]", "[B]", "[C]"], ["<STATIC>", "<STATIC>", "<STATIC>"]]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_gather_mixed_axes_async(self):
@@ -194,7 +194,7 @@ class TestGatherWithBatch:
         prog_ir = af.trace(program)("x", "y")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
         result = await af.acall(batched_ir)(["X", "Y"], "STATIC")
-        assert result == [["[X]", "[Y]"], "<STATIC>"]
+        assert result == [["[X]", "[Y]"], ["<STATIC>", "<STATIC>"]]
 
 
 class TestGatherWithDCE:
@@ -1312,7 +1312,7 @@ class TestGatherBatchAllUnbatched:
         prog_ir = af.trace(program)("a", "b")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
         result = af.call(batched_ir)(["a", "b"], "constant")
-        assert result == [["[a]", "[b]"], "<constant>"]
+        assert result == [["[a]", "[b]"], ["<constant>", "<constant>"]]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_gather_integration_mixed_batched_async(self):
@@ -1325,4 +1325,4 @@ class TestGatherBatchAllUnbatched:
         prog_ir = af.trace(program)("a", "b")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
         result = await af.acall(batched_ir)(["a", "b"], "constant")
-        assert result == [["[a]", "[b]"], "<constant>"]
+        assert result == [["[a]", "[b]"], ["<constant>", "<constant>"]]
