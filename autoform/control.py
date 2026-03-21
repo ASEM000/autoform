@@ -29,7 +29,7 @@ from autoform.core import (
     acall,
     batch_rules,
     call,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     is_irval,
     is_irvar,
@@ -89,7 +89,7 @@ def impl_stop_gradient(x: Tree, /) -> Tree:
     return x
 
 
-def eval_stop_gradient(x: Tree, /) -> Tree:
+def abstract_stop_gradient(x: Tree, /) -> Tree:
     return x
 
 
@@ -118,7 +118,7 @@ def batch_stop_gradient(in_tree: Tree, /) -> tuple[Tree, Tree]:
 
 impl_rules.set(stop_gradient_p, impl_stop_gradient)
 impl_rules.aset(stop_gradient_p, asyncify(impl_stop_gradient))
-eval_rules.set(stop_gradient_p, eval_stop_gradient)
+abstract_rules.set(stop_gradient_p, abstract_stop_gradient)
 push_rules.set(stop_gradient_p, pushforward_stop_gradient)
 push_rules.aset(stop_gradient_p, asyncify(pushforward_stop_gradient))
 pull_fwd_rules.set(stop_gradient_p, pullback_fwd_stop_gradient)
@@ -185,7 +185,7 @@ async def aimpl_switch(in_tree, /, *, branches: dict[str, IR]):
     return await acall(branches[key])(operands)
 
 
-def eval_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
+def abstract_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
     del in_tree
     key0 = next(iter(branches))
     branch0 = branches[key0]
@@ -276,7 +276,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
 
 impl_rules.set(switch_p, impl_switch)
 impl_rules.aset(switch_p, aimpl_switch)
-eval_rules.set(switch_p, eval_switch)
+abstract_rules.set(switch_p, abstract_switch)
 push_rules.set(switch_p, pushforward_switch)
 push_rules.aset(switch_p, apush_switch)
 pull_fwd_rules.set(switch_p, pullback_fwd_switch)
@@ -368,7 +368,7 @@ async def aimpl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_it
     return state
 
 
-def eval_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: int) -> Tree:
+def abstract_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: int) -> Tree:
     del cond_ir, max_iters
     return treelib.map(lambda x: x.aval, body_ir.out_irtree)
 
@@ -573,7 +573,7 @@ async def abatch_while_loop(
 
 impl_rules.set(while_loop_p, impl_while_loop)
 impl_rules.aset(while_loop_p, aimpl_while_loop)
-eval_rules.set(while_loop_p, eval_while_loop)
+abstract_rules.set(while_loop_p, abstract_while_loop)
 pull_fwd_rules.set(while_loop_p, pullback_fwd_while_loop)
 pull_fwd_rules.aset(while_loop_p, apull_fwd_while_loop)
 pull_bwd_rules.set(while_loop_p, pullback_bwd_while_loop)

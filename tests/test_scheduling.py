@@ -88,8 +88,8 @@ class TestGatherValidation:
     def test_exception_propagates(self):
         error_p = af.core.Primitive("error")
 
-        @ft.partial(af.core.eval_rules.set, error_p)
-        def eval_error(x):
+        @ft.partial(af.core.abstract_rules.set, error_p)
+        def abstract_error(x):
             return af.core.Var(str)
 
         @ft.partial(af.core.impl_rules.set, error_p)

@@ -34,7 +34,7 @@ from autoform.core import (
     PrimitiveTag,
     Var,
     batch_rules,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -187,7 +187,7 @@ async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], model: str)
     return response.choices[0].message.content
 
 
-def eval_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
+def abstract_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
     return Var(str)
 
 
@@ -271,7 +271,7 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
 
 impl_rules.set(lm_call_p, impl_lm_call)
 impl_rules.aset(lm_call_p, aimpl_lm_call)
-eval_rules.set(lm_call_p, eval_lm_call)
+abstract_rules.set(lm_call_p, abstract_lm_call)
 push_rules.set(lm_call_p, pushforward_lm_call)
 push_rules.aset(lm_call_p, apush_lm_call)
 pull_fwd_rules.set(lm_call_p, pullback_fwd_lm_call)
@@ -344,7 +344,7 @@ async def aimpl_struct_lm_call(
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
-def eval_struct_lm_call(
+def abstract_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Tree:
     return treelib.map(Var, struct_type_tree(struct))
@@ -451,7 +451,7 @@ async def abatch_struct_lm_call(
 
 impl_rules.set(struct_lm_call_p, impl_struct_lm_call)
 impl_rules.aset(struct_lm_call_p, aimpl_struct_lm_call)
-eval_rules.set(struct_lm_call_p, eval_struct_lm_call)
+abstract_rules.set(struct_lm_call_p, abstract_struct_lm_call)
 push_rules.set(struct_lm_call_p, pushforward_struct_lm_call)
 push_rules.aset(struct_lm_call_p, apush_struct_lm_call)
 pull_fwd_rules.set(struct_lm_call_p, pullback_fwd_struct_lm_call)

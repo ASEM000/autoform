@@ -16,7 +16,7 @@ import pytest
 
 import autoform as af
 from autoform.core import Var, call, trace
-from autoform.string import eval_match
+from autoform.string import abstract_match
 
 
 class TestMatchBasic:
@@ -200,30 +200,30 @@ class TestMatchComposition:
         assert msg_list == ["Input was: yes", "Input was: no", "Input was: yes"]
 
 
-class TestEvalMatch:
-    def test_eval_match_concrete_equal(self):
+class TestAbstractMatch:
+    def test_abstract_match_concrete_equal(self):
 
-        result = eval_match(("yes", "yes"))
+        result = abstract_match(("yes", "yes"))
         assert isinstance(result, Var)
         assert result.type is bool
 
-    def test_eval_match_concrete_unequal(self):
+    def test_abstract_match_concrete_unequal(self):
 
-        result = eval_match(("yes", "no"))
+        result = abstract_match(("yes", "no"))
         assert isinstance(result, Var)
         assert result.type is bool
 
-    def test_eval_match_with_var_returns_var(self):
+    def test_abstract_match_with_var_returns_var(self):
 
-        result = eval_match((Var(str), "yes"))
+        result = abstract_match((Var(str), "yes"))
         assert isinstance(result, Var)
 
-        result = eval_match(("yes", Var(str)))
+        result = abstract_match(("yes", Var(str)))
         assert isinstance(result, Var)
 
-        result = eval_match((Var(str), Var(str)))
+        result = abstract_match((Var(str), Var(str)))
         assert isinstance(result, Var)
 
-    def test_eval_match_rejects_non_string_input(self):
+    def test_abstract_match_rejects_non_string_input(self):
         with pytest.raises(AssertionError, match="`match` expects string inputs"):
-            eval_match(("yes", 1))
+            abstract_match(("yes", 1))

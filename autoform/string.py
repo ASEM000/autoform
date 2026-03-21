@@ -25,7 +25,7 @@ from autoform.core import (
     PrimitiveTag,
     Var,
     batch_rules,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -67,7 +67,7 @@ def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> st
     return template.format(*args, **kwargs)
 
 
-def eval_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
+def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
     return Var(str)
 
 
@@ -112,7 +112,7 @@ def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> t
 
 impl_rules.set(format_p, impl_format)
 impl_rules.aset(format_p, asyncify(impl_format))
-eval_rules.set(format_p, eval_format)
+abstract_rules.set(format_p, abstract_format)
 push_rules.set(format_p, pushforward_format)
 push_rules.aset(format_p, asyncify(pushforward_format))
 pull_fwd_rules.set(format_p, pullback_fwd_format)
@@ -151,7 +151,7 @@ def impl_concat(in_tree: Tree, /) -> str:
     return "".join(in_tree)
 
 
-def eval_concat(in_tree: Tree, /) -> EvalType:
+def abstract_concat(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
     return Var(str)
 
@@ -184,7 +184,7 @@ def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
 
 impl_rules.set(concat_p, impl_concat)
 impl_rules.aset(concat_p, asyncify(impl_concat))
-eval_rules.set(concat_p, eval_concat)
+abstract_rules.set(concat_p, abstract_concat)
 push_rules.set(concat_p, pushforward_concat)
 push_rules.aset(concat_p, asyncify(pushforward_concat))
 pull_fwd_rules.set(concat_p, pullback_fwd_concat)
@@ -229,7 +229,7 @@ def impl_match(in_tree: Tree, /) -> bool:
     return a == b
 
 
-def eval_match(in_tree: Tree, /) -> EvalType:
+def abstract_match(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
     return Var(bool)
 
@@ -263,7 +263,7 @@ def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
 
 impl_rules.set(match_p, impl_match)
 impl_rules.aset(match_p, asyncify(impl_match))
-eval_rules.set(match_p, eval_match)
+abstract_rules.set(match_p, abstract_match)
 push_rules.set(match_p, pushforward_match)
 push_rules.aset(match_p, asyncify(pushforward_match))
 pull_fwd_rules.set(match_p, pullback_fwd_match)

@@ -25,7 +25,7 @@ from autoform.core import (
     Primitive,
     PrimitiveTag,
     batch_rules,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     pack_user_input,
     pull_bwd_rules,
@@ -75,7 +75,7 @@ def impl_splitpoint(x, /, **_):
     return x
 
 
-def eval_splitpoint(x, /, **_):
+def abstract_splitpoint(x, /, **_):
     return x
 
 
@@ -100,7 +100,7 @@ def batch_splitpoint(in_tree, /, **params):
 
 impl_rules.set(splitpoint_p, impl_splitpoint)
 impl_rules.aset(splitpoint_p, asyncify(impl_splitpoint))
-eval_rules.set(splitpoint_p, eval_splitpoint)
+abstract_rules.set(splitpoint_p, abstract_splitpoint)
 push_rules.set(splitpoint_p, push_splitpoint)
 push_rules.aset(splitpoint_p, asyncify(push_splitpoint))
 pull_fwd_rules.set(splitpoint_p, pull_fwd_splitpoint)

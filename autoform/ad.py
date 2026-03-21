@@ -47,7 +47,7 @@ from autoform.core import (
     active_interpreter,
     batch_rules,
     call,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -247,7 +247,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
     return out_p_tree, out_t_tree
 
 
-def eval_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
+def abstract_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     out = treelib.map(lambda x: x.aval, ir.out_irtree)
     return out, out
 
@@ -346,7 +346,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tr
 
 impl_rules.set(pushforward_call_p, impl_pushforward_call)
 impl_rules.aset(pushforward_call_p, aimpl_pushforward_call)
-eval_rules.set(pushforward_call_p, eval_pushforward_call)
+abstract_rules.set(pushforward_call_p, abstract_pushforward_call)
 push_rules.set(pushforward_call_p, pushforward_pushforward_call)
 push_rules.aset(pushforward_call_p, apushforward_pushforward_call)
 pull_fwd_rules.set(pushforward_call_p, pullback_fwd_pushforward_call)
@@ -558,7 +558,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     return out_p_tree, in_c_tree
 
 
-def eval_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
+def abstract_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     out_p = treelib.map(lambda x: x.aval, ir.out_irtree)
     in_c = treelib.map(lambda x: x.aval, ir.in_irtree)
     return out_p, in_c
@@ -664,7 +664,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]
 
 impl_rules.set(pullback_call_p, impl_pullback_call)
 impl_rules.aset(pullback_call_p, aimpl_pullback_call)
-eval_rules.set(pullback_call_p, eval_pullback_call)
+abstract_rules.set(pullback_call_p, abstract_pullback_call)
 push_rules.set(pullback_call_p, pushforward_pullback_call)
 push_rules.aset(pullback_call_p, apushforward_pullback_call)
 pull_fwd_rules.set(pullback_call_p, pullback_fwd_pullback_call)

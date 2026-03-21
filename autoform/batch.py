@@ -35,7 +35,7 @@ from autoform.core import (
     active_interpreter,
     batch_rules,
     call,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -240,7 +240,7 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     return broadcast_batch_out(spec, out_vals, out_batched)
 
 
-def eval_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     return treelib.map(lambda x: x.aval, ir.out_irtree)
 
 
@@ -321,7 +321,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple
 
 impl_rules.set(batch_call_p, impl_batch_call)
 impl_rules.aset(batch_call_p, aimpl_batch_call)
-eval_rules.set(batch_call_p, eval_batch_call)
+abstract_rules.set(batch_call_p, abstract_batch_call)
 push_rules.set(batch_call_p, pushforward_batch_call)
 push_rules.aset(batch_call_p, apushforward_batch_call)
 pull_fwd_rules.set(batch_call_p, pullback_fwd_batch_call)

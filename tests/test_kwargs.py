@@ -32,8 +32,8 @@ def impl_greet(in_tree) -> str:
             return f"{greeting}, {name}{punctuation}"
 
 
-@ft.partial(af.core.eval_rules.set, greet_p)
-def eval_greet(in_tree) -> af.core.Var:
+@ft.partial(af.core.abstract_rules.set, greet_p)
+def abstract_greet(in_tree) -> af.core.Var:
     return af.core.Var(str)
 
 
@@ -94,8 +94,8 @@ class TestKwargsPushforward:
     def test_pushforward_with_kwargs_ir(self):
         test_p = af.core.Primitive("test_kwargs_pf")
 
-        @ft.partial(af.core.eval_rules.set, test_p)
-        def eval_rule(in_tree):
+        @ft.partial(af.core.abstract_rules.set, test_p)
+        def abstract_rule(in_tree):
             return af.core.Var(str)
 
         @ft.partial(af.core.impl_rules.set, test_p)

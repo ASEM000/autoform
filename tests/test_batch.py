@@ -279,8 +279,8 @@ class TestBatchMultipleOutputs:
     def test_batch_primitive_with_two_outputs(self):
         split_p = af.core.Primitive("split")
 
-        @ft.partial(af.core.eval_rules.set, split_p)
-        def eval_split(x):
+        @ft.partial(af.core.abstract_rules.set, split_p)
+        def abstract_split(x):
             return af.core.Var(str), af.core.Var(str)
 
         @ft.partial(af.core.impl_rules.set, split_p)
@@ -306,8 +306,8 @@ class TestBatchMultipleOutputs:
     def test_batch_nested_tuple_output(self):
         nested_p = af.core.Primitive("nested")
 
-        @ft.partial(af.core.eval_rules.set, nested_p)
-        def eval_nested(x):
+        @ft.partial(af.core.abstract_rules.set, nested_p)
+        def abstract_nested(x):
             return (af.core.Var(str), af.core.Var(str)), af.core.Var(str)
 
         @ft.partial(af.core.impl_rules.set, nested_p)
@@ -375,8 +375,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return x
 
-        @ft.partial(af.core.eval_rules.set, single_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, single_p)
+        def abstract_rule(x):
             return af.core.Var(str)
 
         @ft.partial(af.core.batch_rules.set, single_p)
@@ -399,8 +399,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return (x, x)
 
-        @ft.partial(af.core.eval_rules.set, tuple_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, tuple_p)
+        def abstract_rule(x):
             return (af.core.Var(str), af.core.Var(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
@@ -424,8 +424,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return (x, x)
 
-        @ft.partial(af.core.eval_rules.set, tuple_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, tuple_p)
+        def abstract_rule(x):
             return (af.core.Var(str), af.core.Var(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
@@ -449,8 +449,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return {"first": x, "second": (x, x)}
 
-        @ft.partial(af.core.eval_rules.set, nested_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, nested_p)
+        def abstract_rule(x):
             return {"first": af.core.Var(str), "second": (af.core.Var(str), af.core.Var(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
@@ -474,8 +474,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return {"first": x, "second": (x, x)}
 
-        @ft.partial(af.core.eval_rules.set, nested_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, nested_p)
+        def abstract_rule(x):
             return {"first": af.core.Var(str), "second": (af.core.Var(str), af.core.Var(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
@@ -499,8 +499,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return (x, "constant")
 
-        @ft.partial(af.core.eval_rules.set, mixed_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, mixed_p)
+        def abstract_rule(x):
             return (af.core.Var(str), af.core.Var(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
@@ -524,8 +524,8 @@ class TestBatchRuleOutBatchedValidation:
         def impl(x):
             return (x, "constant")
 
-        @ft.partial(af.core.eval_rules.set, mixed_p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, mixed_p)
+        def abstract_rule(x):
             return (af.core.Var(str), af.core.Var(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)

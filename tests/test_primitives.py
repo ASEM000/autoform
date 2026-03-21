@@ -34,14 +34,14 @@ class TestPrimitive:
 
         assert af.core.impl_rules.get(p) is impl
 
-    def test_def_eval_decorator(self):
-        p = af.core.Primitive("test_eval")
+    def test_def_abstract_decorator(self):
+        p = af.core.Primitive("test_abstract")
 
-        @ft.partial(af.core.eval_rules.set, p)
-        def eval_rule(x):
+        @ft.partial(af.core.abstract_rules.set, p)
+        def abstract_rule(x):
             return af.core.Var(str)
 
-        assert af.core.eval_rules.get(p) is eval_rule
+        assert af.core.abstract_rules.get(p) is abstract_rule
 
     def test_def_batch_decorator(self):
         p = af.core.Primitive("test_batch")
@@ -168,8 +168,8 @@ class TestBind:
         def impl(in_tree, *, multiplier):
             return in_tree * multiplier
 
-        @ft.partial(af.core.eval_rules.set, p)
-        def eval_rule(in_tree, *, multiplier):
+        @ft.partial(af.core.abstract_rules.set, p)
+        def abstract_rule(in_tree, *, multiplier):
             return af.core.Var(str)
 
         def func(x):

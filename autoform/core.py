@@ -47,7 +47,7 @@ __all__ = [
     "Primitive",
     # rule registries
     "impl_rules",
-    "eval_rules",
+    "abstract_rules",
     "batch_rules",
     "push_rules",
     "pull_fwd_rules",
@@ -497,10 +497,10 @@ class TracingInterpreter(Interpreter):
 
         in_irtree = treelib.map(to_in_irval, in_tree)
         in_aval_tree = treelib.map(lambda x: x.aval, in_irtree)
-        out_aval_tree = eval_rules.get(prim)(in_aval_tree, **params)
+        out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_irval(x) -> IRVal:
-            # NOTE(asem): eval rules return `Var`/ python types.
+            # NOTE(asem): abstract rules return `Var`/ python types.
             # `Var` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
             return IRVar.fresh(type=x.type) if is_var(x) else IRLit(x)
@@ -680,4 +680,4 @@ batch_rules = InterpreterRuleMapping[tuple[Tree, Tree[bool] | bool]]()
 push_rules = InterpreterRuleMapping[tuple[Tree, Tree]]()
 pull_fwd_rules = InterpreterRuleMapping[tuple[Tree, Tree]]()
 pull_bwd_rules = InterpreterRuleMapping[Tree]()
-eval_rules = InterpreterRuleMapping[Tree[EvalType]]()
+abstract_rules = InterpreterRuleMapping[Tree[EvalType]]()

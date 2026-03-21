@@ -34,7 +34,7 @@ from autoform.core import (
     acall,
     batch_rules,
     call,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -108,7 +108,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
     return await asyncio.gather(*[run(pair) for pair in zip(irs, in_tree, strict=True)])
 
 
-def eval_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
+def abstract_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
     return [treelib.map(lambda x: x.aval, ir.out_irtree) for ir in irs]
 
 
@@ -210,7 +210,7 @@ async def abatch_gather(
 
 impl_rules.set(gather_p, impl_gather)
 impl_rules.aset(gather_p, aimpl_gather)
-eval_rules.set(gather_p, eval_gather)
+abstract_rules.set(gather_p, abstract_gather)
 push_rules.set(gather_p, push_gather)
 push_rules.aset(gather_p, apush_gather)
 pull_fwd_rules.set(gather_p, pull_fwd_gather)
@@ -327,7 +327,7 @@ def impl_depends[T](in_tree: DependsType[T], /) -> T:
     return value
 
 
-def eval_depends(in_tree: DependsType[Tree], /) -> Tree:
+def abstract_depends(in_tree: DependsType[Tree], /) -> Tree:
     value, _ = in_tree
     return value
 
@@ -358,7 +358,7 @@ def batch_depends(
 
 impl_rules.set(depends_p, impl_depends)
 impl_rules.aset(depends_p, asyncify(impl_depends))
-eval_rules.set(depends_p, eval_depends)
+abstract_rules.set(depends_p, abstract_depends)
 push_rules.set(depends_p, push_depends)
 push_rules.aset(depends_p, asyncify(push_depends))
 pull_fwd_rules.set(depends_p, pull_fwd_depends)

@@ -28,8 +28,8 @@ def impl_shout(text: str) -> str:
     return text.upper()
 
 
-@ft.partial(af.core.eval_rules.set, shout_p)
-def eval_shout(text) -> af.core.Var:
+@ft.partial(af.core.abstract_rules.set, shout_p)
+def abstract_shout(text) -> af.core.Var:
     return af.core.Var(str)
 
 
@@ -151,8 +151,8 @@ def impl_textgrad_style_lm_call(
     )
 
 
-@ft.partial(af.core.eval_rules.set, textgrad_style_lm_call_p)
-def eval_textgrad_style_lm_call(in_tree, *, struct: type[af.Struct], **params):
+@ft.partial(af.core.abstract_rules.set, textgrad_style_lm_call_p)
+def abstract_textgrad_style_lm_call(in_tree, *, struct: type[af.Struct], **params):
     return struct.model_construct(**{k: af.core.Var(str) for k in struct.model_fields})
 
 

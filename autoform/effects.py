@@ -34,7 +34,7 @@ from autoform.core import (
     Primitive,
     PrimitiveTag,
     batch_rules,
-    eval_rules,
+    abstract_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -61,7 +61,7 @@ def impl_effect(x, /, **_):
     return x
 
 
-def eval_effect(x, /, **_):
+def abstract_effect(x, /, **_):
     return x
 
 
@@ -107,7 +107,7 @@ async def abatch_effect(in_tree, /, **params):
 
 impl_rules.set(effect_p, impl_effect)
 impl_rules.aset(effect_p, asyncify(impl_effect))
-eval_rules.set(effect_p, eval_effect)
+abstract_rules.set(effect_p, abstract_effect)
 push_rules.set(effect_p, push_effect)
 push_rules.aset(effect_p, asyncify(push_effect))
 pull_fwd_rules.set(effect_p, pull_fwd_effect)
