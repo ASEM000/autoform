@@ -23,17 +23,17 @@ from optree import PyTreeSpec
 
 from autoform.core import (
     Interpreter,
-    Primitive,
+    Prim,
     active_effect,
     active_interpreter,
     using_interpreter,
 )
 from autoform.utils import Tree, treelib
 
-type CacheKey = tuple[Primitive, tuple[Tree, ...], PyTreeSpec]
+type CacheKey = tuple[Prim, tuple[Tree, ...], PyTreeSpec]
 
 
-def make_key(prim: Primitive, in_tree: Tree, /, **params) -> CacheKey:
+def make_key(prim: Prim, in_tree: Tree, /, **params) -> CacheKey:
     flat, struct = treelib.flatten((in_tree, params))
     return (prim, tuple(flat), struct)
 
@@ -43,14 +43,14 @@ class MemoizingInterpreter(Interpreter):
         self.parent = active_interpreter.get()
         self.cache: dict[CacheKey, Tree] = {}
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         if active_effect.get() is not None:
             return self.parent.interpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = self.parent.interpret(prim, in_tree, **params)
         return self.cache[key]
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         if active_effect.get() is not None:
             return await self.parent.ainterpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:

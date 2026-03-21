@@ -30,11 +30,11 @@ from autoform.ad import materialize
 from autoform.core import (
     Effect,
     EvalType,
-    Primitive,
+    Prim,
     PrimitiveTag,
     Var,
-    batch_rules,
     abstract_rules,
+    batch_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -106,7 +106,7 @@ class StreamEffect(Effect):
 # LM CALL
 # ==================================================================================================
 
-lm_call_p = Primitive("lm_call", tag={LMTag})
+lm_call_p = Prim("lm_call", tag={LMTag})
 
 # TODO(asem): take a look into this
 GRAD_PROMPT = """Given this LLM interaction:
@@ -285,7 +285,7 @@ batch_rules.aset(lm_call_p, abatch_lm_call)
 # STRUCT LM CALL
 # ==================================================================================================
 
-struct_lm_call_p = Primitive("struct_lm_call", tag={LMTag})
+struct_lm_call_p = Prim("struct_lm_call", tag={LMTag})
 
 
 def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:

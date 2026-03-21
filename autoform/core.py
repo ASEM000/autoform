@@ -44,7 +44,7 @@ __all__ = [
     "PrimitiveTag",
     "TransformationTag",
     # primitive
-    "Primitive",
+    "Prim",
     # rule registries
     "impl_rules",
     "abstract_rules",
@@ -203,7 +203,7 @@ class PrimitiveTag: ...
 class TransformationTag(PrimitiveTag): ...
 
 
-class Primitive:
+class Prim:
     # NOTE(asem): primitive is a key used for matching against rules
     # defined in ``InterpreterRuleMapping``
     __slots__ = ("name", "tag")
@@ -236,13 +236,13 @@ class IREqn:
 
     def __init__(
         self,
-        prim: Primitive,
+        prim: Prim,
         effect: Effect | None,
         in_irtree: Tree[IRVal],
         out_irtree: Tree[IRVal],
         params: dict | None = None,
     ):
-        assert isinstance(prim, Primitive)
+        assert isinstance(prim, Prim)
         assert isinstance(effect, Effect) or effect is None
         assert treelib.all(treelib.map(is_irval, (in_irtree, out_irtree)))
         assert isinstance(params, dict) or params is None
@@ -344,10 +344,10 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 class Interpreter(ABC):
     @abstractmethod
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Any: ...
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
 
     @abstractmethod
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Any: ...
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
 
 
 @contextmanager
@@ -365,10 +365,10 @@ def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None
 
 
 class EvalInterpreter(Interpreter):
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         return impl_rules.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         return await impl_rules.aget(prim)(in_tree, **params)
 
 
@@ -433,7 +433,7 @@ class EffectInterpreter(Interpreter, ABC):
         self.parent = active_interpreter.get()
         self.handlers: dict[type[Effect], Handler] = dict(handlers)
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         effect = active_effect.get()
 
         if (handler := self.handlers.get(type(effect))) is None:
@@ -459,7 +459,7 @@ class EffectInterpreter(Interpreter, ABC):
 
             result = self.parent.interpret(prim, modified_input, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree:
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         effect = active_effect.get()
 
         if (handler := self.handlers.get(type(effect))) is None:
@@ -487,7 +487,7 @@ class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRVal]:
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree[IRVal]:
         def to_in_irval(x) -> IRVal:
             # NOTE(asem): input can be IRVal in 3 cases:
             # 1. function inputs wrapped by trace
@@ -510,7 +510,7 @@ class TracingInterpreter(Interpreter):
         self.ireqns.append(IREqn(prim, effect, in_irtree, out_irtree, params))
         return out_irtree
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRVal]:
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree[IRVal]:
         return self.interpret(prim, in_tree, **params)
 
 
@@ -638,12 +638,12 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
 
 class InterpreterRuleMapping[R]:
     def __init__(self):
-        self.map: dict[Primitive, Callable[..., R]] = {}
-        self.amap: dict[Primitive, Callable[..., Awaitable[R]]] = {}
+        self.map: dict[Prim, Callable[..., R]] = {}
+        self.amap: dict[Prim, Callable[..., Awaitable[R]]] = {}
         self.lock = RLock()
 
-    def set(self, prim: Primitive, rule: Callable[..., R], /) -> Callable[..., R]:
-        assert isinstance(prim, Primitive), f"Expected primitive, got {prim}"
+    def set(self, prim: Prim, rule: Callable[..., R], /) -> Callable[..., R]:
+        assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
         assert isinstance(rule, Callable), f"Expected callable, got {rule}"
         assert prim not in self.map, f"Rule for primitive {prim} already defined"
 
@@ -652,9 +652,9 @@ class InterpreterRuleMapping[R]:
         return rule
 
     def aset(
-        self, prim: Primitive, rule: Callable[..., Awaitable[R]], /
+        self, prim: Prim, rule: Callable[..., Awaitable[R]], /
     ) -> Callable[..., Awaitable[R]]:
-        assert isinstance(prim, Primitive), f"Expected primitive, got {prim}"
+        assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
         assert isinstance(rule, Callable), f"Expected callable, got {rule}"
         assert prim not in self.amap, f"Async rule for primitive {prim} already defined"
 
@@ -662,13 +662,13 @@ class InterpreterRuleMapping[R]:
             self.amap[prim] = rule
         return rule
 
-    def get(self, prim: Primitive) -> Callable[..., R]:
+    def get(self, prim: Prim) -> Callable[..., R]:
         with self.lock:
             if prim not in self.map:
                 raise KeyError(f"No {type(self).__name__} rule defined for primitive {prim}")
             return self.map[prim]
 
-    def aget(self, prim: Primitive) -> Callable[..., Awaitable[R]]:
+    def aget(self, prim: Prim) -> Callable[..., Awaitable[R]]:
         with self.lock:
             if prim not in self.amap:
                 raise KeyError(f"No async {type(self).__name__} rule defined for primitive {prim}")

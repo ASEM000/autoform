@@ -28,14 +28,14 @@ from autoform.core import (
     IREqn,
     IRLit,
     IRVar,
-    Primitive,
+    Prim,
     TransformationTag,
+    abstract_rules,
     acall,
     active_effect,
     active_interpreter,
     batch_rules,
     call,
-    abstract_rules,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -84,7 +84,7 @@ def broadcast_batch_out(spec, out_tree: Tree, out_batched_tree: Tree[bool], /) -
     return out_spec.unflatten(map(broadcast_leaf, flat_out, flat_out_b))
 
 
-batch_call_p = Primitive("batch_call", tag={BatchTag})
+batch_call_p = Prim("batch_call", tag={BatchTag})
 
 
 def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
@@ -134,11 +134,11 @@ class BatchInterpreter(Interpreter):
         self.parent = active_interpreter.get()
         self.batch_size = batch_size
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return batch_rules.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         # NOTE(asem): async batch rules must be explicitly seted - no fallback to sync.
         with using_interpreter(self.parent):
             return await batch_rules.aget(prim)(in_tree, **params)

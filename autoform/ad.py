@@ -37,17 +37,17 @@ __all__ = [
 from autoform.core import (
     IR,
     Interpreter,
-    IRVal,
     IREqn,
     IRLit,
+    IRVal,
     IRVar,
-    Primitive,
+    Prim,
     TransformationTag,
+    abstract_rules,
     acall,
     active_interpreter,
     batch_rules,
     call,
-    abstract_rules,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -114,18 +114,18 @@ def materialize(x: Tree, /) -> Tree:
 # PUSHFORWARD
 # ==================================================================================================
 
-pushforward_call_p = Primitive("pushforward_call", tag={ADTag})
+pushforward_call_p = Prim("pushforward_call", tag={ADTag})
 
 
 class PushforwardInterpreter(Interpreter):
     def __init__(self):
         self.parent = active_interpreter.get()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return push_rules.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return await push_rules.aget(prim)(in_tree, **params)
 
@@ -371,7 +371,7 @@ dce_rules[pushforward_call_p] = dce_pushforward_call
 # PULLBACK
 # ==================================================================================================
 
-pullback_call_p = Primitive("pullback_call", tag={ADTag})
+pullback_call_p = Prim("pullback_call", tag={ADTag})
 
 
 cotangent_accumulators: dict[type, Callable[[list], Any]] = {}
@@ -395,11 +395,11 @@ class PullbackFwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = active_interpreter.get()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return pull_fwd_rules.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return await pull_fwd_rules.aget(prim)(in_tree, **params)
 
@@ -408,11 +408,11 @@ class PullbackBwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = active_interpreter.get()
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return pull_bwd_rules.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return await pull_bwd_rules.aget(prim)(in_tree, **params)
 

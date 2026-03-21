@@ -22,10 +22,10 @@ from collections.abc import Hashable
 from autoform.core import (
     IR,
     IREqn,
-    Primitive,
+    Prim,
     PrimitiveTag,
-    batch_rules,
     abstract_rules,
+    batch_rules,
     impl_rules,
     pack_user_input,
     pull_bwd_rules,
@@ -42,7 +42,7 @@ class SurgeryTag(PrimitiveTag): ...
 # SPLITPOINT
 # ==================================================================================================
 
-splitpoint_p = Primitive("splitpoint", tag={SurgeryTag})
+splitpoint_p = Prim("splitpoint", tag={SurgeryTag})
 
 
 def splitpoint(in_tree: Tree, /, *, key: Hashable) -> Tree:

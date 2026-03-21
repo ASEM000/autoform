@@ -21,11 +21,11 @@ import functools as ft
 from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
     EvalType,
-    Primitive,
+    Prim,
     PrimitiveTag,
     Var,
-    batch_rules,
     abstract_rules,
+    batch_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -42,7 +42,7 @@ class StringTag(PrimitiveTag): ...
 # FORMAT
 # ==================================================================================================
 
-format_p = Primitive("format", tag={StringTag})
+format_p = Prim("format", tag={StringTag})
 
 
 def format(template: str, *args, **kwargs) -> str:
@@ -126,7 +126,7 @@ batch_rules.aset(format_p, asyncify(batch_format))
 # CONCAT
 # ==================================================================================================
 
-concat_p = Primitive("concat", tag={StringTag})
+concat_p = Prim("concat", tag={StringTag})
 
 
 def concat(*args) -> str:
@@ -199,7 +199,7 @@ batch_rules.aset(concat_p, asyncify(batch_concat))
 # MATCH
 # ==================================================================================================
 
-match_p = Primitive("match", tag={StringTag})
+match_p = Prim("match", tag={StringTag})
 
 
 def match(a: str, b: str, /) -> bool:

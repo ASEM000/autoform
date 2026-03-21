@@ -24,12 +24,12 @@ from autoform.batch import batch
 from autoform.core import (
     IR,
     IREqn,
-    Primitive,
+    Prim,
     PrimitiveTag,
+    abstract_rules,
     acall,
     batch_rules,
     call,
-    abstract_rules,
     impl_rules,
     is_irval,
     is_irvar,
@@ -57,7 +57,7 @@ class ControlTag(PrimitiveTag): ...
 # STOP GRADIENT
 # ==================================================================================================
 
-stop_gradient_p = Primitive("stop_gradient", tag={ControlTag})
+stop_gradient_p = Prim("stop_gradient", tag={ControlTag})
 
 
 def stop_gradient(x: Tree, /) -> Tree:
@@ -133,7 +133,7 @@ batch_rules.aset(stop_gradient_p, asyncify(batch_stop_gradient))
 # SWITCH
 # ==================================================================================================
 
-switch_p = Primitive("switch", tag={ControlTag})
+switch_p = Prim("switch", tag={ControlTag})
 
 
 def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
@@ -301,7 +301,7 @@ dce_rules[switch_p] = dce_switch
 # WHILE LOOP
 # ==================================================================================================
 
-while_loop_p = Primitive("while_loop", tag={ControlTag})
+while_loop_p = Prim("while_loop", tag={ControlTag})
 
 
 def while_loop(cond_ir: IR, body_ir: IR, init_val: Tree, *, max_iters: int) -> Tree:

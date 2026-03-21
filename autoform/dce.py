@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-from autoform.core import IR, IRVal, IREqn, IRLit, IRVar, Primitive, is_irvar
+from autoform.core import IR, IREqn, IRLit, IRVal, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 
 # ==================================================================================================
@@ -38,7 +38,7 @@ def default_dce(ireqn: IREqn, out_used: Tree[bool]) -> tuple[IREqn, Tree[bool]]:
 
 type DCERule = Callable[[IREqn, Tree[bool]], tuple[IREqn, Tree[bool]]]
 
-dce_rules: dict[Primitive, DCERule] = {}
+dce_rules: dict[Prim, DCERule] = {}
 
 
 def dce[**P, R](

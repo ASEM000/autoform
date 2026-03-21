@@ -26,15 +26,15 @@ from autoform.ad import Zero, is_zero, pullback, pushforward
 from autoform.batch import batch
 from autoform.core import (
     IR,
-    IRVal,
     IREqn,
+    IRVal,
     IRVar,
-    Primitive,
+    Prim,
     PrimitiveTag,
+    abstract_rules,
     acall,
     batch_rules,
     call,
-    abstract_rules,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -52,7 +52,7 @@ class SchedulingTag(PrimitiveTag): ...
 # GATHER
 # ==================================================================================================
 
-gather_p = Primitive("gather", tag={SchedulingTag})
+gather_p = Prim("gather", tag={SchedulingTag})
 
 
 def gather(ir_input_pairs: list[tuple[IR, Tree]], /) -> list[Tree]:
@@ -295,7 +295,7 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
 # DEPENDS
 # ==================================================================================================
 
-depends_p = Primitive("depends", tag={SchedulingTag})
+depends_p = Prim("depends", tag={SchedulingTag})
 
 type DependsType[T] = tuple[T, tuple[Tree, ...]]
 
