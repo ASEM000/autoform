@@ -31,8 +31,8 @@ from autoform.utils import Tree, lru_cache, pack_user_input, treelib
 
 __all__ = [
     # base types
-    "Var",
-    "user_types",
+    "AVal",
+    "val_types",
     # ir vals
     "IRVal",
     "IRVar",
@@ -81,30 +81,30 @@ __all__ = [
 # BASE TYPES
 # ==================================================================================================
 
-user_types: set[type] = {str, int, float, bool}
+val_types: set[type] = {str, int, float, bool}
 
-type UserType = str | int | float | bool
-
-
-def is_user_type(x) -> bool:
-    return isinstance(x, tuple(user_types))
+type Val = str | int | float | bool
 
 
-class Var:
+def is_val(x) -> bool:
+    return isinstance(x, tuple(val_types))
+
+
+class AVal:
     __slots__ = "type"
 
     def __init__(self, type: type):
         self.type = type
 
 
-def is_var(x) -> TypeGuard[Var]:
-    return isinstance(x, Var)
+def is_var(x) -> TypeGuard[AVal]:
+    return isinstance(x, AVal)
 
 
-type EvalType = Var | UserType
+type EvalType = AVal | Val
 
 
-def typeof(x: EvalType, /) -> type:
+def typeof(x, /) -> type:
     return x.type if is_var(x) else type(x)
 
 
@@ -144,8 +144,8 @@ class IRVar[T: type](IRVal):
         return f"{type(self).__name__}[{self.type.__name__}](id={self.id}{source})"
 
     @property
-    def aval(self) -> Var:
-        return Var(self.type)
+    def aval(self) -> AVal:
+        return AVal(self.type)
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
@@ -186,7 +186,7 @@ def is_irlit(x) -> TypeGuard[IRLit]:
 
 def input_to_irval(x, /) -> IRVar:
     assert not is_irval(x), "Inputs to `trace` must be normal python types"
-    assert is_user_type(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
+    assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
     return IRVar.fresh(type=type(x))
 
 
@@ -538,7 +538,7 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
 
     @ft.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        in_irtree = treelib.map(input_to_irval, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(input_to_irval, (args, kwargs), is_leaf=is_val)
         in_irargs, in_irkwargs = in_irtree
         with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
@@ -651,9 +651,7 @@ class InterpreterRuleMapping[R]:
             self.map[prim] = rule
         return rule
 
-    def aset(
-        self, prim: Prim, rule: Callable[..., Awaitable[R]], /
-    ) -> Callable[..., Awaitable[R]]:
+    def aset(self, prim: Prim, rule: Callable[..., Awaitable[R]], /) -> Callable[..., Awaitable[R]]:
         assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
         assert isinstance(rule, Callable), f"Expected callable, got {rule}"
         assert prim not in self.amap, f"Async rule for primitive {prim} already defined"

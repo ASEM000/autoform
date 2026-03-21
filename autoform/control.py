@@ -33,7 +33,7 @@ from autoform.core import (
     impl_rules,
     is_irval,
     is_irvar,
-    is_user_type,
+    is_val,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -166,7 +166,7 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         >>> call(ir)("zero", "hello")
         'zero: hello'
     """
-    assert is_user_type(key) or is_irval(key), "key must be a user-type (traceable) value"
+    assert is_val(key) or is_irval(key), "key must be a user-type (traceable) value"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_irtree)
     assert all(treelib.structure(branches[key].in_irtree) == tree_struct0 for key in branches)
