@@ -521,7 +521,7 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
         func: A sync callable that uses autoform primitives (format, concat, lm_call, etc.).
 
     Returns:
-        A tracer callable that takes ``(*args, **kwargs)`` and returns an IR.
+        A tracer callable that takes positional arguments and returns an IR.
 
     Example:
         >>> import autoform as af
@@ -538,11 +538,11 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
 
     @ft.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        in_irtree = treelib.map(input_to_irval, (args, kwargs), is_leaf=is_val)
-        in_irargs, in_irkwargs = in_irtree
+        assert not kwargs, "`trace` does not support keyword arguments"
+        in_irargs = treelib.map(input_to_irval, args, is_leaf=is_val)
         with using_interpreter(TracingInterpreter()) as tracer:
-            out_irtree = func(*in_irargs, **in_irkwargs)
-        in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
+            out_irtree = func(*in_irargs)
+        in_irtree = pack_user_input(*in_irargs)
         out_irtree = treelib.map(to_out_irval, out_irtree)
         return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
@@ -573,7 +573,8 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
 
     def func(*args: P.args, **kwargs: P.kwargs) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        in_tree = pack_user_input(*args, **kwargs)
+        assert not kwargs, "`call` does not support keyword arguments"
+        in_tree = pack_user_input(*args)
         env: dict[IRVar, Any] = {}
 
         def read(irval: IRVal) -> Any:
@@ -612,7 +613,8 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
 
     async def func(*args: P.args, **kwargs: P.kwargs) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        in_tree = pack_user_input(*args, **kwargs)
+        assert not kwargs, "`acall` does not support keyword arguments"
+        in_tree = pack_user_input(*args)
         env: dict[IRVar, Any] = {}
 
         def read(irval: IRVal) -> Any:

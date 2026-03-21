@@ -400,8 +400,8 @@ class TestSwitchNestedTransforms:
         assert c_x == ["grad1", "grad2"]
 
 
-class TestSwitchWithKwargs:
-    def test_switch_with_keyword_operands(self):
+class TestSwitchWithOperands:
+    def test_switch_with_multiple_operands(self):
         branches = {
             "dash": af.trace(lambda x, y: af.format("{}-{}", x, y))("X", "Y"),
             "plus": af.trace(lambda x, y: af.format("{}+{}", x, y))("X", "Y"),

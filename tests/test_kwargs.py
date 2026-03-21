@@ -18,7 +18,7 @@ import pytest
 
 import autoform as af
 
-greet_p = af.core.Primitive("greet")
+greet_p = af.core.Prim("greet")
 
 
 def greet(name: str, *, greeting: str = "Hello", punctuation: str = "!") -> str:
@@ -33,8 +33,8 @@ def impl_greet(in_tree) -> str:
 
 
 @ft.partial(af.core.abstract_rules.set, greet_p)
-def abstract_greet(in_tree) -> af.core.Var:
-    return af.core.Var(str)
+def abstract_greet(in_tree) -> af.core.AVal:
+    return af.core.AVal(str)
 
 
 @ft.partial(af.core.push_rules.set, greet_p)
@@ -90,34 +90,36 @@ class TestKwargsBuildIR:
         assert result == "Hi, World?"
 
 
-class TestKwargsPushforward:
-    def test_pushforward_with_kwargs_ir(self):
-        test_p = af.core.Primitive("test_kwargs_pf")
-
-        @ft.partial(af.core.abstract_rules.set, test_p)
-        def abstract_rule(in_tree):
-            return af.core.Var(str)
-
-        @ft.partial(af.core.impl_rules.set, test_p)
-        def impl_rule(in_tree):
-            x, kwargs = in_tree
-            repeat = kwargs["repeat"]
-            return x * repeat
-
-        @ft.partial(af.core.push_rules.set, test_p)
-        def pf_rule(in_tree):
-            primals, tangents = in_tree
-            return impl_rule(primals), impl_rule(tangents)
-
+class TestKeywordArgumentBoundary:
+    def test_trace_rejects_kwargs(self):
         def program(x, *, repeat=1):
-            return test_p.bind((x, dict(repeat=repeat)))
+            return greet(x, greeting="Hi", punctuation="!" * repeat)
 
-        ir = af.trace(program)("A", repeat=3)
-        match ir.in_irtree:
-            case (x, {"repeat": repeat}):
-                assert isinstance(x, af.core.IRVar)
-                assert isinstance(repeat, af.core.IRVar)
-                assert repeat.type is int
+        with pytest.raises(AssertionError, match="trace.*keyword arguments"):
+            af.trace(program)("A", repeat=3)
+
+    def test_call_rejects_kwargs(self):
+        def program(name, punctuation):
+            return af.format("Hello, {}{}", name, punctuation)
+
+        ir = af.trace(program)("World", "!")
+        with pytest.raises(AssertionError, match="call.*keyword arguments"):
+            af.call(ir)("World", punctuation="?")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_acall_rejects_kwargs(self):
+        def program(name, punctuation):
+            return af.format("Hello, {}{}", name, punctuation)
+
+        ir = af.trace(program)("World", "!")
+        with pytest.raises(AssertionError, match="acall.*keyword arguments"):
+            await af.acall(ir)("World", punctuation="?")
+
+    def test_switch_rejects_kwargs(self):
+        branches = {"a": af.trace(lambda x: af.concat("A:", x))("X")}
+
+        with pytest.raises(AssertionError, match="switch.*keyword arguments"):
+            af.switch("a", branches, x="test")
 
 
 class TestKwargsPullback:

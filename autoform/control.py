@@ -143,10 +143,9 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         key: String key selecting which branch to execute.
         branches: Dict mapping string keys to IR irs, each with compatible input signature.
         *args: Positional arguments passed to the selected branch.
-        **kwargs: Keyword arguments passed to the selected branch.
 
     Returns:
-        Result of ``run_ir(branches[key], *args, **kwargs)``
+        Result of ``run_ir(branches[key], *args)``
 
     Raises:
         KeyError: If key is not in branches.
@@ -167,12 +166,13 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         'zero: hello'
     """
     assert is_val(key) or is_irval(key), "key must be a user-type (traceable) value"
+    assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_irtree)
     assert all(treelib.structure(branches[key].in_irtree) == tree_struct0 for key in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].out_irtree)
     assert all(treelib.structure(branches[key].out_irtree) == tree_struct0 for key in branches)
-    return switch_p.bind((key, pack_user_input(*args, **kwargs)), branches=branches)
+    return switch_p.bind((key, pack_user_input(*args)), branches=branches)
 
 
 def impl_switch(in_tree, /, *, branches: dict[str, IR]):
