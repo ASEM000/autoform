@@ -41,7 +41,7 @@ __all__ = [
     "is_irlit",
     "is_irval",
     # tags
-    "PrimitiveTag",
+    "PrimTag",
     "TransformationTag",
     # primitive
     "Prim",
@@ -197,10 +197,10 @@ def input_to_irval(x, /) -> IRVar:
 
 # NOTE(asem): tags are used to group primitives into categories
 # to be later targeted by effect handlers, ...
-class PrimitiveTag: ...
+class PrimTag: ...
 
 
-class TransformationTag(PrimitiveTag): ...
+class TransformationTag(PrimTag): ...
 
 
 class Prim:
@@ -209,11 +209,11 @@ class Prim:
     __slots__ = ("name", "tag")
     __match_args__ = ("name", "tag")
 
-    def __init__(self, name: str, tag: set[type[PrimitiveTag]] | None = None):
+    def __init__(self, name: str, tag: set[type[PrimTag]] | None = None):
         assert isinstance(name, str), f"Invalid name type: {type(name)=}"
-        assert tag is None or all(issubclass(t, PrimitiveTag) for t in tag), f"Invalid tag: {tag=}"
+        assert tag is None or all(issubclass(t, PrimTag) for t in tag), f"Invalid tag: {tag=}"
         self.name = name
-        self.tag: frozenset[type[PrimitiveTag]] = frozenset(tag) if tag else frozenset()
+        self.tag: frozenset[type[PrimTag]] = frozenset(tag) if tag else frozenset()
 
     def __repr__(self) -> str:
         return self.name

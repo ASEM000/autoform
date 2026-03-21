@@ -30,7 +30,7 @@ from autoform.core import (
     IRVal,
     IRVar,
     Prim,
-    PrimitiveTag,
+    PrimTag,
     abstract_rules,
     acall,
     batch_rules,
@@ -45,7 +45,7 @@ from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import Tree, asyncify, batch_spec, lru_cache, treelib
 
 
-class SchedulingTag(PrimitiveTag): ...
+class SchedulingTag(PrimTag): ...
 
 
 # ==================================================================================================

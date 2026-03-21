@@ -32,7 +32,7 @@ import functools as ft
 
 from autoform.core import (
     Prim,
-    PrimitiveTag,
+    PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -47,7 +47,7 @@ from autoform.utils import asyncify, batch_index, batch_spec, batch_transpose
 # ==================================================================================================
 
 
-class EffectTag(PrimitiveTag): ...
+class EffectTag(PrimTag): ...
 
 
 effect_p = Prim("effect", tag={EffectTag})

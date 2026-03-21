@@ -23,7 +23,7 @@ from autoform.core import (
     IR,
     IREqn,
     Prim,
-    PrimitiveTag,
+    PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -35,7 +35,7 @@ from autoform.core import (
 from autoform.utils import Tree, asyncify, lru_cache
 
 
-class SurgeryTag(PrimitiveTag): ...
+class SurgeryTag(PrimTag): ...
 
 
 # ==================================================================================================

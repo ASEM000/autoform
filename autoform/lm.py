@@ -32,7 +32,7 @@ from autoform.core import (
     Effect,
     EvalType,
     Prim,
-    PrimitiveTag,
+    PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -92,7 +92,7 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
         active_router.reset(token)
 
 
-class LMTag(PrimitiveTag): ...
+class LMTag(PrimTag): ...
 
 
 class StreamEffect(Effect):

@@ -23,7 +23,7 @@ from autoform.core import (
     AVal,
     EvalType,
     Prim,
-    PrimitiveTag,
+    PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -35,7 +35,7 @@ from autoform.core import (
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
 
 
-class StringTag(PrimitiveTag): ...
+class StringTag(PrimTag): ...
 
 
 # ==================================================================================================

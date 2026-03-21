@@ -25,7 +25,7 @@ from autoform.core import (
     IR,
     IREqn,
     Prim,
-    PrimitiveTag,
+    PrimTag,
     abstract_rules,
     acall,
     batch_rules,
@@ -50,7 +50,7 @@ from autoform.utils import (
 )
 
 
-class ControlTag(PrimitiveTag): ...
+class ControlTag(PrimTag): ...
 
 
 # ==================================================================================================
