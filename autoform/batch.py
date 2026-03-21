@@ -37,7 +37,6 @@ from autoform.core import (
     call,
     eval_rules,
     impl_rules,
-    iratom_to_evaltype,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -242,7 +241,7 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
 
 
 def eval_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
-    return treelib.map(iratom_to_evaltype, ir.out_irtree)
+    return treelib.map(lambda x: x.aval, ir.out_irtree)
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:

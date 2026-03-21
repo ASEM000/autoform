@@ -33,14 +33,13 @@ __all__ = [
     # base types
     "Var",
     "user_types",
-    # ir atoms
-    "IRAtom",
+    # ir vals
+    "IRVal",
     "IRVar",
     "IRLit",
     "is_irvar",
     "is_irlit",
-    "is_iratom",
-    "iratom_to_evaltype",
+    "is_irval",
     # tags
     "PrimitiveTag",
     "TransformationTag",
@@ -110,17 +109,21 @@ def typeof(x: EvalType, /) -> type:
 
 
 # ==================================================================================================
-# IR ATOMS
+# IR VALS
 # ==================================================================================================
 
 
-# NOTE(asem): atomic IR nodes either variables (placeholders) for user inputs
+# NOTE(asem): leaf IR nodes either variables (placeholders) for user inputs
 # or literals (constants) baked in the IR
-class IRAtom:
+class IRVal(ABC):
     __slots__ = ()
 
+    @property
+    @abstractmethod
+    def aval(self) -> Any: ...
 
-class IRVar[T: type](IRAtom):
+
+class IRVar[T: type](IRVal):
     __slots__ = ("id", "source", "type")
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
@@ -140,26 +143,26 @@ class IRVar[T: type](IRAtom):
         source = f", source={self.source!r}" if self.source else ""
         return f"{type(self).__name__}[{self.type.__name__}](id={self.id}{source})"
 
+    @property
+    def aval(self) -> Var:
+        return Var(self.type)
+
 
 def is_irvar(x) -> TypeGuard[IRVar]:
     return isinstance(x, IRVar)
 
 
-def is_iratom(x) -> TypeGuard[IRAtom]:
-    return isinstance(x, IRAtom)
+def is_irval(x) -> TypeGuard[IRVal]:
+    return isinstance(x, IRVal)
 
 
-def iratom_to_evaltype(x: IRAtom) -> EvalType:
-    return Var(x.type) if is_irvar(x) else x.value
-
-
-class IRLit[T](IRAtom):
+class IRLit[T](IRVal):
     # NOTE(asem): IRLit wraps leaf-level values in pytrees. so non-hashable mutable structures
 
     __slots__ = "value"
 
     def __init__(self, value: T, /):
-        assert not is_iratom(value)
+        assert not is_irval(value)
         assert hash(value) is not None
         self.value = value
 
@@ -172,13 +175,17 @@ class IRLit[T](IRAtom):
     def __hash__(self) -> int:
         return hash(self.value)
 
+    @property
+    def aval(self) -> T:
+        return self.value
+
 
 def is_irlit(x) -> TypeGuard[IRLit]:
     return isinstance(x, IRLit)
 
 
-def input_to_iratom(x, /) -> IRVar:
-    assert not is_iratom(x), "Inputs to `trace` must be normal python types"
+def input_to_irval(x, /) -> IRVar:
+    assert not is_irval(x), "Inputs to `trace` must be normal python types"
     assert is_user_type(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
     return IRVar.fresh(type=type(x))
 
@@ -231,13 +238,13 @@ class IREqn:
         self,
         prim: Primitive,
         effect: Effect | None,
-        in_irtree: Tree[IRAtom],
-        out_irtree: Tree[IRAtom],
+        in_irtree: Tree[IRVal],
+        out_irtree: Tree[IRVal],
         params: dict | None = None,
     ):
         assert isinstance(prim, Primitive)
         assert isinstance(effect, Effect) or effect is None
-        assert treelib.all(treelib.map(is_iratom, (in_irtree, out_irtree)))
+        assert treelib.all(treelib.map(is_irval, (in_irtree, out_irtree)))
         assert isinstance(params, dict) or params is None
         self.prim = prim
         self.effect = effect
@@ -261,10 +268,10 @@ class IR[**P, R]:
     __slots__ = ("ireqns", "in_irtree", "out_irtree")
     __match_args__ = ("ireqns", "in_irtree", "out_irtree")
 
-    def __init__(self, ireqns: list[IREqn], in_irtree: Tree[IRAtom], out_irtree: Tree[IRAtom]):
+    def __init__(self, ireqns: list[IREqn], in_irtree: Tree[IRVal], out_irtree: Tree[IRVal]):
         assert isinstance(ireqns, list)
         assert all(isinstance(ireqn, IREqn) for ireqn in ireqns)
-        assert treelib.all(treelib.map(is_iratom, (in_irtree, out_irtree)))
+        assert treelib.all(treelib.map(is_irval, (in_irtree, out_irtree)))
         self.ireqns = tuple(ireqns)
         self.in_irtree = in_irtree
         self.out_irtree = out_irtree
@@ -283,14 +290,14 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     assert isinstance(indent, int) and indent >= 0
     sp = " " * indent
 
-    def format_atom(atom: IRAtom) -> str:
-        assert isinstance(atom, IRAtom)
-        if is_irvar(atom):
-            var_type = type(atom).__name__
-            type_info = f"[{atom.type.__name__}]" if atom.type is not None else ""
-            return f"%{atom.id}:{var_type}{type_info}"
-        assert is_irlit(atom)
-        val = atom.value
+    def format_irval(irval: IRVal) -> str:
+        assert isinstance(irval, IRVal)
+        if is_irvar(irval):
+            var_type = type(irval).__name__
+            type_info = f"[{irval.type.__name__}]" if irval.type is not None else ""
+            return f"%{irval.id}:{var_type}{type_info}"
+        assert is_irlit(irval)
+        val = irval.value
         if isinstance(val, IR):
             if expand_ir:
                 sub_code = generate_text_code(val, indent, expand_ir=True)
@@ -308,7 +315,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
     def format_tree(tree: Tree) -> str:
         leaves = treelib.leaves(tree)
-        return ", ".join(format_atom(leaf) for leaf in leaves) if leaves else "()"
+        return ", ".join(format_irval(leaf) for leaf in leaves) if leaves else "()"
 
     in_sig = format_tree(ir.in_irtree)
     out_sig = format_tree(ir.out_irtree)
@@ -480,30 +487,30 @@ class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ireqns: list[IREqn] = []
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRAtom]:
-        def to_in_iratom(x) -> IRAtom:
-            # NOTE(asem): input can be IRAtom in 3 cases:
+    def interpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRVal]:
+        def to_in_irval(x) -> IRVal:
+            # NOTE(asem): input can be IRVal in 3 cases:
             # 1. function inputs wrapped by trace
             # 2. output from previous prim calls
             # 3. raw python values needed to be wrapped by IRLit (local consts, closed-over values)
-            return x if is_iratom(x) else IRLit(x)
+            return x if is_irval(x) else IRLit(x)
 
-        in_irtree = treelib.map(to_in_iratom, in_tree)
-        in_evaltree = treelib.map(iratom_to_evaltype, in_irtree)
-        out_evaltree = eval_rules.get(prim)(in_evaltree, **params)
+        in_irtree = treelib.map(to_in_irval, in_tree)
+        in_aval_tree = treelib.map(lambda x: x.aval, in_irtree)
+        out_aval_tree = eval_rules.get(prim)(in_aval_tree, **params)
 
-        def to_out_iratom(x) -> IRAtom:
+        def to_out_irval(x) -> IRVal:
             # NOTE(asem): eval rules return `Var`/ python types.
             # `Var` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
             return IRVar.fresh(type=x.type) if is_var(x) else IRLit(x)
 
-        out_irtree = treelib.map(to_out_iratom, out_evaltree)
+        out_irtree = treelib.map(to_out_irval, out_aval_tree)
         effect = active_effect.get()
         self.ireqns.append(IREqn(prim, effect, in_irtree, out_irtree, params))
         return out_irtree
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRAtom]:
+    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params) -> Tree[IRVal]:
         return self.interpret(prim, in_tree, **params)
 
 
@@ -526,17 +533,17 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
     """
     assert not inspect.iscoroutinefunction(func), "`trace` only supports sync functions"
 
-    def to_out_iratom(x):
-        return x if is_iratom(x) else IRLit(x)
+    def to_out_irval(x):
+        return x if is_irval(x) else IRLit(x)
 
     @ft.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        in_irtree = treelib.map(input_to_iratom, (args, kwargs), is_leaf=is_user_type)
+        in_irtree = treelib.map(input_to_irval, (args, kwargs), is_leaf=is_user_type)
         in_irargs, in_irkwargs = in_irtree
         with using_interpreter(TracingInterpreter()) as tracer:
             out_irtree = func(*in_irargs, **in_irkwargs)
         in_irtree = pack_user_input(*in_irargs, **in_irkwargs)
-        out_irtree = treelib.map(to_out_iratom, out_irtree)
+        out_irtree = treelib.map(to_out_irval, out_irtree)
         return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
 
     return wrapper
@@ -569,11 +576,11 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
         in_tree = pack_user_input(*args, **kwargs)
         env: dict[IRVar, Any] = {}
 
-        def read(atom: IRAtom) -> Any:
-            return env[atom] if is_irvar(atom) else cast(IRLit, atom).value
+        def read(irval: IRVal) -> Any:
+            return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
 
-        def write(atom: IRAtom, value):
-            is_irvar(atom) and setitem(env, atom, value)
+        def write(irval: IRVal, value):
+            is_irvar(irval) and setitem(env, irval, value)
 
         treelib.map(write, ir.in_irtree, in_tree)
         for ireqn in ir.ireqns:
@@ -608,11 +615,11 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
         in_tree = pack_user_input(*args, **kwargs)
         env: dict[IRVar, Any] = {}
 
-        def read(atom: IRAtom) -> Any:
-            return env[atom] if is_irvar(atom) else cast(IRLit, atom).value
+        def read(irval: IRVal) -> Any:
+            return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
 
-        def write(atom: IRAtom, value):
-            is_irvar(atom) and setitem(env, atom, value)
+        def write(irval: IRVal, value):
+            is_irvar(irval) and setitem(env, irval, value)
 
         treelib.map(write, ir.in_irtree, in_tree)
         for ireqn in ir.ireqns:

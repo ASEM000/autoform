@@ -37,7 +37,7 @@ __all__ = [
 from autoform.core import (
     IR,
     Interpreter,
-    IRAtom,
+    IRVal,
     IREqn,
     IRLit,
     IRVar,
@@ -49,7 +49,6 @@ from autoform.core import (
     call,
     eval_rules,
     impl_rules,
-    iratom_to_evaltype,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -158,10 +157,10 @@ def pushforward(ir: IR, /) -> IR:
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
-    def make_p(atom: IRAtom):
+    def make_p(atom: IRVal):
         return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
 
-    def make_t(atom: IRAtom):
+    def make_t(atom: IRVal):
         return (
             IRVar.fresh(type=atom.type, source=atom)
             if is_irvar(atom)
@@ -184,16 +183,16 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     p_env: dict[IRVar, Any] = {}
     t_env: dict[IRVar, Any] = {}
 
-    def write_p(atom: IRAtom, value: Any):
+    def write_p(atom: IRVal, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def write_t(atom: IRAtom, value: Any):
+    def write_t(atom: IRVal, value: Any):
         is_irvar(atom) and setitem(t_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Any:
+    def read_p(atom: IRVal) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def read_t(atom: IRAtom) -> Any:
+    def read_t(atom: IRVal) -> Any:
         return t_env[atom] if is_irvar(atom) else Zero(type(atom.value))
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
@@ -219,16 +218,16 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
     p_env: dict[IRVar, Any] = {}
     t_env: dict[IRVar, Any] = {}
 
-    def write_p(atom: IRAtom, value: Any):
+    def write_p(atom: IRVal, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def write_t(atom: IRAtom, value: Any):
+    def write_t(atom: IRVal, value: Any):
         is_irvar(atom) and setitem(t_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Any:
+    def read_p(atom: IRVal) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def read_t(atom: IRAtom) -> Any:
+    def read_t(atom: IRVal) -> Any:
         return t_env[atom] if is_irvar(atom) else Zero(type(atom.value))
 
     treelib.map(write_p, ir.in_irtree, p_in_tree)
@@ -249,7 +248,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
 
 
 def eval_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    out = treelib.map(iratom_to_evaltype, ir.out_irtree)
+    out = treelib.map(lambda x: x.aval, ir.out_irtree)
     return out, out
 
 
@@ -472,16 +471,16 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     res_env: dict[int, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
-    def write_p(atom: IRAtom, value: Any):
+    def write_p(atom: IRVal, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Any:
+    def read_p(atom: IRVal) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def write_c(atom: IRAtom, value: Any):
+    def write_c(atom: IRVal, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
 
-    def read_c(atom: IRAtom) -> Any:
+    def read_c(atom: IRVal) -> Any:
         if not is_irvar(atom):
             return Zero(type(atom.value))
         if not (cs := c_env[atom]):
@@ -519,16 +518,16 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     res_env: dict[int, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
-    def write_p(atom: IRAtom, value: Any):
+    def write_p(atom: IRVal, value: Any):
         is_irvar(atom) and setitem(p_env, atom, value)
 
-    def read_p(atom: IRAtom) -> Any:
+    def read_p(atom: IRVal) -> Any:
         return p_env[atom] if is_irvar(atom) else atom.value
 
-    def write_c(atom: IRAtom, value: Any):
+    def write_c(atom: IRVal, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
 
-    def read_c(atom: IRAtom) -> Any:
+    def read_c(atom: IRVal) -> Any:
         if not is_irvar(atom):
             return Zero(type(atom.value))
         if not (cs := c_env[atom]):
@@ -560,8 +559,8 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
 
 def eval_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    out_p = treelib.map(iratom_to_evaltype, ir.out_irtree)
-    in_c = treelib.map(iratom_to_evaltype, ir.in_irtree)
+    out_p = treelib.map(lambda x: x.aval, ir.out_irtree)
+    in_c = treelib.map(lambda x: x.aval, ir.in_irtree)
     return out_p, in_c
 
 

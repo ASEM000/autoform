@@ -26,7 +26,7 @@ from autoform.ad import Zero, is_zero, pullback, pushforward
 from autoform.batch import batch
 from autoform.core import (
     IR,
-    IRAtom,
+    IRVal,
     IREqn,
     IRVar,
     Primitive,
@@ -36,7 +36,6 @@ from autoform.core import (
     call,
     eval_rules,
     impl_rules,
-    iratom_to_evaltype,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -110,7 +109,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
 
 
 def eval_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
-    return [treelib.map(iratom_to_evaltype, ir.out_irtree) for ir in irs]
+    return [treelib.map(lambda x: x.aval, ir.out_irtree) for ir in irs]
 
 
 def push_gather(
@@ -262,7 +261,7 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     adjacency_list = defaultdict(list)
     in_degree = defaultdict(lambda: 0)
 
-    def has_parent(iratom: IRAtom) -> bool:
+    def has_parent(iratom: IRVal) -> bool:
         return is_irvar(iratom) and (iratom in irvar_to_parent)
 
     for ireqn in ir.ireqns:

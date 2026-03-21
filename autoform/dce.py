@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-from autoform.core import IR, IRAtom, IREqn, IRLit, IRVar, Primitive, is_irvar
+from autoform.core import IR, IRVal, IREqn, IRLit, IRVar, Primitive, is_irvar
 from autoform.utils import Tree, treelib
 
 # ==================================================================================================
@@ -74,7 +74,7 @@ def dce[**P, R](
         assert treelib.structure(out_used) == treelib.structure(ir.out_irtree)
         user_out_used = out_used
 
-    def collect_used_irvars(tree: Tree[IRAtom], used: Tree[bool]) -> set[IRVar]:
+    def collect_used_irvars(tree: Tree[IRVal], used: Tree[bool]) -> set[IRVar]:
         active_irvars: set[IRVar] = set()
         flat_tree, flat_used = treelib.leaves(tree), treelib.leaves(used)
         for iratom, keep in zip(flat_tree, flat_used, strict=True):
@@ -85,7 +85,7 @@ def dce[**P, R](
     active_irvars: set[IRVar] = collect_used_irvars(ir.out_irtree, user_out_used)
     active_ireqns: deque[IREqn] = deque()
 
-    def is_active_node(node: IRAtom) -> bool:
+    def is_active_node(node: IRVal) -> bool:
         return is_irvar(node) and (node in active_irvars)
 
     for ireqn in reversed(ir.ireqns):
@@ -115,7 +115,7 @@ def dce[**P, R](
         for atom in treelib.leaves(kept.out_irtree):
             is_irvar(atom) and defined_vars.add(atom)
 
-    def sanitize_out_leaf(atom: IRAtom, used: bool) -> IRAtom:
+    def sanitize_out_leaf(atom: IRVal, used: bool) -> IRVal:
         if not is_irvar(atom):
             # NOTE(asem): leaf is already a literal, nothing to sanitize.
             # >>> def program(x):

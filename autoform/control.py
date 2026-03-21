@@ -31,8 +31,7 @@ from autoform.core import (
     call,
     eval_rules,
     impl_rules,
-    iratom_to_evaltype,
-    is_iratom,
+    is_irval,
     is_irvar,
     is_user_type,
     pull_bwd_rules,
@@ -167,7 +166,7 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         >>> call(ir)("zero", "hello")
         'zero: hello'
     """
-    assert is_user_type(key) or is_iratom(key), "key must be a user-type (traceable) value"
+    assert is_user_type(key) or is_irval(key), "key must be a user-type (traceable) value"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_irtree)
     assert all(treelib.structure(branches[key].in_irtree) == tree_struct0 for key in branches)
@@ -190,7 +189,7 @@ def eval_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
     del in_tree
     key0 = next(iter(branches))
     branch0 = branches[key0]
-    return treelib.map(iratom_to_evaltype, branch0.out_irtree)
+    return treelib.map(lambda x: x.aval, branch0.out_irtree)
 
 
 def pushforward_switch(in_tree, /, *, branches: dict[str, IR]):
@@ -371,7 +370,7 @@ async def aimpl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_it
 
 def eval_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: int) -> Tree:
     del cond_ir, max_iters
-    return treelib.map(iratom_to_evaltype, body_ir.out_irtree)
+    return treelib.map(lambda x: x.aval, body_ir.out_irtree)
 
 
 def pullback_fwd_while_loop(

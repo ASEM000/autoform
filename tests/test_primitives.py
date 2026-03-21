@@ -80,6 +80,21 @@ class TestPrimitive:
         assert af.core.pull_bwd_rules.get(p) is pb_bwd_rule
 
 
+class TestIRVal:
+    def test_irvar_aval_returns_var(self):
+        irvar = af.core.IRVar(type=str)
+
+        assert af.core.is_irval(irvar)
+        assert isinstance(irvar.aval, af.core.Var)
+        assert irvar.aval.type is str
+
+    def test_irlit_aval_returns_wrapped_value(self):
+        irlit = af.core.IRLit("hello")
+
+        assert af.core.is_irval(irlit)
+        assert irlit.aval == "hello"
+
+
 class TestFormatPrimitive:
     def test_basic_format(self):
         result = af.format("Hello, {}!", "World")
