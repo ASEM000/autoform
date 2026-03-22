@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import functools as ft
-import inspect
 import itertools as it
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Generator, Sequence
@@ -88,9 +87,6 @@ type Val = str | int | float | bool
 
 def is_val(x) -> bool:
     return isinstance(x, tuple(val_types))
-
-
-
 
 
 class AVal:
@@ -187,8 +183,6 @@ def is_irlit(x) -> TypeGuard[IRLit]:
     return isinstance(x, IRLit)
 
 
-
-
 # ==================================================================================================
 # PRIMITIVE
 # ==================================================================================================
@@ -260,7 +254,9 @@ class IREqn:
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        return IREqn(self.prim, self.effect, self.in_ir_tree, self.out_ir_tree, self.params | kwargs)
+        return IREqn(
+            self.prim, self.effect, self.in_ir_tree, self.out_ir_tree, self.params | kwargs
+        )
 
 
 class IR[**P, R]:
@@ -481,6 +477,7 @@ class EffectInterpreter(Interpreter, ABC):
 # TRACING
 # ==================================================================================================
 
+
 class TracingInterpreter(Interpreter):
     def __init__(self):
         self.ir_eqns: list[IREqn] = []
@@ -513,10 +510,10 @@ class TracingInterpreter(Interpreter):
 
 
 def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Callable[P, IR[P, R]]:
-    """Build an IR from a sync function by tracing its execution.
+    """Build an IR by tracing a function's execution.
 
     Args:
-        func: A sync callable that uses autoform primitives (format, concat, lm_call, etc.).
+        func: A callable that uses autoform primitives (format, concat, lm_call, etc.).
         static: Bool pytree matching the positional input structure.
             Mark a leaf ``True`` to keep that value fixed at trace time.
             Mark a leaf ``False`` to keep it as a normal runtime input.
@@ -540,7 +537,6 @@ def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Cal
         >>> af.call(ir)(True)
         'error'
     """
-    assert not inspect.iscoroutinefunction(func), "`trace` only supports sync functions"
 
     def is_static_spec(x) -> bool:
         return isinstance(x, bool)

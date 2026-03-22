@@ -677,7 +677,8 @@ batch_rules.aset(pullback_call_p, abatch_pullback_call)
 
 def dce_pullback_call(ir_eqn: IREqn, out_used: Tree[bool], /) -> tuple[IREqn, Tree[bool]]:
     out, in_cot = out_used
-    inner_ir = ir_eqn.params["ir"] if treelib.any(in_cot) else dce(ir_eqn.params["ir"], out_used=out)
+    used = treelib.any(in_cot)
+    inner_ir = ir_eqn.params["ir"] if used else dce(ir_eqn.params["ir"], out_used=out)
     new_eqn = ir_eqn.using(ir=inner_ir)
     return default_dce(new_eqn, out_used)
 

@@ -73,13 +73,6 @@ class TestBuildIR:
         ) or lit_candidate == "Hello, "
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
-    def test_trace_rejects_async_functions(self):
-        async def program(name):
-            return af.concat("Hello, ", name)
-
-        with pytest.raises(AssertionError, match="only supports sync functions"):
-            af.trace(program)
-
     def test_format_traces_template_and_args(self):
         def program(x):
             return af.format("Hello, {}!", x)
