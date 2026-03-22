@@ -21,12 +21,12 @@ import autoform as af
 
 class TestPrimitive:
     def test_creation(self):
-        p = af.core.Primitive("test_prim")
+        p = af.core.Prim("test_prim")
         assert p.name == "test_prim"
         assert repr(p) == "test_prim"
 
     def test_def_impl_decorator(self):
-        p = af.core.Primitive("test_impl")
+        p = af.core.Prim("test_impl")
 
         @ft.partial(af.core.impl_rules.set, p)
         def impl(x):
@@ -35,16 +35,16 @@ class TestPrimitive:
         assert af.core.impl_rules.get(p) is impl
 
     def test_def_abstract_decorator(self):
-        p = af.core.Primitive("test_abstract")
+        p = af.core.Prim("test_abstract")
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(x):
-            return af.core.Var(str)
+            return af.core.AVal(str)
 
         assert af.core.abstract_rules.get(p) is abstract_rule
 
     def test_def_batch_decorator(self):
-        p = af.core.Primitive("test_batch")
+        p = af.core.Prim("test_batch")
 
         @ft.partial(af.core.batch_rules.set, p)
         def batch_rule(in_tree):
@@ -53,7 +53,7 @@ class TestPrimitive:
         assert af.core.batch_rules.get(p) is batch_rule
 
     def test_def_pushforward_decorator(self):
-        p = af.core.Primitive("test_pushforward")
+        p = af.core.Prim("test_pushforward")
 
         @ft.partial(af.core.push_rules.set, p)
         def pf_rule(in_tree):
@@ -62,7 +62,7 @@ class TestPrimitive:
         assert af.core.push_rules.get(p) is pf_rule
 
     def test_def_pullback_forward_decorator(self):
-        p = af.core.Primitive("test_pullback_fwd")
+        p = af.core.Prim("test_pullback_fwd")
 
         @ft.partial(af.core.pull_fwd_rules.set, p)
         def pb_fwd_rule(in_tree):
@@ -71,7 +71,7 @@ class TestPrimitive:
         assert af.core.pull_fwd_rules.get(p) is pb_fwd_rule
 
     def test_def_pullback_backward_decorator(self):
-        p = af.core.Primitive("test_pullback_bwd")
+        p = af.core.Prim("test_pullback_bwd")
 
         @ft.partial(af.core.pull_bwd_rules.set, p)
         def pb_bwd_rule(residuals, out_cotangent):
@@ -81,11 +81,11 @@ class TestPrimitive:
 
 
 class TestIRVal:
-    def test_irvar_aval_returns_var(self):
+    def test_irvar_aval_returns_aval(self):
         irvar = af.core.IRVar(type=str)
 
         assert af.core.is_irval(irvar)
-        assert isinstance(irvar.aval, af.core.Var)
+        assert isinstance(irvar.aval, af.core.AVal)
         assert irvar.aval.type is str
 
     def test_irlit_aval_returns_wrapped_value(self):
@@ -162,7 +162,7 @@ class TestConcatPrimitive:
 
 class TestBind:
     def test_bind_using(self):
-        p = af.core.Primitive("custom_bind")
+        p = af.core.Prim("custom_bind")
 
         @ft.partial(af.core.impl_rules.set, p)
         def impl(in_tree, *, multiplier):
@@ -170,7 +170,7 @@ class TestBind:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
-            return af.core.Var(str)
+            return af.core.AVal(str)
 
         def func(x):
             return p.bind(x, multiplier=3)

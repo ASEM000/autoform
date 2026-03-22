@@ -21,7 +21,7 @@ import autoform as af
 class TestInterpreterRuleMapping:
     def test_basic_get_set(self):
         mapping = af.core.InterpreterRuleMapping()
-        p = af.core.Primitive("test_basic")
+        p = af.core.Prim("test_basic")
 
         @ft.partial(mapping.set, p)
         def rule(x):
@@ -31,7 +31,7 @@ class TestInterpreterRuleMapping:
 
     def test_duplicate_raises(self):
         mapping = af.core.InterpreterRuleMapping()
-        p = af.core.Primitive("test_duplicate")
+        p = af.core.Prim("test_duplicate")
 
         @ft.partial(mapping.set, p)
         def rule1(x):
@@ -54,7 +54,7 @@ class TestInterpreterRuleMapping:
 
         def set_rule(thread_id):
             try:
-                p = af.core.Primitive(f"concurrent_{thread_id}")
+                p = af.core.Prim(f"concurrent_{thread_id}")
 
                 @ft.partial(mapping.set, p)
                 def rule(x):

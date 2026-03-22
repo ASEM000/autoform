@@ -86,11 +86,11 @@ class TestGatherValidation:
             af.gather([("not_an_ir", "input")])
 
     def test_exception_propagates(self):
-        error_p = af.core.Primitive("error")
+        error_p = af.core.Prim("error")
 
         @ft.partial(af.core.abstract_rules.set, error_p)
         def abstract_error(x):
-            return af.core.Var(str)
+            return af.core.AVal(str)
 
         @ft.partial(af.core.impl_rules.set, error_p)
         def impl_error(x):

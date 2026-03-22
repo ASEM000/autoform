@@ -277,11 +277,11 @@ class TestBatchRuleOutBatched:
 
 class TestBatchMultipleOutputs:
     def test_batch_primitive_with_two_outputs(self):
-        split_p = af.core.Primitive("split")
+        split_p = af.core.Prim("split")
 
         @ft.partial(af.core.abstract_rules.set, split_p)
         def abstract_split(x):
-            return af.core.Var(str), af.core.Var(str)
+            return af.core.AVal(str), af.core.AVal(str)
 
         @ft.partial(af.core.impl_rules.set, split_p)
         def impl_split(x):
@@ -304,11 +304,11 @@ class TestBatchMultipleOutputs:
         assert result == (["a", "x", "1"], ["bc", "yz", "23"])
 
     def test_batch_nested_tuple_output(self):
-        nested_p = af.core.Primitive("nested")
+        nested_p = af.core.Prim("nested")
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_nested(x):
-            return (af.core.Var(str), af.core.Var(str)), af.core.Var(str)
+            return (af.core.AVal(str), af.core.AVal(str)), af.core.AVal(str)
 
         @ft.partial(af.core.impl_rules.set, nested_p)
         def impl_nested(x):
@@ -369,7 +369,7 @@ class TestBatchBroadcasting:
 
 class TestBatchRuleOutBatchedValidation:
     def test_single_output_accepts_scalar_bool(self):
-        single_p = af.core.Primitive("single_out")
+        single_p = af.core.Prim("single_out")
 
         @ft.partial(af.core.impl_rules.set, single_p)
         def impl(x):
@@ -377,7 +377,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, single_p)
         def abstract_rule(x):
-            return af.core.Var(str)
+            return af.core.AVal(str)
 
         @ft.partial(af.core.batch_rules.set, single_p)
         def batch_rule(in_tree):
@@ -393,7 +393,7 @@ class TestBatchRuleOutBatchedValidation:
         assert result == ["a", "b"]
 
     def test_tuple_output_requires_tuple_out_batched(self):
-        tuple_p = af.core.Primitive("tuple_out")
+        tuple_p = af.core.Prim("tuple_out")
 
         @ft.partial(af.core.impl_rules.set, tuple_p)
         def impl(x):
@@ -401,7 +401,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.Var(str), af.core.Var(str))
+            return (af.core.AVal(str), af.core.AVal(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def bad_batch_rule(in_tree):
@@ -418,7 +418,7 @@ class TestBatchRuleOutBatchedValidation:
             af.call(batched_ir)(["a", "b"])
 
     def test_tuple_output_with_correct_out_batched(self):
-        tuple_p = af.core.Primitive("tuple_out_correct")
+        tuple_p = af.core.Prim("tuple_out_correct")
 
         @ft.partial(af.core.impl_rules.set, tuple_p)
         def impl(x):
@@ -426,7 +426,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.Var(str), af.core.Var(str))
+            return (af.core.AVal(str), af.core.AVal(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def correct_batch_rule(in_tree):
@@ -443,7 +443,7 @@ class TestBatchRuleOutBatchedValidation:
         assert result == (["a", "b"], ["a", "b"])
 
     def test_nested_output_requires_nested_out_batched(self):
-        nested_p = af.core.Primitive("nested_out")
+        nested_p = af.core.Prim("nested_out")
 
         @ft.partial(af.core.impl_rules.set, nested_p)
         def impl(x):
@@ -451,7 +451,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.Var(str), "second": (af.core.Var(str), af.core.Var(str))}
+            return {"first": af.core.AVal(str), "second": (af.core.AVal(str), af.core.AVal(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def bad_batch_rule(in_tree):
@@ -468,7 +468,7 @@ class TestBatchRuleOutBatchedValidation:
             af.call(batched_ir)(["a", "b"])
 
     def test_nested_output_with_correct_out_batched(self):
-        nested_p = af.core.Primitive("nested_out_correct")
+        nested_p = af.core.Prim("nested_out_correct")
 
         @ft.partial(af.core.impl_rules.set, nested_p)
         def impl(x):
@@ -476,7 +476,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.Var(str), "second": (af.core.Var(str), af.core.Var(str))}
+            return {"first": af.core.AVal(str), "second": (af.core.AVal(str), af.core.AVal(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def correct_batch_rule(in_tree):
@@ -493,7 +493,7 @@ class TestBatchRuleOutBatchedValidation:
         assert result == {"first": ["a", "b"], "second": (["a", "b"], ["a", "b"])}
 
     def test_mixed_batched_output(self):
-        mixed_p = af.core.Primitive("mixed_batch")
+        mixed_p = af.core.Prim("mixed_batch")
 
         @ft.partial(af.core.impl_rules.set, mixed_p)
         def impl(x):
@@ -501,7 +501,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.Var(str), af.core.Var(str))
+            return (af.core.AVal(str), af.core.AVal(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):
@@ -518,7 +518,7 @@ class TestBatchRuleOutBatchedValidation:
         assert result == (["a", "b"], ["constant", "constant"])
 
     def test_hop_broadcasts_scalar_output(self):
-        mixed_p = af.core.Primitive("mixed_batch_boundary")
+        mixed_p = af.core.Prim("mixed_batch_boundary")
 
         @ft.partial(af.core.impl_rules.set, mixed_p)
         def impl(x):
@@ -526,7 +526,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.Var(str), af.core.Var(str))
+            return (af.core.AVal(str), af.core.AVal(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):

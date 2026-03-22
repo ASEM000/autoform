@@ -236,14 +236,11 @@ class Struct(BaseModel):
         >>> import autoform as af
         >>> from typing import Literal
         >>> from annotated_types import Len
-        >>> class Inner(af.Struct):
-        ...     x: str
         >>> class Answer(af.Struct):
         ...     reasoning: str
         ...     answer: int
         ...     status: Literal["correct", "incorrect"]
         ...     scores: Annotated[list[int], Len(3, 3)]
-        ...     inner: Inner
 
     """
 
