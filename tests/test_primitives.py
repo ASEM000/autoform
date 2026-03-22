@@ -109,8 +109,8 @@ class TestFormatPrimitive:
             return af.format("Value: {}", x)
 
         ir = af.trace(func)("test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "format"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "format"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_format_ir_async(self):
@@ -140,8 +140,8 @@ class TestConcatPrimitive:
             return af.concat(x, y)
 
         ir = af.trace(func)("a", "b")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "concat"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "concat"
 
     def test_concat_trace_rejects_non_string_input(self):
         def func(x, y, z):
@@ -176,7 +176,7 @@ class TestBind:
             return p.bind(x, multiplier=3)
 
         ir = af.trace(func)("A")
-        assert ir.ireqns[0].params["multiplier"] == 3
+        assert ir.ir_eqns[0].params["multiplier"] == 3
         result = af.call(ir)("B")
         assert result == "BBB"
 
@@ -191,15 +191,15 @@ class TestInterpreter:
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
             af.format("Hello, {}!", af.core.IRVar.fresh(type=str))
-            assert len(tracer.ireqns) == 1
+            assert len(tracer.ir_eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
 
-    def test_tracing_interpreter_creates_ireqns(self):
+    def test_tracing_interpreter_creates_ir_eqns(self):
         tracer = af.core.TracingInterpreter()
         with af.core.using_interpreter(tracer):
             af.format("Hello, {}!", af.core.IRVar.fresh(type=str))
-        assert len(tracer.ireqns) == 1
+        assert len(tracer.ir_eqns) == 1
 
 
 class TestStopGradient:
@@ -212,8 +212,8 @@ class TestStopGradient:
             return af.stop_gradient(x)
 
         ir = af.trace(func)("test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "stop_gradient"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "stop_gradient"
 
     def test_run_ir(self):
         def func(x):
@@ -312,8 +312,8 @@ class TestRunIRInline:
 
         outer_ir = af.trace(outer)("X")
 
-        assert len(outer_ir.ireqns) == 1
-        assert outer_ir.ireqns[0].prim.name == "format"
+        assert len(outer_ir.ir_eqns) == 1
+        assert outer_ir.ir_eqns[0].prim.name == "format"
 
     def test_run_ir_inline_executes_correctly(self):
         """Inlined run_ir produces correct output."""
@@ -340,7 +340,7 @@ class TestRunIRInline:
             return af.call(inner_ir)(x)
 
         outer_ir = af.trace(outer)("X")
-        assert len(outer_ir.ireqns) == 2
+        assert len(outer_ir.ir_eqns) == 2
         result = af.call(outer_ir)("hello")
         assert result == "[hello!]"
 
@@ -354,7 +354,7 @@ class TestRunIRInline:
             return af.call(ir2)(r1)
 
         outer_ir = af.trace(outer)("X")
-        assert len(outer_ir.ireqns) == 2
+        assert len(outer_ir.ir_eqns) == 2
         result = af.call(outer_ir)("start")
         assert result == "start12"
 
@@ -442,7 +442,7 @@ class TestLiteralZeroing:
 
         tangent_ir = af.pushforward(ir)
 
-        _, tangent_in = tangent_ir.in_irtree
+        _, tangent_in = tangent_ir.in_ir_tree
         t_lit, t_var = tangent_in
 
         assert isinstance(t_lit, af.core.IRLit)
@@ -456,13 +456,13 @@ class TestLiteralZeroing:
 
         ir = af.trace(f)("input")
 
-        res_var, res_lit = ir.out_irtree
+        res_var, res_lit = ir.out_ir_tree
         assert isinstance(res_lit, af.core.IRLit)
         assert res_lit.value == "constant_output"
 
         tangent_ir = af.pushforward(ir)
 
-        _, tangent_out = tangent_ir.out_irtree
+        _, tangent_out = tangent_ir.out_ir_tree
         t_out_var, t_out_lit = tangent_out
 
         assert isinstance(t_out_lit, af.core.IRLit)
@@ -476,7 +476,7 @@ class TestLiteralZeroing:
         ir = af.trace(f)("input")
         adjoint_ir = af.pullback(ir)
 
-        _, cotangent_out = adjoint_ir.in_irtree
+        _, cotangent_out = adjoint_ir.in_ir_tree
         c_out_var, c_out_lit = cotangent_out
 
         assert isinstance(c_out_lit, af.core.IRLit)
@@ -491,7 +491,7 @@ class TestLiteralZeroing:
 
         adjoint_ir = af.pullback(ir)
 
-        _, cotangent_in = adjoint_ir.out_irtree
+        _, cotangent_in = adjoint_ir.out_ir_tree
         c_in_lit, c_in_var = cotangent_in
 
         assert isinstance(c_in_lit, af.core.IRLit)

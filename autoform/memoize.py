@@ -85,7 +85,7 @@ def memoize() -> Generator[None, None, None]:
         ...         b = af.concat(x, "!")  # same call, will be cached
         ...         return a, b
         >>> ir = af.trace(program)("test")
-        >>> len(ir.ireqns)
+        >>> len(ir.ir_eqns)
         1
     """
     with using_interpreter(MemoizingInterpreter()):

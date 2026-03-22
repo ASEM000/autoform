@@ -70,8 +70,8 @@ class TestCustomPrimitive:
             return shout(x)
 
         ir = af.trace(program)("test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "shout"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "shout"
 
         result = af.call(ir)("world")
         assert result == "WORLD"
@@ -276,8 +276,8 @@ class TestTextGradStylePullback:
             return textgrad_style_lm_call(messages, model="openai/gpt-5.2", struct=ResearchNotes)
 
         ir = af.trace(program)("test topic")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "textgrad_style_lm_call"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "textgrad_style_lm_call"
 
     def test_multi_agent_ir_build(self):
         def multi_agent_pipeline(topic: str):
@@ -307,7 +307,7 @@ class TestTextGradStylePullback:
 
         ir = af.trace(multi_agent_pipeline)("AI safety")
 
-        prim_names = [eqn.prim.name for eqn in ir.ireqns]
+        prim_names = [eqn.prim.name for eqn in ir.ir_eqns]
         assert prim_names.count("textgrad_style_lm_call") == 2
         assert prim_names.count("format") == 2
 
@@ -321,8 +321,8 @@ class TestTextGradStylePullback:
         ir = af.trace(pipeline)("test")
         pb_ir = af.pullback(ir)
 
-        assert len(pb_ir.ireqns) == 1
-        assert pb_ir.ireqns[0].prim.name == "pullback_call"
+        assert len(pb_ir.ir_eqns) == 1
+        assert pb_ir.ir_eqns[0].prim.name == "pullback_call"
 
 
 class TestMultiAgentComposition:
@@ -382,8 +382,8 @@ class TestMultiAgentComposition:
 
         batch_transformed = af.batch(ir, in_axes=True)
 
-        assert len(batch_transformed.ireqns) == 1
-        assert batch_transformed.ireqns[0].prim.name == "batch_call"
+        assert len(batch_transformed.ir_eqns) == 1
+        assert batch_transformed.ir_eqns[0].prim.name == "batch_call"
 
     def test_nested_batch_and_pullback(self):
         """Test composing batch and pullback transforms.

@@ -109,7 +109,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
 
 
 def abstract_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
-    return [treelib.map(lambda x: x.aval, ir.out_irtree) for ir in irs]
+    return [treelib.map(lambda x: x.aval, ir.out_ir_tree) for ir in irs]
 
 
 def push_gather(
@@ -179,11 +179,11 @@ def batch_gather(
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if batch_spec(inp, inp_batched) is None:
             results.append(call(ir)(inp))
-            out_batched.append(treelib.map(lambda _: False, ir.out_irtree))
+            out_batched.append(treelib.map(lambda _: False, ir.out_ir_tree))
         else:
             batched_ir = batch(ir, in_axes=inp_batched)
             results.append(call(batched_ir)(inp))
-            out_batched.append(treelib.map(lambda _: True, ir.out_irtree))
+            out_batched.append(treelib.map(lambda _: True, ir.out_ir_tree))
 
     return results, out_batched
 
@@ -199,11 +199,11 @@ async def abatch_gather(
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if batch_spec(inp, inp_batched) is None:
             results.append(await acall(ir)(inp))
-            out_batched.append(treelib.map(lambda _: False, ir.out_irtree))
+            out_batched.append(treelib.map(lambda _: False, ir.out_ir_tree))
         else:
             batched_ir = batch(ir, in_axes=inp_batched)
             results.append(await acall(batched_ir)(inp))
-            out_batched.append(treelib.map(lambda _: True, ir.out_irtree))
+            out_batched.append(treelib.map(lambda _: True, ir.out_ir_tree))
 
     return results, out_batched
 
@@ -221,10 +221,10 @@ batch_rules.set(gather_p, batch_gather)
 batch_rules.aset(gather_p, abatch_gather)
 
 
-def dce_gather(ireqn: IREqn, out_used: list[bool], /) -> tuple[IREqn, list[bool]]:
-    irs = ireqn.params["irs"]
+def dce_gather(ir_eqn: IREqn, out_used: list[bool], /) -> tuple[IREqn, list[bool]]:
+    irs = ir_eqn.params["irs"]
     new_irs = [dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
-    new_eqn = ireqn.using(irs=new_irs)
+    new_eqn = ir_eqn.using(irs=new_irs)
     return default_dce(new_eqn, out_used)
 
 
@@ -253,9 +253,9 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
 
     # NOTE(asem): step 1: map irvar -> creator equation
     irvar_to_parent: dict[IRVar, IREqn] = {}
-    for ireqn in ir.ireqns:
-        for out_iratom in treelib.leaves(ireqn.out_irtree):
-            is_irvar(out_iratom) and setitem(irvar_to_parent, out_iratom, ireqn)
+    for ir_eqn in ir.ir_eqns:
+        for out_iratom in treelib.leaves(ir_eqn.out_ir_tree):
+            is_irvar(out_iratom) and setitem(irvar_to_parent, out_iratom, ir_eqn)
 
     # NOTE(asem): step 2: build adjacency list (parent -> children) and in-degree count
     adjacency_list = defaultdict(list)
@@ -264,19 +264,19 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     def has_parent(iratom: IRVal) -> bool:
         return is_irvar(iratom) and (iratom in irvar_to_parent)
 
-    for ireqn in ir.ireqns:
+    for ir_eqn in ir.ir_eqns:
         # NOTE(asem): avoid adding the same parent multiple times if the input is repeated
         seen_parents: set[IREqn] = set()
-        for in_irvar in (x for x in treelib.leaves(ireqn.in_irtree) if has_parent(x)):
+        for in_irvar in (x for x in treelib.leaves(ir_eqn.in_ir_tree) if has_parent(x)):
             # NOTE(asem): consider `concat($1, $1)` this would repeat the same equation
             if (parent := irvar_to_parent[in_irvar]) not in seen_parents:
-                adjacency_list[parent].append(ireqn)
-                in_degree[ireqn] += 1
+                adjacency_list[parent].append(ir_eqn)
+                in_degree[ir_eqn] += 1
                 seen_parents.add(parent)
 
     # NOTE(asem): step 3: kahn's algorithm
     # basically prune nodes with 0 indegree then update the children indegree
-    queue = deque(ireqn for ireqn in ir.ireqns if in_degree[ireqn] == 0)
+    queue = deque(ir_eqn for ir_eqn in ir.ir_eqns if in_degree[ir_eqn] == 0)
     levels = []
 
     while queue:
@@ -407,23 +407,23 @@ def sched[**P, R](ir: IR[P, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> result = asyncio.run(af.acall(scheduled)("hello"))
     """
     levels: list[list[IREqn]] = toposort_levels(ir)
-    out_ireqns: list[IREqn] = []
+    out_ir_eqns: list[IREqn] = []
     cond = (lambda _: True) if cond is None else cond
 
     def recurse(leaf):
         return sched(leaf, cond=cond) if isinstance(leaf, IR) else leaf
 
-    def make_gather(ireqns: list[IREqn]) -> IREqn:
-        irs = [IR([ireqn], ireqn.in_irtree, ireqn.out_irtree) for ireqn in ireqns]
-        in_irtree = [ireqn.in_irtree for ireqn in ireqns]
-        out_irtree = [ireqn.out_irtree for ireqn in ireqns]
-        return IREqn(gather_p, None, in_irtree, out_irtree, dict(irs=irs))
+    def make_gather(ir_eqns: list[IREqn]) -> IREqn:
+        irs = [IR([ir_eqn], ir_eqn.in_ir_tree, ir_eqn.out_ir_tree) for ir_eqn in ir_eqns]
+        in_ir_tree = [ir_eqn.in_ir_tree for ir_eqn in ir_eqns]
+        out_ir_tree = [ir_eqn.out_ir_tree for ir_eqn in ir_eqns]
+        return IREqn(gather_p, None, in_ir_tree, out_ir_tree, dict(irs=irs))
 
     for level in levels:
-        ireqns = [ireqn.using(**treelib.map(recurse, ireqn.params)) for ireqn in level]
-        seq_ireqns = [ireqn for ireqn in ireqns if not cond(ireqn)]
-        par_ireqns = [ireqn for ireqn in ireqns if cond(ireqn)]
-        out_ireqns.extend([make_gather(par_ireqns)] if len(par_ireqns) > 1 else par_ireqns)
-        out_ireqns.extend(seq_ireqns)
+        ir_eqns = [ir_eqn.using(**treelib.map(recurse, ir_eqn.params)) for ir_eqn in level]
+        seq_ir_eqns = [ir_eqn for ir_eqn in ir_eqns if not cond(ir_eqn)]
+        par_ir_eqns = [ir_eqn for ir_eqn in ir_eqns if cond(ir_eqn)]
+        out_ir_eqns.extend([make_gather(par_ir_eqns)] if len(par_ir_eqns) > 1 else par_ir_eqns)
+        out_ir_eqns.extend(seq_ir_eqns)
 
-    return IR(out_ireqns, ir.in_irtree, ir.out_irtree)
+    return IR(out_ir_eqns, ir.in_ir_tree, ir.out_ir_tree)

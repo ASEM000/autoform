@@ -30,8 +30,8 @@ class TestBuildIR:
 
         for traced, runtime, expected in cases:
             ir = af.trace(program)(traced)
-            assert isinstance(ir.in_irtree, af.core.IRVar)
-            assert ir.in_irtree.type is type(traced)
+            assert isinstance(ir.in_ir_tree, af.core.IRVar)
+            assert ir.in_ir_tree.type is type(traced)
             assert af.call(ir)(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -63,15 +63,15 @@ class TestBuildIR:
             return af.concat("Hello, ", name)
 
         ir = af.trace(program)("Alice")
-        assert len(ir.ireqns) == 1
-        assert isinstance(ir.in_irtree, af.core.IRVar)
-        eqn = ir.ireqns[0]
-        assert len(eqn.in_irtree) == 2
-        lit_candidate = eqn.in_irtree[0]
+        assert len(ir.ir_eqns) == 1
+        assert isinstance(ir.in_ir_tree, af.core.IRVar)
+        eqn = ir.ir_eqns[0]
+        assert len(eqn.in_ir_tree) == 2
+        lit_candidate = eqn.in_ir_tree[0]
         assert (
             isinstance(lit_candidate, af.core.IRLit) and lit_candidate.value == "Hello, "
         ) or lit_candidate == "Hello, "
-        assert isinstance(eqn.in_irtree[1], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
     def test_trace_rejects_async_functions(self):
         async def program(name):
@@ -85,9 +85,9 @@ class TestBuildIR:
             return af.format("Hello, {}!", x)
 
         ir = af.trace(program)("World")
-        assert len(ir.ireqns) == 1
-        eqn = ir.ireqns[0]
-        args, kwargs_values = eqn.in_irtree
+        assert len(ir.ir_eqns) == 1
+        eqn = ir.ir_eqns[0]
+        args, kwargs_values = eqn.in_ir_tree
         assert len(args) == 1
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
@@ -101,22 +101,72 @@ class TestBuildIR:
             return b
 
         ir = af.trace(program)("A", "B")
-        assert len(ir.ireqns) == 2
+        assert len(ir.ir_eqns) == 2
 
     def test_single_input_tree_structure(self):
         def program(x):
             return af.concat(x, x)
 
         ir = af.trace(program)("test")
-        assert isinstance(ir.in_irtree, af.core.IRVar)
+        assert isinstance(ir.in_ir_tree, af.core.IRVar)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
             return af.concat(a, b)
 
         ir = af.trace(program)("A", "B")
-        assert isinstance(ir.in_irtree, tuple)
-        assert len(ir.in_irtree) == 2
+        assert isinstance(ir.in_ir_tree, tuple)
+        assert len(ir.in_ir_tree) == 2
+
+
+class TestTraceStatic:
+    def test_mixed_static_and_dynamic_inputs(self):
+        def program(greeting, name):
+            return af.format("{} {}", greeting, name)
+
+        ir = af.trace(program, static=(True, False))("Hello", "World")
+        greeting, name = ir.in_ir_tree
+        assert isinstance(greeting, af.core.IRLit)
+        assert greeting.value == "Hello"
+        assert isinstance(name, af.core.IRVar)
+        assert af.call(ir)("Hello", "Alice") == "Hello Alice"
+
+    def test_static_mismatch_is_rejected(self):
+        def program(greeting, name):
+            return af.format("{} {}", greeting, name)
+
+        ir = af.trace(program, static=(True, False))("Hello", "World")
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            af.call(ir)("Hi", "Alice")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_static_mismatch_is_rejected_async(self):
+        def program(greeting, name):
+            return af.format("{} {}", greeting, name)
+
+        ir = af.trace(program, static=(True, False))("Hello", "World")
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            await af.acall(ir)("Hi", "Alice")
+
+    def test_static_spec_mismatch_is_rejected(self):
+        def program(greeting, name):
+            return af.format("{} {}", greeting, name)
+
+        with pytest.raises(ValueError):
+            af.trace(program, static=(True,))("Hello", "World")
+
+    def test_static_bool_specializes_python_branch(self):
+        def program(use_bang, name):
+            if use_bang:
+                return af.concat(name, "!")
+            return af.concat(name, "?")
+
+        ir = af.trace(program, static=(True, False))(True, "World")
+        use_bang, name = ir.in_ir_tree
+        assert isinstance(use_bang, af.core.IRLit)
+        assert use_bang.value is True
+        assert isinstance(name, af.core.IRVar)
+        assert af.call(ir)(True, "Alice") == "Alice!"
 
 
 class TestRunIR:

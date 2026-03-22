@@ -90,6 +90,9 @@ def is_val(x) -> bool:
     return isinstance(x, tuple(val_types))
 
 
+
+
+
 class AVal:
     __slots__ = "type"
 
@@ -184,10 +187,6 @@ def is_irlit(x) -> TypeGuard[IRLit]:
     return isinstance(x, IRLit)
 
 
-def input_to_irval(x, /) -> IRVar:
-    assert not is_irval(x), "Inputs to `trace` must be normal python types"
-    assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-    return IRVar.fresh(type=type(x))
 
 
 # ==================================================================================================
@@ -231,25 +230,25 @@ class Prim:
 
 
 class IREqn:
-    __slots__ = ("prim", "effect", "in_irtree", "out_irtree", "params")
-    __match_args__ = ("prim", "effect", "in_irtree", "out_irtree", "params")
+    __slots__ = ("prim", "effect", "in_ir_tree", "out_ir_tree", "params")
+    __match_args__ = ("prim", "effect", "in_ir_tree", "out_ir_tree", "params")
 
     def __init__(
         self,
         prim: Prim,
         effect: Effect | None,
-        in_irtree: Tree[IRVal],
-        out_irtree: Tree[IRVal],
+        in_ir_tree: Tree[IRVal],
+        out_ir_tree: Tree[IRVal],
         params: dict | None = None,
     ):
         assert isinstance(prim, Prim)
         assert isinstance(effect, Effect) or effect is None
-        assert treelib.all(treelib.map(is_irval, (in_irtree, out_irtree)))
+        assert treelib.all(treelib.map(is_irval, (in_ir_tree, out_ir_tree)))
         assert isinstance(params, dict) or params is None
         self.prim = prim
         self.effect = effect
-        self.in_irtree = in_irtree
-        self.out_irtree = out_irtree
+        self.in_ir_tree = in_ir_tree
+        self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
 
     def bind(self, in_tree: Tree, /, **params):
@@ -261,20 +260,20 @@ class IREqn:
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        return IREqn(self.prim, self.effect, self.in_irtree, self.out_irtree, self.params | kwargs)
+        return IREqn(self.prim, self.effect, self.in_ir_tree, self.out_ir_tree, self.params | kwargs)
 
 
 class IR[**P, R]:
-    __slots__ = ("ireqns", "in_irtree", "out_irtree")
-    __match_args__ = ("ireqns", "in_irtree", "out_irtree")
+    __slots__ = ("ir_eqns", "in_ir_tree", "out_ir_tree")
+    __match_args__ = ("ir_eqns", "in_ir_tree", "out_ir_tree")
 
-    def __init__(self, ireqns: list[IREqn], in_irtree: Tree[IRVal], out_irtree: Tree[IRVal]):
-        assert isinstance(ireqns, list)
-        assert all(isinstance(ireqn, IREqn) for ireqn in ireqns)
-        assert treelib.all(treelib.map(is_irval, (in_irtree, out_irtree)))
-        self.ireqns = tuple(ireqns)
-        self.in_irtree = in_irtree
-        self.out_irtree = out_irtree
+    def __init__(self, ir_eqns: list[IREqn], in_ir_tree: Tree[IRVal], out_ir_tree: Tree[IRVal]):
+        assert isinstance(ir_eqns, list)
+        assert all(isinstance(ir_eqn, IREqn) for ir_eqn in ir_eqns)
+        assert treelib.all(treelib.map(is_irval, (in_ir_tree, out_ir_tree)))
+        self.ir_eqns = tuple(ir_eqns)
+        self.in_ir_tree = in_ir_tree
+        self.out_ir_tree = out_ir_tree
 
     def __repr__(self) -> str:
         return generate_text_code(ir=self, expand_ir=True)
@@ -303,7 +302,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
                 sub_code = generate_text_code(val, indent, expand_ir=True)
                 return f"<IR:{{\n{sub_code}\n}}>"
             else:
-                prim_names = ",".join(e.prim.name for e in val.ireqns)
+                prim_names = ",".join(e.prim.name for e in val.ir_eqns)
                 if len(prim_names) > 20:
                     prim_names = prim_names[:17] + "..."
                 return f"<IR:[{prim_names}]>"
@@ -317,21 +316,21 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         leaves = treelib.leaves(tree)
         return ", ".join(format_irval(leaf) for leaf in leaves) if leaves else "()"
 
-    in_sig = format_tree(ir.in_irtree)
-    out_sig = format_tree(ir.out_irtree)
+    in_sig = format_tree(ir.in_ir_tree)
+    out_sig = format_tree(ir.out_ir_tree)
 
     header = f"func({in_sig}) -> ({out_sig}) {{"
     lines = [header]
 
-    for ireqn in ir.ireqns:
-        lhs = format_tree(ireqn.out_irtree)
-        rhs = format_tree(ireqn.in_irtree)
-        params_str = ", ".join(f"{k}={ireqn.params[k]!r}" for k in (ireqn.params or {}))
-        effect_str = f" @{ireqn.effect!r}" if ireqn.effect else ""
+    for ir_eqn in ir.ir_eqns:
+        lhs = format_tree(ir_eqn.out_ir_tree)
+        rhs = format_tree(ir_eqn.in_ir_tree)
+        params_str = ", ".join(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
+        effect_str = f" @{ir_eqn.effect!r}" if ir_eqn.effect else ""
         if params_str:
-            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}, {params_str}){effect_str}")
+            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str}){effect_str}")
         else:
-            lines.append(f"{sp}({lhs}) = {ireqn.prim.name}({rhs}){effect_str}")
+            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}){effect_str}")
 
     lines.append("}")
     return "\n".join(lines)
@@ -482,43 +481,45 @@ class EffectInterpreter(Interpreter, ABC):
 # TRACING
 # ==================================================================================================
 
-
 class TracingInterpreter(Interpreter):
     def __init__(self):
-        self.ireqns: list[IREqn] = []
+        self.ir_eqns: list[IREqn] = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree[IRVal]:
-        def to_in_irval(x) -> IRVal:
+        def to_in_ir_val(x) -> IRVal:
             # NOTE(asem): input can be IRVal in 3 cases:
             # 1. function inputs wrapped by trace
             # 2. output from previous prim calls
             # 3. raw python values needed to be wrapped by IRLit (local consts, closed-over values)
             return x if is_irval(x) else IRLit(x)
 
-        in_irtree = treelib.map(to_in_irval, in_tree)
-        in_aval_tree = treelib.map(lambda x: x.aval, in_irtree)
+        in_ir_tree = treelib.map(to_in_ir_val, in_tree)
+        in_aval_tree = treelib.map(lambda x: x.aval, in_ir_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
-        def to_out_irval(x) -> IRVal:
-            # NOTE(asem): abstract rules return `Var`/ python types.
-            # `Var` simply denotes a placeholder for a value that will be computed later
+        def to_out_ir_val(x) -> IRVal:
+            # NOTE(asem): abstract rules return `AVal`/ python types.
+            # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
             return IRVar.fresh(type=x.type) if is_var(x) else IRLit(x)
 
-        out_irtree = treelib.map(to_out_irval, out_aval_tree)
+        out_ir_tree = treelib.map(to_out_ir_val, out_aval_tree)
         effect = active_effect.get()
-        self.ireqns.append(IREqn(prim, effect, in_irtree, out_irtree, params))
-        return out_irtree
+        self.ir_eqns.append(IREqn(prim, effect, in_ir_tree, out_ir_tree, params))
+        return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree[IRVal]:
         return self.interpret(prim, in_tree, **params)
 
 
-def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
+def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Callable[P, IR[P, R]]:
     """Build an IR from a sync function by tracing its execution.
 
     Args:
         func: A sync callable that uses autoform primitives (format, concat, lm_call, etc.).
+        static: Bool pytree matching the packed positional input tree.
+            - True: Bake this input leaf into the IR as an ``IRLit``.
+            - False: Trace this input leaf dynamically as an ``IRVar``.
 
     Returns:
         A tracer callable that takes positional arguments and returns an IR.
@@ -533,18 +534,31 @@ def trace[**P, R](func: Callable[P, R], /) -> Callable[P, IR[P, R]]:
     """
     assert not inspect.iscoroutinefunction(func), "`trace` only supports sync functions"
 
-    def to_out_irval(x):
+    def is_static_spec(x) -> bool:
+        return isinstance(x, bool)
+
+    def to_ir_var(x, /) -> IRVar:
+        assert not is_irval(x), "Inputs to `trace` must be normal python types"
+        assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
+        return IRVar.fresh(type=type(x))
+
+    def to_in_ir_val(x, is_static: bool) -> IRVal:
+        return IRLit(x) if is_static else to_ir_var(x)
+
+    def to_out_ir_val(x) -> IRVal:
         return x if is_irval(x) else IRLit(x)
 
     @ft.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
         assert not kwargs, "`trace` does not support keyword arguments"
-        in_irargs = treelib.map(input_to_irval, args, is_leaf=is_val)
+        in_tree = pack_user_input(*args)
+        in_static_tree = treelib.broadcast_prefix(static, in_tree, is_leaf=is_static_spec)
+        in_ir_tree = treelib.map(to_in_ir_val, in_tree, in_static_tree, is_leaf=is_static_spec)
         with using_interpreter(TracingInterpreter()) as tracer:
-            out_irtree = func(*in_irargs)
-        in_irtree = pack_user_input(*in_irargs)
-        out_irtree = treelib.map(to_out_irval, out_irtree)
-        return IR(ireqns=tracer.ireqns, in_irtree=in_irtree, out_irtree=out_irtree)
+            in_prog_tree = [in_ir_tree] if len(args) == 1 else in_ir_tree
+            out_prog_tree = func(*in_prog_tree)
+        out_ir_tree = treelib.map(to_out_ir_val, out_prog_tree)
+        return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
     return wrapper
 
@@ -580,15 +594,21 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
         def read(irval: IRVal) -> Any:
             return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
 
+        def check_input(irval: IRVal, value: Any):
+            if is_irlit(irval):
+                msg = f"Static input mismatch: expected {irval.value!r}, got {value!r}"
+                assert irval.value == value, msg
+
         def write(irval: IRVal, value):
             is_irvar(irval) and setitem(env, irval, value)
 
-        treelib.map(write, ir.in_irtree, in_tree)
-        for ireqn in ir.ireqns:
-            in_values = treelib.map(read, ireqn.in_irtree)
-            out_values = ireqn.bind(in_values, **ireqn.params)
-            treelib.map(write, ireqn.out_irtree, out_values)
-        return treelib.map(read, ir.out_irtree)
+        treelib.map(check_input, ir.in_ir_tree, in_tree)
+        treelib.map(write, ir.in_ir_tree, in_tree)
+        for ir_eqn in ir.ir_eqns:
+            in_values = treelib.map(read, ir_eqn.in_ir_tree)
+            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+            treelib.map(write, ir_eqn.out_ir_tree, out_values)
+        return treelib.map(read, ir.out_ir_tree)
 
     return func
 
@@ -620,15 +640,21 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
         def read(irval: IRVal) -> Any:
             return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
 
+        def check_input(irval: IRVal, value: Any):
+            if is_irlit(irval):
+                msg = f"Static input mismatch: expected {irval.value!r}, got {value!r}"
+                assert irval.value == value, msg
+
         def write(irval: IRVal, value):
             is_irvar(irval) and setitem(env, irval, value)
 
-        treelib.map(write, ir.in_irtree, in_tree)
-        for ireqn in ir.ireqns:
-            in_values = treelib.map(read, ireqn.in_irtree)
-            out_values = await ireqn.abind(in_values, **ireqn.params)
-            treelib.map(write, ireqn.out_irtree, out_values)
-        return treelib.map(read, ir.out_irtree)
+        treelib.map(check_input, ir.in_ir_tree, in_tree)
+        treelib.map(write, ir.in_ir_tree, in_tree)
+        for ir_eqn in ir.ir_eqns:
+            in_values = treelib.map(read, ir_eqn.in_ir_tree)
+            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
+            treelib.map(write, ir_eqn.out_ir_tree, out_values)
+        return treelib.map(read, ir.out_ir_tree)
 
     return func
 

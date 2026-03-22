@@ -166,7 +166,7 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
         return response.choices[0].message.content
 
     # NOTE(asem): stream under effect handler context by default for all lm calls
-    # effect is used here not over user code to avoid having lm call with `StreamEffect` in the ireqn.
+    # effect is used here not over user code to avoid having lm call with `StreamEffect` in the ir_eqn.
     # as effectful equations makes any equation immovable.
     # downside of this approach is streaming is not possible if lm_call is transformed.
     buffer = StringIO()

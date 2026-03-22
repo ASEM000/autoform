@@ -43,10 +43,10 @@ class TestSow:
             return af.checkpoint(x, key="my_name", collection="my_tag")
 
         ir = af.trace(func)("test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "effect"
-        assert ir.ireqns[0].effect.collection == "my_tag"
-        assert ir.ireqns[0].effect.key == "my_name"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "effect"
+        assert ir.ir_eqns[0].effect.collection == "my_tag"
+        assert ir.ir_eqns[0].effect.key == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -297,16 +297,16 @@ class TestInjectAndDCE:
 
         ir = af.trace(program)("test")
 
-        assert len(ir.ireqns) == 3
+        assert len(ir.ir_eqns) == 3
 
         def wrapped(x):
             with af.inject(collection="cache", values={"result": ["CACHED"]}):
                 return af.call(ir)("ignored")
 
         traced_ir = af.trace(wrapped)("example")
-        assert len(traced_ir.ireqns) == 2
+        assert len(traced_ir.ir_eqns) == 2
 
-        last_eqn = traced_ir.ireqns[-1]
+        last_eqn = traced_ir.ir_eqns[-1]
         assert last_eqn.prim.name == "concat"
 
     def test_dce_removes_dead_code_after_inject(self):
@@ -322,9 +322,9 @@ class TestInjectAndDCE:
                 return af.call(ir)("ignored")
 
         traced_ir = af.trace(wrapped)("example")
-        assert len(traced_ir.ireqns) == 2
+        assert len(traced_ir.ir_eqns) == 2
         optimized_ir = af.dce(traced_ir)
-        assert len(optimized_ir.ireqns) == 1
+        assert len(optimized_ir.ir_eqns) == 1
 
         result = af.call(optimized_ir)("any_input")
         assert result == "Got: CACHED"
@@ -338,7 +338,7 @@ class TestInjectAndDCE:
             return af.concat("final:", saved2)
 
         ir = af.trace(program)("test")
-        assert len(ir.ireqns) == 5
+        assert len(ir.ir_eqns) == 5
 
         def wrapped(x):
             with af.inject(collection="cache", values={"first": ["CACHED1"]}):
@@ -373,10 +373,10 @@ class TestSplit:
         ir = af.trace(program)("...")
         lhs, rhs = af.split(ir, key="s")
 
-        assert len(lhs.ireqns) == 1
-        assert lhs.ireqns[0].prim.name == "format"
+        assert len(lhs.ir_eqns) == 1
+        assert lhs.ir_eqns[0].prim.name == "format"
 
-        assert len(rhs.ireqns) == 0
+        assert len(rhs.ir_eqns) == 0
 
         lhs_result = af.call(lhs)("Test")
         assert lhs_result == "Test"
@@ -393,10 +393,10 @@ class TestSplit:
         ir = af.trace(program)("...")
         lhs, rhs = af.split(ir, key="mid")
 
-        assert len(lhs.ireqns) == 1
+        assert len(lhs.ir_eqns) == 1
 
-        assert len(rhs.ireqns) == 1
-        assert rhs.ireqns[0].prim.name == "format"
+        assert len(rhs.ir_eqns) == 1
+        assert rhs.ir_eqns[0].prim.name == "format"
 
         lhs_result = af.call(lhs)("World")
         assert lhs_result == "Hello World"
@@ -475,13 +475,13 @@ class TestSplit:
 
         ir = af.trace(program)("...")
         lhs1, rhs1 = af.split(ir, key="first")
-        assert len(lhs1.ireqns) == 0
-        assert len(rhs1.ireqns) == 3
+        assert len(lhs1.ir_eqns) == 0
+        assert len(rhs1.ir_eqns) == 3
 
         ir2 = af.trace(program)("...")
         lhs2, rhs2 = af.split(ir2, key="second")
-        assert len(lhs2.ireqns) == 2
-        assert len(rhs2.ireqns) == 1
+        assert len(lhs2.ir_eqns) == 2
+        assert len(rhs2.ir_eqns) == 1
 
 
 class TestSplitpointPreservedThroughTransforms:
@@ -493,10 +493,10 @@ class TestSplitpointPreservedThroughTransforms:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        assert len(pf_ir.ireqns) == 1
-        assert pf_ir.ireqns[0].prim.name == "pushforward_call"
-        nested_ir = pf_ir.ireqns[0].params["ir"]
-        splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
+        assert len(pf_ir.ir_eqns) == 1
+        assert pf_ir.ir_eqns[0].prim.name == "pushforward_call"
+        nested_ir = pf_ir.ir_eqns[0].params["ir"]
+        splitpoints = [eqn for eqn in nested_ir.ir_eqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
         assert splitpoints[0].params["key"] == "mid"
 
@@ -508,10 +508,10 @@ class TestSplitpointPreservedThroughTransforms:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        assert len(pb_ir.ireqns) == 1
-        assert pb_ir.ireqns[0].prim.name == "pullback_call"
-        nested_ir = pb_ir.ireqns[0].params["ir"]
-        splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
+        assert len(pb_ir.ir_eqns) == 1
+        assert pb_ir.ir_eqns[0].prim.name == "pullback_call"
+        nested_ir = pb_ir.ir_eqns[0].params["ir"]
+        splitpoints = [eqn for eqn in nested_ir.ir_eqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
         assert splitpoints[0].params["key"] == "mid"
 
@@ -523,10 +523,10 @@ class TestSplitpointPreservedThroughTransforms:
         ir = af.trace(program)("x")
         batch_ir = af.batch(ir, in_axes=True)
 
-        assert len(batch_ir.ireqns) == 1
-        assert batch_ir.ireqns[0].prim.name == "batch_call"
-        nested_ir = batch_ir.ireqns[0].params["ir"]
-        splitpoints = [eqn for eqn in nested_ir.ireqns if eqn.prim.name == "splitpoint"]
+        assert len(batch_ir.ir_eqns) == 1
+        assert batch_ir.ir_eqns[0].prim.name == "batch_call"
+        nested_ir = batch_ir.ir_eqns[0].params["ir"]
+        splitpoints = [eqn for eqn in nested_ir.ir_eqns if eqn.prim.name == "splitpoint"]
         assert len(splitpoints) == 1
         assert splitpoints[0].params["key"] == "mid"
 
@@ -542,18 +542,18 @@ class TestSplitOnTransformedIR:
 
         lhs, rhs = af.split(pf_ir, key="mid")
 
-        assert len(lhs.ireqns) == 1
-        assert lhs.ireqns[0].prim.name == "pushforward_call"
-        nested_lhs = lhs.ireqns[0].params["ir"]
+        assert len(lhs.ir_eqns) == 1
+        assert lhs.ir_eqns[0].prim.name == "pushforward_call"
+        nested_lhs = lhs.ir_eqns[0].params["ir"]
 
-        assert nested_lhs.ireqns[-1].prim.name == "concat"
+        assert nested_lhs.ir_eqns[-1].prim.name == "concat"
 
-        assert len(rhs.ireqns) == 1
-        assert rhs.ireqns[0].prim.name == "pushforward_call"
-        nested_rhs = rhs.ireqns[0].params["ir"]
+        assert len(rhs.ir_eqns) == 1
+        assert rhs.ir_eqns[0].prim.name == "pushforward_call"
+        nested_rhs = rhs.ir_eqns[0].params["ir"]
 
-        assert len(nested_rhs.ireqns) == 1
-        assert nested_rhs.ireqns[0].prim.name == "concat"
+        assert len(nested_rhs.ir_eqns) == 1
+        assert nested_rhs.ir_eqns[0].prim.name == "concat"
 
     def test_split_on_pullback_ir(self):
         def program(x):
@@ -565,10 +565,10 @@ class TestSplitOnTransformedIR:
 
         lhs, rhs = af.split(pb_ir, key="mid")
 
-        assert len(lhs.ireqns) == 1
-        assert lhs.ireqns[0].prim.name == "pullback_call"
-        assert len(rhs.ireqns) == 1
-        assert rhs.ireqns[0].prim.name == "pullback_call"
+        assert len(lhs.ir_eqns) == 1
+        assert lhs.ir_eqns[0].prim.name == "pullback_call"
+        assert len(rhs.ir_eqns) == 1
+        assert rhs.ir_eqns[0].prim.name == "pullback_call"
 
     def test_split_on_batch_ir(self):
         def program(x):
@@ -580,10 +580,10 @@ class TestSplitOnTransformedIR:
 
         lhs, rhs = af.split(batch_ir, key="mid")
 
-        assert len(lhs.ireqns) == 1
-        assert lhs.ireqns[0].prim.name == "batch_call"
-        assert len(rhs.ireqns) == 1
-        assert rhs.ireqns[0].prim.name == "batch_call"
+        assert len(lhs.ir_eqns) == 1
+        assert lhs.ir_eqns[0].prim.name == "batch_call"
+        assert len(rhs.ir_eqns) == 1
+        assert rhs.ir_eqns[0].prim.name == "batch_call"
 
     def test_split_on_transformed_ir_execution(self):
         def program(x):
@@ -606,15 +606,15 @@ class TestSplitOnTransformedIR:
 
         lhs, rhs = af.split(pf_pf_ir, key="mid")
 
-        assert len(lhs.ireqns) == 1
-        assert lhs.ireqns[0].prim.name == "pushforward_call"
-        assert len(rhs.ireqns) == 1
-        assert rhs.ireqns[0].prim.name == "pushforward_call"
+        assert len(lhs.ir_eqns) == 1
+        assert lhs.ir_eqns[0].prim.name == "pushforward_call"
+        assert len(rhs.ir_eqns) == 1
+        assert rhs.ir_eqns[0].prim.name == "pushforward_call"
 
-        inner_lhs = lhs.ireqns[0].params["ir"]
-        inner_rhs = rhs.ireqns[0].params["ir"]
-        assert inner_lhs.ireqns[0].prim.name == "pushforward_call"
-        assert inner_rhs.ireqns[0].prim.name == "pushforward_call"
+        inner_lhs = lhs.ir_eqns[0].params["ir"]
+        inner_rhs = rhs.ir_eqns[0].params["ir"]
+        assert inner_lhs.ir_eqns[0].prim.name == "pushforward_call"
+        assert inner_rhs.ir_eqns[0].prim.name == "pushforward_call"
 
     def test_split_on_batch_pushforward(self):
         def program(x):
@@ -626,15 +626,15 @@ class TestSplitOnTransformedIR:
 
         lhs, rhs = af.split(b_pf_ir, key="mid")
 
-        assert len(lhs.ireqns) == 1
-        assert lhs.ireqns[0].prim.name == "batch_call"
-        assert len(rhs.ireqns) == 1
-        assert rhs.ireqns[0].prim.name == "batch_call"
+        assert len(lhs.ir_eqns) == 1
+        assert lhs.ir_eqns[0].prim.name == "batch_call"
+        assert len(rhs.ir_eqns) == 1
+        assert rhs.ir_eqns[0].prim.name == "batch_call"
 
-        inner_lhs = lhs.ireqns[0].params["ir"]
-        inner_rhs = rhs.ireqns[0].params["ir"]
-        assert inner_lhs.ireqns[0].prim.name == "pushforward_call"
-        assert inner_rhs.ireqns[0].prim.name == "pushforward_call"
+        inner_lhs = lhs.ir_eqns[0].params["ir"]
+        inner_rhs = rhs.ir_eqns[0].params["ir"]
+        assert inner_lhs.ir_eqns[0].prim.name == "pushforward_call"
+        assert inner_rhs.ir_eqns[0].prim.name == "pushforward_call"
 
     def test_split_on_triple_nested(self):
         def program(x):
@@ -646,8 +646,8 @@ class TestSplitOnTransformedIR:
 
         lhs, rhs = af.split(triple, key="mid")
 
-        assert lhs.ireqns[0].prim.name == "pushforward_call"
-        assert rhs.ireqns[0].prim.name == "pushforward_call"
+        assert lhs.ir_eqns[0].prim.name == "pushforward_call"
+        assert rhs.ir_eqns[0].prim.name == "pushforward_call"
 
 
 class TestMemoizeBasic:
@@ -736,7 +736,7 @@ class TestMemoizeWithEffects:
 
         ir = af.trace(func)("test")
 
-        effect_eqns = [eqn for eqn in ir.ireqns if eqn.effect is not None]
+        effect_eqns = [eqn for eqn in ir.ir_eqns if eqn.effect is not None]
         assert len(effect_eqns) == 2
         assert effect_eqns[0].effect.key == "first"
         assert effect_eqns[1].effect.key == "second"

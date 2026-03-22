@@ -134,8 +134,8 @@ class TestSwitchIRStructure:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("a", "test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "switch"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "switch"
 
     def test_has_branches_param(self):
         branches = {
@@ -147,8 +147,8 @@ class TestSwitchIRStructure:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("x", "test")
-        assert "branches" in ir.ireqns[0].params
-        assert len(ir.ireqns[0].params["branches"]) == 2
+        assert "branches" in ir.ir_eqns[0].params
+        assert len(ir.ir_eqns[0].params["branches"]) == 2
 
 
 class TestSwitchPushforward:

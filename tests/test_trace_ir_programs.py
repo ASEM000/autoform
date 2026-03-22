@@ -28,8 +28,8 @@ class TestTraceRunIR:
             return af.call(inner_ir)(x)
 
         outer_ir = af.trace(program_with_run_ir)("test")
-        assert len(outer_ir.ireqns) == 1
-        assert outer_ir.ireqns[0].prim.name == "format"
+        assert len(outer_ir.ir_eqns) == 1
+        assert outer_ir.ir_eqns[0].prim.name == "format"
         result = af.call(outer_ir)("Alice")
         assert result == "Hello, Alice!"
 
@@ -44,7 +44,7 @@ class TestTraceRunIR:
             return af.call(inner_ir)(x)
 
         outer_ir = af.trace(program_with_run_ir)("test")
-        assert len(outer_ir.ireqns) == 2
+        assert len(outer_ir.ir_eqns) == 2
         result = af.call(outer_ir)("hello")
         assert result == "[hello]!"
 
@@ -61,8 +61,8 @@ class TestTraceBatchIR:
             return af.call(batched_inner_ir)(xs)
 
         outer_ir = af.trace(program_with_batch)(["a", "b", "c"])
-        assert len(outer_ir.ireqns) == 1
-        assert outer_ir.ireqns[0].prim.name == "batch_call"
+        assert len(outer_ir.ir_eqns) == 1
+        assert outer_ir.ir_eqns[0].prim.name == "batch_call"
         result = af.call(outer_ir)(["x", "y", "z"])
         assert result == ["Item: x", "Item: y", "Item: z"]
 
@@ -79,8 +79,8 @@ class TestTracePushforwardIR:
             return af.call(pf_ir)((primals, tangents))
 
         outer_ir = af.trace(program_with_pushforward)("p", "t")
-        assert len(outer_ir.ireqns) == 1
-        assert outer_ir.ireqns[0].prim.name == "pushforward_call"
+        assert len(outer_ir.ir_eqns) == 1
+        assert outer_ir.ir_eqns[0].prim.name == "pushforward_call"
         result = af.call(outer_ir)("primal", "tangent")
         assert result == ("[primal]", "[tangent]")
 
@@ -112,8 +112,8 @@ class TestTracePullbackIR:
             return af.call(pb_ir)((primal, cotangent))
 
         outer_ir = af.trace(program_with_pullback)("p", "c")
-        assert len(outer_ir.ireqns) == 1
-        assert outer_ir.ireqns[0].prim.name == "pullback_call"
+        assert len(outer_ir.ir_eqns) == 1
+        assert outer_ir.ir_eqns[0].prim.name == "pullback_call"
         result = af.call(outer_ir)("primal", "cotan")
         assert result == ("<primal>", "cotan")
 
@@ -149,8 +149,8 @@ class TestMultiLevelTracing:
             return af.call(level1_ir)(x)
 
         level2_ir = af.trace(level2)("z")
-        assert len(level2_ir.ireqns) == 1
-        assert level2_ir.ireqns[0].prim.name == "format"
+        assert len(level2_ir.ir_eqns) == 1
+        assert level2_ir.ir_eqns[0].prim.name == "format"
         result = af.call(level2_ir)("hello")
         assert result == "(hello)"
 
@@ -174,7 +174,7 @@ class TestMultiLevelTracing:
             return af.call(level2_ir)(x)
 
         level3_ir = af.trace(level3)("w")
-        assert len(level3_ir.ireqns) == 1
+        assert len(level3_ir.ir_eqns) == 1
         result = af.call(level3_ir)("test")
         assert result == "test!"
 

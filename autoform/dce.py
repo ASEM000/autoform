@@ -27,13 +27,13 @@ from autoform.utils import Tree, treelib
 # ==================================================================================================
 
 
-def default_dce(ireqn: IREqn, out_used: Tree[bool]) -> tuple[IREqn, Tree[bool]]:
-    # NOTE(asem): out_used is a pytree of bool matching the ireqn output pytree that
+def default_dce(ir_eqn: IREqn, out_used: Tree[bool]) -> tuple[IREqn, Tree[bool]]:
+    # NOTE(asem): out_used is a pytree of bool matching the ir_eqn output pytree that
     # denotes which output is used. the return is a another IREqn (mostly for edited HOP IR)
     # and a out_used
     should_use = treelib.any(out_used)
-    in_used = treelib.map(lambda _: should_use, ireqn.in_irtree)
-    return ireqn, in_used
+    in_used = treelib.map(lambda _: should_use, ir_eqn.in_ir_tree)
+    return ir_eqn, in_used
 
 
 type DCERule = Callable[[IREqn, Tree[bool]], tuple[IREqn, Tree[bool]]]
@@ -60,18 +60,18 @@ def dce[**P, R](
         ...     live = af.concat(x, " live")  # returned
         ...     return live
         >>> ir = af.trace(program)("test")
-        >>> len(ir.ireqns)
+        >>> len(ir.ir_eqns)
         2
         >>> dced = af.dce(ir)
-        >>> len(dced.ireqns)
+        >>> len(dced.ir_eqns)
         1
     """
 
     if out_used is None:
-        user_out_used = treelib.map(lambda _: True, ir.out_irtree)
+        user_out_used = treelib.map(lambda _: True, ir.out_ir_tree)
     else:
         assert treelib.all(isinstance(leaf, bool) for leaf in treelib.leaves(out_used))
-        assert treelib.structure(out_used) == treelib.structure(ir.out_irtree)
+        assert treelib.structure(out_used) == treelib.structure(ir.out_ir_tree)
         user_out_used = out_used
 
     def collect_used_irvars(tree: Tree[IRVal], used: Tree[bool]) -> set[IRVar]:
@@ -82,37 +82,37 @@ def dce[**P, R](
                 active_irvars.add(iratom)
         return active_irvars
 
-    active_irvars: set[IRVar] = collect_used_irvars(ir.out_irtree, user_out_used)
-    active_ireqns: deque[IREqn] = deque()
+    active_irvars: set[IRVar] = collect_used_irvars(ir.out_ir_tree, user_out_used)
+    active_ir_eqns: deque[IREqn] = deque()
 
     def is_active_node(node: IRVal) -> bool:
         return is_irvar(node) and (node in active_irvars)
 
-    for ireqn in reversed(ir.ireqns):
+    for ir_eqn in reversed(ir.ir_eqns):
         # NOTE(asem): walk backwards and feed dce rules the appropriate
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
-        ireqn_out_used = treelib.map(is_active_node, ireqn.out_irtree)
-        new_ireqn, in_used = dce_rules.get(ireqn.prim, default_dce)(ireqn, ireqn_out_used)
-        assert treelib.structure(in_used) == treelib.structure(ireqn.in_irtree)
+        ir_eqn_out_used = treelib.map(is_active_node, ir_eqn.out_ir_tree)
+        new_ir_eqn, in_used = dce_rules.get(ir_eqn.prim, default_dce)(ir_eqn, ir_eqn_out_used)
+        assert treelib.structure(in_used) == treelib.structure(ir_eqn.in_ir_tree)
 
-        if ireqn.effect and keep_effects:
-            active_ireqns.appendleft(new_ireqn)
-            active_irvars |= set(x for x in treelib.leaves(ireqn.in_irtree) if is_irvar(x))
+        if ir_eqn.effect and keep_effects:
+            active_ir_eqns.appendleft(new_ir_eqn)
+            active_irvars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
 
         elif treelib.any(in_used):
-            active_ireqns.appendleft(new_ireqn)
-            active_irvars |= collect_used_irvars(ireqn.in_irtree, in_used)
+            active_ir_eqns.appendleft(new_ir_eqn)
+            active_irvars |= collect_used_irvars(ir_eqn.in_ir_tree, in_used)
 
     # NOTE(asem): output sanitization step
-    # `call(ir)` always reads `ir.out_irtree`, even if a caller provided an `out_used` mask.
-    # so after DCE removes equations, `out_irtree` may contain IRVars that are no longer
+    # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
+    # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
-    in_vars = set(x for x in treelib.leaves(ir.in_irtree) if is_irvar(x))
+    in_vars = set(x for x in treelib.leaves(ir.in_ir_tree) if is_irvar(x))
     defined_vars: set[IRVar] = set(in_vars)
-    for kept in active_ireqns:
-        for atom in treelib.leaves(kept.out_irtree):
+    for kept in active_ir_eqns:
+        for atom in treelib.leaves(kept.out_ir_tree):
             is_irvar(atom) and defined_vars.add(atom)
 
     def sanitize_out_leaf(atom: IRVal, used: bool) -> IRVal:
@@ -144,5 +144,5 @@ def dce[**P, R](
             "This typically indicates inconsistent `out_used` or a bug in a DCE rule for a primitive."
         )
 
-    out_irtree = treelib.map(sanitize_out_leaf, ir.out_irtree, user_out_used)
-    return IR(list(active_ireqns), in_irtree=ir.in_irtree, out_irtree=out_irtree)
+    out_ir_tree = treelib.map(sanitize_out_leaf, ir.out_ir_tree, user_out_used)
+    return IR(list(active_ir_eqns), in_ir_tree=ir.in_ir_tree, out_ir_tree=out_ir_tree)

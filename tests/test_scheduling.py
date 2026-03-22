@@ -223,8 +223,8 @@ class TestGatherWithDCE:
         prog_ir = af.trace(program)("a")
         dce_ir = af.dce(prog_ir)
 
-        assert len(dce_ir.ireqns) == 1
-        assert dce_ir.ireqns[0].prim.name == "gather"
+        assert len(dce_ir.ir_eqns) == 1
+        assert dce_ir.ir_eqns[0].prim.name == "gather"
 
     def test_gather_removed_when_unused(self):
         ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
@@ -237,7 +237,7 @@ class TestGatherWithDCE:
         prog_ir = af.trace(program)("a")
         dce_ir = af.dce(prog_ir)
 
-        assert all(eqn.prim.name != "gather" for eqn in dce_ir.ireqns)
+        assert all(eqn.prim.name != "gather" for eqn in dce_ir.ir_eqns)
 
     def test_gather_dce_propagates_to_branches(self):
         def with_dead_code(x):
@@ -253,10 +253,10 @@ class TestGatherWithDCE:
         prog_ir = af.trace(program)("a")
         dce_ir = af.dce(prog_ir)
 
-        gather_eqn = dce_ir.ireqns[0]
+        gather_eqn = dce_ir.ir_eqns[0]
         dce_branch = gather_eqn.params["irs"][0]
 
-        assert len(dce_branch.ireqns) == 1
+        assert len(dce_branch.ir_eqns) == 1
 
     def test_gather_partial_output_used(self):
         ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
@@ -268,11 +268,11 @@ class TestGatherWithDCE:
 
         prog_ir = af.trace(program)("a")
         dce_ir = af.dce(prog_ir, out_used=True)
-        gather_eqns = [e for e in dce_ir.ireqns if e.prim.name == "gather"]
+        gather_eqns = [e for e in dce_ir.ir_eqns if e.prim.name == "gather"]
         assert len(gather_eqns) == 1
         inner_irs = gather_eqns[0].params["irs"]
-        assert len(inner_irs[0].ireqns) == 1
-        assert len(inner_irs[1].ireqns) == 0
+        assert len(inner_irs[0].ir_eqns) == 1
+        assert len(inner_irs[1].ir_eqns) == 0
 
     def test_gather_unused_branch_structured_output_is_callable(self):
         def structured_with_dead(x):
@@ -292,10 +292,10 @@ class TestGatherWithDCE:
 
         assert af.call(dce_ir)("X") == "X!"
 
-        gather_eqn = [e for e in dce_ir.ireqns if e.prim.name == "gather"][0]
+        gather_eqn = [e for e in dce_ir.ir_eqns if e.prim.name == "gather"][0]
         inner_dead = gather_eqn.params["irs"][1]
-        assert len(inner_dead.ireqns) == 0
-        leaves = af.utils.treelib.leaves(inner_dead.out_irtree)
+        assert len(inner_dead.ir_eqns) == 0
+        leaves = af.utils.treelib.leaves(inner_dead.out_ir_tree)
         assert all(af.core.is_irlit(x) and x.value is None for x in leaves)
 
 
@@ -356,7 +356,7 @@ class TestSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        prim_names = [e.prim.name for e in scheduled.ireqns]
+        prim_names = [e.prim.name for e in scheduled.ir_eqns]
         assert prim_names == ["gather", "concat"]
 
         result = af.call(scheduled)("test")
@@ -369,7 +369,7 @@ class TestSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        prim_names = [e.prim.name for e in scheduled.ireqns]
+        prim_names = [e.prim.name for e in scheduled.ir_eqns]
         assert prim_names == ["format"]
 
     def test_with_cond_filter(self):
@@ -382,7 +382,7 @@ class TestSched:
 
         scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
 
-        prim_names = {e.prim.name for e in scheduled.ireqns}
+        prim_names = {e.prim.name for e in scheduled.ir_eqns}
         assert prim_names == {"format", "concat"}
 
     def test_effectful_can_be_parallelized(self):
@@ -394,7 +394,7 @@ class TestSched:
         ir = af.trace(program)("a", "b")
         scheduled = af.sched(ir)
 
-        gather_count = sum(1 for e in scheduled.ireqns if e.prim.name == "gather")
+        gather_count = sum(1 for e in scheduled.ir_eqns if e.prim.name == "gather")
         assert gather_count == 2
 
     def test_effectful_ordering_via_depends(self):
@@ -419,7 +419,7 @@ class TestSched:
         ir = af.trace(program)("a", "b", "c")
         scheduled = af.sched(ir)
 
-        gather_count = sum(1 for e in scheduled.ireqns if e.prim.name == "gather")
+        gather_count = sum(1 for e in scheduled.ir_eqns if e.prim.name == "gather")
         assert gather_count == 1
 
         result = af.call(scheduled)("a", "b", "c")
@@ -439,9 +439,9 @@ class TestSchedRecursive:
         ir = af.trace(program)("a", "x")
         scheduled = af.sched(ir)
 
-        switch_eqn = scheduled.ireqns[0]
+        switch_eqn = scheduled.ir_eqns[0]
         branch_a = switch_eqn.params["branches"]["a"]
-        assert any(e.prim.name == "gather" for e in branch_a.ireqns)
+        assert any(e.prim.name == "gather" for e in branch_a.ir_eqns)
 
         assert af.call(scheduled)("a", "hello") == "[hello]<hello>"
         assert af.call(scheduled)("b", "hello") == "(hello)"
@@ -468,10 +468,10 @@ class TestSchedRecursive:
         ir = af.trace(outer_program)("A", "x", "test")
         scheduled = af.sched(ir)
 
-        outer_switch = scheduled.ireqns[0]
-        inner_switch = outer_switch.params["branches"]["A"].ireqns[0]
+        outer_switch = scheduled.ir_eqns[0]
+        inner_switch = outer_switch.params["branches"]["A"].ir_eqns[0]
         inner_branch_x = inner_switch.params["branches"]["x"]
-        assert any(e.prim.name == "gather" for e in inner_branch_x.ireqns)
+        assert any(e.prim.name == "gather" for e in inner_branch_x.ir_eqns)
 
         assert af.call(scheduled)("A", "x", "hello") == "[hello]<hello>"
         assert af.call(scheduled)("A", "y", "hello") == "(hello)"
@@ -488,9 +488,9 @@ class TestSchedRecursive:
         ir = af.trace(program)("a", "b")
         scheduled = af.sched(ir)
 
-        outer_gather = scheduled.ireqns[0]
+        outer_gather = scheduled.ir_eqns[0]
         for inner_ir in outer_gather.params["irs"]:
-            assert any(e.prim.name == "gather" for e in inner_ir.ireqns)
+            assert any(e.prim.name == "gather" for e in inner_ir.ir_eqns)
 
         result = af.call(scheduled)("hello", "world")
         assert result == ["[hello]<hello>", "(world){world}"]
@@ -507,9 +507,9 @@ class TestSchedRecursive:
 
         scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
 
-        switch_eqn = scheduled.ireqns[0]
+        switch_eqn = scheduled.ir_eqns[0]
         branch_a = switch_eqn.params["branches"]["a"]
-        assert not any(e.prim.name == "gather" for e in branch_a.ireqns)
+        assert not any(e.prim.name == "gather" for e in branch_a.ir_eqns)
 
         assert af.call(scheduled)("a", "test") == ("[test]", "test!")
 
@@ -540,7 +540,7 @@ class TestSchedRecursive:
         ir = af.trace(program)("a", "x")
         scheduled = af.sched(ir)
 
-        switch_eqn = scheduled.ireqns[0]
+        switch_eqn = scheduled.ir_eqns[0]
         assert "branches" in switch_eqn.params
         assert "a" in switch_eqn.params["branches"]
 
@@ -760,10 +760,10 @@ class TestDepends:
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
-        depends_eqns = [e for e in ir.ireqns if e.prim.name == "depends"]
+        depends_eqns = [e for e in ir.ir_eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
-        in_leaves = af.utils.treelib.leaves(depends_eqns[0].in_irtree)
+        in_leaves = af.utils.treelib.leaves(depends_eqns[0].in_ir_tree)
         assert len(in_leaves) >= 2
 
 
@@ -777,7 +777,7 @@ class TestDependsWithDCE:
         ir = af.trace(program)("x")
         dce_ir = af.dce(ir)
 
-        depends_eqns = [e for e in dce_ir.ireqns if e.prim.name == "depends"]
+        depends_eqns = [e for e in dce_ir.ir_eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
     def test_removed_when_unused(self):
@@ -790,7 +790,7 @@ class TestDependsWithDCE:
         ir = af.trace(program)("x")
         dce_ir = af.dce(ir)
 
-        depends_eqns = [e for e in dce_ir.ireqns if e.prim.name == "depends"]
+        depends_eqns = [e for e in dce_ir.ir_eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 0
 
 
@@ -997,7 +997,7 @@ class TestDependsWithSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        depends_eqns = [e for e in scheduled.ireqns if e.prim.name == "depends"]
+        depends_eqns = [e for e in scheduled.ir_eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
         result = af.call(scheduled)("hello")

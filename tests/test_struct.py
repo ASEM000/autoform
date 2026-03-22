@@ -192,8 +192,8 @@ class TestStructLmCall:
             )
 
         built_ir = af.trace(ir)("test")
-        assert len(built_ir.ireqns) == 1
-        assert built_ir.ireqns[0].prim.name == "struct_lm_call"
+        assert len(built_ir.ir_eqns) == 1
+        assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
 
     def test_struct_lm_call_params(self):
         class Answer(af.Struct):
@@ -207,7 +207,7 @@ class TestStructLmCall:
             )
 
         built_ir = af.trace(ir)("test")
-        params = built_ir.ireqns[0].params
+        params = built_ir.ir_eqns[0].params
         assert params["model"] == "gpt-5.2"
         assert params["struct"] is Answer
         assert params["roles"] == ["user"]
@@ -225,8 +225,8 @@ class TestStructLmCall:
             )
 
         built_ir = af.trace(ir)("test")
-        assert len(built_ir.ireqns) == 1
-        assert built_ir.ireqns[0].prim.name == "struct_lm_call"
+        assert len(built_ir.ir_eqns) == 1
+        assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
 
     def test_struct_lm_call_pullback(self):
         class Answer(af.Struct):
@@ -242,7 +242,7 @@ class TestStructLmCall:
         built_ir = af.trace(ir)("test")
         pb_ir = af.pullback(built_ir)
         assert pb_ir is not None
-        assert len(pb_ir.ireqns) > 0
+        assert len(pb_ir.ir_eqns) > 0
 
     def test_struct_lm_call_assertion_on_non_struct(self):
         class NotAStruct:
@@ -270,8 +270,8 @@ class TestStructLmCall:
             )
 
         built_ir = af.trace(ir)("test")
-        assert len(built_ir.ireqns) == 1
-        assert built_ir.ireqns[0].prim.name == "struct_lm_call"
+        assert len(built_ir.ir_eqns) == 1
+        assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
 
     def test_struct_lm_call_with_map_chain(self):
         class Step1(af.Struct):
@@ -295,7 +295,7 @@ class TestStructLmCall:
             return step2
 
         built_ir = af.trace(ir)("test")
-        prim_names = [eqn.prim.name for eqn in built_ir.ireqns]
+        prim_names = [eqn.prim.name for eqn in built_ir.ir_eqns]
         assert "struct_lm_call" in prim_names
         assert prim_names.count("struct_lm_call") == 2
 
@@ -344,6 +344,45 @@ class TestStructInAxes:
         )
         assert result == ["[PREFIX] a", "[PREFIX] b", "[PREFIX] c"]
 
+
+class TestStructStatic:
+    def test_struct_as_static_mask(self):
+        class Person(af.Struct):
+            name: str
+            sur: str
+
+        def greet(p: Person) -> str:
+            return af.format("Hello {}, {}", p.name, p.sur)
+
+        ir = af.trace(
+            greet,
+            static=Person.model_construct(name=False, sur=True),
+        )(Person(name="x", sur="Smith"))
+
+        assert isinstance(ir.in_ir_tree.name, af.core.IRVar)
+        assert isinstance(ir.in_ir_tree.sur, af.core.IRLit)
+        assert ir.in_ir_tree.sur.value == "Smith"
+        result = af.call(ir)(Person(name="Alice", sur="Smith"))
+        assert result == "Hello Alice, Smith"
+
+    def test_struct_static_mismatch_is_rejected(self):
+        class Person(af.Struct):
+            name: str
+            sur: str
+
+        def greet(p: Person) -> str:
+            return af.format("Hello {}, {}", p.name, p.sur)
+
+        ir = af.trace(
+            greet,
+            static=Person.model_construct(name=False, sur=True),
+        )(Person(name="x", sur="Smith"))
+
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            af.call(ir)(Person(name="Alice", sur="Jones"))
+
+
+class TestStructBatchSupport:
     def test_struct_hash_for_lru_cache(self):
         class A(af.Struct):
             x: str
@@ -858,6 +897,6 @@ class TestStructComplex:
             )
 
         ir = af.trace(program)("test")
-        assert len(ir.ireqns) == 1
+        assert len(ir.ir_eqns) == 1
         tt_leaves = af.utils.treelib.leaves(af.utils.struct_type_tree(Outer))
         assert tt_leaves == [str, str, str, str]

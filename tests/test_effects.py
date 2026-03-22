@@ -29,10 +29,10 @@ class TestEffectBasics:
             return checkpoint(x, key="my_key", collection="my_col")
 
         ir = af.trace(func)("test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "effect"
-        assert ir.ireqns[0].effect.key == "my_key"
-        assert ir.ireqns[0].effect.collection == "my_col"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "effect"
+        assert ir.ir_eqns[0].effect.key == "my_key"
+        assert ir.ir_eqns[0].effect.collection == "my_col"
 
 
 class TestCollect:
