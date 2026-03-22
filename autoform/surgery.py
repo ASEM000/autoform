@@ -22,10 +22,10 @@ from collections.abc import Hashable
 from autoform.core import (
     IR,
     IREqn,
-    Primitive,
-    PrimitiveTag,
+    Prim,
+    PrimTag,
+    abstract_rules,
     batch_rules,
-    eval_rules,
     impl_rules,
     pack_user_input,
     pull_bwd_rules,
@@ -35,14 +35,14 @@ from autoform.core import (
 from autoform.utils import Tree, asyncify, lru_cache
 
 
-class SurgeryTag(PrimitiveTag): ...
+class SurgeryTag(PrimTag): ...
 
 
 # ==================================================================================================
 # SPLITPOINT
 # ==================================================================================================
 
-splitpoint_p = Primitive("splitpoint", tag={SurgeryTag})
+splitpoint_p = Prim("splitpoint", tag={SurgeryTag})
 
 
 def splitpoint(in_tree: Tree, /, *, key: Hashable) -> Tree:
@@ -75,7 +75,7 @@ def impl_splitpoint(x, /, **_):
     return x
 
 
-def eval_splitpoint(x, /, **_):
+def abstract_splitpoint(x, /, **_):
     return x
 
 
@@ -100,7 +100,7 @@ def batch_splitpoint(in_tree, /, **params):
 
 impl_rules.set(splitpoint_p, impl_splitpoint)
 impl_rules.aset(splitpoint_p, asyncify(impl_splitpoint))
-eval_rules.set(splitpoint_p, eval_splitpoint)
+abstract_rules.set(splitpoint_p, abstract_splitpoint)
 push_rules.set(splitpoint_p, push_splitpoint)
 push_rules.aset(splitpoint_p, asyncify(push_splitpoint))
 pull_fwd_rules.set(splitpoint_p, pull_fwd_splitpoint)
@@ -117,17 +117,17 @@ batch_rules.aset(splitpoint_p, asyncify(batch_splitpoint))
 
 
 def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
-    for idx, ireqn in enumerate(ir.ireqns):
-        if ireqn.prim == splitpoint_p and ireqn.params.get("key") == splitpoint_key:
-            # NOTE(asem): splitpoint at top level. split ir.ireqns at idx.
+    for idx, ir_eqn in enumerate(ir.ir_eqns):
+        if ir_eqn.prim == splitpoint_p and ir_eqn.params.get("key") == splitpoint_key:
+            # NOTE(asem): splitpoint at top level. split ir.ir_eqns at idx.
             # def program(x):
             #     y = splitpoint(concat(x, "!"), key="mid")
             #     return concat(y, "?")
             # split(ir, key="mid")
             #   lhs: [concat], rhs: [concat]  (splitpoint stripped)
             #   lhs returns splitpoint's input value, rhs receives it in splitpoint's output slot
-            lhs_ireqns = list(ir.ireqns[:idx])  # exclude splitpoint
-            rhs_ireqns = list(ir.ireqns[idx + 1 :])
+            lhs_ir_eqns = list(ir.ir_eqns[:idx])  # exclude splitpoint
+            rhs_ir_eqns = list(ir.ir_eqns[idx + 1 :])
 
             # NOTE(asem): lhs must return the value marked by the splitpoint itself.
             # it cannot return splitpoint's output var because the splitpoint equation
@@ -138,25 +138,25 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
             # ...   y = splitpoint(y, key="mid")
             # ...   return y
             # if lhs returned the last preceding equation output, it would return z, not y.
-            lhs_out = ireqn.in_irtree
-            lhs = IR(lhs_ireqns, ir.in_irtree, lhs_out)
+            lhs_out = ir_eqn.in_ir_tree
+            lhs = IR(lhs_ir_eqns, ir.in_ir_tree, lhs_out)
 
-            rhs_in_irtree = pack_user_input(ireqn.out_irtree)
-            # NOTE(asem): in case rhs_ireqn is empty
+            rhs_in_ir_tree = pack_user_input(ir_eqn.out_ir_tree)
+            # NOTE(asem): in case rhs_ir_eqn is empty
             # >>> def program(x):
             # ...   y = concat(x, x)
             # ...   z = splitpoint(y, key="mid")
             # >>> split(ir, key="mid")
             #   lhs: [concat], rhs: []
-            # in here rhs in_irtree = splitpoint out_irtree
-            # and out_irtree = splitpoint out_irtree still
-            rhs_out_irtree = ([ireqn] + rhs_ireqns)[-1].out_irtree
-            rhs = IR(rhs_ireqns, rhs_in_irtree, rhs_out_irtree)
+            # in here rhs in_ir_tree = splitpoint out_ir_tree
+            # and out_ir_tree = splitpoint out_ir_tree still
+            rhs_out_ir_tree = ([ir_eqn] + rhs_ir_eqns)[-1].out_ir_tree
+            rhs = IR(rhs_ir_eqns, rhs_in_ir_tree, rhs_out_ir_tree)
             return lhs, rhs
 
         # NOTE(asem): check if splitpoint is inside a nested IR (HOP).
-        for irkey in filter(lambda k: isinstance(ireqn.params[k], IR), ireqn.params):
-            result = maybe_split(ireqn.params[irkey], splitpoint_key)
+        for irkey in filter(lambda k: isinstance(ir_eqn.params[k], IR), ir_eqn.params):
+            result = maybe_split(ir_eqn.params[irkey], splitpoint_key)
 
             if result is None:
                 continue
@@ -169,18 +169,18 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
             # split(pushforward(ir), key="mid")
             #   lhs: [pushforward_call(nested_lhs)]
             #   rhs: [pushforward_call(nested_rhs)]
-            lhs_hop = ireqn.using(**{irkey: inner_lhs})
-            rhs_hop = ireqn.using(**{irkey: inner_rhs})
+            lhs_hop = ir_eqn.using(**{irkey: inner_lhs})
+            rhs_hop = ir_eqn.using(**{irkey: inner_rhs})
 
-            before: list[IREqn] = list(ir.ireqns[:idx])
-            after: list[IREqn] = list(ir.ireqns[idx + 1 :])
+            before: list[IREqn] = list(ir.ir_eqns[:idx])
+            after: list[IREqn] = list(ir.ir_eqns[idx + 1 :])
 
-            lhs = IR(before + [lhs_hop], ir.in_irtree, lhs_hop.out_irtree)
+            lhs = IR(before + [lhs_hop], ir.in_ir_tree, lhs_hop.out_ir_tree)
 
             # NOTE(asem): if rhs is empty, splitpoint at the end of ir.
-            rhs_in_irtree = pack_user_input(lhs.out_irtree)
-            rhs_out_irtree = ([rhs_hop] + after)[-1].out_irtree
-            rhs = IR([rhs_hop] + after, rhs_in_irtree, rhs_out_irtree)
+            rhs_in_ir_tree = pack_user_input(lhs.out_ir_tree)
+            rhs_out_ir_tree = ([rhs_hop] + after)[-1].out_ir_tree
+            rhs = IR([rhs_hop] + after, rhs_in_ir_tree, rhs_out_ir_tree)
             return lhs, rhs
 
     return None

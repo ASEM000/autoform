@@ -8,9 +8,30 @@
 
   - `Struct` instances are now **frozen** (immutable). Direct attribute assignment after construction raises an error. Use `model_construct()` or pytree `unflatten` for bypass semantics (e.g., tracing, batch axes).
 
-  - `trace` now accepts only sync functions. `atrace` has been removed. Async code must be synchronized or wrapped before tracing.
+  - Public tracing and IR execution boundaries are now positional-only. `trace`, `call`, `acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`.
+
+    ```python
+    def greet(name, punctuation):
+        return af.format("Hello, {}{}", name, punctuation)
+
+    ir = af.trace(greet)("world", "!")
+    af.call(ir)("Alice", "?")
+    ```
 
 ### New Features
+
+  - `trace(..., static=...)` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
+
+    ```python
+    def label(is_error, value):
+        if is_error:
+            return af.format("error: {}", value)
+        return af.format("ok: {}", value)
+
+    ir = af.trace(label, static=(True, False))(True, "disk full")
+    af.call(ir)(True, "timeout")
+    # "error: timeout"
+    ```
 
   - `using_router` context manager to set `litellm.Router`. Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
 

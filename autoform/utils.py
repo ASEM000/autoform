@@ -68,10 +68,9 @@ def tree_index(node: Tree, b: int, /) -> Tree:
 
 
 def pack_user_input(*args, **kwargs) -> Tree:
-    # NOTE(asem): pack args/kwargs into a single tree for user-bind interface.
-    # useful to avoid dealing with args/kwargs unpacking at the IR level.
-    if kwargs:
-        return (*args, kwargs)
+    # NOTE(asem): pack positional user inputs into a single tree for user-bind interface.
+    # keyword arguments are rejected at the public trace/call boundary.
+    assert not kwargs, "keyword arguments are not supported"
     if len(args) == 1:
         return args[0]
     return args
@@ -237,14 +236,11 @@ class Struct(BaseModel):
         >>> import autoform as af
         >>> from typing import Literal
         >>> from annotated_types import Len
-        >>> class Inner(af.Struct):
-        ...     x: str
         >>> class Answer(af.Struct):
         ...     reasoning: str
         ...     answer: int
         ...     status: Literal["correct", "incorrect"]
         ...     scores: Annotated[list[int], Len(3, 3)]
-        ...     inner: Inner
 
     """
 

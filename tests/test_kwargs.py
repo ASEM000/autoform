@@ -18,7 +18,7 @@ import pytest
 
 import autoform as af
 
-greet_p = af.core.Primitive("greet")
+greet_p = af.core.Prim("greet")
 
 
 def greet(name: str, *, greeting: str = "Hello", punctuation: str = "!") -> str:
@@ -32,9 +32,9 @@ def impl_greet(in_tree) -> str:
             return f"{greeting}, {name}{punctuation}"
 
 
-@ft.partial(af.core.eval_rules.set, greet_p)
-def eval_greet(in_tree) -> af.core.Var:
-    return af.core.Var(str)
+@ft.partial(af.core.abstract_rules.set, greet_p)
+def abstract_greet(in_tree) -> af.core.AVal:
+    return af.core.AVal(str)
 
 
 @ft.partial(af.core.push_rules.set, greet_p)
@@ -70,16 +70,16 @@ class TestKwargsBuildIR:
             return greet(name, greeting="Hi", punctuation="?")
 
         ir = af.trace(program)("World")
-        assert len(ir.ireqns) == 1
-        eqn = ir.ireqns[0]
+        assert len(ir.ir_eqns) == 1
+        eqn = ir.ir_eqns[0]
         assert eqn.prim == greet_p
-        match eqn.in_irtree:
+        match eqn.in_ir_tree:
             case (name, {"greeting": greeting, "punctuation": punctuation}):
                 assert isinstance(name, af.core.IRVar)
                 assert isinstance(greeting, af.core.IRLit)
                 assert isinstance(punctuation, af.core.IRLit)
             case _:
-                pytest.fail("Unexpected in_irtree structure")
+                pytest.fail("Unexpected in_ir_tree structure")
 
     def test_kwargs_execution(self):
         def program(name):
@@ -90,34 +90,36 @@ class TestKwargsBuildIR:
         assert result == "Hi, World?"
 
 
-class TestKwargsPushforward:
-    def test_pushforward_with_kwargs_ir(self):
-        test_p = af.core.Primitive("test_kwargs_pf")
-
-        @ft.partial(af.core.eval_rules.set, test_p)
-        def eval_rule(in_tree):
-            return af.core.Var(str)
-
-        @ft.partial(af.core.impl_rules.set, test_p)
-        def impl_rule(in_tree):
-            x, kwargs = in_tree
-            repeat = kwargs["repeat"]
-            return x * repeat
-
-        @ft.partial(af.core.push_rules.set, test_p)
-        def pf_rule(in_tree):
-            primals, tangents = in_tree
-            return impl_rule(primals), impl_rule(tangents)
-
+class TestKeywordArgumentBoundary:
+    def test_trace_rejects_kwargs(self):
         def program(x, *, repeat=1):
-            return test_p.bind((x, dict(repeat=repeat)))
+            return greet(x, greeting="Hi", punctuation="!" * repeat)
 
-        ir = af.trace(program)("A", repeat=3)
-        match ir.in_irtree:
-            case (x, {"repeat": repeat}):
-                assert isinstance(x, af.core.IRVar)
-                assert isinstance(repeat, af.core.IRVar)
-                assert repeat.type is int
+        with pytest.raises(AssertionError, match="trace.*keyword arguments"):
+            af.trace(program)("A", repeat=3)
+
+    def test_call_rejects_kwargs(self):
+        def program(name, punctuation):
+            return af.format("Hello, {}{}", name, punctuation)
+
+        ir = af.trace(program)("World", "!")
+        with pytest.raises(AssertionError, match="call.*keyword arguments"):
+            af.call(ir)("World", punctuation="?")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_acall_rejects_kwargs(self):
+        def program(name, punctuation):
+            return af.format("Hello, {}{}", name, punctuation)
+
+        ir = af.trace(program)("World", "!")
+        with pytest.raises(AssertionError, match="acall.*keyword arguments"):
+            await af.acall(ir)("World", punctuation="?")
+
+    def test_switch_rejects_kwargs(self):
+        branches = {"a": af.trace(lambda x: af.concat("A:", x))("X")}
+
+        with pytest.raises(AssertionError, match="switch.*keyword arguments"):
+            af.switch("a", branches, x="test")
 
 
 class TestKwargsPullback:
@@ -127,5 +129,5 @@ class TestKwargsPullback:
 
         ir = af.trace(program)("World")
         pb_ir = af.pullback(ir)
-        assert len(pb_ir.in_irtree) == 2
-        assert len(pb_ir.out_irtree) == 2
+        assert len(pb_ir.in_ir_tree) == 2
+        assert len(pb_ir.out_ir_tree) == 2

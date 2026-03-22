@@ -16,7 +16,7 @@ import functools as ft
 
 import autoform as af
 
-shout_p = af.core.Primitive("shout")
+shout_p = af.core.Prim("shout")
 
 
 def shout(text: str) -> str:
@@ -28,9 +28,9 @@ def impl_shout(text: str) -> str:
     return text.upper()
 
 
-@ft.partial(af.core.eval_rules.set, shout_p)
-def eval_shout(text) -> af.core.Var:
-    return af.core.Var(str)
+@ft.partial(af.core.abstract_rules.set, shout_p)
+def abstract_shout(text) -> af.core.AVal:
+    return af.core.AVal(str)
 
 
 @ft.partial(af.core.push_rules.set, shout_p)
@@ -70,8 +70,8 @@ class TestCustomPrimitive:
             return shout(x)
 
         ir = af.trace(program)("test")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "shout"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "shout"
 
         result = af.call(ir)("world")
         assert result == "WORLD"
@@ -128,7 +128,7 @@ class Article(af.Struct):
     summary: str
 
 
-textgrad_style_lm_call_p = af.core.Primitive("textgrad_style_lm_call")
+textgrad_style_lm_call_p = af.core.Prim("textgrad_style_lm_call")
 
 
 def textgrad_style_lm_call(
@@ -146,21 +146,23 @@ def textgrad_style_lm_call(
 def impl_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[af.Struct]
 ):
-    return af.core.impl_rules[af.struct_lm_call_p](
+    return af.core.impl_rules.get(af.struct_lm_call_p)(
         contents, roles=roles, model=model, struct=struct
     )
 
 
-@ft.partial(af.core.eval_rules.set, textgrad_style_lm_call_p)
-def eval_textgrad_style_lm_call(in_tree, *, struct: type[af.Struct], **params):
-    return struct.model_construct(**{k: af.core.Var(str) for k in struct.model_fields})
+@ft.partial(af.core.abstract_rules.set, textgrad_style_lm_call_p)
+def abstract_textgrad_style_lm_call(in_tree, *, struct: type[af.Struct], **params):
+    return struct.model_construct(**{k: af.core.AVal(str) for k in struct.model_fields})
 
 
 @ft.partial(af.core.pull_fwd_rules.set, textgrad_style_lm_call_p)
 def pull_fwd_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[af.Struct]
 ):
-    out = af.core.impl_rules[af.struct_lm_call_p](contents, roles=roles, model=model, struct=struct)
+    out = af.core.impl_rules.get(af.struct_lm_call_p)(
+        contents, roles=roles, model=model, struct=struct
+    )
     residuals = (contents, roles, out)
     return out, residuals
 
@@ -226,10 +228,10 @@ def push_textgrad_style_lm_call(in_tree, *, roles: tuple, model: str, struct: ty
     """
     primals, tangents = in_tree
     tangents = af.ad.materialize(tangents)
-    p_out = af.core.impl_rules[af.struct_lm_call_p](
+    p_out = af.core.impl_rules.get(af.struct_lm_call_p)(
         primals, roles=roles, model=model, struct=struct
     )
-    t_out = af.core.impl_rules[af.struct_lm_call_p](
+    t_out = af.core.impl_rules.get(af.struct_lm_call_p)(
         tangents, roles=roles, model=model, struct=struct
     )
     return p_out, t_out
@@ -276,8 +278,8 @@ class TestTextGradStylePullback:
             return textgrad_style_lm_call(messages, model="openai/gpt-5.2", struct=ResearchNotes)
 
         ir = af.trace(program)("test topic")
-        assert len(ir.ireqns) == 1
-        assert ir.ireqns[0].prim.name == "textgrad_style_lm_call"
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim.name == "textgrad_style_lm_call"
 
     def test_multi_agent_ir_build(self):
         def multi_agent_pipeline(topic: str):
@@ -307,7 +309,7 @@ class TestTextGradStylePullback:
 
         ir = af.trace(multi_agent_pipeline)("AI safety")
 
-        prim_names = [eqn.prim.name for eqn in ir.ireqns]
+        prim_names = [eqn.prim.name for eqn in ir.ir_eqns]
         assert prim_names.count("textgrad_style_lm_call") == 2
         assert prim_names.count("format") == 2
 
@@ -321,8 +323,8 @@ class TestTextGradStylePullback:
         ir = af.trace(pipeline)("test")
         pb_ir = af.pullback(ir)
 
-        assert len(pb_ir.ireqns) == 1
-        assert pb_ir.ireqns[0].prim.name == "pullback_call"
+        assert len(pb_ir.ir_eqns) == 1
+        assert pb_ir.ir_eqns[0].prim.name == "pullback_call"
 
 
 class TestMultiAgentComposition:
@@ -382,8 +384,8 @@ class TestMultiAgentComposition:
 
         batch_transformed = af.batch(ir, in_axes=True)
 
-        assert len(batch_transformed.ireqns) == 1
-        assert batch_transformed.ireqns[0].prim.name == "batch_call"
+        assert len(batch_transformed.ir_eqns) == 1
+        assert batch_transformed.ir_eqns[0].prim.name == "batch_call"
 
     def test_nested_batch_and_pullback(self):
         """Test composing batch and pullback transforms.

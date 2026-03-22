@@ -20,12 +20,12 @@ import functools as ft
 
 from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
+    AVal,
     EvalType,
-    Primitive,
-    PrimitiveTag,
-    Var,
+    Prim,
+    PrimTag,
+    abstract_rules,
     batch_rules,
-    eval_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -35,14 +35,14 @@ from autoform.core import (
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
 
 
-class StringTag(PrimitiveTag): ...
+class StringTag(PrimTag): ...
 
 
 # ==================================================================================================
 # FORMAT
 # ==================================================================================================
 
-format_p = Primitive("format", tag={StringTag})
+format_p = Prim("format", tag={StringTag})
 
 
 def format(template: str, *args, **kwargs) -> str:
@@ -67,8 +67,8 @@ def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> st
     return template.format(*args, **kwargs)
 
 
-def eval_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
-    return Var(str)
+def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
+    return AVal(str)
 
 
 def pushforward_format(
@@ -112,7 +112,7 @@ def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> t
 
 impl_rules.set(format_p, impl_format)
 impl_rules.aset(format_p, asyncify(impl_format))
-eval_rules.set(format_p, eval_format)
+abstract_rules.set(format_p, abstract_format)
 push_rules.set(format_p, pushforward_format)
 push_rules.aset(format_p, asyncify(pushforward_format))
 pull_fwd_rules.set(format_p, pullback_fwd_format)
@@ -126,7 +126,7 @@ batch_rules.aset(format_p, asyncify(batch_format))
 # CONCAT
 # ==================================================================================================
 
-concat_p = Primitive("concat", tag={StringTag})
+concat_p = Prim("concat", tag={StringTag})
 
 
 def concat(*args) -> str:
@@ -151,9 +151,9 @@ def impl_concat(in_tree: Tree, /) -> str:
     return "".join(in_tree)
 
 
-def eval_concat(in_tree: Tree, /) -> EvalType:
+def abstract_concat(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
-    return Var(str)
+    return AVal(str)
 
 
 def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
@@ -184,7 +184,7 @@ def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
 
 impl_rules.set(concat_p, impl_concat)
 impl_rules.aset(concat_p, asyncify(impl_concat))
-eval_rules.set(concat_p, eval_concat)
+abstract_rules.set(concat_p, abstract_concat)
 push_rules.set(concat_p, pushforward_concat)
 push_rules.aset(concat_p, asyncify(pushforward_concat))
 pull_fwd_rules.set(concat_p, pullback_fwd_concat)
@@ -199,7 +199,7 @@ batch_rules.aset(concat_p, asyncify(batch_concat))
 # MATCH
 # ==================================================================================================
 
-match_p = Primitive("match", tag={StringTag})
+match_p = Prim("match", tag={StringTag})
 
 
 def match(a: str, b: str, /) -> bool:
@@ -229,9 +229,9 @@ def impl_match(in_tree: Tree, /) -> bool:
     return a == b
 
 
-def eval_match(in_tree: Tree, /) -> EvalType:
+def abstract_match(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
-    return Var(bool)
+    return AVal(bool)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -263,7 +263,7 @@ def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
 
 impl_rules.set(match_p, impl_match)
 impl_rules.aset(match_p, asyncify(impl_match))
-eval_rules.set(match_p, eval_match)
+abstract_rules.set(match_p, abstract_match)
 push_rules.set(match_p, pushforward_match)
 push_rules.aset(match_p, asyncify(pushforward_match))
 pull_fwd_rules.set(match_p, pullback_fwd_match)

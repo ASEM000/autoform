@@ -31,10 +31,10 @@ from __future__ import annotations
 import functools as ft
 
 from autoform.core import (
-    Primitive,
-    PrimitiveTag,
+    Prim,
+    PrimTag,
+    abstract_rules,
     batch_rules,
-    eval_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -47,10 +47,10 @@ from autoform.utils import asyncify, batch_index, batch_spec, batch_transpose
 # ==================================================================================================
 
 
-class EffectTag(PrimitiveTag): ...
+class EffectTag(PrimTag): ...
 
 
-effect_p = Primitive("effect", tag={EffectTag})
+effect_p = Prim("effect", tag={EffectTag})
 
 
 def effect(x, /, **p):
@@ -61,7 +61,7 @@ def impl_effect(x, /, **_):
     return x
 
 
-def eval_effect(x, /, **_):
+def abstract_effect(x, /, **_):
     return x
 
 
@@ -107,7 +107,7 @@ async def abatch_effect(in_tree, /, **params):
 
 impl_rules.set(effect_p, impl_effect)
 impl_rules.aset(effect_p, asyncify(impl_effect))
-eval_rules.set(effect_p, eval_effect)
+abstract_rules.set(effect_p, abstract_effect)
 push_rules.set(effect_p, push_effect)
 push_rules.aset(effect_p, asyncify(push_effect))
 pull_fwd_rules.set(effect_p, pull_fwd_effect)

@@ -28,13 +28,13 @@ from litellm import acompletion, completion, get_model_info
 
 from autoform.ad import materialize
 from autoform.core import (
+    AVal,
     Effect,
     EvalType,
-    Primitive,
-    PrimitiveTag,
-    Var,
+    Prim,
+    PrimTag,
+    abstract_rules,
     batch_rules,
-    eval_rules,
     impl_rules,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -92,7 +92,7 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
         active_router.reset(token)
 
 
-class LMTag(PrimitiveTag): ...
+class LMTag(PrimTag): ...
 
 
 class StreamEffect(Effect):
@@ -106,7 +106,7 @@ class StreamEffect(Effect):
 # LM CALL
 # ==================================================================================================
 
-lm_call_p = Primitive("lm_call", tag={LMTag})
+lm_call_p = Prim("lm_call", tag={LMTag})
 
 # TODO(asem): take a look into this
 GRAD_PROMPT = """Given this LLM interaction:
@@ -166,7 +166,7 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
         return response.choices[0].message.content
 
     # NOTE(asem): stream under effect handler context by default for all lm calls
-    # effect is used here not over user code to avoid having lm call with `StreamEffect` in the ireqn.
+    # effect is used here not over user code to avoid having lm call with `StreamEffect` in the ir_eqn.
     # as effectful equations makes any equation immovable.
     # downside of this approach is streaming is not possible if lm_call is transformed.
     buffer = StringIO()
@@ -187,8 +187,8 @@ async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], model: str)
     return response.choices[0].message.content
 
 
-def eval_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
-    return Var(str)
+def abstract_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
+    return AVal(str)
 
 
 def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
@@ -271,7 +271,7 @@ async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> t
 
 impl_rules.set(lm_call_p, impl_lm_call)
 impl_rules.aset(lm_call_p, aimpl_lm_call)
-eval_rules.set(lm_call_p, eval_lm_call)
+abstract_rules.set(lm_call_p, abstract_lm_call)
 push_rules.set(lm_call_p, pushforward_lm_call)
 push_rules.aset(lm_call_p, apush_lm_call)
 pull_fwd_rules.set(lm_call_p, pullback_fwd_lm_call)
@@ -285,7 +285,7 @@ batch_rules.aset(lm_call_p, abatch_lm_call)
 # STRUCT LM CALL
 # ==================================================================================================
 
-struct_lm_call_p = Primitive("struct_lm_call", tag={LMTag})
+struct_lm_call_p = Prim("struct_lm_call", tag={LMTag})
 
 
 def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:
@@ -344,10 +344,10 @@ async def aimpl_struct_lm_call(
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
-def eval_struct_lm_call(
+def abstract_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Tree:
-    return treelib.map(Var, struct_type_tree(struct))
+    return treelib.map(AVal, struct_type_tree(struct))
 
 
 def pushforward_struct_lm_call(
@@ -451,7 +451,7 @@ async def abatch_struct_lm_call(
 
 impl_rules.set(struct_lm_call_p, impl_struct_lm_call)
 impl_rules.aset(struct_lm_call_p, aimpl_struct_lm_call)
-eval_rules.set(struct_lm_call_p, eval_struct_lm_call)
+abstract_rules.set(struct_lm_call_p, abstract_struct_lm_call)
 push_rules.set(struct_lm_call_p, pushforward_struct_lm_call)
 push_rules.aset(struct_lm_call_p, apush_struct_lm_call)
 pull_fwd_rules.set(struct_lm_call_p, pullback_fwd_struct_lm_call)

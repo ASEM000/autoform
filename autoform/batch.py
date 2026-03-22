@@ -28,16 +28,15 @@ from autoform.core import (
     IREqn,
     IRLit,
     IRVar,
-    Primitive,
+    Prim,
     TransformationTag,
+    abstract_rules,
     acall,
     active_effect,
     active_interpreter,
     batch_rules,
     call,
-    eval_rules,
     impl_rules,
-    iratom_to_evaltype,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -59,8 +58,8 @@ def is_axis_spec(x) -> bool:
     return isinstance(x, bool)
 
 
-def assert_trees(batch_tree: Tree, irtree: Tree, prim_name: str) -> Tree:
-    expected_batch_tree = treelib.map(lambda _: False, irtree)
+def assert_trees(batch_tree: Tree, ir_tree: Tree, prim_name: str) -> Tree:
+    expected_batch_tree = treelib.map(lambda _: False, ir_tree)
     is_bool_leaf = lambda x: isinstance(x, bool)
     batch_spec = treelib.structure(batch_tree, is_leaf=is_bool_leaf)
     expected_spec = treelib.structure(expected_batch_tree, is_leaf=is_bool_leaf)
@@ -85,7 +84,7 @@ def broadcast_batch_out(spec, out_tree: Tree, out_batched_tree: Tree[bool], /) -
     return out_spec.unflatten(map(broadcast_leaf, flat_out, flat_out_b))
 
 
-batch_call_p = Primitive("batch_call", tag={BatchTag})
+batch_call_p = Prim("batch_call", tag={BatchTag})
 
 
 def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
@@ -119,15 +118,15 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     def make_b(atom):
         return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
 
-    in_b_irtree = treelib.map(make_b, ir.in_irtree)
-    out_b_irtree = treelib.map(make_b, ir.out_irtree)
+    in_b_ir_tree = treelib.map(make_b, ir.in_ir_tree)
+    out_b_ir_tree = treelib.map(make_b, ir.out_ir_tree)
     # NOTE(asem): effect on the wrapper IREqn is unused at execution time.
     # impl_batch_call never reads active_effect, and no EffectInterpreter handler
     # targets batch_call_p. inner IREqns carry their own effects and restore them
-    # via ireqn.bind(). captured here only to preserve the IR structure contract.
+    # via ir_eqn.bind(). captured here only to preserve the IR structure contract.
     effect = active_effect.get()
-    eqn = IREqn(batch_call_p, effect, in_b_irtree, out_b_irtree, dict(ir=ir, in_axes=in_axes))
-    return IR([eqn], in_b_irtree, out_b_irtree)
+    eqn = IREqn(batch_call_p, effect, in_b_ir_tree, out_b_ir_tree, dict(ir=ir, in_axes=in_axes))
+    return IR([eqn], in_b_ir_tree, out_b_ir_tree)
 
 
 class BatchInterpreter(Interpreter):
@@ -135,11 +134,11 @@ class BatchInterpreter(Interpreter):
         self.parent = active_interpreter.get()
         self.batch_size = batch_size
 
-    def interpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params):
         with using_interpreter(self.parent):
             return batch_rules.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: Primitive, in_tree: Tree, /, **params):
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         # NOTE(asem): async batch rules must be explicitly seted - no fallback to sync.
         with using_interpreter(self.parent):
             return await batch_rules.aget(prim)(in_tree, **params)
@@ -153,7 +152,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # >>> in_batched_tree = ReviewState(code=True, has_bugs=True)
     # >>> batch_size = 2
     col_tree = in_tree
-    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
+    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
 
     if (spec := batch_spec(col_tree, in_batched_tree)) is None:
         return call(ir)(col_tree)
@@ -182,26 +181,26 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     def read_b(atom) -> bool:
         return b_env[atom] if is_irvar(atom) else False
 
-    treelib.map(write_v, ir.in_irtree, col_tree)
-    treelib.map(write_b, ir.in_irtree, in_batched_tree)
+    treelib.map(write_v, ir.in_ir_tree, col_tree)
+    treelib.map(write_b, ir.in_ir_tree, in_batched_tree)
 
     with using_interpreter(BatchInterpreter(batch_size=batch_size)):
-        for ireqn in ir.ireqns:
-            in_vals = treelib.map(read_v, ireqn.in_irtree)
-            in_batched = treelib.map(read_b, ireqn.in_irtree)
+        for ir_eqn in ir.ir_eqns:
+            in_vals = treelib.map(read_v, ir_eqn.in_ir_tree)
+            in_batched = treelib.map(read_b, ir_eqn.in_ir_tree)
             in_tree = (batch_size, in_batched, in_vals)
-            out_vals, out_batched = ireqn.bind(in_tree, **ireqn.params)
-            treelib.map(write_v, ireqn.out_irtree, out_vals)
-            out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
-            treelib.map(write_b, ireqn.out_irtree, out_batched)
-    out_vals = treelib.map(read_v, ir.out_irtree)
-    out_batched = treelib.map(read_b, ir.out_irtree)
+            out_vals, out_batched = ir_eqn.bind(in_tree, **ir_eqn.params)
+            treelib.map(write_v, ir_eqn.out_ir_tree, out_vals)
+            out_batched = assert_trees(out_batched, ir_eqn.out_ir_tree, ir_eqn.prim.name)
+            treelib.map(write_b, ir_eqn.out_ir_tree, out_batched)
+    out_vals = treelib.map(read_v, ir.out_ir_tree)
+    out_batched = treelib.map(read_b, ir.out_ir_tree)
     return broadcast_batch_out(spec, out_vals, out_batched)
 
 
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     col_tree = in_tree
-    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_irtree, is_leaf=is_axis_spec)
+    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
 
     if (spec := batch_spec(col_tree, in_batched_tree)) is None:
         return await acall(ir)(col_tree)
@@ -224,25 +223,25 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     def read_b(atom) -> bool:
         return b_env[atom] if is_irvar(atom) else False
 
-    treelib.map(write_v, ir.in_irtree, col_tree)
-    treelib.map(write_b, ir.in_irtree, in_batched_tree)
+    treelib.map(write_v, ir.in_ir_tree, col_tree)
+    treelib.map(write_b, ir.in_ir_tree, in_batched_tree)
 
     with using_interpreter(BatchInterpreter(batch_size=batch_size)):
-        for ireqn in ir.ireqns:
-            in_vals = treelib.map(read_v, ireqn.in_irtree)
-            in_batched = treelib.map(read_b, ireqn.in_irtree)
+        for ir_eqn in ir.ir_eqns:
+            in_vals = treelib.map(read_v, ir_eqn.in_ir_tree)
+            in_batched = treelib.map(read_b, ir_eqn.in_ir_tree)
             in_tree = (batch_size, in_batched, in_vals)
-            out_vals, out_batched = await ireqn.abind(in_tree, **ireqn.params)
-            treelib.map(write_v, ireqn.out_irtree, out_vals)
-            out_batched = assert_trees(out_batched, ireqn.out_irtree, ireqn.prim.name)
-            treelib.map(write_b, ireqn.out_irtree, out_batched)
-    out_vals = treelib.map(read_v, ir.out_irtree)
-    out_batched = treelib.map(read_b, ir.out_irtree)
+            out_vals, out_batched = await ir_eqn.abind(in_tree, **ir_eqn.params)
+            treelib.map(write_v, ir_eqn.out_ir_tree, out_vals)
+            out_batched = assert_trees(out_batched, ir_eqn.out_ir_tree, ir_eqn.prim.name)
+            treelib.map(write_b, ir_eqn.out_ir_tree, out_batched)
+    out_vals = treelib.map(read_v, ir.out_ir_tree)
+    out_batched = treelib.map(read_b, ir.out_ir_tree)
     return broadcast_batch_out(spec, out_vals, out_batched)
 
 
-def eval_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
-    return treelib.map(iratom_to_evaltype, ir.out_irtree)
+def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+    return treelib.map(lambda x: x.aval, ir.out_ir_tree)
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
@@ -305,7 +304,7 @@ def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, 
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(batch_index, col_cols, in_batched)
     out_bi = [call(batched_ir)(unbatch(b)) for b in range(batch_size)]
-    out_batched = treelib.map(lambda _: True, ir.out_irtree)
+    out_batched = treelib.map(lambda _: True, ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
@@ -315,14 +314,14 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(batch_index, col_cols, in_batched)
     out_bi = await asyncio.gather(*[acall(batched_ir)(unbatch(b)) for b in range(batch_size)])
-    out_batched = treelib.map(lambda _: True, ir.out_irtree)
+    out_batched = treelib.map(lambda _: True, ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, list(out_bi))
     return out_ib, out_batched
 
 
 impl_rules.set(batch_call_p, impl_batch_call)
 impl_rules.aset(batch_call_p, aimpl_batch_call)
-eval_rules.set(batch_call_p, eval_batch_call)
+abstract_rules.set(batch_call_p, abstract_batch_call)
 push_rules.set(batch_call_p, pushforward_batch_call)
 push_rules.aset(batch_call_p, apushforward_batch_call)
 pull_fwd_rules.set(batch_call_p, pullback_fwd_batch_call)
@@ -333,8 +332,8 @@ batch_rules.set(batch_call_p, batch_batch_call)
 batch_rules.aset(batch_call_p, abatch_batch_call)
 
 
-def dce_batch_call(ireqn: IREqn, out_used: Tree[bool], /) -> tuple[IREqn, Tree[bool]]:
-    new_eqn = ireqn.using(ir=dce(ireqn.params["ir"], out_used=out_used))
+def dce_batch_call(ir_eqn: IREqn, out_used: Tree[bool], /) -> tuple[IREqn, Tree[bool]]:
+    new_eqn = ir_eqn.using(ir=dce(ir_eqn.params["ir"], out_used=out_used))
     return default_dce(new_eqn, out_used)
 
 
