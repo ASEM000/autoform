@@ -517,20 +517,28 @@ def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Cal
 
     Args:
         func: A sync callable that uses autoform primitives (format, concat, lm_call, etc.).
-        static: Bool pytree matching the packed positional input tree.
-            - True: Bake this input leaf into the IR as an ``IRLit``.
-            - False: Trace this input leaf dynamically as an ``IRVar``.
+        static: Bool pytree matching the positional input structure.
+            Mark a leaf ``True`` to keep that value fixed at trace time.
+            Mark a leaf ``False`` to keep it as a normal runtime input.
+            This is useful for ordinary Python control flow such as ``if``
+            statements. Later calls must pass the same values for leaves
+            marked static.
 
     Returns:
         A tracer callable that takes positional arguments and returns an IR.
 
+    When a flag is marked static, tracing follows only the branch selected by
+    that flag at trace time.
+
     Example:
         >>> import autoform as af
-        >>> def greet(name, punctuation):
-        ...     return af.format("Hello, {}{}!", name, punctuation)
-        >>> ir = af.trace(greet)("World", "?")
-        >>> af.call(ir)("Alice", "!")
-        'Hello, Alice!!'
+        >>> def label(is_error):
+        ...     if is_error:
+        ...         return "error"
+        ...     return "ok"
+        >>> ir = af.trace(label, static=True)(True)
+        >>> af.call(ir)(True)
+        'error'
     """
     assert not inspect.iscoroutinefunction(func), "`trace` only supports sync functions"
 
@@ -553,9 +561,9 @@ def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Cal
         assert not kwargs, "`trace` does not support keyword arguments"
         in_tree = pack_user_input(*args)
         in_static_tree = treelib.broadcast_prefix(static, in_tree, is_leaf=is_static_spec)
-        in_ir_tree = treelib.map(to_in_ir_val, in_tree, in_static_tree, is_leaf=is_static_spec)
+        in_ir_tree = treelib.map(to_in_ir_val, in_tree, in_static_tree, is_leaf=is_val)
         with using_interpreter(TracingInterpreter()) as tracer:
-            in_prog_tree = [in_ir_tree] if len(args) == 1 else in_ir_tree
+            in_prog_tree = (in_ir_tree,) if len(args) == 1 else cast(tuple, in_ir_tree)
             out_prog_tree = func(*in_prog_tree)
         out_ir_tree = treelib.map(to_out_ir_val, out_prog_tree)
         return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)

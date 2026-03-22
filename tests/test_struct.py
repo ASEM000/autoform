@@ -346,7 +346,7 @@ class TestStructInAxes:
 
 
 class TestStructStatic:
-    def test_struct_as_static_mask(self):
+    def test_struct_static_mask(self):
         class Person(af.Struct):
             name: str
             sur: str
@@ -357,15 +357,14 @@ class TestStructStatic:
         ir = af.trace(
             greet,
             static=Person.model_construct(name=False, sur=True),
-        )(Person(name="x", sur="Smith"))
+        )(Person(name="Alice", sur="Smith"))
 
         assert isinstance(ir.in_ir_tree.name, af.core.IRVar)
         assert isinstance(ir.in_ir_tree.sur, af.core.IRLit)
         assert ir.in_ir_tree.sur.value == "Smith"
-        result = af.call(ir)(Person(name="Alice", sur="Smith"))
-        assert result == "Hello Alice, Smith"
+        assert af.call(ir)(Person(name="Bob", sur="Smith")) == "Hello Bob, Smith"
 
-    def test_struct_static_mismatch_is_rejected(self):
+    def test_struct_static_mismatch(self):
         class Person(af.Struct):
             name: str
             sur: str
@@ -376,10 +375,10 @@ class TestStructStatic:
         ir = af.trace(
             greet,
             static=Person.model_construct(name=False, sur=True),
-        )(Person(name="x", sur="Smith"))
+        )(Person(name="Alice", sur="Smith"))
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            af.call(ir)(Person(name="Alice", sur="Jones"))
+            af.call(ir)(Person(name="Bob", sur="Jones"))
 
 
 class TestStructBatchSupport:

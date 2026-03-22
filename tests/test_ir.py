@@ -120,53 +120,55 @@ class TestBuildIR:
 
 
 class TestTraceStatic:
-    def test_mixed_static_and_dynamic_inputs(self):
-        def program(greeting, name):
-            return af.format("{} {}", greeting, name)
+    def test_static_inputs_become_literals(self):
+        def program(prefix, name):
+            return af.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
-        greeting, name = ir.in_ir_tree
-        assert isinstance(greeting, af.core.IRLit)
-        assert greeting.value == "Hello"
-        assert isinstance(name, af.core.IRVar)
+
+        assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
+        assert ir.in_ir_tree[0].value == "Hello"
+        assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
         assert af.call(ir)("Hello", "Alice") == "Hello Alice"
 
-    def test_static_mismatch_is_rejected(self):
-        def program(greeting, name):
-            return af.format("{} {}", greeting, name)
+    def test_static_input_mismatch_errors_before_execution(self):
+        def program(prefix, name):
+            return af.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
+
         with pytest.raises(AssertionError, match="Static input mismatch"):
             af.call(ir)("Hi", "Alice")
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_static_mismatch_is_rejected_async(self):
-        def program(greeting, name):
-            return af.format("{} {}", greeting, name)
+    async def test_static_input_mismatch_errors_before_async_execution(self):
+        def program(prefix, name):
+            return af.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
+
         with pytest.raises(AssertionError, match="Static input mismatch"):
             await af.acall(ir)("Hi", "Alice")
 
-    def test_static_spec_mismatch_is_rejected(self):
-        def program(greeting, name):
-            return af.format("{} {}", greeting, name)
+    def test_static_spec_must_match_input_tree(self):
+        def program(prefix, name):
+            return af.format("{} {}", prefix, name)
 
         with pytest.raises(ValueError):
-            af.trace(program, static=(True,))("Hello", "World")
+            af.trace(program, static=(True, False, True))("Hello", "World")
 
     def test_static_bool_specializes_python_branch(self):
-        def program(use_bang, name):
-            if use_bang:
-                return af.concat(name, "!")
-            return af.concat(name, "?")
+        def program(flag, name):
+            if flag:
+                return af.format("Hello {}", name)
+            return af.format("Bye {}", name)
 
         ir = af.trace(program, static=(True, False))(True, "World")
-        use_bang, name = ir.in_ir_tree
-        assert isinstance(use_bang, af.core.IRLit)
-        assert use_bang.value is True
-        assert isinstance(name, af.core.IRVar)
-        assert af.call(ir)(True, "Alice") == "Alice!"
+
+        assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
+        assert ir.in_ir_tree[0].value is True
+        assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
+        assert af.call(ir)(True, "Alice") == "Hello Alice"
 
 
 class TestRunIR:
