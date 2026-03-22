@@ -47,6 +47,19 @@
         result = af.call(ir)(inputs)
     ```
 
+  - Added inference primitives `factor` and `weight`.
+
+    ```python
+    def program(x):
+        y = af.concat(x, "!")
+        af.factor(y, judge=lambda s: float(len(s)))
+        return y
+
+    ir = af.trace(program)("x")
+    out, total = af.call(af.weight(ir))("ab")
+    # ("ab!", 3.0)
+    ```
+
 
 ### Improvements
 
