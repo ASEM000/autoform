@@ -51,11 +51,6 @@ __all__ = [
     "push_rules",
     "pull_fwd_rules",
     "pull_bwd_rules",
-    "aimpl_rules",
-    "abatch_rules",
-    "apush_rules",
-    "apull_fwd_rules",
-    "apull_bwd_rules",
     # ir structures
     "IREqn",
     "IR",
