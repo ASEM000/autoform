@@ -23,7 +23,7 @@ from autoform.scheduling import toposort_levels
 class TestGatherBasic:
     def test_single_ir(self):
         ir = af.trace(lambda x: af.format("[{}]", x))("a")
-        result = af.gather([(ir, "A")])
+        result = af.gather([(ir, ("A",))])
         assert result == ["[A]"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -31,7 +31,7 @@ class TestGatherBasic:
         ir = af.trace(lambda x: af.format("[{}]", x))("a")
 
         def program(x):
-            return af.gather([(ir, x)])
+            return af.gather([(ir, (x,))])
 
         prog_ir = af.trace(program)("a")
         result = await af.acall(prog_ir)("A")
@@ -40,7 +40,7 @@ class TestGatherBasic:
     def test_two_irs(self):
         ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-        result = af.gather([(ir1, "A"), (ir2, "B")])
+        result = af.gather([(ir1, ("A",)), (ir2, ("B",))])
         assert result == ["[A]", "<B>"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -49,7 +49,7 @@ class TestGatherBasic:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(a, b):
-            return af.gather([(ir1, a), (ir2, b)])
+            return af.gather([(ir1, (a,)), (ir2, (b,))])
 
         prog_ir = af.trace(program)("a", "b")
         result = await af.acall(prog_ir)("A", "B")
@@ -59,7 +59,7 @@ class TestGatherBasic:
         ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
         ir3 = af.trace(lambda x: af.format("{{{}}}", x))("a")
-        result = af.gather([(ir1, "X"), (ir2, "Y"), (ir3, "Z")])
+        result = af.gather([(ir1, ("X",)), (ir2, ("Y",)), (ir3, ("Z",))])
         assert result == ["[X]", "<Y>", "{Z}"]
 
     def test_chained_operations(self):
@@ -68,7 +68,7 @@ class TestGatherBasic:
             return af.format("[{}]", a)
 
         ir = af.trace(chain)("a")
-        result = af.gather([(ir, "hello"), (ir, "world")])
+        result = af.gather([(ir, ("hello",)), (ir, ("world",))])
         assert result == ["[hello!]", "[world!]"]
 
 
@@ -83,7 +83,7 @@ class TestGatherValidation:
 
     def test_non_ir_raises(self):
         with pytest.raises(TypeError, match="Expected \\(ir, inputs\\) tuple"):
-            af.gather([("not_an_ir", "input")])
+            af.gather([("not_an_ir", ("input",))])
 
     def test_exception_propagates(self):
         error_p = af.core.Prim("error")
@@ -100,7 +100,7 @@ class TestGatherValidation:
         ir_error = af.trace(lambda x: error_p.bind(x))("a")
 
         with pytest.raises(ValueError, match="intentional error"):
-            af.gather([(ir_ok, "A"), (ir_error, "B")])
+            af.gather([(ir_ok, ("A",)), (ir_error, ("B",))])
 
 
 class TestGatherWithTransforms:
@@ -109,11 +109,11 @@ class TestGatherWithTransforms:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir1, x), (ir2, x)])
+            return af.gather([(ir1, (x,)), (ir2, (x,))])
 
         prog_ir = af.trace(program)("a")
         pf_ir = af.pushforward(prog_ir)
-        (p_out, t_out) = af.call(pf_ir)(("primal", "tangent"))
+        (p_out, t_out) = af.call(pf_ir)(("primal",), ("tangent",))
         assert p_out == ["[primal]", "<primal>"]
         assert t_out == ["[tangent]", "<tangent>"]
 
@@ -123,11 +123,11 @@ class TestGatherWithTransforms:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir1, x), (ir2, x)])
+            return af.gather([(ir1, (x,)), (ir2, (x,))])
 
         prog_ir = af.trace(program)("a")
         pf_ir = af.pushforward(prog_ir)
-        (p_out, t_out) = await af.acall(pf_ir)(("primal", "tangent"))
+        (p_out, t_out) = await af.acall(pf_ir)(("primal",), ("tangent",))
         assert p_out == ["[primal]", "<primal>"]
         assert t_out == ["[tangent]", "<tangent>"]
 
@@ -136,13 +136,13 @@ class TestGatherWithTransforms:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir1, x), (ir2, x)])
+            return af.gather([(ir1, (x,)), (ir2, (x,))])
 
         prog_ir = af.trace(program)("a")
         pb_ir = af.pullback(prog_ir)
-        out, cotangent = af.call(pb_ir)(("primal", ["grad1", "grad2"]))
+        out, cotangent = af.call(pb_ir)(("primal",), ["grad1", "grad2"])
         assert out == ["[primal]", "<primal>"]
-        assert isinstance(cotangent, str)
+        assert cotangent == ("grad1grad2",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_async(self):
@@ -150,13 +150,13 @@ class TestGatherWithTransforms:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir1, x), (ir2, x)])
+            return af.gather([(ir1, (x,)), (ir2, (x,))])
 
         prog_ir = af.trace(program)("a")
         pb_ir = af.pullback(prog_ir)
-        out, cotangent = await af.acall(pb_ir)(("primal", ["grad1", "grad2"]))
+        out, cotangent = await af.acall(pb_ir)(("primal",), ["grad1", "grad2"])
         assert out == ["[primal]", "<primal>"]
-        assert isinstance(cotangent, str)
+        assert cotangent == ("grad1grad2",)
 
 
 class TestGatherWithBatch:
@@ -165,7 +165,7 @@ class TestGatherWithBatch:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir1, x), (ir2, x)])
+            return af.gather([(ir1, (x,)), (ir2, (x,))])
 
         prog_ir = af.trace(program)("a")
         batched_ir = af.batch(prog_ir)
@@ -178,7 +178,7 @@ class TestGatherWithBatch:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir1, x), (ir2, x)])
+            return af.gather([(ir1, (x,)), (ir2, (x,))])
 
         prog_ir = af.trace(program)("a")
         batched_ir = af.batch(prog_ir)
@@ -190,7 +190,7 @@ class TestGatherWithBatch:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("sample")
 
         def program(x, y):
-            return af.gather([(ir1, x), (ir2, y)])
+            return af.gather([(ir1, (x,)), (ir2, (y,))])
 
         prog_ir = af.trace(program)("x", "y")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
@@ -203,7 +203,7 @@ class TestGatherWithBatch:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("sample")
 
         def program(x, y):
-            return af.gather([(ir1, x), (ir2, y)])
+            return af.gather([(ir1, (x,)), (ir2, (y,))])
 
         prog_ir = af.trace(program)("x", "y")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
@@ -217,7 +217,7 @@ class TestGatherWithDCE:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            results = af.gather([(ir1, x), (ir2, x)])
+            results = af.gather([(ir1, (x,)), (ir2, (x,))])
             return results
 
         prog_ir = af.trace(program)("a")
@@ -231,7 +231,7 @@ class TestGatherWithDCE:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            _ = af.gather([(ir1, x), (ir2, x)])
+            _ = af.gather([(ir1, (x,)), (ir2, (x,))])
             return af.format("constant: {}", x)
 
         prog_ir = af.trace(program)("a")
@@ -248,7 +248,7 @@ class TestGatherWithDCE:
         ir_simple = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            return af.gather([(ir_with_dead, x), (ir_simple, x)])
+            return af.gather([(ir_with_dead, (x,)), (ir_simple, (x,))])
 
         prog_ir = af.trace(program)("a")
         dce_ir = af.dce(prog_ir)
@@ -263,7 +263,7 @@ class TestGatherWithDCE:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x):
-            results = af.gather([(ir1, x), (ir2, x)])
+            results = af.gather([(ir1, (x,)), (ir2, (x,))])
             return results[0]
 
         prog_ir = af.trace(program)("a")
@@ -284,7 +284,7 @@ class TestGatherWithDCE:
         ir_dead = af.trace(structured_with_dead)("x")
 
         def program(x):
-            result, _ = af.gather([(ir_live, x), (ir_dead, x)])
+            result, _ = af.gather([(ir_live, (x,)), (ir_dead, (x,))])
             return result
 
         prog_ir = af.trace(program)("x")
@@ -308,7 +308,7 @@ class TestGatherContextPreservation:
         ir2 = af.trace(func)("b")
 
         with af.collect(collection="debug") as collected:
-            results = af.gather([(ir1, "A"), (ir2, "B")])
+            results = af.gather([(ir1, ("A",)), (ir2, ("B",))])
 
         assert results == ["A", "B"]
         assert "val" in collected
@@ -322,7 +322,7 @@ class TestGatherContextPreservation:
         ir2 = af.trace(func)("b")
 
         with af.inject(collection="cache", values={"val": ["CACHED1", "CACHED2"]}):
-            results = af.gather([(ir1, "A"), (ir2, "B")])
+            results = af.gather([(ir1, ("A",)), (ir2, ("B",))])
 
         assert results == ["CACHED1", "CACHED2"]
 
@@ -333,13 +333,13 @@ class TestGatherContextPreservation:
         inner_ir = af.trace(inner)("x")
 
         def outer(x):
-            results = af.gather([(inner_ir, x), (inner_ir, x)])
+            results = af.gather([(inner_ir, (x,)), (inner_ir, (x,))])
             return af.concat(results[0], results[1])
 
         outer_ir = af.trace(outer)("x")
 
         with af.collect(collection="debug") as collected:
-            results = af.gather([(outer_ir, "A"), (outer_ir, "B")])
+            results = af.gather([(outer_ir, ("A",)), (outer_ir, ("B",))])
 
         assert "inner" in collected
         assert len(collected["inner"]) == 4
@@ -482,7 +482,7 @@ class TestSchedRecursive:
         ir2 = af.trace(lambda x: af.concat(af.format("({})", x), af.format("{{{}}}", x)))("x")
 
         def program(a, b):
-            results = af.gather([(ir1, a), (ir2, b)])
+            results = af.gather([(ir1, (a,)), (ir2, (b,))])
             return results
 
         ir = af.trace(program)("a", "b")
@@ -558,7 +558,7 @@ class TestSchedComposition:
         scheduled = af.sched(ir)
         pf_ir = af.pushforward(scheduled)
 
-        primals, tangents = af.call(pf_ir)(("test", "tangent"))
+        primals, tangents = af.call(pf_ir)(("test",), ("tangent",))
         assert primals == "[test]<test>"
         assert tangents == "[tangent]<tangent>"
 
@@ -572,9 +572,9 @@ class TestSchedComposition:
         scheduled = af.sched(ir)
         pb_ir = af.pullback(scheduled)
 
-        out, cotangent = af.call(pb_ir)(("test", "grad"))
+        out, cotangent = af.call(pb_ir)(("test",), "grad")
         assert out == "[test]<test>"
-        assert isinstance(cotangent, str)
+        assert isinstance(cotangent[0], str)
 
     def test_sched_then_batch(self):
         def program(x):
@@ -804,7 +804,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = af.call(pf_ir)(("primal", "tangent"))
+        primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
         assert primal == "B: primal"
         assert tangent == "B: tangent"
 
@@ -818,7 +818,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = await af.acall(pf_ir)(("primal", "tangent"))
+        primal, tangent = await af.acall(pf_ir)(("primal",), ("tangent",))
         assert primal == "B: primal"
         assert tangent == "B: tangent"
 
@@ -832,7 +832,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = af.call(pf_ir)(("primal", "tangent"))
+        primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
         assert primal == "C: primal"
         assert tangent == "C: tangent"
 
@@ -846,7 +846,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = af.call(pf_ir)(("primal", "tangent"))
+        primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
         assert primal == "C: primal"
         assert tangent == "C: tangent"
 
@@ -861,9 +861,9 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = af.call(pb_ir)(("primal", "grad"))
+        out, cotangent = af.call(pb_ir)(("primal",), "grad")
         assert out == "B: primal"
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_async(self):
@@ -875,9 +875,9 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = await af.acall(pb_ir)(("primal", "grad"))
+        out, cotangent = await af.acall(pb_ir)(("primal",), "grad")
         assert out == "B: primal"
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
     def test_pullback_multiple_deps(self):
         def program(x):
@@ -889,9 +889,9 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = af.call(pb_ir)(("primal", "grad"))
+        out, cotangent = af.call(pb_ir)(("primal",), "grad")
         assert out == "C: primal"
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
     def test_pullback_chained(self):
         def program(x):
@@ -903,9 +903,9 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = af.call(pb_ir)(("primal", "grad"))
+        out, cotangent = af.call(pb_ir)(("primal",), "grad")
         assert out == "C: primal"
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
 
 class TestDependsWithBatch:
@@ -1028,7 +1028,7 @@ class TestDependsNestedTransforms:
         pf_ir = af.pushforward(ir)
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
 
-        primals, tangents = af.call(batch_pf_ir)(["a", "b"], ["da", "db"])
+        primals, tangents = af.call(batch_pf_ir)((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
         assert tangents == ["B: da", "B: db"]
 
@@ -1043,7 +1043,7 @@ class TestDependsNestedTransforms:
         pf_ir = af.pushforward(ir)
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
 
-        primals, tangents = await af.acall(batch_pf_ir)(["a", "b"], ["da", "db"])
+        primals, tangents = await af.acall(batch_pf_ir)((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
         assert tangents == ["B: da", "B: db"]
 
@@ -1057,9 +1057,9 @@ class TestDependsNestedTransforms:
         pb_ir = af.pullback(ir)
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
 
-        outs, cotangents = af.call(batch_pb_ir)(["a", "b"], ["g1", "g2"])
+        outs, cotangents = af.call(batch_pb_ir)((["a", "b"],), ["g1", "g2"])
         assert outs == ["B: a", "B: b"]
-        assert cotangents == ["g1", "g2"]
+        assert cotangents == (["g1", "g2"],)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_pullback_async(self):
@@ -1072,9 +1072,9 @@ class TestDependsNestedTransforms:
         pb_ir = af.pullback(ir)
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
 
-        outs, cotangents = await af.acall(batch_pb_ir)(["a", "b"], ["g1", "g2"])
+        outs, cotangents = await af.acall(batch_pb_ir)((["a", "b"],), ["g1", "g2"])
         assert outs == ["B: a", "B: b"]
-        assert cotangents == ["g1", "g2"]
+        assert cotangents == (["g1", "g2"],)
 
     def test_pushforward_of_batch(self):
         def program(x):
@@ -1086,7 +1086,7 @@ class TestDependsNestedTransforms:
         batched_ir = af.batch(ir)
         pf_batched_ir = af.pushforward(batched_ir)
 
-        primals, tangents = af.call(pf_batched_ir)((["a", "b"], ["da", "db"]))
+        primals, tangents = af.call(pf_batched_ir)((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
         assert tangents == ["B: da", "B: db"]
 
@@ -1100,9 +1100,9 @@ class TestDependsNestedTransforms:
         batched_ir = af.batch(ir)
         pb_batched_ir = af.pullback(batched_ir)
 
-        outs, cotangents = af.call(pb_batched_ir)((["a", "b"], ["g1", "g2"]))
+        outs, cotangents = af.call(pb_batched_ir)((["a", "b"],), ["g1", "g2"])
         assert outs == ["B: a", "B: b"]
-        assert cotangents == ["g1", "g2"]
+        assert cotangents == (["g1", "g2"],)
 
     def test_sched_of_pushforward(self):
         def program(x):
@@ -1114,7 +1114,7 @@ class TestDependsNestedTransforms:
         pf_ir = af.pushforward(ir)
         sched_pf_ir = af.sched(pf_ir)
 
-        primal, tangent = af.call(sched_pf_ir)(("primal", "tangent"))
+        primal, tangent = af.call(sched_pf_ir)(("primal",), ("tangent",))
         assert primal == "B: primal"
         assert tangent == "B: tangent"
 
@@ -1128,9 +1128,9 @@ class TestDependsNestedTransforms:
         pb_ir = af.pullback(ir)
         sched_pb_ir = af.sched(pb_ir)
 
-        out, cotangent = af.call(sched_pb_ir)(("primal", "grad"))
+        out, cotangent = af.call(sched_pb_ir)(("primal",), "grad")
         assert out == "B: primal"
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
     def test_sched_of_batch(self):
         def program(x):
@@ -1278,7 +1278,7 @@ class TestGatherBatchAllUnbatched:
 
         batch_size = 3
         in_batched = [False, False]
-        in_values = ["hello", "world"]
+        in_values = [("hello",), ("world",)]
 
         out_vals, out_batched = af.core.batch_rules.get(af.scheduling.gather_p)(
             (batch_size, in_batched, in_values), irs=irs
@@ -1294,7 +1294,7 @@ class TestGatherBatchAllUnbatched:
 
         batch_size = 3
         in_batched = [False, False]
-        in_values = ["hello", "world"]
+        in_values = [("hello",), ("world",)]
 
         out_vals, out_batched = await af.core.batch_rules.aget(af.scheduling.gather_p)(
             (batch_size, in_batched, in_values), irs=irs
@@ -1308,7 +1308,7 @@ class TestGatherBatchAllUnbatched:
 
         batch_size = 3
         in_batched = [False]
-        in_values = ["hello"]
+        in_values = [("hello",)]
 
         out_vals, out_batched = af.core.batch_rules.get(af.scheduling.gather_p)(
             (batch_size, in_batched, in_values), irs=irs
@@ -1321,7 +1321,7 @@ class TestGatherBatchAllUnbatched:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x, y):
-            return af.gather([(ir1, x), (ir2, y)])
+            return af.gather([(ir1, (x,)), (ir2, (y,))])
 
         prog_ir = af.trace(program)("a", "b")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
@@ -1334,7 +1334,7 @@ class TestGatherBatchAllUnbatched:
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
 
         def program(x, y):
-            return af.gather([(ir1, x), (ir2, y)])
+            return af.gather([(ir1, (x,)), (ir2, (y,))])
 
         prog_ir = af.trace(program)("a", "b")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))

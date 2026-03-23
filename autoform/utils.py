@@ -67,15 +67,6 @@ def tree_index(node: Tree, b: int, /) -> Tree:
     return children[b]
 
 
-def pack_user_input(*args, **kwargs) -> Tree:
-    # NOTE(asem): pack positional user inputs into a single tree for user-bind interface.
-    # keyword arguments are rejected at the public trace/call boundary.
-    assert not kwargs, "keyword arguments are not supported"
-    if len(args) == 1:
-        return args[0]
-    return args
-
-
 # ==================================================================================================
 # STRUCT
 # ==================================================================================================

@@ -30,8 +30,10 @@ class TestBuildIR:
 
         for traced, runtime, expected in cases:
             ir = af.trace(program)(traced)
-            assert isinstance(ir.in_ir_tree, af.core.IRVar)
-            assert ir.in_ir_tree.type is type(traced)
+            assert isinstance(ir.in_ir_tree, tuple)
+            assert len(ir.in_ir_tree) == 1
+            assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
+            assert ir.in_ir_tree[0].type is type(traced)
             assert af.call(ir)(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -64,7 +66,9 @@ class TestBuildIR:
 
         ir = af.trace(program)("Alice")
         assert len(ir.ir_eqns) == 1
-        assert isinstance(ir.in_ir_tree, af.core.IRVar)
+        assert isinstance(ir.in_ir_tree, tuple)
+        assert len(ir.in_ir_tree) == 1
+        assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
         eqn = ir.ir_eqns[0]
         assert len(eqn.in_ir_tree) == 2
         lit_candidate = eqn.in_ir_tree[0]
@@ -101,7 +105,9 @@ class TestBuildIR:
             return af.concat(x, x)
 
         ir = af.trace(program)("test")
-        assert isinstance(ir.in_ir_tree, af.core.IRVar)
+        assert isinstance(ir.in_ir_tree, tuple)
+        assert len(ir.in_ir_tree) == 1
+        assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):

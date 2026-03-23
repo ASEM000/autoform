@@ -45,7 +45,7 @@ class TestFactor:
         pf_ir = af.pushforward(ir)
 
         with pytest.raises(NotImplementedError, match="no default pushforward rule"):
-            af.call(pf_ir)(("hello", "delta"))
+            af.call(pf_ir)(("hello",), ("delta",))
 
     def test_factor_pullback_is_unsupported(self):
         def program(x):
@@ -55,7 +55,7 @@ class TestFactor:
         pb_ir = af.pullback(ir)
 
         with pytest.raises(NotImplementedError, match="no default pullback rule"):
-            af.call(pb_ir)(("hello", 1.0))
+            af.call(pb_ir)(("hello",), 1.0)
 
 
 class TestWeight:

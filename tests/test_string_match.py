@@ -119,7 +119,7 @@ class TestMatchPushforward:
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
 
-        out_primal, out_tangent = call(pf_ir)(("yes", "tangent_input"))
+        out_primal, out_tangent = call(pf_ir)(("yes",), ("tangent_input",))
 
         assert out_primal is True
         assert af.ad.is_zero(out_tangent)
@@ -132,7 +132,7 @@ class TestMatchPushforward:
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
 
-        out_primal, out_tangent = call(pf_ir)(("no", "tangent_input"))
+        out_primal, out_tangent = call(pf_ir)(("no",), ("tangent_input",))
 
         assert out_primal is False
         assert af.ad.is_zero(out_tangent)
@@ -147,11 +147,11 @@ class TestMatchPullback:
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
 
-        out_primal, in_cotangent = call(pb_ir)(("yes", "feedback"))
+        out_primal, in_cotangent = call(pb_ir)(("yes",), "feedback")
 
         assert out_primal is True
-        assert af.ad.is_zero(in_cotangent)
-        assert in_cotangent.type is str
+        assert af.ad.is_zero(in_cotangent[0])
+        assert in_cotangent[0].type is str
 
     def test_pullback_match_false_case(self):
         def check(x):
@@ -160,11 +160,11 @@ class TestMatchPullback:
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
 
-        out_primal, in_cotangent = call(pb_ir)(("no", "feedback"))
+        out_primal, in_cotangent = call(pb_ir)(("no",), "feedback")
 
         assert out_primal is False
-        assert af.ad.is_zero(in_cotangent)
-        assert in_cotangent.type is str
+        assert af.ad.is_zero(in_cotangent[0])
+        assert in_cotangent[0].type is str
 
 
 class TestMatchComposition:

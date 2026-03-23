@@ -165,7 +165,7 @@ class TestSwitchPushforward:
         pf_ir = af.pushforward(ir)
         primals = ("zero", "hello")
         tangents = ("", "world")
-        p_out, t_out = af.call(pf_ir)((primals, tangents))
+        p_out, t_out = af.call(pf_ir)(primals, tangents)
         assert p_out == "zero: hello"
 
         assert t_out == "world"
@@ -184,7 +184,7 @@ class TestSwitchPushforward:
         pf_ir = af.pushforward(ir)
         primals = ("zero", "hello")
         tangents = ("", "world")
-        p_out, t_out = await af.acall(pf_ir)((primals, tangents))
+        p_out, t_out = await af.acall(pf_ir)(primals, tangents)
         assert p_out == "zero: hello"
 
         assert t_out == "world"
@@ -202,7 +202,7 @@ class TestSwitchPushforward:
         pf_ir = af.pushforward(ir)
         primals = ("one", "hello")
         tangents = ("", "world")
-        p_out, t_out = af.call(pf_ir)((primals, tangents))
+        p_out, t_out = af.call(pf_ir)(primals, tangents)
         assert p_out == "one: hello"
 
         assert t_out == "world"
@@ -225,7 +225,7 @@ class TestSwitchPullback:
         pb_ir = af.pullback(ir)
         primals = ("zero", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = af.call(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = af.call(pb_ir)(primals, cotangent)
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -246,7 +246,7 @@ class TestSwitchPullback:
         pb_ir = af.pullback(ir)
         primals = ("zero", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = await af.acall(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = await af.acall(pb_ir)(primals, cotangent)
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -266,7 +266,7 @@ class TestSwitchPullback:
         pb_ir = af.pullback(ir)
         primals = ("one", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = af.call(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = af.call(pb_ir)(primals, cotangent)
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -375,7 +375,7 @@ class TestSwitchNestedTransforms:
         pf_batched_ir = af.pushforward(batched_ir)
         primals = ("a", ["a", "b"])
         tangents = ("", ["ta", "tb"])
-        p_out, t_out = af.call(pf_batched_ir)((primals, tangents))
+        p_out, t_out = af.call(pf_batched_ir)(primals, tangents)
         assert p_out == ["A:a", "A:b"]
 
         assert t_out == ["ta", "tb"]
@@ -394,7 +394,7 @@ class TestSwitchNestedTransforms:
         pb_batched_ir = af.pullback(batched_ir)
         primals = ("a", ["a", "b"])
         cotangents = ["grad1", "grad2"]
-        p_out, c_in = af.call(pb_batched_ir)((primals, cotangents))
+        p_out, c_in = af.call(pb_batched_ir)(primals, cotangents)
         assert p_out == ["A:a", "A:b"]
         c_key, c_x = c_in
         assert c_x == ["grad1", "grad2"]
@@ -459,7 +459,7 @@ class TestSwitchBatchAllUnbatched:
         }
         batch_size = 3
         in_batched = (False, False)
-        in_values = ("a", "hello")
+        in_values = ("a", ("hello",))
         out_vals, out_batched = af.core.batch_rules.get(af.control.switch_p)(
             (batch_size, in_batched, in_values), branches=branches
         )
@@ -502,7 +502,7 @@ class TestSwitchBatchAllUnbatched:
         }
         batch_size = 3
         in_batched = (False, False)
-        in_values = ("b", "world")
+        in_values = ("b", ("world",))
         out_vals, out_batched = await af.core.batch_rules.aget(af.control.switch_p)(
             (batch_size, in_batched, in_values), branches=branches
         )

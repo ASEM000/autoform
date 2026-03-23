@@ -67,7 +67,7 @@ class TestSow:
 
         ir = af.trace(func)("a")
         pf_ir = af.pushforward(ir)
-        primal_out, tangent_out = af.call(pf_ir)(("primal", "tangent"))
+        primal_out, tangent_out = af.call(pf_ir)(("primal",), ("tangent",))
         assert primal_out == "primal"
         assert tangent_out == "tangent"
 
@@ -77,9 +77,9 @@ class TestSow:
 
         ir = af.trace(func)("a")
         pb_ir = af.pullback(ir)
-        primal_out, cotangent_in = af.call(pb_ir)(("primal", "cotangent"))
+        primal_out, cotangent_in = af.call(pb_ir)(("primal",), "cotangent")
         assert primal_out == "primal"
-        assert cotangent_in == "cotangent"
+        assert cotangent_in == ("cotangent",)
 
     def test_batch(self):
         def func(x):
@@ -242,7 +242,7 @@ class TestTransformThenReap:
         pf_ir = af.pushforward(ir)
 
         with af.collect(collection="debug") as collected:
-            result = af.call(pf_ir)(("primal", "tangent"))
+            result = af.call(pf_ir)(("primal",), ("tangent",))
         assert collected == {"val": ["primal", "tangent"]}
 
     def test_reap_captures_during_pullback(self):
@@ -253,7 +253,7 @@ class TestTransformThenReap:
         pb_ir = af.pullback(ir)
 
         with af.collect(collection="debug") as collected:
-            result = af.call(pb_ir)(("primal", "cotangent"))
+            result = af.call(pb_ir)(("primal",), "cotangent")
         assert collected == {"val": ["primal", "cotangent"]}
 
     def test_reap_captures_during_batch(self):
@@ -798,7 +798,10 @@ class TestMemoizeTransformedIRs:
         with using_interpreter(counter):
             with af.memoize():
                 for inp in inputs:
-                    results.append(af.call(ir)(inp))
+                    if isinstance(inp, tuple):
+                        results.append(af.call(ir)(*inp))
+                    else:
+                        results.append(af.call(ir)(inp))
         return results, counter.call_count
 
     def test_memoize_batched_ir(self):
@@ -822,7 +825,9 @@ class TestMemoizeTransformedIRs:
         ir = af.trace(func)("test")
         pf_ir = af.pushforward(ir)
 
-        (r1, r2), misses = self.count_misses(pf_ir, ("primal", "tangent"), ("primal", "tangent"))
+        (r1, r2), misses = self.count_misses(
+            pf_ir, (("primal",), ("tangent",)), (("primal",), ("tangent",))
+        )
 
         assert r1 == r2
         assert misses == 3
@@ -835,7 +840,7 @@ class TestMemoizeTransformedIRs:
         pb_ir = af.pullback(ir)
 
         (r1, r2), misses = self.count_misses(
-            pb_ir, ("primal", "cotangent"), ("primal", "cotangent")
+            pb_ir, (("primal",), "cotangent"), (("primal",), "cotangent")
         )
 
         assert r1 == r2

@@ -82,7 +82,7 @@ class TestCustomPrimitive:
 
         ir = af.trace(program)("test")
         pf_ir = af.pushforward(ir)
-        primal_out, tangent_out = af.call(pf_ir)(("hello", "bye"))
+        primal_out, tangent_out = af.call(pf_ir)(("hello",), ("bye",))
         assert primal_out == "HELLO"
         assert tangent_out == "BYE"
 
@@ -92,9 +92,9 @@ class TestCustomPrimitive:
 
         ir = af.trace(program)("test")
         pb_ir = af.pullback(ir)
-        output, grad_input = af.call(pb_ir)(("hello", "feedback"))
+        output, grad_input = af.call(pb_ir)(("hello",), "feedback")
         assert output == "HELLO"
-        assert grad_input == "feedback"
+        assert grad_input == ("feedback",)
 
     def test_shout_batch(self):
         def program(x):
@@ -347,7 +347,7 @@ class TestMultiAgentComposition:
         ir = af.trace(chained_agents)("test")
         pf_ir = af.pushforward(ir)
 
-        primal_out, tangent_out = af.call(pf_ir)(("input", "delta"))
+        primal_out, tangent_out = af.call(pf_ir)(("input",), ("delta",))
         assert primal_out == "[Agent2: [Agent1: input]]"
         assert tangent_out == "[Agent2: [Agent1: delta]]"
 
@@ -360,10 +360,9 @@ class TestMultiAgentComposition:
         ir = af.trace(chained_agents)("test")
         pb_ir = af.pullback(ir)
 
-        output, input_grad = af.call(pb_ir)(("input", "feedback"))
+        output, input_grad = af.call(pb_ir)(("input",), "feedback")
         assert output == "[Agent2: [Agent1: input]]"
-
-        assert input_grad == "feedback"
+        assert input_grad == ("feedback",)
 
     def test_batch_construction_textgrad_style(self):
         """Test that batch can be constructed for TextGrad primitive.
@@ -403,7 +402,7 @@ class TestMultiAgentComposition:
 
         inputs = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]
-        outputs, input_grads = af.call(batch_pb)(inputs, cotangents)
+        outputs, input_grads = af.call(batch_pb)((inputs,), cotangents)
 
         assert outputs == ["[Processed: a]", "[Processed: b]", "[Processed: c]"]
-        assert input_grads == ["g1", "g2", "g3"]
+        assert input_grads == (["g1", "g2", "g3"],)

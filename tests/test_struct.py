@@ -311,7 +311,7 @@ class TestStructInAxes:
 
         ir = af.trace(greet)(Person(name="x", sur="y"))
 
-        batch = af.batch(ir, in_axes=Person.model_construct(name=True, sur=False))
+        batch = af.batch(ir, in_axes=(Person.model_construct(name=True, sur=False),))
 
         result = af.call(batch)(
             Person.model_construct(name=["Alice", "Bob"], sur="Smith"),
@@ -333,7 +333,7 @@ class TestStructInAxes:
 
         batch = af.batch(
             ir,
-            in_axes=Outer.model_construct(inner=Inner.model_construct(value=True), tag=False),
+            in_axes=(Outer.model_construct(inner=Inner.model_construct(value=True), tag=False),),
         )
 
         result = af.call(batch)(
@@ -356,12 +356,12 @@ class TestStructStatic:
 
         ir = af.trace(
             greet,
-            static=Person.model_construct(name=False, sur=True),
+            static=(Person.model_construct(name=False, sur=True),),
         )(Person(name="Alice", sur="Smith"))
 
-        assert isinstance(ir.in_ir_tree.name, af.core.IRVar)
-        assert isinstance(ir.in_ir_tree.sur, af.core.IRLit)
-        assert ir.in_ir_tree.sur.value == "Smith"
+        assert isinstance(ir.in_ir_tree[0].name, af.core.IRVar)
+        assert isinstance(ir.in_ir_tree[0].sur, af.core.IRLit)
+        assert ir.in_ir_tree[0].sur.value == "Smith"
         assert af.call(ir)(Person(name="Bob", sur="Smith")) == "Hello Bob, Smith"
 
     def test_struct_static_mismatch(self):
@@ -374,7 +374,7 @@ class TestStructStatic:
 
         ir = af.trace(
             greet,
-            static=Person.model_construct(name=False, sur=True),
+            static=(Person.model_construct(name=False, sur=True),),
         )(Person(name="Alice", sur="Smith"))
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
@@ -841,7 +841,7 @@ class TestStructComplex:
         ir = af.trace(summarize)(Record(name="x", tags=["a", "b"]))
         batch = af.batch(
             ir,
-            in_axes=Record.model_construct(name=True, tags=[False, False]),
+            in_axes=(Record.model_construct(name=True, tags=[False, False]),),
         )
         result = af.call(batch)(
             Record.model_construct(name=["Alice", "Bob"], tags=["p", "q"]),
@@ -858,10 +858,10 @@ class TestStructComplex:
 
         ir = af.trace(program)(Pair(a="x", b="y"))
         pf_ir = af.pushforward(ir)
-        primal, tangent = af.call(pf_ir)((
-            Pair(a="hello", b="world"),
-            Pair(a="delta_a", b="delta_b"),
-        ))
+        primal, tangent = af.call(pf_ir)(
+            (Pair(a="hello", b="world"),),
+            (Pair(a="delta_a", b="delta_b"),),
+        )
         assert primal == "[hello,world]"
         assert tangent == "[delta_a,delta_b]"
 
@@ -875,9 +875,9 @@ class TestStructComplex:
 
         ir = af.trace(program)(Pair(a="x", b="y"))
         pb_ir = af.pullback(ir)
-        output, grad = af.call(pb_ir)((Pair(a="hello", b="world"), "feedback"))
+        output, grad = af.call(pb_ir)((Pair(a="hello", b="world"),), "feedback")
         assert output == "[hello,world]"
-        assert isinstance(grad, Pair)
+        assert isinstance(grad[0], Pair)
 
     def test_struct_lm_call_nested_struct_traces(self):
         class Inner(af.Struct):
