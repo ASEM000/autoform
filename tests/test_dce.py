@@ -311,7 +311,7 @@ class TestNestedDCE:
         assert len(inner_ir.ir_eqns) == 2
 
         pb_ir = af.pullback(inner_ir)
-        dce = af.dce(pb_ir, out_used=(True, False))
+        dce = af.dce(pb_ir, out_used=(True, (False,)))
 
         dced_inner = dce.ir_eqns[0].params["ir"]
         assert len(dced_inner.ir_eqns) == 1
@@ -326,11 +326,11 @@ class TestNestedDCE:
         assert len(inner_ir.ir_eqns) == 2
 
         pb_ir = af.pullback(inner_ir)
-        dce = af.dce(pb_ir, out_used=(False, True))
+        dce = af.dce(pb_ir, out_used=(False, (True,)))
 
         dced_inner = dce.ir_eqns[0].params["ir"]
         assert len(dced_inner.ir_eqns) == 2
-        assert af.call(dce)(("x", "cot")) == ("x LIVE", "cot")
+        assert af.call(dce)(("x",), "cot") == ("x LIVE", ("cot",))
 
     def test_deeply_nested_dce(self):
         def branch_fn(x):

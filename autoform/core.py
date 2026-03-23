@@ -26,7 +26,7 @@ from operator import setitem
 from threading import RLock
 from typing import Any, ClassVar, Self, TypeGuard, cast
 
-from autoform.utils import Tree, lru_cache, pack_user_input, treelib
+from autoform.utils import Tree, lru_cache, treelib
 
 __all__ = [
     # base types
@@ -51,11 +51,6 @@ __all__ = [
     "push_rules",
     "pull_fwd_rules",
     "pull_bwd_rules",
-    "aimpl_rules",
-    "abatch_rules",
-    "apush_rules",
-    "apull_fwd_rules",
-    "apull_bwd_rules",
     # ir structures
     "IREqn",
     "IR",
@@ -555,12 +550,11 @@ def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Cal
     @ft.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
         assert not kwargs, "`trace` does not support keyword arguments"
-        in_tree = pack_user_input(*args)
+        in_tree = args
         in_static_tree = treelib.broadcast_prefix(static, in_tree, is_leaf=is_static_spec)
         in_ir_tree = treelib.map(to_in_ir_val, in_tree, in_static_tree, is_leaf=is_val)
         with using_interpreter(TracingInterpreter()) as tracer:
-            in_prog_tree = (in_ir_tree,) if len(args) == 1 else cast(tuple, in_ir_tree)
-            out_prog_tree = func(*in_prog_tree)
+            out_prog_tree = func(*cast(tuple, in_ir_tree))
         out_ir_tree = treelib.map(to_out_ir_val, out_prog_tree)
         return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
@@ -592,7 +586,7 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
     def func(*args: P.args, **kwargs: P.kwargs) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
         assert not kwargs, "`call` does not support keyword arguments"
-        in_tree = pack_user_input(*args)
+        in_tree = args
         env: dict[IRVar, Any] = {}
 
         def read(irval: IRVal) -> Any:
@@ -638,7 +632,7 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
     async def func(*args: P.args, **kwargs: P.kwargs) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
         assert not kwargs, "`acall` does not support keyword arguments"
-        in_tree = pack_user_input(*args)
+        in_tree = args
         env: dict[IRVar, Any] = {}
 
         def read(irval: IRVal) -> Any:

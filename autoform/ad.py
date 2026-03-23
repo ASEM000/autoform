@@ -44,10 +44,8 @@ from autoform.core import (
     Prim,
     TransformationTag,
     abstract_rules,
-    acall,
     active_interpreter,
     batch_rules,
-    call,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -149,7 +147,7 @@ def pushforward(ir: IR, /) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.trace(program)("a", "b")
         >>> pf_ir = af.pushforward(ir)
-        >>> primals, tangents = call(pf_ir)((("Hello", " World"), ("dx", "dy")))
+        >>> primals, tangents = call(pf_ir)(("Hello", " World"), ("dx", "dy"))
         >>> primals
         'Hello World'
         >>> tangents
@@ -256,8 +254,8 @@ def pushforward_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
     primals, tangents = in_tree
     (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
     pf_ir = pushforward(ir)
-    p_out = call(pf_ir)((p_in, t_in))
-    t_out = call(pf_ir)((p_in_t, t_in_t))
+    p_out = pf_ir.call(p_in, t_in)
+    t_out = pf_ir.call(p_in_t, t_in_t)
     return p_out, t_out
 
 
@@ -265,15 +263,15 @@ async def apushforward_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tr
     primals, tangents = in_tree
     (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
     pf_ir = pushforward(ir)
-    p_out = await acall(pf_ir)((p_in, t_in))
-    t_out = await acall(pf_ir)((p_in_t, t_in_t))
+    p_out = await pf_ir.acall(p_in, t_in)
+    t_out = await pf_ir.acall(p_in_t, t_in_t)
     return p_out, t_out
 
 
 def pullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in) = in_tree
     pf_ir = pushforward(ir)
-    p_out, t_out = call(pf_ir)((p_in, t_in))
+    p_out, t_out = pf_ir.call(p_in, t_in)
     residuals = (p_in, t_in)
     return (p_out, t_out), residuals
 
@@ -281,7 +279,7 @@ def pullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tr
 async def apullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in) = in_tree
     pf_ir = pushforward(ir)
-    p_out, t_out = await acall(pf_ir)((p_in, t_in))
+    p_out, t_out = await pf_ir.acall(p_in, t_in)
     residuals = (p_in, t_in)
     return (p_out, t_out), residuals
 
@@ -291,8 +289,8 @@ def pullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     in_p, _ = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
-    _, in_c_p = call(pb_ir)((in_p, out_c_p))
-    _, in_c_t = call(pb_ir)((in_p, out_c_t))
+    _, in_c_p = pb_ir.call(in_p, out_c_p)
+    _, in_c_t = pb_ir.call(in_p, out_c_t)
     return (in_c_p, in_c_t)
 
 
@@ -301,8 +299,8 @@ async def apullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     in_p, _ = residuals
     out_c_p, out_c_t = out_cotangent
     pb_ir = pullback(ir)
-    _, in_c_p = await acall(pb_ir)((in_p, out_c_p))
-    _, in_c_t = await acall(pb_ir)((in_p, out_c_t))
+    _, in_c_p = await pb_ir.acall(in_p, out_c_p)
+    _, in_c_t = await pb_ir.acall(in_p, out_c_t)
     return (in_c_p, in_c_t)
 
 
@@ -312,14 +310,14 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
     if batch_spec(in_values, in_batched) is None:
         pf_ir = pushforward(ir)
-        result = call(pf_ir)(in_values)
+        result = pf_ir.call(*in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_t = ft.partial(batch_index, t_cols, t_batched)
     pf_ir = pushforward(ir)
-    out_bi = [call(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(batch_size)]
+    out_bi = [pf_ir.call(unbatch_p(b), unbatch_t(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, pf_ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -331,14 +329,14 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tr
 
     if batch_spec(in_values, in_batched) is None:
         pf_ir = pushforward(ir)
-        result = await acall(pf_ir)(in_values)
+        result = await pf_ir.acall(*in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_t = ft.partial(batch_index, t_cols, t_batched)
     pf_ir = pushforward(ir)
-    out_bi = await asyncio.gather(*[acall(pf_ir)((unbatch_p(b), unbatch_t(b))) for b in range(bs)])
+    out_bi = await asyncio.gather(*[pf_ir.acall(unbatch_p(b), unbatch_t(b)) for b in range(bs)])
     out_batched = treelib.map(lambda _: True, pf_ir.out_ir_tree)
     out_ib = batch_transpose(bs, out_batched, list(out_bi))
     return out_ib, out_batched
@@ -436,7 +434,7 @@ def pullback(ir: IR, /) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.trace(program)("a", "b")
         >>> pb_ir = af.pullback(ir)
-        >>> outputs, cotangents = call(pb_ir)((("Hello", " World"), "feedback"))
+        >>> outputs, cotangents = call(pb_ir)(("Hello", " World"), "feedback")
         >>> outputs
         'Hello World'
         >>> cotangents  # Gradient flows back to both inputs
@@ -568,8 +566,8 @@ def pushforward_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
     pb_ir = pullback(ir)
-    out_p, in_c = call(pb_ir)((p_in, c_out))
-    t_out_p, t_in_c = call(pb_ir)((t_p_in, t_c_out))
+    out_p, in_c = pb_ir.call(p_in, c_out)
+    t_out_p, t_in_c = pb_ir.call(t_p_in, t_c_out)
     return (out_p, in_c), (t_out_p, t_in_c)
 
 
@@ -577,15 +575,15 @@ async def apushforward_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree,
     primals, tangents = in_tree
     (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
     pb_ir = pullback(ir)
-    out_p, in_c = await acall(pb_ir)((p_in, c_out))
-    t_out_p, t_in_c = await acall(pb_ir)((t_p_in, t_c_out))
+    out_p, in_c = await pb_ir.acall(p_in, c_out)
+    t_out_p, t_in_c = await pb_ir.acall(t_p_in, t_c_out)
     return (out_p, in_c), (t_out_p, t_in_c)
 
 
 def pullback_fwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
     pb_ir = pullback(ir)
-    out_p, in_c = call(pb_ir)((p_in, c_out))
+    out_p, in_c = pb_ir.call(p_in, c_out)
     residuals = (p_in, c_out, out_p, in_c)
     return (out_p, in_c), residuals
 
@@ -593,7 +591,7 @@ def pullback_fwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]
 async def apullback_fwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
     pb_ir = pullback(ir)
-    out_p, in_c = await acall(pb_ir)((p_in, c_out))
+    out_p, in_c = await pb_ir.acall(p_in, c_out)
     residuals = (p_in, c_out, out_p, in_c)
     return (out_p, in_c), residuals
 
@@ -603,9 +601,9 @@ def pullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     p_in, c_out, _, _ = residuals
     out_c_p, in_c_c = out_cotangent
     pb_ir = pullback(ir)
-    _, in_c_p = call(pb_ir)((p_in, out_c_p))
+    _, in_c_p = pb_ir.call(p_in, out_c_p)
     pf_ir = pushforward(ir)
-    _, in_c_cout = call(pf_ir)((p_in, in_c_c))
+    _, in_c_cout = pf_ir.call(p_in, in_c_c)
     return (in_c_p, in_c_cout)
 
 
@@ -614,9 +612,9 @@ async def apullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
     p_in, c_out, _, _ = residuals
     out_c_p, in_c_c = out_cotangent
     pb_ir = pullback(ir)
-    _, in_c_p = await acall(pb_ir)((p_in, out_c_p))
+    _, in_c_p = await pb_ir.acall(p_in, out_c_p)
     pf_ir = pushforward(ir)
-    _, in_c_cout = await acall(pf_ir)((p_in, in_c_c))
+    _, in_c_cout = await pf_ir.acall(p_in, in_c_c)
     return (in_c_p, in_c_cout)
 
 
@@ -627,14 +625,14 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
     if batch_spec(in_values, in_batched) is None:
         pb_ir = pullback(ir)
-        result = call(pb_ir)(in_values)
+        result = pb_ir.call(*in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_c = ft.partial(batch_index, out_c_cols, c_batched)
     pb_ir = pullback(ir)
-    out_bi = [call(pb_ir)((unbatch_p(b), unbatch_c(b))) for b in range(size)]
+    out_bi = [pb_ir.call(unbatch_p(b), unbatch_c(b)) for b in range(size)]
     out_batched = treelib.map(lambda _: True, pb_ir.out_ir_tree)
     out_ib = batch_transpose(size, out_batched, out_bi)
     return out_ib, out_batched
@@ -647,16 +645,14 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]
 
     if batch_spec(in_values, in_batched) is None:
         pb_ir = pullback(ir)
-        result = await acall(pb_ir)(in_values)
+        result = await pb_ir.acall(*in_values)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
     unbatch_c = ft.partial(batch_index, out_c_cols, c_batched)
     pb_ir = pullback(ir)
-    out_bi = await asyncio.gather(*[
-        acall(pb_ir)((unbatch_p(b), unbatch_c(b))) for b in range(size)
-    ])
+    out_bi = await asyncio.gather(*[pb_ir.acall(unbatch_p(b), unbatch_c(b)) for b in range(size)])
     out_batched = treelib.map(lambda _: True, pb_ir.out_ir_tree)
     out_ib = batch_transpose(size, out_batched, list(out_bi))
     return out_ib, out_batched

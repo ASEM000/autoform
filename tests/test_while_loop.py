@@ -272,10 +272,10 @@ class TestWhileLoopPullback:
         primal_in = "start"
         out_cotangent = "feedback"
 
-        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = call(pb_ir)((primal_in,), out_cotangent)
 
         assert final_state == "start"
-        assert in_cotangent == "feedback"
+        assert in_cotangent == ("feedback",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_no_iterations_async(self):
@@ -297,10 +297,10 @@ class TestWhileLoopPullback:
         primal_in = "start"
         out_cotangent = "feedback"
 
-        final_state, in_cotangent = await af.acall(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = await af.acall(pb_ir)((primal_in,), out_cotangent)
 
         assert final_state == "start"
-        assert in_cotangent == "feedback"
+        assert in_cotangent == ("feedback",)
 
     def test_pullback_with_iterations(self):
         def cond(x):
@@ -321,10 +321,10 @@ class TestWhileLoopPullback:
         primal_in = "a"
         out_cotangent = "g"
 
-        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = call(pb_ir)((primal_in,), out_cotangent)
 
         assert final_state == "a.."
-        assert in_cotangent == "g"
+        assert in_cotangent == ("g",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_with_iterations_async(self):
@@ -346,10 +346,10 @@ class TestWhileLoopPullback:
         primal_in = "a"
         out_cotangent = "g"
 
-        final_state, in_cotangent = await af.acall(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = await af.acall(pb_ir)((primal_in,), out_cotangent)
 
         assert final_state == "a.."
-        assert in_cotangent == "g"
+        assert in_cotangent == ("g",)
 
 
 class TestWhileLoopWithMark:
@@ -398,10 +398,10 @@ class TestWhileLoopWithMark:
         pb_ir = af.pullback(loop_ir)
         primal_in = "a"
         out_cotangent = "feedback"
-        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = call(pb_ir)((primal_in,), out_cotangent)
 
         assert final_state == "axxx"
-        assert in_cotangent == "feedback"
+        assert in_cotangent == ("feedback",)
 
         assert result == "axxx"
         assert collected["state"] == ["ax", "axx", "axxx"]
@@ -571,11 +571,11 @@ class TestWhileLoopAdvanced:
 
         primals = ["a", "b"]
         cotangents = ["g1", "g2"]
-        result = call(batched_pb)(primals, cotangents)
+        result = call(batched_pb)((primals,), cotangents)
 
         outputs, in_cotangents = result
         assert outputs == ["a..", "b.."]
-        assert in_cotangents == ["g1", "g2"]
+        assert in_cotangents == (["g1", "g2"],)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_pullback_async(self):
@@ -597,11 +597,11 @@ class TestWhileLoopAdvanced:
 
         primals = ["a", "b"]
         cotangents = ["g1", "g2"]
-        result = await af.acall(batched_pb)(primals, cotangents)
+        result = await af.acall(batched_pb)((primals,), cotangents)
 
         outputs, in_cotangents = result
         assert outputs == ["a..", "b.."]
-        assert in_cotangents == ["g1", "g2"]
+        assert in_cotangents == (["g1", "g2"],)
 
     def test_max_iters_zero(self):
         def cond(x):

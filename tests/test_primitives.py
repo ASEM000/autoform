@@ -238,7 +238,7 @@ class TestStopGradient:
 
         ir = af.trace(func)("a")
         pf_ir = af.pushforward(ir)
-        primal_out, tangent_out = af.call(pf_ir)(("primal", "tangent"))
+        primal_out, tangent_out = af.call(pf_ir)(("primal",), ("tangent",))
         assert primal_out == "primal"
         assert af.ad.is_zero(tangent_out)
 
@@ -248,9 +248,9 @@ class TestStopGradient:
 
         ir = af.trace(func)("a")
         pb_ir = af.pullback(ir)
-        primal_out, cotangent_in = af.call(pb_ir)(("primal", "cotangent"))
+        primal_out, cotangent_in = af.call(pb_ir)(("primal",), "cotangent")
         assert primal_out == "primal"
-        assert af.ad.is_zero(cotangent_in)
+        assert af.ad.is_zero(cotangent_in[0])
 
     def test_batch(self):
         def func(x):
@@ -268,7 +268,7 @@ class TestStopGradient:
 
         ir = af.trace(func)("a", "b")
         pb_ir = af.pullback(ir)
-        _, (cotangent_x, cotangent_y) = af.call(pb_ir)((("a", "b"), "grad"))
+        _, (cotangent_x, cotangent_y) = af.call(pb_ir)(("a", "b"), "grad")
         assert af.ad.is_zero(cotangent_x)
         assert cotangent_y == "grad"
 
@@ -295,9 +295,9 @@ class TestStopGradient:
 
         ir = af.trace(func)(("a", "b"))
         pb_ir = af.pullback(ir)
-        _, cotangent_in = af.call(pb_ir)((("p1", "p2"), ("c1", "c2")))
-        assert af.ad.is_zero(cotangent_in[0])
-        assert af.ad.is_zero(cotangent_in[1])
+        _, cotangent_in = af.call(pb_ir)((("p1", "p2"),), ("c1", "c2"))
+        assert af.ad.is_zero(cotangent_in[0][0])
+        assert af.ad.is_zero(cotangent_in[0][1])
 
 
 class TestRunIRInline:
@@ -367,7 +367,7 @@ class TestRunIRInline:
 
         outer_ir = af.trace(outer)("X")
         pf_ir = af.pushforward(outer_ir)
-        (p_out, t_out) = af.call(pf_ir)(("primal", "tangent"))
+        (p_out, t_out) = af.call(pf_ir)(("primal",), ("tangent",))
         assert p_out == "primal!"
 
         assert t_out == "tangent"
@@ -381,8 +381,8 @@ class TestRunIRInline:
 
         outer_ir = af.trace(outer)("X")
         pb_ir = af.pullback(outer_ir)
-        _, cotangent = af.call(pb_ir)(("hello", "grad"))
-        assert cotangent == "grad"
+        _, cotangent = af.call(pb_ir)(("hello",), "grad")
+        assert cotangent == ("grad",)
 
     def test_batch_on_inlined_run_ir(self):
         """Batch works on inlined run_ir."""

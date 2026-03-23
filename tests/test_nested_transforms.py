@@ -29,7 +29,7 @@ class TestBatchOfPushforward:
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
         primals = ["a", "b", "c"]
         tangents = ["da", "db", "dc"]
-        result = af.call(batch_pf_ir)(primals, tangents)
+        result = af.call(batch_pf_ir)((primals,), (tangents,))
 
         assert result == (
             ["Value: a!", "Value: b!", "Value: c!"],
@@ -48,7 +48,7 @@ class TestBatchOfPushforward:
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
         primals = ["a", "b", "c"]
         tangents = ["da", "db", "dc"]
-        result = await af.acall(batch_pf_ir)(primals, tangents)
+        result = await af.acall(batch_pf_ir)((primals,), (tangents,))
 
         assert result == (
             ["Value: a!", "Value: b!", "Value: c!"],
@@ -62,7 +62,7 @@ class TestBatchOfPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
-        result = af.call(batch_pf_ir)(["a"], ["da"])
+        result = af.call(batch_pf_ir)((["a"],), (["da"],))
 
         assert result == (["a!"], ["da"])
 
@@ -79,10 +79,10 @@ class TestBatchOfPullback:
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
         primals = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]
-        result = af.call(batch_pb_ir)(primals, cotangents)
+        result = af.call(batch_pb_ir)((primals,), cotangents)
         assert result == (
             ["Value: a!", "Value: b!", "Value: c!"],
-            ["g1", "g2", "g3"],
+            (["g1", "g2", "g3"],),
         )
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -97,10 +97,10 @@ class TestBatchOfPullback:
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
         primals = ["a", "b", "c"]
         cotangents = ["g1", "g2", "g3"]
-        result = await af.acall(batch_pb_ir)(primals, cotangents)
+        result = await af.acall(batch_pb_ir)((primals,), cotangents)
         assert result == (
             ["Value: a!", "Value: b!", "Value: c!"],
-            ["g1", "g2", "g3"],
+            (["g1", "g2", "g3"],),
         )
 
     def test_batch_of_pullback_single_element(self):
@@ -110,8 +110,8 @@ class TestBatchOfPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
-        result = af.call(batch_pb_ir)(["a"], ["g"])
-        assert result == (["a!"], ["g"])
+        result = af.call(batch_pb_ir)((["a"],), ["g"])
+        assert result == (["a!"], (["g"],))
 
 
 class TestPushforwardOfBatch:
@@ -126,7 +126,7 @@ class TestPushforwardOfBatch:
         pf_batch = af.pushforward(batch_obj)
         p_xs = ["a", "b"]
         t_xs = ["da", "db"]
-        result = af.call(pf_batch)((p_xs, t_xs))
+        result = af.call(pf_batch)((p_xs,), (t_xs,))
 
         assert result == (
             ["Value: a!", "Value: b!"],
@@ -145,7 +145,7 @@ class TestPushforwardOfBatch:
         pf_batch = af.pushforward(batch_obj)
         p_xs = ["a", "b"]
         t_xs = ["da", "db"]
-        result = await af.acall(pf_batch)((p_xs, t_xs))
+        result = await af.acall(pf_batch)((p_xs,), (t_xs,))
 
         assert result == (
             ["Value: a!", "Value: b!"],
@@ -159,7 +159,7 @@ class TestPushforwardOfBatch:
         ir = af.trace(program)("x")
         batch_obj = af.batch(ir)
         pf_batch = af.pushforward(batch_obj)
-        result = af.call(pf_batch)((["a"], ["da"]))
+        result = af.call(pf_batch)((["a"],), (["da"],))
 
         assert result == (["a!"], ["da"])
 
@@ -176,10 +176,10 @@ class TestPullbackOfBatch:
         pb_batch = af.pullback(batch_obj)
         p_xs = ["a", "b"]
         out_cotangent = ["g1", "g2"]
-        result = af.call(pb_batch)((p_xs, out_cotangent))
+        result = af.call(pb_batch)((p_xs,), out_cotangent)
         assert result == (
             ["Value: a!", "Value: b!"],
-            ["g1", "g2"],
+            (["g1", "g2"],),
         )
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -194,10 +194,10 @@ class TestPullbackOfBatch:
         pb_batch = af.pullback(batch_obj)
         p_xs = ["a", "b"]
         out_cotangent = ["g1", "g2"]
-        result = await af.acall(pb_batch)((p_xs, out_cotangent))
+        result = await af.acall(pb_batch)((p_xs,), out_cotangent)
         assert result == (
             ["Value: a!", "Value: b!"],
-            ["g1", "g2"],
+            (["g1", "g2"],),
         )
 
     def test_pullback_of_batch_single_element(self):
@@ -207,8 +207,8 @@ class TestPullbackOfBatch:
         ir = af.trace(program)("x")
         batch_obj = af.batch(ir)
         pb_batch = af.pullback(batch_obj)
-        result = af.call(pb_batch)((["a"], ["g"]))
-        assert result == (["a!"], ["g"])
+        result = af.call(pb_batch)((["a"],), ["g"])
+        assert result == (["a!"], (["g"],))
 
 
 class TestTripleNesting:
@@ -246,7 +246,7 @@ class TestTripleNesting:
         p_xs = ["a", "b"]
         t1_xs = ["t1a", "t1b"]
         t2_xs = (["t2a", "t2b"], ["t2t1a", "t2t1b"])
-        result = af.call(pf2)(((p_xs, t1_xs), t2_xs))
+        result = af.call(pf2)((((p_xs,), (t1_xs,))), (((t2_xs[0],), (t2_xs[1],))))
 
         assert result == (
             (["a!", "b!"], ["t1a", "t1b"]),
@@ -292,9 +292,9 @@ class TestTriplePushforward:
         pf3 = af.pushforward(pf2)
         p = "a"
         t1 = "t1"
-        t2 = ("t2p", "t2t")
-        t3 = (("t3pp", "t3pt"), ("t3tp", "t3tt"))
-        result = af.call(pf3)((((p, t1), t2), t3))
+        t2 = (("t2p",), ("t2t",))
+        t3 = ((("t3pp",), ("t3pt",)), (("t3tp",), ("t3tt",)))
+        result = af.call(pf3)((((p,), (t1,)), t2), t3)
 
         assert result == (
             (("a!", "t1"), ("t2p!", "t2t")),
@@ -312,9 +312,9 @@ class TestTriplePushforward:
         pf3 = af.pushforward(pf2)
         p = "a"
         t1 = "t1"
-        t2 = ("t2p", "t2t")
-        t3 = (("t3pp", "t3pt"), ("t3tp", "t3tt"))
-        result = await af.acall(pf3)((((p, t1), t2), t3))
+        t2 = (("t2p",), ("t2t",))
+        t3 = ((("t3pp",), ("t3pt",)), (("t3tp",), ("t3tt",)))
+        result = await af.acall(pf3)((((p,), (t1,)), t2), t3)
 
         assert result == (
             (("a!", "t1"), ("t2p!", "t2t")),
@@ -331,11 +331,11 @@ class TestTriplePushforward:
         pf3 = af.pushforward(pf2)
         pf4 = af.pushforward(pf3)
         level0 = "a"
-        level1 = "b"
-        level2 = ("c", "d")
-        level3 = (("e", "f"), ("g", "h"))
-        level4 = ((("i", "j"), ("k", "l")), (("m", "n"), ("o", "p")))
-        result = af.call(pf4)(((((level0, level1), level2), level3), level4))
+        level1 = ("b",)
+        level2 = (("c",), ("d",))
+        level3 = ((("e",), ("f",)), (("g",), ("h",)))
+        level4 = (((("i",), ("j",)), (("k",), ("l",))), ((("m",), ("n",)), (("o",), ("p",))))
+        result = af.call(pf4)(((((level0,), level1), level2), level3), level4)
         expected = (
             ((("[a]", "[b]"), ("[c]", "[d]")), (("[e]", "[f]"), ("[g]", "[h]"))),
             ((("[i]", "[j]"), ("[k]", "[l]")), (("[m]", "[n]"), ("[o]", "[p]"))),
@@ -354,10 +354,10 @@ class TestTriplePullback:
         pb3 = af.pullback(pb2)
         p = "a"
         c1 = "g1"
-        c2 = ("g2_p", "g2_c")
-        c3 = (("g3_pp", "g3_pc"), ("g3_cp", "g3_cc"))
-        result = af.call(pb3)((((p, c1), c2), c3))
-        (((out_p, out_c1), _), _) = result
+        c2 = ("g2_p", ("g2_c",))
+        c3 = (("g3_pp", ("g3_pc",)), (("g3_cp",), "g3_cc"))
+        result = af.call(pb3)((((p,), c1), c2), c3)
+        (((out_p, (out_c1,)), _), _) = result
         assert out_p == "a!"
         assert out_c1 == "g1"
 
@@ -372,10 +372,10 @@ class TestTriplePullback:
         pb3 = af.pullback(pb2)
         p = "a"
         c1 = "g1"
-        c2 = ("g2_p", "g2_c")
-        c3 = (("g3_pp", "g3_pc"), ("g3_cp", "g3_cc"))
-        result = await af.acall(pb3)((((p, c1), c2), c3))
-        (((out_p, out_c1), _), _) = result
+        c2 = ("g2_p", ("g2_c",))
+        c3 = (("g3_pp", ("g3_pc",)), (("g3_cp",), "g3_cc"))
+        result = await af.acall(pb3)((((p,), c1), c2), c3)
+        (((out_p, (out_c1,)), _), _) = result
         assert out_p == "a!"
         assert out_c1 == "g1"
 
@@ -393,7 +393,7 @@ class TestMixedDeepNesting:
         p_cotangents = ["g1", "g2"]
         t_primals = ["ta", "tb"]
         t_cotangents = ["tg1", "tg2"]
-        result = af.call(b)(((p_primals, p_cotangents), (t_primals, t_cotangents)))
+        result = af.call(b)((((p_primals,), p_cotangents)), (((t_primals,), t_cotangents)))
         assert len(result) == 2
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -409,7 +409,7 @@ class TestMixedDeepNesting:
         p_cotangents = ["g1", "g2"]
         t_primals = ["ta", "tb"]
         t_cotangents = ["tg1", "tg2"]
-        result = await af.acall(b)(((p_primals, p_cotangents), (t_primals, t_cotangents)))
+        result = await af.acall(b)((((p_primals,), p_cotangents)), (((t_primals,), t_cotangents)))
         assert len(result) == 2
 
     def test_pushforward_batch_pullback(self):
@@ -424,10 +424,10 @@ class TestMixedDeepNesting:
         p_cotangents = ["g1", "g2"]
         t_primals = ["ta", "tb"]
         t_cotangents = ["tg1", "tg2"]
-        result = af.call(pf)(((p_primals, p_cotangents), (t_primals, t_cotangents)))
+        result = af.call(pf)((((p_primals,), p_cotangents)), (((t_primals,), t_cotangents)))
         (p_out, t_out) = result
-        assert p_out == (["[a]", "[b]"], ["g1", "g2"])
-        assert t_out == (["[ta]", "[tb]"], ["tg1", "tg2"])
+        assert p_out == (["[a]", "[b]"], (["g1", "g2"],))
+        assert t_out == (["[ta]", "[tb]"], (["tg1", "tg2"],))
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_batch_pullback_async(self):
@@ -442,10 +442,10 @@ class TestMixedDeepNesting:
         p_cotangents = ["g1", "g2"]
         t_primals = ["ta", "tb"]
         t_cotangents = ["tg1", "tg2"]
-        result = await af.acall(pf)(((p_primals, p_cotangents), (t_primals, t_cotangents)))
+        result = await af.acall(pf)((((p_primals,), p_cotangents)), (((t_primals,), t_cotangents)))
         (p_out, t_out) = result
-        assert p_out == (["[a]", "[b]"], ["g1", "g2"])
-        assert t_out == (["[ta]", "[tb]"], ["tg1", "tg2"])
+        assert p_out == (["[a]", "[b]"], (["g1", "g2"],))
+        assert t_out == (["[ta]", "[tb]"], (["tg1", "tg2"],))
 
     def test_pullback_pushforward_batch(self):
         def f(x):
@@ -458,7 +458,7 @@ class TestMixedDeepNesting:
         p_inputs = ["a", "b"]
         t_inputs = ["ta", "tb"]
         out_cotangent = (["g1", "g2"], ["tg1", "tg2"])
-        result = af.call(pb)(((p_inputs, t_inputs), out_cotangent))
+        result = af.call(pb)(((p_inputs,), (t_inputs,)), out_cotangent)
         (primal_result, cotangent_result) = result
 
         assert primal_result == (["a!", "b!"], ["ta", "tb"])
@@ -475,7 +475,7 @@ class TestMixedDeepNesting:
         p_inputs = ["a", "b"]
         t_inputs = ["ta", "tb"]
         out_cotangent = (["g1", "g2"], ["tg1", "tg2"])
-        result = await af.acall(pb)(((p_inputs, t_inputs), out_cotangent))
+        result = await af.acall(pb)(((p_inputs,), (t_inputs,)), out_cotangent)
         (primal_result, cotangent_result) = result
 
         assert primal_result == (["a!", "b!"], ["ta", "tb"])
@@ -490,7 +490,7 @@ class TestMixedDeepNesting:
         b2 = af.batch(b1, in_axes=(True, True))
         primals = [["a", "b"], ["c"]]
         tangents = [["ta", "tb"], ["tc"]]
-        result = af.call(b2)(primals, tangents)
+        result = af.call(b2)((primals,), (tangents,))
         assert result == (
             [["<a>", "<b>"], ["<c>"]],
             [["<ta>", "<tb>"], ["<tc>"]],
@@ -507,7 +507,7 @@ class TestMixedDeepNesting:
         p_xs = ["a", "b"]
         t1_xs = ["t1a", "t1b"]
         t2 = (["t2pa", "t2pb"], ["t2ta", "t2tb"])
-        result = af.call(pf2)(((p_xs, t1_xs), t2))
+        result = af.call(pf2)((((p_xs,), (t1_xs,))), (((t2[0],), (t2[1],))))
 
         assert result == (
             (["a!", "b!"], ["t1a", "t1b"]),
@@ -525,21 +525,8 @@ class TestAlternatingTransforms:
         pf1 = af.pushforward(pb1)
         pb2 = af.pullback(pf1)
         pf2 = af.pushforward(pb2)
-        p = "x"
-        c1 = "g"
-        t1 = ("tp", "tc")
-        c2 = (("cpp", "cpc"), ("ctp", "ctc"))
-        t2 = (
-            (
-                (("tppp", "tppc"), ("tpcp", "tpcc")),
-                (("tpcpp", "tpcpc"), ("tpccp", "tpccc")),
-            ),
-            (
-                (("tcpp", "tcpc"), ("tccp", "tccc")),
-                (("tccpp", "tccpc"), ("tcccp", "tcccc")),
-            ),
-        )
-        result = af.call(pf2)((((((p, c1), t1), c2), t2)))
+        input_tree = af.core.treelib.map(lambda _: "x", pf2.in_ir_tree)
+        result = af.call(pf2)(*input_tree)
         assert result is not None
 
     def test_batch_pf_batch_pf(self):
@@ -561,7 +548,17 @@ class TestAlternatingTransforms:
                 [["qta", "qtb"], ["qtc", "qtd"]],
             ),
         )
-        result = af.call(b2)(input_tree)
+        input_tree = (
+            (
+                ([["a", "b"], ["c", "d"]],),
+                ([["ta", "tb"], ["tc", "td"]],),
+            ),
+            (
+                ([["qa", "qb"], ["qc", "qd"]],),
+                ([["qta", "qtb"], ["qtc", "qtd"]],),
+            ),
+        )
+        result = af.call(b2)(*input_tree)
 
         assert result == (
             ([["a!", "b!"], ["c!", "d!"]], [["ta", "tb"], ["tc", "td"]]),
@@ -593,7 +590,7 @@ class TestDeepWithMultipleArgs:
         p_b = ["b1", "b2"]
         t_a = ["ta1", "ta2"]
         t_b = ["tb1", "tb2"]
-        result = af.call(pf)(((p_a, p_b), (t_a, t_b)))
+        result = af.call(pf)((p_a, p_b), (t_a, t_b))
         assert result == (
             ["a1-b1", "a2-b2"],
             ["ta1-tb1", "ta2-tb2"],
@@ -610,7 +607,7 @@ class TestDeepWithMultipleArgs:
         a_vals = [["a1", "a2"], ["a3"]]
         b_vals = [["b1", "b2"], ["b3"]]
         cotangent = [["g1", "g2"], ["g3"]]
-        result = af.call(pb)(((a_vals, b_vals), cotangent))
+        result = af.call(pb)((a_vals, b_vals), cotangent)
         (primal_out, cotangent_in) = result
         assert primal_out == [["a1b1", "a2b2"], ["a3b3"]]
 
@@ -639,7 +636,7 @@ class TestEdgeCasesDeepNesting:
         pf = af.pushforward(b3)
         primals = [[["a"]]]
         tangents = [[["t"]]]
-        result = af.call(pf)((primals, tangents))
+        result = af.call(pf)((primals,), (tangents,))
 
         assert result == ([[["a!"]]], [[["t"]]])
 
@@ -668,7 +665,7 @@ class TestChainedOperations:
         pf = af.pushforward(b2)
         primals = [["a", "b"], ["c"]]
         tangents = [["ta", "tb"], ["tc"]]
-        result = af.call(pf)((primals, tangents))
+        result = af.call(pf)((primals,), (tangents,))
 
         assert result == (
             [["[a]!", "[b]!"], ["[c]!"]],
@@ -690,7 +687,7 @@ class TestChainedOperations:
         p_c = [["g1", "g2"]]
         t_p = [["ta", "tb"]]
         t_c = [["tg1", "tg2"]]
-        result = af.call(b2)(((p_p, p_c), (t_p, t_c)))
+        result = af.call(b2)((((p_p,), p_c)), (((t_p,), t_c)))
         assert result is not None
 
 
@@ -704,7 +701,7 @@ class TestBatchOfPushforwardAllUnbatched:
 
         batch_size = 3
         in_batched = (False, False)
-        in_values = ("hello", "tangent")
+        in_values = (("hello",), ("tangent",))
 
         out_vals, out_batched = af.core.batch_rules.get(af.ad.pushforward_call_p)(
             (batch_size, in_batched, in_values), ir=ir
@@ -721,7 +718,7 @@ class TestBatchOfPushforwardAllUnbatched:
 
         batch_size = 3
         in_batched = (False, False)
-        in_values = ("hello", "tangent")
+        in_values = (("hello",), ("tangent",))
 
         out_vals, out_batched = await af.core.batch_rules.aget(af.ad.pushforward_call_p)(
             (batch_size, in_batched, in_values), ir=ir
@@ -736,7 +733,7 @@ class TestBatchOfPushforwardAllUnbatched:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, False))
-        result = af.call(batch_pf_ir)(["a", "b", "c"], "t")
+        result = af.call(batch_pf_ir)((["a", "b", "c"],), ("t",))
         assert result == (["a!", "b!", "c!"], ["t", "t", "t"])
 
 
@@ -749,13 +746,13 @@ class TestBatchOfPullbackAllUnbatched:
 
         batch_size = 3
         in_batched = (False, False)
-        in_values = ("hello", "cotangent")
+        in_values = (("hello",), "cotangent")
 
         out_vals, out_batched = af.core.batch_rules.get(af.ad.pullback_call_p)(
             (batch_size, in_batched, in_values), ir=ir
         )
-        assert out_vals == ("hello!", "cotangent")
-        assert out_batched == (False, False)
+        assert out_vals == ("hello!", ("cotangent",))
+        assert out_batched == (False, (False,))
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_batch_all_unbatched_async(self):
@@ -766,13 +763,13 @@ class TestBatchOfPullbackAllUnbatched:
 
         batch_size = 3
         in_batched = (False, False)
-        in_values = ("hello", "cotangent")
+        in_values = (("hello",), "cotangent")
 
         out_vals, out_batched = await af.core.batch_rules.aget(af.ad.pullback_call_p)(
             (batch_size, in_batched, in_values), ir=ir
         )
-        assert out_vals == ("hello!", "cotangent")
-        assert out_batched == (False, False)
+        assert out_vals == ("hello!", ("cotangent",))
+        assert out_batched == (False, (False,))
 
     def test_pullback_batch_primals_batched_cotangents_unbatched(self):
         def program(x):
@@ -781,8 +778,8 @@ class TestBatchOfPullbackAllUnbatched:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, False))
-        result = af.call(batch_pb_ir)(["a", "b", "c"], "g")
-        assert result == (["a!", "b!", "c!"], ["g", "g", "g"])
+        result = af.call(batch_pb_ir)((["a", "b", "c"],), "g")
+        assert result == (["a!", "b!", "c!"], (["g", "g", "g"],))
 
 
 class TestPullbackOfPushforward:
@@ -797,13 +794,13 @@ class TestPullbackOfPushforward:
         tangent = "world"
         out_cotangent_p = "grad_p"
         out_cotangent_t = "grad_t"
-        result = af.call(pb_pf_ir)(((primal, tangent), (out_cotangent_p, out_cotangent_t)))
+        result = af.call(pb_pf_ir)(((primal,), (tangent,)), (out_cotangent_p, out_cotangent_t))
         (out_p, out_t), (in_c_p, in_c_t) = result
 
         assert out_p == "hello!"
         assert out_t == "world"
-        assert in_c_p == "grad_p"
-        assert in_c_t == "grad_t"
+        assert in_c_p == ("grad_p",)
+        assert in_c_t == ("grad_t",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_pushforward_async(self):
@@ -817,13 +814,13 @@ class TestPullbackOfPushforward:
         tangent = "world"
         out_cotangent_p = "grad_p"
         out_cotangent_t = "grad_t"
-        result = await af.acall(pb_pf_ir)(((primal, tangent), (out_cotangent_p, out_cotangent_t)))
+        result = await af.acall(pb_pf_ir)(((primal,), (tangent,)), (out_cotangent_p, out_cotangent_t))
         (out_p, out_t), (in_c_p, in_c_t) = result
 
         assert out_p == "hello!"
         assert out_t == "world"
-        assert in_c_p == "grad_p"
-        assert in_c_t == "grad_t"
+        assert in_c_p == ("grad_p",)
+        assert in_c_t == ("grad_t",)
 
     def test_pullback_of_pushforward_format(self):
         def f(x):
@@ -832,13 +829,13 @@ class TestPullbackOfPushforward:
         ir = af.trace(f)("x")
         pf_ir = af.pushforward(ir)
         pb_pf_ir = af.pullback(pf_ir)
-        result = af.call(pb_pf_ir)((("a", "ta"), ("gp", "gt")))
+        result = af.call(pb_pf_ir)((("a",), ("ta",)), ("gp", "gt"))
         (out_p, out_t), (in_c_p, in_c_t) = result
 
         assert out_p == "[a]"
         assert out_t == "[ta]"
-        assert in_c_p == "gp"
-        assert in_c_t == "gt"
+        assert in_c_p == ("gp",)
+        assert in_c_t == ("gt",)
 
     def test_pullback_of_pushforward_two_args(self):
         def f(x, y):
@@ -850,7 +847,7 @@ class TestPullbackOfPushforward:
         primals = ("hello", " world")
         tangents = ("t1", "t2")
         out_cotangent = ("gp", "gt")
-        result = af.call(pb_pf_ir)(((primals, tangents), out_cotangent))
+        result = af.call(pb_pf_ir)((primals, tangents), out_cotangent)
         (out_p, out_t), (in_c_p, in_c_t) = result
 
         assert out_p == "hello world"
@@ -869,7 +866,7 @@ class TestPullbackOfPushforward:
         primals = ("hello", " world")
         tangents = ("t1", "t2")
         out_cotangent = ("gp", "gt")
-        result = await af.acall(pb_pf_ir)(((primals, tangents), out_cotangent))
+        result = await af.acall(pb_pf_ir)((primals, tangents), out_cotangent)
         (out_p, out_t), (in_c_p, in_c_t) = result
 
         assert out_p == "hello world"
@@ -890,12 +887,12 @@ class TestPullbackOfPullback:
         cotangent = "grad"
         out_c_p = "gg_p"
         out_c_c = "gg_c"
-        result = af.call(pb_pb_ir)(((primal, cotangent), (out_c_p, out_c_c)))
+        result = af.call(pb_pb_ir)((((primal,), cotangent)), (out_c_p, (out_c_c,)))
         (out_p, in_c), (in_c_p, in_c_cout) = result
 
         assert out_p == "hello!"
-        assert in_c == "grad"
-        assert in_c_p == "gg_p"
+        assert in_c == ("grad",)
+        assert in_c_p == ("gg_p",)
         assert in_c_cout == "gg_c"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -910,12 +907,12 @@ class TestPullbackOfPullback:
         cotangent = "grad"
         out_c_p = "gg_p"
         out_c_c = "gg_c"
-        result = await af.acall(pb_pb_ir)(((primal, cotangent), (out_c_p, out_c_c)))
+        result = await af.acall(pb_pb_ir)((((primal,), cotangent)), (out_c_p, (out_c_c,)))
         (out_p, in_c), (in_c_p, in_c_cout) = result
 
         assert out_p == "hello!"
-        assert in_c == "grad"
-        assert in_c_p == "gg_p"
+        assert in_c == ("grad",)
+        assert in_c_p == ("gg_p",)
         assert in_c_cout == "gg_c"
 
     def test_pullback_of_pullback_format(self):
@@ -925,12 +922,12 @@ class TestPullbackOfPullback:
         ir = af.trace(f)("x")
         pb_ir = af.pullback(ir)
         pb_pb_ir = af.pullback(pb_ir)
-        result = af.call(pb_pb_ir)((("a", "g"), ("cp", "cc")))
+        result = af.call(pb_pb_ir)((("a",), "g"), ("cp", ("cc",)))
         (out_p, in_c), (in_c_p, in_c_cout) = result
 
         assert out_p == "<a>"
-        assert in_c == "g"
-        assert in_c_p == "cp"
+        assert in_c == ("g",)
+        assert in_c_p == ("cp",)
         assert in_c_cout == "<cc>"
 
     def test_pullback_of_pullback_two_args(self):
@@ -944,7 +941,7 @@ class TestPullbackOfPullback:
         cotangent = "grad"
         out_c_p = "cp"
         out_c_c = ("cc_x", "cc_y")
-        result = af.call(pb_pb_ir)(((primals, cotangent), (out_c_p, out_c_c)))
+        result = af.call(pb_pb_ir)((primals, cotangent), (out_c_p, out_c_c))
         (out_p, in_c), (in_c_primals, in_c_cout) = result
 
         assert out_p == "hello world"
@@ -964,7 +961,7 @@ class TestPullbackOfPullback:
         cotangent = "grad"
         out_c_p = "cp"
         out_c_c = ("cc_x", "cc_y")
-        result = await af.acall(pb_pb_ir)(((primals, cotangent), (out_c_p, out_c_c)))
+        result = await af.acall(pb_pb_ir)((primals, cotangent), (out_c_p, out_c_c))
         (out_p, in_c), (in_c_primals, in_c_cout) = result
 
         assert out_p == "hello world"

@@ -34,10 +34,8 @@ from autoform.core import (
     Prim,
     TransformationTag,
     abstract_rules,
-    acall,
     active_interpreter,
     batch_rules,
-    call,
     impl_rules,
     is_irlit,
     is_irvar,
@@ -272,12 +270,12 @@ def batch_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     weight_ir = weight(ir)
 
     if batch_spec(in_values, in_batched) is None:
-        result = call(weight_ir)(in_values)
+        result = weight_ir.call(*in_values)
         out_batched = treelib.map(lambda _: False, weight_ir.out_ir_tree)
         return result, out_batched
 
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    out_bi = [call(weight_ir)(unbatch(b)) for b in range(batch_size)]
+    out_bi = [weight_ir.call(*unbatch(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, weight_ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -288,12 +286,12 @@ async def abatch_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     weight_ir = weight(ir)
 
     if batch_spec(in_values, in_batched) is None:
-        result = await acall(weight_ir)(in_values)
+        result = await weight_ir.acall(*in_values)
         out_batched = treelib.map(lambda _: False, weight_ir.out_ir_tree)
         return result, out_batched
 
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    out_bi = await asyncio.gather(*[acall(weight_ir)(unbatch(b)) for b in range(batch_size)])
+    out_bi = await asyncio.gather(*[weight_ir.acall(*unbatch(b)) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, weight_ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, list(out_bi))
     return out_ib, out_batched

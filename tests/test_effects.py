@@ -166,7 +166,7 @@ class TestEffectsWithTransforms:
         pf_ir = af.pushforward(ir)
 
         with af.collect(collection="debug") as collected:
-            primal, tangent = af.call(pf_ir)(("primal", "tangent"))
+            primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
 
         assert primal == "primal"
         assert tangent == "tangent"
@@ -180,10 +180,10 @@ class TestEffectsWithTransforms:
         pb_ir = af.pullback(ir)
 
         with af.collect(collection="debug") as collected:
-            primal, cotangent = af.call(pb_ir)(("primal", "cotangent"))
+            primal, cotangent = af.call(pb_ir)(("primal",), "cotangent")
 
         assert primal == "primal"
-        assert cotangent == "cotangent"
+        assert cotangent == ("cotangent",)
         assert collected == {"val": ["primal", "cotangent"]}
 
 

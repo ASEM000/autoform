@@ -137,7 +137,7 @@ class TestFormatPushforward:
 
         ir = af.trace(greet)("x")
         pf_ir = af.pushforward(ir)
-        primal, tangent = af.call(pf_ir)(("World", "Tangent"))
+        primal, tangent = af.call(pf_ir)(("World",), ("Tangent",))
         assert primal == "Hello, World!"
         assert tangent == "Hello, Tangent!"
 
@@ -147,7 +147,7 @@ class TestFormatPushforward:
 
         ir = af.trace(greet)("x")
         pf_ir = af.pushforward(ir)
-        primal, tangent = af.call(pf_ir)(("World", "Tangent"))
+        primal, tangent = af.call(pf_ir)(("World",), ("Tangent",))
         assert primal == "Hello, World!"
         assert tangent == "Hello, Tangent!"
 
@@ -159,10 +159,10 @@ class TestFormatPullback:
 
         ir = af.trace(greet)("x")
         pb_ir = af.pullback(ir)
-        primal, cotangent = af.call(pb_ir)(("World", "grad"))
+        primal, cotangent = af.call(pb_ir)(("World",), "grad")
         assert primal == "Hello, World!"
 
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
     def test_pullback_kwargs(self):
         def greet(name):
@@ -170,10 +170,10 @@ class TestFormatPullback:
 
         ir = af.trace(greet)("x")
         pb_ir = af.pullback(ir)
-        primal, cotangent = af.call(pb_ir)(("World", "grad"))
+        primal, cotangent = af.call(pb_ir)(("World",), "grad")
         assert primal == "Hello, World!"
 
-        assert cotangent == "grad"
+        assert cotangent == ("grad",)
 
     def test_pullback_mixed(self):
         def greet(greeting, name):
@@ -181,7 +181,7 @@ class TestFormatPullback:
 
         ir = af.trace(greet)("x", "y")
         pb_ir = af.pullback(ir)
-        primal, cotangent = af.call(pb_ir)((("Hi", "World"), "grad"))
+        primal, cotangent = af.call(pb_ir)(("Hi", "World"), "grad")
         assert primal == "Hi, World!"
 
         assert cotangent == ("grad", "grad")

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import functools as ft
 import threading
 
@@ -19,6 +20,10 @@ import autoform as af
 
 
 class TestInterpreterRuleMapping:
+    def test_core_all_exports_existing_symbols(self):
+        missing = [name for name in af.core.__all__ if not hasattr(af.core, name)]
+        assert missing == []
+
     def test_basic_get_set(self):
         mapping = af.core.InterpreterRuleMapping()
         p = af.core.Prim("test_basic")
@@ -28,6 +33,17 @@ class TestInterpreterRuleMapping:
             return x
 
         assert mapping.get(p) is rule
+
+    def test_async_get_set(self):
+        mapping = af.core.InterpreterRuleMapping()
+        p = af.core.Prim("test_async")
+
+        @ft.partial(mapping.aset, p)
+        async def rule(x):
+            return x + 1
+
+        assert mapping.aget(p) is rule
+        assert asyncio.run(mapping.aget(p)(1)) == 2
 
     def test_duplicate_raises(self):
         mapping = af.core.InterpreterRuleMapping()

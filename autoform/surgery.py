@@ -27,7 +27,6 @@ from autoform.core import (
     abstract_rules,
     batch_rules,
     impl_rules,
-    pack_user_input,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -141,7 +140,7 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
             lhs_out = ir_eqn.in_ir_tree
             lhs = IR(lhs_ir_eqns, ir.in_ir_tree, lhs_out)
 
-            rhs_in_ir_tree = pack_user_input(ir_eqn.out_ir_tree)
+            rhs_in_ir_tree = (ir_eqn.out_ir_tree,)
             # NOTE(asem): in case rhs_ir_eqn is empty
             # >>> def program(x):
             # ...   y = concat(x, x)
@@ -178,7 +177,7 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
             lhs = IR(before + [lhs_hop], ir.in_ir_tree, lhs_hop.out_ir_tree)
 
             # NOTE(asem): if rhs is empty, splitpoint at the end of ir.
-            rhs_in_ir_tree = pack_user_input(lhs.out_ir_tree)
+            rhs_in_ir_tree = (lhs.out_ir_tree,)
             rhs_out_ir_tree = ([rhs_hop] + after)[-1].out_ir_tree
             rhs = IR([rhs_hop] + after, rhs_in_ir_tree, rhs_out_ir_tree)
             return lhs, rhs

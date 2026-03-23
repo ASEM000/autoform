@@ -76,7 +76,7 @@ class TestTracePushforwardIR:
         pf_ir = af.pushforward(inner_ir)
 
         def program_with_pushforward(primals, tangents):
-            return af.call(pf_ir)((primals, tangents))
+            return af.call(pf_ir)((primals,), (tangents,))
 
         outer_ir = af.trace(program_with_pushforward)("p", "t")
         assert len(outer_ir.ir_eqns) == 1
@@ -93,7 +93,7 @@ class TestTracePushforwardIR:
         pf_ir = af.pushforward(inner_ir)
 
         def program_with_pushforward(primals, tangents):
-            return af.call(pf_ir)((primals, tangents))
+            return af.call(pf_ir)((primals,), (tangents,))
 
         outer_ir = af.trace(program_with_pushforward)("p", "t")
         result = await af.acall(outer_ir)("primal", "tangent")
@@ -109,13 +109,13 @@ class TestTracePullbackIR:
         pb_ir = af.pullback(inner_ir)
 
         def program_with_pullback(primal, cotangent):
-            return af.call(pb_ir)((primal, cotangent))
+            return af.call(pb_ir)((primal,), cotangent)
 
         outer_ir = af.trace(program_with_pullback)("p", "c")
         assert len(outer_ir.ir_eqns) == 1
         assert outer_ir.ir_eqns[0].prim.name == "pullback_call"
         result = af.call(outer_ir)("primal", "cotan")
-        assert result == ("<primal>", "cotan")
+        assert result == ("<primal>", ("cotan",))
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_trace_pullback_async(self):
@@ -126,11 +126,11 @@ class TestTracePullbackIR:
         pb_ir = af.pullback(inner_ir)
 
         def program_with_pullback(primal, cotangent):
-            return af.call(pb_ir)((primal, cotangent))
+            return af.call(pb_ir)((primal,), cotangent)
 
         outer_ir = af.trace(program_with_pullback)("p", "c")
         result = await af.acall(outer_ir)("primal", "cotan")
-        assert result == ("<primal>", "cotan")
+        assert result == ("<primal>", ("cotan",))
 
 
 class TestMultiLevelTracing:
@@ -191,7 +191,7 @@ class TestTransformOfTracedRunIR:
 
         outer_ir = af.trace(program_with_run_ir)("test")
         pf_outer_ir = af.pushforward(outer_ir)
-        result = af.call(pf_outer_ir)(("primal", "tangent"))
+        result = af.call(pf_outer_ir)(("primal",), ("tangent",))
         assert result == ("[primal]", "[tangent]")
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -206,7 +206,7 @@ class TestTransformOfTracedRunIR:
 
         outer_ir = af.trace(program_with_run_ir)("test")
         pf_outer_ir = af.pushforward(outer_ir)
-        result = await af.acall(pf_outer_ir)(("primal", "tangent"))
+        result = await af.acall(pf_outer_ir)(("primal",), ("tangent",))
         assert result == ("[primal]", "[tangent]")
 
     def test_batch_of_traced_run_ir(self):
@@ -249,8 +249,8 @@ class TestTransformOfTracedRunIR:
 
         outer_ir = af.trace(program_with_run_ir)("test")
         pb_outer_ir = af.pullback(outer_ir)
-        result = af.call(pb_outer_ir)(("primal", "cotan"))
-        assert result == ("primal!", "cotan")
+        result = af.call(pb_outer_ir)(("primal",), "cotan")
+        assert result == ("primal!", ("cotan",))
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_traced_run_ir_async(self):
@@ -264,5 +264,5 @@ class TestTransformOfTracedRunIR:
 
         outer_ir = af.trace(program_with_run_ir)("test")
         pb_outer_ir = af.pullback(outer_ir)
-        result = await af.acall(pb_outer_ir)(("primal", "cotan"))
-        assert result == ("primal!", "cotan")
+        result = await af.acall(pb_outer_ir)(("primal",), "cotan")
+        assert result == ("primal!", ("cotan",))
