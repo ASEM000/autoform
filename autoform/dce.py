@@ -41,9 +41,9 @@ type DCERule = Callable[[IREqn, Tree[bool]], tuple[IREqn, Tree[bool]]]
 dce_rules: dict[Prim, DCERule] = {}
 
 
-def dce[**P, R](
-    ir: IR[P, R], /, *, out_used: Tree[bool] | None = None, keep_effects: bool = True
-) -> IR[P, R]:
+def dce[*A, R](
+    ir: IR[*A, R], /, *, out_used: Tree[bool] | None = None, keep_effects: bool = True
+) -> IR[*A, R]:
     """Remove dead code from an IR.
 
     Performs backward pass to identify which equations contribute to output.
