@@ -147,7 +147,7 @@ def pushforward(ir: IR, /) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.trace(program)("a", "b")
         >>> pf_ir = af.pushforward(ir)
-        >>> primals, tangents = call(pf_ir)(("Hello", " World"), ("dx", "dy"))
+        >>> primals, tangents = pf_ir.call(("Hello", " World"), ("dx", "dy"))
         >>> primals
         'Hello World'
         >>> tangents
@@ -434,7 +434,7 @@ def pullback(ir: IR, /) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.trace(program)("a", "b")
         >>> pb_ir = af.pullback(ir)
-        >>> outputs, cotangents = call(pb_ir)(("Hello", " World"), "feedback")
+        >>> outputs, cotangents = pb_ir.call(("Hello", " World"), "feedback")
         >>> outputs
         'Hello World'
         >>> cotangents  # Gradient flows back to both inputs

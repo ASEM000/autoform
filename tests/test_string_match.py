@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.core import AVal, call, trace
+from autoform.core import AVal, trace
 from autoform.string import abstract_match
 
 
@@ -42,24 +42,24 @@ class TestMatchTraced:
             return af.match(x, "yes")
 
         ir = trace(check)("dummy")
-        assert call(ir)("yes") is True
-        assert call(ir)("no") is False
+        assert ir.call("yes") is True
+        assert ir.call("no") is False
 
     def test_traced_match_both_args(self):
         def check(a, b):
             return af.match(a, b)
 
         ir = trace(check)("a", "b")
-        assert call(ir)("hello", "hello") is True
-        assert call(ir)("hello", "world") is False
+        assert ir.call("hello", "hello") is True
+        assert ir.call("hello", "world") is False
 
     def test_match_with_literal_second_arg(self):
         def check(x):
             return af.match(x, "target")
 
         ir = trace(check)("dummy")
-        assert call(ir)("target") is True
-        assert call(ir)("other") is False
+        assert ir.call("target") is True
+        assert ir.call("other") is False
 
     def test_traced_match_rejects_non_string_input(self):
         def check(a, b):
@@ -77,7 +77,7 @@ class TestMatchBatch:
         ir = trace(check)("dummy")
         batched_ir = af.batch(ir, in_axes=True)
 
-        results = call(batched_ir)(["yes", "yes", "yes"])
+        results = batched_ir.call(["yes", "yes", "yes"])
         assert results == [True, True, True]
 
     def test_batch_match_mixed(self):
@@ -87,7 +87,7 @@ class TestMatchBatch:
         ir = trace(check)("dummy")
         batched_ir = af.batch(ir, in_axes=True)
 
-        results = call(batched_ir)(["yes", "no", "yes"])
+        results = batched_ir.call(["yes", "no", "yes"])
         assert results == [True, False, True]
 
     def test_batch_match_both_args_batched(self):
@@ -97,7 +97,7 @@ class TestMatchBatch:
         ir = trace(check)("a", "b")
         batched_ir = af.batch(ir, in_axes=(True, True))
 
-        results = call(batched_ir)(["a", "b", "c"], ["a", "x", "c"])
+        results = batched_ir.call(["a", "b", "c"], ["a", "x", "c"])
         assert results == [True, False, True]
 
     def test_batch_match_one_arg_broadcast(self):
@@ -107,7 +107,7 @@ class TestMatchBatch:
         ir = trace(check)("a", "b")
         batched_ir = af.batch(ir, in_axes=(True, False))
 
-        results = call(batched_ir)(["target", "other", "target"], "target")
+        results = batched_ir.call(["target", "other", "target"], "target")
         assert results == [True, False, True]
 
 
@@ -119,7 +119,7 @@ class TestMatchPushforward:
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
 
-        out_primal, out_tangent = call(pf_ir)(("yes",), ("tangent_input",))
+        out_primal, out_tangent = pf_ir.call(("yes",), ("tangent_input",))
 
         assert out_primal is True
         assert af.ad.is_zero(out_tangent)
@@ -132,7 +132,7 @@ class TestMatchPushforward:
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
 
-        out_primal, out_tangent = call(pf_ir)(("no",), ("tangent_input",))
+        out_primal, out_tangent = pf_ir.call(("no",), ("tangent_input",))
 
         assert out_primal is False
         assert af.ad.is_zero(out_tangent)
@@ -147,7 +147,7 @@ class TestMatchPullback:
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
 
-        out_primal, in_cotangent = call(pb_ir)(("yes",), "feedback")
+        out_primal, in_cotangent = pb_ir.call(("yes",), "feedback")
 
         assert out_primal is True
         assert af.ad.is_zero(in_cotangent[0])
@@ -160,7 +160,7 @@ class TestMatchPullback:
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
 
-        out_primal, in_cotangent = call(pb_ir)(("no",), "feedback")
+        out_primal, in_cotangent = pb_ir.call(("no",), "feedback")
 
         assert out_primal is False
         assert af.ad.is_zero(in_cotangent[0])
@@ -176,11 +176,11 @@ class TestMatchComposition:
 
         ir = trace(process)("status", "text")
 
-        is_active, formatted = call(ir)("active", "hello")
+        is_active, formatted = ir.call("active", "hello")
         assert is_active is True
         assert formatted == "Status check: hello"
 
-        is_active, formatted = call(ir)("inactive", "hello")
+        is_active, formatted = ir.call("inactive", "hello")
         assert is_active is False
         assert formatted == "Status check: hello"
 
@@ -193,7 +193,7 @@ class TestMatchComposition:
         ir = trace(process)("status")
         batched_ir = af.batch(ir, in_axes=True)
 
-        results = call(batched_ir)(["yes", "no", "yes"])
+        results = batched_ir.call(["yes", "no", "yes"])
         is_yes_list, msg_list = results
 
         assert is_yes_list == [True, False, True]

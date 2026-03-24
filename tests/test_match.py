@@ -106,7 +106,7 @@ class TestIREqnMatchArgs:
 
         assert new_ir.ir_eqns[0].effect.collection == "new_tag"
 
-        result = af.call(new_ir)("hello")
+        result = new_ir.call("hello")
         assert result == "hello!"
 
 

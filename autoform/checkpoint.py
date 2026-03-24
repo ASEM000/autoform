@@ -61,7 +61,7 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
         ...     return af.checkpoint(response, key="response", collection="debug")
         >>> ir = af.trace(program)("test")
         >>> with af.collect(collection="debug") as collected:
-        ...     result = af.call(ir)("What is 6*7?")
+        ...     result = ir.call("What is 6*7?")
         >>> result
         'Q: What is 6*7? A: 42'
         >>> collected["prompt"]
@@ -96,7 +96,7 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
         ...     return af.concat(prompt, " A: 42")
         >>> ir = af.trace(program)("test")
         >>> with af.collect(collection="debug") as collected:
-        ...     result = af.call(ir)("What?")
+        ...     result = ir.call("What?")
         >>> result
         'Q: What? A: 42'
         >>> collected["prompt"]
@@ -139,7 +139,7 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
         ...     return af.checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
         >>> ir = af.trace(program)("test")
         >>> with af.inject(collection="cache", values={"greeting": ["CACHED"]}):
-        ...     af.call(ir)("World")
+        ...     ir.call("World")
         'CACHED'
     """
     assert isinstance(values, dict)

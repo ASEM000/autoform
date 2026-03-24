@@ -43,7 +43,7 @@ class TestCollect:
         ir = af.trace(func)("test")
 
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
 
         assert result == "hello"
         assert collected == {"val": ["hello"]}
@@ -56,7 +56,7 @@ class TestCollect:
         ir = af.trace(func)("test")
 
         with af.collect(collection="debug") as collected:
-            result = await af.acall(ir)("hello")
+            result = await ir.acall("hello")
 
         assert result == "hello"
         assert collected == {"val": ["hello"]}
@@ -70,7 +70,7 @@ class TestCollect:
         ir = af.trace(func)("test")
 
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
 
         assert result == "hello"
         assert collected == {"debug_val": ["hello"]}
@@ -85,7 +85,7 @@ class TestCollect:
         ir = af.trace(func)("test")
 
         with af.collect(collection=...) as collected:
-            af.call(ir)("hello")
+            ir.call("hello")
 
         assert collected == {"a": ["hello"], "b": ["hello"]}
 
@@ -98,11 +98,11 @@ class TestInject:
         ir = af.trace(func)("test")
 
         with af.collect(collection="cache") as collected:
-            normal = af.call(ir)("World")
+            normal = ir.call("World")
         assert normal == "Hello, World"
 
         with af.inject(collection="cache", values={"greeting": ["CACHED"]}):
-            injected = af.call(ir)("World")
+            injected = ir.call("World")
         assert injected == "CACHED"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -113,7 +113,7 @@ class TestInject:
         ir = af.trace(func)("test")
 
         with af.inject(collection="cache", values={"greeting": ["CACHED"]}):
-            injected = await af.acall(ir)("World")
+            injected = await ir.acall("World")
         assert injected == "CACHED"
 
     def test_inject_partial(self):
@@ -125,7 +125,7 @@ class TestInject:
         ir = af.trace(func)("test")
 
         with af.inject(collection="cache", values={"first": ["INJECTED"]}):
-            result = af.call(ir)("ignored")
+            result = ir.call("ignored")
 
         assert result == "INJECTED!"
 
@@ -139,7 +139,7 @@ class TestEffectsWithTransforms:
         batched = af.batch(ir)
 
         with af.collect(collection="debug") as collected:
-            result = af.call(batched)(["a", "b", "c"])
+            result = batched.call(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
         assert collected == {"val": ["a", "b", "c"]}
@@ -153,7 +153,7 @@ class TestEffectsWithTransforms:
         batched = af.batch(ir)
 
         with af.collect(collection="debug") as collected:
-            result = await af.acall(batched)(["a", "b", "c"])
+            result = await batched.acall(["a", "b", "c"])
 
         assert result == ["a", "b", "c"]
         assert collected == {"val": ["a", "b", "c"]}
@@ -166,7 +166,7 @@ class TestEffectsWithTransforms:
         pf_ir = af.pushforward(ir)
 
         with af.collect(collection="debug") as collected:
-            primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
+            primal, tangent = pf_ir.call(("primal",), ("tangent",))
 
         assert primal == "primal"
         assert tangent == "tangent"
@@ -180,7 +180,7 @@ class TestEffectsWithTransforms:
         pb_ir = af.pullback(ir)
 
         with af.collect(collection="debug") as collected:
-            primal, cotangent = af.call(pb_ir)(("primal",), "cotangent")
+            primal, cotangent = pb_ir.call(("primal",), "cotangent")
 
         assert primal == "primal"
         assert cotangent == ("cotangent",)
@@ -198,7 +198,7 @@ class TestHandlerComposition:
 
         with af.collect(collection="debug") as debug_collected:
             with af.collect(collection="cache") as cache_collected:
-                result = af.call(ir)("hello")
+                result = ir.call("hello")
 
         assert result == "hello"
         assert debug_collected == {"debug": ["hello"]}
@@ -231,7 +231,7 @@ class TestMultiShotContinuation:
 
         handler = MultiShotHandler(alternatives=["A", "B", "C"])
         with using_interpreter(EffectInterpreter((MultiEffect, handler))):
-            result = af.call(ir)("ignored")
+            result = ir.call("ignored")
 
         assert handler.results == ["A!", "B!", "C!"]
         assert result == "C!"
@@ -257,7 +257,7 @@ class TestMultiShotContinuation:
         ir = af.trace(program)("test")
 
         with using_interpreter(EffectInterpreter((AggregateEffect, aggregating_handler))):
-            result = af.call(ir)("Hello")
+            result = ir.call("Hello")
 
         assert result == "Hello! | Hello? | Hello."
 
@@ -279,7 +279,7 @@ class TestMultiShotContinuation:
         ir = af.trace(program)("test")
 
         with using_interpreter(EffectInterpreter((SingleEffect, single_shot_handler))):
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
 
         assert result == "HELLO world modified"
 
@@ -299,7 +299,7 @@ class TestMultiShotContinuation:
         ir = af.trace(program)("test")
 
         with using_interpreter(EffectInterpreter((SkipEffect, skip_handler))):
-            result = af.call(ir)("ignored")
+            result = ir.call("ignored")
 
         assert result == "SKIPPED"
 
@@ -322,7 +322,7 @@ class TestMultiShotContinuation:
         ir = af.trace(program)("test")
 
         with using_interpreter(EffectInterpreter((InspectEffect, inspect_handler))):
-            result = af.call(ir)("world")
+            result = ir.call("world")
 
         assert result == "hello world"
         assert captured["prim_name"] == "format"

@@ -400,10 +400,10 @@ def sched[**P, R](ir: IR[P, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> scheduled = af.sched(ir)
         >>>
         >>> # sync execution (sequential)
-        >>> result = af.call(scheduled)("hello")
+        >>> result = scheduled.call("hello")
         >>>
         >>> # async execution (concurrent via asyncio.gather)
-        >>> result = asyncio.run(af.acall(scheduled)("hello"))
+        >>> result = asyncio.run(scheduled.acall("hello"))
     """
     levels: list[list[IREqn]] = toposort_levels(ir)
     out_ir_eqns: list[IREqn] = []

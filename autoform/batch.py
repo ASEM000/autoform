@@ -108,7 +108,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         >>> ir = af.trace(greet)("Hi", "World")
         >>> # Batch over names, broadcast greeting
         >>> batched = af.batch(ir, in_axes=(False, True))
-        >>> call(batched)("Hello, ", ["Alice", "Bob", "Carol"])
+        >>> batched.call("Hello, ", ["Alice", "Bob", "Carol"])
         ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
@@ -161,7 +161,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # ...     return af.format("constant string")
     # >>> ir = af.trace(program)("input")
     # >>> batched = af.batch(ir, in_axes=True)
-    # >>> call(batched)([])
+    # >>> batched.call([])
     assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Any] = {}

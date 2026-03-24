@@ -27,9 +27,7 @@ from autoform.core import (
     Prim,
     PrimTag,
     abstract_rules,
-    acall,
     batch_rules,
-    call,
     impl_rules,
     is_irval,
     is_irvar,
@@ -75,7 +73,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         ...     return af.concat(stopped, y)
         >>> ir = af.trace(ir)("a", "b")
         >>> pb_ir = af.pullback(ir)
-        >>> _, (cotangent_x, cotangent_y) = call(pb_ir)(("a", "b"), "grad")
+        >>> _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
         >>> cotangent_x
         Zero(str)
         >>> cotangent_y
@@ -159,9 +157,9 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         >>> def ir(key, x):
         ...     return af.switch(key, branches, x)
         >>> ir = af.trace(ir)("one", "hello")
-        >>> call(ir)("one", "hello")
+        >>> ir.call("one", "hello")
         'one: hello'
-        >>> call(ir)("zero", "hello")
+        >>> ir.call("zero", "hello")
         'zero: hello'
     """
     assert is_val(key) or is_irval(key), "key must be a user-type (traceable) value"
@@ -355,9 +353,9 @@ def impl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: in
     state = (in_tree,)
     out = in_tree
     for _ in range(max_iters):
-        if not call(cond_ir)(*state):
+        if not cond_ir.call(*state):
             break
-        out = call(body_ir)(*state)
+        out = body_ir.call(*state)
         state = (out,)
     return out
 
@@ -366,9 +364,9 @@ async def aimpl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_it
     state = (in_tree,)
     out = in_tree
     for _ in range(max_iters):
-        if not await acall(cond_ir)(*state):
+        if not await cond_ir.acall(*state):
             break
-        out = await acall(body_ir)(*state)
+        out = await body_ir.acall(*state)
         state = (out,)
     return out
 
@@ -386,9 +384,9 @@ def pullback_fwd_while_loop(
     trajectory = [state]
 
     for _ in range(max_iters):
-        if not call(cond_ir)(*state):
+        if not cond_ir.call(*state):
             break
-        out = call(body_ir)(*state)
+        out = body_ir.call(*state)
         state = (out,)
         trajectory.append(state)
 
@@ -404,9 +402,9 @@ async def apull_fwd_while_loop(
     trajectory = [state]
 
     for _ in range(max_iters):
-        if not await acall(cond_ir)(*state):
+        if not await cond_ir.acall(*state):
             break
-        out = await acall(body_ir)(*state)
+        out = await body_ir.acall(*state)
         state = (out,)
         trajectory.append(state)
 
@@ -507,7 +505,7 @@ def batch_while_loop(
         in_batched_cond = state_in_axes
         # NOTE(asem): move from AoS to SoA for alive states
         in_transposed_cond = batch_transpose(n_alive, in_batched_cond, alive_states)
-        conds_result = call(batched_cond)(*in_transposed_cond)
+        conds_result = batched_cond.call(*in_transposed_cond)
         # NOTE(asem): cond returns scalar bool, batched -> list. use unbatch for consistency.
         out_batched_cond = isinstance(conds_result, list)
         conds = [batch_index(conds_result, out_batched_cond, b) for b in range(n_alive)]
@@ -521,7 +519,7 @@ def batch_while_loop(
             n_still_alive = len(still_alive_states)
             in_batched = state_in_axes
             in_transposed = batch_transpose(n_still_alive, in_batched, still_alive_states)
-            out_transposed = call(batched_body)(*in_transposed)
+            out_transposed = batched_body.call(*in_transposed)
             out_batched = treelib.map(is_irvar, body_ir.out_ir_tree)
 
             for local_idx, batch_idx in enumerate(still_alive):
@@ -559,7 +557,7 @@ async def abatch_while_loop(
         n_alive = len(alive_states)
         in_batched_cond = state_in_axes
         in_transposed_cond = batch_transpose(n_alive, in_batched_cond, alive_states)
-        conds_result = await acall(batched_cond)(*in_transposed_cond)
+        conds_result = await batched_cond.acall(*in_transposed_cond)
         out_batched_cond = isinstance(conds_result, list)
         conds = [batch_index(conds_result, out_batched_cond, b) for b in range(n_alive)]
 
@@ -571,7 +569,7 @@ async def abatch_while_loop(
             n_still_alive = len(still_alive_states)
             in_batched_body = state_in_axes
             in_transposed = batch_transpose(n_still_alive, in_batched_body, still_alive_states)
-            out_transposed = await acall(batched_body)(*in_transposed)
+            out_transposed = await batched_body.acall(*in_transposed)
             out_batched_body = treelib.map(is_irvar, body_ir.out_ir_tree)
 
             for local_idx, batch_idx in enumerate(still_alive):

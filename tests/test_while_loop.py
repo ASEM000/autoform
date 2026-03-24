@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.core import call, trace
+from autoform.core import trace
 from tests.conftest import TEST_MODEL, requires_llm
 
 
@@ -48,7 +48,7 @@ class TestWhileLoopImpl:
             return af.while_loop(cond_ir, body_ir, init, max_iters=10)
 
         loop_ir = trace(loop)("")
-        result = await af.acall(loop_ir)("input")
+        result = await loop_ir.acall("input")
         assert result == "input"
 
     def test_cond_always_true_iterates(self):
@@ -65,7 +65,7 @@ class TestWhileLoopImpl:
             return af.while_loop(cond_ir, body_ir, init, max_iters=3)
 
         loop_ir = trace(loop)("")
-        result = call(loop_ir)("a")
+        result = loop_ir.call("a")
         assert result == "a..."
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -83,7 +83,7 @@ class TestWhileLoopImpl:
             return af.while_loop(cond_ir, body_ir, init, max_iters=3)
 
         loop_ir = trace(loop)("")
-        result = await af.acall(loop_ir)("a")
+        result = await loop_ir.acall("a")
         assert result == "a..."
 
     def test_cond_always_true_exits_first_iter(self):
@@ -117,7 +117,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b", "c"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ["a", "b", "c"]
 
@@ -139,7 +139,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b", "c"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states == ["a", "b", "c"]
 
@@ -160,7 +160,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["", "", "already"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ["x", "x", "already"]
 
@@ -181,7 +181,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ["a...", "b..."]
 
@@ -203,7 +203,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states == ["a...", "b..."]
 
@@ -224,7 +224,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ("", "a")
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ("x", "a")
         assert isinstance(states, tuple)
@@ -246,7 +246,7 @@ class TestWhileLoopBatch:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["", "a"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ["x", "a"]
         assert isinstance(states, list)
@@ -272,7 +272,7 @@ class TestWhileLoopPullback:
         primal_in = "start"
         out_cotangent = "feedback"
 
-        final_state, in_cotangent = call(pb_ir)((primal_in,), out_cotangent)
+        final_state, in_cotangent = pb_ir.call((primal_in,), out_cotangent)
 
         assert final_state == "start"
         assert in_cotangent == ("feedback",)
@@ -297,7 +297,7 @@ class TestWhileLoopPullback:
         primal_in = "start"
         out_cotangent = "feedback"
 
-        final_state, in_cotangent = await af.acall(pb_ir)((primal_in,), out_cotangent)
+        final_state, in_cotangent = await pb_ir.acall((primal_in,), out_cotangent)
 
         assert final_state == "start"
         assert in_cotangent == ("feedback",)
@@ -321,7 +321,7 @@ class TestWhileLoopPullback:
         primal_in = "a"
         out_cotangent = "g"
 
-        final_state, in_cotangent = call(pb_ir)((primal_in,), out_cotangent)
+        final_state, in_cotangent = pb_ir.call((primal_in,), out_cotangent)
 
         assert final_state == "a.."
         assert in_cotangent == ("g",)
@@ -346,7 +346,7 @@ class TestWhileLoopPullback:
         primal_in = "a"
         out_cotangent = "g"
 
-        final_state, in_cotangent = await af.acall(pb_ir)((primal_in,), out_cotangent)
+        final_state, in_cotangent = await pb_ir.acall((primal_in,), out_cotangent)
 
         assert final_state == "a.."
         assert in_cotangent == ("g",)
@@ -369,7 +369,7 @@ class TestWhileLoopWithMark:
 
         loop_ir = trace(loop)("init")
         with af.collect(collection="trace") as collected:
-            result = af.call(loop_ir)("a")
+            result = loop_ir.call("a")
 
         assert result == "a"
         assert "state" not in collected or collected["state"] == []
@@ -391,14 +391,14 @@ class TestWhileLoopWithMark:
         loop_ir = trace(loop)("init")
 
         with af.collect(collection="trace") as collected:
-            result = af.call(loop_ir)("a")
+            result = loop_ir.call("a")
         assert result == "axxx"
         assert collected["state"] == ["ax", "axx", "axxx"]
 
         pb_ir = af.pullback(loop_ir)
         primal_in = "a"
         out_cotangent = "feedback"
-        final_state, in_cotangent = call(pb_ir)((primal_in,), out_cotangent)
+        final_state, in_cotangent = pb_ir.call((primal_in,), out_cotangent)
 
         assert final_state == "axxx"
         assert in_cotangent == ("feedback",)
@@ -474,7 +474,7 @@ class TestWhileLoopAdvanced:
             return af.while_loop(outer_cond_ir, outer_body_ir, init, max_iters=3)
 
         loop_ir = trace(loop)("")
-        result = call(loop_ir)("start")
+        result = loop_ir.call("start")
         assert result == "startiii"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -502,7 +502,7 @@ class TestWhileLoopAdvanced:
             return af.while_loop(outer_cond_ir, outer_body_ir, init, max_iters=3)
 
         loop_ir = trace(loop)("")
-        result = await af.acall(loop_ir)("start")
+        result = await loop_ir.acall("start")
         assert result == "startiii"
 
     def test_batch_divergent_exit(self):
@@ -522,7 +522,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["go", "stop", "go"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states[0] == "go!"
         assert states[1] == "stop"
@@ -546,7 +546,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["go", "stop", "go"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states[0] == "go!"
         assert states[1] == "stop"
@@ -571,7 +571,7 @@ class TestWhileLoopAdvanced:
 
         primals = ["a", "b"]
         cotangents = ["g1", "g2"]
-        result = call(batched_pb)((primals,), cotangents)
+        result = batched_pb.call((primals,), cotangents)
 
         outputs, in_cotangents = result
         assert outputs == ["a..", "b.."]
@@ -597,7 +597,7 @@ class TestWhileLoopAdvanced:
 
         primals = ["a", "b"]
         cotangents = ["g1", "g2"]
-        result = await af.acall(batched_pb)((primals,), cotangents)
+        result = await batched_pb.acall((primals,), cotangents)
 
         outputs, in_cotangents = result
         assert outputs == ["a..", "b.."]
@@ -630,7 +630,7 @@ class TestWhileLoopAdvanced:
             return af.while_loop(cond_ir, body_ir, init, max_iters=1)
 
         loop_ir = trace(loop)("")
-        result = call(loop_ir)("test")
+        result = loop_ir.call("test")
         assert result == "test!"
 
     def test_batch_all_exit_immediately(self):
@@ -650,7 +650,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b", "c", "d", "e"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ["a", "b", "c", "d", "e"]
 
@@ -671,7 +671,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["", "", "", "done"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states[0] == "x"
         assert states[1] == "x"
@@ -696,7 +696,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["", "", "", "done"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states[0] == "x"
         assert states[1] == "x"
@@ -717,7 +717,7 @@ class TestWhileLoopAdvanced:
             return af.while_loop(cond_ir, body_ir, init, max_iters=20)
 
         loop_ir = trace(loop)("")
-        result = call(loop_ir)("a")
+        result = loop_ir.call("a")
         assert result == "a" + "." * 20
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -735,7 +735,7 @@ class TestWhileLoopAdvanced:
             return af.while_loop(cond_ir, body_ir, init, max_iters=20)
 
         loop_ir = trace(loop)("")
-        result = await af.acall(loop_ir)("a")
+        result = await loop_ir.acall("a")
         assert result == "a" + "." * 20
 
     def test_batch_variable_iteration_counts(self):
@@ -755,7 +755,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["", "", "already", "done"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states[0] == "x"
         assert states[1] == "x"
@@ -780,7 +780,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["", "", "already", "done"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states[0] == "x"
         assert states[1] == "x"
@@ -804,7 +804,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b", "c"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states == ["a...", "b...", "c..."]
 
@@ -826,7 +826,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["a", "b", "c"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states == ["a...", "b...", "c..."]
 
@@ -848,7 +848,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["go", "go", "stop", "go"]
-        states = call(batched_ir)(inputs)
+        states = batched_ir.call(inputs)
 
         assert states[0] == "go!"
         assert states[1] == "go!"
@@ -874,7 +874,7 @@ class TestWhileLoopAdvanced:
         batched_ir = af.batch(loop_ir, in_axes=True)
 
         inputs = ["go", "go", "stop", "go"]
-        states = await af.acall(batched_ir)(inputs)
+        states = await batched_ir.acall(inputs)
 
         assert states[0] == "go!"
         assert states[1] == "go!"
@@ -906,7 +906,7 @@ class TestWhileLoopWithLLM:
         loop_ir = trace(loop)("init")
 
         with af.collect(collection="refinements") as collected:
-            result = af.call(loop_ir)("hey whats up")
+            result = loop_ir.call("hey whats up")
 
         assert isinstance(result, str)
         assert len(result) > 0
@@ -937,7 +937,7 @@ class TestWhileLoopWithLLM:
         primal_in = "hey whats up"
         out_cotangent = "feedback on final output"
 
-        final_state, in_cotangent = call(pb_ir)((primal_in, out_cotangent))
+        final_state, in_cotangent = pb_ir.call((primal_in, out_cotangent))
 
         assert isinstance(final_state, str)
         assert len(final_state) > 0
@@ -956,7 +956,7 @@ class TestWhileLoopWithLLM:
         batched_ir = af.batch(translate_ir, in_axes=True)
 
         inputs = ["Hello", "Goodbye", "Thank you"]
-        results = call(batched_ir)(inputs)
+        results = batched_ir.call(inputs)
 
         assert len(results) == 3
         for r in results:
@@ -975,7 +975,7 @@ class TestWhileLoopWithLLM:
             return af.struct_lm_call(msgs, model=TEST_MODEL, struct=Sentiment)
 
         analyze_ir = trace(analyze)("text")
-        result = call(analyze_ir)("I love this product! It's amazing!")
+        result = analyze_ir.call("I love this product! It's amazing!")
 
         assert hasattr(result, "positive")
         assert hasattr(result, "confidence")
@@ -997,7 +997,7 @@ class TestWhileLoopWithLLM:
         primal = "hey whats up"
         tangent = "tangent direction"
 
-        (out_primal, out_tangent) = call(pf_ir)((primal, tangent))
+        (out_primal, out_tangent) = pf_ir.call((primal, tangent))
 
         assert isinstance(out_primal, str)
         assert len(out_primal) > 0
@@ -1022,7 +1022,7 @@ class TestWhileLoopWithLLM:
 
         process_ir = trace(process)("text")
         with af.collect(collection="steps") as collected:
-            result = af.call(process_ir)("The quick brown fox jumps over the lazy dog.")
+            result = process_ir.call("The quick brown fox jumps over the lazy dog.")
 
         assert isinstance(result, str)
         assert "summary" in collected
@@ -1068,7 +1068,7 @@ class TestWhileLoopWithLLM:
 
         loop_ir = trace(loop)("...")
         with af.collect(collection="trace") as collected:
-            result = af.call(loop_ir)("yo whats good bro")
+            result = loop_ir.call("yo whats good bro")
 
         assert isinstance(result, str)
         assert "draft" in collected
@@ -1077,6 +1077,6 @@ class TestWhileLoopWithLLM:
         if collected["draft"]:
             updated_drafts = [f"[EDITED] {d}" for d in collected["draft"]]
             with af.inject(collection="trace", values={"draft": updated_drafts}):
-                updated_result = af.call(loop_ir)("yo whats good bro")
+                updated_result = loop_ir.call("yo whats good bro")
 
             assert isinstance(updated_result, str)

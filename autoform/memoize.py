@@ -70,7 +70,7 @@ def memoize() -> Generator[None, None, None]:
         ...     return af.concat(a, b)
         >>> ir = af.trace(program)("test")
         >>> with af.memoize():
-        ...     result = af.call(ir)("hello")
+        ...     result = ir.call("hello")
         >>> result
         'hello!hello!'
 
