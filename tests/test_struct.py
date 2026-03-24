@@ -313,7 +313,7 @@ class TestStructInAxes:
 
         batch = af.batch(ir, in_axes=Person.model_construct(name=True, sur=False))
 
-        result = af.call(batch)(
+        result = batch.call(
             Person.model_construct(name=["Alice", "Bob"], sur="Smith"),
         )
         assert result == ["Hello Alice, Smith", "Hello Bob, Smith"]
@@ -336,7 +336,7 @@ class TestStructInAxes:
             in_axes=Outer.model_construct(inner=Inner.model_construct(value=True), tag=False),
         )
 
-        result = af.call(batch)(
+        result = batch.call(
             Outer.model_construct(
                 inner=Inner.model_construct(value=["a", "b", "c"]),
                 tag="PREFIX",
@@ -362,7 +362,7 @@ class TestStructStatic:
         assert isinstance(ir.in_ir_tree.name, af.core.IRVar)
         assert isinstance(ir.in_ir_tree.sur, af.core.IRLit)
         assert ir.in_ir_tree.sur.value == "Smith"
-        assert af.call(ir)(Person(name="Bob", sur="Smith")) == "Hello Bob, Smith"
+        assert ir.call(Person(name="Bob", sur="Smith")) == "Hello Bob, Smith"
 
     def test_struct_static_mismatch(self):
         class Person(af.Struct):
@@ -378,7 +378,7 @@ class TestStructStatic:
         )(Person(name="Alice", sur="Smith"))
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            af.call(ir)(Person(name="Bob", sur="Jones"))
+            ir.call(Person(name="Bob", sur="Jones"))
 
 
 class TestStructBatchSupport:
@@ -408,7 +408,7 @@ class TestStructBatchSupport:
 
         ir = af.trace(process)("x")
         batch = af.batch(ir, in_axes=True)
-        result = af.call(batch)(["1", "2", "3"])
+        result = batch.call(["1", "2", "3"])
         assert isinstance(result, Output)
         assert result.first == ["A:1", "A:2", "A:3"]
         assert result.second == ["B:1", "B:2", "B:3"]
@@ -429,7 +429,7 @@ class TestStructBatchSupport:
 
         ir = af.trace(create)("x")
         batch = af.batch(ir, in_axes=True)
-        result = af.call(batch)(["a", "b"])
+        result = batch.call(["a", "b"])
         assert isinstance(result, Outer)
         assert isinstance(result.inner, Inner)
         assert result.inner.value == ["V:a", "V:b"]
@@ -441,7 +441,7 @@ class TestStructBatchSupport:
 
         ir = af.trace(dual)("x")
         batch = af.batch(ir, in_axes=True)
-        result = af.call(batch)(["a", "b"])
+        result = batch.call(["a", "b"])
         assert result == (["L:a", "L:b"], ["R:a", "R:b"])
 
     def test_batch_preserves_nested_tuple_output(self):
@@ -450,7 +450,7 @@ class TestStructBatchSupport:
 
         ir = af.trace(nested)("x")
         batch = af.batch(ir, in_axes=True)
-        result = af.call(batch)(["1", "2"])
+        result = batch.call(["1", "2"])
         assert result == ((["A:1", "A:2"], ["B:1", "B:2"]), ["C:1", "C:2"])
 
 
@@ -799,7 +799,7 @@ class TestStructComplex:
             return af.format("{}: {}", o.label, o.inner.value)
 
         ir = af.trace(program)(Outer(inner=Inner(value="x"), label="y"))
-        result = af.call(ir)(Outer(inner=Inner(value="world"), label="hello"))
+        result = ir.call(Outer(inner=Inner(value="world"), label="hello"))
         assert result == "hello: world"
 
     def test_struct_trace_with_scalar_fields_are_dynamic(self):
@@ -815,7 +815,7 @@ class TestStructComplex:
             )
 
         ir = af.trace(program)(Counter(name="cats", count=1, score=1.5, active=True))
-        result = af.call(ir)(Counter(name="dogs", count=2, score=2.5, active=False))
+        result = ir.call(Counter(name="dogs", count=2, score=2.5, active=False))
         assert result == "dogs: 2 2.5 False"
 
     def test_struct_trace_with_list_field_access(self):
@@ -827,7 +827,7 @@ class TestStructComplex:
             return af.format("{}: {}, {}, {}", w.tag, w.items[0], w.items[1], w.items[2])
 
         ir = af.trace(program)(WithList(tag="t", items=["a", "b", "c"]))
-        result = af.call(ir)(WithList(tag="label", items=["x", "y", "z"]))
+        result = ir.call(WithList(tag="label", items=["x", "y", "z"]))
         assert result == "label: x, y, z"
 
     def test_batch_struct_input_with_list_field(self):
@@ -843,7 +843,7 @@ class TestStructComplex:
             ir,
             in_axes=Record.model_construct(name=True, tags=[False, False]),
         )
-        result = af.call(batch)(
+        result = batch.call(
             Record.model_construct(name=["Alice", "Bob"], tags=["p", "q"]),
         )
         assert result == ["Alice=p,q", "Bob=p,q"]
@@ -858,7 +858,7 @@ class TestStructComplex:
 
         ir = af.trace(program)(Pair(a="x", b="y"))
         pf_ir = af.pushforward(ir)
-        primal, tangent = af.call(pf_ir)((
+        primal, tangent = pf_ir.call((
             Pair(a="hello", b="world"),
             Pair(a="delta_a", b="delta_b"),
         ))
@@ -875,7 +875,7 @@ class TestStructComplex:
 
         ir = af.trace(program)(Pair(a="x", b="y"))
         pb_ir = af.pullback(ir)
-        output, grad = af.call(pb_ir)((Pair(a="hello", b="world"), "feedback"))
+        output, grad = pb_ir.call((Pair(a="hello", b="world"), "feedback"))
         assert output == "[hello,world]"
         assert isinstance(grad, Pair)
 

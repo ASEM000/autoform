@@ -197,9 +197,9 @@ def split[*A, R](ir: IR[*A, R], /, *, key: Hashable) -> tuple[IR, IR]:
         ...     return af.concat(y, "?")
         >>> ir = af.trace(program)("x")
         >>> lhs, rhs = af.split(ir, key="mid")
-        >>> af.call(lhs)("hello")
+        >>> lhs.call("hello")
         'hello!'
-        >>> af.call(rhs)("hello!")
+        >>> rhs.call("hello!")
         'hello!?'
 
     To merge the split IRs back together, retrace with splitpoint::

@@ -27,9 +27,7 @@ from autoform.core import (
     Prim,
     PrimTag,
     abstract_rules,
-    acall,
     batch_rules,
-    call,
     impl_rules,
     is_irval,
     is_irvar,
@@ -76,7 +74,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         ...     return af.concat(stopped, y)
         >>> ir = af.trace(ir)("a", "b")
         >>> pb_ir = af.pullback(ir)
-        >>> _, (cotangent_x, cotangent_y) = call(pb_ir)((("a", "b"), "grad"))
+        >>> _, (cotangent_x, cotangent_y) = pb_ir.call((("a", "b"), "grad"))
         >>> cotangent_x
         Zero(str)
         >>> cotangent_y
@@ -160,9 +158,9 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         >>> def ir(key, x):
         ...     return af.switch(key, branches, x)
         >>> ir = af.trace(ir)("one", "hello")
-        >>> call(ir)("one", "hello")
+        >>> ir.call("one", "hello")
         'one: hello'
-        >>> call(ir)("zero", "hello")
+        >>> ir.call("zero", "hello")
         'zero: hello'
     """
     assert is_val(key) or is_irval(key), "key must be a user-type (traceable) value"
@@ -177,12 +175,12 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
 
 def impl_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = in_tree
-    return call(branches[key])(operands)
+    return branches[key].call(operands)
 
 
 async def aimpl_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = in_tree
-    return await acall(branches[key])(operands)
+    return await branches[key].acall(operands)
 
 
 def abstract_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
@@ -196,26 +194,26 @@ def pushforward_switch(in_tree, /, *, branches: dict[str, IR]):
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = pushforward(branches[key])
-    return call(pf_ir)((p_operands, t_operands))
+    return pf_ir.call((p_operands, t_operands))
 
 
 async def apush_switch(in_tree, /, *, branches: dict[str, IR]):
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = pushforward(branches[key])
-    return await acall(pf_ir)((p_operands, t_operands))
+    return await pf_ir.acall((p_operands, t_operands))
 
 
 def pullback_fwd_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, Tree]:
     key, operands = in_tree
-    out = call(branches[key])(operands)
+    out = branches[key].call(operands)
     residuals = (key, operands)
     return out, residuals
 
 
 async def apull_fwd_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, Tree]:
     key, operands = in_tree
-    out = await acall(branches[key])(operands)
+    out = await branches[key].acall(operands)
     residuals = (key, operands)
     return out, residuals
 
@@ -224,7 +222,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = pullback(branches[key])
-    _, c_operands = call(pb_ir)((operands, out_cotangent))
+    _, c_operands = pb_ir.call((operands, out_cotangent))
     return (Zero(str), c_operands)
 
 
@@ -232,7 +230,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = pullback(branches[key])
-    _, c_operands = await acall(pb_ir)((operands, out_cotangent))
+    _, c_operands = await pb_ir.acall((operands, out_cotangent))
     return (Zero(str), c_operands)
 
 
@@ -247,7 +245,7 @@ def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
     def run_ir_at(b):
-        return call(branches[key_col[b] if key_batched else key_col])(unbatch(b))
+        return branches[key_col[b] if key_batched else key_col].call(unbatch(b))
 
     results = [run_ir_at(b) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, results[0])
@@ -266,7 +264,7 @@ async def abatch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, b
     unbatch = ft.partial(batch_index, operands_col, operands_batched)
 
     async def run_ir_at(b):
-        return await acall(branches[key_col[b] if key_batched else key_col])(unbatch(b))
+        return await branches[key_col[b] if key_batched else key_col].acall(unbatch(b))
 
     results = await asyncio.gather(*[run_ir_at(b) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, results[0])
@@ -353,18 +351,18 @@ def while_loop(cond_ir: IR, body_ir: IR, init_val: Tree, *, max_iters: int) -> T
 def impl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: int) -> Tree:
     state = in_tree
     for _ in range(max_iters):
-        if not call(cond_ir)(state):
+        if not cond_ir.call(state):
             break
-        state = call(body_ir)(state)
+        state = body_ir.call(state)
     return state
 
 
 async def aimpl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: int) -> Tree:
     state = in_tree
     for _ in range(max_iters):
-        if not await acall(cond_ir)(state):
+        if not await cond_ir.acall(state):
             break
-        state = await acall(body_ir)(state)
+        state = await body_ir.acall(state)
     return state
 
 
@@ -380,9 +378,9 @@ def pullback_fwd_while_loop(
     trajectory = [state]
 
     for _ in range(max_iters):
-        if not call(cond_ir)(state):
+        if not cond_ir.call(state):
             break
-        state = call(body_ir)(state)
+        state = body_ir.call(state)
         trajectory.append(state)
 
     residuals = (trajectory, body_ir)
@@ -396,9 +394,9 @@ async def apull_fwd_while_loop(
     trajectory = [state]
 
     for _ in range(max_iters):
-        if not await acall(cond_ir)(state):
+        if not await cond_ir.acall(state):
             break
-        state = await acall(body_ir)(state)
+        state = await body_ir.acall(state)
         trajectory.append(state)
 
     residuals = (trajectory, body_ir)
@@ -416,7 +414,7 @@ def pullback_bwd_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_i
 
     for t in reversed(range(n_iters)):
         state_t = trajectory[t]
-        _, cotangent = call(pb_body)((state_t, cotangent))
+        _, cotangent = pb_body.call((state_t, cotangent))
 
     return cotangent
 
@@ -434,7 +432,7 @@ async def apull_bwd_while_loop(
 
     for t in reversed(range(n_iters)):
         state_t = trajectory[t]
-        _, cotangent = await acall(pb_body)((state_t, cotangent))
+        _, cotangent = await pb_body.acall((state_t, cotangent))
 
     return cotangent
 
@@ -495,7 +493,7 @@ def batch_while_loop(
         in_batched_cond = treelib.map(lambda _: True, cond_ir.in_ir_tree)
         # NOTE(asem): move from AoS to SoA for alive states
         in_transposed_cond = batch_transpose(n_alive, in_batched_cond, alive_states)
-        conds_result = call(batched_cond)(in_transposed_cond)
+        conds_result = batched_cond.call(in_transposed_cond)
         # NOTE(asem): cond returns scalar bool, batched -> list. use unbatch for consistency.
         out_batched_cond = isinstance(conds_result, list)
         conds = [batch_index(conds_result, out_batched_cond, b) for b in range(n_alive)]
@@ -509,7 +507,7 @@ def batch_while_loop(
             n_still_alive = len(still_alive_states)
             in_batched = treelib.map(lambda _: True, body_ir.in_ir_tree)
             in_transposed = batch_transpose(n_still_alive, in_batched, still_alive_states)
-            out_transposed = call(batched_body)(in_transposed)
+            out_transposed = batched_body.call(in_transposed)
             out_batched = treelib.map(is_irvar, body_ir.out_ir_tree)
 
             for local_idx, batch_idx in enumerate(still_alive):
@@ -546,7 +544,7 @@ async def abatch_while_loop(
         n_alive = len(alive_states)
         in_batched_cond = treelib.map(lambda _: True, cond_ir.in_ir_tree)
         in_transposed_cond = batch_transpose(n_alive, in_batched_cond, alive_states)
-        conds_result = await acall(batched_cond)(in_transposed_cond)
+        conds_result = await batched_cond.acall(in_transposed_cond)
         out_batched_cond = isinstance(conds_result, list)
         conds = [batch_index(conds_result, out_batched_cond, b) for b in range(n_alive)]
 
@@ -558,7 +556,7 @@ async def abatch_while_loop(
             n_still_alive = len(still_alive_states)
             in_batched_body = treelib.map(lambda _: True, body_ir.in_ir_tree)
             in_transposed = batch_transpose(n_still_alive, in_batched_body, still_alive_states)
-            out_transposed = await acall(batched_body)(in_transposed)
+            out_transposed = await batched_body.acall(in_transposed)
             out_batched_body = treelib.map(is_irvar, body_ir.out_ir_tree)
 
             for local_idx, batch_idx in enumerate(still_alive):

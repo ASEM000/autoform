@@ -53,7 +53,7 @@ class TestFormatTrace:
             return af.format("Hello, {}!", name)
 
         ir = af.trace(greet)("x")
-        result = af.call(ir)("World")
+        result = ir.call("World")
         assert result == "Hello, World!"
 
     def test_trace_kwargs(self):
@@ -61,7 +61,7 @@ class TestFormatTrace:
             return af.format("Hello, {name}!", name=name)
 
         ir = af.trace(greet)("x")
-        result = af.call(ir)("World")
+        result = ir.call("World")
         assert result == "Hello, World!"
 
     def test_trace_mixed(self):
@@ -69,7 +69,7 @@ class TestFormatTrace:
             return af.format("{}, {name}!", greeting, name=name)
 
         ir = af.trace(greet)("x", "y")
-        result = af.call(ir)("Hi", "World")
+        result = ir.call("Hi", "World")
         assert result == "Hi, World!"
 
 
@@ -80,7 +80,7 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x")
         batched = af.batch(ir)
-        result = af.call(batched)(["Alice", "Bob", "Charlie"])
+        result = batched.call(["Alice", "Bob", "Charlie"])
         assert result == ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
 
     def test_batch_kwargs(self):
@@ -89,7 +89,7 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x")
         batched = af.batch(ir)
-        result = af.call(batched)(["Alice", "Bob", "Charlie"])
+        result = batched.call(["Alice", "Bob", "Charlie"])
         assert result == ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
 
     def test_batch_mixed_args_kwargs(self):
@@ -98,7 +98,7 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x", "y")
         batched = af.batch(ir)
-        result = af.call(batched)(["Hi", "Hello"], ["Alice", "Bob"])
+        result = batched.call(["Hi", "Hello"], ["Alice", "Bob"])
         assert result == ["Hi, Alice!", "Hello, Bob!"]
 
     def test_batch_broadcast_positional(self):
@@ -107,7 +107,7 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x", "y")
         batched = af.batch(ir, in_axes=(False, True))
-        result = af.call(batched)("Hello", ["Alice", "Bob"])
+        result = batched.call("Hello", ["Alice", "Bob"])
         assert result == ["Hello: Alice", "Hello: Bob"]
 
     def test_batch_broadcast_kwargs(self):
@@ -116,7 +116,7 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x", "y")
         batched = af.batch(ir, in_axes=(False, True))
-        result = af.call(batched)("Hello", ["Alice", "Bob"])
+        result = batched.call("Hello", ["Alice", "Bob"])
         assert result == ["Hello: Alice", "Hello: Bob"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -126,7 +126,7 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x")
         batched = af.batch(ir)
-        result = await af.acall(batched)(["Alice", "Bob"])
+        result = await batched.acall(["Alice", "Bob"])
         assert result == ["Hello, Alice!", "Hello, Bob!"]
 
 
@@ -137,7 +137,7 @@ class TestFormatPushforward:
 
         ir = af.trace(greet)("x")
         pf_ir = af.pushforward(ir)
-        primal, tangent = af.call(pf_ir)(("World", "Tangent"))
+        primal, tangent = pf_ir.call(("World", "Tangent"))
         assert primal == "Hello, World!"
         assert tangent == "Hello, Tangent!"
 
@@ -147,7 +147,7 @@ class TestFormatPushforward:
 
         ir = af.trace(greet)("x")
         pf_ir = af.pushforward(ir)
-        primal, tangent = af.call(pf_ir)(("World", "Tangent"))
+        primal, tangent = pf_ir.call(("World", "Tangent"))
         assert primal == "Hello, World!"
         assert tangent == "Hello, Tangent!"
 
@@ -159,7 +159,7 @@ class TestFormatPullback:
 
         ir = af.trace(greet)("x")
         pb_ir = af.pullback(ir)
-        primal, cotangent = af.call(pb_ir)(("World", "grad"))
+        primal, cotangent = pb_ir.call(("World", "grad"))
         assert primal == "Hello, World!"
 
         assert cotangent == "grad"
@@ -170,7 +170,7 @@ class TestFormatPullback:
 
         ir = af.trace(greet)("x")
         pb_ir = af.pullback(ir)
-        primal, cotangent = af.call(pb_ir)(("World", "grad"))
+        primal, cotangent = pb_ir.call(("World", "grad"))
         assert primal == "Hello, World!"
 
         assert cotangent == "grad"
@@ -181,7 +181,7 @@ class TestFormatPullback:
 
         ir = af.trace(greet)("x", "y")
         pb_ir = af.pullback(ir)
-        primal, cotangent = af.call(pb_ir)((("Hi", "World"), "grad"))
+        primal, cotangent = pb_ir.call((("Hi", "World"), "grad"))
         assert primal == "Hi, World!"
 
         assert cotangent == ("grad", "grad")

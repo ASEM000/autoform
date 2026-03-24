@@ -32,7 +32,7 @@ class TestBuildIR:
             ir = af.trace(program)(traced)
             assert isinstance(ir.in_ir_tree, af.core.IRVar)
             assert ir.in_ir_tree.type is type(traced)
-            assert af.call(ir)(runtime) == expected
+            assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
         def program(payload):
@@ -45,7 +45,7 @@ class TestBuildIR:
             )
 
         ir = af.trace(program)({"name": "cats", "count": 1, "score": 1.5, "active": True})
-        result = af.call(ir)({"name": "dogs", "count": 2, "score": 2.5, "active": False})
+        result = ir.call({"name": "dogs", "count": 2, "score": 2.5, "active": False})
         assert result == "dogs 2 2.5 False"
 
     def test_trace_unsupported_input_leaf_errors(self):
@@ -85,7 +85,7 @@ class TestBuildIR:
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
         assert isinstance(args[0], af.core.IRVar)
-        assert af.call(ir)("Alice") == "Hello, Alice!"
+        assert ir.call("Alice") == "Hello, Alice!"
 
     def test_multiple_operations(self):
         def program(x, y):
@@ -122,7 +122,7 @@ class TestTraceStatic:
         assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
         assert ir.in_ir_tree[0].value == "Hello"
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
-        assert af.call(ir)("Hello", "Alice") == "Hello Alice"
+        assert ir.call("Hello", "Alice") == "Hello Alice"
 
     def test_static_input_mismatch_errors_before_execution(self):
         def program(prefix, name):
@@ -131,7 +131,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            af.call(ir)("Hi", "Alice")
+            ir.call("Hi", "Alice")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_static_input_mismatch_errors_before_async_execution(self):
@@ -141,7 +141,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            await af.acall(ir)("Hi", "Alice")
+            await ir.acall("Hi", "Alice")
 
     def test_static_spec_must_match_input_tree(self):
         def program(prefix, name):
@@ -161,7 +161,7 @@ class TestTraceStatic:
         assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
         assert ir.in_ir_tree[0].value is True
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
-        assert af.call(ir)(True, "Alice") == "Hello Alice"
+        assert ir.call(True, "Alice") == "Hello Alice"
 
 
 class TestRunIR:
@@ -170,7 +170,7 @@ class TestRunIR:
             return af.concat(x, "!")
 
         ir = af.trace(program)("hello")
-        result = af.call(ir)("world")
+        result = ir.call("world")
         assert result == "world!"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -179,7 +179,7 @@ class TestRunIR:
             return af.concat(x, "!")
 
         ir = af.trace(program)("hello")
-        result = await af.acall(ir)("world")
+        result = await ir.acall("world")
         assert result == "world!"
 
     def test_chained_operations(self):
@@ -189,7 +189,7 @@ class TestRunIR:
             return step2
 
         ir = af.trace(program)("A")
-        result = af.call(ir)("B")
+        result = ir.call("B")
         assert result == "[BB]"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -200,7 +200,7 @@ class TestRunIR:
             return step2
 
         ir = af.trace(program)("A")
-        result = await af.acall(ir)("B")
+        result = await ir.acall("B")
         assert result == "[BB]"
 
     def test_multiple_args(self):
@@ -208,7 +208,7 @@ class TestRunIR:
             return af.format("{} + {}", a, b)
 
         ir = af.trace(program)("x", "y")
-        result = af.call(ir)("1", "2")
+        result = ir.call("1", "2")
         assert result == "1 + 2"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -217,5 +217,5 @@ class TestRunIR:
             return af.format("{} + {}", a, b)
 
         ir = af.trace(program)("x", "y")
-        result = await af.acall(ir)("1", "2")
+        result = await ir.acall("1", "2")
         assert result == "1 + 2"

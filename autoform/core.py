@@ -531,7 +531,7 @@ def trace[*A, R](
         ...         return "error"
         ...     return "ok"
         >>> ir = af.trace(label, static=True)(True)
-        >>> af.call(ir)(True)
+        >>> ir.call(True)
         'error'
     """
 
@@ -582,7 +582,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     Example:
         >>> import autoform as af
         >>> ir = af.trace(lambda x: af.format("Hello {}", x))("world")
-        >>> af.call(ir)("Alice")
+        >>> ir.call("Alice")
         'Hello Alice'
     """
 
@@ -628,7 +628,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
         >>> import autoform as af
         >>> import asyncio
         >>> ir = af.trace(lambda x: af.format("Hello {}", x))("world")
-        >>> asyncio.run(af.acall(ir)("Alice"))
+        >>> asyncio.run(ir.acall("Alice"))
         'Hello Alice'
     """
 

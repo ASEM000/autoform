@@ -31,11 +31,9 @@ from autoform.core import (
     Prim,
     TransformationTag,
     abstract_rules,
-    acall,
     active_effect,
     active_interpreter,
     batch_rules,
-    call,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -110,7 +108,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         >>> ir = af.trace(greet)("Hi", "World")
         >>> # Batch over names, broadcast greeting
         >>> batched = af.batch(ir, in_axes=(False, True))
-        >>> call(batched)(("Hello, ", ["Alice", "Bob", "Carol"]))
+        >>> batched.call(("Hello, ", ["Alice", "Bob", "Carol"]))
         ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
@@ -155,7 +153,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
 
     if (spec := batch_spec(col_tree, in_batched_tree)) is None:
-        return call(ir)(col_tree)
+        return ir.call(col_tree)
 
     batch_size = spec.num_children
     # NOTE(asem): this case can be something like
@@ -163,7 +161,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # ...     return af.format("constant string")
     # >>> ir = af.trace(program)("input")
     # >>> batched = af.batch(ir, in_axes=True)
-    # >>> call(batched)([])
+    # >>> batched.call([])
     assert batch_size, "batch size must be > 0"
 
     v_env: dict[IRVar, Any] = {}
@@ -203,7 +201,7 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
 
     if (spec := batch_spec(col_tree, in_batched_tree)) is None:
-        return await acall(ir)(col_tree)
+        return await ir.acall(col_tree)
 
     batch_size = spec.num_children
     assert batch_size, "batch size must be > 0"
@@ -249,7 +247,7 @@ def pushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
-    return call(batch_pf_ir)((p_cols, t_cols))
+    return batch_pf_ir.call((p_cols, t_cols))
 
 
 async def apushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
@@ -257,13 +255,13 @@ async def apushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) ->
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
-    return await acall(batch_pf_ir)((p_cols, t_cols))
+    return await batch_pf_ir.acall((p_cols, t_cols))
 
 
 def pullback_fwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
     col_tree = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
-    out_cols = call(batched_ir)(col_tree)
+    out_cols = batched_ir.call(col_tree)
     residuals = (col_tree, in_axes)
     return out_cols, residuals
 
@@ -271,7 +269,7 @@ def pullback_fwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple
 async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
     col_tree = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
-    out_cols = await acall(batched_ir)(col_tree)
+    out_cols = await batched_ir.acall(col_tree)
     residuals = (col_tree, in_axes)
     return out_cols, residuals
 
@@ -282,7 +280,7 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
     batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
-    _, in_c_cols = call(batch_pb_ir)((p_cols, out_c_cols))
+    _, in_c_cols = batch_pb_ir.call((p_cols, out_c_cols))
     return in_c_cols
 
 
@@ -292,7 +290,7 @@ async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
     batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
-    _, in_c_cols = await acall(batch_pb_ir)((p_cols, out_c_cols))
+    _, in_c_cols = await batch_pb_ir.acall((p_cols, out_c_cols))
     return in_c_cols
 
 
@@ -303,7 +301,7 @@ def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, 
     # then unflatten back to the original container type.
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(batch_index, col_cols, in_batched)
-    out_bi = [call(batched_ir)(unbatch(b)) for b in range(batch_size)]
+    out_bi = [batched_ir.call(unbatch(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -313,7 +311,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple
     batch_size, in_batched, col_cols = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(batch_index, col_cols, in_batched)
-    out_bi = await asyncio.gather(*[acall(batched_ir)(unbatch(b)) for b in range(batch_size)])
+    out_bi = await asyncio.gather(*[batched_ir.acall(unbatch(b)) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, ir.out_ir_tree)
     out_ib = batch_transpose(batch_size, out_batched, list(out_bi))
     return out_ib, out_batched

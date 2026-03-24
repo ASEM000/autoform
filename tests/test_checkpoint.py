@@ -53,7 +53,7 @@ class TestSow:
             return af.checkpoint(x, key="value", collection="test")
 
         ir = af.trace(func)("test")
-        result = af.call(ir)("hello")
+        result = ir.call("hello")
         assert result == "hello"
 
     def test_hashable_tags_and_names(self):
@@ -67,7 +67,7 @@ class TestSow:
 
         ir = af.trace(func)("a")
         pf_ir = af.pushforward(ir)
-        primal_out, tangent_out = af.call(pf_ir)(("primal", "tangent"))
+        primal_out, tangent_out = pf_ir.call(("primal", "tangent"))
         assert primal_out == "primal"
         assert tangent_out == "tangent"
 
@@ -77,7 +77,7 @@ class TestSow:
 
         ir = af.trace(func)("a")
         pb_ir = af.pullback(ir)
-        primal_out, cotangent_in = af.call(pb_ir)(("primal", "cotangent"))
+        primal_out, cotangent_in = pb_ir.call(("primal", "cotangent"))
         assert primal_out == "primal"
         assert cotangent_in == "cotangent"
 
@@ -87,7 +87,7 @@ class TestSow:
 
         ir = af.trace(func)("a")
         batched_ir = af.batch(ir)
-        result = af.call(batched_ir)(["a", "b", "c"])
+        result = batched_ir.call(["a", "b", "c"])
         assert result == ["a", "b", "c"]
 
     def test_in_chain(self):
@@ -96,7 +96,7 @@ class TestSow:
             return af.concat("[", sowed, "]")
 
         ir = af.trace(func)("a")
-        result = af.call(ir)("hello")
+        result = ir.call("hello")
         assert result == "[hello]"
 
 
@@ -107,7 +107,7 @@ class TestRunAndReap:
 
         ir = af.trace(func)("test")
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
         assert result == "hello"
         assert collected == {"captured": ["hello"]}
 
@@ -120,7 +120,7 @@ class TestRunAndReap:
 
         ir = af.trace(func)("test")
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hi")
+            result = ir.call("hi")
         assert result == "hi!"
         assert collected == {"first": ["hi"], "second": ["hi!"]}
 
@@ -133,11 +133,11 @@ class TestRunAndReap:
         ir = af.trace(func)("test")
 
         with af.collect(collection="debug") as debug_collected:
-            af.call(ir)("hello")
+            ir.call("hello")
         assert debug_collected == {"debug_val": ["hello"]}
 
         with af.collect(collection="metrics") as metrics_collected:
-            af.call(ir)("hello")
+            ir.call("hello")
         assert metrics_collected == {"metrics_val": ["hello"]}
 
     def test_reap_empty_when_no_match(self):
@@ -146,7 +146,7 @@ class TestRunAndReap:
 
         ir = af.trace(func)("test")
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
         assert result == "hello"
         assert collected == {}
 
@@ -156,7 +156,7 @@ class TestRunAndReap:
 
         ir = af.trace(func)("test")
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
         assert result == "hello!"
         assert collected == {}
 
@@ -168,7 +168,7 @@ class TestRunAndReap:
 
         ir = af.trace(func)("test")
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("What?")
+            result = ir.call("What?")
         assert result == "Q: What? A: 42"
         assert collected["prompt"] == ["Q: What?"]
         assert collected["response"] == ["Q: What? A: 42"]
@@ -181,11 +181,11 @@ class TestRunAndPlant:
 
         ir = af.trace(func)("test")
 
-        result = af.call(ir)("World")
+        result = ir.call("World")
         assert result == "Hello, World"
 
         with af.inject(collection="cache", values={"greeting": ["CACHED"]}):
-            result = af.call(ir)("World")
+            result = ir.call("World")
         assert result == "CACHED"
 
     def test_plant_partial(self):
@@ -197,7 +197,7 @@ class TestRunAndPlant:
         ir = af.trace(func)("test")
 
         with af.inject(collection="cache", values={"first": ["PLANTED"]}):
-            result = af.call(ir)("ignored")
+            result = ir.call("ignored")
         assert result == "PLANTED!"
 
     def test_plant_filters_by_tag(self):
@@ -209,7 +209,7 @@ class TestRunAndPlant:
         ir = af.trace(func)("test")
 
         with af.inject(collection="cache", values={"val": ["CACHED"]}):
-            result = af.call(ir)("input")
+            result = ir.call("input")
         assert result == "CACHED"
 
     def test_plant_empty_dict(self):
@@ -219,7 +219,7 @@ class TestRunAndPlant:
         ir = af.trace(func)("test")
 
         with af.inject(collection="cache", values={}):
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
         assert result == "hello"
 
     def test_plant_unmatched_name(self):
@@ -229,7 +229,7 @@ class TestRunAndPlant:
         ir = af.trace(func)("test")
 
         with af.inject(collection="cache", values={"other": ["PLANTED"]}):
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
         assert result == "hello"
 
 
@@ -242,7 +242,7 @@ class TestTransformThenReap:
         pf_ir = af.pushforward(ir)
 
         with af.collect(collection="debug") as collected:
-            result = af.call(pf_ir)(("primal", "tangent"))
+            result = pf_ir.call(("primal", "tangent"))
         assert collected == {"val": ["primal", "tangent"]}
 
     def test_reap_captures_during_pullback(self):
@@ -253,7 +253,7 @@ class TestTransformThenReap:
         pb_ir = af.pullback(ir)
 
         with af.collect(collection="debug") as collected:
-            result = af.call(pb_ir)(("primal", "cotangent"))
+            result = pb_ir.call(("primal", "cotangent"))
         assert collected == {"val": ["primal", "cotangent"]}
 
     def test_reap_captures_during_batch(self):
@@ -264,7 +264,7 @@ class TestTransformThenReap:
         batched = af.batch(ir)
 
         with af.collect(collection="debug") as collected:
-            result = af.call(batched)(["a", "b", "c"])
+            result = batched.call(["a", "b", "c"])
         assert result == ["a", "b", "c"]
         assert collected == {"val": ["a", "b", "c"]}
 
@@ -283,7 +283,7 @@ class TestTransformThenReap:
 
         ir = af.trace(func)("input")
         with af.collect(collection="debug") as collected:
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
         assert result == "a: hello"
         assert collected == {"result": ["a: hello"]}
 
@@ -301,7 +301,7 @@ class TestInjectAndDCE:
 
         def wrapped(x):
             with af.inject(collection="cache", values={"result": ["CACHED"]}):
-                return af.call(ir)("ignored")
+                return ir.call("ignored")
 
         traced_ir = af.trace(wrapped)("example")
         assert len(traced_ir.ir_eqns) == 2
@@ -319,14 +319,14 @@ class TestInjectAndDCE:
 
         def wrapped(x):
             with af.inject(collection="cache", values={"result": ["CACHED"]}):
-                return af.call(ir)("ignored")
+                return ir.call("ignored")
 
         traced_ir = af.trace(wrapped)("example")
         assert len(traced_ir.ir_eqns) == 2
         optimized_ir = af.dce(traced_ir)
         assert len(optimized_ir.ir_eqns) == 1
 
-        result = af.call(optimized_ir)("any_input")
+        result = optimized_ir.call("any_input")
         assert result == "Got: CACHED"
 
     def test_inject_dce_with_multiple_marks(self):
@@ -342,11 +342,11 @@ class TestInjectAndDCE:
 
         def wrapped(x):
             with af.inject(collection="cache", values={"first": ["CACHED1"]}):
-                return af.call(ir)(x)
+                return ir.call(x)
 
         traced_ir = af.trace(wrapped)("example")
         optimized_ir = af.dce(traced_ir)
-        result = af.call(optimized_ir)("input")
+        result = optimized_ir.call("input")
         assert result == "final:step2:CACHED1"
 
     def test_inject_works_with_nested_transforms(self):
@@ -359,7 +359,7 @@ class TestInjectAndDCE:
         batched_ir = af.batch(ir)
 
         with af.inject(collection="cache", values={"result": ["A", "B"]}):
-            result = af.call(batched_ir)(["x", "y"])
+            result = batched_ir.call(["x", "y"])
 
         assert result == ["Got: A", "Got: B"]
 
@@ -378,9 +378,9 @@ class TestSplit:
 
         assert len(rhs.ir_eqns) == 0
 
-        lhs_result = af.call(lhs)("Test")
+        lhs_result = lhs.call("Test")
         assert lhs_result == "Test"
-        rhs_result = af.call(rhs)(lhs_result)
+        rhs_result = rhs.call(lhs_result)
         assert rhs_result == lhs_result
 
     def test_split_mark_in_middle(self):
@@ -398,14 +398,14 @@ class TestSplit:
         assert len(rhs.ir_eqns) == 1
         assert rhs.ir_eqns[0].prim.name == "format"
 
-        lhs_result = af.call(lhs)("World")
+        lhs_result = lhs.call("World")
         assert lhs_result == "Hello World"
 
-        rhs_result = af.call(rhs)(lhs_result)
+        rhs_result = rhs.call(lhs_result)
         assert rhs_result == "Result: Hello World"
 
         ir_full = af.trace(program)("x")
-        full_result = af.call(ir_full)("World")
+        full_result = ir_full.call("World")
         assert rhs_result == full_result
 
     def test_split_returns_marked_value_not_last_preceding_value(self):
@@ -418,12 +418,12 @@ class TestSplit:
         ir = af.trace(program)("...")
         lhs, rhs = af.split(ir, key="mid")
 
-        lhs_result = af.call(lhs)("q")
+        lhs_result = lhs.call("q")
         assert lhs_result == "qa"
 
-        rhs_result = af.call(rhs)(lhs_result)
+        rhs_result = rhs.call(lhs_result)
         assert rhs_result == lhs_result
-        assert rhs_result == af.call(ir)("q")
+        assert rhs_result == ir.call("q")
 
     def test_split_rhs_with_extra_stuff_fails_on_execution(self):
         def program(x):
@@ -435,9 +435,9 @@ class TestSplit:
         ir = af.trace(program)("...")
         lhs, rhs = af.split(ir, key="mid")
 
-        assert af.call(lhs)("q") == "qa"
+        assert lhs.call("q") == "qa"
         with pytest.raises(KeyError):
-            af.call(rhs)("qa")
+            rhs.call("qa")
 
     def test_split_composition_equals_full(self):
         def program(x):
@@ -452,9 +452,9 @@ class TestSplit:
         ir_full = af.trace(program)("x")
 
         for inp in ["a", "hello", "test123"]:
-            lhs_result = af.call(lhs)(inp)
-            rhs_result = af.call(rhs)(lhs_result)
-            full_result = af.call(ir_full)(inp)
+            lhs_result = lhs.call(inp)
+            rhs_result = rhs.call(lhs_result)
+            full_result = ir_full.call(inp)
             assert rhs_result == full_result
 
     def test_split_not_found_raises(self):
@@ -593,8 +593,8 @@ class TestSplitOnTransformedIR:
         ir = af.trace(program)("x")
 
         lhs, rhs = af.split(ir, key="mid")
-        assert af.call(lhs)("hello") == "hello!"
-        assert af.call(rhs)("hello!") == "hello!?"
+        assert lhs.call("hello") == "hello!"
+        assert rhs.call("hello!") == "hello!?"
 
     def test_split_on_double_pushforward(self):
         def program(x):
@@ -662,7 +662,7 @@ class TestMemoizeBasic:
         counter = CountingInterpreter()
         with using_interpreter(counter):
             with af.memoize():
-                result = af.call(ir)("hello")
+                result = ir.call("hello")
 
         assert result == "hello!hello!"
         assert counter.call_count == 2
@@ -675,7 +675,7 @@ class TestMemoizeBasic:
         ir = af.trace(func)("test")
 
         with af.memoize():
-            result = af.call(ir)("hello")
+            result = ir.call("hello")
 
         assert result == "hello!"
 
@@ -688,8 +688,8 @@ class TestMemoizeBasic:
         counter = CountingInterpreter()
         with using_interpreter(counter):
             with af.memoize():
-                r1 = af.call(ir)("hello")
-                r2 = af.call(ir)("world")
+                r1 = ir.call("hello")
+                r2 = ir.call("world")
 
         assert r1 == "hello!"
         assert r2 == "world!"
@@ -706,7 +706,7 @@ class TestMemoizeWithEffects:
 
         with af.memoize():
             with af.collect(collection="debug") as collected:
-                result = af.call(ir)("hello")
+                result = ir.call("hello")
 
         assert result == "hello!"
         assert collected == {"val": ["hello!"]}
@@ -721,7 +721,7 @@ class TestMemoizeWithEffects:
 
         with af.memoize():
             with af.collect(collection="debug") as collected:
-                result = af.call(ir)("hi")
+                result = ir.call("hi")
 
         assert result == "hihi"
         assert "first" in collected
@@ -749,8 +749,8 @@ class TestMemoizeWithEffects:
 
         with af.collect(collection="debug") as collected:
             with af.memoize():
-                r1 = af.call(ir)("hello")
-                r2 = af.call(ir)("hello")
+                r1 = ir.call("hello")
+                r2 = ir.call("hello")
 
         assert r1 == "hello"
         assert r2 == "hello"
@@ -767,8 +767,8 @@ class TestMemoizeMultipleCalls:
         counter = CountingInterpreter()
         with using_interpreter(counter):
             with af.memoize():
-                r1 = af.call(ir)("hello")
-                r2 = af.call(ir)("hello")
+                r1 = ir.call("hello")
+                r2 = ir.call("hello")
 
         assert r1 == "hello!"
         assert r2 == "hello!"
@@ -783,10 +783,10 @@ class TestMemoizeMultipleCalls:
         counter = CountingInterpreter()
         with using_interpreter(counter):
             with af.memoize():
-                af.call(ir)("hello")
+                ir.call("hello")
 
             with af.memoize():
-                af.call(ir)("hello")
+                ir.call("hello")
 
         assert counter.call_count == 2
 
@@ -798,7 +798,7 @@ class TestMemoizeTransformedIRs:
         with using_interpreter(counter):
             with af.memoize():
                 for inp in inputs:
-                    results.append(af.call(ir)(inp))
+                    results.append(ir.call(inp))
         return results, counter.call_count
 
     def test_memoize_batched_ir(self):

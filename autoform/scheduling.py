@@ -32,9 +32,7 @@ from autoform.core import (
     Prim,
     PrimTag,
     abstract_rules,
-    acall,
     batch_rules,
-    call,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
@@ -91,7 +89,7 @@ def gather(ir_input_pairs: list[tuple[IR, Tree]], /) -> list[Tree]:
 
 def impl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
     assert len(in_tree) == len(irs)
-    return [call(ir)(inp) for ir, inp in zip(irs, in_tree, strict=True)]
+    return [ir.call(inp) for ir, inp in zip(irs, in_tree, strict=True)]
 
 
 async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
@@ -99,11 +97,11 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
 
     if len(irs) == 1:
         [ir], [inputs] = irs, in_tree
-        return [await acall(ir)(inputs)]
+        return [await ir.acall(inputs)]
 
     async def run(pair):
         ir, inp = pair
-        return await acall(ir)(inp)
+        return await ir.acall(inp)
 
     return await asyncio.gather(*[run(pair) for pair in zip(irs, in_tree, strict=True)])
 
@@ -178,11 +176,11 @@ def batch_gather(
 
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if batch_spec(inp, inp_batched) is None:
-            results.append(call(ir)(inp))
+            results.append(ir.call(inp))
             out_batched.append(treelib.map(lambda _: False, ir.out_ir_tree))
         else:
             batched_ir = batch(ir, in_axes=inp_batched)
-            results.append(call(batched_ir)(inp))
+            results.append(batched_ir.call(inp))
             out_batched.append(treelib.map(lambda _: True, ir.out_ir_tree))
 
     return results, out_batched
@@ -198,11 +196,11 @@ async def abatch_gather(
 
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if batch_spec(inp, inp_batched) is None:
-            results.append(await acall(ir)(inp))
+            results.append(await ir.acall(inp))
             out_batched.append(treelib.map(lambda _: False, ir.out_ir_tree))
         else:
             batched_ir = batch(ir, in_axes=inp_batched)
-            results.append(await acall(batched_ir)(inp))
+            results.append(await batched_ir.acall(inp))
             out_batched.append(treelib.map(lambda _: True, ir.out_ir_tree))
 
     return results, out_batched
@@ -401,10 +399,10 @@ def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> scheduled = af.sched(ir)
         >>>
         >>> # sync execution (sequential)
-        >>> result = af.call(scheduled)("hello")
+        >>> result = scheduled.call("hello")
         >>>
         >>> # async execution (concurrent via asyncio.gather)
-        >>> result = asyncio.run(af.acall(scheduled)("hello"))
+        >>> result = asyncio.run(scheduled.acall("hello"))
     """
     levels: list[list[IREqn]] = toposort_levels(ir)
     out_ir_eqns: list[IREqn] = []

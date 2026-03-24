@@ -86,7 +86,7 @@ class TestKwargsBuildIR:
             return greet(name, greeting="Hi", punctuation="?")
 
         ir = af.trace(program)("World")
-        result = af.call(ir)("World")
+        result = ir.call("World")
         assert result == "Hi, World?"
 
 
@@ -104,7 +104,7 @@ class TestKeywordArgumentBoundary:
 
         ir = af.trace(program)("World", "!")
         with pytest.raises(AssertionError, match="call.*keyword arguments"):
-            af.call(ir)("World", punctuation="?")
+            ir.call("World", punctuation="?")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_acall_rejects_kwargs(self):
@@ -113,7 +113,7 @@ class TestKeywordArgumentBoundary:
 
         ir = af.trace(program)("World", "!")
         with pytest.raises(AssertionError, match="acall.*keyword arguments"):
-            await af.acall(ir)("World", punctuation="?")
+            await ir.acall("World", punctuation="?")
 
     def test_switch_rejects_kwargs(self):
         branches = {"a": af.trace(lambda x: af.concat("A:", x))("X")}

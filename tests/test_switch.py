@@ -29,7 +29,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("zero", "hello")
-        result = af.call(ir)("zero", "hello")
+        result = ir.call("zero", "hello")
         assert result == "zero: hello"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -44,7 +44,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("zero", "hello")
-        result = await af.acall(ir)("zero", "hello")
+        result = await ir.acall("zero", "hello")
         assert result == "zero: hello"
 
     def test_switch_key_one(self):
@@ -58,7 +58,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("one", "hello")
-        result = af.call(ir)("one", "hello")
+        result = ir.call("one", "hello")
         assert result == "one: hello"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -72,7 +72,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("one", "hello")
-        result = await af.acall(ir)("one", "hello")
+        result = await ir.acall("one", "hello")
         assert result == "one: hello"
 
     def test_switch_key_two(self):
@@ -86,7 +86,7 @@ class TestSwitchBasic:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("two", "hello")
-        result = af.call(ir)("two", "hello")
+        result = ir.call("two", "hello")
         assert result == "two: hello"
 
     def test_switch_invalid_key_raises(self):
@@ -107,9 +107,9 @@ class TestSwitchBasic:
             return af.switch(key, branches, x, y)
 
         ir = af.trace(program)("concat", "Hello", "World")
-        result = af.call(ir)("concat", "Hello", "World")
+        result = ir.call("concat", "Hello", "World")
         assert result == "HelloWorld"
-        result = af.call(ir)("format", "Hello", "World")
+        result = ir.call("format", "Hello", "World")
         assert result == "Hello - World"
 
     def test_switch_direct_call(self):
@@ -165,7 +165,7 @@ class TestSwitchPushforward:
         pf_ir = af.pushforward(ir)
         primals = ("zero", "hello")
         tangents = ("", "world")
-        p_out, t_out = af.call(pf_ir)((primals, tangents))
+        p_out, t_out = pf_ir.call((primals, tangents))
         assert p_out == "zero: hello"
 
         assert t_out == "world"
@@ -184,7 +184,7 @@ class TestSwitchPushforward:
         pf_ir = af.pushforward(ir)
         primals = ("zero", "hello")
         tangents = ("", "world")
-        p_out, t_out = await af.acall(pf_ir)((primals, tangents))
+        p_out, t_out = await pf_ir.acall((primals, tangents))
         assert p_out == "zero: hello"
 
         assert t_out == "world"
@@ -202,7 +202,7 @@ class TestSwitchPushforward:
         pf_ir = af.pushforward(ir)
         primals = ("one", "hello")
         tangents = ("", "world")
-        p_out, t_out = af.call(pf_ir)((primals, tangents))
+        p_out, t_out = pf_ir.call((primals, tangents))
         assert p_out == "one: hello"
 
         assert t_out == "world"
@@ -225,7 +225,7 @@ class TestSwitchPullback:
         pb_ir = af.pullback(ir)
         primals = ("zero", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = af.call(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = pb_ir.call((primals, cotangent))
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -246,7 +246,7 @@ class TestSwitchPullback:
         pb_ir = af.pullback(ir)
         primals = ("zero", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = await af.acall(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = await pb_ir.acall((primals, cotangent))
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -266,7 +266,7 @@ class TestSwitchPullback:
         pb_ir = af.pullback(ir)
         primals = ("one", "hello")
         cotangent = "grad"
-        _, (c_key, c_x) = af.call(pb_ir)((primals, cotangent))
+        _, (c_key, c_x) = pb_ir.call((primals, cotangent))
         assert is_zero_cotangent(c_key)
         assert c_x == "grad"
 
@@ -283,7 +283,7 @@ class TestSwitchBatch:
 
         ir = af.trace(program)("zero", "hello")
         batched_ir = af.batch(ir, in_axes=(False, True))
-        result = af.call(batched_ir)("zero", ["a", "b", "c"])
+        result = batched_ir.call("zero", ["a", "b", "c"])
         assert result == ["zero: a", "zero: b", "zero: c"]
 
     def test_batch_varying_key(self):
@@ -297,7 +297,7 @@ class TestSwitchBatch:
 
         ir = af.trace(program)("zero", "hello")
         batched_ir = af.batch(ir, in_axes=(True, True))
-        result = af.call(batched_ir)(["zero", "one", "zero"], ["a", "b", "c"])
+        result = batched_ir.call(["zero", "one", "zero"], ["a", "b", "c"])
         assert result == ["zero: a", "one: b", "zero: c"]
 
     def test_batch_varying_key_static_operand(self):
@@ -311,7 +311,7 @@ class TestSwitchBatch:
 
         ir = af.trace(program)("zero", "hello")
         batched_ir = af.batch(ir, in_axes=(True, False))
-        result = af.call(batched_ir)(["zero", "one", "one"], "test")
+        result = batched_ir.call(["zero", "one", "one"], "test")
         assert result == ["zero: test", "one: test", "one: test"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -326,7 +326,7 @@ class TestSwitchBatch:
 
         ir = af.trace(program)("zero", "hello")
         batched_ir = af.batch(ir, in_axes=(False, True))
-        result = await af.acall(batched_ir)("zero", ["a", "b", "c"])
+        result = await batched_ir.acall("zero", ["a", "b", "c"])
         assert result == ["zero: a", "zero: b", "zero: c"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -341,7 +341,7 @@ class TestSwitchBatch:
 
         ir = af.trace(program)("zero", "hello")
         batched_ir = af.batch(ir, in_axes=(True, True))
-        result = await af.acall(batched_ir)(["zero", "one", "zero"], ["a", "b", "c"])
+        result = await batched_ir.acall(["zero", "one", "zero"], ["a", "b", "c"])
         assert result == ["zero: a", "one: b", "zero: c"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -356,7 +356,7 @@ class TestSwitchBatch:
 
         ir = af.trace(program)("zero", "hello")
         batched_ir = af.batch(ir, in_axes=(True, False))
-        result = await af.acall(batched_ir)(["zero", "one", "one"], "test")
+        result = await batched_ir.acall(["zero", "one", "one"], "test")
         assert result == ["zero: test", "one: test", "one: test"]
 
 
@@ -375,7 +375,7 @@ class TestSwitchNestedTransforms:
         pf_batched_ir = af.pushforward(batched_ir)
         primals = ("a", ["a", "b"])
         tangents = ("", ["ta", "tb"])
-        p_out, t_out = af.call(pf_batched_ir)((primals, tangents))
+        p_out, t_out = pf_batched_ir.call((primals, tangents))
         assert p_out == ["A:a", "A:b"]
 
         assert t_out == ["ta", "tb"]
@@ -394,7 +394,7 @@ class TestSwitchNestedTransforms:
         pb_batched_ir = af.pullback(batched_ir)
         primals = ("a", ["a", "b"])
         cotangents = ["grad1", "grad2"]
-        p_out, c_in = af.call(pb_batched_ir)((primals, cotangents))
+        p_out, c_in = pb_batched_ir.call((primals, cotangents))
         assert p_out == ["A:a", "A:b"]
         c_key, c_x = c_in
         assert c_x == ["grad1", "grad2"]
@@ -433,8 +433,8 @@ class TestSwitchComplexBranches:
             return af.switch(key, branches, x)
 
         ir = af.trace(program)("brackets", "test")
-        assert af.call(ir)("brackets", "hello") == "[hello]!"
-        assert af.call(ir)("parens", "hello") == "(hello)?"
+        assert ir.call("brackets", "hello") == "[hello]!"
+        assert ir.call("parens", "hello") == "(hello)?"
 
     def test_many_branches(self):
         branches = {
@@ -447,7 +447,7 @@ class TestSwitchComplexBranches:
 
         ir = af.trace(program)("branch0", "test")
         for i in range(5):
-            result = af.call(ir)(f"branch{i}", "hello")
+            result = ir.call(f"branch{i}", "hello")
             assert result == f"branch{i}: hello"
 
 
@@ -477,7 +477,7 @@ class TestSwitchBatchAllUnbatched:
 
         ir = af.trace(program)("a", "hello")
         batched_ir = af.batch(ir, in_axes=(True, False))
-        result = af.call(batched_ir)(["a", "b", "a"], "test")
+        result = batched_ir.call(["a", "b", "a"], "test")
         assert result == ["A: test", "B: test", "A: test"]
 
     def test_switch_batch_key_unbatched_operand_batched(self):
@@ -491,7 +491,7 @@ class TestSwitchBatchAllUnbatched:
 
         ir = af.trace(program)("a", "hello")
         batched_ir = af.batch(ir, in_axes=(False, True))
-        result = af.call(batched_ir)("a", ["x", "y", "z"])
+        result = batched_ir.call("a", ["x", "y", "z"])
         assert result == ["A: x", "A: y", "A: z"]
 
     @pytest.mark.asyncio(loop_scope="function")

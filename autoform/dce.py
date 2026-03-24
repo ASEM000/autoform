@@ -105,7 +105,7 @@ def dce[*A, R](
             active_irvars |= collect_used_irvars(ir_eqn.in_ir_tree, in_used)
 
     # NOTE(asem): output sanitization step
-    # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
+    # `ir.call(...)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
     # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.

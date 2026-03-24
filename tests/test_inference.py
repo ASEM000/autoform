@@ -27,7 +27,7 @@ class TestFactor:
             return af.factor(x, judge=len_score)
 
         ir = af.trace(program)("x")
-        assert af.call(ir)("hello") == 5.0
+        assert ir.call("hello") == 5.0
 
     def test_factor_batches_elementwise(self):
         def program(x):
@@ -35,7 +35,7 @@ class TestFactor:
 
         ir = af.trace(program)("x")
         batched_ir = af.batch(ir)
-        assert af.call(batched_ir)(["a", "bbb"]) == [1.0, 3.0]
+        assert batched_ir.call(["a", "bbb"]) == [1.0, 3.0]
 
     def test_factor_pushforward_is_unsupported(self):
         def program(x):
@@ -45,7 +45,7 @@ class TestFactor:
         pf_ir = af.pushforward(ir)
 
         with pytest.raises(NotImplementedError, match="no default pushforward rule"):
-            af.call(pf_ir)(("hello", "delta"))
+            pf_ir.call(("hello", "delta"))
 
     def test_factor_pullback_is_unsupported(self):
         def program(x):
@@ -55,7 +55,7 @@ class TestFactor:
         pb_ir = af.pullback(ir)
 
         with pytest.raises(NotImplementedError, match="no default pullback rule"):
-            af.call(pb_ir)(("hello", 1.0))
+            pb_ir.call(("hello", 1.0))
 
 
 class TestWeight:
@@ -69,7 +69,7 @@ class TestWeight:
         ir = af.trace(program)("x")
         weight_ir = af.weight(ir)
 
-        output, total = af.call(weight_ir)("ab")
+        output, total = weight_ir.call("ab")
         assert output == "ab!"
         assert total == 5.0
 
@@ -95,8 +95,8 @@ class TestWeight:
         ir = af.trace(program)("left", "x")
         weight_ir = af.weight(ir)
 
-        left_out, left_total = af.call(weight_ir)("left", "go")
-        right_out, right_total = af.call(weight_ir)("right", "go")
+        left_out, left_total = weight_ir.call("left", "go")
+        right_out, right_total = weight_ir.call("right", "go")
 
         assert left_out == "L:go"
         assert left_total == 4.0
@@ -121,8 +121,8 @@ class TestWeight:
         ir = af.trace(loop)("")
         weight_ir = af.weight(ir)
 
-        out1, total1 = af.call(weight_ir)("")
-        out2, total2 = af.call(weight_ir)("seed")
+        out1, total1 = weight_ir.call("")
+        out2, total2 = weight_ir.call("seed")
 
         assert out1 == "x"
         assert total1 == 1.0
@@ -139,7 +139,7 @@ class TestWeight:
         weight_ir = af.weight(ir)
         batched_ir = af.batch(weight_ir)
 
-        outputs, totals = af.call(batched_ir)(["a", "bbb"])
+        outputs, totals = batched_ir.call(["a", "bbb"])
         assert outputs == ["a!", "bbb!"]
         assert totals == [2.0, 4.0]
 
@@ -154,7 +154,7 @@ class TestWeight:
         weight_ir = af.weight(dced)
 
         assert len(dced.ir_eqns) == 2
-        output, total = af.call(weight_ir)("ab")
+        output, total = weight_ir.call("ab")
         assert output == "ab"
         assert total == 3.0
 
@@ -167,6 +167,6 @@ class TestWeight:
         ir = af.trace(program)("x")
         weight_ir = af.weight(ir)
 
-        output, total = await af.acall(weight_ir)("abc")
+        output, total = await weight_ir.acall("abc")
         assert output == "abc!"
         assert total == 3.0

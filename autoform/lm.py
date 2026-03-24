@@ -82,7 +82,7 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
         ...     max_parallel_requests=10,
         ... )
         >>> with af.using_router(router):  # doctest: +SKIP
-        ...     af.call(ir)(inputs)
+        ...     ir.call(inputs)
     """
     assert router is None or isinstance(router, LMRouter), f"Expected LMRouter or None."
     token = active_router.set(router)
