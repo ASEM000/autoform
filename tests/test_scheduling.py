@@ -34,7 +34,7 @@ class TestGatherBasic:
             return af.gather([(ir, (x,))])
 
         prog_ir = af.trace(program)("a")
-        result = await af.acall(prog_ir)("A")
+        result = await prog_ir.acall("A")
         assert result == ["[A]"]
 
     def test_two_irs(self):
@@ -52,7 +52,7 @@ class TestGatherBasic:
             return af.gather([(ir1, (a,)), (ir2, (b,))])
 
         prog_ir = af.trace(program)("a", "b")
-        result = await af.acall(prog_ir)("A", "B")
+        result = await prog_ir.acall("A", "B")
         assert result == ["[A]", "<B>"]
 
     def test_three_irs(self):
@@ -113,7 +113,7 @@ class TestGatherWithTransforms:
 
         prog_ir = af.trace(program)("a")
         pf_ir = af.pushforward(prog_ir)
-        (p_out, t_out) = af.call(pf_ir)(("primal",), ("tangent",))
+        (p_out, t_out) = pf_ir.call(("primal",), ("tangent",))
         assert p_out == ["[primal]", "<primal>"]
         assert t_out == ["[tangent]", "<tangent>"]
 
@@ -127,7 +127,7 @@ class TestGatherWithTransforms:
 
         prog_ir = af.trace(program)("a")
         pf_ir = af.pushforward(prog_ir)
-        (p_out, t_out) = await af.acall(pf_ir)(("primal",), ("tangent",))
+        (p_out, t_out) = await pf_ir.acall(("primal",), ("tangent",))
         assert p_out == ["[primal]", "<primal>"]
         assert t_out == ["[tangent]", "<tangent>"]
 
@@ -140,7 +140,7 @@ class TestGatherWithTransforms:
 
         prog_ir = af.trace(program)("a")
         pb_ir = af.pullback(prog_ir)
-        out, cotangent = af.call(pb_ir)(("primal",), ["grad1", "grad2"])
+        out, cotangent = pb_ir.call(("primal",), ["grad1", "grad2"])
         assert out == ["[primal]", "<primal>"]
         assert cotangent == ("grad1grad2",)
 
@@ -154,7 +154,7 @@ class TestGatherWithTransforms:
 
         prog_ir = af.trace(program)("a")
         pb_ir = af.pullback(prog_ir)
-        out, cotangent = await af.acall(pb_ir)(("primal",), ["grad1", "grad2"])
+        out, cotangent = await pb_ir.acall(("primal",), ["grad1", "grad2"])
         assert out == ["[primal]", "<primal>"]
         assert cotangent == ("grad1grad2",)
 
@@ -169,7 +169,7 @@ class TestGatherWithBatch:
 
         prog_ir = af.trace(program)("a")
         batched_ir = af.batch(prog_ir)
-        result = af.call(batched_ir)(["A", "B", "C"])
+        result = batched_ir.call(["A", "B", "C"])
         assert result == [["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"]]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -182,7 +182,7 @@ class TestGatherWithBatch:
 
         prog_ir = af.trace(program)("a")
         batched_ir = af.batch(prog_ir)
-        result = await af.acall(batched_ir)(["A", "B", "C"])
+        result = await batched_ir.acall(["A", "B", "C"])
         assert result == [["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"]]
 
     def test_batch_gather_mixed_axes(self):
@@ -194,7 +194,7 @@ class TestGatherWithBatch:
 
         prog_ir = af.trace(program)("x", "y")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
-        result = af.call(batched_ir)(["A", "B", "C"], "STATIC")
+        result = batched_ir.call(["A", "B", "C"], "STATIC")
         assert result == [["[A]", "[B]", "[C]"], ["<STATIC>", "<STATIC>", "<STATIC>"]]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -207,7 +207,7 @@ class TestGatherWithBatch:
 
         prog_ir = af.trace(program)("x", "y")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
-        result = await af.acall(batched_ir)(["X", "Y"], "STATIC")
+        result = await batched_ir.acall(["X", "Y"], "STATIC")
         assert result == [["[X]", "[Y]"], ["<STATIC>", "<STATIC>"]]
 
 
@@ -290,7 +290,7 @@ class TestGatherWithDCE:
         prog_ir = af.trace(program)("x")
         dce_ir = af.dce(prog_ir)
 
-        assert af.call(dce_ir)("X") == "X!"
+        assert dce_ir.call("X") == "X!"
 
         gather_eqn = [e for e in dce_ir.ir_eqns if e.prim.name == "gather"][0]
         inner_dead = gather_eqn.params["irs"][1]
@@ -359,7 +359,7 @@ class TestSched:
         prim_names = [e.prim.name for e in scheduled.ir_eqns]
         assert prim_names == ["gather", "concat"]
 
-        result = af.call(scheduled)("test")
+        result = scheduled.call("test")
         assert result == "[test]<test>"
 
     def test_single_equation_not_wrapped(self):
@@ -406,7 +406,7 @@ class TestSched:
         ir = af.trace(program)("a", "b")
         scheduled = af.sched(ir)
 
-        result = af.call(scheduled)("hello", "world")
+        result = scheduled.call("hello", "world")
         assert result == "world"
 
     def test_mixed_pure_and_effectful(self):
@@ -422,7 +422,7 @@ class TestSched:
         gather_count = sum(1 for e in scheduled.ir_eqns if e.prim.name == "gather")
         assert gather_count == 1
 
-        result = af.call(scheduled)("a", "b", "c")
+        result = scheduled.call("a", "b", "c")
         assert result == ("[a]", "<b>", "{c}")
 
 
@@ -443,8 +443,8 @@ class TestSchedRecursive:
         branch_a = switch_eqn.params["branches"]["a"]
         assert any(e.prim.name == "gather" for e in branch_a.ir_eqns)
 
-        assert af.call(scheduled)("a", "hello") == "[hello]<hello>"
-        assert af.call(scheduled)("b", "hello") == "(hello)"
+        assert scheduled.call("a", "hello") == "[hello]<hello>"
+        assert scheduled.call("b", "hello") == "(hello)"
 
     def test_sched_nested_switch(self):
         inner_branches = {
@@ -473,9 +473,9 @@ class TestSchedRecursive:
         inner_branch_x = inner_switch.params["branches"]["x"]
         assert any(e.prim.name == "gather" for e in inner_branch_x.ir_eqns)
 
-        assert af.call(scheduled)("A", "x", "hello") == "[hello]<hello>"
-        assert af.call(scheduled)("A", "y", "hello") == "(hello)"
-        assert af.call(scheduled)("B", "ignored", "world") == "ignored world"
+        assert scheduled.call("A", "x", "hello") == "[hello]<hello>"
+        assert scheduled.call("A", "y", "hello") == "(hello)"
+        assert scheduled.call("B", "ignored", "world") == "ignored world"
 
     def test_sched_gather_nested_irs(self):
         ir1 = af.trace(lambda x: af.concat(af.format("[{}]", x), af.format("<{}>", x)))("x")
@@ -492,7 +492,7 @@ class TestSchedRecursive:
         for inner_ir in outer_gather.params["irs"]:
             assert any(e.prim.name == "gather" for e in inner_ir.ir_eqns)
 
-        result = af.call(scheduled)("hello", "world")
+        result = scheduled.call("hello", "world")
         assert result == ["[hello]<hello>", "(world){world}"]
 
     def test_sched_with_cond_propagates_to_nested(self):
@@ -511,7 +511,7 @@ class TestSchedRecursive:
         branch_a = switch_eqn.params["branches"]["a"]
         assert not any(e.prim.name == "gather" for e in branch_a.ir_eqns)
 
-        assert af.call(scheduled)("a", "test") == ("[test]", "test!")
+        assert scheduled.call("a", "test") == ("[test]", "test!")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_sched_recursive_async(self):
@@ -526,7 +526,7 @@ class TestSchedRecursive:
         ir = af.trace(program)("a", "x")
         scheduled = af.sched(ir)
 
-        result = await af.acall(scheduled)("a", "hello")
+        result = await scheduled.acall("a", "hello")
         assert result == "[hello]<hello>"
 
     def test_sched_preserves_non_ir_params(self):
@@ -544,7 +544,7 @@ class TestSchedRecursive:
         assert "branches" in switch_eqn.params
         assert "a" in switch_eqn.params["branches"]
 
-        assert af.call(scheduled)("a", "test") == "[test]"
+        assert scheduled.call("a", "test") == "[test]"
 
 
 class TestSchedComposition:
@@ -558,7 +558,7 @@ class TestSchedComposition:
         scheduled = af.sched(ir)
         pf_ir = af.pushforward(scheduled)
 
-        primals, tangents = af.call(pf_ir)(("test",), ("tangent",))
+        primals, tangents = pf_ir.call(("test",), ("tangent",))
         assert primals == "[test]<test>"
         assert tangents == "[tangent]<tangent>"
 
@@ -572,7 +572,7 @@ class TestSchedComposition:
         scheduled = af.sched(ir)
         pb_ir = af.pullback(scheduled)
 
-        out, cotangent = af.call(pb_ir)(("test",), "grad")
+        out, cotangent = pb_ir.call(("test",), "grad")
         assert out == "[test]<test>"
         assert isinstance(cotangent[0], str)
 
@@ -586,7 +586,7 @@ class TestSchedComposition:
         scheduled = af.sched(ir)
         batched_ir = af.batch(scheduled)
 
-        result = af.call(batched_ir)(["A", "B", "C"])
+        result = batched_ir.call(["A", "B", "C"])
         assert result == ["[A]<A>", "[B]<B>", "[C]<C>"]
 
     def test_sched_then_dce(self):
@@ -601,7 +601,7 @@ class TestSchedComposition:
         scheduled = af.sched(ir)
         dce_ir = af.dce(scheduled)
 
-        result = af.call(dce_ir)("test")
+        result = dce_ir.call("test")
         assert result == "[test]<test>"
 
     def test_dce_then_sched(self):
@@ -615,7 +615,7 @@ class TestSchedComposition:
         dce_ir = af.dce(ir)
         scheduled = af.sched(dce_ir)
 
-        result = af.call(scheduled)("test")
+        result = scheduled.call("test")
         assert result == "[test]<test>"
 
 
@@ -630,7 +630,7 @@ class TestAsyncSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = await af.acall(scheduled)("test")
+        result = await scheduled.acall("test")
         assert result == "[test]<test>"
 
     async def test_parallel_independent_ops(self):
@@ -643,7 +643,7 @@ class TestAsyncSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = await af.acall(scheduled)("test")
+        result = await scheduled.acall("test")
         assert result == ("[test]", "<test>", "{test}")
 
     async def test_sequential_dependent_ops(self):
@@ -655,7 +655,7 @@ class TestAsyncSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = await af.acall(scheduled)("test")
+        result = await scheduled.acall("test")
         assert result == "[test]!"
 
     async def test_mixed_parallel_and_sequential(self):
@@ -669,7 +669,7 @@ class TestAsyncSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = await af.acall(scheduled)("test")
+        result = await scheduled.acall("test")
         assert result == "[test]<test>"
 
 
@@ -677,7 +677,7 @@ class TestAsyncSched:
 class TestAsyncAcall:
     async def test_basic_acall(self):
         ir = af.trace(lambda x: af.format("[{}]", x))("a")
-        result = await af.acall(ir)("hello")
+        result = await ir.acall("hello")
         assert result == "[hello]"
 
     async def test_acall_with_switch(self):
@@ -691,10 +691,10 @@ class TestAsyncAcall:
 
         ir = af.trace(program)("a", "x")
 
-        result_a = await af.acall(ir)("a", "test")
+        result_a = await ir.acall("a", "test")
         assert result_a == "[test]"
 
-        result_b = await af.acall(ir)("b", "test")
+        result_b = await ir.acall("b", "test")
         assert result_b == "<test>"
 
 
@@ -706,7 +706,7 @@ class TestDepends:
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
-        result = af.call(ir)("hello")
+        result = ir.call("hello")
         assert result == "B: hello"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -717,7 +717,7 @@ class TestDepends:
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
-        result = await af.acall(ir)("hello")
+        result = await ir.acall("hello")
         assert result == "B: hello"
 
     def test_multiple_deps(self):
@@ -728,7 +728,7 @@ class TestDepends:
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
-        result = af.call(ir)("hello")
+        result = ir.call("hello")
         assert result == "C: hello"
 
     def test_chained(self):
@@ -741,7 +741,7 @@ class TestDepends:
             return c_ordered
 
         ir = af.trace(program)("x")
-        result = af.call(ir)("hello")
+        result = ir.call("hello")
         assert result == "C: hello"
 
     def test_no_deps(self):
@@ -750,7 +750,7 @@ class TestDepends:
             return af.depends(a)
 
         ir = af.trace(program)("x")
-        result = af.call(ir)("hello")
+        result = ir.call("hello")
         assert result == "A: hello"
 
     def test_ir_structure(self):
@@ -804,7 +804,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
+        primal, tangent = pf_ir.call(("primal",), ("tangent",))
         assert primal == "B: primal"
         assert tangent == "B: tangent"
 
@@ -818,7 +818,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = await af.acall(pf_ir)(("primal",), ("tangent",))
+        primal, tangent = await pf_ir.acall(("primal",), ("tangent",))
         assert primal == "B: primal"
         assert tangent == "B: tangent"
 
@@ -832,7 +832,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
+        primal, tangent = pf_ir.call(("primal",), ("tangent",))
         assert primal == "C: primal"
         assert tangent == "C: tangent"
 
@@ -846,7 +846,7 @@ class TestDependsWithPushforward:
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
 
-        primal, tangent = af.call(pf_ir)(("primal",), ("tangent",))
+        primal, tangent = pf_ir.call(("primal",), ("tangent",))
         assert primal == "C: primal"
         assert tangent == "C: tangent"
 
@@ -861,7 +861,7 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = af.call(pb_ir)(("primal",), "grad")
+        out, cotangent = pb_ir.call(("primal",), "grad")
         assert out == "B: primal"
         assert cotangent == ("grad",)
 
@@ -875,7 +875,7 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = await af.acall(pb_ir)(("primal",), "grad")
+        out, cotangent = await pb_ir.acall(("primal",), "grad")
         assert out == "B: primal"
         assert cotangent == ("grad",)
 
@@ -889,7 +889,7 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = af.call(pb_ir)(("primal",), "grad")
+        out, cotangent = pb_ir.call(("primal",), "grad")
         assert out == "C: primal"
         assert cotangent == ("grad",)
 
@@ -903,7 +903,7 @@ class TestDependsWithPullback:
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
 
-        out, cotangent = af.call(pb_ir)(("primal",), "grad")
+        out, cotangent = pb_ir.call(("primal",), "grad")
         assert out == "C: primal"
         assert cotangent == ("grad",)
 
@@ -918,7 +918,7 @@ class TestDependsWithBatch:
         ir = af.trace(program)("x")
         batched_ir = af.batch(ir)
 
-        result = af.call(batched_ir)(["x", "y", "z"])
+        result = batched_ir.call(["x", "y", "z"])
         assert result == ["B: x", "B: y", "B: z"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -931,7 +931,7 @@ class TestDependsWithBatch:
         ir = af.trace(program)("x")
         batched_ir = af.batch(ir)
 
-        result = await af.acall(batched_ir)(["x", "y", "z"])
+        result = await batched_ir.acall(["x", "y", "z"])
         assert result == ["B: x", "B: y", "B: z"]
 
     def test_batch_multiple_deps(self):
@@ -944,7 +944,7 @@ class TestDependsWithBatch:
         ir = af.trace(program)("x")
         batched_ir = af.batch(ir)
 
-        result = af.call(batched_ir)(["x", "y"])
+        result = batched_ir.call(["x", "y"])
         assert result == ["C: x", "C: y"]
 
     def test_batch_chained(self):
@@ -957,7 +957,7 @@ class TestDependsWithBatch:
         ir = af.trace(program)("x")
         batched_ir = af.batch(ir)
 
-        result = af.call(batched_ir)(["x", "y"])
+        result = batched_ir.call(["x", "y"])
         assert result == ["C: x", "C: y"]
 
 
@@ -971,7 +971,7 @@ class TestDependsWithSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = af.call(scheduled)("hello")
+        result = scheduled.call("hello")
         assert result == "B: hello"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -984,7 +984,7 @@ class TestDependsWithSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = await af.acall(scheduled)("hello")
+        result = await scheduled.acall("hello")
         assert result == "B: hello"
 
     def test_sched_preserves_depends(self):
@@ -1000,7 +1000,7 @@ class TestDependsWithSched:
         depends_eqns = [e for e in scheduled.ir_eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
-        result = af.call(scheduled)("hello")
+        result = scheduled.call("hello")
         assert result == "A: helloB: hello"
 
     def test_sched_data_dependency(self):
@@ -1013,7 +1013,7 @@ class TestDependsWithSched:
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
-        result = af.call(scheduled)("hello")
+        result = scheduled.call("hello")
         assert result == "B: A: hello"
 
 
@@ -1028,7 +1028,7 @@ class TestDependsNestedTransforms:
         pf_ir = af.pushforward(ir)
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
 
-        primals, tangents = af.call(batch_pf_ir)((["a", "b"],), (["da", "db"],))
+        primals, tangents = batch_pf_ir.call((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
         assert tangents == ["B: da", "B: db"]
 
@@ -1043,7 +1043,7 @@ class TestDependsNestedTransforms:
         pf_ir = af.pushforward(ir)
         batch_pf_ir = af.batch(pf_ir, in_axes=(True, True))
 
-        primals, tangents = await af.acall(batch_pf_ir)((["a", "b"],), (["da", "db"],))
+        primals, tangents = await batch_pf_ir.acall((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
         assert tangents == ["B: da", "B: db"]
 
@@ -1057,7 +1057,7 @@ class TestDependsNestedTransforms:
         pb_ir = af.pullback(ir)
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
 
-        outs, cotangents = af.call(batch_pb_ir)((["a", "b"],), ["g1", "g2"])
+        outs, cotangents = batch_pb_ir.call((["a", "b"],), ["g1", "g2"])
         assert outs == ["B: a", "B: b"]
         assert cotangents == (["g1", "g2"],)
 
@@ -1072,7 +1072,7 @@ class TestDependsNestedTransforms:
         pb_ir = af.pullback(ir)
         batch_pb_ir = af.batch(pb_ir, in_axes=(True, True))
 
-        outs, cotangents = await af.acall(batch_pb_ir)((["a", "b"],), ["g1", "g2"])
+        outs, cotangents = await batch_pb_ir.acall((["a", "b"],), ["g1", "g2"])
         assert outs == ["B: a", "B: b"]
         assert cotangents == (["g1", "g2"],)
 
@@ -1086,7 +1086,7 @@ class TestDependsNestedTransforms:
         batched_ir = af.batch(ir)
         pf_batched_ir = af.pushforward(batched_ir)
 
-        primals, tangents = af.call(pf_batched_ir)((["a", "b"],), (["da", "db"],))
+        primals, tangents = pf_batched_ir.call((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
         assert tangents == ["B: da", "B: db"]
 
@@ -1100,7 +1100,7 @@ class TestDependsNestedTransforms:
         batched_ir = af.batch(ir)
         pb_batched_ir = af.pullback(batched_ir)
 
-        outs, cotangents = af.call(pb_batched_ir)((["a", "b"],), ["g1", "g2"])
+        outs, cotangents = pb_batched_ir.call((["a", "b"],), ["g1", "g2"])
         assert outs == ["B: a", "B: b"]
         assert cotangents == (["g1", "g2"],)
 
@@ -1114,7 +1114,7 @@ class TestDependsNestedTransforms:
         pf_ir = af.pushforward(ir)
         sched_pf_ir = af.sched(pf_ir)
 
-        primal, tangent = af.call(sched_pf_ir)(("primal",), ("tangent",))
+        primal, tangent = sched_pf_ir.call(("primal",), ("tangent",))
         assert primal == "B: primal"
         assert tangent == "B: tangent"
 
@@ -1128,7 +1128,7 @@ class TestDependsNestedTransforms:
         pb_ir = af.pullback(ir)
         sched_pb_ir = af.sched(pb_ir)
 
-        out, cotangent = af.call(sched_pb_ir)(("primal",), "grad")
+        out, cotangent = sched_pb_ir.call(("primal",), "grad")
         assert out == "B: primal"
         assert cotangent == ("grad",)
 
@@ -1142,7 +1142,7 @@ class TestDependsNestedTransforms:
         batched_ir = af.batch(ir)
         sched_batched_ir = af.sched(batched_ir)
 
-        result = af.call(sched_batched_ir)(["x", "y", "z"])
+        result = sched_batched_ir.call(["x", "y", "z"])
         assert result == ["B: x", "B: y", "B: z"]
 
 
@@ -1325,7 +1325,7 @@ class TestGatherBatchAllUnbatched:
 
         prog_ir = af.trace(program)("a", "b")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
-        result = af.call(batched_ir)(["a", "b"], "constant")
+        result = batched_ir.call(["a", "b"], "constant")
         assert result == [["[a]", "[b]"], ["<constant>", "<constant>"]]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -1338,5 +1338,5 @@ class TestGatherBatchAllUnbatched:
 
         prog_ir = af.trace(program)("a", "b")
         batched_ir = af.batch(prog_ir, in_axes=(True, False))
-        result = await af.acall(batched_ir)(["a", "b"], "constant")
+        result = await batched_ir.acall(["a", "b"], "constant")
         assert result == [["[a]", "[b]"], ["<constant>", "<constant>"]]

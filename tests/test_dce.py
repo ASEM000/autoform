@@ -98,7 +98,7 @@ class TestDCEWithHigherOrderPrimitives:
         inner_ir = af.trace(lambda x: af.concat(x, "!"))("x")
 
         def program(x):
-            return af.call(inner_ir)(x)
+            return inner_ir.call(x)
 
         ir = af.trace(program)("input")
         dce = af.dce(ir)
@@ -115,7 +115,7 @@ class TestDCEWithHigherOrderPrimitives:
         inner_ir = af.trace(inner)("x")
 
         def program(x):
-            return af.call(inner_ir)(x)
+            return inner_ir.call(x)
 
         ir = af.trace(program)("input")
         dce = af.dce(ir)
@@ -268,7 +268,7 @@ class TestNestedDCE:
         dced_branch_a = dce.ir_eqns[0].params["branches"]["a"]
         assert len(dced_branch_a.ir_eqns) == 1
 
-        result = af.call(dce)("a", "hello")
+        result = dce.call("a", "hello")
         assert result == "hello LIVE"
 
     def test_batch_call_dces_inner_ir(self):
@@ -330,7 +330,7 @@ class TestNestedDCE:
 
         dced_inner = dce.ir_eqns[0].params["ir"]
         assert len(dced_inner.ir_eqns) == 2
-        assert af.call(dce)(("x",), "cot") == ("x LIVE", ("cot",))
+        assert dce.call(("x",), "cot") == ("x LIVE", ("cot",))
 
     def test_deeply_nested_dce(self):
         def branch_fn(x):
@@ -404,7 +404,7 @@ class TestDCEWithOutUsed:
 
         ir = af.trace(program)("x")
         dced = af.dce(ir, out_used=(True, False))
-        assert af.call(dced)("X") == ("Xa", None)
+        assert dced.call("X") == ("Xa", None)
 
     def test_out_used_with_shared_dependency(self):
         def program(x):

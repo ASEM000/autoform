@@ -182,7 +182,7 @@ def weight(ir: IR, /) -> IR:
         ...     return y
         >>> ir = af.trace(program)("x")
         >>> weight_ir = af.weight(ir)
-        >>> af.call(weight_ir)("ab")
+        >>> weight_ir.call("ab")
         ('ab!', 5.0)
     """
 
