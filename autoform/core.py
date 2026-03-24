@@ -254,7 +254,7 @@ class IREqn:
         )
 
 
-class IR[**P, R]:
+class IR[*A, R]:
     __slots__ = ("ir_eqns", "in_ir_tree", "out_ir_tree")
     __match_args__ = ("ir_eqns", "in_ir_tree", "out_ir_tree")
 
@@ -269,11 +269,11 @@ class IR[**P, R]:
     def __repr__(self) -> str:
         return generate_text_code(ir=self, expand_ir=True)
 
-    def call(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        return call(self)(*args, **kwargs)
+    def call(self, *args: *A) -> R:
+        return call(self)(*args)
 
-    async def acall(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        return await acall(self)(*args, **kwargs)
+    async def acall(self, *args: *A) -> R:
+        return await acall(self)(*args)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
@@ -504,7 +504,9 @@ class TracingInterpreter(Interpreter):
         return self.interpret(prim, in_tree, **params)
 
 
-def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Callable[P, IR[P, R]]:
+def trace[*A, R](
+    func: Callable[[*A], R], /, *, static: Tree[bool] = False
+) -> Callable[[*A], IR[*A, R]]:
     """Build an IR by tracing a function's execution.
 
     Args:
@@ -548,8 +550,7 @@ def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Cal
         return x if is_irval(x) else IRLit(x)
 
     @ft.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> IR[P, R]:
-        assert not kwargs, "`trace` does not support keyword arguments"
+    def wrapper(*args: *A) -> IR[*A, R]:
         in_tree = args
         in_static_tree = treelib.broadcast_prefix(static, in_tree, is_leaf=is_static_spec)
         in_ir_tree = treelib.map(to_in_ir_val, in_tree, in_static_tree, is_leaf=is_val)
@@ -567,7 +568,7 @@ def trace[**P, R](func: Callable[P, R], /, *, static: Tree[bool] = False) -> Cal
 
 
 @ft.partial(lru_cache, maxsize=256)
-def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
+def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     """Call an IR.
 
     Args:
@@ -583,9 +584,8 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
         'Hello Alice'
     """
 
-    def func(*args: P.args, **kwargs: P.kwargs) -> R:
+    def func(*args: *A) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        assert not kwargs, "`call` does not support keyword arguments"
         in_tree = args
         env: dict[IRVar, Any] = {}
 
@@ -612,7 +612,7 @@ def call[**P, R](ir: IR[P, R], /) -> Callable[P, R]:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
+def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     """Async call an IR.
 
     Args:
@@ -629,9 +629,8 @@ def acall[**P, R](ir: IR[P, R], /) -> Callable[P, Awaitable[R]]:
         'Hello Alice'
     """
 
-    async def func(*args: P.args, **kwargs: P.kwargs) -> R:
+    async def func(*args: *A) -> R:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        assert not kwargs, "`acall` does not support keyword arguments"
         in_tree = args
         env: dict[IRVar, Any] = {}
 

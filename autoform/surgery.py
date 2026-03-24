@@ -186,7 +186,7 @@ def maybe_split(ir: IR, splitpoint_key: Hashable) -> tuple[IR, IR] | None:
 
 
 @ft.partial(lru_cache, maxsize=256)
-def split[**P, R](ir: IR, /, *, key: Hashable) -> tuple[IR, IR]:
+def split[*A, R](ir: IR[*A, R], /, *, key: Hashable) -> tuple[IR, IR]:
     """Split an IR into left and right IRs at the splitpoint with given key.
 
     Example:
