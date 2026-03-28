@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Effects"""
+"""Intercepts"""
 
-# NOTE(asem): effects provide a way to intercept primitive evaluation
-# with custom behavior, without defining new primitives or rules. the handler
+# NOTE(asem): intercepts provide a way to customize primitive evaluation
+# with custom behavior, without defining new primitives or rules. the interceptor
 # intercepts during execution, not during transformations (pushforward,
 # pullback, batch) - those still use standard rules.
 #
-# a handler communicates with the interpreter using a generator pattern:
+# an interceptor communicates with the interpreter using a generator pattern:
 #   yield in_tree  -> invoke the primitive, receive result
 #   return result  -> return final value to caller
 #
@@ -43,76 +43,76 @@ from autoform.core import (
 from autoform.utils import asyncify, batch_index, batch_spec, batch_transpose
 
 # ==================================================================================================
-# EFFECT
+# INTERCEPT
 # ==================================================================================================
 
 
-class EffectTag(PrimTag): ...
+class InterceptTag(PrimTag): ...
 
 
-effect_p = Prim("effect", tag={EffectTag})
+intercept_p = Prim("intercept", tag={InterceptTag})
 
 
-def effect(x, /, **p):
-    return effect_p.bind(x, **p)
+def intercept(x, /, **p):
+    return intercept_p.bind(x, **p)
 
 
-def impl_effect(x, /, **_):
+def impl_intercept(x, /, **_):
     return x
 
 
-def abstract_effect(x, /, **_):
+def abstract_intercept(x, /, **_):
     return x
 
 
-def push_effect(in_tree, /, **params):
+def push_intercept(in_tree, /, **params):
     primal, tangent = in_tree
-    return effect_p.bind(primal, **params), effect_p.bind(tangent, **params)
+    return intercept_p.bind(primal, **params), intercept_p.bind(tangent, **params)
 
 
-def pull_fwd_effect(x, /, **params):
-    return effect_p.bind(x, **params), None
+def pull_fwd_intercept(x, /, **params):
+    return intercept_p.bind(x, **params), None
 
 
-def pull_bwd_effect(in_tree, /, **params):
+def pull_bwd_intercept(in_tree, /, **params):
     _, cotangent = in_tree
-    return effect_p.bind(cotangent, **params)
+    return intercept_p.bind(cotangent, **params)
 
 
-def batch_effect(in_tree, /, **params):
+def batch_intercept(in_tree, /, **params):
     batch_size, in_batched, x = in_tree
 
     if batch_spec(x, in_batched) is None:
-        return effect_p.bind(x, **params), False
+        return intercept_p.bind(x, **params), False
 
     unbatch = ft.partial(batch_index, x, in_batched)
-    out_bi = [effect_p.bind(unbatch(b), **params) for b in range(batch_size)]
+    out_bi = [intercept_p.bind(unbatch(b), **params) for b in range(batch_size)]
     out_batched = in_batched
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
-async def abatch_effect(in_tree, /, **params):
+async def abatch_intercept(in_tree, /, **params):
     batch_size, in_batched, x = in_tree
 
     if batch_spec(x, in_batched) is None:
-        return await effect_p.abind(x, **params), False
+        return await intercept_p.abind(x, **params), False
 
     unbatch = ft.partial(batch_index, x, in_batched)
-    out_bi = [await effect_p.abind(unbatch(b), **params) for b in range(batch_size)]
+    out_bi = [await intercept_p.abind(unbatch(b), **params) for b in range(batch_size)]
     out_batched = in_batched
     out_ib = batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
-impl_rules.set(effect_p, impl_effect)
-impl_rules.aset(effect_p, asyncify(impl_effect))
-abstract_rules.set(effect_p, abstract_effect)
-push_rules.set(effect_p, push_effect)
-push_rules.aset(effect_p, asyncify(push_effect))
-pull_fwd_rules.set(effect_p, pull_fwd_effect)
-pull_fwd_rules.aset(effect_p, asyncify(pull_fwd_effect))
-pull_bwd_rules.set(effect_p, pull_bwd_effect)
-pull_bwd_rules.aset(effect_p, asyncify(pull_bwd_effect))
-batch_rules.set(effect_p, batch_effect)
-batch_rules.aset(effect_p, abatch_effect)
+impl_rules.set(intercept_p, impl_intercept)
+impl_rules.aset(intercept_p, asyncify(impl_intercept))
+abstract_rules.set(intercept_p, abstract_intercept)
+push_rules.set(intercept_p, push_intercept)
+push_rules.aset(intercept_p, asyncify(push_intercept))
+pull_fwd_rules.set(intercept_p, pull_fwd_intercept)
+pull_fwd_rules.aset(intercept_p, asyncify(pull_fwd_intercept))
+pull_bwd_rules.set(intercept_p, pull_bwd_intercept)
+pull_bwd_rules.aset(intercept_p, asyncify(pull_bwd_intercept))
+batch_rules.set(intercept_p, batch_intercept)
+batch_rules.aset(intercept_p, abatch_intercept)

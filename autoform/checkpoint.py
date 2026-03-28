@@ -21,8 +21,8 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
-from autoform.core import Effect, EffectInterpreter, using_effect, using_interpreter
-from autoform.effects import effect_p
+from autoform.core import Intercept, InterceptorInterpreter, using_intercept, using_interpreter
+from autoform.intercepts import intercept_p
 from autoform.utils import Tree
 
 # ==================================================================================================
@@ -30,7 +30,7 @@ from autoform.utils import Tree
 # ==================================================================================================
 
 
-class CheckpointEffect(Effect):
+class CheckpointIntercept(Intercept):
     __slots__ = ("key", "collection")
 
     def __init__(self, *, key: Hashable, collection: Hashable | None = None):
@@ -67,8 +67,8 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    with using_effect(CheckpointEffect(key=key, collection=collection)):
-        return effect_p.bind(value)
+    with using_intercept(CheckpointIntercept(key=key, collection=collection)):
+        return intercept_p.bind(value)
 
 
 # ==================================================================================================
@@ -104,13 +104,13 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     """
     collected: Collected = defaultdict(list)
 
-    def collector(prim, effect: CheckpointEffect, in_tree: Any, /):
+    def collector(prim, intercept: CheckpointIntercept, in_tree: Any, /):
         result = yield in_tree
-        if collection is ... or effect.collection == collection:
-            collected[effect.key].append(result)
+        if collection is ... or intercept.collection == collection:
+            collected[intercept.key].append(result)
         return result
 
-    with using_interpreter(EffectInterpreter((CheckpointEffect, collector))):
+    with using_interpreter(InterceptorInterpreter((CheckpointIntercept, collector))):
         yield collected
 
 
@@ -148,12 +148,12 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
 
     cache = {k: deque(values[k]) for k in values}
 
-    def injector(prim, effect: CheckpointEffect, in_tree: Any, /):
-        if effect.collection == collection:
-            if effect.key in cache and cache[effect.key]:
-                return cache[effect.key].popleft()
+    def injector(prim, intercept: CheckpointIntercept, in_tree: Any, /):
+        if intercept.collection == collection:
+            if intercept.key in cache and cache[intercept.key]:
+                return cache[intercept.key].popleft()
         out_tree = yield in_tree
         return out_tree
 
-    with using_interpreter(EffectInterpreter((CheckpointEffect, injector))):
+    with using_interpreter(InterceptorInterpreter((CheckpointIntercept, injector))):
         yield

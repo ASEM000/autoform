@@ -24,10 +24,12 @@ pip install git+https://github.com/ASEM000/autoform.git
 ```python
 import autoform as af
 
+
 def explain(topic: str) -> str:
     prompt = af.format("Explain {} in one paragraph.", topic)
     msg = dict(role="user", content=prompt)
     return af.lm_call([msg], model="gpt-5.2")
+
 
 ir = af.trace(explain)("...")  # capture structure, no execution
 ```
@@ -98,8 +100,8 @@ flowchart LR
 ```
 
 ```python
-scheduled = af.sched(ir)               # groups independent equations into gather stages
-result = await scheduled.acall("DNA")   # runs each gather stage concurrently
+scheduled = af.sched(ir)  # groups independent equations into gather stages
+result = await scheduled.acall("DNA")  # runs each gather stage concurrently
 ```
 
 ## Debugging
@@ -110,10 +112,11 @@ def pipeline(x: str) -> str:
     msg1 = dict(role="user", content=x)
     step1 = af.lm_call([msg1], model="gpt-5.2")
     step1 = af.checkpoint(step1, key="step1", collection="debug")
-    
+
     msg2 = dict(role="user", content=step1)
     step2 = af.lm_call([msg2], model="gpt-5.2")
     return step2
+
 
 ir = af.trace(pipeline)("...")
 
@@ -151,6 +154,7 @@ flowchart TD
 from typing import Literal
 import autoform as af
 
+
 # Struct: a tree node; each field becomes an IR leaf during tracing.
 class Decision(af.Struct):
     tool: Literal["search", "calc", "done"]
@@ -158,10 +162,12 @@ class Decision(af.Struct):
     answer: str
     status: Literal["continue", "done"]
 
+
 class State(af.Struct):
     history: str
     result: str
     status: Literal["continue", "done"]
+
 
 # each tool branch is traced independently; switch dispatches at runtime.
 tool_branches = dict(
@@ -170,8 +176,10 @@ tool_branches = dict(
     done=af.trace(done)("...", "..."),
 )
 
+
 def cond(state: State):
     return af.match(state.status, "continue")
+
 
 def body(state: State):
     messages = [
@@ -182,12 +190,15 @@ def body(state: State):
     new_history = af.switch(d.tool, tool_branches, d.args, state.history)
     return State(history=new_history, result=d.answer, status=d.status)
 
+
 cond_ir = af.trace(cond)(State(history="...", result="", status="..."))
 body_ir = af.trace(body)(State(history="...", result="", status="..."))
+
 
 def agent(question: str):
     init = State(history=question, result="", status="continue")
     return af.while_loop(cond_ir, body_ir, init, max_iters=5).result
+
 
 agent_ir = af.trace(agent)("...")
 

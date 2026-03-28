@@ -25,7 +25,7 @@ from typing import Any, cast
 from autoform.core import (
     IR,
     AVal,
-    Effect,
+    Intercept,
     Interpreter,
     IREqn,
     IRLit,
@@ -42,7 +42,7 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    using_effect,
+    using_intercept,
     using_interpreter,
 )
 from autoform.utils import (
@@ -65,7 +65,7 @@ factor_p = Prim("factor", tag={InferenceTag})
 weight_call_p = Prim("weight_call", tag={InferenceTag})
 
 
-class FactorEffect(Effect): ...
+class FactorIntercept(Intercept): ...
 
 
 def accumulate(total: Tree | None, score: Tree) -> Tree:
@@ -96,10 +96,10 @@ def factor(*args, judge: Callable[..., float]) -> float:
     """
 
     assert callable(judge), f"`judge` must be callable, got {type(judge)}"
-    # NOTE(asem): mark factor with an effect even though execution does not
-    # read active_effect here. this keeps factor semantically live for passes
+    # NOTE(asem): mark factor with an intercept even though execution does not
+    # read active_intercept here. this keeps factor semantically live for passes
     # like DCE and prevents it from being treated as an ordinary pure primitive.
-    with using_effect(FactorEffect()):
+    with using_intercept(FactorIntercept()):
         return factor_p.bind(args, judge=judge)
 
 

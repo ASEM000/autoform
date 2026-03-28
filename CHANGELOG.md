@@ -14,9 +14,12 @@
     def greet(name, punctuation):
         return af.format("Hello, {}{}", name, punctuation)
 
+
     ir = af.trace(greet)("world", "!")
     af.call(ir)("Alice", "?")
     ```
+
+  - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
 
 ### New Features
 
@@ -28,6 +31,7 @@
             return af.format("error: {}", value)
         return af.format("ok: {}", value)
 
+
     ir = af.trace(label, static=(True, False))(True, "disk full")
     af.call(ir)(True, "timeout")
     # "error: timeout"
@@ -38,11 +42,10 @@
     ```python
     import autoform as af
     from litellm import Router
-    model_list = [dict(model_name="gpt-5.2", litellm_params=dict(model="gpt-5.2", tpm=100_000, rpm=1_000))]
-    router = Router(
-        model_list=model_list,
-        max_parallel_requests=10,
-    )
+
+    litellm_params = dict(model="gpt-5.2", tpm=100_000, rpm=1_000)
+    model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
+    router = Router(model_list=model_list, max_parallel_requests=10)
     with af.using_router(router):
         result = af.call(ir)(inputs)
     ```
@@ -54,6 +57,7 @@
         y = af.concat(x, "!")
         af.factor(y, judge=lambda s: float(len(s)))
         return y
+
 
     ir = af.trace(program)("x")
     out, total = af.call(af.weight(ir))("ab")
@@ -71,6 +75,7 @@
     def bad(x, y, z):
         return af.concat(x, y, z)
 
+
     af.trace(bad)("a", "b", 1)  # AssertionError during tracing
     ```
 
@@ -81,6 +86,7 @@
     ```python
     def program(x, y):
         return af.format("x={}", x), af.format("y={}", y)
+
 
     ir = af.trace(program)("...", "...")
     batched = af.batch(ir, in_axes=(True, False))
@@ -97,8 +103,12 @@
   
     ```python
     import autoform as af
+
+
     def greet(name):
         return af.format("Hello, {}!", name)
+
+
     ir = af.trace(greet)("...")
     result = af.call(ir)("World")  # "Hello, World!"
     ```
@@ -124,6 +134,8 @@
     ```python
     def shout(text):
         return af.format("{}!", text)
+
+
     ir = af.trace(shout)("...")
     batched_ir = af.batch(ir)
     result = af.call(batched_ir)(["hello", "world"])  # ["hello!", "world!"]
@@ -136,6 +148,8 @@
         a = af.format("[{}]", x)
         b = af.format("<{}>", x)
         return af.concat(a, b)
+
+
     ir = af.trace(program)("x")
     scheduled = af.sched(ir)
     result = await af.acall(scheduled)("test")  # concurrent execution
@@ -150,6 +164,8 @@
         a = af.concat(x, "!")
         b = af.concat(x, "!")  # duplicate call
         return af.concat(a, b)
+
+
     ir = af.trace(program)("test")
     with af.memoize():
         result = af.call(ir)("hello")  # caches identical calls at runtime
@@ -163,6 +179,8 @@
             a = af.concat(x, "!")
             b = af.concat(x, "!")  # deduplicated during tracing
             return a, b
+
+
     ir = af.trace(program)("test")
     print(len(ir.ireqns))  # 1 (second call eliminated at trace time)
     ```
@@ -174,6 +192,8 @@
         dead = af.concat(x, "dead")  # unused
         live = af.concat(x, "live")
         return live
+
+
     ir = af.trace(program)("x")
     dce_ir = af.dce(ir)  # removes dead code
     ```
@@ -183,6 +203,8 @@
     ```python
     def func(x):
         return af.checkpoint(x, key="val", collection="debug")
+
+
     ir = af.trace(func)("...")
     with af.collect(collection="debug") as captured:
         result = af.call(ir)("hello")
@@ -196,6 +218,8 @@
         y = af.format("Hello {}", x)
         z = af.splitpoint(y, key="mid")
         return af.format("Result: {}", z)
+
+
     ir = af.trace(program)("...")
     lhs, rhs = af.split(ir, key="mid")
     ```
@@ -208,15 +232,21 @@
     result = af.gather([(ir1, "A"), (ir2, "B")])  # ["[A]", "<B>"]
     ```
 
-  - Custom effects system with default handler support
+  - Custom intercept system with default interceptor support
   
     ```python
-    from autoform.core import Effect, EffectInterpreter, using_interpreter
-    class MyEffect(Effect): ...
-    def handler(prim, effect, in_tree, /, **params):
+    from autoform.core import Intercept, InterceptorInterpreter, using_interpreter
+
+
+    class MyIntercept(Intercept): ...
+
+
+    def interceptor(prim, intercept, in_tree, /, **params):
         out_tree = yield in_tree
         return out_tree + " modified"
-    with using_interpreter(EffectInterpreter((MyEffect, handler))):
+
+
+    with using_interpreter(InterceptorInterpreter((MyIntercept, interceptor))):
         result = af.call(ir)("input")
     ```
 
@@ -224,8 +254,8 @@
   
     ```python
     branches = dict(
-        a = af.trace(lambda x: af.concat("A:", x))("..."),
-        b = af.trace(lambda x: af.concat("B:", x))("..."),
+        a=af.trace(lambda x: af.concat("A:", x))("..."),
+        b=af.trace(lambda x: af.concat("B:", x))("..."),
     )
     result = af.switch("a", branches, "test")  # "A:test"
     ```
@@ -233,10 +263,10 @@
   - String primitives: `format`, `concat`, `match`
   
     ```python
-    af.format("Hello, {}!", "World")       # "Hello, World!"
-    af.format("{a}-{b}", a="x", b="y")     # "x-y"
-    af.concat("Hello", " World")           # "Hello World"
-    af.match("yes", "yes")                 # True
+    af.format("Hello, {}!", "World")  # "Hello, World!"
+    af.format("{a}-{b}", a="x", b="y")  # "x-y"
+    af.concat("Hello", " World")  # "Hello World"
+    af.match("yes", "yes")  # True
     ```
 
   - Language model integration via `lm_call` and `struct_lm_call` (powered by LiteLLM)

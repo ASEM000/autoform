@@ -373,9 +373,7 @@ batch_rules.aset(depends_p, asyncify(batch_depends))
 
 
 @ft.partial(lru_cache, maxsize=256)
-def sched[*A, R](
-    ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = None
-) -> IR[*A, R]:
+def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = None) -> IR[*A, R]:
     """Schedule independent operations for parallel execution using gather.
 
     Args:

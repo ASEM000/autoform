@@ -44,9 +44,9 @@ class TestSow:
 
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "effect"
-        assert ir.ir_eqns[0].effect.collection == "my_tag"
-        assert ir.ir_eqns[0].effect.key == "my_name"
+        assert ir.ir_eqns[0].prim.name == "intercept"
+        assert ir.ir_eqns[0].intercept.collection == "my_tag"
+        assert ir.ir_eqns[0].intercept.key == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -696,7 +696,7 @@ class TestMemoizeBasic:
         assert counter.call_count == 2
 
 
-class TestMemoizeWithEffects:
+class TestMemoizeWithIntercepts:
     def test_memoize_with_checkpoint(self):
         def func(x):
             a = checkpoint(af.concat(x, "!"), key="val", collection="debug")
@@ -711,7 +711,7 @@ class TestMemoizeWithEffects:
         assert result == "hello!"
         assert collected == {"val": ["hello!"]}
 
-    def test_memoize_does_not_merge_different_effects(self):
+    def test_memoize_does_not_merge_different_intercepts(self):
         def func(x):
             a = checkpoint(x, key="first", collection="debug")
             b = checkpoint(x, key="second", collection="debug")
@@ -727,7 +727,7 @@ class TestMemoizeWithEffects:
         assert "first" in collected
         assert "second" in collected
 
-    def test_memoize_inside_trace_does_not_dedup_effectful_calls(self):
+    def test_memoize_inside_trace_does_not_dedup_intercepted_calls(self):
         def func(x):
             with af.memoize():
                 a = checkpoint(x, key="first", collection="debug")
@@ -736,12 +736,12 @@ class TestMemoizeWithEffects:
 
         ir = af.trace(func)("test")
 
-        effect_eqns = [eqn for eqn in ir.ir_eqns if eqn.effect is not None]
-        assert len(effect_eqns) == 2
-        assert effect_eqns[0].effect.key == "first"
-        assert effect_eqns[1].effect.key == "second"
+        intercept_eqns = [eqn for eqn in ir.ir_eqns if eqn.intercept is not None]
+        assert len(intercept_eqns) == 2
+        assert intercept_eqns[0].intercept.key == "first"
+        assert intercept_eqns[1].intercept.key == "second"
 
-    def test_memoize_outside_collect_does_not_skip_effects(self):
+    def test_memoize_outside_collect_does_not_skip_intercepts(self):
         def func(x):
             return checkpoint(x, key="val", collection="debug")
 
