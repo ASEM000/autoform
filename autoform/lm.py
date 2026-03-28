@@ -29,8 +29,8 @@ from litellm import acompletion, completion, get_model_info
 from autoform.ad import materialize
 from autoform.core import (
     AVal,
-    Effect,
     EvalType,
+    Intercept,
     Prim,
     PrimTag,
     abstract_rules,
@@ -39,9 +39,9 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    using_effect,
+    using_intercept,
 )
-from autoform.effects import effect_p
+from autoform.intercepts import intercept_p
 from autoform.utils import (
     Struct,
     Tree,
@@ -95,7 +95,7 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
 class LMTag(PrimTag): ...
 
 
-class StreamEffect(Effect):
+class StreamIntercept(Intercept):
     __slots__ = "text"
 
     def __init__(self, text: str):
@@ -165,18 +165,18 @@ def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str
         response = comp(messages=messages, model=model)
         return response.choices[0].message.content
 
-    # NOTE(asem): stream under effect handler context by default for all lm calls
-    # effect is used here not over user code to avoid having lm call with `StreamEffect` in the ir_eqn.
-    # as effectful equations makes any equation immovable.
+    # NOTE(asem): stream under intercept context by default for all lm calls.
+    # the intercept is used here not over user code to avoid having lm call with `StreamIntercept`
+    # in the ir_eqn, since intercepted equations make any equation immovable.
     # downside of this approach is streaming is not possible if lm_call is transformed.
     buffer = StringIO()
     for chunk in comp(messages=messages, model=model, stream=True):
         text = chunk.choices[0].delta.content or ""
         buffer.write(text)
-        with using_effect(StreamEffect(text)):
-            # NOTE(asem): bind triggers the active interpreter to process the effect
-            # if EffectInterpreter is active, otherwise pass through (rule-wise).
-            effect_p.bind(text)
+        with using_intercept(StreamIntercept(text)):
+            # NOTE(asem): bind triggers the active interpreter to process the intercept
+            # if InterceptorInterpreter is active, otherwise pass through (rule-wise).
+            intercept_p.bind(text)
     return buffer.getvalue()
 
 

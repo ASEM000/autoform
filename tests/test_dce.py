@@ -460,8 +460,8 @@ class TestDCEWithOutUsed:
         assert len(dced_branch.ir_eqns) == 2
 
 
-class TestDCEWithEffects:
-    def test_effectful_equation_not_removed(self):
+class TestDCEWithIntercepts:
+    def test_intercepted_equation_not_removed(self):
         def program(x):
             saved = af.checkpoint(x, key="save", collection="cache")
             return x
@@ -471,9 +471,9 @@ class TestDCEWithEffects:
 
         dce = af.dce(ir)
         assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].effect is not None
+        assert dce.ir_eqns[0].intercept is not None
 
-    def test_effectful_inputs_remain_active(self):
+    def test_intercepted_inputs_remain_active(self):
         def program(x):
             computed = af.concat(x, "!")
             saved = af.checkpoint(computed, key="save", collection="cache")
@@ -485,7 +485,7 @@ class TestDCEWithEffects:
         dce = af.dce(ir)
         assert len(dce.ir_eqns) == 2
 
-    def test_mixed_effectful_and_dead(self):
+    def test_mixed_intercepted_and_dead(self):
         def program(x):
             dead = af.concat(x, "dead")
             saved = af.checkpoint(x, key="save", collection="cache")
@@ -494,12 +494,12 @@ class TestDCEWithEffects:
         ir = af.trace(program)("test")
         assert len(ir.ir_eqns) == 2
 
-        dce = af.dce(ir, keep_effects=False)
+        dce = af.dce(ir, keep_intercepts=False)
         assert len(dce.ir_eqns) == 0
 
-        dce = af.dce(ir, keep_effects=True)
+        dce = af.dce(ir, keep_intercepts=True)
         assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].effect is not None
+        assert dce.ir_eqns[0].intercept is not None
 
 
 class TestDCEWithDepends:
@@ -612,7 +612,7 @@ class TestDCEWithDepends:
         assert len(format_eqns) == 1
         assert len(depends_eqns) == 1
 
-    def test_depends_with_effectful(self):
+    def test_depends_with_intercepted(self):
         def program(x):
             a = af.checkpoint(x, key="a")
             b = af.format("B: {}", x)
@@ -621,7 +621,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        effect_eqns = [e for e in dce.ir_eqns if e.effect is not None]
+        intercept_eqns = [e for e in dce.ir_eqns if e.intercept is not None]
         depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
-        assert len(effect_eqns) == 1
+        assert len(intercept_eqns) == 1
         assert len(depends_eqns) == 1

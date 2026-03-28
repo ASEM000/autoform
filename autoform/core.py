@@ -64,11 +64,11 @@ __all__ = [
     "trace",
     "call",
     "acall",
-    # effects
-    "Effect",
-    "EffectInterpreter",
-    "using_effect",
-    "active_effect",
+    # intercepts
+    "Intercept",
+    "InterceptorInterpreter",
+    "using_intercept",
+    "active_intercept",
 ]
 
 # ==================================================================================================
@@ -184,7 +184,7 @@ def is_irlit(x) -> TypeGuard[IRLit]:
 
 
 # NOTE(asem): tags are used to group primitives into categories
-# to be later targeted by effect handlers, ...
+# to be later targeted by interceptors, ...
 class PrimTag: ...
 
 
@@ -219,38 +219,42 @@ class Prim:
 
 
 class IREqn:
-    __slots__ = ("prim", "effect", "in_ir_tree", "out_ir_tree", "params")
-    __match_args__ = ("prim", "effect", "in_ir_tree", "out_ir_tree", "params")
+    __slots__ = ("prim", "intercept", "in_ir_tree", "out_ir_tree", "params")
+    __match_args__ = ("prim", "intercept", "in_ir_tree", "out_ir_tree", "params")
 
     def __init__(
         self,
         prim: Prim,
-        effect: Effect | None,
+        intercept: Intercept | None,
         in_ir_tree: Tree[IRVal],
         out_ir_tree: Tree[IRVal],
         params: dict | None = None,
     ):
         assert isinstance(prim, Prim)
-        assert isinstance(effect, Effect) or effect is None
+        assert isinstance(intercept, Intercept) or intercept is None
         assert treelib.all(treelib.map(is_irval, (in_ir_tree, out_ir_tree)))
         assert isinstance(params, dict) or params is None
         self.prim = prim
-        self.effect = effect
+        self.intercept = intercept
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
 
     def bind(self, in_tree: Tree, /, **params):
-        with using_effect(self.effect):
+        with using_intercept(self.intercept):
             return self.prim.bind(in_tree, **params)
 
     async def abind(self, in_tree: Tree, /, **params):
-        with using_effect(self.effect):
+        with using_intercept(self.intercept):
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
         return IREqn(
-            self.prim, self.effect, self.in_ir_tree, self.out_ir_tree, self.params | kwargs
+            self.prim,
+            self.intercept,
+            self.in_ir_tree,
+            self.out_ir_tree,
+            self.params | kwargs,
         )
 
 
@@ -317,11 +321,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         lhs = format_tree(ir_eqn.out_ir_tree)
         rhs = format_tree(ir_eqn.in_ir_tree)
         params_str = ", ".join(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
-        effect_str = f" @{ir_eqn.effect!r}" if ir_eqn.effect else ""
+        intercept_str = f" @{ir_eqn.intercept!r}" if ir_eqn.intercept else ""
         if params_str:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str}){effect_str}")
+            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str}){intercept_str}")
         else:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}){effect_str}")
+            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}){intercept_str}")
 
     lines.append("}")
     return "\n".join(lines)
@@ -366,75 +370,75 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 # ==================================================================================================
-# EFFECT
+# INTERCEPT
 # ==================================================================================================
 
 
-class Effect:
+class Intercept:
     __slots__ = ()
 
 
-active_effect: ContextVar[Effect | None] = ContextVar("active_effect", default=None)
+active_intercept: ContextVar[Intercept | None] = ContextVar("active_intercept", default=None)
 
 
 @contextmanager
-def using_effect[T: Effect](effect: T | None) -> Generator[T | None, None, None]:
-    if effect is None:
-        yield effect
+def using_intercept[T: Intercept](intercept: T | None) -> Generator[T | None, None, None]:
+    if intercept is None:
+        yield intercept
         return
-    assert isinstance(effect, Effect), f"Expected Effect, got {type(effect)}"
-    token = active_effect.set(effect)
+    assert isinstance(intercept, Intercept), f"Expected Intercept, got {type(intercept)}"
+    token = active_intercept.set(intercept)
     try:
-        yield effect
+        yield intercept
     finally:
-        active_effect.reset(token)
+        active_intercept.reset(token)
 
 
-type Handler = Callable[..., Generator[Any, Any, Any]]
+type Interceptor = Callable[..., Generator[Any, Any, Any]]
 
 
-class EffectInterpreter(Interpreter, ABC):
-    # NOTE(asem): handler patterns (callable-based, not methods)
-    # handler signature: handler(prim, effect, in_tree, /, **params)
+class InterceptorInterpreter(Interpreter, ABC):
+    # NOTE(asem): interceptor patterns (callable-based, not methods)
+    # interceptor signature: interceptor(prim, intercept, in_tree, /, **params)
     #
     # skip (replace value, no continuation)
-    # >>> def handler(prim, effect, in_tree, /):
+    # >>> def interceptor(prim, intercept, in_tree, /):
     # ...     return replacement
     # ...     yield
     #
     # pass-through (observe only)
-    # >>> def handler(prim, effect, in_tree, /):
+    # >>> def interceptor(prim, intercept, in_tree, /):
     # ...     return (yield in_tree)
     #
     # pre-process input
-    # >>> def handler(prim, effect, in_tree, /):
+    # >>> def interceptor(prim, intercept, in_tree, /):
     # ...     return (yield transform(in_tree))
     #
     # post-process output
-    # >>> def handler(prim, effect, in_tree, /, **params):
+    # >>> def interceptor(prim, intercept, in_tree, /, **params):
     # ...     result = yield in_tree
     # ...     return transform(result)
-    def __init__(self, *handlers: tuple[type[Effect], Handler]):
-        for handler in handlers:
-            msg = "handlers must be (EffectType, handler) pairs"
-            assert isinstance(handler, Sequence) and len(handler) == 2, msg
-            eff_type, _ = handler
-            assert issubclass(eff_type, Effect), f"Invalid effect type: {eff_type}"
+    def __init__(self, *interceptors: tuple[type[Intercept], Interceptor]):
+        for interceptor in interceptors:
+            msg = "interceptors must be (InterceptType, interceptor) pairs"
+            assert isinstance(interceptor, Sequence) and len(interceptor) == 2, msg
+            intercept_type, _ = interceptor
+            assert issubclass(intercept_type, Intercept), f"Invalid {intercept_type=}"
         self.parent = active_interpreter.get()
-        self.handlers: dict[type[Effect], Handler] = dict(handlers)
+        self.interceptors: dict[type[Intercept], Interceptor] = dict(interceptors)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        effect = active_effect.get()
+        intercept = active_intercept.get()
 
-        if (handler := self.handlers.get(type(effect))) is None:
+        if (interceptor := self.interceptors.get(type(intercept))) is None:
             return self.parent.interpret(prim, in_tree, **params)
 
-        gen = handler(prim, effect, in_tree, **params)
+        gen = interceptor(prim, intercept, in_tree, **params)
         result = None
 
         # NOTE(asem):
-        # the handler can yield multiple times, each yield invokes the continuation.
-        # >>> def handler(prim, effect, in_tree, /, **params):
+        # the interceptor can yield multiple times, each yield invokes the continuation.
+        # >>> def interceptor(prim, intercept, in_tree, /, **params):
         # ...     results = []
         # ...     for v in (...):
         # ...         result = yield v
@@ -450,12 +454,12 @@ class EffectInterpreter(Interpreter, ABC):
             result = self.parent.interpret(prim, modified_input, **params)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        effect = active_effect.get()
+        intercept = active_intercept.get()
 
-        if (handler := self.handlers.get(type(effect))) is None:
+        if (interceptor := self.interceptors.get(type(intercept))) is None:
             return await self.parent.ainterpret(prim, in_tree, **params)
 
-        gen = handler(prim, effect, in_tree, **params)
+        gen = interceptor(prim, intercept, in_tree, **params)
         result = None
 
         # NOTE(asem): same generator protocol as sync, but uses ainterpret for continuation
@@ -496,8 +500,8 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh(type=x.type) if is_var(x) else IRLit(x)
 
         out_ir_tree = treelib.map(to_out_ir_val, out_aval_tree)
-        effect = active_effect.get()
-        self.ir_eqns.append(IREqn(prim, effect, in_ir_tree, out_ir_tree, params))
+        intercept = active_intercept.get()
+        self.ir_eqns.append(IREqn(prim, intercept, in_ir_tree, out_ir_tree, params))
         return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree[IRVal]:
