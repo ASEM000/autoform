@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-from autoform.autoform.analysis import ir_tree_ir_vars
+from autoform.analysis import ir_tree_ir_vars
 from autoform.core import IR, IREqn, IRLit, IRVal, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 

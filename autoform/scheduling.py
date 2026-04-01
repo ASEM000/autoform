@@ -20,21 +20,18 @@ import asyncio
 import functools as ft
 from collections import defaultdict, deque
 from collections.abc import Callable
-from operator import setitem
 
 from autoform.ad import Zero, is_zero, pullback, pushforward
+from autoform.analysis import ir_tree_ir_vars, ir_var_producers
 from autoform.batch import batch
 from autoform.core import (
     IR,
     IREqn,
-    IRVal,
-    IRVar,
     Prim,
     PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
-    is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -251,22 +248,16 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     # 3. topological sort into levels using kahn's algorithm
 
     # NOTE(asem): step 1: map ir_var -> creator equation
-    ir_var_to_parent: dict[IRVar, IREqn] = {}
-    for ir_eqn in ir.ir_eqns:
-        for out_ir_atom in treelib.leaves(ir_eqn.out_ir_tree):
-            is_irvar(out_ir_atom) and setitem(ir_var_to_parent, out_ir_atom, ir_eqn)
+    ir_var_to_parent = ir_var_producers(ir)
 
     # NOTE(asem): step 2: build adjacency list (parent -> children) and in-degree count
     adjacency_list = defaultdict(list)
     in_degree = defaultdict(lambda: 0)
 
-    def has_parent(ir_atom: IRVal) -> bool:
-        return is_irvar(ir_atom) and (ir_atom in ir_var_to_parent)
-
     for ir_eqn in ir.ir_eqns:
         # NOTE(asem): avoid adding the same parent multiple times if the input is repeated
         seen_parents: set[IREqn] = set()
-        for in_ir_var in (x for x in treelib.leaves(ir_eqn.in_ir_tree) if has_parent(x)):
+        for in_ir_var in (x for x in ir_tree_ir_vars(ir_eqn.in_ir_tree) if x in ir_var_to_parent):
             # NOTE(asem): consider `concat($1, $1)` this would repeat the same equation
             if (parent := ir_var_to_parent[in_ir_var]) not in seen_parents:
                 adjacency_list[parent].append(ir_eqn)

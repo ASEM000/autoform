@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
 import autoform as af
-from autoform.autoform.analysis import ir_tree_ir_vars
+from autoform.analysis import ir_tree_ir_vars, ir_var_producers
 
 
 class TestIrTreeIrVars:
@@ -54,3 +56,37 @@ class TestIrTreeIrVars:
         ir = af.trace(program)("seed")
 
         assert ir_tree_ir_vars(ir.out_ir_tree) == (ir.out_ir_tree[1]["value"],)
+
+
+class TestIrVarProducers:
+    def test_maps_each_output_ir_var_to_its_producer(self):
+        def program(x):
+            left = af.concat(x, "1")
+            right = af.concat(left, "2")
+            return left, right
+
+        ir = af.trace(program)("seed")
+        first_eqn, second_eqn = ir.ir_eqns
+        left, right = ir.out_ir_tree
+
+        assert ir_var_producers(ir) == {left: first_eqn, right: second_eqn}
+
+    def test_includes_all_ir_vars_from_tree_outputs(self):
+        def program(x):
+            pair = af.concat(x, "!")
+            return {"value": pair, "original": x}
+
+        ir = af.trace(program)("seed")
+        producers = ir_var_producers(ir)
+        produced = ir.out_ir_tree["value"]
+
+        assert producers == {produced: ir.ir_eqns[0]}
+
+    def test_errors_if_same_ir_var_is_produced_twice(self):
+        shared = af.core.IRVar.fresh(type=str)
+        eqn_a = af.core.IREqn(af.core.Prim("a"), None, (), shared, {})
+        eqn_b = af.core.IREqn(af.core.Prim("b"), None, (), shared, {})
+        ir = af.core.IR([eqn_a, eqn_b], in_ir_tree=(), out_ir_tree=shared)
+
+        with pytest.raises(AssertionError, match="produced by multiple equations"):
+            ir_var_producers(ir)

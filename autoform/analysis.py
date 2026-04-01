@@ -18,13 +18,24 @@ from __future__ import annotations
 
 from typing import cast
 
-from autoform.core import IRVal, IRVar, is_irvar
+from autoform.core import IR, IREqn, IRVal, IRVar, is_irvar
 from autoform.utils import Tree, treelib
 
-__all__ = ["ir_tree_ir_vars"]
+__all__ = ["ir_tree_ir_vars", "ir_var_producers"]
 
 
 def ir_tree_ir_vars(tree: Tree[IRVal], /) -> tuple[IRVar, ...]:
     """Return IRVars from an IR tree in leaf order."""
 
     return tuple(cast(IRVar, x) for x in treelib.leaves(tree) if is_irvar(x))
+
+
+def ir_var_producers(ir: IR, /) -> dict[IRVar, IREqn]:
+    """Return the top-level producer equation for each IRVar defined by ``ir``."""
+
+    producers: dict[IRVar, IREqn] = {}
+    for ir_eqn in ir.ir_eqns:
+        for ir_var in ir_tree_ir_vars(ir_eqn.out_ir_tree):
+            assert ir_var not in producers, f"IRVar {ir_var!r} is produced by multiple equations"
+            producers[ir_var] = ir_eqn
+    return producers
