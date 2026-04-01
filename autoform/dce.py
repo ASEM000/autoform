@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
+from autoform.autoform.analysis import ir_tree_ir_vars
 from autoform.core import IR, IREqn, IRLit, IRVal, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 
@@ -83,7 +84,11 @@ def dce[*A, R](
                 active_ir_vars.add(ir_atom)
         return active_ir_vars
 
-    active_ir_vars: set[IRVar] = collect_used_ir_vars(ir.out_ir_tree, user_out_used)
+    active_ir_vars: set[IRVar]
+    if out_used is None:
+        active_ir_vars = set(ir_tree_ir_vars(ir.out_ir_tree))
+    else:
+        active_ir_vars = collect_used_ir_vars(ir.out_ir_tree, user_out_used)
     active_ir_eqns: deque[IREqn] = deque()
 
     def is_active_node(node: IRVal) -> bool:
@@ -110,7 +115,7 @@ def dce[*A, R](
     # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
-    in_vars = set(x for x in treelib.leaves(ir.in_ir_tree) if is_irvar(x))
+    in_vars = set(ir_tree_ir_vars(ir.in_ir_tree))
     defined_vars: set[IRVar] = set(in_vars)
     for kept in active_ir_eqns:
         for atom in treelib.leaves(kept.out_ir_tree):
