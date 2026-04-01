@@ -81,18 +81,18 @@ class TestPrimitive:
 
 
 class TestIRVal:
-    def test_irvar_aval_returns_aval(self):
-        irvar = af.core.IRVar(type=str)
+    def test_ir_var_aval_returns_aval(self):
+        ir_var = af.core.IRVar(type=str)
 
-        assert af.core.is_irval(irvar)
-        assert isinstance(irvar.aval, af.core.AVal)
-        assert irvar.aval.type is str
+        assert af.core.is_irval(ir_var)
+        assert isinstance(ir_var.aval, af.core.AVal)
+        assert ir_var.aval.type is str
 
-    def test_irlit_aval_returns_wrapped_value(self):
-        irlit = af.core.IRLit("hello")
+    def test_ir_lit_aval_returns_wrapped_value(self):
+        ir_lit = af.core.IRLit("hello")
 
-        assert af.core.is_irval(irlit)
-        assert irlit.aval == "hello"
+        assert af.core.is_irval(ir_lit)
+        assert ir_lit.aval == "hello"
 
 
 class TestFormatPrimitive:

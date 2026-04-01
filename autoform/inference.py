@@ -200,16 +200,16 @@ def weight(ir: IR, /) -> IR:
 def impl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
     env: dict[IRVar, Any] = {}
 
-    def read(irval: IRVal) -> Any:
-        return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
+    def read(ir_val: IRVal) -> Any:
+        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
 
-    def check_input(irval: IRVal, value: Any):
-        if is_irlit(irval):
-            msg = f"Static input mismatch: expected {irval.value!r}, got {value!r}"
-            assert irval.value == value, msg
+    def check_input(ir_val: IRVal, value: Any):
+        if is_irlit(ir_val):
+            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+            assert ir_val.value == value, msg
 
-    def write(irval: IRVal, value: Any):
-        is_irvar(irval) and setitem(env, irval, value)
+    def write(ir_val: IRVal, value: Any):
+        is_irvar(ir_val) and setitem(env, ir_val, value)
 
     treelib.map(check_input, ir.in_ir_tree, in_tree)
     treelib.map(write, ir.in_ir_tree, in_tree)
@@ -227,16 +227,16 @@ def impl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
 async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
     env: dict[IRVar, Any] = {}
 
-    def read(irval: IRVal) -> Any:
-        return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
+    def read(ir_val: IRVal) -> Any:
+        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
 
-    def check_input(irval: IRVal, value: Any):
-        if is_irlit(irval):
-            msg = f"Static input mismatch: expected {irval.value!r}, got {value!r}"
-            assert irval.value == value, msg
+    def check_input(ir_val: IRVal, value: Any):
+        if is_irlit(ir_val):
+            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+            assert ir_val.value == value, msg
 
-    def write(irval: IRVal, value: Any):
-        is_irvar(irval) and setitem(env, irval, value)
+    def write(ir_val: IRVal, value: Any):
+        is_irvar(ir_val) and setitem(env, ir_val, value)
 
     treelib.map(check_input, ir.in_ir_tree, in_tree)
     treelib.map(write, ir.in_ir_tree, in_tree)

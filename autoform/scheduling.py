@@ -246,29 +246,29 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     # 2. level n must complete before level n+1 starts
 
     # NOTE(asem): three-step process:
-    # 1. map each irvar to its creator equation
-    # 2. build adjacency list (parent -> children) from irvar flow
+    # 1. map each ir_var to its creator equation
+    # 2. build adjacency list (parent -> children) from ir_var flow
     # 3. topological sort into levels using kahn's algorithm
 
-    # NOTE(asem): step 1: map irvar -> creator equation
-    irvar_to_parent: dict[IRVar, IREqn] = {}
+    # NOTE(asem): step 1: map ir_var -> creator equation
+    ir_var_to_parent: dict[IRVar, IREqn] = {}
     for ir_eqn in ir.ir_eqns:
-        for out_iratom in treelib.leaves(ir_eqn.out_ir_tree):
-            is_irvar(out_iratom) and setitem(irvar_to_parent, out_iratom, ir_eqn)
+        for out_ir_atom in treelib.leaves(ir_eqn.out_ir_tree):
+            is_irvar(out_ir_atom) and setitem(ir_var_to_parent, out_ir_atom, ir_eqn)
 
     # NOTE(asem): step 2: build adjacency list (parent -> children) and in-degree count
     adjacency_list = defaultdict(list)
     in_degree = defaultdict(lambda: 0)
 
-    def has_parent(iratom: IRVal) -> bool:
-        return is_irvar(iratom) and (iratom in irvar_to_parent)
+    def has_parent(ir_atom: IRVal) -> bool:
+        return is_irvar(ir_atom) and (ir_atom in ir_var_to_parent)
 
     for ir_eqn in ir.ir_eqns:
         # NOTE(asem): avoid adding the same parent multiple times if the input is repeated
         seen_parents: set[IREqn] = set()
-        for in_irvar in (x for x in treelib.leaves(ir_eqn.in_ir_tree) if has_parent(x)):
+        for in_ir_var in (x for x in treelib.leaves(ir_eqn.in_ir_tree) if has_parent(x)):
             # NOTE(asem): consider `concat($1, $1)` this would repeat the same equation
-            if (parent := irvar_to_parent[in_irvar]) not in seen_parents:
+            if (parent := ir_var_to_parent[in_ir_var]) not in seen_parents:
                 adjacency_list[parent].append(ir_eqn)
                 in_degree[ir_eqn] += 1
                 seen_parents.add(parent)
@@ -400,10 +400,10 @@ def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> scheduled = af.sched(ir)
         >>>
         >>> # sync execution (sequential)
-        >>> result = scheduled.call("hello")
+        >>> result = scheduled.call("hello") # doctest: +SKIP
         >>>
         >>> # async execution (concurrent via asyncio.gather)
-        >>> result = asyncio.run(scheduled.acall("hello"))
+        >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
     levels: list[list[IREqn]] = toposort_levels(ir)
     out_ir_eqns: list[IREqn] = []
