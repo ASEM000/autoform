@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.analysis import ir_tree_ir_vars, ir_var_producers
+from autoform.analysis import ir_eqn_graph, ir_tree_ir_vars, ir_var_producers
 
 
 class TestIrTreeIrVars:
@@ -90,3 +90,47 @@ class TestIrVarProducers:
 
         with pytest.raises(AssertionError, match="produced by multiple equations"):
             ir_var_producers(ir)
+
+
+class TestIrEqnDependencyGraph:
+    def test_returns_empty_graph_for_empty_ir(self):
+        def program(x):
+            return x
+
+        ir = af.trace(program)("seed")
+
+        assert ir_eqn_graph(ir) == {}
+
+    def test_includes_independent_equations_with_empty_children(self):
+        def program(a, b):
+            left = af.format("{}", a)
+            right = af.format("{}", b)
+            return left, right
+
+        ir = af.trace(program)("a", "b")
+        left_eqn, right_eqn = ir.ir_eqns
+
+        assert ir_eqn_graph(ir) == {left_eqn: [], right_eqn: []}
+
+    def test_maps_parent_equations_to_children(self):
+        def program(x):
+            a = af.format("{}", x)
+            b = af.concat(a, "!")
+            c = af.concat(b, "?")
+            return c
+
+        ir = af.trace(program)("seed")
+        a_eqn, b_eqn, c_eqn = ir.ir_eqns
+
+        assert ir_eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: [c_eqn], c_eqn: []}
+
+    def test_dedupes_repeated_input_dependencies(self):
+        def program(x):
+            a = af.format("{}", x)
+            b = af.concat(a, a)
+            return b
+
+        ir = af.trace(program)("seed")
+        a_eqn, b_eqn = ir.ir_eqns
+
+        assert ir_eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: []}

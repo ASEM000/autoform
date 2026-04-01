@@ -22,7 +22,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 
 from autoform.ad import Zero, is_zero, pullback, pushforward
-from autoform.analysis import ir_tree_ir_vars, ir_var_producers
+from autoform.analysis import ir_eqn_graph
 from autoform.batch import batch
 from autoform.core import (
     IR,
@@ -247,22 +247,12 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     # 2. build adjacency list (parent -> children) from ir_var flow
     # 3. topological sort into levels using kahn's algorithm
 
-    # NOTE(asem): step 1: map ir_var -> creator equation
-    ir_var_to_parent = ir_var_producers(ir)
-
-    # NOTE(asem): step 2: build adjacency list (parent -> children) and in-degree count
-    adjacency_list = defaultdict(list)
+    # NOTE(asem): step 1/2: build adjacency list (parent -> children) from ir_var flow
+    adjacency_list = ir_eqn_graph(ir)
     in_degree = defaultdict(lambda: 0)
-
-    for ir_eqn in ir.ir_eqns:
-        # NOTE(asem): avoid adding the same parent multiple times if the input is repeated
-        seen_parents: set[IREqn] = set()
-        for in_ir_var in (x for x in ir_tree_ir_vars(ir_eqn.in_ir_tree) if x in ir_var_to_parent):
-            # NOTE(asem): consider `concat($1, $1)` this would repeat the same equation
-            if (parent := ir_var_to_parent[in_ir_var]) not in seen_parents:
-                adjacency_list[parent].append(ir_eqn)
-                in_degree[ir_eqn] += 1
-                seen_parents.add(parent)
+    for children in adjacency_list.values():
+        for child in children:
+            in_degree[child] += 1
 
     # NOTE(asem): step 3: kahn's algorithm
     # basically prune nodes with 0 indegree then update the children indegree
