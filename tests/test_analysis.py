@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.analysis import ir_eqn_graph, ir_tree_ir_vars, ir_var_producers
+from autoform.analysis import ir_eqn_graph, ir_liveness, ir_tree_ir_vars, ir_var_producers
 
 
 class TestIrTreeIrVars:
@@ -134,3 +134,59 @@ class TestIrEqnDependencyGraph:
         a_eqn, b_eqn = ir.ir_eqns
 
         assert ir_eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: []}
+
+
+class TestIrLiveIrVars:
+    def test_empty_ir_returns_no_equation_boundaries(self):
+        def program(x):
+            return x
+
+        ir = af.trace(program)("seed")
+
+        assert ir_liveness(ir) == []
+
+    def test_chain_returns_before_after_liveness(self):
+        def program(x):
+            a = af.format("{}", x)
+            b = af.concat(a, "!")
+            c = af.concat(b, "?")
+            return c
+
+        ir = af.trace(program)("seed")
+        (x,) = ir.in_ir_tree
+        a, b, c = (ir_eqn.out_ir_tree for ir_eqn in ir.ir_eqns)
+
+        assert ir_liveness(ir) == [({x}, {a}), ({a}, {b}), ({b}, {c})]
+
+    def test_parallel_equations_keep_suffix_live_ins(self):
+        def program(a, b):
+            left = af.format("{}", a)
+            right = af.format("{}", b)
+            return left, right
+
+        ir = af.trace(program)("left", "right")
+        a, b = ir.in_ir_tree
+        left, right = (ir_eqn.out_ir_tree for ir_eqn in ir.ir_eqns)
+
+        assert ir_liveness(ir) == [({a, b}, {b, left}), ({b, left}, {left, right})]
+
+    def test_partial_output_mask_reduces_output_boundary_liveness(self):
+        def program(x):
+            a = af.concat(x, "a")
+            b = af.concat(x, "b")
+            return a, b
+
+        ir = af.trace(program)("seed")
+        (x,) = ir.in_ir_tree
+        a, b = (ir_eqn.out_ir_tree for ir_eqn in ir.ir_eqns)
+
+        assert ir_liveness(ir, out_used=(True, False)) == [({x}, {x, a}), ({x, a}, {a})]
+
+    def test_static_inputs_do_not_become_live_ir_vars(self):
+        def program(prefix, name):
+            return af.format("{} {}", prefix, name)
+
+        ir = af.trace(program, static=(True, False))("Hello", "World")
+        out_var = ir.out_ir_tree
+
+        assert ir_liveness(ir) == [({ir.in_ir_tree[1]}, {out_var})]

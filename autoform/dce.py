@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-from autoform.analysis import ir_tree_ir_vars
+from autoform.analysis import ir_liveness, ir_tree_ir_vars, ir_tree_used_ir_vars
 from autoform.core import IR, IREqn, IRLit, IRVal, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 
@@ -76,19 +76,15 @@ def dce[*A, R](
         assert treelib.structure(out_used) == treelib.structure(ir.out_ir_tree)
         user_out_used = out_used
 
-    def collect_used_ir_vars(tree: Tree[IRVal], used: Tree[bool]) -> set[IRVar]:
-        active_ir_vars: set[IRVar] = set()
-        flat_tree, flat_used = treelib.leaves(tree), treelib.leaves(used)
-        for ir_atom, keep in zip(flat_tree, flat_used, strict=True):
-            if keep and is_irvar(ir_atom):
-                active_ir_vars.add(ir_atom)
-        return active_ir_vars
+    live_ir_vars = ir_liveness(ir, out_used=user_out_used)
 
-    active_ir_vars: set[IRVar]
-    if out_used is None:
+    if live_ir_vars:
+        *_, (_, last_after) = live_ir_vars
+        active_ir_vars: set[IRVar] = set(last_after)
+    elif out_used is None:
         active_ir_vars = set(ir_tree_ir_vars(ir.out_ir_tree))
     else:
-        active_ir_vars = collect_used_ir_vars(ir.out_ir_tree, user_out_used)
+        active_ir_vars = ir_tree_used_ir_vars(ir.out_ir_tree, user_out_used)
     active_ir_eqns: deque[IREqn] = deque()
 
     def is_active_node(node: IRVal) -> bool:
@@ -108,7 +104,7 @@ def dce[*A, R](
 
         elif treelib.any(in_used):
             active_ir_eqns.appendleft(new_ir_eqn)
-            active_ir_vars |= collect_used_ir_vars(ir_eqn.in_ir_tree, in_used)
+            active_ir_vars |= ir_tree_used_ir_vars(ir_eqn.in_ir_tree, in_used)
 
     # NOTE(asem): output sanitization step
     # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.

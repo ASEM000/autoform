@@ -21,7 +21,7 @@ from typing import cast
 from autoform.core import IR, IREqn, IRVal, IRVar, is_irvar
 from autoform.utils import Tree, treelib
 
-__all__ = ["ir_tree_ir_vars", "ir_var_producers", "ir_eqn_graph"]
+__all__ = ["ir_tree_ir_vars", "ir_var_producers", "ir_eqn_graph", "ir_liveness"]
 
 
 def ir_tree_ir_vars(tree: Tree[IRVal], /) -> tuple[IRVar, ...]:
@@ -36,9 +36,7 @@ def ir_var_producers(ir: IR, /) -> dict[IRVar, IREqn]:
     producers: dict[IRVar, IREqn] = {}
     for ir_eqn in ir.ir_eqns:
         for ir_var in ir_tree_ir_vars(ir_eqn.out_ir_tree):
-            assert (prior := producers.get(ir_var)) is None, (
-                f"IRVar {ir_var!r} is produced by multiple equations: {prior!r}, {ir_eqn!r}"
-            )
+            assert producers.get(ir_var) is None
             producers[ir_var] = ir_eqn
     return producers
 
@@ -56,3 +54,50 @@ def ir_eqn_graph(ir: IR, /) -> dict[IREqn, list[IREqn]]:
                 seen_parents.add(p)
 
     return adjacency_list
+
+
+def ir_tree_used_ir_vars(tree: Tree[IRVal], used: Tree[bool], /) -> set[IRVar]:
+    # NOTE(asem): this helper reads a pytree of IR leaves together with a pytree mask of bools
+    # and returns exactly the IRVars whose corresponding mask entry is True.
+    # >>> tree = (IRVar(id=1), IRVar(id=2))
+    # >>> used = (True, False)
+    # >>> ir_tree_used_ir_vars(tree, used)
+    # {IRVar(id=1)}
+    used_ir_vars: set[IRVar] = set()
+    flat_tree, flat_used = treelib.leaves(tree), treelib.leaves(used)
+    for ir_atom, keep in zip(flat_tree, flat_used, strict=True):
+        keep and is_irvar(ir_atom) and used_ir_vars.add(ir_atom)
+    return used_ir_vars
+
+
+def ir_liveness(ir: IR, /, *, out_used: Tree[bool] = None) -> list[tuple[set[IRVar], set[IRVar]]]:
+    """Return per-equation liveness as ``(before, after)`` pairs."""
+
+    # NOTE(asem): liveness is a backward dataflow analysis that computes, for each equation, the set
+    # IRVars that are live (used by later equations or outputs) at the boundary before that equation.
+
+    if out_used is None:
+        live_after = set(ir_tree_ir_vars(ir.out_ir_tree))
+    else:
+        assert treelib.all(isinstance(leaf, bool) for leaf in treelib.leaves(out_used))
+        assert treelib.structure(out_used) == treelib.structure(ir.out_ir_tree)
+        # NOTE(asem): with a partial output mask, only the selected output IRVars are live.
+        # >>> def program(x):
+        # ...     a = af.concat(x, "!")
+        # ...     b = af.concat(x, "?")
+        # ...     return a, b
+        # >>> ir_liveness(ir, out_used=(True, False))[-1][1]
+        # {a}
+        live_after = ir_tree_used_ir_vars(ir.out_ir_tree, out_used)
+
+    liveness: list[tuple[set[IRVar], set[IRVar]]] = [None] * len(ir.ir_eqns)
+
+    for i in reversed(range(len(ir.ir_eqns))):
+        ir_eqn = ir.ir_eqns[i]
+        uses = set(ir_tree_ir_vars(ir_eqn.in_ir_tree))
+        defs = set(ir_tree_ir_vars(ir_eqn.out_ir_tree))
+        live_before = uses | (live_after - defs)
+        liveness[i] = (live_before, live_after)
+        live_after = live_before
+
+    return liveness
