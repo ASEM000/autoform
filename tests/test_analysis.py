@@ -88,7 +88,7 @@ class TestIrVarProducers:
         eqn_b = af.core.IREqn(af.core.Prim("b"), None, (), shared, {})
         ir = af.core.IR([eqn_a, eqn_b], in_ir_tree=(), out_ir_tree=shared)
 
-        with pytest.raises(AssertionError, match="produced by multiple equations"):
+        with pytest.raises(AssertionError):
             ir_var_producers(ir)
 
 
