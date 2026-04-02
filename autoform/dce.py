@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
+from autoform.analysis import ir_liveness, ir_tree_ir_vars, ir_tree_used_ir_vars
 from autoform.core import IR, IREqn, IRLit, IRVal, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 
@@ -75,19 +76,19 @@ def dce[*A, R](
         assert treelib.structure(out_used) == treelib.structure(ir.out_ir_tree)
         user_out_used = out_used
 
-    def collect_used_irvars(tree: Tree[IRVal], used: Tree[bool]) -> set[IRVar]:
-        active_irvars: set[IRVar] = set()
-        flat_tree, flat_used = treelib.leaves(tree), treelib.leaves(used)
-        for iratom, keep in zip(flat_tree, flat_used, strict=True):
-            if keep and is_irvar(iratom):
-                active_irvars.add(iratom)
-        return active_irvars
+    live_ir_vars = ir_liveness(ir, out_used=user_out_used)
 
-    active_irvars: set[IRVar] = collect_used_irvars(ir.out_ir_tree, user_out_used)
+    if live_ir_vars:
+        *_, (_, last_after) = live_ir_vars
+        active_ir_vars: set[IRVar] = set(last_after)
+    elif out_used is None:
+        active_ir_vars = set(ir_tree_ir_vars(ir.out_ir_tree))
+    else:
+        active_ir_vars = ir_tree_used_ir_vars(ir.out_ir_tree, user_out_used)
     active_ir_eqns: deque[IREqn] = deque()
 
     def is_active_node(node: IRVal) -> bool:
-        return is_irvar(node) and (node in active_irvars)
+        return is_irvar(node) and (node in active_ir_vars)
 
     for ir_eqn in reversed(ir.ir_eqns):
         # NOTE(asem): walk backwards and feed dce rules the appropriate
@@ -99,18 +100,18 @@ def dce[*A, R](
 
         if ir_eqn.intercept and keep_intercepts:
             active_ir_eqns.appendleft(new_ir_eqn)
-            active_irvars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
+            active_ir_vars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
 
         elif treelib.any(in_used):
             active_ir_eqns.appendleft(new_ir_eqn)
-            active_irvars |= collect_used_irvars(ir_eqn.in_ir_tree, in_used)
+            active_ir_vars |= ir_tree_used_ir_vars(ir_eqn.in_ir_tree, in_used)
 
     # NOTE(asem): output sanitization step
     # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
     # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
-    in_vars = set(x for x in treelib.leaves(ir.in_ir_tree) if is_irvar(x))
+    in_vars = set(ir_tree_ir_vars(ir.in_ir_tree))
     defined_vars: set[IRVar] = set(in_vars)
     for kept in active_ir_eqns:
         for atom in treelib.leaves(kept.out_ir_tree):

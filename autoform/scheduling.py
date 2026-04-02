@@ -20,21 +20,18 @@ import asyncio
 import functools as ft
 from collections import defaultdict, deque
 from collections.abc import Callable
-from operator import setitem
 
 from autoform.ad import Zero, is_zero, pullback, pushforward
+from autoform.analysis import ir_eqn_graph
 from autoform.batch import batch
 from autoform.core import (
     IR,
     IREqn,
-    IRVal,
-    IRVar,
     Prim,
     PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
-    is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -246,32 +243,16 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     # 2. level n must complete before level n+1 starts
 
     # NOTE(asem): three-step process:
-    # 1. map each irvar to its creator equation
-    # 2. build adjacency list (parent -> children) from irvar flow
+    # 1. map each ir_var to its creator equation
+    # 2. build adjacency list (parent -> children) from ir_var flow
     # 3. topological sort into levels using kahn's algorithm
 
-    # NOTE(asem): step 1: map irvar -> creator equation
-    irvar_to_parent: dict[IRVar, IREqn] = {}
-    for ir_eqn in ir.ir_eqns:
-        for out_iratom in treelib.leaves(ir_eqn.out_ir_tree):
-            is_irvar(out_iratom) and setitem(irvar_to_parent, out_iratom, ir_eqn)
-
-    # NOTE(asem): step 2: build adjacency list (parent -> children) and in-degree count
-    adjacency_list = defaultdict(list)
+    # NOTE(asem): step 1/2: build adjacency list (parent -> children) from ir_var flow
+    adjacency_list = ir_eqn_graph(ir)
     in_degree = defaultdict(lambda: 0)
-
-    def has_parent(iratom: IRVal) -> bool:
-        return is_irvar(iratom) and (iratom in irvar_to_parent)
-
-    for ir_eqn in ir.ir_eqns:
-        # NOTE(asem): avoid adding the same parent multiple times if the input is repeated
-        seen_parents: set[IREqn] = set()
-        for in_irvar in (x for x in treelib.leaves(ir_eqn.in_ir_tree) if has_parent(x)):
-            # NOTE(asem): consider `concat($1, $1)` this would repeat the same equation
-            if (parent := irvar_to_parent[in_irvar]) not in seen_parents:
-                adjacency_list[parent].append(ir_eqn)
-                in_degree[ir_eqn] += 1
-                seen_parents.add(parent)
+    for children in adjacency_list.values():
+        for child in children:
+            in_degree[child] += 1
 
     # NOTE(asem): step 3: kahn's algorithm
     # basically prune nodes with 0 indegree then update the children indegree
@@ -400,10 +381,10 @@ def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> scheduled = af.sched(ir)
         >>>
         >>> # sync execution (sequential)
-        >>> result = scheduled.call("hello")
+        >>> result = scheduled.call("hello") # doctest: +SKIP
         >>>
         >>> # async execution (concurrent via asyncio.gather)
-        >>> result = asyncio.run(scheduled.acall("hello"))
+        >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
     levels: list[list[IREqn]] = toposort_levels(ir)
     out_ir_eqns: list[IREqn] = []

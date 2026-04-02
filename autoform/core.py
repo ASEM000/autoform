@@ -284,14 +284,14 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     assert isinstance(indent, int) and indent >= 0
     sp = " " * indent
 
-    def format_irval(irval: IRVal) -> str:
-        assert isinstance(irval, IRVal)
-        if is_irvar(irval):
-            var_type = type(irval).__name__
-            type_info = f"[{irval.type.__name__}]" if irval.type is not None else ""
-            return f"%{irval.id}:{var_type}{type_info}"
-        assert is_irlit(irval)
-        val = irval.value
+    def format_ir_val(ir_val: IRVal) -> str:
+        assert isinstance(ir_val, IRVal)
+        if is_irvar(ir_val):
+            var_type = type(ir_val).__name__
+            type_info = f"[{ir_val.type.__name__}]" if ir_val.type is not None else ""
+            return f"%{ir_val.id}:{var_type}{type_info}"
+        assert is_irlit(ir_val)
+        val = ir_val.value
         if isinstance(val, IR):
             if expand_ir:
                 sub_code = generate_text_code(val, indent, expand_ir=True)
@@ -309,7 +309,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
     def format_tree(tree: Tree) -> str:
         leaves = treelib.leaves(tree)
-        return ", ".join(format_irval(leaf) for leaf in leaves) if leaves else "()"
+        return ", ".join(format_ir_val(leaf) for leaf in leaves) if leaves else "()"
 
     in_sig = format_tree(ir.in_ir_tree)
     out_sig = format_tree(ir.out_ir_tree)
@@ -593,16 +593,16 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
         in_tree = args
         env: dict[IRVar, Any] = {}
 
-        def read(irval: IRVal) -> Any:
-            return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
+        def read(ir_val: IRVal) -> Any:
+            return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
 
-        def check_input(irval: IRVal, value: Any):
-            if is_irlit(irval):
-                msg = f"Static input mismatch: expected {irval.value!r}, got {value!r}"
-                assert irval.value == value, msg
+        def check_input(ir_val: IRVal, value: Any):
+            if is_irlit(ir_val):
+                msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+                assert ir_val.value == value, msg
 
-        def write(irval: IRVal, value):
-            is_irvar(irval) and setitem(env, irval, value)
+        def write(ir_val: IRVal, value):
+            is_irvar(ir_val) and setitem(env, ir_val, value)
 
         treelib.map(check_input, ir.in_ir_tree, in_tree)
         treelib.map(write, ir.in_ir_tree, in_tree)
@@ -638,16 +638,16 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
         in_tree = args
         env: dict[IRVar, Any] = {}
 
-        def read(irval: IRVal) -> Any:
-            return env[irval] if is_irvar(irval) else cast(IRLit, irval).value
+        def read(ir_val: IRVal) -> Any:
+            return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
 
-        def check_input(irval: IRVal, value: Any):
-            if is_irlit(irval):
-                msg = f"Static input mismatch: expected {irval.value!r}, got {value!r}"
-                assert irval.value == value, msg
+        def check_input(ir_val: IRVal, value: Any):
+            if is_irlit(ir_val):
+                msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+                assert ir_val.value == value, msg
 
-        def write(irval: IRVal, value):
-            is_irvar(irval) and setitem(env, irval, value)
+        def write(ir_val: IRVal, value):
+            is_irvar(ir_val) and setitem(env, ir_val, value)
 
         treelib.map(check_input, ir.in_ir_tree, in_tree)
         treelib.map(write, ir.in_ir_tree, in_tree)
