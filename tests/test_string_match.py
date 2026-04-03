@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.core import AVal, trace
+from autoform.core import AVal, TypedAVal, trace
 from autoform.string import abstract_match
 
 
@@ -215,13 +215,13 @@ class TestAbstractMatch:
 
     def test_abstract_match_with_var_returns_var(self):
 
-        result = abstract_match((AVal(str), "yes"))
+        result = abstract_match((TypedAVal(str), "yes"))
         assert isinstance(result, AVal)
 
-        result = abstract_match(("yes", AVal(str)))
+        result = abstract_match(("yes", TypedAVal(str)))
         assert isinstance(result, AVal)
 
-        result = abstract_match((AVal(str), AVal(str)))
+        result = abstract_match((TypedAVal(str), TypedAVal(str)))
         assert isinstance(result, AVal)
 
     def test_abstract_match_rejects_non_string_input(self):

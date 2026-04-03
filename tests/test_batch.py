@@ -281,7 +281,7 @@ class TestBatchMultipleOutputs:
 
         @ft.partial(af.core.abstract_rules.set, split_p)
         def abstract_split(x):
-            return af.core.AVal(str), af.core.AVal(str)
+            return af.core.TypedAVal(str), af.core.TypedAVal(str)
 
         @ft.partial(af.core.impl_rules.set, split_p)
         def impl_split(x):
@@ -308,7 +308,7 @@ class TestBatchMultipleOutputs:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_nested(x):
-            return (af.core.AVal(str), af.core.AVal(str)), af.core.AVal(str)
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str)), af.core.TypedAVal(str)
 
         @ft.partial(af.core.impl_rules.set, nested_p)
         def impl_nested(x):
@@ -377,7 +377,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, single_p)
         def abstract_rule(x):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         @ft.partial(af.core.batch_rules.set, single_p)
         def batch_rule(in_tree):
@@ -401,7 +401,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def bad_batch_rule(in_tree):
@@ -426,7 +426,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def correct_batch_rule(in_tree):
@@ -451,7 +451,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.AVal(str), "second": (af.core.AVal(str), af.core.AVal(str))}
+            return {"first": af.core.TypedAVal(str), "second": (af.core.TypedAVal(str), af.core.TypedAVal(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def bad_batch_rule(in_tree):
@@ -476,7 +476,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.AVal(str), "second": (af.core.AVal(str), af.core.AVal(str))}
+            return {"first": af.core.TypedAVal(str), "second": (af.core.TypedAVal(str), af.core.TypedAVal(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def correct_batch_rule(in_tree):
@@ -501,7 +501,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):
@@ -526,7 +526,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):

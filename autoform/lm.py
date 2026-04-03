@@ -28,11 +28,11 @@ from litellm import acompletion, completion, get_model_info
 
 from autoform.ad import materialize
 from autoform.core import (
-    AVal,
     EvalType,
     Intercept,
     Prim,
     PrimTag,
+    TypedAVal,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -188,7 +188,7 @@ async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], model: str)
 
 
 def abstract_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> EvalType:
-    return AVal(str)
+    return TypedAVal(str)
 
 
 def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str], model: str) -> tuple[Tree, Tree]:
@@ -347,7 +347,7 @@ async def aimpl_struct_lm_call(
 def abstract_struct_lm_call(
     in_tree: Tree, /, *, roles: list[str], model: str, struct: type[Struct]
 ) -> Tree:
-    return treelib.map(AVal, struct_type_tree(struct))
+    return treelib.map(TypedAVal, struct_type_tree(struct))
 
 
 def pushforward_struct_lm_call(

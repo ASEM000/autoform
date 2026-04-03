@@ -34,7 +34,7 @@ def impl_greet(in_tree) -> str:
 
 @ft.partial(af.core.abstract_rules.set, greet_p)
 def abstract_greet(in_tree) -> af.core.AVal:
-    return af.core.AVal(str)
+    return af.core.TypedAVal(str)
 
 
 @ft.partial(af.core.push_rules.set, greet_p)

@@ -39,7 +39,7 @@ class TestPrimitive:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(x):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         assert af.core.abstract_rules.get(p) is abstract_rule
 
@@ -170,7 +170,7 @@ class TestBind:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         def func(x):
             return p.bind(x, multiplier=3)

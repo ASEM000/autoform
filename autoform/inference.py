@@ -33,6 +33,7 @@ from autoform.core import (
     IRVar,
     Prim,
     TransformationTag,
+    TypedAVal,
     abstract_rules,
     active_interpreter,
     batch_rules,
@@ -111,7 +112,7 @@ def impl_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> float:
 
 def abstract_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> AVal:
     del in_tree, judge
-    return AVal(float)
+    return TypedAVal(float)
 
 
 def batch_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> tuple[Tree, bool]:
@@ -253,7 +254,7 @@ async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
 
 def abstract_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, AVal]:
     del in_tree
-    return treelib.map(lambda x: x.aval, ir.out_ir_tree), AVal(float)
+    return treelib.map(lambda x: x.aval, ir.out_ir_tree), TypedAVal(float)
 
 
 def unsupported_weight_transform(name: str):

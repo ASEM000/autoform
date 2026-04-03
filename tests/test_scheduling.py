@@ -90,7 +90,7 @@ class TestGatherValidation:
 
         @ft.partial(af.core.abstract_rules.set, error_p)
         def abstract_error(x):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         @ft.partial(af.core.impl_rules.set, error_p)
         def impl_error(x):

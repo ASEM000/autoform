@@ -31,7 +31,10 @@ from autoform.utils import Tree, lru_cache, treelib
 __all__ = [
     # base types
     "AVal",
+    "TypedAVal",
+    "Val",
     "val_types",
+    "is_val",
     # ir vals
     "IRVal",
     "IRVar",
@@ -85,10 +88,23 @@ def is_val(x) -> bool:
 
 
 class AVal:
+    __slots__ = ()
+
+
+class TypedAVal(AVal):
     __slots__ = "type"
 
     def __init__(self, type: type):
         self.type = type
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.type.__name__})"
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TypedAVal) and self.type is other.type
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.type))
 
 
 def is_var(x) -> TypeGuard[AVal]:
@@ -112,34 +128,40 @@ def typeof(x, /) -> type:
 class IRVal(ABC):
     __slots__ = ()
 
-    @property
-    @abstractmethod
-    def aval(self) -> Any: ...
 
-
-class IRVar[T: type](IRVal):
-    __slots__ = ("id", "source", "type")
+class IRVar(IRVal):
+    __slots__ = ("id", "source", "aval")
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
 
-    def __init__(self, /, *, type: T, source: IRVar | None = None):
+    def __init__(self, /, *, aval: AVal | None = None, type: type | None = None, source: IRVar | None = None):
         self.id = next(self.counter)
         assert is_irvar(source) or source is None
+        assert (aval is None) ^ (type is None), "Provide exactly one of `aval` or `type`."
+        aval = TypedAVal(type) if aval is None else aval
+        assert is_var(aval)
         self.source = source
-        self.type = type
+        self.aval = aval
 
     @classmethod
-    def fresh(cls, *, type: T, source: IRVar | None = None) -> Self:
+    def fresh(
+        cls, *, aval: AVal | None = None, type: type | None = None, source: IRVar | None = None
+    ) -> Self:
+        assert (aval is None) ^ (type is None), "Provide exactly one of `aval` or `type`."
         with cls.lock:
-            return cls(source=source, type=type)
+            return cls(source=source, aval=aval, type=type)
 
     def __repr__(self) -> str:
         source = f", source={self.source!r}" if self.source else ""
-        return f"{type(self).__name__}[{self.type.__name__}](id={self.id}{source})"
+        aval = self.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
+        return f"{type(self).__name__}[{aval}](id={self.id}{source})"
 
     @property
-    def aval(self) -> AVal:
-        return AVal(self.type)
+    def type(self) -> type:
+        assert isinstance(
+            self.aval, TypedAVal
+        ), f"`IRVar.type` only supports scalar avals, got {self.aval!r}"
+        return self.aval.type
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
@@ -494,10 +516,10 @@ class TracingInterpreter(Interpreter):
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_val(x) -> IRVal:
-            # NOTE(asem): abstract rules return `AVal`/ python types.
+            # NOTE(asem): abstract rules return `AVal`/ python leaves.
             # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
-            return IRVar.fresh(type=x.type) if is_var(x) else IRLit(x)
+            return IRVar.fresh(aval=x) if is_var(x) else IRLit(x)
 
         out_ir_tree = treelib.map(to_out_ir_val, out_aval_tree)
         intercept = active_intercept.get()
@@ -545,7 +567,7 @@ def trace[*A, R](
     def to_ir_var(x, /) -> IRVar:
         assert not is_irval(x), "Inputs to `trace` must be normal python types"
         assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(type=type(x))
+        return IRVar.fresh(aval=TypedAVal(type(x)))
 
     def to_in_ir_val(x, is_static: bool) -> IRVal:
         return IRLit(x) if is_static else to_ir_var(x)
