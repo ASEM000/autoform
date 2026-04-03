@@ -397,6 +397,48 @@ class TestRunIRInline:
         assert result == ["[a]", "[b]", "[c]"]
 
 
+class TestTransformWrapperAvals:
+    def test_pushforward_wrapper_preserves_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("pf")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        pf_ir = af.pushforward(ir)
+        primals_in, tangents_in = pf_ir.in_ir_tree
+        primals_out, tangents_out = pf_ir.out_ir_tree
+
+        assert primals_in[0].aval is aval
+        assert tangents_in[0].aval is aval
+        assert primals_out[0].aval is aval
+        assert tangents_out[0].aval is aval
+
+    def test_pullback_wrapper_preserves_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("pb")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        pb_ir = af.pullback(ir)
+        primals_in, cotangents_in = pb_ir.in_ir_tree
+        primals_out, cotangents_out = pb_ir.out_ir_tree
+
+        assert primals_in[0].aval is aval
+        assert cotangents_in[0].aval is aval
+        assert primals_out[0].aval is aval
+        assert cotangents_out[0].aval is aval
+
+
 class TestCotangentHelpers:
     def test_zero_str(self):
         z = af.ad.Zero(str)

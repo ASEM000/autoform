@@ -170,3 +170,21 @@ class TestWeight:
         output, total = await weight_ir.acall("abc")
         assert output == "abc!"
         assert total == 3.0
+
+    def test_weight_wrapper_preserves_output_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("out")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        weight_ir = af.weight(ir)
+        output_var, total_var = weight_ir.out_ir_tree
+
+        assert output_var[0].aval is aval
+        assert isinstance(total_var.aval, af.core.TypedAVal)
+        assert total_var.aval.type is float

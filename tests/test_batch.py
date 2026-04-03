@@ -158,6 +158,22 @@ class TestBatchIRStructure:
         batched_ir = af.batch(ir)
         assert "ir" in batched_ir.ir_eqns[0].params
 
+    def test_batch_wrapper_preserves_input_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("input")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        batched_ir = af.batch(ir)
+
+        assert batched_ir.in_ir_tree[0].aval is aval
+        assert batched_ir.out_ir_tree[0].aval is aval
+
 
 class TestNestedBatch:
     def test_batch_of_batch(self):

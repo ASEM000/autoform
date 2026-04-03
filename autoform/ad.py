@@ -156,11 +156,11 @@ def pushforward(ir: IR, /) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom: IRVal):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     def make_t(atom: IRVal):
         return (
-            IRVar.fresh(type=atom.type, source=atom)
+            IRVar.fresh(aval=atom.aval, source=atom)
             if is_irvar(atom)
             else IRLit(Zero(type(atom.value)))
         )
@@ -443,11 +443,11 @@ def pullback(ir: IR, /) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     def make_c(atom):
         return (
-            IRVar.fresh(type=atom.type, source=atom)
+            IRVar.fresh(aval=atom.aval, source=atom)
             if is_irvar(atom)
             else IRLit(Zero(type(atom.value)))
         )

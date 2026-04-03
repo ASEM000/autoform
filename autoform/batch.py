@@ -114,7 +114,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_b(atom):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     in_b_ir_tree = treelib.map(make_b, ir.in_ir_tree)
     out_b_ir_tree = treelib.map(make_b, ir.out_ir_tree)

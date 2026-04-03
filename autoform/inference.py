@@ -190,10 +190,10 @@ def weight(ir: IR, /) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make(atom: IRVal):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     in_ir_tree = treelib.map(make, ir.in_ir_tree)
-    out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(type=float))
+    out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(aval=TypedAVal(float)))
     ir_eqn = IREqn(weight_call_p, None, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
