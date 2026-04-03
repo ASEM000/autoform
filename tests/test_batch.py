@@ -30,6 +30,15 @@ class TestBatchBasic:
         result = batched_ir.call(["hello", "world"])
         assert result == ["hello!", "world!"]
 
+    def test_single_arg_tuple_batch_container(self):
+        def shout(text):
+            return af.format("{}!", text)
+
+        ir = af.trace(shout)("hello")
+        batched_ir = af.batch(ir)
+        result = batched_ir.call(("hello", "world"))
+        assert result == ("hello!", "world!")
+
     @pytest.mark.asyncio(loop_scope="function")
     async def test_single_arg_async(self):
         def shout(text):

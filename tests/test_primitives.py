@@ -82,7 +82,7 @@ class TestPrimitive:
 
 class TestIRVal:
     def test_ir_var_aval_returns_aval(self):
-        ir_var = af.core.IRVar(type=str)
+        ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
 
         assert af.core.is_irval(ir_var)
         assert isinstance(ir_var.aval, af.core.AVal)
@@ -190,7 +190,7 @@ class TestInterpreter:
         tracer = af.core.TracingInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.format("Hello, {}!", af.core.IRVar.fresh(type=str))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
             assert len(tracer.ir_eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
@@ -198,7 +198,7 @@ class TestInterpreter:
     def test_tracing_interpreter_creates_ir_eqns(self):
         tracer = af.core.TracingInterpreter()
         with af.core.using_interpreter(tracer):
-            af.format("Hello, {}!", af.core.IRVar.fresh(type=str))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
         assert len(tracer.ir_eqns) == 1
 
 
@@ -477,7 +477,7 @@ class TestCotangentHelpers:
 class TestLiteralZeroing:
     def test_pushforward_zeros_literal_input_tangent(self):
         lit = af.core.IRLit("constant")
-        var = af.core.IRVar(type=str)
+        var = af.core.IRVar(aval=af.core.TypedAVal(str))
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)
@@ -526,7 +526,7 @@ class TestLiteralZeroing:
 
     def test_pullback_zeros_literal_input_cotangent(self):
         lit = af.core.IRLit("constant_input")
-        var = af.core.IRVar(type=str)
+        var = af.core.IRVar(aval=af.core.TypedAVal(str))
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)

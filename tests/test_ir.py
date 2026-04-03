@@ -33,7 +33,8 @@ class TestBuildIR:
             assert isinstance(ir.in_ir_tree, tuple)
             assert len(ir.in_ir_tree) == 1
             assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-            assert ir.in_ir_tree[0].type is type(traced)
+            assert isinstance(ir.in_ir_tree[0].aval, af.core.TypedAVal)
+            assert ir.in_ir_tree[0].aval.type is type(traced)
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):

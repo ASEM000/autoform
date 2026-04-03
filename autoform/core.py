@@ -152,36 +152,22 @@ class IRVar(IRVal):
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
 
-    def __init__(
-        self, /, *, aval: AVal | None = None, type: type | None = None, source: IRVar | None = None
-    ):
+    def __init__(self, /, *, aval: AVal, source: IRVar | None = None):
         self.id = next(self.counter)
         assert is_irvar(source) or source is None
-        assert (aval is None) ^ (type is None), "Provide exactly one of `aval` or `type`."
-        aval = TypedAVal(type) if aval is None else aval
         assert is_var(aval)
         self.source = source
         self.aval = aval
 
     @classmethod
-    def fresh(
-        cls, *, aval: AVal | None = None, type: type | None = None, source: IRVar | None = None
-    ) -> Self:
-        assert (aval is None) ^ (type is None), "Provide exactly one of `aval` or `type`."
+    def fresh(cls, *, aval: AVal, source: IRVar | None = None) -> Self:
         with cls.lock:
-            return cls(source=source, aval=aval, type=type)
+            return cls(source=source, aval=aval)
 
     def __repr__(self) -> str:
         source = f", source={self.source!r}" if self.source else ""
-        aval = self.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
+        aval = self.aval.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
         return f"{type(self).__name__}[{aval}](id={self.id}{source})"
-
-    @property
-    def type(self) -> type:
-        assert isinstance(self.aval, TypedAVal), (
-            f"`IRVar.type` only supports scalar avals, got {self.aval!r}"
-        )
-        return self.aval.type
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
@@ -330,7 +316,12 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         assert isinstance(ir_val, IRVal)
         if is_irvar(ir_val):
             var_type = type(ir_val).__name__
-            type_info = f"[{ir_val.type.__name__}]" if ir_val.type is not None else ""
+            aval_info = (
+                ir_val.aval.type.__name__
+                if isinstance(ir_val.aval, TypedAVal)
+                else repr(ir_val.aval)
+            )
+            type_info = f"[{aval_info}]"
             return f"%{ir_val.id}:{var_type}{type_info}"
         assert is_irlit(ir_val)
         val = ir_val.value
