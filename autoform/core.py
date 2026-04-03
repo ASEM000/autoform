@@ -152,7 +152,9 @@ class IRVar(IRVal):
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
 
-    def __init__(self, /, *, aval: AVal | None = None, type: type | None = None, source: IRVar | None = None):
+    def __init__(
+        self, /, *, aval: AVal | None = None, type: type | None = None, source: IRVar | None = None
+    ):
         self.id = next(self.counter)
         assert is_irvar(source) or source is None
         assert (aval is None) ^ (type is None), "Provide exactly one of `aval` or `type`."
@@ -176,9 +178,9 @@ class IRVar(IRVal):
 
     @property
     def type(self) -> type:
-        assert isinstance(
-            self.aval, TypedAVal
-        ), f"`IRVar.type` only supports scalar avals, got {self.aval!r}"
+        assert isinstance(self.aval, TypedAVal), (
+            f"`IRVar.type` only supports scalar avals, got {self.aval!r}"
+        )
         return self.aval.type
 
 
@@ -611,6 +613,58 @@ def trace[*A, R](
 # ==================================================================================================
 
 
+def run_ir(ir: IR, in_tree: Tree, /, *, interpreter: Interpreter) -> Tree:
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
+    env: dict[IRVar, Any] = {}
+
+    def read(ir_val: IRVal) -> Any:
+        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
+
+    def check_input(ir_val: IRVal, value: Any):
+        if is_irlit(ir_val):
+            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+            assert ir_val.value == value, msg
+
+    def write(ir_val: IRVal, value: Any):
+        is_irvar(ir_val) and setitem(env, ir_val, value)
+
+    treelib.map(check_input, ir.in_ir_tree, in_tree)
+    treelib.map(write, ir.in_ir_tree, in_tree)
+    with using_interpreter(interpreter):
+        for ir_eqn in ir.ir_eqns:
+            in_values = treelib.map(read, ir_eqn.in_ir_tree)
+            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+            treelib.map(write, ir_eqn.out_ir_tree, out_values)
+    return treelib.map(read, ir.out_ir_tree)
+
+
+async def arun_ir(ir: IR, in_tree: Tree, /, *, interpreter: Interpreter) -> Tree:
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
+    env: dict[IRVar, Any] = {}
+
+    def read(ir_val: IRVal) -> Any:
+        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
+
+    def check_input(ir_val: IRVal, value: Any):
+        if is_irlit(ir_val):
+            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+            assert ir_val.value == value, msg
+
+    def write(ir_val: IRVal, value: Any):
+        is_irvar(ir_val) and setitem(env, ir_val, value)
+
+    treelib.map(check_input, ir.in_ir_tree, in_tree)
+    treelib.map(write, ir.in_ir_tree, in_tree)
+    with using_interpreter(interpreter):
+        for ir_eqn in ir.ir_eqns:
+            in_values = treelib.map(read, ir_eqn.in_ir_tree)
+            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
+            treelib.map(write, ir_eqn.out_ir_tree, out_values)
+    return treelib.map(read, ir.out_ir_tree)
+
+
 @ft.partial(lru_cache, maxsize=256)
 def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     """Call an IR.
@@ -629,28 +683,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     """
 
     def func(*args: *A) -> R:
-        assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        in_tree = args
-        env: dict[IRVar, Any] = {}
-
-        def read(ir_val: IRVal) -> Any:
-            return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-        def check_input(ir_val: IRVal, value: Any):
-            if is_irlit(ir_val):
-                msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-                assert ir_val.value == value, msg
-
-        def write(ir_val: IRVal, value):
-            is_irvar(ir_val) and setitem(env, ir_val, value)
-
-        treelib.map(check_input, ir.in_ir_tree, in_tree)
-        treelib.map(write, ir.in_ir_tree, in_tree)
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-        return treelib.map(read, ir.out_ir_tree)
+        return run_ir(ir, args, interpreter=active_interpreter.get())
 
     return func
 
@@ -674,28 +707,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     """
 
     async def func(*args: *A) -> R:
-        assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        in_tree = args
-        env: dict[IRVar, Any] = {}
-
-        def read(ir_val: IRVal) -> Any:
-            return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-        def check_input(ir_val: IRVal, value: Any):
-            if is_irlit(ir_val):
-                msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-                assert ir_val.value == value, msg
-
-        def write(ir_val: IRVal, value):
-            is_irvar(ir_val) and setitem(env, ir_val, value)
-
-        treelib.map(check_input, ir.in_ir_tree, in_tree)
-        treelib.map(write, ir.in_ir_tree, in_tree)
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-        return treelib.map(read, ir.out_ir_tree)
+        return await arun_ir(ir, args, interpreter=active_interpreter.get())
 
     return func
 

@@ -19,8 +19,7 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 from collections.abc import Callable
-from operator import add, setitem
-from typing import Any, cast
+from operator import add
 
 from autoform.core import (
     IR,
@@ -28,7 +27,6 @@ from autoform.core import (
     Intercept,
     Interpreter,
     IREqn,
-    IRLit,
     IRVal,
     IRVar,
     Prim,
@@ -36,15 +34,15 @@ from autoform.core import (
     TypedAVal,
     abstract_rules,
     active_interpreter,
+    arun_ir,
     batch_rules,
     impl_rules,
-    is_irlit,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    run_ir,
     using_intercept,
-    using_interpreter,
 )
 from autoform.utils import (
     Tree,
@@ -199,55 +197,15 @@ def weight(ir: IR, /) -> IR:
 
 
 def impl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
-    env: dict[IRVar, Any] = {}
-
-    def read(ir_val: IRVal) -> Any:
-        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-    def check_input(ir_val: IRVal, value: Any):
-        if is_irlit(ir_val):
-            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-            assert ir_val.value == value, msg
-
-    def write(ir_val: IRVal, value: Any):
-        is_irvar(ir_val) and setitem(env, ir_val, value)
-
-    treelib.map(check_input, ir.in_ir_tree, in_tree)
-    treelib.map(write, ir.in_ir_tree, in_tree)
     interpreter = WeightInterpreter()
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-    out_tree = treelib.map(read, ir.out_ir_tree)
+    out_tree = run_ir(ir, in_tree, interpreter=interpreter)
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
 
 async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
-    env: dict[IRVar, Any] = {}
-
-    def read(ir_val: IRVal) -> Any:
-        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-    def check_input(ir_val: IRVal, value: Any):
-        if is_irlit(ir_val):
-            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-            assert ir_val.value == value, msg
-
-    def write(ir_val: IRVal, value: Any):
-        is_irvar(ir_val) and setitem(env, ir_val, value)
-
-    treelib.map(check_input, ir.in_ir_tree, in_tree)
-    treelib.map(write, ir.in_ir_tree, in_tree)
     interpreter = WeightInterpreter()
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-    out_tree = treelib.map(read, ir.out_ir_tree)
+    out_tree = await arun_ir(ir, in_tree, interpreter=interpreter)
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
