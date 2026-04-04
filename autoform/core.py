@@ -312,7 +312,6 @@ class IR[*A, R]:
         return walk(self)(*args)
 
 
-
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
     assert isinstance(indent, int) and indent >= 0
     sp = " " * indent
@@ -625,10 +624,11 @@ def call_with_interpreter[*A, R](
         gen = walk(ir)(*args)
         with using_interpreter(interpreter):
             try:
-                ir_eqn, in_values = next(gen)
+                step = next(gen)
                 while True:
+                    ir_eqn, in_values = step
                     out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-                    ir_eqn, in_values = gen.send(out_values)
+                    step = gen.send(out_values)
             except StopIteration as e:
                 return e.value
 
@@ -646,10 +646,11 @@ def acall_with_interpreter[*A, R](
         gen = walk(ir)(*args)
         with using_interpreter(interpreter):
             try:
-                ir_eqn, in_values = next(gen)
+                step = next(gen)
                 while True:
+                    ir_eqn, in_values = step
                     out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-                    ir_eqn, in_values = gen.send(out_values)
+                    step = gen.send(out_values)
             except StopIteration as e:
                 return e.value
 
