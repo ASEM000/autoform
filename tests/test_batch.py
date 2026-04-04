@@ -180,10 +180,8 @@ class TestBatchIRStructure:
 
         batched_ir = af.batch(ir)
 
-        assert isinstance(batched_ir.in_ir_tree[0].aval, af.core.MappedAVal)
-        assert batched_ir.in_ir_tree[0].aval.inner is aval
-        assert isinstance(batched_ir.out_ir_tree[0].aval, af.core.MappedAVal)
-        assert batched_ir.out_ir_tree[0].aval.inner is aval
+        assert batched_ir.in_ir_tree[0].aval is aval
+        assert batched_ir.out_ir_tree[0].aval is aval
 
     def test_batch_wrapper_preserves_broadcast_aval(self):
         class TaggedAVal(af.core.AVal):
@@ -209,9 +207,8 @@ class TestBatchIRStructure:
         batched_ir = af.batch(ir)
 
         assert isinstance(batched_ir.out_ir_tree, af.core.IRVar)
-        assert isinstance(batched_ir.out_ir_tree.aval, af.core.MappedAVal)
-        assert isinstance(batched_ir.out_ir_tree.aval.inner, af.core.TypedAVal)
-        assert batched_ir.out_ir_tree.aval.inner.type is str
+        assert isinstance(batched_ir.out_ir_tree.aval, af.core.TypedAVal)
+        assert batched_ir.out_ir_tree.aval.type is str
         assert batched_ir.call(["a", "b"]) == ["c", "c"]
 
     def test_batch_broadcast_constant_output_stays_literal(self):

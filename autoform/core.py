@@ -31,7 +31,6 @@ from autoform.utils import Tree, lru_cache, treelib
 __all__ = [
     # base types
     "AVal",
-    "MappedAVal",
     "TypedAVal",
     "Val",
     "val_types",
@@ -107,23 +106,6 @@ class TypedAVal(AVal):
 
     def __hash__(self) -> int:
         return hash((type(self), self.type))
-
-
-class MappedAVal(AVal):
-    __slots__ = "inner"
-
-    def __init__(self, inner: AVal):
-        assert is_var(inner), f"Expected abstract value, got {inner!r}"
-        self.inner = inner
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.inner!r})"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, MappedAVal) and self.inner == other.inner
-
-    def __hash__(self) -> int:
-        return hash((type(self), self.inner))
 
 
 def is_var(x) -> TypeGuard[AVal]:

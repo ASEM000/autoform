@@ -28,7 +28,6 @@ from autoform.core import (
     IREqn,
     IRLit,
     IRVar,
-    MappedAVal,
     Prim,
     TransformationTag,
     TypedAVal,
@@ -120,15 +119,14 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     def make_in(atom, is_batched: bool):
         if not is_irvar(atom):
             return atom
-        aval = MappedAVal(atom.aval) if is_batched else atom.aval
-        return IRVar.fresh(aval=aval, source=atom)
+        del is_batched
+        return IRVar.fresh(aval=atom.aval, source=atom)
 
     def make_out(atom):
         if is_irvar(atom):
-            aval = MappedAVal(atom.aval) if has_batched_input else atom.aval
-            return IRVar.fresh(aval=aval, source=atom)
+            return IRVar.fresh(aval=atom.aval, source=atom)
         if has_batched_input:
-            return IRVar.fresh(aval=MappedAVal(TypedAVal(type(atom.value))))
+            return IRVar.fresh(aval=TypedAVal(type(atom.value)))
         return atom
 
     in_b_ir_tree = treelib.map(make_in, ir.in_ir_tree, in_batched_tree)
@@ -260,9 +258,9 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
 
     def out_aval(atom):
         if is_irvar(atom):
-            return MappedAVal(atom.aval) if has_batched_input else atom.aval
+            return atom.aval
         if has_batched_input:
-            return MappedAVal(TypedAVal(type(atom.value)))
+            return TypedAVal(type(atom.value))
         return atom.value
 
     return treelib.map(out_aval, ir.out_ir_tree)
