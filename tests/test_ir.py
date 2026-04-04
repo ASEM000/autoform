@@ -183,9 +183,9 @@ class TestRunIR:
         assert ir_eqn.prim.name == "concat"
         assert in_values == ("world", "!")
 
-        with pytest.raises(StopIteration) as e:
-            gen.send("world!")
-        assert e.value.value == "world!"
+        done, out = gen.send("world!")
+        assert done is None
+        assert out == "world!"
 
     def test_walk_allows_external_step_execution(self):
         def program(x):
@@ -199,9 +199,9 @@ class TestRunIR:
         assert in_values == ("world", "!")
         out_values = ir_eqn.bind(("there", "!"), **ir_eqn.params)
 
-        with pytest.raises(StopIteration) as e:
-            gen.send(out_values)
-        assert e.value.value == "there!"
+        done, out = gen.send(out_values)
+        assert done is None
+        assert out == "there!"
 
     def test_basic_execution(self):
         def program(x):

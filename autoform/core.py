@@ -290,7 +290,7 @@ class IR[*A, R]:
     async def acall(self, *args: *A) -> R:
         return await acall(self)(*args)
 
-    def walk(self, *args: *A) -> Generator[tuple[IREqn, Tree], Tree, R]:
+    def walk(self, *args: *A) -> Generator[tuple[IREqn | None, Tree], Tree, None]:
         return walk(self)(*args)
 
 
@@ -557,12 +557,14 @@ def trace[*A, R](
 # WALK
 # ==================================================================================================
 
+type GenStep = tuple[IREqn | None, Tree]
+
 
 @ft.partial(lru_cache, maxsize=256)
-def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[tuple[IREqn, Tree], Tree, R]]:
+def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
     """Walk an IR one equation at a time."""
 
-    def func(*args: *A) -> Generator[tuple[IREqn, Tree], Tree, R]:
+    def func(*args: *A) -> Generator[GenStep, Tree, None]:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
         env: dict[IRVar, Any] = {}
 
@@ -585,7 +587,7 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[tuple[IREqn, Tree]
             out_values = yield ir_eqn, in_values
             treelib.map(write, ir_eqn.out_ir_tree, out_values)
 
-        return treelib.map(read, ir.out_ir_tree)
+        yield None, treelib.map(read, ir.out_ir_tree)
 
     return func
 
@@ -602,16 +604,16 @@ def call_with_interpreter[*A, R](
     assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
 
     def func(*args: *A) -> R:
-        gen = walk(ir)(*args)
         with using_interpreter(interpreter):
-            try:
-                step = next(gen)
-                while True:
-                    ir_eqn, in_values = step
-                    out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-                    step = gen.send(out_values)
-            except StopIteration as e:
-                return e.value
+            step = next(gen := walk(ir)(*args))
+            for _ in ir.ir_eqns:
+                ir_eqn, in_values = step
+                assert ir_eqn is not None
+                out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+                step = gen.send(out_values)
+            ir_eqn, out = step
+            assert ir_eqn is None
+        return out
 
     return func
 
@@ -623,36 +625,22 @@ def acall_with_interpreter[*A, R](
     assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
 
     async def func(*args: *A) -> R:
-        gen = walk(ir)(*args)
         with using_interpreter(interpreter):
-            try:
-                step = next(gen)
-                while True:
-                    ir_eqn, in_values = step
-                    out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-                    step = gen.send(out_values)
-            except StopIteration as e:
-                return e.value
+            step = next(gen := walk(ir)(*args))
+            for _ in ir.ir_eqns:
+                ir_eqn, in_values = step
+                assert ir_eqn is not None
+                out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
+                step = gen.send(out_values)
+            ir_eqn, out = step
+            assert ir_eqn is None
+        return out
 
     return func
 
 
 @ft.partial(lru_cache, maxsize=256)
 def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
-    """Call an IR.
-
-    Args:
-        ir: The IR to run.
-
-    Returns:
-        A callable that runs the IR with the provided arguments.
-
-    Example:
-        >>> import autoform as af
-        >>> ir = af.trace(lambda x: af.format("Hello {}", x))("world")
-        >>> ir.call("Alice")
-        'Hello Alice'
-    """
 
     def func(*args: *A) -> R:
         return call_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
@@ -662,21 +650,6 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
 
 @ft.partial(lru_cache, maxsize=256)
 def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
-    """Async call an IR.
-
-    Args:
-        ir: The IR to run.
-
-    Returns:
-        A callable that returns a coroutine running the IR with the provided arguments.
-
-    Example:
-        >>> import autoform as af
-        >>> import asyncio
-        >>> ir = af.trace(lambda x: af.format("Hello {}", x))("world")
-        >>> asyncio.run(ir.acall("Alice"))
-        'Hello Alice'
-    """
 
     async def func(*args: *A) -> R:
         return await acall_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
