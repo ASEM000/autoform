@@ -285,12 +285,67 @@ class IR[*A, R]:
         return generate_text_code(ir=self, expand_ir=True)
 
     def call(self, *args: *A) -> R:
+        """Run IR with concrete runtime inputs.
+
+        Use this after `trace(...)` has produced an `IR`. Pass values with the same
+        pytree structure as `in_ir_tree`; the method executes the stored equations
+        in order and returns the final output tree.
+
+        Example:
+            >>> import autoform as af
+            >>> def wrap(x):
+            ...     return af.format("[{}]", x)
+            >>> ir = af.trace(wrap)("x")
+            >>> ir.call("y")
+            '[y]'
+        """
         return call(self)(*args)
 
     async def acall(self, *args: *A) -> R:
+        """Run IR asynchronously with concrete runtime inputs.
+
+        Use this when execution may cross async primitive rules. The inputs follow
+        the same conventions as `call(...)`, but the method returns an awaitable
+        and each equation is driven through `abind(...)`.
+
+        Example:
+            >>> import autoform as af
+            >>> import asyncio
+            >>> def wrap(x):
+            ...     return af.format("[{}]", x)
+            >>> ir = af.trace(wrap)("x")
+            >>> asyncio.run(ir.acall("y"))
+            '[y]'
+        """
         return await acall(self)(*args)
 
     def walk(self, *args: *A) -> Generator[tuple[IREqn | None, Tree], Tree, None]:
+        """Step through this IR one equation at a time.
+
+        Manual control over IR execution. Start with `next(gen)` to receive `(ir_eqn, in_values)`, 
+        compute or override the equation output, using `ir_eqn.bind(in_values, **ir_eqn.params)` 
+        for synchronous execution or `await ir_eqn.abind(in_values, **ir_eqn.params)` for async 
+        execution, and send that output back with `gen.send(...)`. After the last equation,
+        the generator yields `(None, out_tree)`.
+
+        Example:
+            >>> import autoform as af
+            >>> def wrap(x):
+            ...     punctuated = af.concat(x, "!")
+            ...     return af.format("[{}]", punctuated)
+            >>> ir = af.trace(wrap)("x")
+            >>> gen = ir.walk("y")
+            >>> ir_eqn, in_values = next(gen)
+            >>> ir_eqn.prim.name
+            'concat'
+            >>> step = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+            >>> ir_eqn, in_values = step
+            >>> ir_eqn.prim.name
+            'format'
+            >>> done, out = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+            >>> done is None, out
+            (True, '[y!]')
+        """
         return walk(self)(*args)
 
 
