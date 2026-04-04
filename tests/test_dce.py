@@ -62,7 +62,7 @@ class TestDCE:
             assert curr_out in next_in_leaves
 
     def test_errors_on_dangling_used_output_irvar(self):
-        dangling = IRVar.fresh(type=str)
+        dangling = IRVar.fresh(aval=af.core.TypedAVal(str))
         bad_ir = IR([], in_ir_tree=(), out_ir_tree=dangling)
 
         with pytest.raises(AssertionError):

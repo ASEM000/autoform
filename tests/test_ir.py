@@ -33,7 +33,8 @@ class TestBuildIR:
             assert isinstance(ir.in_ir_tree, tuple)
             assert len(ir.in_ir_tree) == 1
             assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-            assert ir.in_ir_tree[0].type is type(traced)
+            assert isinstance(ir.in_ir_tree[0].aval, af.core.TypedAVal)
+            assert ir.in_ir_tree[0].aval.type is type(traced)
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -171,6 +172,37 @@ class TestTraceStatic:
 
 
 class TestRunIR:
+    def test_walk_yields_eqn_inputs_and_return_final_output(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("hello")
+        gen = ir.walk("world")
+
+        ir_eqn, in_values = next(gen)
+        assert ir_eqn.prim.name == "concat"
+        assert in_values == ("world", "!")
+
+        done, out = gen.send("world!")
+        assert done is None
+        assert out == "world!"
+
+    def test_walk_allows_external_step_execution(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("hello")
+        gen = ir.walk("world")
+
+        ir_eqn, in_values = next(gen)
+        assert ir_eqn.prim.name == "concat"
+        assert in_values == ("world", "!")
+        out_values = ir_eqn.bind(("there", "!"), **ir_eqn.params)
+
+        done, out = gen.send(out_values)
+        assert done is None
+        assert out == "there!"
+
     def test_basic_execution(self):
         def program(x):
             return af.concat(x, "!")

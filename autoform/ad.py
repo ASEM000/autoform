@@ -43,6 +43,7 @@ from autoform.core import (
     IRVar,
     Prim,
     TransformationTag,
+    TypedAVal,
     abstract_rules,
     active_interpreter,
     batch_rules,
@@ -83,6 +84,11 @@ class Zero:
 
 def is_zero(x) -> bool:
     return isinstance(x, Zero)
+
+
+def zero_aval(aval, /) -> Zero:
+    assert isinstance(aval, TypedAVal), f"Expected TypedAVal, got {aval!r}"
+    return Zero(aval.type)
 
 
 zero_registry: dict[type, Any] = {}
@@ -156,11 +162,11 @@ def pushforward(ir: IR, /) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom: IRVal):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     def make_t(atom: IRVal):
         return (
-            IRVar.fresh(type=atom.type, source=atom)
+            IRVar.fresh(aval=atom.aval, source=atom)
             if is_irvar(atom)
             else IRLit(Zero(type(atom.value)))
         )
@@ -443,11 +449,11 @@ def pullback(ir: IR, /) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     def make_c(atom):
         return (
-            IRVar.fresh(type=atom.type, source=atom)
+            IRVar.fresh(aval=atom.aval, source=atom)
             if is_irvar(atom)
             else IRLit(Zero(type(atom.value)))
         )
@@ -482,7 +488,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
         if not is_irvar(atom):
             return Zero(type(atom.value))
         if not (cs := c_env[atom]):
-            return Zero(atom.type)
+            return zero_aval(atom.aval)
         return accumulate_cotangents(cs)
 
     treelib.map(write_p, ir.in_ir_tree, p_in_tree)
@@ -529,7 +535,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
         if not is_irvar(atom):
             return Zero(type(atom.value))
         if not (cs := c_env[atom]):
-            return Zero(atom.type)
+            return zero_aval(atom.aval)
         return accumulate_cotangents(cs)
 
     treelib.map(write_p, ir.in_ir_tree, p_in_tree)

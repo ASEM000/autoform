@@ -142,7 +142,7 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         *args: Positional arguments passed to the selected branch.
 
     Returns:
-        Result of ``run_ir(branches[key], *args)``
+        Result of ``branches[key].call(*args)``
 
     Raises:
         KeyError: If key is not in branches.

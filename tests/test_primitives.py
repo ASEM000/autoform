@@ -39,7 +39,7 @@ class TestPrimitive:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(x):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         assert af.core.abstract_rules.get(p) is abstract_rule
 
@@ -82,7 +82,7 @@ class TestPrimitive:
 
 class TestIRVal:
     def test_ir_var_aval_returns_aval(self):
-        ir_var = af.core.IRVar(type=str)
+        ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
 
         assert af.core.is_irval(ir_var)
         assert isinstance(ir_var.aval, af.core.AVal)
@@ -170,7 +170,7 @@ class TestBind:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         def func(x):
             return p.bind(x, multiplier=3)
@@ -190,7 +190,7 @@ class TestInterpreter:
         tracer = af.core.TracingInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.format("Hello, {}!", af.core.IRVar.fresh(type=str))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
             assert len(tracer.ir_eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
@@ -198,7 +198,7 @@ class TestInterpreter:
     def test_tracing_interpreter_creates_ir_eqns(self):
         tracer = af.core.TracingInterpreter()
         with af.core.using_interpreter(tracer):
-            af.format("Hello, {}!", af.core.IRVar.fresh(type=str))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
         assert len(tracer.ir_eqns) == 1
 
 
@@ -397,6 +397,48 @@ class TestRunIRInline:
         assert result == ["[a]", "[b]", "[c]"]
 
 
+class TestTransformWrapperAvals:
+    def test_pushforward_wrapper_preserves_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("pf")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        pf_ir = af.pushforward(ir)
+        primals_in, tangents_in = pf_ir.in_ir_tree
+        primals_out, tangents_out = pf_ir.out_ir_tree
+
+        assert primals_in[0].aval is aval
+        assert tangents_in[0].aval is aval
+        assert primals_out[0].aval is aval
+        assert tangents_out[0].aval is aval
+
+    def test_pullback_wrapper_preserves_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("pb")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        pb_ir = af.pullback(ir)
+        primals_in, cotangents_in = pb_ir.in_ir_tree
+        primals_out, cotangents_out = pb_ir.out_ir_tree
+
+        assert primals_in[0].aval is aval
+        assert cotangents_in[0].aval is aval
+        assert primals_out[0].aval is aval
+        assert cotangents_out[0].aval is aval
+
+
 class TestCotangentHelpers:
     def test_zero_str(self):
         z = af.ad.Zero(str)
@@ -435,7 +477,7 @@ class TestCotangentHelpers:
 class TestLiteralZeroing:
     def test_pushforward_zeros_literal_input_tangent(self):
         lit = af.core.IRLit("constant")
-        var = af.core.IRVar(type=str)
+        var = af.core.IRVar(aval=af.core.TypedAVal(str))
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)
@@ -484,7 +526,7 @@ class TestLiteralZeroing:
 
     def test_pullback_zeros_literal_input_cotangent(self):
         lit = af.core.IRLit("constant_input")
-        var = af.core.IRVar(type=str)
+        var = af.core.IRVar(aval=af.core.TypedAVal(str))
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)

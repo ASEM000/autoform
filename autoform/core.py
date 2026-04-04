@@ -31,7 +31,10 @@ from autoform.utils import Tree, lru_cache, treelib
 __all__ = [
     # base types
     "AVal",
+    "TypedAVal",
+    "Val",
     "val_types",
+    "is_val",
     # ir vals
     "IRVal",
     "IRVar",
@@ -62,6 +65,7 @@ __all__ = [
     "using_interpreter",
     # ir building and execution
     "trace",
+    "walk",
     "call",
     "acall",
     # intercepts
@@ -85,10 +89,23 @@ def is_val(x) -> bool:
 
 
 class AVal:
+    __slots__ = ()
+
+
+class TypedAVal(AVal):
     __slots__ = "type"
 
     def __init__(self, type: type):
         self.type = type
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.type.__name__})"
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, TypedAVal) and self.type is other.type
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.type))
 
 
 def is_var(x) -> TypeGuard[AVal]:
@@ -112,34 +129,28 @@ def typeof(x, /) -> type:
 class IRVal(ABC):
     __slots__ = ()
 
-    @property
-    @abstractmethod
-    def aval(self) -> Any: ...
 
-
-class IRVar[T: type](IRVal):
-    __slots__ = ("id", "source", "type")
+class IRVar(IRVal):
+    __slots__ = ("id", "source", "aval")
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
 
-    def __init__(self, /, *, type: T, source: IRVar | None = None):
+    def __init__(self, /, *, aval: AVal, source: IRVar | None = None):
         self.id = next(self.counter)
         assert is_irvar(source) or source is None
+        assert is_var(aval)
         self.source = source
-        self.type = type
+        self.aval = aval
 
     @classmethod
-    def fresh(cls, *, type: T, source: IRVar | None = None) -> Self:
+    def fresh(cls, *, aval: AVal, source: IRVar | None = None) -> Self:
         with cls.lock:
-            return cls(source=source, type=type)
+            return cls(source=source, aval=aval)
 
     def __repr__(self) -> str:
         source = f", source={self.source!r}" if self.source else ""
-        return f"{type(self).__name__}[{self.type.__name__}](id={self.id}{source})"
-
-    @property
-    def aval(self) -> AVal:
-        return AVal(self.type)
+        aval = self.aval.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
+        return f"{type(self).__name__}[{aval}](id={self.id}{source})"
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
@@ -274,10 +285,68 @@ class IR[*A, R]:
         return generate_text_code(ir=self, expand_ir=True)
 
     def call(self, *args: *A) -> R:
+        """Run IR with concrete runtime inputs.
+
+        Use this after `trace(...)` has produced an `IR`. Pass values with the same
+        pytree structure as `in_ir_tree`; the method executes the stored equations
+        in order and returns the final output tree.
+
+        Example:
+            >>> import autoform as af
+            >>> def wrap(x):
+            ...     return af.format("[{}]", x)
+            >>> ir = af.trace(wrap)("x")
+            >>> ir.call("y")
+            '[y]'
+        """
         return call(self)(*args)
 
     async def acall(self, *args: *A) -> R:
+        """Run IR asynchronously with concrete runtime inputs.
+
+        Use this when execution may cross async primitive rules. The inputs follow
+        the same conventions as `call(...)`, but the method returns an awaitable
+        and each equation is driven through `abind(...)`.
+
+        Example:
+            >>> import autoform as af
+            >>> import asyncio
+            >>> def wrap(x):
+            ...     return af.format("[{}]", x)
+            >>> ir = af.trace(wrap)("x")
+            >>> asyncio.run(ir.acall("y"))
+            '[y]'
+        """
         return await acall(self)(*args)
+
+    def walk(self, *args: *A) -> Generator[tuple[IREqn | None, Tree], Tree, None]:
+        """Step through this IR one equation at a time.
+
+        Manual control over IR execution. Start with `next(gen)` to receive `(ir_eqn, in_values)`, 
+        compute or override the equation output, using `ir_eqn.bind(in_values, **ir_eqn.params)` 
+        for synchronous execution or `await ir_eqn.abind(in_values, **ir_eqn.params)` for async 
+        execution, and send that output back with `gen.send(...)`. After the last equation,
+        the generator yields `(None, out_tree)`.
+
+        Example:
+            >>> import autoform as af
+            >>> def wrap(x):
+            ...     punctuated = af.concat(x, "!")
+            ...     return af.format("[{}]", punctuated)
+            >>> ir = af.trace(wrap)("x")
+            >>> gen = ir.walk("y")
+            >>> ir_eqn, in_values = next(gen)
+            >>> ir_eqn.prim.name
+            'concat'
+            >>> step = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+            >>> ir_eqn, in_values = step
+            >>> ir_eqn.prim.name
+            'format'
+            >>> done, out = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+            >>> done is None, out
+            (True, '[y!]')
+        """
+        return walk(self)(*args)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
@@ -288,7 +357,12 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         assert isinstance(ir_val, IRVal)
         if is_irvar(ir_val):
             var_type = type(ir_val).__name__
-            type_info = f"[{ir_val.type.__name__}]" if ir_val.type is not None else ""
+            aval_info = (
+                ir_val.aval.type.__name__
+                if isinstance(ir_val.aval, TypedAVal)
+                else repr(ir_val.aval)
+            )
+            type_info = f"[{aval_info}]"
             return f"%{ir_val.id}:{var_type}{type_info}"
         assert is_irlit(ir_val)
         val = ir_val.value
@@ -398,26 +472,6 @@ type Interceptor = Callable[..., Generator[Any, Any, Any]]
 
 
 class InterceptorInterpreter(Interpreter, ABC):
-    # NOTE(asem): interceptor patterns (callable-based, not methods)
-    # interceptor signature: interceptor(prim, intercept, in_tree, /, **params)
-    #
-    # skip (replace value, no continuation)
-    # >>> def interceptor(prim, intercept, in_tree, /):
-    # ...     return replacement
-    # ...     yield
-    #
-    # pass-through (observe only)
-    # >>> def interceptor(prim, intercept, in_tree, /):
-    # ...     return (yield in_tree)
-    #
-    # pre-process input
-    # >>> def interceptor(prim, intercept, in_tree, /):
-    # ...     return (yield transform(in_tree))
-    #
-    # post-process output
-    # >>> def interceptor(prim, intercept, in_tree, /, **params):
-    # ...     result = yield in_tree
-    # ...     return transform(result)
     def __init__(self, *interceptors: tuple[type[Intercept], Interceptor]):
         for interceptor in interceptors:
             msg = "interceptors must be (InterceptType, interceptor) pairs"
@@ -435,16 +489,6 @@ class InterceptorInterpreter(Interpreter, ABC):
 
         gen = interceptor(prim, intercept, in_tree, **params)
         result = None
-
-        # NOTE(asem):
-        # the interceptor can yield multiple times, each yield invokes the continuation.
-        # >>> def interceptor(prim, intercept, in_tree, /, **params):
-        # ...     results = []
-        # ...     for v in (...):
-        # ...         result = yield v
-        # ...         results.append(result)
-        # ...     return best(results)
-        # ...     yield
         while True:
             try:
                 modified_input = next(gen) if result is None else gen.send(result)
@@ -461,8 +505,6 @@ class InterceptorInterpreter(Interpreter, ABC):
 
         gen = interceptor(prim, intercept, in_tree, **params)
         result = None
-
-        # NOTE(asem): same generator protocol as sync, but uses ainterpret for continuation
         while True:
             try:
                 modified_input = next(gen) if result is None else gen.send(result)
@@ -494,10 +536,10 @@ class TracingInterpreter(Interpreter):
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_val(x) -> IRVal:
-            # NOTE(asem): abstract rules return `AVal`/ python types.
+            # NOTE(asem): abstract rules return `AVal`/ python leaves.
             # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
-            return IRVar.fresh(type=x.type) if is_var(x) else IRLit(x)
+            return IRVar.fresh(aval=x) if is_var(x) else IRLit(x)
 
         out_ir_tree = treelib.map(to_out_ir_val, out_aval_tree)
         intercept = active_intercept.get()
@@ -545,7 +587,7 @@ def trace[*A, R](
     def to_ir_var(x, /) -> IRVar:
         assert not is_irval(x), "Inputs to `trace` must be normal python types"
         assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(type=type(x))
+        return IRVar.fresh(aval=TypedAVal(type(x)))
 
     def to_in_ir_val(x, is_static: bool) -> IRVal:
         return IRLit(x) if is_static else to_ir_var(x)
@@ -567,30 +609,18 @@ def trace[*A, R](
 
 
 # ==================================================================================================
-# CALL
+# WALK
 # ==================================================================================================
+
+type GenStep = tuple[IREqn | None, Tree]
 
 
 @ft.partial(lru_cache, maxsize=256)
-def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
-    """Call an IR.
+def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
+    """Walk an IR one equation at a time."""
 
-    Args:
-        ir: The IR to run.
-
-    Returns:
-        A callable that runs the IR with the provided arguments.
-
-    Example:
-        >>> import autoform as af
-        >>> ir = af.trace(lambda x: af.format("Hello {}", x))("world")
-        >>> ir.call("Alice")
-        'Hello Alice'
-    """
-
-    def func(*args: *A) -> R:
+    def func(*args: *A) -> Generator[GenStep, Tree, None]:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        in_tree = args
         env: dict[IRVar, Any] = {}
 
         def read(ir_val: IRVal) -> Any:
@@ -601,61 +631,83 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
                 msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
                 assert ir_val.value == value, msg
 
-        def write(ir_val: IRVal, value):
+        def write(ir_val: IRVal, value: Any):
             is_irvar(ir_val) and setitem(env, ir_val, value)
 
-        treelib.map(check_input, ir.in_ir_tree, in_tree)
-        treelib.map(write, ir.in_ir_tree, in_tree)
+        treelib.map(check_input, ir.in_ir_tree, args)
+        treelib.map(write, ir.in_ir_tree, args)
+
         for ir_eqn in ir.ir_eqns:
             in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+            out_values = yield ir_eqn, in_values
             treelib.map(write, ir_eqn.out_ir_tree, out_values)
-        return treelib.map(read, ir.out_ir_tree)
+
+        yield None, treelib.map(read, ir.out_ir_tree)
+
+    return func
+
+
+# ==================================================================================================
+# CALL
+# ==================================================================================================
+
+
+def call_with_interpreter[*A, R](
+    ir: IR[*A, R], /, *, interpreter: Interpreter
+) -> Callable[[*A], R]:
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
+
+    def func(*args: *A) -> R:
+        with using_interpreter(interpreter):
+            step = next(gen := walk(ir)(*args))
+            for _ in ir.ir_eqns:
+                ir_eqn, in_values = step
+                assert ir_eqn is not None
+                out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+                step = gen.send(out_values)
+            ir_eqn, out = step
+            assert ir_eqn is None
+        return out
+
+    return func
+
+
+def acall_with_interpreter[*A, R](
+    ir: IR[*A, R], /, *, interpreter: Interpreter
+) -> Callable[[*A], Awaitable[R]]:
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
+
+    async def func(*args: *A) -> R:
+        with using_interpreter(interpreter):
+            step = next(gen := walk(ir)(*args))
+            for _ in ir.ir_eqns:
+                ir_eqn, in_values = step
+                assert ir_eqn is not None
+                out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
+                step = gen.send(out_values)
+            ir_eqn, out = step
+            assert ir_eqn is None
+        return out
+
+    return func
+
+
+@ft.partial(lru_cache, maxsize=256)
+def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
+
+    def func(*args: *A) -> R:
+        return call_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
 
     return func
 
 
 @ft.partial(lru_cache, maxsize=256)
 def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
-    """Async call an IR.
-
-    Args:
-        ir: The IR to run.
-
-    Returns:
-        A callable that returns a coroutine running the IR with the provided arguments.
-
-    Example:
-        >>> import autoform as af
-        >>> import asyncio
-        >>> ir = af.trace(lambda x: af.format("Hello {}", x))("world")
-        >>> asyncio.run(ir.acall("Alice"))
-        'Hello Alice'
-    """
 
     async def func(*args: *A) -> R:
-        assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        in_tree = args
-        env: dict[IRVar, Any] = {}
-
-        def read(ir_val: IRVal) -> Any:
-            return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-        def check_input(ir_val: IRVal, value: Any):
-            if is_irlit(ir_val):
-                msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-                assert ir_val.value == value, msg
-
-        def write(ir_val: IRVal, value):
-            is_irvar(ir_val) and setitem(env, ir_val, value)
-
-        treelib.map(check_input, ir.in_ir_tree, in_tree)
-        treelib.map(write, ir.in_ir_tree, in_tree)
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-        return treelib.map(read, ir.out_ir_tree)
+        return await acall_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
 
     return func
 

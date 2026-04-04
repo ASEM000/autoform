@@ -30,6 +30,7 @@ from autoform.core import (
     IRVar,
     Prim,
     TransformationTag,
+    TypedAVal,
     abstract_rules,
     active_intercept,
     active_interpreter,
@@ -112,12 +113,24 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
+    has_batched_input = any(treelib.leaves(in_batched_tree, is_leaf=is_axis_spec))
 
-    def make_b(atom):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+    def make_in(atom, is_batched: bool):
+        if not is_irvar(atom):
+            return atom
+        del is_batched
+        return IRVar.fresh(aval=atom.aval, source=atom)
 
-    in_b_ir_tree = treelib.map(make_b, ir.in_ir_tree)
-    out_b_ir_tree = treelib.map(make_b, ir.out_ir_tree)
+    def make_out(atom):
+        if is_irvar(atom):
+            return IRVar.fresh(aval=atom.aval, source=atom)
+        if has_batched_input:
+            return IRVar.fresh(aval=TypedAVal(type(atom.value)))
+        return atom
+
+    in_b_ir_tree = treelib.map(make_in, ir.in_ir_tree, in_batched_tree)
+    out_b_ir_tree = treelib.map(make_out, ir.out_ir_tree)
     # NOTE(asem): intercept on the wrapper IREqn is unused at execution time.
     # impl_batch_call never reads active_intercept, and no InterceptorInterpreter interceptor
     # targets batch_call_p. inner IREqns carry their own intercepts and restore them
@@ -239,7 +252,18 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
 
 
 def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
-    return treelib.map(lambda x: x.aval, ir.out_ir_tree)
+    del in_tree
+    in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
+    has_batched_input = any(treelib.leaves(in_batched_tree, is_leaf=is_axis_spec))
+
+    def out_aval(atom):
+        if is_irvar(atom):
+            return atom.aval
+        if has_batched_input:
+            return TypedAVal(type(atom.value))
+        return atom.value
+
+    return treelib.map(out_aval, ir.out_ir_tree)
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:

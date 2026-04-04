@@ -30,6 +30,15 @@ class TestBatchBasic:
         result = batched_ir.call(["hello", "world"])
         assert result == ["hello!", "world!"]
 
+    def test_single_arg_tuple_batch_container(self):
+        def shout(text):
+            return af.format("{}!", text)
+
+        ir = af.trace(shout)("hello")
+        batched_ir = af.batch(ir)
+        result = batched_ir.call(("hello", "world"))
+        assert result == ("hello!", "world!")
+
     @pytest.mark.asyncio(loop_scope="function")
     async def test_single_arg_async(self):
         def shout(text):
@@ -158,6 +167,60 @@ class TestBatchIRStructure:
         batched_ir = af.batch(ir)
         assert "ir" in batched_ir.ir_eqns[0].params
 
+    def test_batch_wrapper_rewrites_batched_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("input")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        batched_ir = af.batch(ir)
+
+        assert batched_ir.in_ir_tree[0].aval is aval
+        assert batched_ir.out_ir_tree[0].aval is aval
+
+    def test_batch_wrapper_preserves_broadcast_aval(self):
+        class TaggedAVal(af.core.AVal):
+            __slots__ = ("tag",)
+
+            def __init__(self, tag):
+                self.tag = tag
+
+        aval = TaggedAVal("input")
+        var = af.core.IRVar(aval=aval)
+        ir = af.core.IR([], (var,), (var,))
+
+        batched_ir = af.batch(ir, in_axes=False)
+
+        assert batched_ir.in_ir_tree[0].aval is aval
+        assert batched_ir.out_ir_tree[0].aval is aval
+
+    def test_batch_constant_output_uses_mapped_wrapper_var(self):
+        def f(x):
+            return "c"
+
+        ir = af.trace(f)("x")
+        batched_ir = af.batch(ir)
+
+        assert isinstance(batched_ir.out_ir_tree, af.core.IRVar)
+        assert isinstance(batched_ir.out_ir_tree.aval, af.core.TypedAVal)
+        assert batched_ir.out_ir_tree.aval.type is str
+        assert batched_ir.call(["a", "b"]) == ["c", "c"]
+
+    def test_batch_broadcast_constant_output_stays_literal(self):
+        def f(x):
+            return "c"
+
+        ir = af.trace(f)("x")
+        batched_ir = af.batch(ir, in_axes=False)
+
+        assert isinstance(batched_ir.out_ir_tree, af.core.IRLit)
+        assert batched_ir.call("a") == "c"
+
 
 class TestNestedBatch:
     def test_batch_of_batch(self):
@@ -281,7 +344,7 @@ class TestBatchMultipleOutputs:
 
         @ft.partial(af.core.abstract_rules.set, split_p)
         def abstract_split(x):
-            return af.core.AVal(str), af.core.AVal(str)
+            return af.core.TypedAVal(str), af.core.TypedAVal(str)
 
         @ft.partial(af.core.impl_rules.set, split_p)
         def impl_split(x):
@@ -308,7 +371,7 @@ class TestBatchMultipleOutputs:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_nested(x):
-            return (af.core.AVal(str), af.core.AVal(str)), af.core.AVal(str)
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str)), af.core.TypedAVal(str)
 
         @ft.partial(af.core.impl_rules.set, nested_p)
         def impl_nested(x):
@@ -377,7 +440,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, single_p)
         def abstract_rule(x):
-            return af.core.AVal(str)
+            return af.core.TypedAVal(str)
 
         @ft.partial(af.core.batch_rules.set, single_p)
         def batch_rule(in_tree):
@@ -401,7 +464,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def bad_batch_rule(in_tree):
@@ -426,7 +489,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def correct_batch_rule(in_tree):
@@ -451,7 +514,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.AVal(str), "second": (af.core.AVal(str), af.core.AVal(str))}
+            return {"first": af.core.TypedAVal(str), "second": (af.core.TypedAVal(str), af.core.TypedAVal(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def bad_batch_rule(in_tree):
@@ -476,7 +539,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.AVal(str), "second": (af.core.AVal(str), af.core.AVal(str))}
+            return {"first": af.core.TypedAVal(str), "second": (af.core.TypedAVal(str), af.core.TypedAVal(str))}
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def correct_batch_rule(in_tree):
@@ -501,7 +564,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):
@@ -526,7 +589,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.AVal(str), af.core.AVal(str))
+            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):

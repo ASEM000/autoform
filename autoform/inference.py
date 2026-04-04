@@ -19,8 +19,8 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 from collections.abc import Callable
-from operator import add, setitem
-from typing import Any, cast
+from operator import add
+from typing import cast
 
 from autoform.core import (
     IR,
@@ -28,22 +28,22 @@ from autoform.core import (
     Intercept,
     Interpreter,
     IREqn,
-    IRLit,
     IRVal,
     IRVar,
     Prim,
     TransformationTag,
+    TypedAVal,
     abstract_rules,
+    acall_with_interpreter,
     active_interpreter,
     batch_rules,
+    call_with_interpreter,
     impl_rules,
-    is_irlit,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
     using_intercept,
-    using_interpreter,
 )
 from autoform.utils import (
     Tree,
@@ -111,7 +111,7 @@ def impl_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> float:
 
 def abstract_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> AVal:
     del in_tree, judge
-    return AVal(float)
+    return TypedAVal(float)
 
 
 def batch_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> tuple[Tree, bool]:
@@ -189,71 +189,31 @@ def weight(ir: IR, /) -> IR:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def make(atom: IRVal):
-        return IRVar.fresh(type=atom.type, source=atom) if is_irvar(atom) else atom
+        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
 
     in_ir_tree = treelib.map(make, ir.in_ir_tree)
-    out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(type=float))
+    out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(aval=TypedAVal(float)))
     ir_eqn = IREqn(weight_call_p, None, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 
 def impl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
-    env: dict[IRVar, Any] = {}
-
-    def read(ir_val: IRVal) -> Any:
-        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-    def check_input(ir_val: IRVal, value: Any):
-        if is_irlit(ir_val):
-            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-            assert ir_val.value == value, msg
-
-    def write(ir_val: IRVal, value: Any):
-        is_irvar(ir_val) and setitem(env, ir_val, value)
-
-    treelib.map(check_input, ir.in_ir_tree, in_tree)
-    treelib.map(write, ir.in_ir_tree, in_tree)
     interpreter = WeightInterpreter()
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-    out_tree = treelib.map(read, ir.out_ir_tree)
+    out_tree = call_with_interpreter(ir, interpreter=interpreter)(*cast(tuple, in_tree))
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
 
 async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
-    env: dict[IRVar, Any] = {}
-
-    def read(ir_val: IRVal) -> Any:
-        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
-
-    def check_input(ir_val: IRVal, value: Any):
-        if is_irlit(ir_val):
-            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-            assert ir_val.value == value, msg
-
-    def write(ir_val: IRVal, value: Any):
-        is_irvar(ir_val) and setitem(env, ir_val, value)
-
-    treelib.map(check_input, ir.in_ir_tree, in_tree)
-    treelib.map(write, ir.in_ir_tree, in_tree)
     interpreter = WeightInterpreter()
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-    out_tree = treelib.map(read, ir.out_ir_tree)
+    out_tree = await acall_with_interpreter(ir, interpreter=interpreter)(*cast(tuple, in_tree))
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
 
 def abstract_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, AVal]:
     del in_tree
-    return treelib.map(lambda x: x.aval, ir.out_ir_tree), AVal(float)
+    return treelib.map(lambda x: x.aval, ir.out_ir_tree), TypedAVal(float)
 
 
 def unsupported_weight_transform(name: str):

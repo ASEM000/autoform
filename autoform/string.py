@@ -20,10 +20,10 @@ import functools as ft
 
 from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
-    AVal,
     EvalType,
     Prim,
     PrimTag,
+    TypedAVal,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -68,7 +68,7 @@ def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> st
 
 
 def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
-    return AVal(str)
+    return TypedAVal(str)
 
 
 def pushforward_format(
@@ -153,7 +153,7 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 def abstract_concat(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
-    return AVal(str)
+    return TypedAVal(str)
 
 
 def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
@@ -231,7 +231,7 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 def abstract_match(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
-    return AVal(bool)
+    return TypedAVal(bool)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:

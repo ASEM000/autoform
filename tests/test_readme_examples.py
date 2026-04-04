@@ -30,7 +30,7 @@ def impl_shout(text: str) -> str:
 
 @ft.partial(af.core.abstract_rules.set, shout_p)
 def abstract_shout(text) -> af.core.AVal:
-    return af.core.AVal(str)
+    return af.core.TypedAVal(str)
 
 
 @ft.partial(af.core.push_rules.set, shout_p)
@@ -153,7 +153,7 @@ def impl_textgrad_style_lm_call(
 
 @ft.partial(af.core.abstract_rules.set, textgrad_style_lm_call_p)
 def abstract_textgrad_style_lm_call(in_tree, *, struct: type[af.Struct], **params):
-    return struct.model_construct(**{k: af.core.AVal(str) for k in struct.model_fields})
+    return struct.model_construct(**{k: af.core.TypedAVal(str) for k in struct.model_fields})
 
 
 @ft.partial(af.core.pull_fwd_rules.set, textgrad_style_lm_call_p)
