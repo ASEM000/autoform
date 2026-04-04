@@ -172,6 +172,37 @@ class TestTraceStatic:
 
 
 class TestRunIR:
+    def test_walk_yields_eqn_inputs_and_return_final_output(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("hello")
+        gen = ir.walk("world")
+
+        ir_eqn, in_values = next(gen)
+        assert ir_eqn.prim.name == "concat"
+        assert in_values == ("world", "!")
+
+        with pytest.raises(StopIteration) as e:
+            gen.send("world!")
+        assert e.value.value == "world!"
+
+    def test_walk_allows_external_step_execution(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("hello")
+        gen = ir.walk("world")
+
+        ir_eqn, in_values = next(gen)
+        assert ir_eqn.prim.name == "concat"
+        assert in_values == ("world", "!")
+        out_values = ir_eqn.bind(("there", "!"), **ir_eqn.params)
+
+        with pytest.raises(StopIteration) as e:
+            gen.send(out_values)
+        assert e.value.value == "there!"
+
     def test_basic_execution(self):
         def program(x):
             return af.concat(x, "!")

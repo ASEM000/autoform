@@ -66,6 +66,7 @@ __all__ = [
     "using_interpreter",
     # ir building and execution
     "trace",
+    "walk",
     "call",
     "acall",
     # intercepts
@@ -307,6 +308,10 @@ class IR[*A, R]:
     async def acall(self, *args: *A) -> R:
         return await acall(self)(*args)
 
+    def walk(self, *args: *A) -> Generator[tuple[IREqn, Tree], Tree, R]:
+        return walk(self)(*args)
+
+
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
     assert isinstance(indent, int) and indent >= 0
@@ -431,26 +436,6 @@ type Interceptor = Callable[..., Generator[Any, Any, Any]]
 
 
 class InterceptorInterpreter(Interpreter, ABC):
-    # NOTE(asem): interceptor patterns (callable-based, not methods)
-    # interceptor signature: interceptor(prim, intercept, in_tree, /, **params)
-    #
-    # skip (replace value, no continuation)
-    # >>> def interceptor(prim, intercept, in_tree, /):
-    # ...     return replacement
-    # ...     yield
-    #
-    # pass-through (observe only)
-    # >>> def interceptor(prim, intercept, in_tree, /):
-    # ...     return (yield in_tree)
-    #
-    # pre-process input
-    # >>> def interceptor(prim, intercept, in_tree, /):
-    # ...     return (yield transform(in_tree))
-    #
-    # post-process output
-    # >>> def interceptor(prim, intercept, in_tree, /, **params):
-    # ...     result = yield in_tree
-    # ...     return transform(result)
     def __init__(self, *interceptors: tuple[type[Intercept], Interceptor]):
         for interceptor in interceptors:
             msg = "interceptors must be (InterceptType, interceptor) pairs"
@@ -468,16 +453,6 @@ class InterceptorInterpreter(Interpreter, ABC):
 
         gen = interceptor(prim, intercept, in_tree, **params)
         result = None
-
-        # NOTE(asem):
-        # the interceptor can yield multiple times, each yield invokes the continuation.
-        # >>> def interceptor(prim, intercept, in_tree, /, **params):
-        # ...     results = []
-        # ...     for v in (...):
-        # ...         result = yield v
-        # ...         results.append(result)
-        # ...     return best(results)
-        # ...     yield
         while True:
             try:
                 modified_input = next(gen) if result is None else gen.send(result)
@@ -494,8 +469,6 @@ class InterceptorInterpreter(Interpreter, ABC):
 
         gen = interceptor(prim, intercept, in_tree, **params)
         result = None
-
-        # NOTE(asem): same generator protocol as sync, but uses ainterpret for continuation
         while True:
             try:
                 modified_input = next(gen) if result is None else gen.send(result)
@@ -600,60 +573,87 @@ def trace[*A, R](
 
 
 # ==================================================================================================
+# WALK
+# ==================================================================================================
+
+
+@ft.partial(lru_cache, maxsize=256)
+def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[tuple[IREqn, Tree], Tree, R]]:
+    """Walk an IR one equation at a time."""
+
+    def func(*args: *A) -> Generator[tuple[IREqn, Tree], Tree, R]:
+        assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
+        env: dict[IRVar, Any] = {}
+
+        def read(ir_val: IRVal) -> Any:
+            return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
+
+        def check_input(ir_val: IRVal, value: Any):
+            if is_irlit(ir_val):
+                msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
+                assert ir_val.value == value, msg
+
+        def write(ir_val: IRVal, value: Any):
+            is_irvar(ir_val) and setitem(env, ir_val, value)
+
+        treelib.map(check_input, ir.in_ir_tree, args)
+        treelib.map(write, ir.in_ir_tree, args)
+
+        for ir_eqn in ir.ir_eqns:
+            in_values = treelib.map(read, ir_eqn.in_ir_tree)
+            out_values = yield ir_eqn, in_values
+            treelib.map(write, ir_eqn.out_ir_tree, out_values)
+
+        return treelib.map(read, ir.out_ir_tree)
+
+    return func
+
+
+# ==================================================================================================
 # CALL
 # ==================================================================================================
 
 
-def run_ir(ir: IR, in_tree: Tree, /, *, interpreter: Interpreter) -> Tree:
+@ft.partial(lru_cache, maxsize=256)
+def call_with_interpreter[*A, R](
+    ir: IR[*A, R], /, *, interpreter: Interpreter
+) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
     assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
-    env: dict[IRVar, Any] = {}
 
-    def read(ir_val: IRVal) -> Any:
-        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
+    def func(*args: *A) -> R:
+        gen = walk(ir)(*args)
+        with using_interpreter(interpreter):
+            try:
+                ir_eqn, in_values = next(gen)
+                while True:
+                    out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+                    ir_eqn, in_values = gen.send(out_values)
+            except StopIteration as e:
+                return e.value
 
-    def check_input(ir_val: IRVal, value: Any):
-        if is_irlit(ir_val):
-            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-            assert ir_val.value == value, msg
-
-    def write(ir_val: IRVal, value: Any):
-        is_irvar(ir_val) and setitem(env, ir_val, value)
-
-    treelib.map(check_input, ir.in_ir_tree, in_tree)
-    treelib.map(write, ir.in_ir_tree, in_tree)
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-    return treelib.map(read, ir.out_ir_tree)
+    return func
 
 
-async def arun_ir(ir: IR, in_tree: Tree, /, *, interpreter: Interpreter) -> Tree:
+@ft.partial(lru_cache, maxsize=256)
+def acall_with_interpreter[*A, R](
+    ir: IR[*A, R], /, *, interpreter: Interpreter
+) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
     assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
-    env: dict[IRVar, Any] = {}
 
-    def read(ir_val: IRVal) -> Any:
-        return env[ir_val] if is_irvar(ir_val) else cast(IRLit, ir_val).value
+    async def func(*args: *A) -> R:
+        gen = walk(ir)(*args)
+        with using_interpreter(interpreter):
+            try:
+                ir_eqn, in_values = next(gen)
+                while True:
+                    out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
+                    ir_eqn, in_values = gen.send(out_values)
+            except StopIteration as e:
+                return e.value
 
-    def check_input(ir_val: IRVal, value: Any):
-        if is_irlit(ir_val):
-            msg = f"Static input mismatch: expected {ir_val.value!r}, got {value!r}"
-            assert ir_val.value == value, msg
-
-    def write(ir_val: IRVal, value: Any):
-        is_irvar(ir_val) and setitem(env, ir_val, value)
-
-    treelib.map(check_input, ir.in_ir_tree, in_tree)
-    treelib.map(write, ir.in_ir_tree, in_tree)
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
-    return treelib.map(read, ir.out_ir_tree)
+    return func
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -674,7 +674,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     """
 
     def func(*args: *A) -> R:
-        return run_ir(ir, args, interpreter=active_interpreter.get())
+        return call_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
 
     return func
 
@@ -698,7 +698,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     """
 
     async def func(*args: *A) -> R:
-        return await arun_ir(ir, args, interpreter=active_interpreter.get())
+        return await acall_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
 
     return func
 

@@ -20,6 +20,7 @@ import asyncio
 import functools as ft
 from collections.abc import Callable
 from operator import add
+from typing import cast
 
 from autoform.core import (
     IR,
@@ -33,15 +34,15 @@ from autoform.core import (
     TransformationTag,
     TypedAVal,
     abstract_rules,
+    acall_with_interpreter,
     active_interpreter,
-    arun_ir,
     batch_rules,
+    call_with_interpreter,
     impl_rules,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    run_ir,
     using_intercept,
 )
 from autoform.utils import (
@@ -198,14 +199,14 @@ def weight(ir: IR, /) -> IR:
 
 def impl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
     interpreter = WeightInterpreter()
-    out_tree = run_ir(ir, in_tree, interpreter=interpreter)
+    out_tree = call_with_interpreter(ir, interpreter=interpreter)(*cast(tuple, in_tree))
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
 
 async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
     interpreter = WeightInterpreter()
-    out_tree = await arun_ir(ir, in_tree, interpreter=interpreter)
+    out_tree = await acall_with_interpreter(ir, interpreter=interpreter)(*cast(tuple, in_tree))
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
