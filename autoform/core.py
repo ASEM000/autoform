@@ -595,7 +595,6 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[tuple[IREqn, Tree]
 # ==================================================================================================
 
 
-@ft.partial(lru_cache, maxsize=256)
 def call_with_interpreter[*A, R](
     ir: IR[*A, R], /, *, interpreter: Interpreter
 ) -> Callable[[*A], R]:
@@ -617,7 +616,6 @@ def call_with_interpreter[*A, R](
     return func
 
 
-@ft.partial(lru_cache, maxsize=256)
 def acall_with_interpreter[*A, R](
     ir: IR[*A, R], /, *, interpreter: Interpreter
 ) -> Callable[[*A], Awaitable[R]]:
