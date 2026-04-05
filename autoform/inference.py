@@ -188,7 +188,7 @@ def weight(ir: IR, /) -> IR:
 
     in_ir_tree = treelib.map(make, ir.in_ir_tree)
     out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(aval=TypedAVal(float)))
-    ir_eqn = IREqn(weight_call_p, None, in_ir_tree, out_ir_tree, dict(ir=ir))
+    ir_eqn = IREqn(weight_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 

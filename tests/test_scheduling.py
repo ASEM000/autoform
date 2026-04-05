@@ -385,7 +385,7 @@ class TestSched:
         prim_names = {e.prim.name for e in scheduled.ir_eqns}
         assert prim_names == {"format", "concat"}
 
-    def test_intercepted_can_be_parallelized(self):
+    def test_checkpoints_can_be_parallelized(self):
         def program(a, b):
             x = af.checkpoint(af.format("{}", a), key="x")
             y = af.checkpoint(af.format("{}", b), key="y")
@@ -397,7 +397,7 @@ class TestSched:
         gather_count = sum(1 for e in scheduled.ir_eqns if e.prim.name == "gather")
         assert gather_count == 2
 
-    def test_intercepted_ordering_via_depends(self):
+    def test_checkpoint_ordering_via_depends(self):
         def program(a, b):
             x = af.checkpoint(af.format("{}", a), key="x")
             y = af.checkpoint(af.format("{}", b), key="y")
@@ -409,7 +409,7 @@ class TestSched:
         result = scheduled.call("hello", "world")
         assert result == "world"
 
-    def test_mixed_pure_and_intercepted(self):
+    def test_mixed_pure_and_checkpoints(self):
         def program(a, b, c):
             x = af.format("[{}]", a)
             y = af.format("<{}>", b)
@@ -1208,8 +1208,8 @@ class TestToposortLevels:
         assert len(levels[2]) == 1
 
 
-class TestToposortLevelsWithIntercepts:
-    def test_intercepted_equations_can_parallelize(self):
+class TestToposortLevelsWithCheckpoints:
+    def test_checkpoint_equations_can_parallelize(self):
         def program(a, b):
             x = af.checkpoint(af.format("hello {}", a), key="x")
             y = af.checkpoint(af.format("world {}", b), key="y")
@@ -1221,15 +1221,15 @@ class TestToposortLevelsWithIntercepts:
         checkpoint_eqns = [e for lvl in levels for e in lvl if e.prim.name == "checkpoint"]
         assert len(checkpoint_eqns) == 2
 
-        intercept_levels = []
+        checkpoint_levels = []
         for i, lvl in enumerate(levels):
             for e in lvl:
                 if e.prim.name == "checkpoint":
-                    intercept_levels.append(i)
+                    checkpoint_levels.append(i)
 
-        assert intercept_levels[0] == intercept_levels[1]
+        assert checkpoint_levels[0] == checkpoint_levels[1]
 
-    def test_intercepted_ordering_via_depends(self):
+    def test_checkpoint_ordering_via_depends(self):
         def program(a, b):
             x = af.checkpoint(af.format("hello {}", a), key="x")
             y = af.checkpoint(af.format("world {}", b), key="y")
@@ -1238,13 +1238,13 @@ class TestToposortLevelsWithIntercepts:
         ir = af.trace(program)("a", "b")
         levels = toposort_levels(ir)
 
-        intercept_levels = []
+        checkpoint_levels = []
         for i, lvl in enumerate(levels):
             for e in lvl:
                 if e.prim.name == "checkpoint":
-                    intercept_levels.append(i)
+                    checkpoint_levels.append(i)
 
-        assert intercept_levels[0] == intercept_levels[1]
+        assert checkpoint_levels[0] == checkpoint_levels[1]
 
         depends_level = None
         for i, lvl in enumerate(levels):
@@ -1252,9 +1252,9 @@ class TestToposortLevelsWithIntercepts:
                 if e.prim.name == "depends":
                     depends_level = i
 
-        assert depends_level > intercept_levels[0]
+        assert depends_level > checkpoint_levels[0]
 
-    def test_pure_equations_parallelize_around_intercepts(self):
+    def test_pure_equations_parallelize_around_checkpoints(self):
         def program(a, b, c):
             x = af.format("{}", a)
             y = af.checkpoint(af.format("{}", b), key="cp")

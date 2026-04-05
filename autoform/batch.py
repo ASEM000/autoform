@@ -31,7 +31,6 @@ from autoform.core import (
     TransformationTag,
     TypedAVal,
     abstract_rules,
-    active_intercept,
     active_interpreter,
     batch_rules,
     impl_rules,
@@ -130,12 +129,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
 
     in_b_ir_tree = treelib.map(make_in, ir.in_ir_tree, in_batched_tree)
     out_b_ir_tree = treelib.map(make_out, ir.out_ir_tree)
-    # NOTE(asem): intercept on the wrapper IREqn is unused at execution time.
-    # impl_batch_call never reads active_intercept, and no InterceptorInterpreter interceptor
-    # targets batch_call_p. inner IREqns carry their own intercepts and restore them
-    # via ir_eqn.bind(). captured here only to preserve the IR structure contract.
-    intercept = active_intercept.get()
-    eqn = IREqn(batch_call_p, intercept, in_b_ir_tree, out_b_ir_tree, dict(ir=ir, in_axes=in_axes))
+    eqn = IREqn(batch_call_p, in_b_ir_tree, out_b_ir_tree, dict(ir=ir, in_axes=in_axes))
     return IR([eqn], in_b_ir_tree, out_b_ir_tree)
 
 

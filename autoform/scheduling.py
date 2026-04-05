@@ -398,7 +398,7 @@ def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         irs = [IR([ir_eqn], (ir_eqn.in_ir_tree,), ir_eqn.out_ir_tree) for ir_eqn in ir_eqns]
         in_ir_tree = [(ir_eqn.in_ir_tree,) for ir_eqn in ir_eqns]
         out_ir_tree = [ir_eqn.out_ir_tree for ir_eqn in ir_eqns]
-        return IREqn(gather_p, None, in_ir_tree, out_ir_tree, dict(irs=irs))
+        return IREqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
 
     for level in levels:
         ir_eqns = [ir_eqn.using(**treelib.map(recurse, ir_eqn.params)) for ir_eqn in level]

@@ -25,7 +25,6 @@ from autoform.checkpoint import checkpoint_p
 from autoform.core import (
     Interpreter,
     Prim,
-    active_intercept,
     active_interpreter,
     using_interpreter,
 )
@@ -46,14 +45,14 @@ class MemoizingInterpreter(Interpreter):
         self.cache: dict[CacheKey, Tree] = {}
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if active_intercept.get() is not None or prim in non_memoizable_primitives:
+        if prim in non_memoizable_primitives:
             return self.parent.interpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = self.parent.interpret(prim, in_tree, **params)
         return self.cache[key]
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if active_intercept.get() is not None or prim in non_memoizable_primitives:
+        if prim in non_memoizable_primitives:
             return await self.parent.ainterpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = await self.parent.ainterpret(prim, in_tree, **params)
@@ -78,7 +77,7 @@ def memoize() -> Generator[None, None, None]:
 
     Tracing a program with `memoize` will act as compile-time deduplication of
     identical primitive calls (including stochastic primitives like :func:`lm_call`).
-    intercepted and non-memoizable primitives are not memoized.
+    Non-memoizable primitives are not memoized.
 
     Example:
         >>> def program(x):

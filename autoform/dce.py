@@ -43,9 +43,7 @@ dce_rules: dict[Prim, DCERule] = {}
 non_dce_primitives: set[Prim] = set()
 
 
-def dce[*A, R](
-    ir: IR[*A, R], /, *, out_used: Tree[bool] | None = None, keep_intercepts: bool = True
-) -> IR[*A, R]:
+def dce[*A, R](ir: IR[*A, R], /, *, out_used: Tree[bool] | None = None) -> IR[*A, R]:
     """Remove dead code from an IR.
 
     Performs backward pass to identify which equations contribute to output.
@@ -53,7 +51,6 @@ def dce[*A, R](
     Args:
         ir: The IR to optimize.
         out_used: A pytree of bool matching the ir output pytree that denotes which output is used.
-        keep_intercepts: keep equations with intercepts even if their outputs are not used.
 
     Example:
         >>> import autoform as af
@@ -100,10 +97,6 @@ def dce[*A, R](
         assert treelib.structure(in_used) == treelib.structure(ir_eqn.in_ir_tree)
 
         if is_non_dce:
-            active_ir_eqns.appendleft(new_ir_eqn)
-            active_ir_vars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
-
-        elif keep_intercepts and ir_eqn.intercept:
             active_ir_eqns.appendleft(new_ir_eqn)
             active_ir_vars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
 

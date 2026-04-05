@@ -56,7 +56,7 @@ class TestIREqnMatchArgs:
         eqn = ir.ir_eqns[0]
 
         match eqn:
-            case af.core.IREqn(prim, intercept, in_tree, out_tree, params):
+            case af.core.IREqn(prim, in_tree, out_tree, params):
                 assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
@@ -181,7 +181,7 @@ class TestIRMatchArgs:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR([af.core.IREqn(prim, intercept, in_tree, out_tree, params)], _, _):
+            case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
                 assert prim == af.string.concat_p
                 assert StringTag in prim.tag
                 assert len(af.utils.treelib.leaves(in_tree)) == 2
@@ -219,7 +219,7 @@ class TestIRMatchArgs:
 
         match pf_ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Prim("pushforward_call", _), _, _, intercept, params)],
+                [af.core.IREqn(af.core.Prim("pushforward_call", _), _, _, params)],
                 _,
                 _,
             ):
@@ -242,7 +242,7 @@ class TestIRMatchArgs:
 
         match ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Prim("switch", tag), _, _, intercept, params)], _, _
+                [af.core.IREqn(af.core.Prim("switch", tag), _, _, params)], _, _
             ) if ControlTag in tag:
                 branch_dict = params["branches"]
                 assert "a" in branch_dict

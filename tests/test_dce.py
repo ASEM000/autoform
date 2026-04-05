@@ -460,8 +460,8 @@ class TestDCEWithOutUsed:
         assert len(dced_branch.ir_eqns) == 2
 
 
-class TestDCEWithIntercepts:
-    def test_intercepted_equation_not_removed(self):
+class TestDCEWithCheckpoints:
+    def test_checkpoint_equation_not_removed(self):
         def program(x):
             saved = af.checkpoint(x, key="save", collection="cache")
             return x
@@ -474,7 +474,7 @@ class TestDCEWithIntercepts:
         assert dce.ir_eqns[0].prim.name == "checkpoint"
         assert dce.ir_eqns[0].params["key"] == "save"
 
-    def test_intercepted_inputs_remain_active(self):
+    def test_checkpoint_inputs_remain_active(self):
         def program(x):
             computed = af.concat(x, "!")
             saved = af.checkpoint(computed, key="save", collection="cache")
@@ -486,7 +486,7 @@ class TestDCEWithIntercepts:
         dce = af.dce(ir)
         assert len(dce.ir_eqns) == 2
 
-    def test_mixed_intercepted_and_dead(self):
+    def test_mixed_checkpoint_and_dead(self):
         def program(x):
             dead = af.concat(x, "dead")
             saved = af.checkpoint(x, key="save", collection="cache")
@@ -495,12 +495,7 @@ class TestDCEWithIntercepts:
         ir = af.trace(program)("test")
         assert len(ir.ir_eqns) == 2
 
-        dce = af.dce(ir, keep_intercepts=False)
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "checkpoint"
-        assert dce.ir_eqns[0].params["key"] == "save"
-
-        dce = af.dce(ir, keep_intercepts=True)
+        dce = af.dce(ir)
         assert len(dce.ir_eqns) == 1
         assert dce.ir_eqns[0].prim.name == "checkpoint"
         assert dce.ir_eqns[0].params["key"] == "save"
@@ -616,7 +611,7 @@ class TestDCEWithDepends:
         assert len(format_eqns) == 1
         assert len(depends_eqns) == 1
 
-    def test_depends_with_intercepted(self):
+    def test_depends_with_checkpoint(self):
         def program(x):
             a = af.checkpoint(x, key="a")
             b = af.format("B: {}", x)

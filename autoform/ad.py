@@ -172,7 +172,7 @@ def pushforward(ir: IR, /) -> IR:
     out_p_ir_tree = treelib.map(make_p, ir.out_ir_tree)
     out_t_ir_tree = treelib.map(make_t, ir.out_ir_tree)
     out_ir_tree = (out_p_ir_tree, out_t_ir_tree)
-    ir_eqn = IREqn(pushforward_call_p, None, in_ir_tree, out_ir_tree, dict(ir=ir))
+    ir_eqn = IREqn(pushforward_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 
@@ -455,7 +455,7 @@ def pullback(ir: IR, /) -> IR:
     out_p = treelib.map(make_p, ir.out_ir_tree)
     in_c = treelib.map(make_c, ir.in_ir_tree)
     out_ir_tree = (out_p, in_c)
-    ir_eqn = IREqn(pullback_call_p, None, in_ir_tree, out_ir_tree, dict(ir=ir))
+    ir_eqn = IREqn(pullback_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 
