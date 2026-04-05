@@ -32,6 +32,7 @@ from autoform.core import (
 from autoform.utils import Tree, treelib
 
 type CacheKey = tuple[Prim, tuple[Tree, ...], PyTreeSpec]
+non_memoizable_primitives: set[Prim] = {checkpoint_p}
 
 
 def make_key(prim: Prim, in_tree: Tree, /, **params) -> CacheKey:
@@ -45,14 +46,14 @@ class MemoizingInterpreter(Interpreter):
         self.cache: dict[CacheKey, Tree] = {}
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if active_intercept.get() is not None or prim is checkpoint_p:
+        if active_intercept.get() is not None or prim in non_memoizable_primitives:
             return self.parent.interpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = self.parent.interpret(prim, in_tree, **params)
         return self.cache[key]
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if active_intercept.get() is not None or prim is checkpoint_p:
+        if active_intercept.get() is not None or prim in non_memoizable_primitives:
             return await self.parent.ainterpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = await self.parent.ainterpret(prim, in_tree, **params)
@@ -77,7 +78,7 @@ def memoize() -> Generator[None, None, None]:
 
     Tracing a program with `memoize` will act as compile-time deduplication of
     identical primitive calls (including stochastic primitives like :func:`lm_call`).
-    intercepted and checkpoint primitives are not memoized.
+    intercepted and non-memoizable primitives are not memoized.
 
     Example:
         >>> def program(x):
