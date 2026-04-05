@@ -20,6 +20,33 @@ from annotated_types import Len
 import autoform as af
 
 
+class FakeMessage:
+    def __init__(self, content: str):
+        self.content = content
+
+
+class FakeChoice:
+    def __init__(self, content: str):
+        self.message = FakeMessage(content)
+
+
+class FakeResponse:
+    def __init__(self, content: str):
+        self.choices = [FakeChoice(content)]
+
+
+class StructRouter:
+    def completion(self, *, messages: list[dict], model: str, response_format, **kwargs):
+        del kwargs
+        payload = {"text": f"{model}|{messages[-1]['content']}"}
+        return FakeResponse(response_format(**payload).model_dump_json())
+
+    async def acompletion(self, *, messages: list[dict], model: str, response_format, **kwargs):
+        return self.completion(
+            messages=messages, model=model, response_format=response_format, **kwargs
+        )
+
+
 class TestStructFieldValidation:
     def test_leaf_types_accepted(self):
         class Valid(af.Struct):
@@ -195,22 +222,43 @@ class TestStructLmCall:
         assert len(built_ir.ir_eqns) == 1
         assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
 
-    def test_struct_lm_call_params(self):
+    def test_struct_lm_call_keeps_model_in_inputs(self):
         class Answer(af.Struct):
             text: str
 
-        def ir(prompt: str):
+        def ir(prompt: str, model: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
-                model="gpt-5.2",
+                model=model,
                 struct=Answer,
             )
 
-        built_ir = af.trace(ir)("test")
-        params = built_ir.ir_eqns[0].params
-        assert params["model"] == "gpt-5.2"
+        built_ir = af.trace(ir)("test", "gpt-5.2")
+        eqn = built_ir.ir_eqns[0]
+        params = eqn.params
+
+        assert "model" not in params
         assert params["struct"] is Answer
         assert params["roles"] == ["user"]
+        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+
+    def test_struct_lm_call_executes_with_variable_model(self):
+        class Answer(af.Struct):
+            text: str
+
+        def ir(prompt: str, model: str):
+            return af.struct_lm_call(
+                [dict(role="user", content=prompt)],
+                model=model,
+                struct=Answer,
+            )
+
+        built_ir = af.trace(ir)("test", "gpt-5.2")
+
+        with af.using_router(StructRouter()):
+            result = built_ir.call("hello", "m1")
+
+        assert result.text == "m1|hello"
 
     def test_struct_lm_call_eval_returns_var_tree(self):
         class Answer(af.Struct):
