@@ -305,7 +305,7 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
 def impl_struct_lm_call(in_tree: Tree, /, *, roles: list[str], struct: type[Struct]) -> Struct:
     contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     comp = client.completion if (client := active_router.get()) is not None else completion
     resp = comp(messages=messages, model=model, response_format=struct)
     return struct.model_validate_json(resp.choices[0].message.content)
