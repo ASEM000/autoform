@@ -285,9 +285,9 @@ class IR[*A, R]:
     def walk(self, *args: *A) -> Generator[tuple[IREqn | None, Tree], Tree, None]:
         """Step through this IR one equation at a time.
 
-        Manual control over IR execution. Start with `next(gen)` to receive `(ir_eqn, in_values)`, 
-        compute or override the equation output, using `ir_eqn.bind(in_values, **ir_eqn.params)` 
-        for synchronous execution or `await ir_eqn.abind(in_values, **ir_eqn.params)` for async 
+        Manual control over IR execution. Start with `next(gen)` to receive `(ir_eqn, in_values)`,
+        compute or override the equation output, using `ir_eqn.bind(in_values, **ir_eqn.params)`
+        for synchronous execution or `await ir_eqn.abind(in_values, **ir_eqn.params)` for async
         execution, and send that output back with `gen.send(...)`. After the last equation,
         the generator yields `(None, out_tree)`.
 
@@ -485,13 +485,20 @@ class TracingInterpreter(Interpreter):
         self.ir_eqns: list[IREqn] = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        def to_in_ir_atom(value):
+            if not is_irvar(value):
+                hash(value)
+            return value
+
         def to_concrete(leaf, value):
-            assert not is_irvar(value), f"Unexpected variable in {prim} at {'/'.join(map(str, leaf))}"
+            assert not is_irvar(value), (
+                f"Unexpected variable in {prim} at {'/'.join(map(str, leaf))}"
+            )
             return value
 
         params = treelib.map_with_path(to_concrete, params)
 
-        in_ir_tree = in_tree
+        in_ir_tree = treelib.map(to_in_ir_atom, in_tree)
         in_aval_tree = treelib.map(ir_aval, in_ir_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
@@ -544,13 +551,16 @@ def trace[*A, R](
     def is_static_spec(x) -> bool:
         return isinstance(x, bool)
 
+    def to_in_ir_atom(x, is_static: bool):
+        if is_static:
+            hash(x)
+            return x
+        return to_ir_var(x)
+
     def to_ir_var(x, /) -> IRVar:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
         assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
         return IRVar.fresh(aval=TypedAVal(type(x)))
-
-    def to_in_ir_atom(x, is_static: bool):
-        return x if is_static else to_ir_var(x)
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:

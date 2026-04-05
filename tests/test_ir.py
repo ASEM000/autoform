@@ -61,6 +61,16 @@ class TestBuildIR:
         with pytest.raises(AssertionError, match="Unsupported input leaf type"):
             af.trace(program)(Opaque())
 
+    def test_trace_static_unhashable_input_errors(self):
+        class Unhashable:
+            __hash__ = None
+
+        def program(x):
+            return x
+
+        with pytest.raises(TypeError):
+            af.trace(program, static=True)(Unhashable())
+
     def test_traces_literal_and_variable(self):
         def program(name):
             return af.concat("Hello, ", name)
@@ -89,6 +99,39 @@ class TestBuildIR:
         assert eqn.params["template"] == "Hello, {}!"
         assert isinstance(args[0], af.core.IRVar)
         assert ir.call("x0") == "Hello, x0!"
+
+    def test_tracing_unhashable_literal_leaf_errors(self):
+        class Unhashable:
+            __hash__ = None
+
+        literal = Unhashable()
+
+        def program(x):
+            return af.format("{} {}", literal, x)
+
+        with pytest.raises(TypeError):
+            af.trace(program)("x")
+
+    def test_traced_literal_container_is_detached_from_source_mutation(self):
+        parts = ["a", "b"]
+
+        def program(x):
+            return af.format("{} {}", parts, x)
+
+        ir = af.trace(program)("x")
+        eqn = ir.ir_eqns[0]
+        args, kwargs_values = eqn.in_ir_tree
+
+        assert args[0] == ["a", "b"]
+        assert args[0] is not parts
+        assert len(kwargs_values) == 0
+        assert ir.call("z") == "['a', 'b'] z"
+
+        parts.append("c")
+
+        args, _ = eqn.in_ir_tree
+        assert args[0] == ["a", "b"]
+        assert ir.call("z") == "['a', 'b'] z"
 
     def test_multiple_operations(self):
         def program(x, y):
