@@ -76,8 +76,8 @@ class TestKwargsBuildIR:
         match eqn.in_ir_tree:
             case (name, {"greeting": greeting, "punctuation": punctuation}):
                 assert isinstance(name, af.core.IRVar)
-                assert isinstance(greeting, af.core.IRLit)
-                assert isinstance(punctuation, af.core.IRLit)
+                assert greeting == "Hi"
+                assert punctuation == "?"
             case _:
                 pytest.fail("Unexpected in_ir_tree structure")
 

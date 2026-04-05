@@ -20,7 +20,7 @@ from collections import deque
 from collections.abc import Callable
 
 from autoform.analysis import ir_liveness, ir_tree_ir_vars, ir_tree_used_ir_vars
-from autoform.core import IR, IREqn, IRLit, IRVal, IRVar, Prim, is_irvar
+from autoform.core import IR, IREqn, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 
 # ==================================================================================================
@@ -87,7 +87,7 @@ def dce[*A, R](
         active_ir_vars = ir_tree_used_ir_vars(ir.out_ir_tree, user_out_used)
     active_ir_eqns: deque[IREqn] = deque()
 
-    def is_active_node(node: IRVal) -> bool:
+    def is_active_node(node) -> bool:
         return is_irvar(node) and (node in active_ir_vars)
 
     for ir_eqn in reversed(ir.ir_eqns):
@@ -117,7 +117,7 @@ def dce[*A, R](
         for atom in treelib.leaves(kept.out_ir_tree):
             is_irvar(atom) and defined_vars.add(atom)
 
-    def sanitize_out_leaf(atom: IRVal, used: bool) -> IRVal:
+    def sanitize_out_leaf(atom, used: bool):
         if not is_irvar(atom):
             # NOTE(asem): leaf is already a literal, nothing to sanitize.
             # >>> def program(x):
@@ -138,8 +138,8 @@ def dce[*A, R](
             # ...   return (a,b)
             # >>> af.dce(ir, out_used=(True, False))
             # drops eqn for b, but keeps a 2-tuple output.
-            # the second leaf becomes IRLit(None).
-            return IRLit(None)
+            # the second leaf becomes None.
+            return None
         # NOTE(asem): this should be unreachable for well-behaved primitives/rules.
         assert False, (
             "DCE produced an invalid IR: a used output IRVar is not defined by inputs or kept equations. "

@@ -28,7 +28,6 @@ from autoform.core import (
     Intercept,
     Interpreter,
     IREqn,
-    IRVal,
     IRVar,
     Prim,
     TransformationTag,
@@ -39,6 +38,7 @@ from autoform.core import (
     batch_rules,
     call_with_interpreter,
     impl_rules,
+    ir_aval,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -188,8 +188,8 @@ def weight(ir: IR, /) -> IR:
 
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
-    def make(atom: IRVal):
-        return IRVar.fresh(aval=atom.aval, source=atom) if is_irvar(atom) else atom
+    def make(atom):
+        return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else atom
 
     in_ir_tree = treelib.map(make, ir.in_ir_tree)
     out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(aval=TypedAVal(float)))
@@ -213,7 +213,7 @@ async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
 
 def abstract_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, AVal]:
     del in_tree
-    return treelib.map(lambda x: x.aval, ir.out_ir_tree), TypedAVal(float)
+    return treelib.map(ir_aval, ir.out_ir_tree), TypedAVal(float)
 
 
 def unsupported_weight_transform(name: str):

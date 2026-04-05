@@ -32,6 +32,7 @@ from autoform.core import (
     abstract_rules,
     batch_rules,
     impl_rules,
+    ir_aval,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -105,7 +106,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
 
 
 def abstract_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
-    return [treelib.map(lambda x: x.aval, ir.out_ir_tree) for ir in irs]
+    return [treelib.map(ir_aval, ir.out_ir_tree) for ir in irs]
 
 
 def push_gather(

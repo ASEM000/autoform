@@ -80,19 +80,16 @@ class TestPrimitive:
         assert af.core.pull_bwd_rules.get(p) is pb_bwd_rule
 
 
-class TestIRVal:
+class TestIRVar:
     def test_ir_var_aval_returns_aval(self):
         ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
 
-        assert af.core.is_irval(ir_var)
+        assert af.core.is_irvar(ir_var)
         assert isinstance(ir_var.aval, af.core.AVal)
         assert ir_var.aval.type is str
 
-    def test_ir_lit_aval_returns_wrapped_value(self):
-        ir_lit = af.core.IRLit("hello")
-
-        assert af.core.is_irval(ir_lit)
-        assert ir_lit.aval == "hello"
+    def test_plain_literal_is_not_irvar(self):
+        assert not af.core.is_irvar("hello")
 
 
 class TestFormatPrimitive:
@@ -476,7 +473,7 @@ class TestCotangentHelpers:
 
 class TestLiteralZeroing:
     def test_pushforward_zeros_literal_input_tangent(self):
-        lit = af.core.IRLit("constant")
+        lit = "constant"
         var = af.core.IRVar(aval=af.core.TypedAVal(str))
         in_tree = (lit, var)
         out_tree = (var,)
@@ -487,9 +484,8 @@ class TestLiteralZeroing:
         _, tangent_in = tangent_ir.in_ir_tree
         t_lit, t_var = tangent_in
 
-        assert isinstance(t_lit, af.core.IRLit)
-        assert af.ad.is_zero(t_lit.value)
-        assert t_lit.value.type is str
+        assert af.ad.is_zero(t_lit)
+        assert t_lit.type is str
         assert isinstance(t_var, af.core.IRVar)
 
     def test_pushforward_zeros_literal_output_tangent(self):
@@ -499,16 +495,14 @@ class TestLiteralZeroing:
         ir = af.trace(f)("input")
 
         res_var, res_lit = ir.out_ir_tree
-        assert isinstance(res_lit, af.core.IRLit)
-        assert res_lit.value == "constant_output"
+        assert res_lit == "constant_output"
 
         tangent_ir = af.pushforward(ir)
 
         _, tangent_out = tangent_ir.out_ir_tree
         t_out_var, t_out_lit = tangent_out
 
-        assert isinstance(t_out_lit, af.core.IRLit)
-        assert af.ad.is_zero(t_out_lit.value)
+        assert af.ad.is_zero(t_out_lit)
         assert isinstance(t_out_var, af.core.IRVar)
 
     def test_pullback_zeros_literal_output_cotangent(self):
@@ -521,11 +515,10 @@ class TestLiteralZeroing:
         _, cotangent_out = adjoint_ir.in_ir_tree
         c_out_var, c_out_lit = cotangent_out
 
-        assert isinstance(c_out_lit, af.core.IRLit)
-        assert af.ad.is_zero(c_out_lit.value)
+        assert af.ad.is_zero(c_out_lit)
 
     def test_pullback_zeros_literal_input_cotangent(self):
-        lit = af.core.IRLit("constant_input")
+        lit = "constant_input"
         var = af.core.IRVar(aval=af.core.TypedAVal(str))
         in_tree = (lit, var)
         out_tree = (var,)
@@ -536,5 +529,4 @@ class TestLiteralZeroing:
         _, cotangent_in = adjoint_ir.out_ir_tree
         c_in_lit, c_in_var = cotangent_in
 
-        assert isinstance(c_in_lit, af.core.IRLit)
-        assert af.ad.is_zero(c_in_lit.value)
+        assert af.ad.is_zero(c_in_lit)

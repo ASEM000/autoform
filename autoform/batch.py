@@ -19,14 +19,13 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 from operator import setitem
-from typing import Any, cast
+from typing import Any
 
 from autoform.ad import pullback, pushforward
 from autoform.core import (
     IR,
     Interpreter,
     IREqn,
-    IRLit,
     IRVar,
     Prim,
     TransformationTag,
@@ -109,8 +108,8 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         >>> ir = af.trace(greet)("Hi", "World")
         >>> # Batch over names, broadcast greeting
         >>> batched = af.batch(ir, in_axes=(False, True))
-        >>> batched.call("Hello, ", ["Alice", "Bob", "Carol"])
-        ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
+        >>> batched.call("Hello, ", ["x0", "x1", "x2"])
+        ['Hello, x0', 'Hello, x1', 'Hello, x2']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
@@ -126,7 +125,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         if is_irvar(atom):
             return IRVar.fresh(aval=atom.aval, source=atom)
         if has_batched_input:
-            return IRVar.fresh(aval=TypedAVal(type(atom.value)))
+            return IRVar.fresh(aval=TypedAVal(type(atom)))
         return atom
 
     in_b_ir_tree = treelib.map(make_in, ir.in_ir_tree, in_batched_tree)
@@ -187,7 +186,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
         is_irvar(atom) and setitem(b_env, atom, is_batched)
 
     def read_v(atom) -> Any:
-        return v_env[atom] if is_irvar(atom) else cast(IRLit, atom).value
+        return v_env[atom] if is_irvar(atom) else atom
 
     def read_b(atom) -> bool:
         return b_env[atom] if is_irvar(atom) else False
@@ -229,7 +228,7 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
         is_irvar(atom) and setitem(b_env, atom, is_batched)
 
     def read_v(atom) -> Any:
-        return v_env[atom] if is_irvar(atom) else cast(IRLit, atom).value
+        return v_env[atom] if is_irvar(atom) else atom
 
     def read_b(atom) -> bool:
         return b_env[atom] if is_irvar(atom) else False
@@ -260,8 +259,8 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
         if is_irvar(atom):
             return atom.aval
         if has_batched_input:
-            return TypedAVal(type(atom.value))
-        return atom.value
+            return TypedAVal(type(atom))
+        return atom
 
     return treelib.map(out_aval, ir.out_ir_tree)
 

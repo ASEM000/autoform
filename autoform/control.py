@@ -29,7 +29,7 @@ from autoform.core import (
     abstract_rules,
     batch_rules,
     impl_rules,
-    is_irval,
+    ir_aval,
     is_irvar,
     is_val,
     pull_bwd_rules,
@@ -162,7 +162,7 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         >>> ir.call("zero", "hello")
         'zero: hello'
     """
-    assert is_val(key) or is_irval(key), "key must be a user-type (traceable) value"
+    assert is_val(key) or is_irvar(key), "key must be a user-type (traceable) value"
     assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_ir_tree)
@@ -186,7 +186,7 @@ def abstract_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
     del in_tree
     key0 = next(iter(branches))
     branch0 = branches[key0]
-    return treelib.map(lambda x: x.aval, branch0.out_ir_tree)
+    return treelib.map(ir_aval, branch0.out_ir_tree)
 
 
 def pushforward_switch(in_tree, /, *, branches: dict[str, IR]):
@@ -373,7 +373,7 @@ async def aimpl_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_it
 
 def abstract_while_loop(in_tree: Tree, /, *, cond_ir: IR, body_ir: IR, max_iters: int) -> Tree:
     del cond_ir, max_iters
-    return treelib.map(lambda x: x.aval, body_ir.out_ir_tree)
+    return treelib.map(ir_aval, body_ir.out_ir_tree)
 
 
 def pullback_fwd_while_loop(
@@ -525,7 +525,7 @@ def batch_while_loop(
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (batch_index(out_transposed, out_batched, local_idx),)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
-    # only IRVar positions are batched; IRLit positions stay scalar
+    # only IRVar positions are batched; literal positions stay scalar
     out_batched = treelib.map(is_irvar, body_ir.out_ir_tree)
     out_tree = batch_transpose(batch_size, out_batched, [state[0] for state in states])
     in_spec = treelib.structure(init_val, is_leaf=lambda x: x is not init_val)

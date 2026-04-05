@@ -61,11 +61,21 @@ class TestBuildIR:
         with pytest.raises(AssertionError, match="Unsupported input leaf type"):
             af.trace(program)(Opaque())
 
+    def test_trace_static_unhashable_input_errors(self):
+        class Unhashable:
+            __hash__ = None
+
+        def program(x):
+            return x
+
+        with pytest.raises(TypeError):
+            af.trace(program, static=True)(Unhashable())
+
     def test_traces_literal_and_variable(self):
         def program(name):
             return af.concat("Hello, ", name)
 
-        ir = af.trace(program)("Alice")
+        ir = af.trace(program)("x0")
         assert len(ir.ir_eqns) == 1
         assert isinstance(ir.in_ir_tree, tuple)
         assert len(ir.in_ir_tree) == 1
@@ -73,9 +83,7 @@ class TestBuildIR:
         eqn = ir.ir_eqns[0]
         assert len(eqn.in_ir_tree) == 2
         lit_candidate = eqn.in_ir_tree[0]
-        assert (
-            isinstance(lit_candidate, af.core.IRLit) and lit_candidate.value == "Hello, "
-        ) or lit_candidate == "Hello, "
+        assert lit_candidate == "Hello, "
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
     def test_format_traces_template_and_args(self):
@@ -90,7 +98,40 @@ class TestBuildIR:
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
         assert isinstance(args[0], af.core.IRVar)
-        assert ir.call("Alice") == "Hello, Alice!"
+        assert ir.call("x0") == "Hello, x0!"
+
+    def test_tracing_unhashable_literal_leaf_errors(self):
+        class Unhashable:
+            __hash__ = None
+
+        literal = Unhashable()
+
+        def program(x):
+            return af.format("{} {}", literal, x)
+
+        with pytest.raises(TypeError):
+            af.trace(program)("x")
+
+    def test_traced_literal_container_is_detached_from_source_mutation(self):
+        parts = ["a", "b"]
+
+        def program(x):
+            return af.format("{} {}", parts, x)
+
+        ir = af.trace(program)("x")
+        eqn = ir.ir_eqns[0]
+        args, kwargs_values = eqn.in_ir_tree
+
+        assert args[0] == ["a", "b"]
+        assert args[0] is not parts
+        assert len(kwargs_values) == 0
+        assert ir.call("z") == "['a', 'b'] z"
+
+        parts.append("c")
+
+        args, _ = eqn.in_ir_tree
+        assert args[0] == ["a", "b"]
+        assert ir.call("z") == "['a', 'b'] z"
 
     def test_multiple_operations(self):
         def program(x, y):
@@ -126,10 +167,9 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
-        assert ir.in_ir_tree[0].value == "Hello"
+        assert ir.in_ir_tree[0] == "Hello"
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
-        assert ir.call("Hello", "Alice") == "Hello Alice"
+        assert ir.call("Hello", "x0") == "Hello x0"
 
     def test_static_input_mismatch_errors_before_execution(self):
         def program(prefix, name):
@@ -138,7 +178,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            ir.call("Hi", "Alice")
+            ir.call("Hi", "x0")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_static_input_mismatch_errors_before_async_execution(self):
@@ -148,7 +188,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            await ir.acall("Hi", "Alice")
+            await ir.acall("Hi", "x0")
 
     def test_static_spec_must_match_input_tree(self):
         def program(prefix, name):
@@ -165,10 +205,9 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))(True, "World")
 
-        assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
-        assert ir.in_ir_tree[0].value is True
+        assert ir.in_ir_tree[0] is True
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
-        assert ir.call(True, "Alice") == "Hello Alice"
+        assert ir.call(True, "x0") == "Hello x0"
 
 
 class TestRunIR:
