@@ -360,8 +360,7 @@ class TestStructStatic:
         )(Person(name="Alice", sur="Smith"))
 
         assert isinstance(ir.in_ir_tree[0].name, af.core.IRVar)
-        assert isinstance(ir.in_ir_tree[0].sur, af.core.IRLit)
-        assert ir.in_ir_tree[0].sur.value == "Smith"
+        assert ir.in_ir_tree[0].sur == "Smith"
         assert ir.call(Person(name="Bob", sur="Smith")) == "Hello Bob, Smith"
 
     def test_struct_static_mismatch(self):

@@ -296,7 +296,7 @@ class TestGatherWithDCE:
         inner_dead = gather_eqn.params["irs"][1]
         assert len(inner_dead.ir_eqns) == 0
         leaves = af.utils.treelib.leaves(inner_dead.out_ir_tree)
-        assert all(af.core.is_irlit(x) and x.value is None for x in leaves)
+        assert all(x is None for x in leaves)
 
 
 class TestGatherContextPreservation:

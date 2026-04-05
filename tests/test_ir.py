@@ -73,9 +73,7 @@ class TestBuildIR:
         eqn = ir.ir_eqns[0]
         assert len(eqn.in_ir_tree) == 2
         lit_candidate = eqn.in_ir_tree[0]
-        assert (
-            isinstance(lit_candidate, af.core.IRLit) and lit_candidate.value == "Hello, "
-        ) or lit_candidate == "Hello, "
+        assert lit_candidate == "Hello, "
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
     def test_format_traces_template_and_args(self):
@@ -126,8 +124,7 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
-        assert ir.in_ir_tree[0].value == "Hello"
+        assert ir.in_ir_tree[0] == "Hello"
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
         assert ir.call("Hello", "Alice") == "Hello Alice"
 
@@ -165,8 +162,7 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))(True, "World")
 
-        assert isinstance(ir.in_ir_tree[0], af.core.IRLit)
-        assert ir.in_ir_tree[0].value is True
+        assert ir.in_ir_tree[0] is True
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
         assert ir.call(True, "Alice") == "Hello Alice"
 

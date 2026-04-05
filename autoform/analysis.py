@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from typing import cast
 
-from autoform.core import IR, IREqn, IRVal, IRVar, is_irvar
+from autoform.core import IR, IREqn, IRVar, is_irvar
 from autoform.utils import Tree, treelib
 
 __all__ = ["ir_tree_ir_vars", "ir_var_producers", "ir_eqn_graph", "ir_liveness"]
 
 
-def ir_tree_ir_vars(tree: Tree[IRVal], /) -> tuple[IRVar, ...]:
+def ir_tree_ir_vars(tree: Tree, /) -> tuple[IRVar, ...]:
     """Return IRVars from an IR tree in leaf order."""
 
     return tuple(cast(IRVar, x) for x in treelib.leaves(tree) if is_irvar(x))
@@ -56,7 +56,7 @@ def ir_eqn_graph(ir: IR, /) -> dict[IREqn, list[IREqn]]:
     return adjacency_list
 
 
-def ir_tree_used_ir_vars(tree: Tree[IRVal], used: Tree[bool], /) -> set[IRVar]:
+def ir_tree_used_ir_vars(tree: Tree, used: Tree[bool], /) -> set[IRVar]:
     # NOTE(asem): this helper reads a pytree of IR leaves together with a pytree mask of bools
     # and returns exactly the IRVars whose corresponding mask entry is True.
     # >>> tree = (IRVar(id=1), IRVar(id=2))

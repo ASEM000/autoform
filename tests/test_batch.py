@@ -218,7 +218,7 @@ class TestBatchIRStructure:
         ir = af.trace(f)("x")
         batched_ir = af.batch(ir, in_axes=False)
 
-        assert isinstance(batched_ir.out_ir_tree, af.core.IRLit)
+        assert batched_ir.out_ir_tree == "c"
         assert batched_ir.call("a") == "c"
 
 
