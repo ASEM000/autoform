@@ -19,6 +19,30 @@ import pytest
 import autoform as af
 
 
+class FakeMessage:
+    def __init__(self, content: str):
+        self.content = content
+
+
+class FakeChoice:
+    def __init__(self, content: str):
+        self.message = FakeMessage(content)
+
+
+class FakeResponse:
+    def __init__(self, content: str):
+        self.choices = [FakeChoice(content)]
+
+
+class EchoRouter:
+    def completion(self, *, messages: list[dict], model: str, **kwargs):
+        del kwargs
+        return FakeResponse(f"{model}|{messages[-1]['content']}")
+
+    async def acompletion(self, *, messages: list[dict], model: str, **kwargs):
+        return self.completion(messages=messages, model=model, **kwargs)
+
+
 class TestPrimitive:
     def test_creation(self):
         p = af.core.Prim("test_prim")
@@ -155,6 +179,46 @@ class TestConcatPrimitive:
         ir = af.trace(func)("a", "b")
         result = await ir.acall("hello", " world")
         assert result == "hello world"
+
+
+class TestLMPrimitive:
+    def test_lm_call_model_is_traced_as_input(self):
+        def program(prompt: str, model: str):
+            return af.lm_call([{"role": "user", "content": prompt}], model=model)
+
+        ir = af.trace(program)("test", "gpt-5.2")
+        eqn = ir.ir_eqns[0]
+
+        assert eqn.prim.name == "lm_call"
+        assert eqn.params == {"roles": ["user"]}
+        assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+
+    def test_batch_lm_call_supports_variable_models(self):
+        def program(prompt: str, model: str):
+            return af.lm_call([{"role": "user", "content": prompt}], model=model)
+
+        ir = af.trace(program)("test", "gpt-5.2")
+        batched_ir = af.batch(ir, in_axes=(True, True))
+
+        with af.using_router(EchoRouter()):
+            result = batched_ir.call(["hello", "goodbye"], ["m1", "m2"])
+
+        assert result == ["m1|hello", "m2|goodbye"]
+
+    def test_pullback_lm_call_zeroes_model_cotangent(self):
+        def program(prompt: str, model: str):
+            return af.lm_call([{"role": "user", "content": prompt}], model=model)
+
+        ir = af.trace(program)("test", "gpt-5.2")
+        pb_ir = af.pullback(ir)
+
+        with af.using_router(EchoRouter()):
+            out, cotangent = pb_ir.call(("hello", "m1"), "feedback")
+
+        assert out == "m1|hello"
+        assert isinstance(cotangent[0], str)
+        assert cotangent[1] == af.ad.Zero(str)
 
 
 class TestBind:
