@@ -21,7 +21,7 @@ from contextlib import contextmanager
 
 from optree import PyTreeSpec
 
-from autoform.checkpoint import is_checkpoint_call
+from autoform.checkpoint import checkpoint_p
 from autoform.core import (
     Interpreter,
     Prim,
@@ -45,14 +45,14 @@ class MemoizingInterpreter(Interpreter):
         self.cache: dict[CacheKey, Tree] = {}
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if active_intercept.get() is not None or is_checkpoint_call(prim, params):
+        if active_intercept.get() is not None or prim is checkpoint_p:
             return self.parent.interpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = self.parent.interpret(prim, in_tree, **params)
         return self.cache[key]
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if active_intercept.get() is not None or is_checkpoint_call(prim, params):
+        if active_intercept.get() is not None or prim is checkpoint_p:
             return await self.parent.ainterpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = await self.parent.ainterpret(prim, in_tree, **params)

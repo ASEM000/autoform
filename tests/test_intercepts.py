@@ -24,13 +24,13 @@ class TestInterceptBasics:
         result = checkpoint("hello", key="test", collection="debug")
         assert result == "hello"
 
-    def test_intercept_p_in_ir(self):
+    def test_checkpoint_primitive_in_ir(self):
         def func(x):
             return checkpoint(x, key="my_key", collection="my_col")
 
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "intercept"
+        assert ir.ir_eqns[0].prim.name == "checkpoint"
         assert ir.ir_eqns[0].intercept is None
         assert ir.ir_eqns[0].params["key"] == "my_key"
         assert ir.ir_eqns[0].params["collection"] == "my_col"

@@ -20,7 +20,6 @@ from collections import deque
 from collections.abc import Callable
 
 from autoform.analysis import ir_liveness, ir_tree_ir_vars, ir_tree_used_ir_vars
-from autoform.checkpoint import is_checkpoint_call
 from autoform.core import IR, IREqn, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 
@@ -41,6 +40,7 @@ def default_dce(ir_eqn: IREqn, out_used: Tree[bool]) -> tuple[IREqn, Tree[bool]]
 type DCERule = Callable[[IREqn, Tree[bool]], tuple[IREqn, Tree[bool]]]
 
 dce_rules: dict[Prim, DCERule] = {}
+non_dce_primitives: set[Prim] = set()
 
 
 def dce[*A, R](
@@ -53,8 +53,7 @@ def dce[*A, R](
     Args:
         ir: The IR to optimize.
         out_used: A pytree of bool matching the ir output pytree that denotes which output is used.
-        keep_intercepts: keep equations with intercepts (e.g. checkpoint) even if their outputs
-            are not used.
+        keep_intercepts: keep equations with intercepts even if their outputs are not used.
 
     Example:
         >>> import autoform as af
@@ -92,7 +91,7 @@ def dce[*A, R](
         return is_irvar(node) and (node in active_ir_vars)
 
     for ir_eqn in reversed(ir.ir_eqns):
-        is_checkpoint = is_checkpoint_call(ir_eqn.prim, ir_eqn.params)
+        is_non_dce = ir_eqn.prim in non_dce_primitives
         # NOTE(asem): walk backwards and feed dce rules the appropriate
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
@@ -100,7 +99,11 @@ def dce[*A, R](
         new_ir_eqn, in_used = dce_rules.get(ir_eqn.prim, default_dce)(ir_eqn, ir_eqn_out_used)
         assert treelib.structure(in_used) == treelib.structure(ir_eqn.in_ir_tree)
 
-        if keep_intercepts and (ir_eqn.intercept or is_checkpoint):
+        if is_non_dce:
+            active_ir_eqns.appendleft(new_ir_eqn)
+            active_ir_vars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
+
+        elif keep_intercepts and ir_eqn.intercept:
             active_ir_eqns.appendleft(new_ir_eqn)
             active_ir_vars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
 

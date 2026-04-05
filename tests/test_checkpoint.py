@@ -44,7 +44,7 @@ class TestSow:
 
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "intercept"
+        assert ir.ir_eqns[0].prim.name == "checkpoint"
         assert ir.ir_eqns[0].intercept is None
         assert ir.ir_eqns[0].params["collection"] == "my_tag"
         assert ir.ir_eqns[0].params["key"] == "my_name"
@@ -737,7 +737,7 @@ class TestMemoizeWithIntercepts:
 
         ir = af.trace(func)("test")
 
-        checkpoint_eqns = [eqn for eqn in ir.ir_eqns if eqn.prim.name == "intercept"]
+        checkpoint_eqns = [eqn for eqn in ir.ir_eqns if eqn.prim.name == "checkpoint"]
         assert len(checkpoint_eqns) == 2
         assert checkpoint_eqns[0].params["key"] == "first"
         assert checkpoint_eqns[1].params["key"] == "second"

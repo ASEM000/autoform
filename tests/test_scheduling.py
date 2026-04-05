@@ -1218,13 +1218,13 @@ class TestToposortLevelsWithIntercepts:
         ir = af.trace(program)("a", "b")
         levels = toposort_levels(ir)
 
-        intercept_eqns = [e for lvl in levels for e in lvl if e.prim.name == "intercept"]
-        assert len(intercept_eqns) == 2
+        checkpoint_eqns = [e for lvl in levels for e in lvl if e.prim.name == "checkpoint"]
+        assert len(checkpoint_eqns) == 2
 
         intercept_levels = []
         for i, lvl in enumerate(levels):
             for e in lvl:
-                if e.prim.name == "intercept":
+                if e.prim.name == "checkpoint":
                     intercept_levels.append(i)
 
         assert intercept_levels[0] == intercept_levels[1]
@@ -1241,7 +1241,7 @@ class TestToposortLevelsWithIntercepts:
         intercept_levels = []
         for i, lvl in enumerate(levels):
             for e in lvl:
-                if e.prim.name == "intercept":
+                if e.prim.name == "checkpoint":
                     intercept_levels.append(i)
 
         assert intercept_levels[0] == intercept_levels[1]

@@ -21,17 +21,101 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
-from autoform.core import Interpreter, Prim, active_interpreter, using_interpreter
-from autoform.intercepts import intercept_p
-from autoform.utils import Tree
+from autoform.core import (
+    Interpreter,
+    Prim,
+    PrimTag,
+    abstract_rules,
+    active_interpreter,
+    batch_rules,
+    impl_rules,
+    pull_bwd_rules,
+    pull_fwd_rules,
+    push_rules,
+    using_interpreter,
+)
+from autoform.dce import non_dce_primitives
+from autoform.utils import Tree, asyncify, batch_index, batch_spec, batch_transpose
 
 # ==================================================================================================
 # CHECKPOINT
 # ==================================================================================================
 
 
-def is_checkpoint_call(prim: Prim, params: dict[str, Any], /) -> bool:
-    return prim is intercept_p and "key" in params and "collection" in params
+class CheckpointTag(PrimTag): ...
+
+
+checkpoint_p = Prim("checkpoint", tag={CheckpointTag})
+non_dce_primitives.add(checkpoint_p)
+
+
+def impl_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):
+    del key, collection
+    return x
+
+
+def abstract_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):
+    del key, collection
+    return x
+
+
+def push_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
+    primal, tangent = in_tree
+    out_p = checkpoint_p.bind(primal, key=key, collection=collection)
+    out_t = checkpoint_p.bind(tangent, key=key, collection=collection)
+    return out_p, out_t
+
+
+def pull_fwd_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):
+    return checkpoint_p.bind(x, key=key, collection=collection), None
+
+
+def pull_bwd_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
+    _, cotangent = in_tree
+    return checkpoint_p.bind(cotangent, key=key, collection=collection)
+
+
+def batch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
+    batch_size, in_batched, x = in_tree
+
+    if batch_spec(x, in_batched) is None:
+        return checkpoint_p.bind(x, key=key, collection=collection), False
+
+    out_bi = [
+        checkpoint_p.bind(batch_index(x, in_batched, b), key=key, collection=collection)
+        for b in range(batch_size)
+    ]
+    out_batched = in_batched
+    out_ib = batch_transpose(batch_size, out_batched, out_bi)
+    return out_ib, out_batched
+
+
+async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
+    batch_size, in_batched, x = in_tree
+
+    if batch_spec(x, in_batched) is None:
+        return await checkpoint_p.abind(x, key=key, collection=collection), False
+
+    out_bi = [
+        await checkpoint_p.abind(batch_index(x, in_batched, b), key=key, collection=collection)
+        for b in range(batch_size)
+    ]
+    out_batched = in_batched
+    out_ib = batch_transpose(batch_size, out_batched, out_bi)
+    return out_ib, out_batched
+
+
+impl_rules.set(checkpoint_p, impl_checkpoint)
+impl_rules.aset(checkpoint_p, asyncify(impl_checkpoint))
+abstract_rules.set(checkpoint_p, abstract_checkpoint)
+push_rules.set(checkpoint_p, push_checkpoint)
+push_rules.aset(checkpoint_p, asyncify(push_checkpoint))
+pull_fwd_rules.set(checkpoint_p, pull_fwd_checkpoint)
+pull_fwd_rules.aset(checkpoint_p, asyncify(pull_fwd_checkpoint))
+pull_bwd_rules.set(checkpoint_p, pull_bwd_checkpoint)
+pull_bwd_rules.aset(checkpoint_p, asyncify(pull_bwd_checkpoint))
+batch_rules.set(checkpoint_p, batch_checkpoint)
+batch_rules.aset(checkpoint_p, abatch_checkpoint)
 
 
 def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = None) -> Tree:
@@ -63,7 +147,7 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    return intercept_p.bind(value, key=key, collection=collection)
+    return checkpoint_p.bind(value, key=key, collection=collection)
 
 
 # ==================================================================================================
@@ -82,14 +166,14 @@ class CollectingInterpreter(Interpreter):
 
     def interpret(self, prim: Prim, in_tree: Any, /, **params):
         result = self.parent.interpret(prim, in_tree, **params)
-        if is_checkpoint_call(prim, params):
+        if prim is checkpoint_p:
             if self.collection is ... or params["collection"] == self.collection:
                 self.collected[params["key"]].append(result)
         return result
 
     async def ainterpret(self, prim: Prim, in_tree: Any, /, **params):
         result = await self.parent.ainterpret(prim, in_tree, **params)
-        if is_checkpoint_call(prim, params):
+        if prim is checkpoint_p:
             if self.collection is ... or params["collection"] == self.collection:
                 self.collected[params["key"]].append(result)
         return result
@@ -102,13 +186,13 @@ class InjectingInterpreter(Interpreter):
         self.cache = {k: deque(values[k]) for k in values}
 
     def interpret(self, prim: Prim, in_tree: Any, /, **params):
-        if is_checkpoint_call(prim, params) and params["collection"] == self.collection:
+        if prim is checkpoint_p and params["collection"] == self.collection:
             if params["key"] in self.cache and self.cache[params["key"]]:
                 return self.cache[params["key"]].popleft()
         return self.parent.interpret(prim, in_tree, **params)
 
     async def ainterpret(self, prim: Prim, in_tree: Any, /, **params):
-        if is_checkpoint_call(prim, params) and params["collection"] == self.collection:
+        if prim is checkpoint_p and params["collection"] == self.collection:
             if params["key"] in self.cache and self.cache[params["key"]]:
                 return self.cache[params["key"]].popleft()
         return await self.parent.ainterpret(prim, in_tree, **params)
