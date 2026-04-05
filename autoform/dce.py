@@ -19,8 +19,8 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-from autoform.checkpoint import is_checkpoint_call
 from autoform.analysis import ir_liveness, ir_tree_ir_vars, ir_tree_used_ir_vars
+from autoform.checkpoint import is_checkpoint_call
 from autoform.core import IR, IREqn, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
 

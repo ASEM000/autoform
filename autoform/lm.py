@@ -21,15 +21,13 @@ import functools as ft
 from collections.abc import Awaitable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from io import StringIO
 from typing import Any, Protocol, runtime_checkable
 
-from litellm import acompletion, completion, get_model_info
+from litellm import acompletion, completion
 
 from autoform.ad import materialize
 from autoform.core import (
     EvalType,
-    Intercept,
     Prim,
     PrimTag,
     TypedAVal,
@@ -39,9 +37,7 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    using_intercept,
 )
-from autoform.intercepts import intercept_p
 from autoform.utils import (
     Struct,
     Tree,
@@ -95,13 +91,6 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
 class LMTag(PrimTag): ...
 
 
-class StreamIntercept(Intercept):
-    __slots__ = "text"
-
-    def __init__(self, text: str):
-        self.text = text
-
-
 # ==================================================================================================
 # LM CALL
 # ==================================================================================================
@@ -150,34 +139,11 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     return lm_call_p.bind(contents, roles=roles, model=model)
 
 
-@ft.lru_cache(maxsize=256)
-def can_lm_stream(model: str) -> bool:
-    info = get_model_info(model)
-    supports_streaming = "stream" in info.get("supported_openai_params", [])
-    return supports_streaming
-
-
 def impl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     comp = client.completion if (client := active_router.get()) is not None else completion
-
-    if not can_lm_stream(model):
-        response = comp(messages=messages, model=model)
-        return response.choices[0].message.content
-
-    # NOTE(asem): stream under intercept context by default for all lm calls.
-    # the intercept is used here not over user code to avoid having lm call with `StreamIntercept`
-    # in the ir_eqn, since intercepted equations make any equation immovable.
-    # downside of this approach is streaming is not possible if lm_call is transformed.
-    buffer = StringIO()
-    for chunk in comp(messages=messages, model=model, stream=True):
-        text = chunk.choices[0].delta.content or ""
-        buffer.write(text)
-        with using_intercept(StreamIntercept(text)):
-            # NOTE(asem): bind triggers the active interpreter to process the intercept
-            # if InterceptorInterpreter is active, otherwise pass through (rule-wise).
-            intercept_p.bind(text)
-    return buffer.getvalue()
+    response = comp(messages=messages, model=model)
+    return response.choices[0].message.content
 
 
 async def aimpl_lm_call(contents: list[str], /, *, roles: list[str], model: str) -> str:
