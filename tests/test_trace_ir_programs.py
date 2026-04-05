@@ -30,8 +30,8 @@ class TestTraceRunIR:
         outer_ir = af.trace(program_with_run_ir)("test")
         assert len(outer_ir.ir_eqns) == 1
         assert outer_ir.ir_eqns[0].prim.name == "format"
-        result = outer_ir.call("Alice")
-        assert result == "Hello, Alice!"
+        result = outer_ir.call("x0")
+        assert result == "Hello, x0!"
 
     def test_trace_run_ir_multiple_operations(self):
         def inner_program(x):

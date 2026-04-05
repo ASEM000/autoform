@@ -65,7 +65,7 @@ class TestBuildIR:
         def program(name):
             return af.concat("Hello, ", name)
 
-        ir = af.trace(program)("Alice")
+        ir = af.trace(program)("x0")
         assert len(ir.ir_eqns) == 1
         assert isinstance(ir.in_ir_tree, tuple)
         assert len(ir.in_ir_tree) == 1
@@ -88,7 +88,7 @@ class TestBuildIR:
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
         assert isinstance(args[0], af.core.IRVar)
-        assert ir.call("Alice") == "Hello, Alice!"
+        assert ir.call("x0") == "Hello, x0!"
 
     def test_multiple_operations(self):
         def program(x, y):
@@ -126,7 +126,7 @@ class TestTraceStatic:
 
         assert ir.in_ir_tree[0] == "Hello"
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
-        assert ir.call("Hello", "Alice") == "Hello Alice"
+        assert ir.call("Hello", "x0") == "Hello x0"
 
     def test_static_input_mismatch_errors_before_execution(self):
         def program(prefix, name):
@@ -135,7 +135,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            ir.call("Hi", "Alice")
+            ir.call("Hi", "x0")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_static_input_mismatch_errors_before_async_execution(self):
@@ -145,7 +145,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            await ir.acall("Hi", "Alice")
+            await ir.acall("Hi", "x0")
 
     def test_static_spec_must_match_input_tree(self):
         def program(prefix, name):
@@ -164,7 +164,7 @@ class TestTraceStatic:
 
         assert ir.in_ir_tree[0] is True
         assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
-        assert ir.call(True, "Alice") == "Hello Alice"
+        assert ir.call(True, "x0") == "Hello x0"
 
 
 class TestRunIR:

@@ -53,20 +53,20 @@ class TestBatchBasic:
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
-        result = batched_ir.call(["Asem", "Zeyad"], ["Hi", "Hello"])
-        assert result == ["Hi: Asem", "Hello: Zeyad"]
+        result = batched_ir.call(["x0", "x1"], ["Hi", "Hello"])
+        assert result == ["Hi: x0", "Hello: x1"]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_two_args_async(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
-        result = await batched_ir.acall(["Asem", "Zeyad"], ["Hi", "Hello"])
-        assert result == ["Hi: Asem", "Hello: Zeyad"]
+        result = await batched_ir.acall(["x0", "x1"], ["Hi", "Hello"])
+        assert result == ["Hi: x0", "Hello: x1"]
 
     def test_concat(self):
         def join(a, b):
@@ -237,14 +237,14 @@ class TestNestedBatch:
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
         double_batched_ir = af.batch(batched_ir)
         result = double_batched_ir.call(
-            [["Asem", "Zeyad"], ["Zeyad"]],
+            [["x0", "x1"], ["x1"]],
             [["Hi", "Hello"], ["Hey"]],
         )
-        assert result == [["Hi: Asem", "Hello: Zeyad"], ["Hey: Zeyad"]]
+        assert result == [["Hi: x0", "Hello: x1"], ["Hey: x1"]]
 
 
 class TestBatchInAxes:
@@ -252,46 +252,46 @@ class TestBatchInAxes:
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(True, False))
-        result = batched_ir.call(["Asem", "Zeyad", "Zeyad"], "Hi")
-        assert result == ["Hi: Asem", "Hi: Zeyad", "Hi: Zeyad"]
+        result = batched_ir.call(["x0", "x1", "x1"], "Hi")
+        assert result == ["Hi: x0", "Hi: x1", "Hi: x1"]
 
     def test_broadcast_first_arg(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(False, True))
-        result = batched_ir.call("Asem", ["Hi", "Hello", "Hey"])
-        assert result == ["Hi: Asem", "Hello: Asem", "Hey: Asem"]
+        result = batched_ir.call("x0", ["Hi", "Hello", "Hey"])
+        assert result == ["Hi: x0", "Hello: x0", "Hey: x0"]
 
     def test_default_all_batched(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
-        result = batched_ir.call(["Asem", "Zeyad"], ["Hi", "Hello"])
-        assert result == ["Hi: Asem", "Hello: Zeyad"]
+        result = batched_ir.call(["x0", "x1"], ["Hi", "Hello"])
+        assert result == ["Hi: x0", "Hello: x1"]
 
     def test_explicit_all_batched(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(True, True))
-        result = batched_ir.call(["Asem", "Zeyad"], ["Hi", "Hello"])
-        assert result == ["Hi: Asem", "Hello: Zeyad"]
+        result = batched_ir.call(["x0", "x1"], ["Hi", "Hello"])
+        assert result == ["Hi: x0", "Hello: x1"]
 
     def test_all_broadcast(self):
         def greet(name, greeting):
             return af.format("{}: {}", greeting, name)
 
-        ir = af.trace(greet)("Asem", "Hi")
+        ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(False, False))
-        result = batched_ir.call("Asem", "Hi")
-        assert result == "Hi: Asem"
+        result = batched_ir.call("x0", "Hi")
+        assert result == "Hi: x0"
 
 
 class TestBatchUtils:
@@ -410,11 +410,11 @@ class TestBatchBroadcasting:
     def test_format_mixed_batched(self):
         batch_size = 2
         in_batched = ((True, False), ())
-        in_values = ((["Alice", "Bob"], "Hello"), ())
+        in_values = ((["x0", "x1"], "Hello"), ())
         out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
             (batch_size, in_batched, in_values), template="{1}, {0}!", keys=()
         )
-        assert out_vals == ["Hello, Alice!", "Hello, Bob!"]
+        assert out_vals == ["Hello, x0!", "Hello, x1!"]
         assert out_batched
 
     def test_all_unbatched(self):

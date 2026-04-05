@@ -137,7 +137,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     greeting = af.lm_call([system_message, user_message], model="gpt-5.2")
         ...     return greeting
         >>> ir = af.trace(ir)("World") # doctest: +SKIP
-        >>> result = ir.call("Alice") # doctest: +SKIP
+        >>> result = ir.call("x0") # doctest: +SKIP
     """
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
     for m in messages:

@@ -108,8 +108,8 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         >>> ir = af.trace(greet)("Hi", "World")
         >>> # Batch over names, broadcast greeting
         >>> batched = af.batch(ir, in_axes=(False, True))
-        >>> batched.call("Hello, ", ["Alice", "Bob", "Carol"])
-        ['Hello, Alice', 'Hello, Bob', 'Hello, Carol']
+        >>> batched.call("Hello, ", ["x0", "x1", "x2"])
+        ['Hello, x0', 'Hello, x1', 'Hello, x2']
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)

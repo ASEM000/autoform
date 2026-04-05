@@ -35,8 +35,8 @@ class TestFormatBasic:
         assert result == "Hello, World!"
 
     def test_kwargs_multiple(self):
-        result = af.format("{first} {last}", first="John", last="Doe")
-        assert result == "John Doe"
+        result = af.format("{first} {last}", first="x0", last="y0")
+        assert result == "x0 y0"
 
     def test_mixed_positional_and_kwargs(self):
         result = af.format("{0}, {name}!", "Hi", name="World")
@@ -80,8 +80,8 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x")
         batched = af.batch(ir)
-        result = batched.call(["Alice", "Bob", "Charlie"])
-        assert result == ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
+        result = batched.call(["x0", "x1", "x2"])
+        assert result == ["Hello, x0!", "Hello, x1!", "Hello, x2!"]
 
     def test_batch_kwargs(self):
         def greet(name):
@@ -89,8 +89,8 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x")
         batched = af.batch(ir)
-        result = batched.call(["Alice", "Bob", "Charlie"])
-        assert result == ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
+        result = batched.call(["x0", "x1", "x2"])
+        assert result == ["Hello, x0!", "Hello, x1!", "Hello, x2!"]
 
     def test_batch_mixed_args_kwargs(self):
         def greet(greeting, name):
@@ -98,8 +98,8 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x", "y")
         batched = af.batch(ir)
-        result = batched.call(["Hi", "Hello"], ["Alice", "Bob"])
-        assert result == ["Hi, Alice!", "Hello, Bob!"]
+        result = batched.call(["Hi", "Hello"], ["x0", "x1"])
+        assert result == ["Hi, x0!", "Hello, x1!"]
 
     def test_batch_broadcast_positional(self):
         def greet(greeting, name):
@@ -107,8 +107,8 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x", "y")
         batched = af.batch(ir, in_axes=(False, True))
-        result = batched.call("Hello", ["Alice", "Bob"])
-        assert result == ["Hello: Alice", "Hello: Bob"]
+        result = batched.call("Hello", ["x0", "x1"])
+        assert result == ["Hello: x0", "Hello: x1"]
 
     def test_batch_broadcast_kwargs(self):
         def greet(greeting, name):
@@ -116,8 +116,8 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x", "y")
         batched = af.batch(ir, in_axes=(False, True))
-        result = batched.call("Hello", ["Alice", "Bob"])
-        assert result == ["Hello: Alice", "Hello: Bob"]
+        result = batched.call("Hello", ["x0", "x1"])
+        assert result == ["Hello: x0", "Hello: x1"]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_kwargs_async(self):
@@ -126,8 +126,8 @@ class TestFormatBatch:
 
         ir = af.trace(greet)("x")
         batched = af.batch(ir)
-        result = await batched.acall(["Alice", "Bob"])
-        assert result == ["Hello, Alice!", "Hello, Bob!"]
+        result = await batched.acall(["x0", "x1"])
+        assert result == ["Hello, x0!", "Hello, x1!"]
 
 
 class TestFormatPushforward:

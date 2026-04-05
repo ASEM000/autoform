@@ -314,9 +314,9 @@ class TestStructInAxes:
         batch = af.batch(ir, in_axes=(Person.model_construct(name=True, sur=False),))
 
         result = batch.call(
-            Person.model_construct(name=["Alice", "Bob"], sur="Smith"),
+            Person.model_construct(name=["x0", "x1"], sur="y0"),
         )
-        assert result == ["Hello Alice, Smith", "Hello Bob, Smith"]
+        assert result == ["Hello x0, y0", "Hello x1, y0"]
 
     def test_nested_struct_as_in_axes(self):
         class Inner(af.Struct):
@@ -357,11 +357,11 @@ class TestStructStatic:
         ir = af.trace(
             greet,
             static=(Person.model_construct(name=False, sur=True),),
-        )(Person(name="Alice", sur="Smith"))
+        )(Person(name="x0", sur="y0"))
 
         assert isinstance(ir.in_ir_tree[0].name, af.core.IRVar)
-        assert ir.in_ir_tree[0].sur == "Smith"
-        assert ir.call(Person(name="Bob", sur="Smith")) == "Hello Bob, Smith"
+        assert ir.in_ir_tree[0].sur == "y0"
+        assert ir.call(Person(name="x1", sur="y0")) == "Hello x1, y0"
 
     def test_struct_static_mismatch(self):
         class Person(af.Struct):
@@ -374,10 +374,10 @@ class TestStructStatic:
         ir = af.trace(
             greet,
             static=(Person.model_construct(name=False, sur=True),),
-        )(Person(name="Alice", sur="Smith"))
+        )(Person(name="x0", sur="y0"))
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            ir.call(Person(name="Bob", sur="Jones"))
+            ir.call(Person(name="x1", sur="y1"))
 
 
 class TestStructBatchSupport:
@@ -843,9 +843,9 @@ class TestStructComplex:
             in_axes=(Record.model_construct(name=True, tags=[False, False]),),
         )
         result = batch.call(
-            Record.model_construct(name=["Alice", "Bob"], tags=["p", "q"]),
+            Record.model_construct(name=["x0", "x1"], tags=["p", "q"]),
         )
-        assert result == ["Alice=p,q", "Bob=p,q"]
+        assert result == ["x0=p,q", "x1=p,q"]
 
     def test_pushforward_through_nested_struct(self):
         class Pair(af.Struct):
