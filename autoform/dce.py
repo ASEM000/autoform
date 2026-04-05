@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
+from autoform.checkpoint import is_checkpoint_call
 from autoform.analysis import ir_liveness, ir_tree_ir_vars, ir_tree_used_ir_vars
 from autoform.core import IR, IREqn, IRVar, Prim, is_irvar
 from autoform.utils import Tree, treelib
@@ -91,6 +92,7 @@ def dce[*A, R](
         return is_irvar(node) and (node in active_ir_vars)
 
     for ir_eqn in reversed(ir.ir_eqns):
+        is_checkpoint = is_checkpoint_call(ir_eqn.prim, ir_eqn.params)
         # NOTE(asem): walk backwards and feed dce rules the appropriate
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
@@ -98,7 +100,7 @@ def dce[*A, R](
         new_ir_eqn, in_used = dce_rules.get(ir_eqn.prim, default_dce)(ir_eqn, ir_eqn_out_used)
         assert treelib.structure(in_used) == treelib.structure(ir_eqn.in_ir_tree)
 
-        if ir_eqn.intercept and keep_intercepts:
+        if keep_intercepts and (ir_eqn.intercept or is_checkpoint):
             active_ir_eqns.appendleft(new_ir_eqn)
             active_ir_vars |= set(x for x in treelib.leaves(ir_eqn.in_ir_tree) if is_irvar(x))
 

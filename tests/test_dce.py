@@ -471,7 +471,8 @@ class TestDCEWithIntercepts:
 
         dce = af.dce(ir)
         assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].intercept is not None
+        assert dce.ir_eqns[0].prim.name == "intercept"
+        assert dce.ir_eqns[0].params["key"] == "save"
 
     def test_intercepted_inputs_remain_active(self):
         def program(x):
@@ -499,7 +500,8 @@ class TestDCEWithIntercepts:
 
         dce = af.dce(ir, keep_intercepts=True)
         assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].intercept is not None
+        assert dce.ir_eqns[0].prim.name == "intercept"
+        assert dce.ir_eqns[0].params["key"] == "save"
 
 
 class TestDCEWithDepends:
@@ -621,7 +623,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        intercept_eqns = [e for e in dce.ir_eqns if e.intercept is not None]
+        intercept_eqns = [e for e in dce.ir_eqns if e.prim.name == "intercept"]
         depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
         assert len(intercept_eqns) == 1
         assert len(depends_eqns) == 1

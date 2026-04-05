@@ -31,8 +31,9 @@ class TestInterceptBasics:
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
         assert ir.ir_eqns[0].prim.name == "intercept"
-        assert ir.ir_eqns[0].intercept.key == "my_key"
-        assert ir.ir_eqns[0].intercept.collection == "my_col"
+        assert ir.ir_eqns[0].intercept is None
+        assert ir.ir_eqns[0].params["key"] == "my_key"
+        assert ir.ir_eqns[0].params["collection"] == "my_col"
 
 
 class TestCollect:

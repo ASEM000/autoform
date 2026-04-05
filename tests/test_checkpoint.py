@@ -45,8 +45,9 @@ class TestSow:
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
         assert ir.ir_eqns[0].prim.name == "intercept"
-        assert ir.ir_eqns[0].intercept.collection == "my_tag"
-        assert ir.ir_eqns[0].intercept.key == "my_name"
+        assert ir.ir_eqns[0].intercept is None
+        assert ir.ir_eqns[0].params["collection"] == "my_tag"
+        assert ir.ir_eqns[0].params["key"] == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -736,10 +737,10 @@ class TestMemoizeWithIntercepts:
 
         ir = af.trace(func)("test")
 
-        intercept_eqns = [eqn for eqn in ir.ir_eqns if eqn.intercept is not None]
-        assert len(intercept_eqns) == 2
-        assert intercept_eqns[0].intercept.key == "first"
-        assert intercept_eqns[1].intercept.key == "second"
+        checkpoint_eqns = [eqn for eqn in ir.ir_eqns if eqn.prim.name == "intercept"]
+        assert len(checkpoint_eqns) == 2
+        assert checkpoint_eqns[0].params["key"] == "first"
+        assert checkpoint_eqns[1].params["key"] == "second"
 
     def test_memoize_outside_collect_does_not_skip_intercepts(self):
         def func(x):

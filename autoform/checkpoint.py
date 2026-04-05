@@ -21,7 +21,7 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
-from autoform.core import Intercept, InterceptorInterpreter, using_intercept, using_interpreter
+from autoform.core import Interpreter, Prim, active_interpreter, using_interpreter
 from autoform.intercepts import intercept_p
 from autoform.utils import Tree
 
@@ -30,12 +30,8 @@ from autoform.utils import Tree
 # ==================================================================================================
 
 
-class CheckpointIntercept(Intercept):
-    __slots__ = ("key", "collection")
-
-    def __init__(self, *, key: Hashable, collection: Hashable | None = None):
-        self.key = key
-        self.collection = collection
+def is_checkpoint_call(prim: Prim, params: dict[str, Any], /) -> bool:
+    return prim is intercept_p and "key" in params and "collection" in params
 
 
 def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = None) -> Tree:
@@ -67,8 +63,7 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
         >>> collected["prompt"]
         ['Q: What is 6*7?']
     """
-    with using_intercept(CheckpointIntercept(key=key, collection=collection)):
-        return intercept_p.bind(value)
+    return intercept_p.bind(value, key=key, collection=collection)
 
 
 # ==================================================================================================
@@ -77,6 +72,46 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
 
 
 type Collected = dict[Hashable, list[Tree]]
+
+
+class CollectingInterpreter(Interpreter):
+    def __init__(self, *, collection: Hashable):
+        self.parent = active_interpreter.get()
+        self.collection = collection
+        self.collected: Collected = defaultdict(list)
+
+    def interpret(self, prim: Prim, in_tree: Any, /, **params):
+        result = self.parent.interpret(prim, in_tree, **params)
+        if is_checkpoint_call(prim, params):
+            if self.collection is ... or params["collection"] == self.collection:
+                self.collected[params["key"]].append(result)
+        return result
+
+    async def ainterpret(self, prim: Prim, in_tree: Any, /, **params):
+        result = await self.parent.ainterpret(prim, in_tree, **params)
+        if is_checkpoint_call(prim, params):
+            if self.collection is ... or params["collection"] == self.collection:
+                self.collected[params["key"]].append(result)
+        return result
+
+
+class InjectingInterpreter(Interpreter):
+    def __init__(self, *, collection: Hashable, values: Collected):
+        self.parent = active_interpreter.get()
+        self.collection = collection
+        self.cache = {k: deque(values[k]) for k in values}
+
+    def interpret(self, prim: Prim, in_tree: Any, /, **params):
+        if is_checkpoint_call(prim, params) and params["collection"] == self.collection:
+            if params["key"] in self.cache and self.cache[params["key"]]:
+                return self.cache[params["key"]].popleft()
+        return self.parent.interpret(prim, in_tree, **params)
+
+    async def ainterpret(self, prim: Prim, in_tree: Any, /, **params):
+        if is_checkpoint_call(prim, params) and params["collection"] == self.collection:
+            if params["key"] in self.cache and self.cache[params["key"]]:
+                return self.cache[params["key"]].popleft()
+        return await self.parent.ainterpret(prim, in_tree, **params)
 
 
 @contextmanager
@@ -102,16 +137,8 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
         >>> collected["prompt"]
         ['Q: What?']
     """
-    collected: Collected = defaultdict(list)
-
-    def collector(prim, intercept: CheckpointIntercept, in_tree: Any, /):
-        result = yield in_tree
-        if collection is ... or intercept.collection == collection:
-            collected[intercept.key].append(result)
-        return result
-
-    with using_interpreter(InterceptorInterpreter((CheckpointIntercept, collector))):
-        yield collected
+    with using_interpreter(CollectingInterpreter(collection=collection)) as interpreter:
+        yield interpreter.collected
 
 
 # ==================================================================================================
@@ -146,14 +173,5 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
-    cache = {k: deque(values[k]) for k in values}
-
-    def injector(prim, intercept: CheckpointIntercept, in_tree: Any, /):
-        if intercept.collection == collection:
-            if intercept.key in cache and cache[intercept.key]:
-                return cache[intercept.key].popleft()
-        out_tree = yield in_tree
-        return out_tree
-
-    with using_interpreter(InterceptorInterpreter((CheckpointIntercept, injector))):
+    with using_interpreter(InjectingInterpreter(collection=collection, values=values)):
         yield
