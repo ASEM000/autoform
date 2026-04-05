@@ -57,6 +57,18 @@ class TestFactor:
         with pytest.raises(NotImplementedError, match="no default pullback rule"):
             pb_ir.call(("hello",), 1.0)
 
+    def test_memoize_inside_trace_does_not_dedup_factors(self):
+        def program(x):
+            with af.memoize():
+                a = af.factor(x, judge=len_score)
+                b = af.factor(x, judge=len_score)
+                return a, b
+
+        ir = af.trace(program)("x")
+
+        factor_eqns = [eqn for eqn in ir.ir_eqns if eqn.prim.name == "factor"]
+        assert len(factor_eqns) == 2
+
 
 class TestWeight:
     def test_weight_sums_executed_factors(self):

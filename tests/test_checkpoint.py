@@ -44,9 +44,9 @@ class TestSow:
 
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "intercept"
-        assert ir.ir_eqns[0].intercept.collection == "my_tag"
-        assert ir.ir_eqns[0].intercept.key == "my_name"
+        assert ir.ir_eqns[0].prim.name == "checkpoint"
+        assert ir.ir_eqns[0].params["collection"] == "my_tag"
+        assert ir.ir_eqns[0].params["key"] == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -696,7 +696,7 @@ class TestMemoizeBasic:
         assert counter.call_count == 2
 
 
-class TestMemoizeWithIntercepts:
+class TestMemoizeWithCheckpoints:
     def test_memoize_with_checkpoint(self):
         def func(x):
             a = checkpoint(af.concat(x, "!"), key="val", collection="debug")
@@ -711,7 +711,7 @@ class TestMemoizeWithIntercepts:
         assert result == "hello!"
         assert collected == {"val": ["hello!"]}
 
-    def test_memoize_does_not_merge_different_intercepts(self):
+    def test_memoize_does_not_merge_different_checkpoints(self):
         def func(x):
             a = checkpoint(x, key="first", collection="debug")
             b = checkpoint(x, key="second", collection="debug")
@@ -727,7 +727,7 @@ class TestMemoizeWithIntercepts:
         assert "first" in collected
         assert "second" in collected
 
-    def test_memoize_inside_trace_does_not_dedup_intercepted_calls(self):
+    def test_memoize_inside_trace_does_not_dedup_checkpoint_calls(self):
         def func(x):
             with af.memoize():
                 a = checkpoint(x, key="first", collection="debug")
@@ -736,12 +736,12 @@ class TestMemoizeWithIntercepts:
 
         ir = af.trace(func)("test")
 
-        intercept_eqns = [eqn for eqn in ir.ir_eqns if eqn.intercept is not None]
-        assert len(intercept_eqns) == 2
-        assert intercept_eqns[0].intercept.key == "first"
-        assert intercept_eqns[1].intercept.key == "second"
+        checkpoint_eqns = [eqn for eqn in ir.ir_eqns if eqn.prim.name == "checkpoint"]
+        assert len(checkpoint_eqns) == 2
+        assert checkpoint_eqns[0].params["key"] == "first"
+        assert checkpoint_eqns[1].params["key"] == "second"
 
-    def test_memoize_outside_collect_does_not_skip_intercepts(self):
+    def test_memoize_outside_collect_does_not_skip_checkpoints(self):
         def func(x):
             return checkpoint(x, key="val", collection="debug")
 

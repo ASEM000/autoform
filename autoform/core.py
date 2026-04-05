@@ -19,7 +19,7 @@ from __future__ import annotations
 import functools as ft
 import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator, Sequence
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
@@ -65,11 +65,6 @@ __all__ = [
     "walk",
     "call",
     "acall",
-    # intercepts
-    "Intercept",
-    "InterceptorInterpreter",
-    "using_intercept",
-    "active_intercept",
 ]
 
 # ==================================================================================================
@@ -195,38 +190,32 @@ class Prim:
 
 
 class IREqn:
-    __slots__ = ("prim", "intercept", "in_ir_tree", "out_ir_tree", "params")
-    __match_args__ = ("prim", "intercept", "in_ir_tree", "out_ir_tree", "params")
+    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
+    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
 
     def __init__(
         self,
         prim: Prim,
-        intercept: Intercept | None,
         in_ir_tree: Tree,
         out_ir_tree: Tree,
         params: dict[str, Any] | None = None,
     ):
         assert isinstance(prim, Prim)
-        assert isinstance(intercept, Intercept) or intercept is None
         assert isinstance(params, dict) or params is None
         self.prim = prim
-        self.intercept = intercept
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
 
     def bind(self, in_tree: Tree, /, **params):
-        with using_intercept(self.intercept):
-            return self.prim.bind(in_tree, **params)
+        return self.prim.bind(in_tree, **params)
 
     async def abind(self, in_tree: Tree, /, **params):
-        with using_intercept(self.intercept):
-            return await self.prim.abind(in_tree, **params)
+        return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
         return IREqn(
             self.prim,
-            self.intercept,
             self.in_ir_tree,
             self.out_ir_tree,
             self.params | kwargs,
@@ -356,11 +345,10 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
         lhs = format_tree(ir_eqn.out_ir_tree)
         rhs = format_tree(ir_eqn.in_ir_tree)
         params_str = ", ".join(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
-        intercept_str = f" @{ir_eqn.intercept!r}" if ir_eqn.intercept else ""
         if params_str:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str}){intercept_str}")
+            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str})")
         else:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}){intercept_str}")
+            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs})")
 
     lines.append("}")
     return "\n".join(lines)
@@ -405,77 +393,6 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 # ==================================================================================================
-# INTERCEPT
-# ==================================================================================================
-
-
-class Intercept:
-    __slots__ = ()
-
-
-active_intercept: ContextVar[Intercept | None] = ContextVar("active_intercept", default=None)
-
-
-@contextmanager
-def using_intercept[T: Intercept](intercept: T | None) -> Generator[T | None, None, None]:
-    if intercept is None:
-        yield intercept
-        return
-    assert isinstance(intercept, Intercept), f"Expected Intercept, got {type(intercept)}"
-    token = active_intercept.set(intercept)
-    try:
-        yield intercept
-    finally:
-        active_intercept.reset(token)
-
-
-type Interceptor = Callable[..., Generator[Any, Any, Any]]
-
-
-class InterceptorInterpreter(Interpreter, ABC):
-    def __init__(self, *interceptors: tuple[type[Intercept], Interceptor]):
-        for interceptor in interceptors:
-            msg = "interceptors must be (InterceptType, interceptor) pairs"
-            assert isinstance(interceptor, Sequence) and len(interceptor) == 2, msg
-            intercept_type, _ = interceptor
-            assert issubclass(intercept_type, Intercept), f"Invalid {intercept_type=}"
-        self.parent = active_interpreter.get()
-        self.interceptors: dict[type[Intercept], Interceptor] = dict(interceptors)
-
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        intercept = active_intercept.get()
-
-        if (interceptor := self.interceptors.get(type(intercept))) is None:
-            return self.parent.interpret(prim, in_tree, **params)
-
-        gen = interceptor(prim, intercept, in_tree, **params)
-        result = None
-        while True:
-            try:
-                modified_input = next(gen) if result is None else gen.send(result)
-            except StopIteration as e:
-                return e.value
-
-            result = self.parent.interpret(prim, modified_input, **params)
-
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        intercept = active_intercept.get()
-
-        if (interceptor := self.interceptors.get(type(intercept))) is None:
-            return await self.parent.ainterpret(prim, in_tree, **params)
-
-        gen = interceptor(prim, intercept, in_tree, **params)
-        result = None
-        while True:
-            try:
-                modified_input = next(gen) if result is None else gen.send(result)
-            except StopIteration as e:
-                return e.value
-
-            result = await self.parent.ainterpret(prim, modified_input, **params)
-
-
-# ==================================================================================================
 # TRACING
 # ==================================================================================================
 
@@ -509,8 +426,7 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
-        intercept = active_intercept.get()
-        self.ir_eqns.append(IREqn(prim, intercept, in_ir_tree, out_ir_tree, params))
+        self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params))
         return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:

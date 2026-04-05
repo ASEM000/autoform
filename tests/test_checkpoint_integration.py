@@ -16,23 +16,22 @@ import pytest
 
 import autoform as af
 from autoform.checkpoint import checkpoint
-from autoform.core import Intercept, InterceptorInterpreter, using_intercept, using_interpreter
 
 
-class TestInterceptBasics:
-    def test_checkpoint_via_intercepts(self):
+class TestCheckpointBasics:
+    def test_checkpoint_identity(self):
         result = checkpoint("hello", key="test", collection="debug")
         assert result == "hello"
 
-    def test_intercept_p_in_ir(self):
+    def test_checkpoint_primitive_in_ir(self):
         def func(x):
             return checkpoint(x, key="my_key", collection="my_col")
 
         ir = af.trace(func)("test")
         assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "intercept"
-        assert ir.ir_eqns[0].intercept.key == "my_key"
-        assert ir.ir_eqns[0].intercept.collection == "my_col"
+        assert ir.ir_eqns[0].prim.name == "checkpoint"
+        assert ir.ir_eqns[0].params["key"] == "my_key"
+        assert ir.ir_eqns[0].params["collection"] == "my_col"
 
 
 class TestCollect:
@@ -130,8 +129,8 @@ class TestInject:
         assert result == "INJECTED!"
 
 
-class TestInterceptsWithTransforms:
-    def test_intercepts_through_batch(self):
+class TestCheckpointWithTransforms:
+    def test_checkpoints_through_batch(self):
         def func(x):
             return checkpoint(x, key="val", collection="debug")
 
@@ -145,7 +144,7 @@ class TestInterceptsWithTransforms:
         assert collected == {"val": ["a", "b", "c"]}
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_intercepts_through_batch_async(self):
+    async def test_checkpoints_through_batch_async(self):
         def func(x):
             return checkpoint(x, key="val", collection="debug")
 
@@ -158,7 +157,7 @@ class TestInterceptsWithTransforms:
         assert result == ["a", "b", "c"]
         assert collected == {"val": ["a", "b", "c"]}
 
-    def test_intercepts_through_pushforward(self):
+    def test_checkpoints_through_pushforward(self):
         def func(x):
             return checkpoint(x, key="val", collection="debug")
 
@@ -172,7 +171,7 @@ class TestInterceptsWithTransforms:
         assert tangent == "tangent"
         assert collected == {"val": ["primal", "tangent"]}
 
-    def test_intercepts_through_pullback(self):
+    def test_checkpoints_through_pullback(self):
         def func(x):
             return checkpoint(x, key="val", collection="debug")
 
@@ -187,8 +186,8 @@ class TestInterceptsWithTransforms:
         assert collected == {"val": ["primal", "cotangent"]}
 
 
-class TestInterceptorComposition:
-    def test_nested_interceptors(self):
+class TestCheckpointComposition:
+    def test_nested_collectors(self):
         def func(x):
             a = checkpoint(x, key="debug", collection="debug")
             b = checkpoint(a, key="cache", collection="cache")
@@ -203,130 +202,3 @@ class TestInterceptorComposition:
         assert result == "hello"
         assert debug_collected == {"debug": ["hello"]}
         assert cache_collected == {"cache": ["hello"]}
-
-
-class TestMultiShotContinuation:
-    def test_multi_shot_collects_all(self):
-        class MultiIntercept(Intercept):
-            pass
-
-        class MultiShotInterceptor:
-            def __init__(self, alternatives: list):
-                self.alternatives = alternatives
-                self.results = []
-
-            def __call__(self, prim, intercept, in_tree, /):
-                for v in self.alternatives:
-                    result = yield (v, in_tree[1])
-                    self.results.append(result)
-                return self.results[-1]
-                yield
-
-        def program(x):
-            with using_intercept(MultiIntercept()):
-                return af.concat(x, "!")
-            return x
-
-        ir = af.trace(program)("test")
-
-        interceptor = MultiShotInterceptor(alternatives=["A", "B", "C"])
-        with using_interpreter(InterceptorInterpreter((MultiIntercept, interceptor))):
-            result = ir.call("ignored")
-
-        assert interceptor.results == ["A!", "B!", "C!"]
-        assert result == "C!"
-
-    def test_multi_shot_aggregation(self):
-        class AggregateIntercept(Intercept):
-            pass
-
-        def aggregating_interceptor(prim, intercept, in_tree, /):
-            results = []
-            for suffix in ["!", "?", "."]:
-                left, _ = in_tree
-                result = yield (left + suffix, "")
-                results.append(result)
-            return " | ".join(results)
-            yield
-
-        def program(x):
-            with using_intercept(AggregateIntercept()):
-                return af.concat(x, " appended")
-            return x
-
-        ir = af.trace(program)("test")
-
-        with using_interpreter(
-            InterceptorInterpreter((AggregateIntercept, aggregating_interceptor))
-        ):
-            result = ir.call("Hello")
-
-        assert result == "Hello! | Hello? | Hello."
-
-    def test_single_shot_still_works(self):
-        class SingleIntercept(Intercept):
-            pass
-
-        def single_shot_interceptor(prim, intercept, in_tree, /):
-            left, right = in_tree
-            result = yield (left.upper(), right)
-            return result + " modified"
-            yield
-
-        def program(x):
-            with using_intercept(SingleIntercept()):
-                return af.concat(x, " world")
-            return x
-
-        ir = af.trace(program)("test")
-
-        with using_interpreter(InterceptorInterpreter((SingleIntercept, single_shot_interceptor))):
-            result = ir.call("hello")
-
-        assert result == "HELLO world modified"
-
-    def test_skip_still_works(self):
-        class SkipIntercept(Intercept):
-            pass
-
-        def skip_interceptor(prim, intercept, value, /):
-            return "SKIPPED"
-            yield
-
-        def program(x):
-            with using_intercept(SkipIntercept()):
-                return af.concat(x, " should not appear")
-            return x
-
-        ir = af.trace(program)("test")
-
-        with using_interpreter(InterceptorInterpreter((SkipIntercept, skip_interceptor))):
-            result = ir.call("ignored")
-
-        assert result == "SKIPPED"
-
-    def test_interceptor_receives_prim_and_params(self):
-        class InspectIntercept(Intercept):
-            pass
-
-        captured = {}
-
-        def inspect_interceptor(prim, intercept, in_tree, /, **params):
-            captured["prim_name"] = prim.name
-            captured["params"] = params
-            return (yield in_tree)
-
-        def program(x):
-            with using_intercept(InspectIntercept()):
-                return af.format("hello {}", x)
-            return x
-
-        ir = af.trace(program)("test")
-
-        with using_interpreter(InterceptorInterpreter((InspectIntercept, inspect_interceptor))):
-            result = ir.call("world")
-
-        assert result == "hello world"
-        assert captured["prim_name"] == "format"
-        assert "template" in captured["params"]
-        assert captured["params"]["template"] == "hello {}"

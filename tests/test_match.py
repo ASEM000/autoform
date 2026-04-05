@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import autoform as af
-from autoform.checkpoint import CheckpointIntercept
 from autoform.control import ControlTag
 from autoform.string import StringTag
 
@@ -41,8 +40,8 @@ class TestIREqnMatchArgs:
         ir = af.trace(func)("test")
         eqn = ir.ir_eqns[0]
 
-        match eqn.intercept:
-            case CheckpointIntercept(key=key, collection=collection):
+        match eqn.params:
+            case {"key": key, "collection": collection}:
                 matched_tag = collection
             case _:
                 matched_tag = None
@@ -57,7 +56,7 @@ class TestIREqnMatchArgs:
         eqn = ir.ir_eqns[0]
 
         match eqn:
-            case af.core.IREqn(prim, intercept, in_tree, out_tree, params):
+            case af.core.IREqn(prim, in_tree, out_tree, params):
                 assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
@@ -72,8 +71,8 @@ class TestIREqnMatchArgs:
 
         tags_found = []
         for eqn in ir.ir_eqns:
-            match eqn.intercept:
-                case CheckpointIntercept(key=_, collection=collection):
+            match eqn.params:
+                case {"key": _, "collection": collection}:
                     tags_found.append(collection)
 
         assert tags_found == ["step1", "step2"]
@@ -87,14 +86,9 @@ class TestIREqnMatchArgs:
 
         new_eqns = []
         for eqn in ir.ir_eqns:
-            match eqn.intercept:
-                case CheckpointIntercept(key=key, collection="old_tag"):
-                    new_intercept = CheckpointIntercept(key=key, collection="new_tag")
-                    new_eqns.append(
-                        af.core.IREqn(
-                            eqn.prim, new_intercept, eqn.in_ir_tree, eqn.out_ir_tree, eqn.params
-                        )
-                    )
+            match eqn.params:
+                case {"key": _, "collection": "old_tag"}:
+                    new_eqns.append(eqn.using(collection="new_tag"))
                 case _:
                     new_eqns.append(eqn)
 
@@ -104,7 +98,7 @@ class TestIREqnMatchArgs:
             out_ir_tree=ir.out_ir_tree,
         )
 
-        assert new_ir.ir_eqns[0].intercept.collection == "new_tag"
+        assert new_ir.ir_eqns[0].params["collection"] == "new_tag"
 
         result = new_ir.call("hello")
         assert result == "hello!"
@@ -118,13 +112,10 @@ class TestIREqnWithParams:
         ir = af.trace(func)("test")
         eqn = ir.ir_eqns[0]
 
-        new_intercept = CheckpointIntercept(key="x", collection="new")
-        new_eqn = af.core.IREqn(
-            eqn.prim, new_intercept, eqn.in_ir_tree, eqn.out_ir_tree, eqn.params
-        )
+        new_eqn = eqn.using(collection="new")
 
-        assert eqn.intercept.collection == "old"
-        assert new_eqn.intercept.collection == "new"
+        assert eqn.params["collection"] == "old"
+        assert new_eqn.params["collection"] == "new"
         assert new_eqn.prim == eqn.prim
         assert new_eqn.in_ir_tree == eqn.in_ir_tree
         assert new_eqn.out_ir_tree == eqn.out_ir_tree
@@ -155,12 +146,9 @@ class TestInsertAfterPattern:
         new_eqns = []
         for eqn in ir.ir_eqns:
             new_eqns.append(eqn)
-            match eqn.intercept:
-                case CheckpointIntercept(key=key, collection="insert_here"):
-                    new_intercept = CheckpointIntercept(key=key, collection="inserted")
-                    inserted = af.core.IREqn(
-                        eqn.prim, new_intercept, eqn.in_ir_tree, eqn.out_ir_tree, eqn.params
-                    )
+            match eqn.params:
+                case {"key": _, "collection": "insert_here"}:
+                    inserted = eqn.using(collection="inserted")
                     new_eqns.append(inserted)
 
         new_ir = af.core.IR(
@@ -170,8 +158,8 @@ class TestInsertAfterPattern:
         )
 
         assert len(new_ir.ir_eqns) == 3
-        assert new_ir.ir_eqns[0].intercept.collection == "insert_here"
-        assert new_ir.ir_eqns[1].intercept.collection == "inserted"
+        assert new_ir.ir_eqns[0].params["collection"] == "insert_here"
+        assert new_ir.ir_eqns[1].params["collection"] == "inserted"
         assert new_ir.ir_eqns[2].prim == af.string.concat_p
 
 
@@ -193,7 +181,7 @@ class TestIRMatchArgs:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR([af.core.IREqn(prim, intercept, in_tree, out_tree, params)], _, _):
+            case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
                 assert prim == af.string.concat_p
                 assert StringTag in prim.tag
                 assert len(af.utils.treelib.leaves(in_tree)) == 2
@@ -231,7 +219,7 @@ class TestIRMatchArgs:
 
         match pf_ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Prim("pushforward_call", _), _, _, intercept, params)],
+                [af.core.IREqn(af.core.Prim("pushforward_call", _), _, _, params)],
                 _,
                 _,
             ):
@@ -254,7 +242,7 @@ class TestIRMatchArgs:
 
         match ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Prim("switch", tag), _, _, intercept, params)], _, _
+                [af.core.IREqn(af.core.Prim("switch", tag), _, _, params)], _, _
             ) if ControlTag in tag:
                 branch_dict = params["branches"]
                 assert "a" in branch_dict

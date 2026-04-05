@@ -25,7 +25,6 @@ from typing import cast
 from autoform.core import (
     IR,
     AVal,
-    Intercept,
     Interpreter,
     IREqn,
     IRVar,
@@ -43,8 +42,9 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    using_intercept,
 )
+from autoform.dce import non_dce_primitives
+from autoform.memoize import non_memoizable_primitives
 from autoform.utils import (
     Tree,
     asyncify,
@@ -63,9 +63,8 @@ class InferenceTag(TransformationTag): ...
 
 factor_p = Prim("factor", tag={InferenceTag})
 weight_call_p = Prim("weight_call", tag={InferenceTag})
-
-
-class FactorIntercept(Intercept): ...
+non_dce_primitives.add(factor_p)
+non_memoizable_primitives.add(factor_p)
 
 
 def accumulate(total: Tree | None, score: Tree) -> Tree:
@@ -96,11 +95,7 @@ def factor(*args, judge: Callable[..., float]) -> float:
     """
 
     assert callable(judge), f"`judge` must be callable, got {type(judge)}"
-    # NOTE(asem): mark factor with an intercept even though execution does not
-    # read active_intercept here. this keeps factor semantically live for passes
-    # like DCE and prevents it from being treated as an ordinary pure primitive.
-    with using_intercept(FactorIntercept()):
-        return factor_p.bind(args, judge=judge)
+    return factor_p.bind(args, judge=judge)
 
 
 def impl_factor(in_tree: Tree, /, *, judge: Callable[..., float]) -> float:
@@ -193,7 +188,7 @@ def weight(ir: IR, /) -> IR:
 
     in_ir_tree = treelib.map(make, ir.in_ir_tree)
     out_ir_tree = (treelib.map(make, ir.out_ir_tree), IRVar.fresh(aval=TypedAVal(float)))
-    ir_eqn = IREqn(weight_call_p, None, in_ir_tree, out_ir_tree, dict(ir=ir))
+    ir_eqn = IREqn(weight_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 
