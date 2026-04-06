@@ -81,15 +81,6 @@ Scoring primitives and inference transforms.
 .. autofunction:: autoform.factor
 ```
 
-## Surgery
-
-IR manipulation.
-
-```{eval-rst}
-.. autofunction:: autoform.split
-.. autofunction:: autoform.splitpoint
-```
-
 ## Types
 
 Data structures.
