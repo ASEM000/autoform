@@ -25,7 +25,6 @@ from autoform.lm import lm_call, struct_lm_call, using_router
 from autoform.memoize import memoize
 from autoform.scheduling import depends, gather, sched
 from autoform.string import concat, format, match
-from autoform.surgery import split, splitpoint
 from autoform.utils import PYTREE_NAMESPACE, Struct
 
 __all__ = [
@@ -53,8 +52,6 @@ __all__ = [
     "struct_lm_call",
     "stop_gradient",
     "checkpoint",
-    "split",
-    "splitpoint",
     "switch",
     "while_loop",
     "gather",
