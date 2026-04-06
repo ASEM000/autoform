@@ -32,16 +32,15 @@ from autoform.core import (
     TransformationTag,
     TypedAVal,
     abstract_rules,
-    acall_with_interpreter,
     active_interpreter,
     batch_rules,
-    call_with_interpreter,
     impl_rules,
     ir_aval,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    using_interpreter,
 )
 from autoform.dce import non_dce_primitives
 from autoform.memoize import non_memoizable_primitives
@@ -193,15 +192,15 @@ def weight(ir: IR, /) -> IR:
 
 
 def impl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
-    interpreter = WeightInterpreter()
-    out_tree = call_with_interpreter(ir, interpreter=interpreter)(*cast(tuple, in_tree))
+    with using_interpreter(WeightInterpreter()) as interpreter:
+        out_tree = ir.call(*cast(tuple, in_tree))
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 
 
 async def aimpl_weight_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, float]:
-    interpreter = WeightInterpreter()
-    out_tree = await acall_with_interpreter(ir, interpreter=interpreter)(*cast(tuple, in_tree))
+    with using_interpreter(WeightInterpreter()) as interpreter:
+        out_tree = await ir.acall(*cast(tuple, in_tree))
     total = 0.0 if interpreter.total is None else interpreter.total
     return out_tree, total
 

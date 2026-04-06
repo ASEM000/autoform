@@ -535,62 +535,38 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
 # ==================================================================================================
 
 
-def call_with_interpreter[*A, R](
-    ir: IR[*A, R], /, *, interpreter: Interpreter
-) -> Callable[[*A], R]:
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-    assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
-
-    def func(*args: *A) -> R:
-        with using_interpreter(interpreter):
-            step = next(gen := walk(ir)(*args))
-            for _ in ir.ir_eqns:
-                ir_eqn, in_values = step
-                assert ir_eqn is not None
-                out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-                step = gen.send(out_values)
-            ir_eqn, out = step
-            assert ir_eqn is None
-        return out
-
-    return func
-
-
-def acall_with_interpreter[*A, R](
-    ir: IR[*A, R], /, *, interpreter: Interpreter
-) -> Callable[[*A], Awaitable[R]]:
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-    assert isinstance(interpreter, Interpreter), f"Expected Interpreter, got {type(interpreter)}"
-
-    async def func(*args: *A) -> R:
-        with using_interpreter(interpreter):
-            step = next(gen := walk(ir)(*args))
-            for _ in ir.ir_eqns:
-                ir_eqn, in_values = step
-                assert ir_eqn is not None
-                out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-                step = gen.send(out_values)
-            ir_eqn, out = step
-            assert ir_eqn is None
-        return out
-
-    return func
-
-
 @ft.partial(lru_cache, maxsize=256)
 def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
-        return call_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
+        step = next(gen := walk(ir)(*args))
+        for _ in ir.ir_eqns:
+            ir_eqn, in_values = step
+            assert ir_eqn is not None
+            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+            step = gen.send(out_values)
+        ir_eqn, out = step
+        assert ir_eqn is None
+        return out
 
     return func
 
 
 @ft.partial(lru_cache, maxsize=256)
 def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
+    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
-        return await acall_with_interpreter(ir, interpreter=active_interpreter.get())(*args)
+        step = next(gen := walk(ir)(*args))
+        for _ in ir.ir_eqns:
+            ir_eqn, in_values = step
+            assert ir_eqn is not None
+            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
+            step = gen.send(out_values)
+        ir_eqn, out = step
+        assert ir_eqn is None
+        return out
 
     return func
 
