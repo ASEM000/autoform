@@ -210,6 +210,59 @@ class TestTraceStatic:
         assert ir.call(True, "x0") == "Hello x0"
 
 
+class TestMetadata:
+    def test_trace_snapshots_metadata_per_equation(self):
+        def program(x):
+            head = af.concat(x, "!")
+            with af.using_metadata(scope="planner"):
+                mid = af.concat(head, "?")
+                with af.using_metadata(site="draft", tags={"cost"}):
+                    tail = af.concat(mid, ".")
+            return tail
+
+        ir = af.trace(program)("seed")
+
+        assert ir.ir_eqns[0].metadata == {}
+        assert ir.ir_eqns[1].metadata == {"scope": "planner"}
+        assert ir.ir_eqns[2].metadata == {"site": "draft", "tags": {"cost"}}
+
+    def test_bind_reinstalls_equation_metadata(self):
+        probe_p = af.core.Prim("metadata_probe")
+
+        def abstract_probe(x):
+            del x
+            return af.core.TypedAVal(str)
+
+        def impl_probe(x):
+            metadata = af.core.active_metadata.get()
+            tags = ",".join(sorted(metadata.get("tags", ())))
+            return f"{metadata.get('site', '')}|{tags}|{x}"
+
+        af.core.abstract_rules.set(probe_p, abstract_probe)
+        af.core.impl_rules.set(probe_p, impl_probe)
+
+        def program(x):
+            with af.using_metadata(site="draft", tags={"cost"}):
+                return probe_p.bind(x)
+
+        ir = af.trace(program)("seed")
+
+        assert ir.call("hello") == "draft|cost|hello"
+
+    def test_using_preserves_metadata(self):
+        def program(x):
+            with af.using_metadata(site="draft"):
+                return af.concat(x, "!")
+
+        ir = af.trace(program)("seed")
+        eqn = ir.ir_eqns[0]
+
+        new_eqn = eqn.using(collection="debug")
+
+        assert new_eqn.params["collection"] == "debug"
+        assert new_eqn.metadata == {"site": "draft"}
+
+
 class TestRunIR:
     def test_walk_yields_eqn_inputs_and_return_final_output(self):
         def program(x):
