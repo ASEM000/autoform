@@ -60,6 +60,8 @@ __all__ = [
     "TracingInterpreter",
     "active_interpreter",
     "using_interpreter",
+    "active_metadata",
+    "using_metadata",
     # ir building and execution
     "trace",
     "walk",
@@ -185,12 +187,30 @@ class Prim:
 
 
 # ==================================================================================================
+# METADATA
+# ==================================================================================================
+
+
+active_metadata: ContextVar[dict[str, Any]] = ContextVar("active_metadata", default={})
+
+
+@contextmanager
+def using_metadata(**metadata) -> Generator[dict[str, Any], None, None]:
+    assert all(isinstance(key, str) for key in metadata), "Metadata keys must be strings"
+    token = active_metadata.set(metadata)
+    try:
+        yield metadata
+    finally:
+        active_metadata.reset(token)
+
+
+# ==================================================================================================
 # IR
 # ==================================================================================================
 
 
 class IREqn:
-    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
+    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "metadata")
     __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
 
     def __init__(
@@ -199,19 +219,24 @@ class IREqn:
         in_ir_tree: Tree,
         out_ir_tree: Tree,
         params: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
+        assert metadata is None or isinstance(metadata, dict), f"Expected dict metadata, got {type(metadata)}"
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
+        self.metadata = {} if metadata is None else metadata
 
     def bind(self, in_tree: Tree, /, **params):
-        return self.prim.bind(in_tree, **params)
+        with using_metadata(**self.metadata):
+            return self.prim.bind(in_tree, **params)
 
     async def abind(self, in_tree: Tree, /, **params):
-        return await self.prim.abind(in_tree, **params)
+        with using_metadata(**self.metadata):
+            return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
         return IREqn(
@@ -219,6 +244,7 @@ class IREqn:
             self.in_ir_tree,
             self.out_ir_tree,
             self.params | kwargs,
+            self.metadata,
         )
 
 
@@ -426,7 +452,9 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
-        self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params))
+        self.ir_eqns.append(
+            IREqn(prim, in_ir_tree, out_ir_tree, params, metadata=active_metadata.get())
+        )
         return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:

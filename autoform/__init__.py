@@ -18,7 +18,7 @@ from autoform.ad import pullback, pushforward
 from autoform.batch import batch
 from autoform.checkpoint import checkpoint, collect, inject
 from autoform.control import stop_gradient, switch, while_loop
-from autoform.core import acall, call, trace
+from autoform.core import acall, call, trace, using_metadata
 from autoform.dce import dce
 from autoform.lm import lm_call, struct_lm_call, using_router
 from autoform.memoize import memoize
@@ -33,6 +33,7 @@ __all__ = [
     "call",
     "acall",
     "using_router",
+    "using_metadata",
     # transformations
     "pushforward",
     "pullback",
