@@ -211,7 +211,7 @@ def using_metadata(**metadata) -> Generator[dict[str, Any], None, None]:
 
 class IREqn:
     __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "metadata")
-    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params")
+    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "metadata")
 
     def __init__(
         self,
