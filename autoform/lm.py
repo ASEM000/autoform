@@ -154,19 +154,19 @@ def lm_call(
 
 
 def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
-    contents, model, temperature, max_tokens = in_tree
+    contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     comp = client.completion if (client := active_router.get()) is not None else completion
-    response = comp(messages=messages, model=model, temperature=temperature, max_tokens=max_tokens)
+    response = comp(messages=messages, model=model, temperature=temp, max_tokens=max_tokens)
     return response.choices[0].message.content
 
 
 async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
-    contents, model, temperature, max_tokens = in_tree
+    contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
-    response = acomp(messages=messages, model=model, temperature=temperature, max_tokens=max_tokens)
-    return await response.choices[0].message.content
+    response = await acomp(messages=messages, model=model, temperature=temp, max_tokens=max_tokens)
+    return response.choices[0].message.content
 
 
 def abstract_lm_call(in_tree: Tree, /, *, roles: list[str]) -> EvalType:
@@ -221,8 +221,8 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        out = lm_call_p.bind(([grad_prompt], model, temperature, max_tokens), roles=["user"])
-        grads.append(out)
+        grad_out = lm_call_p.bind(([grad_prompt], model, temperature, max_tokens), roles=["user"])
+        grads.append(grad_out)
     return grads, Zero(str), none_or_zero(temperature), none_or_zero(max_tokens)
 
 
@@ -233,8 +233,8 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
 
     async def grad(c):
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        out = lm_call_p.abind(([prompt], model, temperature, max_tokens), roles=["user"])
-        return await out
+        grad_out = lm_call_p.abind(([prompt], model, temperature, max_tokens), roles=["user"])
+        return await grad_out
 
     return (
         await asyncio.gather(*[grad(c) for c in contents]),
@@ -464,8 +464,8 @@ def pullback_bwd_struct_lm_call(
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        out = lm_call_p.bind(([grad_prompt], model, temperature, max_tokens), roles=["user"])
-        grads.append(grad_prompt)
+        grad_out = lm_call_p.bind(([grad_prompt], model, temperature, max_tokens), roles=["user"])
+        grads.append(grad_out)
     return grads, Zero(str), none_or_zero(temperature), none_or_zero(max_tokens)
 
 
@@ -482,8 +482,8 @@ async def apull_bwd_struct_lm_call(
 
     async def grad(c):
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        out = lm_call_p.abind(([prompt], model, temperature, max_tokens), roles=["user"])
-        return await out
+        grad_out = lm_call_p.abind(([prompt], model, temperature, max_tokens), roles=["user"])
+        return await grad_out
 
     return (
         await asyncio.gather(*[grad(c) for c in contents]),
