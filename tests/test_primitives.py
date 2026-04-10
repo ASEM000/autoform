@@ -194,6 +194,49 @@ class TestLMPrimitive:
         assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
+    def test_lm_call_dynamic_temperature_and_max_tokens_are_inputs(self):
+        def program(prompt: str, model: str, temperature: float, max_tokens: int):
+            return af.lm_call(
+                [{"role": "user", "content": prompt}],
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        ir = af.trace(program)("test", "gpt-5.2", 0.2, 64)
+        eqn = ir.ir_eqns[0]
+
+        assert eqn.params == {"roles": ["user"]}
+        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[2], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[3], af.core.IRVar)
+
+    def test_lm_call_forwards_dynamic_temperature_and_max_tokens(self):
+        class RuntimeKwargRouter:
+            def completion(self, *, messages: list[dict], model: str, **kwargs):
+                return FakeResponse(
+                    f"{model}|{kwargs['temperature']}|{kwargs['max_tokens']}|"
+                    f"{messages[-1]['content']}"
+                )
+
+            async def acompletion(self, *, messages: list[dict], model: str, **kwargs):
+                return self.completion(messages=messages, model=model, **kwargs)
+
+        def program(prompt: str, model: str, temperature: float, max_tokens: int):
+            return af.lm_call(
+                [{"role": "user", "content": prompt}],
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        ir = af.trace(program)("test", "gpt-5.2", 0.2, 64)
+
+        with af.using_router(RuntimeKwargRouter()):
+            result = ir.call("hello", "m1", 0.7, 128)
+
+        assert result == "m1|0.7|128|hello"
+
     def test_batch_lm_call_supports_variable_models(self):
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)

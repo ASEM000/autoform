@@ -223,7 +223,7 @@ class IREqn:
     ):
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
-        assert metadata is None or isinstance(metadata, dict), f"Expected dict metadata, got {type(metadata)}"
+        assert metadata is None or isinstance(metadata, dict)
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
@@ -434,9 +434,7 @@ class TracingInterpreter(Interpreter):
             return value
 
         def to_concrete(leaf, value):
-            assert not is_irvar(value), (
-                f"Unexpected variable in {prim} at {'/'.join(map(str, leaf))}"
-            )
+            assert not is_irvar(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
             return value
 
         params = treelib.map_with_path(to_concrete, params)
@@ -452,9 +450,8 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
-        self.ir_eqns.append(
-            IREqn(prim, in_ir_tree, out_ir_tree, params, metadata=active_metadata.get())
-        )
+        ir_eqn = IREqn(prim, in_ir_tree, out_ir_tree, params, metadata=active_metadata.get())
+        self.ir_eqns.append(ir_eqn)
         return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:

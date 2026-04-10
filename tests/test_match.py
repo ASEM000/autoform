@@ -241,9 +241,9 @@ class TestIRMatchArgs:
         ir = af.trace(program)("a", "test")
 
         match ir:
-            case af.core.IR(
-                [af.core.IREqn(af.core.Prim("switch", tag), _, _, params)], _, _
-            ) if ControlTag in tag:
+            case af.core.IR([af.core.IREqn(af.core.Prim("switch", tag), _, _, params)], _, _) if (
+                ControlTag in tag
+            ):
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
                 assert "b" in branch_dict
