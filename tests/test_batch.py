@@ -514,7 +514,10 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.TypedAVal(str), "second": (af.core.TypedAVal(str), af.core.TypedAVal(str))}
+            return {
+                "first": af.core.TypedAVal(str),
+                "second": (af.core.TypedAVal(str), af.core.TypedAVal(str)),
+            }
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def bad_batch_rule(in_tree):
@@ -539,7 +542,10 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
-            return {"first": af.core.TypedAVal(str), "second": (af.core.TypedAVal(str), af.core.TypedAVal(str))}
+            return {
+                "first": af.core.TypedAVal(str),
+                "second": (af.core.TypedAVal(str), af.core.TypedAVal(str)),
+            }
 
         @ft.partial(af.core.batch_rules.set, nested_p)
         def correct_batch_rule(in_tree):

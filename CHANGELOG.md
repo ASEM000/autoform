@@ -50,6 +50,8 @@
         result = af.call(ir)(inputs)
     ```
 
+  - `lm_call(...)` and `struct_lm_call(...)` now accept first-class `temperature=` and `max_tokens=` inputs. Those scalar LM controls can now vary across calls and batches.
+
   - Added inference primitives `factor` and `weight`.
 
     ```python

@@ -108,12 +108,25 @@ FEEDBACK ON OUTPUT: {out_cotangent}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
 
 
-def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
+def none_or_zero(x):
+    return None if x is None else Zero(type(x))
+
+
+def lm_call(
+    messages: list[dict[str, str]],
+    /,
+    *,
+    model: str,
+    temperature: float | int | None = None,
+    max_tokens: int | None = None,
+) -> str:
     """Calls a language model with the given messages and model name using Litellm.
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
         model: The name of the language model to use (e.g., "gpt-5.2").
+        temperature:  The sampling temperature to be used, between 0 and 2.
+        max_tokens: The maximum number of tokens to generate in the chat completion.
 
     Returns:
         The content of the model's response as a string.
@@ -137,88 +150,98 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
 
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
-    return lm_call_p.bind((contents, model), roles=roles)
+    return lm_call_p.bind((contents, model, temperature, max_tokens), roles=roles)
 
 
 def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
-    contents, model = in_tree
+    contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     comp = client.completion if (client := active_router.get()) is not None else completion
-    response = comp(messages=messages, model=model)
+    response = comp(messages=messages, model=model, temperature=temp, max_tokens=max_tokens)
     return response.choices[0].message.content
 
 
 async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
-    contents, model = in_tree
+    contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
-    response = await acomp(messages=messages, model=model)
+    response = await acomp(messages=messages, model=model, temperature=temp, max_tokens=max_tokens)
     return response.choices[0].message.content
 
 
 def abstract_lm_call(in_tree: Tree, /, *, roles: list[str]) -> EvalType:
-    contents, model = in_tree
+    contents, model, temperature, max_tokens = in_tree
     assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
     assert typeof(model) is str, f"`lm_call` expects a string model, got {model!r}"
+    assert temperature is None or typeof(temperature) in (int, float)
+    assert max_tokens is None or typeof(max_tokens) is int
     return TypedAVal(str)
 
 
 def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, _ = tangents
-    p_resp = lm_call_p.bind((primal_contents, primal_model), roles=roles)
-    t_resp = lm_call_p.bind((materialize(tangent_contents), primal_model), roles=roles)
+    primal_contents, primal_model, primal_temperature, primal_max_tokens = primals
+    tangent_contents, *_ = tangents
+    p_tree = (primal_contents, primal_model, primal_temperature, primal_max_tokens)
+    p_resp = lm_call_p.bind(p_tree, roles=roles)
+    t_tree = (materialize(tangent_contents), primal_model, primal_temperature, primal_max_tokens)
+    t_resp = lm_call_p.bind(t_tree, roles=roles)
     return p_resp, t_resp
 
 
 async def apush_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, _ = tangents
+    primal_contents, primal_model, primal_temperature, primal_max_tokens = primals
+    tangent_contents, *_ = tangents
     abind = ft.partial(lm_call_p.abind, roles=roles)
-    p_resp, t_resp = await asyncio.gather(
-        abind((primal_contents, primal_model)),
-        abind((materialize(tangent_contents), primal_model)),
-    )
+    p_tree = (primal_contents, primal_model, primal_temperature, primal_max_tokens)
+    t_tree = (materialize(tangent_contents), primal_model, primal_temperature, primal_max_tokens)
+    p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
 def pullback_fwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
-    contents, model = in_tree
-    out = lm_call_p.bind((contents, model), roles=roles)
-    residuals = (contents, model, out)
+    contents, model, temperature, max_tokens = in_tree
+    out = lm_call_p.bind((contents, model, temperature, max_tokens), roles=roles)
+    residuals = (contents, model, temperature, max_tokens, out)
     return out, residuals
 
 
 async def apull_fwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
-    contents, model = in_tree
-    out = await lm_call_p.abind((contents, model), roles=roles)
-    residuals = (contents, model, out)
+    contents, model, temperature, max_tokens = in_tree
+    out = await lm_call_p.abind((contents, model, temperature, max_tokens), roles=roles)
+    residuals = (contents, model, temperature, max_tokens, out)
     return out, residuals
 
 
 def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = materialize(out_cotangent)
-    contents, model, out = residuals
+    contents, model, temperature, max_tokens, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        grads.append(lm_call_p.bind(([grad_prompt], model), roles=["user"]))
-    return grads, Zero(str)
+        grad_out = lm_call_p.bind(([grad_prompt], model, temperature, max_tokens), roles=["user"])
+        grads.append(grad_out)
+    return grads, Zero(str), none_or_zero(temperature), none_or_zero(max_tokens)
 
 
 async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = materialize(out_cotangent)
-    contents, model, out = residuals
+    contents, model, temperature, max_tokens, out = residuals
 
     async def grad(c):
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        return await lm_call_p.abind(([prompt], model), roles=["user"])
+        grad_out = lm_call_p.abind(([prompt], model, temperature, max_tokens), roles=["user"])
+        return await grad_out
 
-    return await asyncio.gather(*[grad(c) for c in contents]), Zero(str)
+    return (
+        await asyncio.gather(*[grad(c) for c in contents]),
+        Zero(str),
+        none_or_zero(temperature),
+        none_or_zero(max_tokens),
+    )
 
 
 def batch_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
@@ -265,7 +288,14 @@ batch_rules.aset(lm_call_p, abatch_lm_call)
 struct_lm_call_p = Prim("struct_lm_call", tag={LMTag})
 
 
-def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[Struct]) -> Struct:
+def struct_lm_call(
+    messages: list[dict[str, str]],
+    *,
+    model: str,
+    struct: type[Struct],
+    temperature: float | int | None = None,
+    max_tokens: int | None = None,
+) -> Struct:
     """Calls a language model with structured output using response_format.
 
     Uses LLM's built-in JSON mode with a schema to extract structured
@@ -275,6 +305,8 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
         model: The name of the language model to use.
         struct: A ``Struct`` subclass defining the output schema.
+        temperature:  The sampling temperature to be used, between 0 and 2.
+        max_tokens: The maximum number of tokens to generate in the chat completion.
 
     Returns:
         A validated instance of the struct type.
@@ -300,108 +332,173 @@ def struct_lm_call(messages: list[dict[str, str]], *, model: str, struct: type[S
 
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
-    return struct_lm_call_p.bind((contents, model), roles=roles, struct=struct)
+    in_tree = (contents, model, temperature, max_tokens)
+    return struct_lm_call_p.bind(in_tree, roles=roles, struct=struct)
 
 
-def impl_struct_lm_call(in_tree: Tree, /, *, roles: list[str], struct: type[Struct]) -> Struct:
-    contents, model = in_tree
+def impl_struct_lm_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
+) -> Struct:
+    contents, model, temperature, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     comp = client.completion if (client := active_router.get()) is not None else completion
-    resp = comp(messages=messages, model=model, response_format=struct)
+    resp = comp(
+        messages=messages,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_format=struct,
+    )
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
 async def aimpl_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> Struct:
-    contents, model = in_tree
+    contents, model, temperature, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
-    resp = await acomp(messages=messages, model=model, response_format=struct)
+    resp = await acomp(
+        messages=messages,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_format=struct,
+    )
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
-def abstract_struct_lm_call(in_tree: Tree, /, *, roles: list[str], struct: type[Struct]) -> Tree:
-    contents, model = in_tree
+def abstract_struct_lm_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
+) -> Tree:
+    contents, model, temperature, max_tokens = in_tree
     assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
     assert typeof(model) is str, f"Expected string model, got {model!r}"
+    assert temperature is None or typeof(temperature) in (int, float)
+    assert max_tokens is None or typeof(max_tokens) is int
     return treelib.map(TypedAVal, struct_type_tree(struct))
 
 
 def pushforward_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, _ = tangents
-    p_resp = struct_lm_call_p.bind((primal_contents, primal_model), roles=roles, struct=struct)
-    t_resp = struct_lm_call_p.bind(
-        (materialize(tangent_contents), primal_model), roles=roles, struct=struct
-    )
+    primal_contents, primal_model, primal_temperature, primal_max_tokens = primals
+    tangent_contents, *_ = tangents
+    p_tree = (primal_contents, primal_model, primal_temperature, primal_max_tokens)
+    t_tree = (materialize(tangent_contents), primal_model, primal_temperature, primal_max_tokens)
+    p_resp = struct_lm_call_p.bind(p_tree, roles=roles, struct=struct)
+    t_resp = struct_lm_call_p.bind(t_tree, roles=roles, struct=struct)
     return p_resp, t_resp
 
 
 async def apush_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, _ = tangents
+    primal_contents, primal_model, primal_temperature, primal_max_tokens = primals
+    tangent_contents, *_ = tangents
     abind = ft.partial(struct_lm_call_p.abind, roles=roles, struct=struct)
-    p_resp, t_resp = await asyncio.gather(
-        abind((primal_contents, primal_model)),
-        abind((materialize(tangent_contents), primal_model)),
-    )
+    p_tree = (primal_contents, primal_model, primal_temperature, primal_max_tokens)
+    t_tree = (materialize(tangent_contents), primal_model, primal_temperature, primal_max_tokens)
+    p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
 def pullback_fwd_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
-    contents, model = in_tree
-    out = struct_lm_call_p.bind((contents, model), roles=roles, struct=struct)
-    residuals = (contents, model, out)
+    contents, model, temperature, max_tokens = in_tree
+    out = struct_lm_call_p.bind(in_tree, roles=roles, struct=struct)
+    residuals = (contents, model, temperature, max_tokens, out)
     return out, residuals
 
 
 async def apull_fwd_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
-    contents, model = in_tree
-    out = await struct_lm_call_p.abind((contents, model), roles=roles, struct=struct)
-    residuals = (contents, model, out)
+    contents, model, temperature, max_tokens = in_tree
+    out = await struct_lm_call_p.abind(in_tree, roles=roles, struct=struct)
+    residuals = (contents, model, temperature, max_tokens, out)
     return out, residuals
 
 
 def pullback_bwd_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = materialize(out_cotangent)
-    contents, model, out = residuals
+    contents, model, temperature, max_tokens, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        grads.append(lm_call_p.bind(([grad_prompt], model), roles=["user"]))
-    return grads, Zero(str)
+        grad_out = lm_call_p.bind(([grad_prompt], model, temperature, max_tokens), roles=["user"])
+        grads.append(grad_out)
+    return grads, Zero(str), none_or_zero(temperature), none_or_zero(max_tokens)
 
 
 async def apull_bwd_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = materialize(out_cotangent)
-    contents, model, out = residuals
+    contents, model, temperature, max_tokens, out = residuals
 
     async def grad(c):
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        return await lm_call_p.abind(([prompt], model), roles=["user"])
+        grad_out = lm_call_p.abind(([prompt], model, temperature, max_tokens), roles=["user"])
+        return await grad_out
 
-    return await asyncio.gather(*[grad(c) for c in contents]), Zero(str)
+    return (
+        await asyncio.gather(*[grad(c) for c in contents]),
+        Zero(str),
+        none_or_zero(temperature),
+        none_or_zero(max_tokens),
+    )
 
 
 def batch_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
 
@@ -419,7 +516,11 @@ def batch_struct_lm_call(
 
 
 async def abatch_struct_lm_call(
-    in_tree: Tree, /, *, roles: list[str], struct: type[Struct]
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    struct: type[Struct],
 ) -> tuple[Tree, Tree]:
     batch_size, in_batched, in_values = in_tree
 
