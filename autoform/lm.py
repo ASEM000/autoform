@@ -89,7 +89,7 @@ def using_router(router: LMRouter) -> Generator[LMRouter, None, None]:
         >>> with af.using_router(router):  # doctest: +SKIP
         ...     ir.call(inputs)
     """
-    assert isinstance(router, LMRouter), f"Expected LMRouter."
+    assert isinstance(router, LMRouter), f"Expected LMRouter instance, got {type(router)}"
     token = active_router.set(router)
     try:
         yield router
