@@ -56,16 +56,24 @@ class LMRouter(Protocol):
     def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> Awaitable[Any]: ...
 
 
-active_router: ContextVar[LMRouter | None] = ContextVar("active_router", default=None)
+class LiteLLMRouter:
+    def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any:
+        return completion(messages=messages, model=model, **kwargs)
+
+    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> Any:
+        return await acompletion(messages=messages, model=model, **kwargs)
+
+
+
+active_router: ContextVar[LMRouter] = ContextVar("active_router", default=LiteLLMRouter())
 
 
 @contextmanager
-def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, None]:
+def using_router(router: LMRouter) -> Generator[LMRouter, None, None]:
     """Set the LM router for all lm primitives.
 
     The router must expose ``.completion()`` and ``.acompletion()`` matching
     litellm's call signature (e.g. ``litellm.Router``).
-    Pass ``None`` to revert to direct litellm calls.
 
     See https://docs.litellm.ai/docs/routing for details.
 
@@ -81,7 +89,7 @@ def using_router(router: LMRouter | None) -> Generator[LMRouter | None, None, No
         >>> with af.using_router(router):  # doctest: +SKIP
         ...     ir.call(inputs)
     """
-    assert router is None or isinstance(router, LMRouter), f"Expected LMRouter or None."
+    assert isinstance(router, LMRouter), f"Expected LMRouter."
     token = active_router.set(router)
     try:
         yield router
@@ -156,16 +164,24 @@ def lm_call(
 def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
     contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    comp = client.completion if (client := active_router.get()) is not None else completion
-    response = comp(messages=messages, model=model, temperature=temp, max_tokens=max_tokens)
+    response = active_router.get().completion(
+        messages=messages,
+        model=model,
+        temperature=temp,
+        max_tokens=max_tokens,
+    )
     return response.choices[0].message.content
 
 
 async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
     contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
-    response = await acomp(messages=messages, model=model, temperature=temp, max_tokens=max_tokens)
+    response = await active_router.get().acompletion(
+        messages=messages,
+        model=model,
+        temperature=temp,
+        max_tokens=max_tokens,
+    )
     return response.choices[0].message.content
 
 
@@ -345,8 +361,7 @@ def impl_struct_lm_call(
 ) -> Struct:
     contents, model, temperature, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    comp = client.completion if (client := active_router.get()) is not None else completion
-    resp = comp(
+    resp = active_router.get().completion(
         messages=messages,
         model=model,
         temperature=temperature,
@@ -365,8 +380,7 @@ async def aimpl_struct_lm_call(
 ) -> Struct:
     contents, model, temperature, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    acomp = client.acompletion if (client := active_router.get()) is not None else acompletion
-    resp = await acomp(
+    resp = await active_router.get().acompletion(
         messages=messages,
         model=model,
         temperature=temperature,
