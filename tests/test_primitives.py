@@ -232,7 +232,7 @@ class TestLMPrimitive:
 
         ir = af.trace(program)("test", "gpt-5.2", 0.2, 64)
 
-        with af.using_router(RuntimeKwargRouter()):
+        with af.using_client(RuntimeKwargRouter()):
             result = ir.call("hello", "m1", 0.7, 128)
 
         assert result == "m1|0.7|128|hello"
@@ -244,7 +244,7 @@ class TestLMPrimitive:
         ir = af.trace(program)("test", "gpt-5.2")
         batched_ir = af.batch(ir, in_axes=(True, True))
 
-        with af.using_router(EchoRouter()):
+        with af.using_client(EchoRouter()):
             result = batched_ir.call(["hello", "goodbye"], ["m1", "m2"])
 
         assert result == ["m1|hello", "m2|goodbye"]
@@ -256,7 +256,7 @@ class TestLMPrimitive:
         ir = af.trace(program)("test", "gpt-5.2")
         pb_ir = af.pullback(ir)
 
-        with af.using_router(EchoRouter()):
+        with af.using_client(EchoRouter()):
             out, cotangent = pb_ir.call(("hello", "m1"), "feedback")
 
         assert out == "m1|hello"

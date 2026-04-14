@@ -41,7 +41,7 @@ Language model calls.
 ```{eval-rst}
 .. autofunction:: autoform.lm_call
 .. autofunction:: autoform.struct_lm_call
-.. autofunction:: autoform.using_router
+.. autofunction:: autoform.using_client
 ```
 
 ## String Primitives
