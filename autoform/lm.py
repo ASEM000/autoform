@@ -51,12 +51,12 @@ from autoform.utils import (
 
 
 @runtime_checkable
-class LMRouter(Protocol):
+class LMClient(Protocol):
     def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any: ...
     def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> Awaitable[Any]: ...
 
 
-class LiteLLMRouter:
+class LiteLLMClient:
     def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any:
         return completion(messages=messages, model=model, **kwargs)
 
@@ -64,37 +64,38 @@ class LiteLLMRouter:
         return await acompletion(messages=messages, model=model, **kwargs)
 
 
-
-active_router: ContextVar[LMRouter] = ContextVar("active_router", default=LiteLLMRouter())
+active_client: ContextVar[LMClient] = ContextVar("active_client", default=LiteLLMClient())
 
 
 @contextmanager
-def using_router(router: LMRouter) -> Generator[LMRouter, None, None]:
-    """Set the LM router for all lm primitives.
+def using_client(client: LMClient) -> Generator[LMClient, None, None]:
+    """Set the LM client for all lm primitives.
 
-    The router must expose ``.completion()`` and ``.acompletion()`` matching
-    litellm's call signature (e.g. ``litellm.Router``).
+    The client must expose ``.completion()`` and ``.acompletion()`` matching
+    LiteLLM's chat completion signature.
 
-    See https://docs.litellm.ai/docs/routing for details.
+    Acceptable clients include the default direct LiteLLM adapter, a configured
+    ``litellm.Router``, or any wrapper object that forwards those two methods
+    while preserving the LiteLLM request and response shapes.
 
     Example:
         >>> import autoform as af
         >>> from litellm import Router  # doctest: +SKIP
-        >>> router = Router(  # doctest: +SKIP
+        >>> client = Router(  # doctest: +SKIP
         ...     model_list=[
-        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-4")),
+        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-5.2")),
         ...     ],
         ...     max_parallel_requests=10,
         ... )
-        >>> with af.using_router(router):  # doctest: +SKIP
+        >>> with af.using_client(client):  # doctest: +SKIP
         ...     ir.call(inputs)
     """
-    assert isinstance(router, LMRouter), f"Expected LMRouter instance, got {type(router)}"
-    token = active_router.set(router)
+    assert isinstance(client, LMClient), f"Expected LMClient instance, got {type(client)}"
+    token = active_client.set(client)
     try:
-        yield router
+        yield client
     finally:
-        active_router.reset(token)
+        active_client.reset(token)
 
 
 class LMTag(PrimTag): ...
@@ -164,7 +165,7 @@ def lm_call(
 def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
     contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    response = active_router.get().completion(
+    response = active_client.get().completion(
         messages=messages,
         model=model,
         temperature=temp,
@@ -176,7 +177,7 @@ def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
 async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
     contents, model, temp, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    response = await active_router.get().acompletion(
+    response = await active_client.get().acompletion(
         messages=messages,
         model=model,
         temperature=temp,
@@ -361,7 +362,7 @@ def impl_struct_lm_call(
 ) -> Struct:
     contents, model, temperature, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    resp = active_router.get().completion(
+    resp = active_client.get().completion(
         messages=messages,
         model=model,
         temperature=temperature,
@@ -380,7 +381,7 @@ async def aimpl_struct_lm_call(
 ) -> Struct:
     contents, model, temperature, max_tokens = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    resp = await active_router.get().acompletion(
+    resp = await active_client.get().acompletion(
         messages=messages,
         model=model,
         temperature=temperature,
