@@ -24,7 +24,6 @@ from typing import Any
 from autoform.core import (
     Interpreter,
     Prim,
-    PrimTag,
     abstract_rules,
     active_interpreter,
     batch_rules,
@@ -42,10 +41,7 @@ from autoform.utils import Tree, asyncify, batch_index, batch_spec, batch_transp
 # ==================================================================================================
 
 
-class CheckpointTag(PrimTag): ...
-
-
-checkpoint_p = Prim("checkpoint", tag={CheckpointTag})
+checkpoint_p = Prim("checkpoint")
 non_dce_primitives.add(checkpoint_p)
 
 
@@ -159,6 +155,8 @@ type Collected = dict[Hashable, list[Tree]]
 
 
 class CollectingInterpreter(Interpreter):
+    __slots__ = ["parent", "collection", "collected"]
+
     def __init__(self, *, collection: Hashable):
         self.parent = active_interpreter.get()
         self.collection = collection
@@ -180,6 +178,8 @@ class CollectingInterpreter(Interpreter):
 
 
 class InjectingInterpreter(Interpreter):
+    __slots__ = ["parent", "collection", "cache"]
+
     def __init__(self, *, collection: Hashable, values: Collected):
         self.parent = active_interpreter.get()
         self.collection = collection

@@ -28,7 +28,6 @@ from autoform.core import (
     IR,
     IREqn,
     Prim,
-    PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -40,15 +39,11 @@ from autoform.core import (
 from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import Tree, asyncify, batch_spec, lru_cache, treelib
 
-
-class SchedulingTag(PrimTag): ...
-
-
 # ==================================================================================================
 # GATHER
 # ==================================================================================================
 
-gather_p = Prim("gather", tag={SchedulingTag})
+gather_p = Prim("gather")
 
 
 def gather(ir_input_pairs: list[tuple[IR, Tree]], /) -> list[Tree]:
@@ -276,7 +271,7 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
 # DEPENDS
 # ==================================================================================================
 
-depends_p = Prim("depends", tag={SchedulingTag})
+depends_p = Prim("depends")
 
 type DependsType[T] = tuple[T, tuple[Tree, ...]]
 

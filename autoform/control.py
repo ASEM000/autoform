@@ -25,7 +25,6 @@ from autoform.core import (
     IR,
     IREqn,
     Prim,
-    PrimTag,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -46,15 +45,11 @@ from autoform.utils import (
     treelib,
 )
 
-
-class ControlTag(PrimTag): ...
-
-
 # ==================================================================================================
 # STOP GRADIENT
 # ==================================================================================================
 
-stop_gradient_p = Prim("stop_gradient", tag={ControlTag})
+stop_gradient_p = Prim("stop_gradient")
 
 
 def stop_gradient(x: Tree, /) -> Tree:
@@ -130,7 +125,7 @@ batch_rules.aset(stop_gradient_p, asyncify(batch_stop_gradient))
 # SWITCH
 # ==================================================================================================
 
-switch_p = Prim("switch", tag={ControlTag})
+switch_p = Prim("switch")
 
 
 def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
@@ -298,7 +293,7 @@ dce_rules[switch_p] = dce_switch
 # WHILE LOOP
 # ==================================================================================================
 
-while_loop_p = Prim("while_loop", tag={ControlTag})
+while_loop_p = Prim("while_loop")
 
 
 def while_loop(cond_ir: IR, body_ir: IR, init_val: Tree, *, max_iters: int) -> Tree:

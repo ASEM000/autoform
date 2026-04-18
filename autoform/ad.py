@@ -40,7 +40,6 @@ from autoform.core import (
     IREqn,
     IRVar,
     Prim,
-    TransformationTag,
     TypedAVal,
     abstract_rules,
     active_interpreter,
@@ -56,17 +55,13 @@ from autoform.core import (
 from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_cache, treelib
 
-
-class ADTag(TransformationTag): ...
-
-
 # ==================================================================================================
 # ZERO
 # ==================================================================================================
 
 
 class Zero:
-    __slots__ = "type"
+    __slots__ = ["type"]
 
     def __init__(self, type: type, /):
         self.type = type
@@ -117,10 +112,12 @@ def materialize(x: Tree, /) -> Tree:
 # PUSHFORWARD
 # ==================================================================================================
 
-pushforward_call_p = Prim("pushforward_call", tag={ADTag})
+pushforward_call_p = Prim("pushforward_call")
 
 
 class PushforwardInterpreter(Interpreter):
+    __slots__ = ["parent"]
+
     def __init__(self):
         self.parent = active_interpreter.get()
 
@@ -370,7 +367,7 @@ dce_rules[pushforward_call_p] = dce_pushforward_call
 # PULLBACK
 # ==================================================================================================
 
-pullback_call_p = Prim("pullback_call", tag={ADTag})
+pullback_call_p = Prim("pullback_call")
 
 
 cotangent_accumulators: dict[type, Callable[[list], Any]] = {}
@@ -391,6 +388,8 @@ def accumulate_cotangents(cotangents: list[Any]) -> Any:
 
 
 class PullbackFwdInterpreter(Interpreter):
+    __slots__ = ["parent"]
+
     def __init__(self):
         self.parent = active_interpreter.get()
 
@@ -404,6 +403,8 @@ class PullbackFwdInterpreter(Interpreter):
 
 
 class PullbackBwdInterpreter(Interpreter):
+    __slots__ = ["parent"]
+
     def __init__(self):
         self.parent = active_interpreter.get()
 

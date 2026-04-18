@@ -504,7 +504,7 @@ class TestRunIRInline:
 class TestTransformWrapperAvals:
     def test_pushforward_wrapper_preserves_aval(self):
         class TaggedAVal(af.core.AVal):
-            __slots__ = ("tag",)
+            __slots__ = ["tag"]
 
             def __init__(self, tag):
                 self.tag = tag
@@ -524,7 +524,7 @@ class TestTransformWrapperAvals:
 
     def test_pullback_wrapper_preserves_aval(self):
         class TaggedAVal(af.core.AVal):
-            __slots__ = ("tag",)
+            __slots__ = ["tag"]
 
             def __init__(self, tag):
                 self.tag = tag

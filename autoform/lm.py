@@ -29,7 +29,6 @@ from autoform.ad import Zero, materialize
 from autoform.core import (
     EvalType,
     Prim,
-    PrimTag,
     TypedAVal,
     abstract_rules,
     batch_rules,
@@ -57,6 +56,8 @@ class LMClient(Protocol):
 
 
 class LiteLLMClient:
+    __slots__ = []
+
     def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any:
         return completion(messages=messages, model=model, **kwargs)
 
@@ -98,14 +99,11 @@ def using_client(client: LMClient) -> Generator[LMClient, None, None]:
         active_client.reset(token)
 
 
-class LMTag(PrimTag): ...
-
-
 # ==================================================================================================
 # LM CALL
 # ==================================================================================================
 
-lm_call_p = Prim("lm_call", tag={LMTag})
+lm_call_p = Prim("lm_call")
 
 # TODO(asem): take a look into this
 GRAD_PROMPT = """Given this LLM interaction:
@@ -302,7 +300,7 @@ batch_rules.aset(lm_call_p, abatch_lm_call)
 # STRUCT LM CALL
 # ==================================================================================================
 
-struct_lm_call_p = Prim("struct_lm_call", tag={LMTag})
+struct_lm_call_p = Prim("struct_lm_call")
 
 
 def struct_lm_call(
