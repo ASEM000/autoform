@@ -40,6 +40,8 @@ def make_key(prim: Prim, in_tree: Tree, /, **params) -> CacheKey:
 
 
 class MemoizingInterpreter(Interpreter):
+    __slots__ = ["parent", "cache"]
+
     def __init__(self):
         self.parent = active_interpreter.get()
         self.cache: dict[CacheKey, Tree] = {}

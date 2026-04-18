@@ -169,7 +169,7 @@ class TestBatchIRStructure:
 
     def test_batch_wrapper_rewrites_batched_aval(self):
         class TaggedAVal(af.core.AVal):
-            __slots__ = ("tag",)
+            __slots__ = ["tag"]
 
             def __init__(self, tag):
                 self.tag = tag
@@ -185,7 +185,7 @@ class TestBatchIRStructure:
 
     def test_batch_wrapper_preserves_broadcast_aval(self):
         class TaggedAVal(af.core.AVal):
-            __slots__ = ("tag",)
+            __slots__ = ["tag"]
 
             def __init__(self, tag):
                 self.tag = tag

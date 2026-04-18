@@ -22,7 +22,6 @@ from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
     EvalType,
     Prim,
-    PrimTag,
     TypedAVal,
     abstract_rules,
     batch_rules,
@@ -34,15 +33,11 @@ from autoform.core import (
 )
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
 
-
-class StringTag(PrimTag): ...
-
-
 # ==================================================================================================
 # FORMAT
 # ==================================================================================================
 
-format_p = Prim("format", tag={StringTag})
+format_p = Prim("format")
 
 
 def format(template: str, *args, **kwargs) -> str:
@@ -126,7 +121,7 @@ batch_rules.aset(format_p, asyncify(batch_format))
 # CONCAT
 # ==================================================================================================
 
-concat_p = Prim("concat", tag={StringTag})
+concat_p = Prim("concat")
 
 
 def concat(*args) -> str:
@@ -199,7 +194,7 @@ batch_rules.aset(concat_p, asyncify(batch_concat))
 # MATCH
 # ==================================================================================================
 
-match_p = Prim("match", tag={StringTag})
+match_p = Prim("match")
 
 
 def match(a: str, b: str, /) -> bool:

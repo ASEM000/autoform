@@ -28,7 +28,6 @@ from autoform.core import (
     IREqn,
     IRVar,
     Prim,
-    TransformationTag,
     TypedAVal,
     abstract_rules,
     active_interpreter,
@@ -46,9 +45,6 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, treel
 # ==================================================================================================
 # BATCH
 # ==================================================================================================
-
-
-class BatchTag(TransformationTag): ...
 
 
 def is_axis_spec(x) -> bool:
@@ -81,7 +77,7 @@ def broadcast_batch_out(spec, out_tree: Tree, out_batched_tree: Tree[bool], /) -
     return out_spec.unflatten(map(broadcast_leaf, flat_out, flat_out_b))
 
 
-batch_call_p = Prim("batch_call", tag={BatchTag})
+batch_call_p = Prim("batch_call")
 
 
 def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
@@ -134,6 +130,8 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
 
 
 class BatchInterpreter(Interpreter):
+    __slots__ = ["parent", "batch_size"]
+
     def __init__(self, *, batch_size: int):
         self.parent = active_interpreter.get()
         self.batch_size = batch_size

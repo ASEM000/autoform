@@ -39,9 +39,6 @@ __all__ = [
     "IRVar",
     "is_irvar",
     "ir_aval",
-    # tags
-    "PrimTag",
-    "TransformationTag",
     # primitive
     "Prim",
     # rule registries
@@ -82,11 +79,11 @@ def is_val(x) -> bool:
 
 
 class AVal:
-    __slots__ = ()
+    __slots__ = []
 
 
 class TypedAVal(AVal):
-    __slots__ = "type"
+    __slots__ = ["type"]
 
     def __init__(self, type: type):
         self.type = type
@@ -120,7 +117,7 @@ def typeof(x, /) -> type:
 # NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
 # Concrete literals are kept as plain Python values in IR trees.
 class IRVar:
-    __slots__ = ("id", "source", "aval")
+    __slots__ = ["id", "source", "aval"]
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
 
@@ -155,25 +152,14 @@ def ir_aval(x, /):
 # ==================================================================================================
 
 
-# NOTE(asem): tags are used to group primitives into categories
-# to be later targeted by interceptors, ...
-class PrimTag: ...
-
-
-class TransformationTag(PrimTag): ...
-
-
 class Prim:
     # NOTE(asem): primitive is a key used for matching against rules
     # defined in ``InterpreterRuleMapping``
-    __slots__ = ("name", "tag")
-    __match_args__ = ("name", "tag")
+    __slots__ = ["name"]
 
-    def __init__(self, name: str, tag: set[type[PrimTag]] | None = None):
+    def __init__(self, name: str):
         assert isinstance(name, str), f"Invalid name type: {type(name)=}"
-        assert tag is None or all(issubclass(t, PrimTag) for t in tag), f"Invalid tag: {tag=}"
         self.name = name
-        self.tag: frozenset[type[PrimTag]] = frozenset(tag) if tag else frozenset()
 
     def __repr__(self) -> str:
         return self.name
@@ -207,7 +193,7 @@ class Tag:
         True
     """
 
-    __slots__ = ()
+    __slots__ = []
 
     def __new__(cls, *args, **kwargs):
         assert cls is not Tag, "Tag cannot be instantiated directly"
@@ -260,8 +246,7 @@ def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
 
 
 class IREqn:
-    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "tags")
-    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "tags")
+    __slots__ = ["prim", "in_ir_tree", "out_ir_tree", "params", "tags"]
 
     def __init__(
         self,
@@ -294,8 +279,7 @@ class IREqn:
 
 
 class IR[*A, R]:
-    __slots__ = ("ir_eqns", "in_ir_tree", "out_ir_tree")
-    __match_args__ = ("ir_eqns", "in_ir_tree", "out_ir_tree")
+    __slots__ = ["ir_eqns", "in_ir_tree", "out_ir_tree"]
 
     def __init__(self, ir_eqns: list[IREqn], in_ir_tree: Tree, out_ir_tree: Tree):
         assert isinstance(ir_eqns, list)
@@ -433,6 +417,8 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 
 class Interpreter(ABC):
+    __slots__ = []
+
     @abstractmethod
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
 
@@ -455,6 +441,8 @@ def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None
 
 
 class EvalInterpreter(Interpreter):
+    __slots__ = []
+
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         return impl_rules.get(prim)(in_tree, **params)
 
@@ -471,6 +459,8 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 
 
 class TracingInterpreter(Interpreter):
+    __slots__ = ["ir_eqns"]
+
     def __init__(self):
         self.ir_eqns: list[IREqn] = []
 
@@ -648,6 +638,8 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 
 
 class InterpreterRuleMapping[R]:
+    __slots__ = ["map", "amap", "lock"]
+
     def __init__(self):
         self.map: dict[Prim, Callable[..., R]] = {}
         self.amap: dict[Prim, Callable[..., Awaitable[R]]] = {}

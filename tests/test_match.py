@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import autoform as af
-from autoform.control import ControlTag
-from autoform.string import StringTag
 
 
-class TestIREqnMatchArgs:
+class TestIREqnMatch:
     def test_match_by_primitive(self):
         def func(x):
             return af.concat("Hello, ", x)
@@ -48,7 +46,7 @@ class TestIREqnMatchArgs:
 
         assert matched_tag == "step1"
 
-    def test_match_positional_destructuring(self):
+    def test_match_keyword_destructuring(self):
         def func(x):
             return af.format("Value: {}", x)
 
@@ -56,7 +54,7 @@ class TestIREqnMatchArgs:
         eqn = ir.ir_eqns[0]
 
         match eqn:
-            case af.core.IREqn(prim, in_tree, out_tree, params):
+            case af.core.IREqn(prim=prim, in_ir_tree=in_tree, out_ir_tree=out_tree, params=params):
                 assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
@@ -163,12 +161,12 @@ class TestInsertAfterPattern:
         assert new_ir.ir_eqns[2].prim == af.string.concat_p
 
 
-class TestIRMatchArgs:
-    def test_match_ir_positional(self):
+class TestIRMatch:
+    def test_match_ir_keyword(self):
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(eqns, in_tree, out_tree):
+            case af.core.IR(ir_eqns=eqns, in_ir_tree=in_tree, out_ir_tree=out_tree):
                 assert len(eqns) == 1
                 assert isinstance(in_tree, tuple)
                 assert len(in_tree) == 1
@@ -181,9 +179,18 @@ class TestIRMatchArgs:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR([af.core.IREqn(prim, in_tree, out_tree, params)], _, _):
+            case af.core.IR(
+                ir_eqns=[
+                    af.core.IREqn(
+                        prim=prim,
+                        in_ir_tree=in_tree,
+                        out_ir_tree=out_tree,
+                        params=params,
+                    )
+                ]
+            ):
                 assert prim == af.string.concat_p
-                assert StringTag in prim.tag
+                assert prim.name == "concat"
                 assert len(af.utils.treelib.leaves(in_tree)) == 2
             case _:
                 assert False, "Pattern should match single equation"
@@ -196,22 +203,22 @@ class TestIRMatchArgs:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR([af.core.IREqn(p1, _, _, _), af.core.IREqn(p2, _, _, _)], _, _):
+            case af.core.IR(
+                ir_eqns=[af.core.IREqn(prim=p1), af.core.IREqn(prim=p2)]
+            ):
                 assert p1.name == "format"
                 assert p2.name == "concat"
             case _:
                 assert False, "Pattern should match two equations"
 
-    def test_match_by_primitive_tag(self):
+    def test_match_by_primitive_name(self):
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR([af.core.IREqn(af.core.Prim(name, tag), _, _, _)], _, _) if (
-                StringTag in tag
-            ):
+            case af.core.IR(ir_eqns=[af.core.IREqn(prim=af.core.Prim(name=name))]):
                 assert name == "concat"
             case _:
-                assert False, "Pattern should match string-tagged primitive"
+                assert False, "Pattern should match primitive name"
 
     def test_match_higher_order_primitive_with_nested_ir(self):
         inner_ir = af.trace(lambda x: af.concat("a", x))("b")
@@ -219,9 +226,9 @@ class TestIRMatchArgs:
 
         match pf_ir:
             case af.core.IR(
-                [af.core.IREqn(af.core.Prim("pushforward_call", _), _, _, params)],
-                _,
-                _,
+                ir_eqns=[
+                    af.core.IREqn(prim=af.core.Prim(name="pushforward_call"), params=params)
+                ]
             ):
                 nested = params["ir"]
                 assert isinstance(nested, af.core.IR)
@@ -241,8 +248,8 @@ class TestIRMatchArgs:
         ir = af.trace(program)("a", "test")
 
         match ir:
-            case af.core.IR([af.core.IREqn(af.core.Prim("switch", tag), _, _, params)], _, _) if (
-                ControlTag in tag
+            case af.core.IR(
+                ir_eqns=[af.core.IREqn(prim=af.core.Prim(name="switch"), params=params)]
             ):
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
@@ -255,16 +262,16 @@ class TestIRMatchArgs:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(eqns, _, _) if len(eqns) == 1:
+            case af.core.IR(ir_eqns=eqns) if len(eqns) == 1:
                 single_eqn = True
-            case af.core.IR(eqns, _, _) if len(eqns) > 1:
+            case af.core.IR(ir_eqns=eqns) if len(eqns) > 1:
                 single_eqn = False
             case _:
                 single_eqn = None
 
         assert single_eqn is True
 
-    def test_match_all_string_primitives(self):
+    def test_match_all_expected_primitives(self):
         def program(x, y):
             a = af.format("Hello {}", x)
             return af.concat(a, y)
@@ -272,9 +279,11 @@ class TestIRMatchArgs:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(eqns, _, _) if all(StringTag in e.prim.tag for e in eqns):
-                all_string = True
+            case af.core.IR(ir_eqns=eqns) if all(
+                e.prim.name in {"format", "concat"} for e in eqns
+            ):
+                all_expected = True
             case _:
-                all_string = False
+                all_expected = False
 
-        assert all_string is True
+        assert all_expected is True
