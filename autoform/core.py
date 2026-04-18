@@ -218,7 +218,7 @@ class Tag:
         assert cls.__hash__ is not None, "Tag subclasses must be hashable"
 
 
-active_tags: ContextVar[tuple[Tag, ...]] = ContextVar("active_tags", default=())
+active_tags: ContextVar[frozenset[Tag]] = ContextVar("active_tags", default=frozenset())
 
 
 @contextmanager
@@ -247,7 +247,7 @@ def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
     """
 
     assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
-    token = active_tags.set((*active_tags.get(), *tags))
+    token = active_tags.set(active_tags.get() | frozenset(tags))
     try:
         yield tags
     finally:
@@ -269,17 +269,17 @@ class IREqn:
         in_ir_tree: Tree,
         out_ir_tree: Tree,
         params: dict[str, Any] | None = None,
-        tags: tuple[Tag, ...] = (),
+        tags: frozenset[Tag] = frozenset(),
     ):
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
-        assert isinstance(tags, tuple)
+        assert isinstance(tags, frozenset)
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
         assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
-        self.tags = frozenset(tags)
+        self.tags = tags
 
     def bind(self, in_tree: Tree, /, **params):
         with tag(*self.tags):
@@ -290,8 +290,7 @@ class IREqn:
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        tags = tuple(self.tags)
-        return IREqn(self.prim, self.in_ir_tree, self.out_ir_tree, self.params | kwargs, tags)
+        return IREqn(self.prim, self.in_ir_tree, self.out_ir_tree, self.params | kwargs, self.tags)
 
 
 class IR[*A, R]:

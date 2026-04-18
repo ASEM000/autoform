@@ -258,29 +258,29 @@ class TestTags:
                 def __eq__(self, other):
                     return isinstance(other, EqOnlyTag)
 
-    def test_tag_extends_active_tags_and_restores_on_exit(self):
-        assert af.core.active_tags.get() == ()
+    def test_tag_unions_active_tags_and_restores_on_exit(self):
+        assert af.core.active_tags.get() == frozenset()
 
         with af.tag(Label("outer")) as outer_tags:
             assert outer_tags == (Label("outer"),)
-            assert af.core.active_tags.get() == (Label("outer"),)
+            assert af.core.active_tags.get() == frozenset({Label("outer")})
 
             with af.tag(Label("inner")) as inner_tags:
                 assert inner_tags == (Label("inner"),)
-                assert af.core.active_tags.get() == (Label("outer"), Label("inner"))
+                assert af.core.active_tags.get() == frozenset({Label("outer"), Label("inner")})
 
-            assert af.core.active_tags.get() == (Label("outer"),)
+            assert af.core.active_tags.get() == frozenset({Label("outer")})
 
-        assert af.core.active_tags.get() == ()
+        assert af.core.active_tags.get() == frozenset()
 
-    def test_ireqn_tags_input_is_tuple(self):
-        prim = af.core.Prim("tag_tuple")
-        eqn = af.core.IREqn(prim, (), (), tags=(Label("draft"),))
+    def test_ireqn_tags_input_is_frozenset(self):
+        prim = af.core.Prim("tag_set")
+        eqn = af.core.IREqn(prim, (), (), tags=frozenset({Label("draft")}))
 
         assert eqn.tags == frozenset({Label("draft")})
 
         with pytest.raises(AssertionError):
-            af.core.IREqn(prim, (), (), tags=[Label("draft")])
+            af.core.IREqn(prim, (), (), tags=(Label("draft"),))
 
     def test_bind_reinstalls_equation_tags(self):
         probe_p = af.core.Prim("tag_probe")
