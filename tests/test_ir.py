@@ -322,6 +322,17 @@ class TestTags:
         assert new_eqn.params["collection"] == "debug"
         assert new_eqn.tags == frozenset({Label("draft")})
 
+    def test_repr_includes_non_empty_tags(self):
+        def program(x):
+            head = af.concat(x, "!")
+            with af.tag(Label("draft"), CostTag()):
+                return af.concat(head, "?")
+
+        lines = repr(af.trace(program)("seed")).splitlines()
+
+        assert "tags=" not in lines[1]
+        assert "tags={CostTag(), Label(name='draft')}" in lines[2]
+
     def test_calling_existing_ir_while_tracing_unions_runtime_and_equation_tags(self):
         def inner_program(x):
             with af.tag(Label("inner")):

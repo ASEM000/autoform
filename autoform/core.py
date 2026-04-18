@@ -416,11 +416,12 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     for ir_eqn in ir.ir_eqns:
         lhs = format_tree(ir_eqn.out_ir_tree)
         rhs = format_tree(ir_eqn.in_ir_tree)
-        params_str = ", ".join(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
-        if params_str:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str})")
-        else:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs})")
+        eqn_args = [rhs]
+        eqn_args.extend(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
+        if ir_eqn.tags:
+            tags = ", ".join(sorted(repr(tag) for tag in ir_eqn.tags))
+            eqn_args.append(f"tags={{{tags}}}")
+        lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({', '.join(eqn_args)})")
 
     lines.append("}")
     return "\n".join(lines)
