@@ -496,8 +496,7 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
-        tags = active_tags.get()
-        self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, tags=tags))
+        self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
         return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:

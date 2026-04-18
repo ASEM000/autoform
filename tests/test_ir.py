@@ -275,12 +275,12 @@ class TestTags:
 
     def test_ireqn_tags_input_is_frozenset(self):
         prim = af.core.Prim("tag_set")
-        eqn = af.core.IREqn(prim, (), (), tags=frozenset({Label("draft")}))
+        eqn = af.core.IREqn(prim, (), (), None, frozenset({Label("draft")}))
 
         assert eqn.tags == frozenset({Label("draft")})
 
         with pytest.raises(AssertionError):
-            af.core.IREqn(prim, (), (), tags=(Label("draft"),))
+            af.core.IREqn(prim, (), (), None, (Label("draft"),))
 
     def test_bind_reinstalls_equation_tags(self):
         probe_p = af.core.Prim("tag_probe")
