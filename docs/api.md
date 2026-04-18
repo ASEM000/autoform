@@ -6,8 +6,8 @@ Tracing and execution.
 
 ```{eval-rst}
 .. autofunction:: autoform.trace
-.. autofunction:: autoform.call
-.. autofunction:: autoform.acall
+.. autofunction:: autoform.tag
+.. autoclass:: autoform.Tag
 ```
 
 ## Transforms

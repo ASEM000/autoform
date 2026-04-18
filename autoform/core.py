@@ -60,13 +60,12 @@ __all__ = [
     "TracingInterpreter",
     "active_interpreter",
     "using_interpreter",
-    "active_metadata",
-    "using_metadata",
+    "Tag",
+    "active_tags",
+    "tag",
     # ir building and execution
     "trace",
     "walk",
-    "call",
-    "acall",
 ]
 
 # ==================================================================================================
@@ -187,21 +186,72 @@ class Prim:
 
 
 # ==================================================================================================
-# METADATA
+# TAG
 # ==================================================================================================
 
 
-active_metadata: ContextVar[dict[str, Any]] = ContextVar("active_metadata", default={})
+class Tag:
+    """Base class for structured equation tags.
+
+    Subclasses must be hashable.
+
+    Example:
+        >>> from dataclasses import dataclass
+        >>> import autoform as af
+        >>> @dataclass(frozen=True)
+        ... class Label(af.Tag):
+        ...     name: str
+        >>> with af.tag(Label("draft")):
+        ...     ir = af.trace(lambda x: af.concat(x, "!"))("seed")
+        >>> ir.ir_eqns[0].tags == frozenset({Label("draft")})
+        True
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, *args, **kwargs):
+        assert cls is not Tag, "Tag cannot be instantiated directly"
+        return super().__new__(cls)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        assert cls.__hash__ is not None, "Tag subclasses must be hashable"
+
+
+active_tags: ContextVar[frozenset[Tag]] = ContextVar("active_tags", default=frozenset())
 
 
 @contextmanager
-def using_metadata(**metadata) -> Generator[dict[str, Any], None, None]:
-    assert all(isinstance(key, str) for key in metadata), "Metadata keys must be strings"
-    token = active_metadata.set(metadata)
+def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
+    """Attach tags to equations at trace time.
+
+    Equations built inside nested ``tag`` blocks receive the tags from all active
+    blocks. Equations built after a block exits do not receive that block's tags.
+
+    Example:
+        >>> from dataclasses import dataclass
+        >>> import autoform as af
+        >>> @dataclass(frozen=True)
+        ... class Label(af.Tag):
+        ...     name: str
+        >>> def program(x):
+        ...     with af.tag(Label("outer")):
+        ...         head = af.concat(x, "!")
+        ...         with af.tag(Label("inner")):
+        ...             return af.concat(head, "?")
+        >>> ir = af.trace(program)("seed")
+        >>> ir.ir_eqns[0].tags == frozenset({Label("outer")})
+        True
+        >>> ir.ir_eqns[1].tags == frozenset({Label("outer"), Label("inner")})
+        True
+    """
+
+    assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
+    token = active_tags.set(active_tags.get() | frozenset(tags))
     try:
-        yield metadata
+        yield tags
     finally:
-        active_metadata.reset(token)
+        active_tags.reset(token)
 
 
 # ==================================================================================================
@@ -210,8 +260,8 @@ def using_metadata(**metadata) -> Generator[dict[str, Any], None, None]:
 
 
 class IREqn:
-    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "metadata")
-    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "metadata")
+    __slots__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "tags")
+    __match_args__ = ("prim", "in_ir_tree", "out_ir_tree", "params", "tags")
 
     def __init__(
         self,
@@ -219,33 +269,28 @@ class IREqn:
         in_ir_tree: Tree,
         out_ir_tree: Tree,
         params: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None,
+        tags: frozenset[Tag] = frozenset(),
     ):
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
-        assert metadata is None or isinstance(metadata, dict)
+        assert isinstance(tags, frozenset)
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
-        self.metadata = {} if metadata is None else metadata
+        assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
+        self.tags = tags
 
     def bind(self, in_tree: Tree, /, **params):
-        with using_metadata(**self.metadata):
+        with tag(*self.tags):
             return self.prim.bind(in_tree, **params)
 
     async def abind(self, in_tree: Tree, /, **params):
-        with using_metadata(**self.metadata):
+        with tag(*self.tags):
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> IREqn:
-        return IREqn(
-            self.prim,
-            self.in_ir_tree,
-            self.out_ir_tree,
-            self.params | kwargs,
-            self.metadata,
-        )
+        return IREqn(self.prim, self.in_ir_tree, self.out_ir_tree, self.params | kwargs, self.tags)
 
 
 class IR[*A, R]:
@@ -254,8 +299,9 @@ class IR[*A, R]:
 
     def __init__(self, ir_eqns: list[IREqn], in_ir_tree: Tree, out_ir_tree: Tree):
         assert isinstance(ir_eqns, list)
+        ir_eqns = tuple(ir_eqns)
         assert all(isinstance(ir_eqn, IREqn) for ir_eqn in ir_eqns)
-        self.ir_eqns = tuple(ir_eqns)
+        self.ir_eqns = ir_eqns
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
 
@@ -283,7 +329,7 @@ class IR[*A, R]:
         """Run IR asynchronously with concrete runtime inputs.
 
         Use this when execution may cross async primitive rules. The inputs follow
-        the same conventions as `call(...)`, but the method returns an awaitable
+        the same conventions as `IR.call(...)`, but the method returns an awaitable
         and each equation is driven through `abind(...)`.
 
         Example:
@@ -370,11 +416,12 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     for ir_eqn in ir.ir_eqns:
         lhs = format_tree(ir_eqn.out_ir_tree)
         rhs = format_tree(ir_eqn.in_ir_tree)
-        params_str = ", ".join(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
-        if params_str:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs}, {params_str})")
-        else:
-            lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({rhs})")
+        eqn_args = [rhs]
+        eqn_args.extend(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
+        if ir_eqn.tags:
+            tags = ", ".join(sorted(repr(tag) for tag in ir_eqn.tags))
+            eqn_args.append(f"tags={{{tags}}}")
+        lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({', '.join(eqn_args)})")
 
     lines.append("}")
     return "\n".join(lines)
@@ -450,8 +497,7 @@ class TracingInterpreter(Interpreter):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
-        ir_eqn = IREqn(prim, in_ir_tree, out_ir_tree, params, metadata=active_metadata.get())
-        self.ir_eqns.append(ir_eqn)
+        self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
         return out_ir_tree
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
