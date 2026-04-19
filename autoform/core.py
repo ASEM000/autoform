@@ -61,6 +61,7 @@ __all__ = [
     "active_tags",
     "tag",
     # ir building and execution
+    "fold",
     "trace",
     "walk",
 ]
@@ -458,6 +459,63 @@ active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalI
 # ==================================================================================================
 
 
+fold_flag: ContextVar[bool] = ContextVar("fold_mode", default=False)
+
+
+@contextmanager
+def fold() -> Generator[None, None, None]:
+    """Evaluate immediately within the context.
+
+    Inside ``af.trace(...)``, primitive calls normally build IR equations. A
+    ``fold`` block instead runs primitive implementations while tracing and
+    returns concrete values that can be embedded as literals in the surrounding
+    IR. If a primitive inside the block depends on a dynamic traced value, an
+    ``AssertionError`` is raised. Outside tracing, ``fold`` is a no-op.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     with af.fold():
+        ...         prefix = af.concat("hello", " ")
+        ...     return af.concat(prefix, x)
+        >>> ir = af.trace(program)("seed")
+        >>> len(ir.ir_eqns)
+        1
+        >>> ir.call("world")
+        'hello world'
+
+    Fold is useful when a trace-time computation should decide ordinary Python
+    control flow. Autoform cannot stage Python branches whose conditions depend
+    on dynamic IR values; those conditions must be known while tracing. A folded
+    computation runs immediately, so its concrete result can safely choose the
+    branch that is traced into the IR.
+
+    Example:
+        >>> def program(x):
+        ...     with af.fold():
+        ...         route = af.concat("priority", ": high")
+        ...     if route == "priority: high":
+        ...         return af.concat("yes: ", x)
+        ...     return af.concat("no: ", x)
+        >>> ir = af.trace(program)("seed")
+        >>> ir.call("answer")
+        'yes: answer'
+    """
+    token = fold_flag.set(True)
+    try:
+        yield
+    finally:
+        fold_flag.reset(token)
+
+
+def assert_foldable(prim: Prim, tree: Tree) -> None:
+    ir_vars = [x for x in treelib.leaves(tree) if is_irvar(x)]
+    assert not ir_vars, (
+        f"Cannot evaluate {prim.name} in af.fold() because it depends on traced values "
+        f"{ir_vars!r}. Mark the dependencies static or move this computation outside af.fold()."
+    )
+
+
 class TracingInterpreter(Interpreter):
     __slots__ = ["ir_eqns"]
 
@@ -465,6 +523,30 @@ class TracingInterpreter(Interpreter):
         self.ir_eqns: list[IREqn] = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        if fold_flag.get():
+            return self.eval(prim, in_tree, **params)
+        return self.stage(prim, in_tree, **params)
+
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        if fold_flag.get():
+            return await self.aeval(prim, in_tree, **params)
+        return self.stage(prim, in_tree, **params)
+
+    def eval(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        assert_foldable(prim, (in_tree, params))
+        with using_interpreter(EvalInterpreter()):
+            out_tree = prim.bind(in_tree, **params)
+        assert_foldable(prim, out_tree)
+        return out_tree
+
+    async def aeval(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        assert_foldable(prim, (in_tree, params))
+        with using_interpreter(EvalInterpreter()):
+            out_tree = await prim.abind(in_tree, **params)
+        assert_foldable(prim, out_tree)
+        return out_tree
+
+    def stage(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         def to_in_ir_atom(value):
             if not is_irvar(value):
                 hash(value)
@@ -489,9 +571,6 @@ class TracingInterpreter(Interpreter):
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
         self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
         return out_ir_tree
-
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return self.interpret(prim, in_tree, **params)
 
 
 def trace[*A, R](

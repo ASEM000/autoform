@@ -18,7 +18,7 @@ from autoform.ad import pullback, pushforward
 from autoform.batch import batch
 from autoform.checkpoint import checkpoint, collect, inject
 from autoform.control import stop_gradient, switch, while_loop
-from autoform.core import Tag, tag, trace
+from autoform.core import Tag, fold, tag, trace
 from autoform.dce import dce
 from autoform.lm import lm_call, struct_lm_call, using_client
 from autoform.memoize import memoize
@@ -29,6 +29,7 @@ from autoform.utils import PYTREE_NAMESPACE, Struct
 __all__ = [
     # core
     "trace",
+    "fold",
     # execution
     "using_client",
     "tag",
