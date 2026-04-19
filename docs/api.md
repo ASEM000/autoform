@@ -6,6 +6,7 @@ Tracing and execution.
 
 ```{eval-rst}
 .. autofunction:: autoform.trace
+.. autofunction:: autoform.fold
 .. autofunction:: autoform.tag
 .. autoclass:: autoform.Tag
 ```
