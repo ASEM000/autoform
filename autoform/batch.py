@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import functools as ft
+from collections.abc import Hashable
 from operator import setitem
 from typing import Any
 
@@ -31,6 +32,7 @@ from autoform.core import (
     TypedAVal,
     abstract_rules,
     active_interpreter,
+    add_axis,
     batch_rules,
     impl_rules,
     is_irvar,
@@ -80,7 +82,7 @@ def broadcast_batch_out(spec, out_tree: Tree, out_batched_tree: Tree[bool], /) -
 batch_call_p = Prim("batch_call")
 
 
-def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
+def batch(ir: IR, /, *, in_axes: Tree[bool] = True, axis_name: Hashable | None = None) -> IR:
     """Transform an IR to process batched inputs.
 
     Creates a batched version of the IR that processes multiple inputs
@@ -92,6 +94,9 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         in_axes: Axis specification tree matching input structure.
             - True: This input is batched (a collection of values).
             - False: This input is broadcast (same value for all batch items).
+        axis_name: Optional name for the mapped axis. Named-axis primitives
+            such as ``axis_index``, ``axis_size``, and ``axis_gather`` can
+            refer to this name while the batched IR runs.
 
     Returns:
         A new IR that takes batched inputs and returns batched outputs.
@@ -125,7 +130,12 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
 
     in_b_ir_tree = treelib.map(make_in, ir.in_ir_tree, in_batched_tree)
     out_b_ir_tree = treelib.map(make_out, ir.out_ir_tree)
-    eqn = IREqn(batch_call_p, in_b_ir_tree, out_b_ir_tree, dict(ir=ir, in_axes=in_axes))
+    eqn = IREqn(
+        batch_call_p,
+        in_b_ir_tree,
+        out_b_ir_tree,
+        dict(ir=ir, in_axes=in_axes, axis_name=axis_name),
+    )
     return IR([eqn], in_b_ir_tree, out_b_ir_tree)
 
 
@@ -146,7 +156,7 @@ class BatchInterpreter(Interpreter):
             return await batch_rules.aget(prim)(in_tree, **params)
 
 
-def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None) -> Tree:
     # NOTE(asem): ``in_axes`` only marks which leaves are batched.
     # the actual batch container comes from runtime data.
     # >>> in_tree = ReviewState(code=["a", "b"], has_bugs=[True, False])
@@ -186,7 +196,10 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     treelib.map(write_v, ir.in_ir_tree, col_tree)
     treelib.map(write_b, ir.in_ir_tree, in_batched_tree)
 
-    with using_interpreter(BatchInterpreter(batch_size=batch_size)):
+    with (
+        add_axis(axis_name, batch_size, spec),
+        using_interpreter(BatchInterpreter(batch_size=batch_size)),
+    ):
         for ir_eqn in ir.ir_eqns:
             in_vals = treelib.map(read_v, ir_eqn.in_ir_tree)
             in_batched = treelib.map(read_b, ir_eqn.in_ir_tree)
@@ -200,7 +213,9 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     return broadcast_batch_out(spec, out_vals, out_batched)
 
 
-async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+async def aimpl_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> Tree:
     col_tree = in_tree
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
 
@@ -228,7 +243,10 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     treelib.map(write_v, ir.in_ir_tree, col_tree)
     treelib.map(write_b, ir.in_ir_tree, in_batched_tree)
 
-    with using_interpreter(BatchInterpreter(batch_size=batch_size)):
+    with (
+        add_axis(axis_name, batch_size, spec),
+        using_interpreter(BatchInterpreter(batch_size=batch_size)),
+    ):
         for ir_eqn in ir.ir_eqns:
             in_vals = treelib.map(read_v, ir_eqn.in_ir_tree)
             in_batched = treelib.map(read_b, ir_eqn.in_ir_tree)
@@ -242,8 +260,11 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     return broadcast_batch_out(spec, out_vals, out_batched)
 
 
-def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+def abstract_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> Tree:
     del in_tree
+    del axis_name
     in_batched_tree = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
     has_batched_input = any(treelib.leaves(in_batched_tree, is_leaf=is_axis_spec))
 
@@ -257,64 +278,78 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     return treelib.map(out_aval, ir.out_ir_tree)
 
 
-def pushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+def pushforward_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward(ir)
-    batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
+    batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes), axis_name=axis_name)
     return batch_pf_ir.call(p_cols, t_cols)
 
 
-async def apushforward_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+async def apushforward_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> tuple[Tree, Tree]:
     primals, tangents = in_tree
     p_cols, t_cols = primals, tangents
     pf_ir = pushforward(ir)
-    batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
+    batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes), axis_name=axis_name)
     return await batch_pf_ir.acall(p_cols, t_cols)
 
 
-def pullback_fwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+def pullback_fwd_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> tuple[Tree, Tree]:
     col_tree = in_tree
-    batched_ir = batch(ir, in_axes=in_axes)
+    batched_ir = batch(ir, in_axes=in_axes, axis_name=axis_name)
     out_cols = batched_ir.call(*col_tree)
     residuals = (col_tree, in_axes)
     return out_cols, residuals
 
 
-async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+async def apullback_fwd_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> tuple[Tree, Tree]:
     col_tree = in_tree
-    batched_ir = batch(ir, in_axes=in_axes)
+    batched_ir = batch(ir, in_axes=in_axes, axis_name=axis_name)
     out_cols = await batched_ir.acall(*col_tree)
     residuals = (col_tree, in_axes)
     return out_cols, residuals
 
 
-def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+def pullback_bwd_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> Tree:
     residuals, out_cotangent = in_tree
     p_cols, _ = residuals
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
-    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
+    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True), axis_name=axis_name)
     _, in_c_cols = batch_pb_ir.call(p_cols, out_c_cols)
     return in_c_cols
 
 
-async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
+async def apullback_bwd_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> Tree:
     residuals, out_cotangent = in_tree
     p_cols, _ = residuals
     out_c_cols = out_cotangent
     pb_ir = pullback(ir)
-    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
+    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True), axis_name=axis_name)
     _, in_c_cols = await batch_pb_ir.acall(p_cols, out_c_cols)
     return in_c_cols
 
 
-def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+def batch_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> tuple[Tree, Tree]:
     batch_size, in_batched, col_cols = in_tree
     # NOTE(asem): nested batch rule. in_batched tells us which positions are batched.
     # we use in_batched's structure to flatten the data, index each batch item,
     # then unflatten back to the original container type.
-    batched_ir = batch(ir, in_axes=in_axes)
+    batched_ir = batch(ir, in_axes=in_axes, axis_name=axis_name)
     unbatch = ft.partial(batch_index, col_cols, in_batched)
     out_bi = [batched_ir.call(*unbatch(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, ir.out_ir_tree)
@@ -322,9 +357,11 @@ def batch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, 
     return out_ib, out_batched
 
 
-async def abatch_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> tuple[Tree, Tree]:
+async def abatch_batch_call(
+    in_tree: Tree, /, *, ir: IR, in_axes: Tree, axis_name: Hashable | None
+) -> tuple[Tree, Tree]:
     batch_size, in_batched, col_cols = in_tree
-    batched_ir = batch(ir, in_axes=in_axes)
+    batched_ir = batch(ir, in_axes=in_axes, axis_name=axis_name)
     unbatch = ft.partial(batch_index, col_cols, in_batched)
     out_bi = await asyncio.gather(*[batched_ir.acall(*unbatch(b)) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, ir.out_ir_tree)

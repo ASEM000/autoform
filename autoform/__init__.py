@@ -15,6 +15,7 @@
 """Autoform: Composable function transformations for LLM programs."""
 
 from autoform.ad import pullback, pushforward
+from autoform.axes import axis_gather, axis_index, axis_size
 from autoform.batch import batch
 from autoform.checkpoint import checkpoint, collect, inject
 from autoform.control import stop_gradient, switch, while_loop
@@ -37,6 +38,9 @@ __all__ = [
     "pushforward",
     "pullback",
     "batch",
+    "axis_index",
+    "axis_size",
+    "axis_gather",
     "collect",
     "inject",
     "dce",

@@ -19,12 +19,14 @@ from __future__ import annotations
 import functools as ft
 import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
 from threading import RLock
 from typing import Any, ClassVar, Self, TypeGuard, cast
+
+from optree import PyTreeSpec
 
 from autoform.utils import Tree, lru_cache, treelib
 
@@ -60,6 +62,11 @@ __all__ = [
     "Tag",
     "active_tags",
     "tag",
+    "AxisFrame",
+    "active_axes",
+    "add_axis",
+    "get_axis",
+    "require_current_axis",
     # ir building and execution
     "fold",
     "trace",
@@ -239,6 +246,58 @@ def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
         yield tags
     finally:
         active_tags.reset(token)
+
+
+# ==================================================================================================
+# AXIS
+# ==================================================================================================
+
+
+class AxisFrame:
+    """A mapped-axis frame active during a named ``batch`` execution."""
+
+    __slots__ = ["name", "size", "spec"]
+
+    def __init__(self, name: Hashable, size: int, spec: PyTreeSpec):
+        self.name = name
+        self.size = size
+        self.spec = spec
+
+
+active_axes: ContextVar[tuple[AxisFrame, ...]] = ContextVar("active_axes", default=())
+
+
+@contextmanager
+def add_axis(
+    axis_name: Hashable | None,
+    axis_size: int,
+    axis_spec: PyTreeSpec,
+) -> Generator[None, None, None]:
+    if axis_name is None:
+        yield
+        return
+
+    frame = AxisFrame(axis_name, axis_size, axis_spec)
+    token = active_axes.set(active_axes.get() + (frame,))
+    try:
+        yield
+    finally:
+        active_axes.reset(token)
+
+
+def get_axis(axis_name: Hashable) -> AxisFrame:
+    for frame in reversed(active_axes.get()):
+        if frame.name == axis_name:
+            return frame
+    raise NameError(f"unbound axis name: {axis_name!r}")
+
+
+def require_current_axis(axis_name: Hashable) -> AxisFrame:
+    axes = active_axes.get()
+    assert axes, f"unbound axis name: {axis_name!r}"
+    axis = axes[-1]
+    assert axis.name == axis_name, f"collective over non-current axis {axis_name!r}."
+    return axis
 
 
 # ==================================================================================================
