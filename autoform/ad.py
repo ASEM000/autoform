@@ -87,6 +87,7 @@ def zero_aval(aval, /) -> Zero:
 
 zero_registry: dict[type, Any] = {}
 zero_registry[str] = ""
+zero = lambda v: Zero(type(v))
 
 
 def materialize(x: Tree, /) -> Tree:
@@ -115,19 +116,48 @@ def materialize(x: Tree, /) -> Tree:
 pushforward_call_p = Prim("pushforward_call")
 
 
+class PushforwardValue:
+    __slots__ = ["owner", "primal", "tangent"]
+
+    def __init__(self, owner, primal, tangent):
+        self.owner = owner
+        self.primal = primal
+        self.tangent = tangent
+
+
 class PushforwardInterpreter(Interpreter):
     __slots__ = ["parent"]
 
     def __init__(self):
         self.parent = active_interpreter.get()
 
+    def pack(self, p: Tree, t: Tree, /) -> Tree:
+        return treelib.map(lambda p, t: PushforwardValue(self, p, t), p, t)
+
+    def unpack(self, values: Tree, /) -> tuple[Tree, Tree]:
+        # NOTE(asem): pushforward is structural, so this is not fixing a current
+        # perturbation-confusion bug. Ownership only keeps values from other
+        # interpreter instances opaque to this one.
+
+        def primal(v):
+            return v.primal if isinstance(v, PushforwardValue) and v.owner is self else v
+
+        def tangent(v):
+            return v.tangent if isinstance(v, PushforwardValue) and v.owner is self else zero(v)
+
+        return treelib.map(primal, values), treelib.map(tangent, values)
+
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
+        p_in, t_in = self.unpack(in_tree)
         with using_interpreter(self.parent):
-            return push_rules.get(prim)(in_tree, **params)
+            p_out, t_out = push_rules.get(prim)((p_in, t_in), **params)
+        return self.pack(p_out, t_out)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
+        p_in, t_in = self.unpack(in_tree)
         with using_interpreter(self.parent):
-            return await push_rules.aget(prim)(in_tree, **params)
+            p_out, t_out = await push_rules.aget(prim)((p_in, t_in), **params)
+        return self.pack(p_out, t_out)
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -141,7 +171,7 @@ def pushforward(ir: IR, /) -> IR:
         ir: The IR to transform.
 
     Returns:
-        A new IR: `(primals, tangents) -> (out_primalputs, out_tangentputs)`
+        A new IR: `(p_in, t_in) -> (p_out, t_out)`
 
     Example:
         >>> import autoform as af
@@ -149,10 +179,10 @@ def pushforward(ir: IR, /) -> IR:
         ...     return af.concat(x, y)
         >>> ir = af.trace(program)("a", "b")
         >>> pf_ir = af.pushforward(ir)
-        >>> primals, tangents = pf_ir.call(("Hello", " World"), ("dx", "dy"))
-        >>> primals
+        >>> p_out, t_out = pf_ir.call(("Hello", " World"), ("dx", "dy"))
+        >>> p_out
         'Hello World'
-        >>> tangents
+        >>> t_out
         'dxdy'
     """
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
@@ -163,84 +193,60 @@ def pushforward(ir: IR, /) -> IR:
     def make_t(atom):
         return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else Zero(type(atom))
 
-    p_in_ir_tree = treelib.map(make_p, ir.in_ir_tree)
-    t_in_ir_tree = treelib.map(make_t, ir.in_ir_tree)
-    in_ir_tree = (p_in_ir_tree, t_in_ir_tree)
-    out_p_ir_tree = treelib.map(make_p, ir.out_ir_tree)
-    out_t_ir_tree = treelib.map(make_t, ir.out_ir_tree)
-    out_ir_tree = (out_p_ir_tree, out_t_ir_tree)
+    p_in_ir = treelib.map(make_p, ir.in_ir_tree)
+    t_in_ir = treelib.map(make_t, ir.in_ir_tree)
+    in_ir_tree = (p_in_ir, t_in_ir)
+    p_out_ir = treelib.map(make_p, ir.out_ir_tree)
+    t_out_ir = treelib.map(make_t, ir.out_ir_tree)
+    out_ir_tree = (p_out_ir, t_out_ir)
     ir_eqn = IREqn(pushforward_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    (p_in_tree, t_in_tree) = in_tree
+    (p_in, t_in) = in_tree
 
-    p_env: dict[IRVar, Any] = {}
-    t_env: dict[IRVar, Any] = {}
+    env: dict[IRVar, Any] = {}
+    interpreter = PushforwardInterpreter()
 
-    def write_p(atom, value: Any):
-        is_irvar(atom) and setitem(p_env, atom, value)
+    def write(atom, value: Any):
+        is_irvar(atom) and setitem(env, atom, value)
 
-    def write_t(atom, value: Any):
-        is_irvar(atom) and setitem(t_env, atom, value)
+    def read(atom) -> Any:
+        return env[atom] if is_irvar(atom) else atom
 
-    def read_p(atom) -> Any:
-        return p_env[atom] if is_irvar(atom) else atom
+    treelib.map(write, ir.in_ir_tree, interpreter.pack(p_in, t_in))
 
-    def read_t(atom) -> Any:
-        return t_env[atom] if is_irvar(atom) else Zero(type(atom))
-
-    treelib.map(write_p, ir.in_ir_tree, p_in_tree)
-    treelib.map(write_t, ir.in_ir_tree, t_in_tree)
-
-    with using_interpreter(PushforwardInterpreter()):
+    with using_interpreter(interpreter):
         for ir_eqn in ir.ir_eqns:
-            p_in_ir_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
-            t_in_ir_eqn = treelib.map(read_t, ir_eqn.in_ir_tree)
-            in_tree = (p_in_ir_eqn, t_in_ir_eqn)
-            out_p_ir_eqn, out_t_ir_eqn = ir_eqn.bind(in_tree, **ir_eqn.params)
-            treelib.map(write_p, ir_eqn.out_ir_tree, out_p_ir_eqn)
-            treelib.map(write_t, ir_eqn.out_ir_tree, out_t_ir_eqn)
+            in_tree = treelib.map(read, ir_eqn.in_ir_tree)
+            out_tree = ir_eqn.bind(in_tree, **ir_eqn.params)
+            treelib.map(write, ir_eqn.out_ir_tree, out_tree)
 
-    out_p_tree = treelib.map(read_p, ir.out_ir_tree)
-    out_t_tree = treelib.map(read_t, ir.out_ir_tree)
-    return out_p_tree, out_t_tree
+    return interpreter.unpack(treelib.map(read, ir.out_ir_tree))
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    (p_in_tree, t_in_tree) = in_tree
+    (p_in, t_in) = in_tree
 
-    p_env: dict[IRVar, Any] = {}
-    t_env: dict[IRVar, Any] = {}
+    env: dict[IRVar, Any] = {}
+    interpreter = PushforwardInterpreter()
 
-    def write_p(atom, value: Any):
-        is_irvar(atom) and setitem(p_env, atom, value)
+    def write(atom, value: Any):
+        is_irvar(atom) and setitem(env, atom, value)
 
-    def write_t(atom, value: Any):
-        is_irvar(atom) and setitem(t_env, atom, value)
+    def read(atom) -> Any:
+        return env[atom] if is_irvar(atom) else atom
 
-    def read_p(atom) -> Any:
-        return p_env[atom] if is_irvar(atom) else atom
+    treelib.map(write, ir.in_ir_tree, interpreter.pack(p_in, t_in))
 
-    def read_t(atom) -> Any:
-        return t_env[atom] if is_irvar(atom) else Zero(type(atom))
-
-    treelib.map(write_p, ir.in_ir_tree, p_in_tree)
-    treelib.map(write_t, ir.in_ir_tree, t_in_tree)
-
-    with using_interpreter(PushforwardInterpreter()):
+    with using_interpreter(interpreter):
         for ir_eqn in ir.ir_eqns:
-            p_in_ir_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
-            t_in_ir_eqn = treelib.map(read_t, ir_eqn.in_ir_tree)
-            in_tree = (p_in_ir_eqn, t_in_ir_eqn)
-            out_p_ir_eqn, out_t_ir_eqn = await ir_eqn.abind(in_tree, **ir_eqn.params)
-            treelib.map(write_p, ir_eqn.out_ir_tree, out_p_ir_eqn)
-            treelib.map(write_t, ir_eqn.out_ir_tree, out_t_ir_eqn)
+            in_tree = treelib.map(read, ir_eqn.in_ir_tree)
+            out_tree = await ir_eqn.abind(in_tree, **ir_eqn.params)
+            treelib.map(write, ir_eqn.out_ir_tree, out_tree)
 
-    out_p_tree = treelib.map(read_p, ir.out_ir_tree)
-    out_t_tree = treelib.map(read_t, ir.out_ir_tree)
-    return out_p_tree, out_t_tree
+    return interpreter.unpack(treelib.map(read, ir.out_ir_tree))
 
 
 def abstract_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
@@ -249,20 +255,20 @@ def abstract_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
 
 def pushforward_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
+    p, t = in_tree
+    (p_in, t_in), (t_p_in, t_t_in) = p, t
     pf_ir = pushforward(ir)
     p_out = pf_ir.call(p_in, t_in)
-    t_out = pf_ir.call(p_in_t, t_in_t)
+    t_out = pf_ir.call(t_p_in, t_t_in)
     return p_out, t_out
 
 
 async def apushforward_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    (p_in, t_in), (p_in_t, t_in_t) = primals, tangents
+    p, t = in_tree
+    (p_in, t_in), (t_p_in, t_t_in) = p, t
     pf_ir = pushforward(ir)
     p_out = await pf_ir.acall(p_in, t_in)
-    t_out = await pf_ir.acall(p_in_t, t_in_t)
+    t_out = await pf_ir.acall(t_p_in, t_t_in)
     return p_out, t_out
 
 
@@ -283,23 +289,23 @@ async def apullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[T
 
 
 def pullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
-    residuals, out_cotangent = in_tree
-    in_p, _ = residuals
-    out_c_p, out_c_t = out_cotangent
+    residuals, c_out = in_tree
+    p_in, _ = residuals
+    c_p_out, c_t_out = c_out
     pb_ir = pullback(ir)
-    _, in_c_p = pb_ir.call(in_p, out_c_p)
-    _, in_c_t = pb_ir.call(in_p, out_c_t)
-    return (in_c_p, in_c_t)
+    _, c_p_in = pb_ir.call(p_in, c_p_out)
+    _, c_t_in = pb_ir.call(p_in, c_t_out)
+    return (c_p_in, c_t_in)
 
 
 async def apullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: IR) -> Tree:
-    residuals, out_cotangent = in_tree
-    in_p, _ = residuals
-    out_c_p, out_c_t = out_cotangent
+    residuals, c_out = in_tree
+    p_in, _ = residuals
+    c_p_out, c_t_out = c_out
     pb_ir = pullback(ir)
-    _, in_c_p = await pb_ir.acall(in_p, out_c_p)
-    _, in_c_t = await pb_ir.acall(in_p, out_c_t)
-    return (in_c_p, in_c_t)
+    _, c_p_in = await pb_ir.acall(p_in, c_p_out)
+    _, c_t_in = await pb_ir.acall(p_in, c_t_out)
+    return (c_p_in, c_t_in)
 
 
 def batch_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
@@ -354,8 +360,8 @@ batch_rules.aset(pushforward_call_p, abatch_pushforward_call)
 
 
 def dce_pushforward_call(ir_eqn: IREqn, out_used: Tree[bool], /) -> tuple[IREqn, Tree[bool]]:
-    primals_used, tangents_used = out_used
-    original_out_used = treelib.map(lambda p, t: p or t, primals_used, tangents_used)
+    p_used, t_used = out_used
+    original_out_used = treelib.map(lambda p, t: p or t, p_used, t_used)
     new_eqn = ir_eqn.using(ir=dce(ir_eqn.params["ir"], out_used=original_out_used))
     return default_dce(new_eqn, out_used)
 
@@ -450,18 +456,18 @@ def pullback(ir: IR, /) -> IR:
     def make_c(atom):
         return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else Zero(type(atom))
 
-    in_p = treelib.map(make_p, ir.in_ir_tree)
-    out_c = treelib.map(make_c, ir.out_ir_tree)
-    in_ir_tree = (in_p, out_c)
-    out_p = treelib.map(make_p, ir.out_ir_tree)
-    in_c = treelib.map(make_c, ir.in_ir_tree)
-    out_ir_tree = (out_p, in_c)
+    p_in_ir = treelib.map(make_p, ir.in_ir_tree)
+    c_out_ir = treelib.map(make_c, ir.out_ir_tree)
+    in_ir_tree = (p_in_ir, c_out_ir)
+    p_out_ir = treelib.map(make_p, ir.out_ir_tree)
+    c_in_ir = treelib.map(make_c, ir.in_ir_tree)
+    out_ir_tree = (p_out_ir, c_in_ir)
     ir_eqn = IREqn(pullback_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return IR([ir_eqn], in_ir_tree, out_ir_tree)
 
 
 def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    (p_in_tree, out_c_tree) = in_tree
+    (p_in, c_out) = in_tree
 
     p_env: dict[IRVar, Any] = {}
     res_env: dict[int, Tree] = {}
@@ -483,32 +489,32 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             return zero_aval(atom.aval)
         return accumulate_cotangents(cs)
 
-    treelib.map(write_p, ir.in_ir_tree, p_in_tree)
+    treelib.map(write_p, ir.in_ir_tree, p_in)
 
     with using_interpreter(PullbackFwdInterpreter()):
         for i, ir_eqn in enumerate(ir.ir_eqns):
-            p_in_ir_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
-            out_p_ir_eqn, residuals = ir_eqn.bind(p_in_ir_eqn, **ir_eqn.params)
+            p_in_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
+            p_out_eqn, residuals = ir_eqn.bind(p_in_eqn, **ir_eqn.params)
             res_env[i] = residuals
-            treelib.map(write_p, ir_eqn.out_ir_tree, out_p_ir_eqn)
+            treelib.map(write_p, ir_eqn.out_ir_tree, p_out_eqn)
 
-    treelib.map(write_c, ir.out_ir_tree, out_c_tree)
+    treelib.map(write_c, ir.out_ir_tree, c_out)
 
     with using_interpreter(PullbackBwdInterpreter()):
         for i, ir_eqn in enumerate(reversed(ir.ir_eqns)):
             idx = len(ir.ir_eqns) - 1 - i
             residuals = res_env[idx]
-            out_c_ir_eqn = treelib.map(read_c, ir_eqn.out_ir_tree)
-            c_in_ir_eqn = ir_eqn.bind((residuals, out_c_ir_eqn), **ir_eqn.params)
-            treelib.map(write_c, ir_eqn.in_ir_tree, c_in_ir_eqn)
+            c_out_eqn = treelib.map(read_c, ir_eqn.out_ir_tree)
+            c_in_eqn = ir_eqn.bind((residuals, c_out_eqn), **ir_eqn.params)
+            treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    out_p_tree = treelib.map(read_p, ir.out_ir_tree)
-    in_c_tree = treelib.map(read_c, ir.in_ir_tree)
-    return out_p_tree, in_c_tree
+    p_out = treelib.map(read_p, ir.out_ir_tree)
+    c_in = treelib.map(read_c, ir.in_ir_tree)
+    return p_out, c_in
 
 
 async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    (p_in_tree, out_c_tree) = in_tree
+    (p_in, c_out) = in_tree
 
     p_env: dict[IRVar, Any] = {}
     res_env: dict[int, Tree] = {}
@@ -530,95 +536,95 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             return zero_aval(atom.aval)
         return accumulate_cotangents(cs)
 
-    treelib.map(write_p, ir.in_ir_tree, p_in_tree)
+    treelib.map(write_p, ir.in_ir_tree, p_in)
 
     with using_interpreter(PullbackFwdInterpreter()):
         for i, ir_eqn in enumerate(ir.ir_eqns):
-            p_in_ir_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
-            out_p_ir_eqn, residuals = await ir_eqn.abind(p_in_ir_eqn, **ir_eqn.params)
+            p_in_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
+            p_out_eqn, residuals = await ir_eqn.abind(p_in_eqn, **ir_eqn.params)
             res_env[i] = residuals
-            treelib.map(write_p, ir_eqn.out_ir_tree, out_p_ir_eqn)
+            treelib.map(write_p, ir_eqn.out_ir_tree, p_out_eqn)
 
-    treelib.map(write_c, ir.out_ir_tree, out_c_tree)
+    treelib.map(write_c, ir.out_ir_tree, c_out)
 
     with using_interpreter(PullbackBwdInterpreter()):
         for i, ir_eqn in enumerate(reversed(ir.ir_eqns)):
             idx = len(ir.ir_eqns) - 1 - i
             residuals = res_env[idx]
-            out_c_ir_eqn = treelib.map(read_c, ir_eqn.out_ir_tree)
-            c_in_ir_eqn = await ir_eqn.abind((residuals, out_c_ir_eqn), **ir_eqn.params)
-            treelib.map(write_c, ir_eqn.in_ir_tree, c_in_ir_eqn)
+            c_out_eqn = treelib.map(read_c, ir_eqn.out_ir_tree)
+            c_in_eqn = await ir_eqn.abind((residuals, c_out_eqn), **ir_eqn.params)
+            treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    out_p_tree = treelib.map(read_p, ir.out_ir_tree)
-    in_c_tree = treelib.map(read_c, ir.in_ir_tree)
-    return out_p_tree, in_c_tree
+    p_out = treelib.map(read_p, ir.out_ir_tree)
+    c_in = treelib.map(read_c, ir.in_ir_tree)
+    return p_out, c_in
 
 
 def abstract_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    out_p = treelib.map(ir_aval, ir.out_ir_tree)
-    in_c = treelib.map(ir_aval, ir.in_ir_tree)
-    return out_p, in_c
+    p_out = treelib.map(ir_aval, ir.out_ir_tree)
+    c_in = treelib.map(ir_aval, ir.in_ir_tree)
+    return p_out, c_in
 
 
 def pushforward_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
+    p, t = in_tree
+    (p_in, c_out), (t_p_in, t_c_out) = p, t
     pb_ir = pullback(ir)
-    out_p, in_c = pb_ir.call(p_in, c_out)
-    t_out_p, t_in_c = pb_ir.call(t_p_in, t_c_out)
-    return (out_p, in_c), (t_out_p, t_in_c)
+    p_out, c_in = pb_ir.call(p_in, c_out)
+    t_p_out, t_c_in = pb_ir.call(t_p_in, t_c_out)
+    return (p_out, c_in), (t_p_out, t_c_in)
 
 
 async def apushforward_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    (p_in, c_out), (t_p_in, t_c_out) = primals, tangents
+    p, t = in_tree
+    (p_in, c_out), (t_p_in, t_c_out) = p, t
     pb_ir = pullback(ir)
-    out_p, in_c = await pb_ir.acall(p_in, c_out)
-    t_out_p, t_in_c = await pb_ir.acall(t_p_in, t_c_out)
-    return (out_p, in_c), (t_out_p, t_in_c)
+    p_out, c_in = await pb_ir.acall(p_in, c_out)
+    t_p_out, t_c_in = await pb_ir.acall(t_p_in, t_c_out)
+    return (p_out, c_in), (t_p_out, t_c_in)
 
 
 def pullback_fwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
     pb_ir = pullback(ir)
-    out_p, in_c = pb_ir.call(p_in, c_out)
-    residuals = (p_in, c_out, out_p, in_c)
-    return (out_p, in_c), residuals
+    p_out, c_in = pb_ir.call(p_in, c_out)
+    residuals = (p_in, c_out, p_out, c_in)
+    return (p_out, c_in), residuals
 
 
 async def apullback_fwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
     pb_ir = pullback(ir)
-    out_p, in_c = await pb_ir.acall(p_in, c_out)
-    residuals = (p_in, c_out, out_p, in_c)
-    return (out_p, in_c), residuals
+    p_out, c_in = await pb_ir.acall(p_in, c_out)
+    residuals = (p_in, c_out, p_out, c_in)
+    return (p_out, c_in), residuals
 
 
 def pullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
-    residuals, out_cotangent = in_tree
-    p_in, c_out, _, _ = residuals
-    out_c_p, in_c_c = out_cotangent
+    residuals, c = in_tree
+    p_in, _, _, _ = residuals
+    c_p_out, c_c_in = c
     pb_ir = pullback(ir)
-    _, in_c_p = pb_ir.call(p_in, out_c_p)
+    _, c_p_in = pb_ir.call(p_in, c_p_out)
     pf_ir = pushforward(ir)
-    _, in_c_cout = pf_ir.call(p_in, in_c_c)
-    return (in_c_p, in_c_cout)
+    _, c_c_out = pf_ir.call(p_in, c_c_in)
+    return (c_p_in, c_c_out)
 
 
 async def apullback_bwd_pullback_call(in_tree: Tree, /, *, ir: IR) -> Tree:
-    residuals, out_cotangent = in_tree
-    p_in, c_out, _, _ = residuals
-    out_c_p, in_c_c = out_cotangent
+    residuals, c = in_tree
+    p_in, _, _, _ = residuals
+    c_p_out, c_c_in = c
     pb_ir = pullback(ir)
-    _, in_c_p = await pb_ir.acall(p_in, out_c_p)
+    _, c_p_in = await pb_ir.acall(p_in, c_p_out)
     pf_ir = pushforward(ir)
-    _, in_c_cout = await pf_ir.acall(p_in, in_c_c)
-    return (in_c_p, in_c_cout)
+    _, c_c_out = await pf_ir.acall(p_in, c_c_in)
+    return (c_p_in, c_c_out)
 
 
 def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     size, in_batched, in_values = in_tree
-    (p_cols, out_c_cols) = in_values
+    (p_cols, c_cols) = in_values
     (p_batched, c_batched) = in_batched
 
     if batch_spec(in_values, in_batched) is None:
@@ -628,7 +634,7 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
         return result, out_batched
 
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
-    unbatch_c = ft.partial(batch_index, out_c_cols, c_batched)
+    unbatch_c = ft.partial(batch_index, c_cols, c_batched)
     pb_ir = pullback(ir)
     out_bi = [pb_ir.call(unbatch_p(b), unbatch_c(b)) for b in range(size)]
     out_batched = treelib.map(lambda _: True, pb_ir.out_ir_tree)
@@ -638,7 +644,7 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
 async def abatch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     size, in_batched, in_values = in_tree
-    (p_cols, out_c_cols) = in_values
+    (p_cols, c_cols) = in_values
     (p_batched, c_batched) = in_batched
 
     if batch_spec(in_values, in_batched) is None:
@@ -648,7 +654,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]
         return result, out_batched
 
     unbatch_p = ft.partial(batch_index, p_cols, p_batched)
-    unbatch_c = ft.partial(batch_index, out_c_cols, c_batched)
+    unbatch_c = ft.partial(batch_index, c_cols, c_batched)
     pb_ir = pullback(ir)
     out_bi = await asyncio.gather(*[pb_ir.acall(unbatch_p(b), unbatch_c(b)) for b in range(size)])
     out_batched = treelib.map(lambda _: True, pb_ir.out_ir_tree)
