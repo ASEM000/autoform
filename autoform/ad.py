@@ -393,19 +393,48 @@ def accumulate_cotangents(cotangents: list[Any]) -> Any:
     return sum(non_zero[1:], non_zero[0])
 
 
+class PullbackFwdValue:
+    __slots__ = ["owner", "primal"]
+
+    def __init__(self, owner, primal):
+        self.owner = owner
+        self.primal = primal
+
+
 class PullbackFwdInterpreter(Interpreter):
     __slots__ = ["parent"]
 
     def __init__(self):
         self.parent = active_interpreter.get()
 
+    def pack(self, p: Tree, /) -> Tree:
+        return treelib.map(lambda p: PullbackFwdValue(self, p), p)
+
+    def unpack(self, values: Tree, /) -> Tree:
+        def primal(v):
+            return v.primal if isinstance(v, PullbackFwdValue) and v.owner is self else v
+
+        return treelib.map(primal, values)
+
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
+        p_in = self.unpack(in_tree)
         with using_interpreter(self.parent):
-            return pull_fwd_rules.get(prim)(in_tree, **params)
+            p_out, residuals = pull_fwd_rules.get(prim)(p_in, **params)
+        return self.pack(p_out), residuals
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
+        p_in = self.unpack(in_tree)
         with using_interpreter(self.parent):
-            return await pull_fwd_rules.aget(prim)(in_tree, **params)
+            p_out, residuals = await pull_fwd_rules.aget(prim)(p_in, **params)
+        return self.pack(p_out), residuals
+
+
+class PullbackBwdValue:
+    __slots__ = ["owner", "cotangent"]
+
+    def __init__(self, owner, cotangent):
+        self.owner = owner
+        self.cotangent = cotangent
 
 
 class PullbackBwdInterpreter(Interpreter):
@@ -414,13 +443,28 @@ class PullbackBwdInterpreter(Interpreter):
     def __init__(self):
         self.parent = active_interpreter.get()
 
+    def pack(self, c: Tree, /) -> Tree:
+        return treelib.map(lambda c: PullbackBwdValue(self, c), c)
+
+    def unpack(self, values: Tree, /) -> Tree:
+        def cotangent(v):
+            return v.cotangent if isinstance(v, PullbackBwdValue) and v.owner is self else v
+
+        return treelib.map(cotangent, values)
+
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
+        residuals, c_out = in_tree
+        c_out = self.unpack(c_out)
         with using_interpreter(self.parent):
-            return pull_bwd_rules.get(prim)(in_tree, **params)
+            c_in = pull_bwd_rules.get(prim)((residuals, c_out), **params)
+        return self.pack(c_in)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
+        residuals, c_out = in_tree
+        c_out = self.unpack(c_out)
         with using_interpreter(self.parent):
-            return await pull_bwd_rules.aget(prim)(in_tree, **params)
+            c_in = await pull_bwd_rules.aget(prim)((residuals, c_out), **params)
+        return self.pack(c_in)
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -469,94 +513,96 @@ def pullback(ir: IR, /) -> IR:
 def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
 
-    p_env: dict[IRVar, Any] = {}
-    res_env: dict[int, Tree] = {}
+    env: dict[IRVar, Any] = {}
+    res: dict[IREqn, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
+    fwd = PullbackFwdInterpreter()
+    bwd = PullbackBwdInterpreter()
 
-    def write_p(atom, value: Any):
-        is_irvar(atom) and setitem(p_env, atom, value)
+    def write(atom, value: Any):
+        is_irvar(atom) and setitem(env, atom, value)
 
-    def read_p(atom) -> Any:
-        return p_env[atom] if is_irvar(atom) else atom
+    def read(atom) -> Any:
+        return env[atom] if is_irvar(atom) else atom
 
     def write_c(atom, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
 
     def read_c(atom) -> Any:
         if not is_irvar(atom):
-            return Zero(type(atom))
+            return bwd.pack(Zero(type(atom)))
         if not (cs := c_env[atom]):
-            return zero_aval(atom.aval)
-        return accumulate_cotangents(cs)
+            return bwd.pack(zero_aval(atom.aval))
+        return bwd.pack(accumulate_cotangents([bwd.unpack(c) for c in cs]))
 
-    treelib.map(write_p, ir.in_ir_tree, p_in)
+    treelib.map(write, ir.in_ir_tree, p_in)
 
-    with using_interpreter(PullbackFwdInterpreter()):
-        for i, ir_eqn in enumerate(ir.ir_eqns):
-            p_in_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
+    with using_interpreter(fwd):
+        for ir_eqn in ir.ir_eqns:
+            p_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
             p_out_eqn, residuals = ir_eqn.bind(p_in_eqn, **ir_eqn.params)
-            res_env[i] = residuals
-            treelib.map(write_p, ir_eqn.out_ir_tree, p_out_eqn)
+            res[ir_eqn] = residuals
+            treelib.map(write, ir_eqn.out_ir_tree, p_out_eqn)
 
-    treelib.map(write_c, ir.out_ir_tree, c_out)
+    treelib.map(write_c, ir.out_ir_tree, bwd.pack(c_out))
 
-    with using_interpreter(PullbackBwdInterpreter()):
-        for i, ir_eqn in enumerate(reversed(ir.ir_eqns)):
-            idx = len(ir.ir_eqns) - 1 - i
-            residuals = res_env[idx]
+    with using_interpreter(bwd):
+        for ir_eqn in reversed(ir.ir_eqns):
+            residuals = res[ir_eqn]
             c_out_eqn = treelib.map(read_c, ir_eqn.out_ir_tree)
             c_in_eqn = ir_eqn.bind((residuals, c_out_eqn), **ir_eqn.params)
             treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    p_out = treelib.map(read_p, ir.out_ir_tree)
-    c_in = treelib.map(read_c, ir.in_ir_tree)
+    p_out = fwd.unpack(treelib.map(read, ir.out_ir_tree))
+    c_in = bwd.unpack(treelib.map(read_c, ir.in_ir_tree))
     return p_out, c_in
 
 
 async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
 
-    p_env: dict[IRVar, Any] = {}
-    res_env: dict[int, Tree] = {}
+    env: dict[IRVar, Any] = {}
+    res: dict[IREqn, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
+    fwd = PullbackFwdInterpreter()
+    bwd = PullbackBwdInterpreter()
 
-    def write_p(atom, value: Any):
-        is_irvar(atom) and setitem(p_env, atom, value)
+    def write(atom, value: Any):
+        is_irvar(atom) and setitem(env, atom, value)
 
-    def read_p(atom) -> Any:
-        return p_env[atom] if is_irvar(atom) else atom
+    def read(atom) -> Any:
+        return env[atom] if is_irvar(atom) else atom
 
     def write_c(atom, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
 
     def read_c(atom) -> Any:
         if not is_irvar(atom):
-            return Zero(type(atom))
+            return bwd.pack(Zero(type(atom)))
         if not (cs := c_env[atom]):
-            return zero_aval(atom.aval)
-        return accumulate_cotangents(cs)
+            return bwd.pack(zero_aval(atom.aval))
+        return bwd.pack(accumulate_cotangents([bwd.unpack(c) for c in cs]))
 
-    treelib.map(write_p, ir.in_ir_tree, p_in)
+    treelib.map(write, ir.in_ir_tree, p_in)
 
-    with using_interpreter(PullbackFwdInterpreter()):
-        for i, ir_eqn in enumerate(ir.ir_eqns):
-            p_in_eqn = treelib.map(read_p, ir_eqn.in_ir_tree)
+    with using_interpreter(fwd):
+        for ir_eqn in ir.ir_eqns:
+            p_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
             p_out_eqn, residuals = await ir_eqn.abind(p_in_eqn, **ir_eqn.params)
-            res_env[i] = residuals
-            treelib.map(write_p, ir_eqn.out_ir_tree, p_out_eqn)
+            res[ir_eqn] = residuals
+            treelib.map(write, ir_eqn.out_ir_tree, p_out_eqn)
 
-    treelib.map(write_c, ir.out_ir_tree, c_out)
+    treelib.map(write_c, ir.out_ir_tree, bwd.pack(c_out))
 
-    with using_interpreter(PullbackBwdInterpreter()):
-        for i, ir_eqn in enumerate(reversed(ir.ir_eqns)):
-            idx = len(ir.ir_eqns) - 1 - i
-            residuals = res_env[idx]
+    with using_interpreter(bwd):
+        for ir_eqn in reversed(ir.ir_eqns):
+            residuals = res[ir_eqn]
             c_out_eqn = treelib.map(read_c, ir_eqn.out_ir_tree)
             c_in_eqn = await ir_eqn.abind((residuals, c_out_eqn), **ir_eqn.params)
             treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    p_out = treelib.map(read_p, ir.out_ir_tree)
-    c_in = treelib.map(read_c, ir.in_ir_tree)
+    p_out = fwd.unpack(treelib.map(read, ir.out_ir_tree))
+    c_in = bwd.unpack(treelib.map(read_c, ir.in_ir_tree))
     return p_out, c_in
 
 
