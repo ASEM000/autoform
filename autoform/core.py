@@ -700,15 +700,10 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
-        step = next(gen := walk(ir)(*args))
-        for _ in ir.ir_eqns:
-            ir_eqn, in_values = step
-            assert ir_eqn is not None
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-            step = gen.send(out_values)
-        ir_eqn, out = step
-        assert ir_eqn is None
-        return out
+        ir_eqn, in_values = next(gen := walk(ir)(*args))
+        while ir_eqn:
+            ir_eqn, in_values = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+        return in_values
 
     return func
 
@@ -718,15 +713,10 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
-        step = next(gen := walk(ir)(*args))
-        for _ in ir.ir_eqns:
-            ir_eqn, in_values = step
-            assert ir_eqn is not None
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            step = gen.send(out_values)
-        ir_eqn, out = step
-        assert ir_eqn is None
-        return out
+        ir_eqn, in_values = next(gen := walk(ir)(*args))
+        while ir_eqn:
+            ir_eqn, in_values = gen.send(await ir_eqn.abind(in_values, **ir_eqn.params))
+        return in_values
 
     return func
 
