@@ -52,6 +52,8 @@ __all__ = [
     "IREqn",
     "IR",
     # interpreters
+    "BaseInterpreter",
+    "BoxedInterpreter",
     "Interpreter",
     "EvalInterpreter",
     "TracingInterpreter",
@@ -417,7 +419,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 # ==================================================================================================
 
 
-class Interpreter(ABC):
+class BaseInterpreter(ABC):
     __slots__ = []
 
     @abstractmethod
@@ -427,8 +429,26 @@ class Interpreter(ABC):
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
 
 
+class Interpreter(BaseInterpreter):
+    __slots__ = []
+
+
+class BoxedInterpreter[T](BaseInterpreter):
+    __slots__ = []
+    # NOTE(asem): boxed interpreters own a transform-specific value wrapper.
+    # plain interpreters only override primitive dispatch but boxed interpreters
+    # also define how values are boxed before primitive evaluation and unboxed
+    # when rules need the underlying payload.
+
+    @abstractmethod
+    def box(self, value, /) -> Tree[T]: ...
+
+    @abstractmethod
+    def unbox(self, value: Tree, /): ...
+
+
 @contextmanager
-def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
+def using_interpreter[T: BaseInterpreter](interpreter: T) -> Generator[T, None, None]:
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -451,7 +471,7 @@ class EvalInterpreter(Interpreter):
         return await impl_rules.aget(prim)(in_tree, **params)
 
 
-active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
+active_interpreter = ContextVar[BaseInterpreter]("active_interpreter", default=EvalInterpreter())
 
 
 # ==================================================================================================

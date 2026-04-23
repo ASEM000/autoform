@@ -36,7 +36,7 @@ __all__ = [
 
 from autoform.core import (
     IR,
-    Interpreter,
+    BoxedInterpreter,
     IREqn,
     IRVar,
     Prim,
@@ -116,7 +116,7 @@ def materialize(x: Tree, /) -> Tree:
 pushforward_call_p = Prim("pushforward_call")
 
 
-class PushforwardValue:
+class PushforwardBox:
     __slots__ = ["owner", "primal", "tangent"]
 
     def __init__(self, owner, primal, tangent):
@@ -125,39 +125,40 @@ class PushforwardValue:
         self.tangent = tangent
 
 
-class PushforwardInterpreter(Interpreter):
+class PushforwardInterpreter(BoxedInterpreter[PushforwardBox]):
     __slots__ = ["parent"]
 
     def __init__(self):
         self.parent = active_interpreter.get()
 
-    def pack(self, p: Tree, t: Tree, /) -> Tree:
-        return treelib.map(lambda p, t: PushforwardValue(self, p, t), p, t)
+    def box(self, value, /) -> Tree:
+        p, t = value
+        return treelib.map(lambda p, t: PushforwardBox(self, p, t), p, t)
 
-    def unpack(self, values: Tree, /) -> tuple[Tree, Tree]:
+    def unbox(self, values: Tree, /) -> tuple[Tree, Tree]:
         # NOTE(asem): pushforward is structural, so this is not fixing a current
         # perturbation-confusion bug. Ownership only keeps values from other
         # interpreter instances opaque to this one.
 
         def primal(v):
-            return v.primal if isinstance(v, PushforwardValue) and v.owner is self else v
+            return v.primal if isinstance(v, PushforwardBox) and v.owner is self else v
 
         def tangent(v):
-            return v.tangent if isinstance(v, PushforwardValue) and v.owner is self else zero(v)
+            return v.tangent if isinstance(v, PushforwardBox) and v.owner is self else zero(v)
 
         return treelib.map(primal, values), treelib.map(tangent, values)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
-        p_in, t_in = self.unpack(in_tree)
+        p_in, t_in = self.unbox(in_tree)
         with using_interpreter(self.parent):
             p_out, t_out = push_rules.get(prim)((p_in, t_in), **params)
-        return self.pack(p_out, t_out)
+        return self.box((p_out, t_out))
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
-        p_in, t_in = self.unpack(in_tree)
+        p_in, t_in = self.unbox(in_tree)
         with using_interpreter(self.parent):
             p_out, t_out = await push_rules.aget(prim)((p_in, t_in), **params)
-        return self.pack(p_out, t_out)
+        return self.box((p_out, t_out))
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -215,7 +216,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     def read(atom) -> Any:
         return env[atom] if is_irvar(atom) else atom
 
-    treelib.map(write, ir.in_ir_tree, interpreter.pack(p_in, t_in))
+    treelib.map(write, ir.in_ir_tree, interpreter.box((p_in, t_in)))
 
     with using_interpreter(interpreter):
         for ir_eqn in ir.ir_eqns:
@@ -223,7 +224,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             out_tree = ir_eqn.bind(in_tree, **ir_eqn.params)
             treelib.map(write, ir_eqn.out_ir_tree, out_tree)
 
-    return interpreter.unpack(treelib.map(read, ir.out_ir_tree))
+    return interpreter.unbox(treelib.map(read, ir.out_ir_tree))
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
@@ -238,7 +239,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
     def read(atom) -> Any:
         return env[atom] if is_irvar(atom) else atom
 
-    treelib.map(write, ir.in_ir_tree, interpreter.pack(p_in, t_in))
+    treelib.map(write, ir.in_ir_tree, interpreter.box((p_in, t_in)))
 
     with using_interpreter(interpreter):
         for ir_eqn in ir.ir_eqns:
@@ -246,7 +247,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
             out_tree = await ir_eqn.abind(in_tree, **ir_eqn.params)
             treelib.map(write, ir_eqn.out_ir_tree, out_tree)
 
-    return interpreter.unpack(treelib.map(read, ir.out_ir_tree))
+    return interpreter.unbox(treelib.map(read, ir.out_ir_tree))
 
 
 def abstract_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
@@ -393,7 +394,7 @@ def accumulate_cotangents(cotangents: list[Any]) -> Any:
     return sum(non_zero[1:], non_zero[0])
 
 
-class PullbackFwdValue:
+class PullbackFwdBox:
     __slots__ = ["owner", "primal"]
 
     def __init__(self, owner, primal):
@@ -401,35 +402,35 @@ class PullbackFwdValue:
         self.primal = primal
 
 
-class PullbackFwdInterpreter(Interpreter):
+class PullbackFwdInterpreter(BoxedInterpreter[PullbackFwdBox]):
     __slots__ = ["parent"]
 
     def __init__(self):
         self.parent = active_interpreter.get()
 
-    def pack(self, p: Tree, /) -> Tree:
-        return treelib.map(lambda p: PullbackFwdValue(self, p), p)
+    def box(self, value, /) -> Tree:
+        return treelib.map(lambda p: PullbackFwdBox(self, p), value)
 
-    def unpack(self, values: Tree, /) -> Tree:
+    def unbox(self, values: Tree, /) -> Tree:
         def primal(v):
-            return v.primal if isinstance(v, PullbackFwdValue) and v.owner is self else v
+            return v.primal if isinstance(v, PullbackFwdBox) and v.owner is self else v
 
         return treelib.map(primal, values)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
-        p_in = self.unpack(in_tree)
+        p_in = self.unbox(in_tree)
         with using_interpreter(self.parent):
             p_out, residuals = pull_fwd_rules.get(prim)(p_in, **params)
-        return self.pack(p_out), residuals
+        return self.box(p_out), residuals
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
-        p_in = self.unpack(in_tree)
+        p_in = self.unbox(in_tree)
         with using_interpreter(self.parent):
             p_out, residuals = await pull_fwd_rules.aget(prim)(p_in, **params)
-        return self.pack(p_out), residuals
+        return self.box(p_out), residuals
 
 
-class PullbackBwdValue:
+class PullbackBwdBox:
     __slots__ = ["owner", "cotangent"]
 
     def __init__(self, owner, cotangent):
@@ -437,34 +438,34 @@ class PullbackBwdValue:
         self.cotangent = cotangent
 
 
-class PullbackBwdInterpreter(Interpreter):
+class PullbackBwdInterpreter(BoxedInterpreter[PullbackBwdBox]):
     __slots__ = ["parent"]
 
     def __init__(self):
         self.parent = active_interpreter.get()
 
-    def pack(self, c: Tree, /) -> Tree:
-        return treelib.map(lambda c: PullbackBwdValue(self, c), c)
+    def box(self, value, /) -> Tree:
+        return treelib.map(lambda c: PullbackBwdBox(self, c), value)
 
-    def unpack(self, values: Tree, /) -> Tree:
+    def unbox(self, values: Tree, /) -> Tree:
         def cotangent(v):
-            return v.cotangent if isinstance(v, PullbackBwdValue) and v.owner is self else v
+            return v.cotangent if isinstance(v, PullbackBwdBox) and v.owner is self else v
 
         return treelib.map(cotangent, values)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
         residuals, c_out = in_tree
-        c_out = self.unpack(c_out)
+        c_out = self.unbox(c_out)
         with using_interpreter(self.parent):
             c_in = pull_bwd_rules.get(prim)((residuals, c_out), **params)
-        return self.pack(c_in)
+        return self.box(c_in)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         residuals, c_out = in_tree
-        c_out = self.unpack(c_out)
+        c_out = self.unbox(c_out)
         with using_interpreter(self.parent):
             c_in = await pull_bwd_rules.aget(prim)((residuals, c_out), **params)
-        return self.pack(c_in)
+        return self.box(c_in)
 
 
 @ft.partial(lru_cache, maxsize=256)
@@ -530,10 +531,10 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
     def read_c(atom) -> Any:
         if not is_irvar(atom):
-            return bwd.pack(Zero(type(atom)))
+            return bwd.box(Zero(type(atom)))
         if not (cs := c_env[atom]):
-            return bwd.pack(zero_aval(atom.aval))
-        return bwd.pack(accumulate_cotangents([bwd.unpack(c) for c in cs]))
+            return bwd.box(zero_aval(atom.aval))
+        return bwd.box(accumulate_cotangents([bwd.unbox(c) for c in cs]))
 
     treelib.map(write, ir.in_ir_tree, p_in)
 
@@ -544,7 +545,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             res[ir_eqn] = residuals
             treelib.map(write, ir_eqn.out_ir_tree, p_out_eqn)
 
-    treelib.map(write_c, ir.out_ir_tree, bwd.pack(c_out))
+    treelib.map(write_c, ir.out_ir_tree, bwd.box(c_out))
 
     with using_interpreter(bwd):
         for ir_eqn in reversed(ir.ir_eqns):
@@ -553,8 +554,8 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             c_in_eqn = ir_eqn.bind((residuals, c_out_eqn), **ir_eqn.params)
             treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    p_out = fwd.unpack(treelib.map(read, ir.out_ir_tree))
-    c_in = bwd.unpack(treelib.map(read_c, ir.in_ir_tree))
+    p_out = fwd.unbox(treelib.map(read, ir.out_ir_tree))
+    c_in = bwd.unbox(treelib.map(read_c, ir.in_ir_tree))
     return p_out, c_in
 
 
@@ -578,10 +579,10 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 
     def read_c(atom) -> Any:
         if not is_irvar(atom):
-            return bwd.pack(Zero(type(atom)))
+            return bwd.box(Zero(type(atom)))
         if not (cs := c_env[atom]):
-            return bwd.pack(zero_aval(atom.aval))
-        return bwd.pack(accumulate_cotangents([bwd.unpack(c) for c in cs]))
+            return bwd.box(zero_aval(atom.aval))
+        return bwd.box(accumulate_cotangents([bwd.unbox(c) for c in cs]))
 
     treelib.map(write, ir.in_ir_tree, p_in)
 
@@ -592,7 +593,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             res[ir_eqn] = residuals
             treelib.map(write, ir_eqn.out_ir_tree, p_out_eqn)
 
-    treelib.map(write_c, ir.out_ir_tree, bwd.pack(c_out))
+    treelib.map(write_c, ir.out_ir_tree, bwd.box(c_out))
 
     with using_interpreter(bwd):
         for ir_eqn in reversed(ir.ir_eqns):
@@ -601,8 +602,8 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             c_in_eqn = await ir_eqn.abind((residuals, c_out_eqn), **ir_eqn.params)
             treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    p_out = fwd.unpack(treelib.map(read, ir.out_ir_tree))
-    c_in = bwd.unpack(treelib.map(read_c, ir.in_ir_tree))
+    p_out = fwd.unbox(treelib.map(read, ir.out_ir_tree))
+    c_in = bwd.unbox(treelib.map(read_c, ir.in_ir_tree))
     return p_out, c_in
 
 

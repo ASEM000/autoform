@@ -24,7 +24,7 @@ from typing import Any
 from autoform.ad import pullback, pushforward
 from autoform.core import (
     IR,
-    Interpreter,
+    BoxedInterpreter,
     IREqn,
     IRVar,
     Prim,
@@ -129,7 +129,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     return IR([eqn], v_in_ir, v_out_ir)
 
 
-class BatchValue:
+class BatchBox:
     __slots__ = ["owner", "value", "batched"]
 
     def __init__(self, owner, value, batched):
@@ -138,43 +138,44 @@ class BatchValue:
         self.batched = batched
 
 
-class BatchInterpreter(Interpreter):
+class BatchInterpreter(BoxedInterpreter[BatchBox]):
     __slots__ = ["parent", "batch_size"]
 
     def __init__(self, *, batch_size: int):
         self.parent = active_interpreter.get()
         self.batch_size = batch_size
 
-    def pack(self, v: Tree, b: Tree, /) -> Tree:
+    def box(self, value, /) -> Tree:
+        v, b = value
         # NOTE(asem): ``b`` is a prefix spec, not necessarily the same structure
         # as ``v``. For example, v=["a", "b"] and b=True means the whole list is
         # one batched leaf, not two leaves.
         spec = treelib.structure(b, is_leaf=is_axis_spec)
         v = spec.flatten_up_to(v)
         b = treelib.leaves(b, is_leaf=is_axis_spec)
-        return spec.unflatten(BatchValue(self, v, b) for v, b in zip(v, b, strict=True))
+        return spec.unflatten(BatchBox(self, v, b) for v, b in zip(v, b, strict=True))
 
-    def unpack(self, v: Tree, /) -> tuple[Tree, Tree]:
+    def unbox(self, v: Tree, /) -> tuple[Tree, Tree]:
         def value(v):
-            return v.value if isinstance(v, BatchValue) and v.owner is self else v
+            return v.value if isinstance(v, BatchBox) and v.owner is self else v
 
         def batched(v):
-            return v.batched if isinstance(v, BatchValue) and v.owner is self else False
+            return v.batched if isinstance(v, BatchBox) and v.owner is self else False
 
         return treelib.map(value, v), treelib.map(batched, v)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params):
-        v_in, b_in = self.unpack(in_tree)
+        v_in, b_in = self.unbox(in_tree)
         with using_interpreter(self.parent):
             v_out, b_out = batch_rules.get(prim)((self.batch_size, b_in, v_in), **params)
-        return self.pack(v_out, b_out)
+        return self.box((v_out, b_out))
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params):
         # NOTE(asem): async batch rules must be explicitly seted - no fallback to sync.
-        v_in, b_in = self.unpack(in_tree)
+        v_in, b_in = self.unbox(in_tree)
         with using_interpreter(self.parent):
             v_out, b_out = await batch_rules.aget(prim)((self.batch_size, b_in, v_in), **params)
-        return self.pack(v_out, b_out)
+        return self.box((v_out, b_out))
 
 
 def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
@@ -208,17 +209,17 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     def read(atom) -> Any:
         return env[atom] if is_irvar(atom) else atom
 
-    treelib.map(write, ir.in_ir_tree, interpreter.pack(v_in, b_in))
+    treelib.map(write, ir.in_ir_tree, interpreter.box((v_in, b_in)))
 
     with using_interpreter(interpreter):
         for ir_eqn in ir.ir_eqns:
             v_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
             v_out_eqn = ir_eqn.bind(v_in_eqn, **ir_eqn.params)
-            v_out, b_out = interpreter.unpack(v_out_eqn)
+            v_out, b_out = interpreter.unbox(v_out_eqn)
             b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
-            treelib.map(write, ir_eqn.out_ir_tree, interpreter.pack(v_out, b_out))
+            treelib.map(write, ir_eqn.out_ir_tree, interpreter.box((v_out, b_out)))
 
-    v_out, b_out = interpreter.unpack(treelib.map(read, ir.out_ir_tree))
+    v_out, b_out = interpreter.unbox(treelib.map(read, ir.out_ir_tree))
     return broadcast_batch_out(spec, v_out, b_out)
 
 
@@ -241,17 +242,17 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     def read(atom) -> Any:
         return env[atom] if is_irvar(atom) else atom
 
-    treelib.map(write, ir.in_ir_tree, interpreter.pack(v_in, b_in))
+    treelib.map(write, ir.in_ir_tree, interpreter.box((v_in, b_in)))
 
     with using_interpreter(interpreter):
         for ir_eqn in ir.ir_eqns:
             v_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
             v_out_eqn = await ir_eqn.abind(v_in_eqn, **ir_eqn.params)
-            v_out, b_out = interpreter.unpack(v_out_eqn)
+            v_out, b_out = interpreter.unbox(v_out_eqn)
             b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
-            treelib.map(write, ir_eqn.out_ir_tree, interpreter.pack(v_out, b_out))
+            treelib.map(write, ir_eqn.out_ir_tree, interpreter.box((v_out, b_out)))
 
-    v_out, b_out = interpreter.unpack(treelib.map(read, ir.out_ir_tree))
+    v_out, b_out = interpreter.unbox(treelib.map(read, ir.out_ir_tree))
     return broadcast_batch_out(spec, v_out, b_out)
 
 
