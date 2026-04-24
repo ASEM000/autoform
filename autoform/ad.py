@@ -128,8 +128,8 @@ class PushforwardBox:
 class PushforwardInterpreter(BoxedInterpreter[PushforwardBox]):
     __slots__ = ["parent"]
 
-    def __init__(self):
-        self.parent = active_interpreter.get()
+    def __init__(self, *, parent):
+        self.parent = parent
 
     def box(self, value, /) -> Tree:
         p, t = value
@@ -208,7 +208,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, t_in) = in_tree
 
     env: dict[IRVar, Any] = {}
-    interpreter = PushforwardInterpreter()
+    interpreter = PushforwardInterpreter(parent=active_interpreter.get())
 
     def write(atom, value: Any):
         is_irvar(atom) and setitem(env, atom, value)
@@ -231,7 +231,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
     (p_in, t_in) = in_tree
 
     env: dict[IRVar, Any] = {}
-    interpreter = PushforwardInterpreter()
+    interpreter = PushforwardInterpreter(parent=active_interpreter.get())
 
     def write(atom, value: Any):
         is_irvar(atom) and setitem(env, atom, value)
@@ -405,8 +405,8 @@ class PullbackFwdBox:
 class PullbackFwdInterpreter(BoxedInterpreter[PullbackFwdBox]):
     __slots__ = ["parent"]
 
-    def __init__(self):
-        self.parent = active_interpreter.get()
+    def __init__(self, *, parent):
+        self.parent = parent
 
     def box(self, value, /) -> Tree:
         return treelib.map(lambda p: PullbackFwdBox(self, p), value)
@@ -441,8 +441,8 @@ class PullbackBwdBox:
 class PullbackBwdInterpreter(BoxedInterpreter[PullbackBwdBox]):
     __slots__ = ["parent"]
 
-    def __init__(self):
-        self.parent = active_interpreter.get()
+    def __init__(self, *, parent):
+        self.parent = parent
 
     def box(self, value, /) -> Tree:
         return treelib.map(lambda c: PullbackBwdBox(self, c), value)
@@ -517,8 +517,9 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     env: dict[IRVar, Any] = {}
     res: dict[IREqn, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
-    fwd = PullbackFwdInterpreter()
-    bwd = PullbackBwdInterpreter()
+    parent = active_interpreter.get()
+    fwd = PullbackFwdInterpreter(parent=parent)
+    bwd = PullbackBwdInterpreter(parent=parent)
 
     def write(atom, value: Any):
         is_irvar(atom) and setitem(env, atom, value)
@@ -565,8 +566,9 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     env: dict[IRVar, Any] = {}
     res: dict[IREqn, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
-    fwd = PullbackFwdInterpreter()
-    bwd = PullbackBwdInterpreter()
+    parent = active_interpreter.get()
+    fwd = PullbackFwdInterpreter(parent=parent)
+    bwd = PullbackBwdInterpreter(parent=parent)
 
     def write(atom, value: Any):
         is_irvar(atom) and setitem(env, atom, value)

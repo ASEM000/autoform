@@ -141,8 +141,8 @@ class BatchBox:
 class BatchInterpreter(BoxedInterpreter[BatchBox]):
     __slots__ = ["parent", "batch_size"]
 
-    def __init__(self, *, batch_size: int):
-        self.parent = active_interpreter.get()
+    def __init__(self, *, batch_size: int, parent):
+        self.parent = parent
         self.batch_size = batch_size
 
     def box(self, value, /) -> Tree:
@@ -201,7 +201,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     assert batch_size, "batch size must be > 0"
 
     env: dict[IRVar, Any] = {}
-    interpreter = BatchInterpreter(batch_size=batch_size)
+    interpreter = BatchInterpreter(batch_size=batch_size, parent=active_interpreter.get())
 
     def write(atom, value: Any):
         is_irvar(atom) and setitem(env, atom, value)
@@ -234,7 +234,7 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     assert batch_size, "batch size must be > 0"
 
     env: dict[IRVar, Any] = {}
-    interpreter = BatchInterpreter(batch_size=batch_size)
+    interpreter = BatchInterpreter(batch_size=batch_size, parent=active_interpreter.get())
 
     def write(atom, value: Any):
         is_irvar(atom) and setitem(env, atom, value)
