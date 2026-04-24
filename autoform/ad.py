@@ -205,49 +205,13 @@ def pushforward(ir: IR, /) -> IR:
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    (p_in, t_in) = in_tree
-
-    env: dict[IRVar, Any] = {}
-    interpreter = PushforwardInterpreter(parent=active_interpreter.get())
-
-    def write(atom, value: Any):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Any:
-        return env[atom] if is_irvar(atom) else atom
-
-    treelib.map(write, ir.in_ir_tree, interpreter.box((p_in, t_in)))
-
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_tree = treelib.map(read, ir_eqn.in_ir_tree)
-            out_tree = ir_eqn.bind(in_tree, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_tree)
-
-    return interpreter.unbox(treelib.map(read, ir.out_ir_tree))
+    with using_interpreter(PushforwardInterpreter(parent=active_interpreter.get())) as pusher:
+        return pusher.unbox(ir.call(*pusher.box(in_tree)))
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
-    (p_in, t_in) = in_tree
-
-    env: dict[IRVar, Any] = {}
-    interpreter = PushforwardInterpreter(parent=active_interpreter.get())
-
-    def write(atom, value: Any):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Any:
-        return env[atom] if is_irvar(atom) else atom
-
-    treelib.map(write, ir.in_ir_tree, interpreter.box((p_in, t_in)))
-
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            in_tree = treelib.map(read, ir_eqn.in_ir_tree)
-            out_tree = await ir_eqn.abind(in_tree, **ir_eqn.params)
-            treelib.map(write, ir_eqn.out_ir_tree, out_tree)
-
-    return interpreter.unbox(treelib.map(read, ir.out_ir_tree))
+    with using_interpreter(PushforwardInterpreter(parent=active_interpreter.get())) as pusher:
+        return pusher.unbox(await ir.acall(*pusher.box(in_tree)))
 
 
 def abstract_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
