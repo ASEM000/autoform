@@ -52,6 +52,8 @@ __all__ = [
     "IREqn",
     "IR",
     # interpreters
+    "BaseInterpreter",
+    "BoxedInterpreter",
     "Interpreter",
     "EvalInterpreter",
     "TracingInterpreter",
@@ -417,7 +419,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 # ==================================================================================================
 
 
-class Interpreter(ABC):
+class BaseInterpreter(ABC):
     __slots__ = []
 
     @abstractmethod
@@ -427,8 +429,26 @@ class Interpreter(ABC):
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
 
 
+class Interpreter(BaseInterpreter):
+    __slots__ = []
+
+
+class BoxedInterpreter[T](BaseInterpreter):
+    __slots__ = []
+    # NOTE(asem): boxed interpreters own a transform-specific value wrapper.
+    # plain interpreters only override primitive dispatch but boxed interpreters
+    # also define how values are boxed before primitive evaluation and unboxed
+    # when rules need the underlying payload.
+
+    @abstractmethod
+    def box(self, value, /) -> Tree[T]: ...
+
+    @abstractmethod
+    def unbox(self, value: Tree, /): ...
+
+
 @contextmanager
-def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
+def using_interpreter[T: BaseInterpreter](interpreter: T) -> Generator[T, None, None]:
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -451,7 +471,7 @@ class EvalInterpreter(Interpreter):
         return await impl_rules.aget(prim)(in_tree, **params)
 
 
-active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
+active_interpreter = ContextVar[BaseInterpreter]("active_interpreter", default=EvalInterpreter())
 
 
 # ==================================================================================================
@@ -680,15 +700,10 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
-        step = next(gen := walk(ir)(*args))
-        for _ in ir.ir_eqns:
-            ir_eqn, in_values = step
-            assert ir_eqn is not None
-            out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-            step = gen.send(out_values)
-        ir_eqn, out = step
-        assert ir_eqn is None
-        return out
+        ir_eqn, in_values = next(gen := walk(ir)(*args))
+        while ir_eqn:
+            ir_eqn, in_values = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+        return in_values
 
     return func
 
@@ -698,15 +713,10 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
-        step = next(gen := walk(ir)(*args))
-        for _ in ir.ir_eqns:
-            ir_eqn, in_values = step
-            assert ir_eqn is not None
-            out_values = await ir_eqn.abind(in_values, **ir_eqn.params)
-            step = gen.send(out_values)
-        ir_eqn, out = step
-        assert ir_eqn is None
-        return out
+        ir_eqn, in_values = next(gen := walk(ir)(*args))
+        while ir_eqn:
+            ir_eqn, in_values = gen.send(await ir_eqn.abind(in_values, **ir_eqn.params))
+        return in_values
 
     return func
 

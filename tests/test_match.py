@@ -203,9 +203,7 @@ class TestIRMatch:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(
-                ir_eqns=[af.core.IREqn(prim=p1), af.core.IREqn(prim=p2)]
-            ):
+            case af.core.IR(ir_eqns=[af.core.IREqn(prim=p1), af.core.IREqn(prim=p2)]):
                 assert p1.name == "format"
                 assert p2.name == "concat"
             case _:
@@ -226,9 +224,7 @@ class TestIRMatch:
 
         match pf_ir:
             case af.core.IR(
-                ir_eqns=[
-                    af.core.IREqn(prim=af.core.Prim(name="pushforward_call"), params=params)
-                ]
+                ir_eqns=[af.core.IREqn(prim=af.core.Prim(name="pushforward_call"), params=params)]
             ):
                 nested = params["ir"]
                 assert isinstance(nested, af.core.IR)
@@ -279,9 +275,7 @@ class TestIRMatch:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(ir_eqns=eqns) if all(
-                e.prim.name in {"format", "concat"} for e in eqns
-            ):
+            case af.core.IR(ir_eqns=eqns) if all(e.prim.name in {"format", "concat"} for e in eqns):
                 all_expected = True
             case _:
                 all_expected = False
