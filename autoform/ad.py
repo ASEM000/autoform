@@ -20,7 +20,6 @@ import asyncio
 import functools as ft
 from collections import defaultdict
 from collections.abc import Callable
-from operator import setitem
 from typing import Any
 
 __all__ = [
@@ -506,18 +505,11 @@ def pullback(ir: IR, /) -> IR:
 def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
 
-    env: dict[IRVar, Any] = {}
     res: dict[IREqn, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
     parent = active_interpreter.get()
     fwd = PullbackFwdInterpreter(parent=parent)
     bwd = PullbackBwdInterpreter(parent=parent)
-
-    def write(atom, value: Any):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Any:
-        return env[atom] if is_irvar(atom) else atom
 
     def write_c(atom, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
@@ -529,14 +521,16 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             return bwd.box(zero_aval(atom.aval))
         return bwd.box(accumulate_cotangents([bwd.unbox(c) for c in cs]))
 
-    treelib.map(write, ir.in_ir_tree, p_in)
-
     with using_interpreter(fwd):
-        for ir_eqn in ir.ir_eqns:
-            p_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
-            p_out_eqn, residuals = ir_eqn.bind(p_in_eqn, **ir_eqn.params)
+
+        def custom_bind(ir_eqn: IREqn, boxed_in: Tree, /) -> Tree:
+            boxed_out, residuals = ir_eqn.bind(boxed_in, **ir_eqn.params)
             res[ir_eqn] = residuals
-            treelib.map(write, ir_eqn.out_ir_tree, p_out_eqn)
+            return boxed_out
+
+        ir_eqn, boxed_in = next(gen := ir.walk(*fwd.box(p_in)))
+        while ir_eqn:
+            ir_eqn, boxed_in = gen.send(custom_bind(ir_eqn, boxed_in))
 
     treelib.map(write_c, ir.out_ir_tree, bwd.box(c_out))
 
@@ -547,7 +541,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             c_in_eqn = ir_eqn.bind((residuals, c_out_eqn), **ir_eqn.params)
             treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    p_out = fwd.unbox(treelib.map(read, ir.out_ir_tree))
+    p_out = fwd.unbox(boxed_in)
     c_in = bwd.unbox(treelib.map(read_c, ir.in_ir_tree))
     return p_out, c_in
 
@@ -555,18 +549,11 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
 async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     (p_in, c_out) = in_tree
 
-    env: dict[IRVar, Any] = {}
     res: dict[IREqn, Tree] = {}
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
     parent = active_interpreter.get()
     fwd = PullbackFwdInterpreter(parent=parent)
     bwd = PullbackBwdInterpreter(parent=parent)
-
-    def write(atom, value: Any):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Any:
-        return env[atom] if is_irvar(atom) else atom
 
     def write_c(atom, value: Any):
         is_irvar(atom) and c_env[atom].append(value)
@@ -578,14 +565,16 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             return bwd.box(zero_aval(atom.aval))
         return bwd.box(accumulate_cotangents([bwd.unbox(c) for c in cs]))
 
-    treelib.map(write, ir.in_ir_tree, p_in)
-
     with using_interpreter(fwd):
-        for ir_eqn in ir.ir_eqns:
-            p_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
-            p_out_eqn, residuals = await ir_eqn.abind(p_in_eqn, **ir_eqn.params)
+
+        async def custom_abind(ir_eqn: IREqn, boxed_in: Tree, /) -> Tree:
+            boxed_out, residuals = await ir_eqn.abind(boxed_in, **ir_eqn.params)
             res[ir_eqn] = residuals
-            treelib.map(write, ir_eqn.out_ir_tree, p_out_eqn)
+            return boxed_out
+
+        ir_eqn, boxed_in = next(gen := ir.walk(*fwd.box(p_in)))
+        while ir_eqn:
+            ir_eqn, boxed_in = gen.send(await custom_abind(ir_eqn, boxed_in))
 
     treelib.map(write_c, ir.out_ir_tree, bwd.box(c_out))
 
@@ -596,7 +585,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
             c_in_eqn = await ir_eqn.abind((residuals, c_out_eqn), **ir_eqn.params)
             treelib.map(write_c, ir_eqn.in_ir_tree, c_in_eqn)
 
-    p_out = fwd.unbox(treelib.map(read, ir.out_ir_tree))
+    p_out = fwd.unbox(boxed_in)
     c_in = bwd.unbox(treelib.map(read_c, ir.in_ir_tree))
     return p_out, c_in
 
