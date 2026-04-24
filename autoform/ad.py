@@ -86,7 +86,7 @@ def zero_aval(aval, /) -> Zero:
 
 zero_registry: dict[type, Any] = {}
 zero_registry[str] = ""
-zero = lambda v: Zero(type(v))
+zero = lambda v: v if is_zero(v) else Zero(type(v))
 
 
 def materialize(x: Tree, /) -> Tree:

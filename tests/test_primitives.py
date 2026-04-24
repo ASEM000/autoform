@@ -561,6 +561,11 @@ class TestCotangentHelpers:
         assert af.ad.Zero(str) == af.ad.Zero(str)
         assert af.ad.Zero(str) != af.ad.Zero(bool)
 
+    def test_zero_helper_is_idempotent(self):
+        z = af.ad.Zero(str)
+        assert af.ad.zero(z) is z
+        assert af.ad.materialize(af.ad.zero(z)) == ""
+
     def test_accumulate_cotangents_single(self):
         result = af.ad.accumulate_cotangents(["hello"])
         assert result == "hello"
