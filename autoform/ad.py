@@ -109,6 +109,10 @@ def materialize(x: Tree, /) -> Tree:
     return treelib.map(map_func, x, is_leaf=is_zero)
 
 
+def all_zero(x: Tree, /) -> bool:
+    return all(is_zero(leaf) for leaf in treelib.leaves(x, is_leaf=is_zero))
+
+
 # ==================================================================================================
 # PUSHFORWARD
 # ==================================================================================================
@@ -206,12 +210,36 @@ def pushforward(ir: IR, /) -> IR:
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     with using_interpreter(PushforwardInterpreter(parent=active_interpreter.get())) as pusher:
-        return pusher.unbox(ir.call(*pusher.box(in_tree)))
+
+        def custom_bind(ir_eqn: IREqn, boxed_in: Tree, /) -> Tree:
+            p_in, t_in = pusher.unbox(boxed_in)
+            if not all_zero(t_in):
+                return ir_eqn.bind(boxed_in, **ir_eqn.params)
+            with using_interpreter(pusher.parent):
+                p_out = ir_eqn.bind(p_in, **ir_eqn.params)
+            return pusher.box((p_out, treelib.map(zero, p_out)))
+
+        ir_eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
+        while ir_eqn:
+            ir_eqn, boxed_in = gen.send(custom_bind(ir_eqn, boxed_in))
+        return pusher.unbox(boxed_in)
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
     with using_interpreter(PushforwardInterpreter(parent=active_interpreter.get())) as pusher:
-        return pusher.unbox(await ir.acall(*pusher.box(in_tree)))
+
+        async def custom_abind(ir_eqn: IREqn, boxed_in: Tree, /) -> Tree:
+            p_in, t_in = pusher.unbox(boxed_in)
+            if not all_zero(t_in):
+                return await ir_eqn.abind(boxed_in, **ir_eqn.params)
+            with using_interpreter(pusher.parent):
+                p_out = await ir_eqn.abind(p_in, **ir_eqn.params)
+            return pusher.box((p_out, treelib.map(zero, p_out)))
+
+        ir_eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
+        while ir_eqn:
+            ir_eqn, boxed_in = gen.send(await custom_abind(ir_eqn, boxed_in))
+        return pusher.unbox(boxed_in)
 
 
 def abstract_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
