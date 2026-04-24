@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import functools as ft
-from operator import setitem
-from typing import Any
 
 from autoform.ad import pullback, pushforward
 from autoform.core import (
@@ -200,26 +198,20 @@ def impl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     # >>> batched.call([])
     assert batch_size, "batch size must be > 0"
 
-    env: dict[IRVar, Any] = {}
-    interpreter = BatchInterpreter(batch_size=batch_size, parent=active_interpreter.get())
+    batcher = BatchInterpreter(batch_size=batch_size, parent=active_interpreter.get())
+    with using_interpreter(batcher):
 
-    def write(atom, value: Any):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Any:
-        return env[atom] if is_irvar(atom) else atom
-
-    treelib.map(write, ir.in_ir_tree, interpreter.box((v_in, b_in)))
-
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            v_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
-            v_out_eqn = ir_eqn.bind(v_in_eqn, **ir_eqn.params)
-            v_out, b_out = interpreter.unbox(v_out_eqn)
+        def custom_bind(ir_eqn: IREqn, boxed_in: Tree, /) -> Tree:
+            boxed_out = ir_eqn.bind(boxed_in, **ir_eqn.params)
+            v_out, b_out = batcher.unbox(boxed_out)
             b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
-            treelib.map(write, ir_eqn.out_ir_tree, interpreter.box((v_out, b_out)))
+            return batcher.box((v_out, b_out))
 
-    v_out, b_out = interpreter.unbox(treelib.map(read, ir.out_ir_tree))
+        ir_eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        while ir_eqn:
+            ir_eqn, boxed_in = gen.send(custom_bind(ir_eqn, boxed_in))
+
+    v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
 
 
@@ -233,26 +225,20 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     batch_size = spec.num_children
     assert batch_size, "batch size must be > 0"
 
-    env: dict[IRVar, Any] = {}
-    interpreter = BatchInterpreter(batch_size=batch_size, parent=active_interpreter.get())
+    batcher = BatchInterpreter(batch_size=batch_size, parent=active_interpreter.get())
+    with using_interpreter(batcher):
 
-    def write(atom, value: Any):
-        is_irvar(atom) and setitem(env, atom, value)
-
-    def read(atom) -> Any:
-        return env[atom] if is_irvar(atom) else atom
-
-    treelib.map(write, ir.in_ir_tree, interpreter.box((v_in, b_in)))
-
-    with using_interpreter(interpreter):
-        for ir_eqn in ir.ir_eqns:
-            v_in_eqn = treelib.map(read, ir_eqn.in_ir_tree)
-            v_out_eqn = await ir_eqn.abind(v_in_eqn, **ir_eqn.params)
-            v_out, b_out = interpreter.unbox(v_out_eqn)
+        async def custom_abind(ir_eqn: IREqn, boxed_in: Tree, /) -> Tree:
+            boxed_out = await ir_eqn.abind(boxed_in, **ir_eqn.params)
+            v_out, b_out = batcher.unbox(boxed_out)
             b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
-            treelib.map(write, ir_eqn.out_ir_tree, interpreter.box((v_out, b_out)))
+            return batcher.box((v_out, b_out))
 
-    v_out, b_out = interpreter.unbox(treelib.map(read, ir.out_ir_tree))
+        ir_eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        while ir_eqn:
+            ir_eqn, boxed_in = gen.send(await custom_abind(ir_eqn, boxed_in))
+
+    v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
 
 
