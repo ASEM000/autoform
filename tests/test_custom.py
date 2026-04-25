@@ -101,6 +101,39 @@ class TestCustomFunction:
 
 
 class TestCustomPushforward:
+    def test_custom_pushforward_rule_can_use_untraceable_python_for_multi_primitive_body(self):
+        def python_only_upper(x):
+            return x.upper()
+
+        with pytest.raises(AttributeError):
+            af.trace(lambda x: python_only_upper(x))("seed")
+
+        @af.custom
+        def pair_program(x, y):
+            left = af.format("left {}", x)
+            right = af.concat(y, "!")
+            return left, right
+
+        @pair_program.set_pushforward
+        def pair_program_pushforward(in_tree, /, *, call):
+            del call
+            primals, tangents = in_tree
+            x, y = primals
+            dx, dy = tangents
+            return (
+                python_only_upper(x),
+                python_only_upper(y),
+            ), (
+                python_only_upper(dx),
+                python_only_upper(dy),
+            )
+
+        ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
+        out, tangent = af.pushforward(ir).call(("hello", "world"), ("small", "change"))
+
+        assert out == ("HELLO", "WORLD")
+        assert tangent == ("SMALL", "CHANGE")
+
     def test_custom_pushforward_rule_matches_mapping_signature(self):
         @af.custom
         def bracket(x):
@@ -171,6 +204,37 @@ class TestCustomPushforward:
 
 
 class TestCustomPullback:
+    def test_custom_pullback_rule_can_use_untraceable_python_for_multi_primitive_body(self):
+        def python_only_lower(x):
+            return x.lower()
+
+        with pytest.raises(AttributeError):
+            af.trace(lambda x: python_only_lower(x))("seed")
+
+        @af.custom
+        def pair_program(x, y):
+            left = af.format("left {}", x)
+            right = af.concat(y, "!")
+            return left, right
+
+        @pair_program.set_pullback
+        def pair_program_pullback(in_tree, /, *, call):
+            del call
+            (primals, output), cotangents = in_tree
+            x, y = primals
+            left_out, right_out = output
+            left_cotangent, right_cotangent = cotangents
+            return (
+                f"{python_only_lower(x)} <- {python_only_lower(left_out)} <- {left_cotangent}",
+                f"{python_only_lower(y)} <- {python_only_lower(right_out)} <- {right_cotangent}",
+            )
+
+        ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
+        out, cotangents = af.pullback(ir).call(("HELLO", "WORLD"), ("L", "R"))
+
+        assert out == ("left HELLO", "WORLD!")
+        assert cotangents == ("hello <- left hello <- L", "world <- world! <- R")
+
     def test_custom_pullback_rule_uses_mlx_argument_order(self):
         @af.custom
         def bracket(x):
@@ -245,6 +309,41 @@ class TestCustomPullback:
 
 
 class TestCustomBatch:
+    def test_custom_batch_rule_can_use_untraceable_python_for_multi_primitive_body(self):
+        def python_only_title(x):
+            return x.title()
+
+        with pytest.raises(AttributeError):
+            af.trace(lambda x: python_only_title(x))("seed")
+
+        @af.custom
+        def pair_program(x, y):
+            left = af.format("left {}", x)
+            right = af.concat(y, "!")
+            return left, right
+
+        @pair_program.set_batch
+        def pair_program_batch(in_tree, /, *, call):
+            del call
+            batch_size, axes, values = in_tree
+            xs, ys = values
+            x_axis, y_axis = axes
+            assert batch_size == 2
+            assert x_axis is True
+            assert y_axis is True
+            return (
+                [python_only_title(x) for x in xs],
+                [python_only_title(y) for y in ys],
+            ), (True, True)
+
+        ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
+        batched = af.batch(ir)
+
+        assert batched.call(["hello", "goodbye"], ["world", "moon"]) == (
+            ["Hello", "Goodbye"],
+            ["World", "Moon"],
+        )
+
     def test_custom_batch_rule(self):
         @af.custom
         def bracket(x):
