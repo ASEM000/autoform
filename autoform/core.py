@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
 from threading import RLock
-from typing import Any, ClassVar, Self, TypeGuard, cast
+from typing import Any, ClassVar, Protocol, Self, TypeGuard, cast
 
 from autoform.utils import Tree, lru_cache, treelib
 
@@ -48,6 +48,20 @@ __all__ = [
     "push_rules",
     "pull_fwd_rules",
     "pull_bwd_rules",
+    "InterpreterRule",
+    "AsyncInterpreterRule",
+    "ImplRule",
+    "AImplRule",
+    "AbstractRule",
+    "AAbstractRule",
+    "PushforwardRule",
+    "APushforwardRule",
+    "PullbackFwdRule",
+    "APullbackFwdRule",
+    "PullbackBwdRule",
+    "APullbackBwdRule",
+    "BatchRule",
+    "ABatchRule",
     # ir structures
     "IREqn",
     "IR",
@@ -726,48 +740,69 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 # ==================================================================================================
 
 
-class InterpreterRuleMapping[R]:
+class InterpreterRule[R](Protocol):
+    def __call__(self, in_tree: Tree, /, **params: Any) -> R: ...
+
+
+type AsyncInterpreterRule[R] = InterpreterRule[Awaitable[R]]
+type ImplRule = InterpreterRule[Tree]
+type AImplRule = AsyncInterpreterRule[Tree]
+type AbstractRule = InterpreterRule[Tree[EvalType]]
+type AAbstractRule = AsyncInterpreterRule[Tree[EvalType]]
+type PushforwardRule = InterpreterRule[tuple[Tree, Tree]]
+type APushforwardRule = AsyncInterpreterRule[tuple[Tree, Tree]]
+type PullbackFwdRule = InterpreterRule[tuple[Tree, Tree]]
+type APullbackFwdRule = AsyncInterpreterRule[tuple[Tree, Tree]]
+type PullbackBwdRule = InterpreterRule[Tree]
+type APullbackBwdRule = AsyncInterpreterRule[Tree]
+type BatchRule = InterpreterRule[tuple[Tree, Tree[bool] | bool]]
+type ABatchRule = AsyncInterpreterRule[tuple[Tree, Tree[bool] | bool]]
+
+
+class InterpreterRuleMapping[Rule: InterpreterRule[Any], ARule: AsyncInterpreterRule[Any]]:
     __slots__ = ["map", "amap", "lock"]
 
     def __init__(self):
-        self.map: dict[Prim, Callable[..., R]] = {}
-        self.amap: dict[Prim, Callable[..., Awaitable[R]]] = {}
+        self.map: dict[Prim, Rule] = {}
+        self.amap: dict[Prim, ARule] = {}
         self.lock = RLock()
 
-    def set(self, prim: Prim, rule: Callable[..., R], /) -> Callable[..., R]:
+    def set[R: Rule](self, prim: Prim, rule: R, /, *, replace: bool = False) -> R:
         assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
         assert isinstance(rule, Callable), f"Expected callable, got {rule}"
-        assert prim not in self.map, f"Rule for primitive {prim} already defined"
+        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+        assert replace or prim not in self.map, f"Rule for primitive {prim} already defined"
 
         with self.lock:
             self.map[prim] = rule
         return rule
 
-    def aset(self, prim: Prim, rule: Callable[..., Awaitable[R]], /) -> Callable[..., Awaitable[R]]:
+    def aset[AR: ARule](self, prim: Prim, rule: AR, /, *, replace: bool = False) -> AR:
         assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
         assert isinstance(rule, Callable), f"Expected callable, got {rule}"
-        assert prim not in self.amap, f"Async rule for primitive {prim} already defined"
+        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+        assert replace or prim not in self.amap, f"Async rule for primitive {prim} already defined"
 
         with self.lock:
             self.amap[prim] = rule
         return rule
 
-    def get(self, prim: Prim) -> Callable[..., R]:
+    def get(self, prim: Prim) -> Rule:
         with self.lock:
             if prim not in self.map:
                 raise KeyError(f"No {type(self).__name__} rule defined for primitive {prim}")
             return self.map[prim]
 
-    def aget(self, prim: Prim) -> Callable[..., Awaitable[R]]:
+    def aget(self, prim: Prim) -> ARule:
         with self.lock:
             if prim not in self.amap:
                 raise KeyError(f"No async {type(self).__name__} rule defined for primitive {prim}")
             return self.amap[prim]
 
 
-impl_rules = InterpreterRuleMapping[Tree]()
-batch_rules = InterpreterRuleMapping[tuple[Tree, Tree[bool] | bool]]()
-push_rules = InterpreterRuleMapping[tuple[Tree, Tree]]()
-pull_fwd_rules = InterpreterRuleMapping[tuple[Tree, Tree]]()
-pull_bwd_rules = InterpreterRuleMapping[Tree]()
-abstract_rules = InterpreterRuleMapping[Tree[EvalType]]()
+impl_rules = InterpreterRuleMapping[ImplRule, AImplRule]()
+batch_rules = InterpreterRuleMapping[BatchRule, ABatchRule]()
+push_rules = InterpreterRuleMapping[PushforwardRule, APushforwardRule]()
+pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule, APullbackFwdRule]()
+pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule, APullbackBwdRule]()
+abstract_rules = InterpreterRuleMapping[AbstractRule, AAbstractRule]()

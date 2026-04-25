@@ -19,6 +19,7 @@ IR-to-IR transformations.
 .. autofunction:: autoform.batch
 .. autofunction:: autoform.pullback
 .. autofunction:: autoform.pushforward
+.. autofunction:: autoform.custom
 .. autofunction:: autoform.sched
 .. autofunction:: autoform.dce
 .. autofunction:: autoform.memoize
