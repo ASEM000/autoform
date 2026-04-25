@@ -35,14 +35,32 @@ class TestCustomFunction:
         ir = af.trace(lambda x: af.concat(bracket(x), "!"))("seed")
         custom_eqn = ir.ir_eqns[0]
 
-        assert ir.ir_eqns[0].prim.name.endswith("bracket")
-        assert [eqn.prim.name.split(":")[0] for eqn in ir.ir_eqns] == ["custom_call", "concat"]
+        assert ir.ir_eqns[0].prim.name.startswith("custom_call_p<bracket-")
+        assert [eqn.prim.name.split("-")[0] for eqn in ir.ir_eqns] == [
+            "custom_call_p<bracket",
+            "concat",
+        ]
         assert set(custom_eqn.params) == {"call"}
         assert custom_eqn.params["call"] is bracket.func
         assert "func" not in custom_eqn.params
         assert "ir" not in custom_eqn.params
         assert "key" not in custom_eqn.params
         assert ir.call("hello") == "[hello]!"
+
+    def test_custom_primitive_names_are_unique_for_same_function_name(self):
+        def make_custom():
+            @af.custom
+            def duplicate(x):
+                return af.format("[{}]", x)
+
+            return duplicate
+
+        first = make_custom()
+        second = make_custom()
+
+        assert first.prim.name.startswith("custom_call_p<duplicate-")
+        assert second.prim.name.startswith("custom_call_p<duplicate-")
+        assert first.prim.name != second.prim.name
 
     def test_rules_are_stored_in_rule_mappings(self):
         @af.custom

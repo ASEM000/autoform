@@ -186,8 +186,7 @@ def install_custom_call_rules(prim: Prim, /) -> None:
 
 
 def custom_prim_name(func: Callable[..., Any]) -> str:
-    name = f"{func.__module__}.{func.__qualname__}"
-    return f"custom_call:{name}"
+    return f"custom_call_p<{func.__name__}-{id(func):x}>"
 
 
 class CustomFunc:
