@@ -297,7 +297,7 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test", "gpt-5.2")
 
-        with af.using_client(ConfiguredStructRouter()):
+        with af.lm_client(ConfiguredStructRouter()):
             result = built_ir.call("hello", "m1")
 
         assert result.text == "m1|0.6|96|hello"
@@ -315,7 +315,7 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test", "gpt-5.2")
 
-        with af.using_client(StructRouter()):
+        with af.lm_client(StructRouter()):
             result = built_ir.call("hello", "m1")
 
         assert result.text == "m1|hello"

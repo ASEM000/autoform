@@ -164,7 +164,7 @@ class TestFold:
             return af.format("{}: {}", rubric, question)
 
         client = Client()
-        with af.using_client(client):
+        with af.lm_client(client):
             ir = af.trace(program)("seed")
 
         assert client.calls == 1

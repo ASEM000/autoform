@@ -69,7 +69,7 @@ active_client: ContextVar[LMClient] = ContextVar("active_client", default=LiteLL
 
 
 @contextmanager
-def using_client(client: LMClient) -> Generator[LMClient, None, None]:
+def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
     """Set the LM client for all lm primitives.
 
     The client must expose ``.completion()`` and ``.acompletion()`` matching
@@ -88,7 +88,7 @@ def using_client(client: LMClient) -> Generator[LMClient, None, None]:
         ...     ],
         ...     max_parallel_requests=10,
         ... )
-        >>> with af.using_client(client):  # doctest: +SKIP
+        >>> with af.lm_client(client):  # doctest: +SKIP
         ...     ir.call(inputs)
     """
     assert isinstance(client, LMClient), f"Expected LMClient instance, got {type(client)}"
@@ -125,7 +125,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     Returns:
         The content of the model's response as a string.
 
-    Use :func:`using_client` to configure provider-specific settings like ``max_tokens``.
+    Use :func:`lm_client` to configure provider-specific settings like ``max_tokens``.
 
     Example:
         >>> import autoform as af
@@ -138,7 +138,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         >>> ir = af.trace(program)("World") # doctest: +SKIP
         >>> result = ir.call("x0") # doctest: +SKIP
 
-    Example with :func:`using_client`:
+    Example with :func:`lm_client`:
         >>> import autoform as af
         >>> from litellm import Router  # doctest: +SKIP
         >>> params_1024 = dict(model="gpt-5.2", max_tokens=1024)
@@ -154,7 +154,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     return af.concat("Answer: ", answer)
         >>> ir = af.trace(program)("topic", "model")
         >>> model_names = ["gpt-5.2-1024", "gpt-5.2-512"]
-        >>> with af.using_client(router):  # doctest: +SKIP
+        >>> with af.lm_client(router):  # doctest: +SKIP
         ...     result = af.batch(ir, in_axes=(False, True)).call("AI", model_names)
     """
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"

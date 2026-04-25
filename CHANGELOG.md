@@ -39,7 +39,7 @@
     # "error: timeout"
     ```
 
-  - `using_client` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
+  - `lm_client` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
 
     ```python
     import autoform as af
@@ -48,7 +48,7 @@
     litellm_params = dict(model="gpt-5.2", tpm=100_000, rpm=1_000)
     model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
     client = Router(model_list=model_list, max_parallel_requests=10)
-    with af.using_client(client):
+    with af.lm_client(client):
         result = af.call(ir)(inputs)
     ```
 
