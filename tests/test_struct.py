@@ -242,37 +242,40 @@ class TestStructLmCall:
         assert params["roles"] == ["user"]
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
-    def test_struct_lm_call_dynamic_temperature_and_max_tokens_are_inputs(self):
+    def test_struct_lm_call_only_traces_messages_and_model(self):
         class Answer(af.Struct):
             text: str
 
-        def ir(prompt: str, model: str, temperature: float, max_tokens: int):
+        def ir(prompt: str, model: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
                 model=model,
                 struct=Answer,
-                temperature=temperature,
-                max_tokens=max_tokens,
             )
 
-        built_ir = af.trace(ir)("test", "gpt-5.2", 0.1, 32)
+        built_ir = af.trace(ir)("test", "gpt-5.2")
         eqn = built_ir.ir_eqns[0]
 
         assert eqn.params["struct"] is Answer
         assert eqn.params["roles"] == ["user"]
+        assert len(eqn.in_ir_tree) == 2
+        assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[2], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[3], af.core.IRVar)
 
-    def test_struct_lm_call_forwards_dynamic_temperature_and_max_tokens(self):
+    def test_struct_lm_call_leaves_litellm_params_to_active_client(self):
         class Answer(af.Struct):
             text: str
 
-        class RuntimeKwargStructRouter:
+        class ConfiguredStructRouter:
+            def __init__(self):
+                self.litellm_params = {"m1": {"temperature": 0.6, "max_tokens": 96}}
+
             def completion(self, *, messages: list[dict], model: str, response_format, **kwargs):
+                assert kwargs == {}
+                params = self.litellm_params[model]
                 payload = {
                     "text": (
-                        f"{model}|{kwargs['temperature']}|{kwargs['max_tokens']}|"
+                        f"{model}|{params['temperature']}|{params['max_tokens']}|"
                         f"{messages[-1]['content']}"
                     )
                 }
@@ -285,19 +288,17 @@ class TestStructLmCall:
                     messages=messages, model=model, response_format=response_format, **kwargs
                 )
 
-        def ir(prompt: str, model: str, temperature: float, max_tokens: int):
+        def ir(prompt: str, model: str):
             return af.struct_lm_call(
                 [dict(role="user", content=prompt)],
                 model=model,
                 struct=Answer,
-                temperature=temperature,
-                max_tokens=max_tokens,
             )
 
-        built_ir = af.trace(ir)("test", "gpt-5.2", 0.1, 32)
+        built_ir = af.trace(ir)("test", "gpt-5.2")
 
-        with af.using_client(RuntimeKwargStructRouter()):
-            result = built_ir.call("hello", "m1", 0.6, 96)
+        with af.using_client(ConfiguredStructRouter()):
+            result = built_ir.call("hello", "m1")
 
         assert result.text == "m1|0.6|96|hello"
 

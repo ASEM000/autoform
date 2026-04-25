@@ -21,6 +21,8 @@
 
   - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
 
+  - `lm_call(...)` and `struct_lm_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
+
 ### New Features
 
   - `trace(..., static=...)` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
@@ -49,8 +51,6 @@
     with af.using_client(client):
         result = af.call(ir)(inputs)
     ```
-
-  - `lm_call(...)` and `struct_lm_call(...)` now accept first-class `temperature=` and `max_tokens=` inputs. Those scalar LM controls can now vary across calls and batches.
 
   - Added inference primitives `factor` and `weight`.
 
