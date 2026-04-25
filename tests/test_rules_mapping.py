@@ -63,6 +63,36 @@ class TestInterpreterRuleMapping:
         except AssertionError:
             pass
 
+    def test_replace_allows_explicit_overwrite(self):
+        mapping = af.core.InterpreterRuleMapping()
+        p = af.core.Prim("test_replace")
+
+        @ft.partial(mapping.set, p)
+        def rule1(x):
+            return x
+
+        @ft.partial(mapping.set, p, replace=True)
+        def rule2(x):
+            return x + 1
+
+        assert mapping.get(p) is rule2
+        assert mapping.get(p)(1) == 2
+
+    def test_async_replace_allows_explicit_overwrite(self):
+        mapping = af.core.InterpreterRuleMapping()
+        p = af.core.Prim("test_async_replace")
+
+        @ft.partial(mapping.aset, p)
+        async def rule1(x):
+            return x
+
+        @ft.partial(mapping.aset, p, replace=True)
+        async def rule2(x):
+            return x + 1
+
+        assert mapping.aget(p) is rule2
+        assert asyncio.run(mapping.aget(p)(1)) == 2
+
     def test_concurrent_registration(self):
         mapping = af.core.InterpreterRuleMapping()
         results = []

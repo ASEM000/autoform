@@ -65,6 +65,7 @@ The last line is the point: `batch(pullback(ir))`, transformations compose.
 | `batch` | Vectorize over inputs |
 | `pushforward` | Forward-mode-like transform |
 | `pullback` | Reverse-mode-like transform |
+| `custom` | Optional custom transform rules for a function boundary |
 | `sched` | Auto-concurrent execution |
 
 </div>
