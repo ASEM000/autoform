@@ -964,7 +964,7 @@ class TestWhileLoopWithLLM:
             assert len(r) > 0
 
     @requires_llm
-    def test_struct_lm_call(self):
+    def test_lm_struct_call(self):
         class Sentiment(af.Struct):
             positive: bool
             confidence: float
@@ -972,7 +972,7 @@ class TestWhileLoopWithLLM:
 
         def analyze(text):
             msgs = [{"role": "user", "content": af.format("Analyze sentiment: {}", text)}]
-            return af.struct_lm_call(msgs, model=TEST_MODEL, struct=Sentiment)
+            return af.lm_struct_call(msgs, model=TEST_MODEL, struct=Sentiment)
 
         analyze_ir = trace(analyze)("text")
         result = analyze_ir.call("I love this product! It's amazing!")
@@ -1035,7 +1035,7 @@ class TestWhileLoopWithLLM:
             reason: str
 
         def cond(text):
-            verdict = af.struct_lm_call(
+            verdict = af.lm_struct_call(
                 [
                     {
                         "role": "user",

@@ -21,6 +21,8 @@
 
   - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
 
+  - `lm_call(...)` and `lm_struct_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
+
 ### New Features
 
   - `trace(..., static=...)` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
@@ -37,7 +39,7 @@
     # "error: timeout"
     ```
 
-  - `using_client` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
+  - `lm_client` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
 
     ```python
     import autoform as af
@@ -46,11 +48,9 @@
     litellm_params = dict(model="gpt-5.2", tpm=100_000, rpm=1_000)
     model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
     client = Router(model_list=model_list, max_parallel_requests=10)
-    with af.using_client(client):
+    with af.lm_client(client):
         result = af.call(ir)(inputs)
     ```
-
-  - `lm_call(...)` and `struct_lm_call(...)` now accept first-class `temperature=` and `max_tokens=` inputs. Those scalar LM controls can now vary across calls and batches.
 
   - Added inference primitives `factor` and `weight`.
 
@@ -271,7 +271,7 @@
     af.match("yes", "yes")  # True
     ```
 
-  - Language model integration via `lm_call` and `struct_lm_call` (powered by LiteLLM)
+  - Language model integration via `lm_call` and `lm_struct_call` (powered by LiteLLM)
   
     ```python
     def explain(topic):

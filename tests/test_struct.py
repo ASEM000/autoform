@@ -206,13 +206,13 @@ class TestStruct:
 
 
 class TestStructLmCall:
-    def test_struct_lm_call_build(self):
+    def test_lm_struct_call_build(self):
         class Answer(af.Struct):
             reasoning: str
             answer: int
 
         def ir(prompt: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model="gpt-5.2",
                 struct=Answer,
@@ -220,14 +220,14 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test")
         assert len(built_ir.ir_eqns) == 1
-        assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
+        assert built_ir.ir_eqns[0].prim.name == "lm_struct_call"
 
-    def test_struct_lm_call_keeps_model_in_inputs(self):
+    def test_lm_struct_call_keeps_model_in_inputs(self):
         class Answer(af.Struct):
             text: str
 
         def ir(prompt: str, model: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model=model,
                 struct=Answer,
@@ -242,37 +242,40 @@ class TestStructLmCall:
         assert params["roles"] == ["user"]
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
-    def test_struct_lm_call_dynamic_temperature_and_max_tokens_are_inputs(self):
+    def test_lm_struct_call_only_traces_messages_and_model(self):
         class Answer(af.Struct):
             text: str
 
-        def ir(prompt: str, model: str, temperature: float, max_tokens: int):
-            return af.struct_lm_call(
+        def ir(prompt: str, model: str):
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model=model,
                 struct=Answer,
-                temperature=temperature,
-                max_tokens=max_tokens,
             )
 
-        built_ir = af.trace(ir)("test", "gpt-5.2", 0.1, 32)
+        built_ir = af.trace(ir)("test", "gpt-5.2")
         eqn = built_ir.ir_eqns[0]
 
         assert eqn.params["struct"] is Answer
         assert eqn.params["roles"] == ["user"]
+        assert len(eqn.in_ir_tree) == 2
+        assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[2], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[3], af.core.IRVar)
 
-    def test_struct_lm_call_forwards_dynamic_temperature_and_max_tokens(self):
+    def test_lm_struct_call_leaves_litellm_params_to_active_client(self):
         class Answer(af.Struct):
             text: str
 
-        class RuntimeKwargStructRouter:
+        class ConfiguredStructRouter:
+            def __init__(self):
+                self.litellm_params = {"m1": {"temperature": 0.6, "max_tokens": 96}}
+
             def completion(self, *, messages: list[dict], model: str, response_format, **kwargs):
+                assert kwargs == {}
+                params = self.litellm_params[model]
                 payload = {
                     "text": (
-                        f"{model}|{kwargs['temperature']}|{kwargs['max_tokens']}|"
+                        f"{model}|{params['temperature']}|{params['max_tokens']}|"
                         f"{messages[-1]['content']}"
                     )
                 }
@@ -285,28 +288,8 @@ class TestStructLmCall:
                     messages=messages, model=model, response_format=response_format, **kwargs
                 )
 
-        def ir(prompt: str, model: str, temperature: float, max_tokens: int):
-            return af.struct_lm_call(
-                [dict(role="user", content=prompt)],
-                model=model,
-                struct=Answer,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-
-        built_ir = af.trace(ir)("test", "gpt-5.2", 0.1, 32)
-
-        with af.using_client(RuntimeKwargStructRouter()):
-            result = built_ir.call("hello", "m1", 0.6, 96)
-
-        assert result.text == "m1|0.6|96|hello"
-
-    def test_struct_lm_call_executes_with_variable_model(self):
-        class Answer(af.Struct):
-            text: str
-
         def ir(prompt: str, model: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model=model,
                 struct=Answer,
@@ -314,18 +297,36 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test", "gpt-5.2")
 
-        with af.using_client(StructRouter()):
+        with af.lm_client(ConfiguredStructRouter()):
+            result = built_ir.call("hello", "m1")
+
+        assert result.text == "m1|0.6|96|hello"
+
+    def test_lm_struct_call_executes_with_variable_model(self):
+        class Answer(af.Struct):
+            text: str
+
+        def ir(prompt: str, model: str):
+            return af.lm_struct_call(
+                [dict(role="user", content=prompt)],
+                model=model,
+                struct=Answer,
+            )
+
+        built_ir = af.trace(ir)("test", "gpt-5.2")
+
+        with af.lm_client(StructRouter()):
             result = built_ir.call("hello", "m1")
 
         assert result.text == "m1|hello"
 
-    def test_struct_lm_call_eval_returns_var_tree(self):
+    def test_lm_struct_call_eval_returns_var_tree(self):
         class Answer(af.Struct):
             field1: str
             field2: str
 
         def ir(prompt: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model="gpt-5.2",
                 struct=Answer,
@@ -333,14 +334,14 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test")
         assert len(built_ir.ir_eqns) == 1
-        assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
+        assert built_ir.ir_eqns[0].prim.name == "lm_struct_call"
 
-    def test_struct_lm_call_pullback(self):
+    def test_lm_struct_call_pullback(self):
         class Answer(af.Struct):
             text: str
 
         def ir(prompt: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model="gpt-5.2",
                 struct=Answer,
@@ -351,12 +352,12 @@ class TestStructLmCall:
         assert pb_ir is not None
         assert len(pb_ir.ir_eqns) > 0
 
-    def test_struct_lm_call_assertion_on_non_struct(self):
+    def test_lm_struct_call_assertion_on_non_struct(self):
         class NotAStruct:
             pass
 
         try:
-            af.struct_lm_call(
+            af.lm_struct_call(
                 [dict(role="user", content="test")],
                 model="gpt-5.2",
                 struct=NotAStruct,
@@ -365,12 +366,12 @@ class TestStructLmCall:
         except AssertionError as e:
             assert "Struct" in str(e)
 
-    def test_struct_lm_call_with_array_field(self):
+    def test_lm_struct_call_with_array_field(self):
         class WithArray(af.Struct):
             items: Annotated[list[str], Len(3, 3)]
 
         def ir(prompt: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model="gpt-5.2",
                 struct=WithArray,
@@ -378,9 +379,9 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test")
         assert len(built_ir.ir_eqns) == 1
-        assert built_ir.ir_eqns[0].prim.name == "struct_lm_call"
+        assert built_ir.ir_eqns[0].prim.name == "lm_struct_call"
 
-    def test_struct_lm_call_with_map_chain(self):
+    def test_lm_struct_call_with_map_chain(self):
         class Step1(af.Struct):
             draft: str
 
@@ -388,13 +389,13 @@ class TestStructLmCall:
             final: str
 
         def ir(prompt: str):
-            step1 = af.struct_lm_call(
+            step1 = af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model="gpt-5.2",
                 struct=Step1,
             )
             refined = af.utils.treelib.map(lambda x: af.format("[refined] {}", x), step1)
-            step2 = af.struct_lm_call(
+            step2 = af.lm_struct_call(
                 [dict(role="user", content=refined.draft)],
                 model="gpt-5.2",
                 struct=Step2,
@@ -403,8 +404,8 @@ class TestStructLmCall:
 
         built_ir = af.trace(ir)("test")
         prim_names = [eqn.prim.name for eqn in built_ir.ir_eqns]
-        assert "struct_lm_call" in prim_names
-        assert prim_names.count("struct_lm_call") == 2
+        assert "lm_struct_call" in prim_names
+        assert prim_names.count("lm_struct_call") == 2
 
 
 class TestStructInAxes:
@@ -985,7 +986,7 @@ class TestStructComplex:
         assert output == "[hello,world]"
         assert isinstance(grad[0], Pair)
 
-    def test_struct_lm_call_nested_struct_traces(self):
+    def test_lm_struct_call_nested_struct_traces(self):
         class Inner(af.Struct):
             detail: str
 
@@ -995,7 +996,7 @@ class TestStructComplex:
             tags: Annotated[list[str], Len(2, 2)]
 
         def program(prompt: str):
-            return af.struct_lm_call(
+            return af.lm_struct_call(
                 [dict(role="user", content=prompt)],
                 model="gpt-5.2",
                 struct=Outer,

@@ -194,46 +194,41 @@ class TestLMPrimitive:
         assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
 
-    def test_lm_call_dynamic_temperature_and_max_tokens_are_inputs(self):
-        def program(prompt: str, model: str, temperature: float, max_tokens: int):
-            return af.lm_call(
-                [{"role": "user", "content": prompt}],
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+    def test_lm_call_only_traces_messages_and_model(self):
+        def program(prompt: str, model: str):
+            return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2", 0.2, 64)
+        ir = af.trace(program)("test", "gpt-5.2")
         eqn = ir.ir_eqns[0]
 
         assert eqn.params == {"roles": ["user"]}
+        assert len(eqn.in_ir_tree) == 2
+        assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
         assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[2], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[3], af.core.IRVar)
 
-    def test_lm_call_forwards_dynamic_temperature_and_max_tokens(self):
-        class RuntimeKwargRouter:
+    def test_lm_call_leaves_litellm_params_to_active_client(self):
+        class ConfiguredRouter:
+            def __init__(self):
+                self.litellm_params = {"m1": {"temperature": 0.7, "max_tokens": 128}}
+
             def completion(self, *, messages: list[dict], model: str, **kwargs):
+                assert kwargs == {}
+                params = self.litellm_params[model]
                 return FakeResponse(
-                    f"{model}|{kwargs['temperature']}|{kwargs['max_tokens']}|"
+                    f"{model}|{params['temperature']}|{params['max_tokens']}|"
                     f"{messages[-1]['content']}"
                 )
 
             async def acompletion(self, *, messages: list[dict], model: str, **kwargs):
                 return self.completion(messages=messages, model=model, **kwargs)
 
-        def program(prompt: str, model: str, temperature: float, max_tokens: int):
-            return af.lm_call(
-                [{"role": "user", "content": prompt}],
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+        def program(prompt: str, model: str):
+            return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2", 0.2, 64)
+        ir = af.trace(program)("test", "gpt-5.2")
 
-        with af.using_client(RuntimeKwargRouter()):
-            result = ir.call("hello", "m1", 0.7, 128)
+        with af.lm_client(ConfiguredRouter()):
+            result = ir.call("hello", "m1")
 
         assert result == "m1|0.7|128|hello"
 
@@ -244,7 +239,7 @@ class TestLMPrimitive:
         ir = af.trace(program)("test", "gpt-5.2")
         batched_ir = af.batch(ir, in_axes=(True, True))
 
-        with af.using_client(EchoRouter()):
+        with af.lm_client(EchoRouter()):
             result = batched_ir.call(["hello", "goodbye"], ["m1", "m2"])
 
         assert result == ["m1|hello", "m2|goodbye"]
@@ -256,7 +251,7 @@ class TestLMPrimitive:
         ir = af.trace(program)("test", "gpt-5.2")
         pb_ir = af.pullback(ir)
 
-        with af.using_client(EchoRouter()):
+        with af.lm_client(EchoRouter()):
             out, cotangent = pb_ir.call(("hello", "m1"), "feedback")
 
         assert out == "m1|hello"
