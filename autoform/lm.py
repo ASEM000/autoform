@@ -300,11 +300,12 @@ batch_rules.aset(lm_call_p, abatch_lm_call)
 # STRUCT LM CALL
 # ==================================================================================================
 
-struct_lm_call_p = Prim("struct_lm_call")
+lm_struct_call_p = Prim("lm_struct_call")
 
 
-def struct_lm_call[T: Struct](
+def lm_struct_call[T: Struct](
     messages: list[dict[str, str]],
+    /,
     *,
     model: str,
     struct: type[T],
@@ -329,7 +330,7 @@ def struct_lm_call[T: Struct](
         ...     answer: int
         >>> def solver(question):
         ...     messages = [{"role": "user", "content": question}]
-        ...     return af.struct_lm_call(messages, model="gpt-5.2", struct=Answer)
+        ...     return af.lm_struct_call(messages, model="gpt-5.2", struct=Answer)
         >>> ir = af.trace(solver)("What is 2+2?")  # doctest: +SKIP
         >>> result = ir.call("What is 2+2?")  # doctest: +SKIP
         >>> result.answer  # doctest: +SKIP
@@ -344,10 +345,10 @@ def struct_lm_call[T: Struct](
     roles = [m["role"] for m in messages]
     contents = [m["content"] for m in messages]
     in_tree = (contents, model)
-    return struct_lm_call_p.bind(in_tree, roles=roles, struct=struct)
+    return lm_struct_call_p.bind(in_tree, roles=roles, struct=struct)
 
 
-def impl_struct_lm_call[T: Struct](
+def impl_lm_struct_call[T: Struct](
     in_tree: Tree,
     /,
     *,
@@ -364,7 +365,7 @@ def impl_struct_lm_call[T: Struct](
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
-async def aimpl_struct_lm_call[T: Struct](
+async def aimpl_lm_struct_call[T: Struct](
     in_tree: Tree,
     /,
     *,
@@ -381,7 +382,7 @@ async def aimpl_struct_lm_call[T: Struct](
     return struct.model_validate_json(resp.choices[0].message.content)
 
 
-def abstract_struct_lm_call[T: Struct](
+def abstract_lm_struct_call[T: Struct](
     in_tree: Tree,
     /,
     *,
@@ -394,7 +395,7 @@ def abstract_struct_lm_call[T: Struct](
     return treelib.map(TypedAVal, struct_type_tree(struct))
 
 
-def pushforward_struct_lm_call(
+def pushforward_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -406,12 +407,12 @@ def pushforward_struct_lm_call(
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
     t_tree = (materialize(tangent_contents), primal_model)
-    p_resp = struct_lm_call_p.bind(p_tree, roles=roles, struct=struct)
-    t_resp = struct_lm_call_p.bind(t_tree, roles=roles, struct=struct)
+    p_resp = lm_struct_call_p.bind(p_tree, roles=roles, struct=struct)
+    t_resp = lm_struct_call_p.bind(t_tree, roles=roles, struct=struct)
     return p_resp, t_resp
 
 
-async def apush_struct_lm_call(
+async def apush_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -421,14 +422,14 @@ async def apush_struct_lm_call(
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
-    abind = ft.partial(struct_lm_call_p.abind, roles=roles, struct=struct)
+    abind = ft.partial(lm_struct_call_p.abind, roles=roles, struct=struct)
     p_tree = (primal_contents, primal_model)
     t_tree = (materialize(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_struct_lm_call(
+def pullback_fwd_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -436,12 +437,12 @@ def pullback_fwd_struct_lm_call(
     struct: type[Struct],
 ) -> tuple[Tree, Tree]:
     contents, model = in_tree
-    out = struct_lm_call_p.bind(in_tree, roles=roles, struct=struct)
+    out = lm_struct_call_p.bind(in_tree, roles=roles, struct=struct)
     residuals = (contents, model, out)
     return out, residuals
 
 
-async def apull_fwd_struct_lm_call(
+async def apull_fwd_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -449,12 +450,12 @@ async def apull_fwd_struct_lm_call(
     struct: type[Struct],
 ) -> tuple[Tree, Tree]:
     contents, model = in_tree
-    out = await struct_lm_call_p.abind(in_tree, roles=roles, struct=struct)
+    out = await lm_struct_call_p.abind(in_tree, roles=roles, struct=struct)
     residuals = (contents, model, out)
     return out, residuals
 
 
-def pullback_bwd_struct_lm_call(
+def pullback_bwd_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -472,7 +473,7 @@ def pullback_bwd_struct_lm_call(
     return grads, Zero(str)
 
 
-async def apull_bwd_struct_lm_call(
+async def apull_bwd_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -494,7 +495,7 @@ async def apull_bwd_struct_lm_call(
     )
 
 
-def batch_struct_lm_call(
+def batch_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -504,19 +505,19 @@ def batch_struct_lm_call(
     batch_size, in_batched, in_values = in_tree
 
     if batch_spec(in_values, in_batched) is None:
-        result = struct_lm_call_p.bind(in_values, roles=roles, struct=struct)
+        result = lm_struct_call_p.bind(in_values, roles=roles, struct=struct)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    bind = ft.partial(struct_lm_call_p.bind, roles=roles, struct=struct)
+    bind = ft.partial(lm_struct_call_p.bind, roles=roles, struct=struct)
     results = [bind(unbatch(b)) for b in range(batch_size)]
     out_batched = treelib.map(lambda _: True, results[0])
     out_ib = batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
 
 
-async def abatch_struct_lm_call(
+async def abatch_lm_struct_call(
     in_tree: Tree,
     /,
     *,
@@ -526,26 +527,26 @@ async def abatch_struct_lm_call(
     batch_size, in_batched, in_values = in_tree
 
     if batch_spec(in_values, in_batched) is None:
-        result = await struct_lm_call_p.abind(in_values, roles=roles, struct=struct)
+        result = await lm_struct_call_p.abind(in_values, roles=roles, struct=struct)
         out_batched = treelib.map(lambda _: False, result)
         return result, out_batched
 
     unbatch = ft.partial(batch_index, in_values, in_batched)
-    abind = ft.partial(struct_lm_call_p.abind, roles=roles, struct=struct)
+    abind = ft.partial(lm_struct_call_p.abind, roles=roles, struct=struct)
     results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
     out_batched = treelib.map(lambda _: True, results[0])
     out_ib = batch_transpose(batch_size, out_batched, list(results))
     return out_ib, out_batched
 
 
-impl_rules.set(struct_lm_call_p, impl_struct_lm_call)
-impl_rules.aset(struct_lm_call_p, aimpl_struct_lm_call)
-abstract_rules.set(struct_lm_call_p, abstract_struct_lm_call)
-push_rules.set(struct_lm_call_p, pushforward_struct_lm_call)
-push_rules.aset(struct_lm_call_p, apush_struct_lm_call)
-pull_fwd_rules.set(struct_lm_call_p, pullback_fwd_struct_lm_call)
-pull_fwd_rules.aset(struct_lm_call_p, apull_fwd_struct_lm_call)
-pull_bwd_rules.set(struct_lm_call_p, pullback_bwd_struct_lm_call)
-pull_bwd_rules.aset(struct_lm_call_p, apull_bwd_struct_lm_call)
-batch_rules.set(struct_lm_call_p, batch_struct_lm_call)
-batch_rules.aset(struct_lm_call_p, abatch_struct_lm_call)
+impl_rules.set(lm_struct_call_p, impl_lm_struct_call)
+impl_rules.aset(lm_struct_call_p, aimpl_lm_struct_call)
+abstract_rules.set(lm_struct_call_p, abstract_lm_struct_call)
+push_rules.set(lm_struct_call_p, pushforward_lm_struct_call)
+push_rules.aset(lm_struct_call_p, apush_lm_struct_call)
+pull_fwd_rules.set(lm_struct_call_p, pullback_fwd_lm_struct_call)
+pull_fwd_rules.aset(lm_struct_call_p, apull_fwd_lm_struct_call)
+pull_bwd_rules.set(lm_struct_call_p, pullback_bwd_lm_struct_call)
+pull_bwd_rules.aset(lm_struct_call_p, apull_bwd_lm_struct_call)
+batch_rules.set(lm_struct_call_p, batch_lm_struct_call)
+batch_rules.aset(lm_struct_call_p, abatch_lm_struct_call)

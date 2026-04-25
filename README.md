@@ -187,7 +187,7 @@ def body(state: State):
         dict(role="system", content="You are a tool-use agent."),
         dict(role="user", content=state.history),
     ]
-    d = af.struct_lm_call(messages, model="gpt-5.2", struct=Decision)
+    d = af.lm_struct_call(messages, model="gpt-5.2", struct=Decision)
     new_history = af.switch(d.tool, tool_branches, d.args, state.history)
     return State(history=new_history, result=d.answer, status=d.status)
 

@@ -146,7 +146,7 @@ def textgrad_style_lm_call(
 def impl_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[af.Struct]
 ):
-    return af.core.impl_rules.get(af.struct_lm_call_p)(
+    return af.core.impl_rules.get(af.lm_struct_call_p)(
         contents, roles=roles, model=model, struct=struct
     )
 
@@ -160,7 +160,7 @@ def abstract_textgrad_style_lm_call(in_tree, *, struct: type[af.Struct], **param
 def pull_fwd_textgrad_style_lm_call(
     contents: tuple, *, roles: tuple, model: str, struct: type[af.Struct]
 ):
-    out = af.core.impl_rules.get(af.struct_lm_call_p)(
+    out = af.core.impl_rules.get(af.lm_struct_call_p)(
         contents, roles=roles, model=model, struct=struct
     )
     residuals = (contents, roles, out)
@@ -228,10 +228,10 @@ def push_textgrad_style_lm_call(in_tree, *, roles: tuple, model: str, struct: ty
     """
     primals, tangents = in_tree
     tangents = af.ad.materialize(tangents)
-    p_out = af.core.impl_rules.get(af.struct_lm_call_p)(
+    p_out = af.core.impl_rules.get(af.lm_struct_call_p)(
         primals, roles=roles, model=model, struct=struct
     )
-    t_out = af.core.impl_rules.get(af.struct_lm_call_p)(
+    t_out = af.core.impl_rules.get(af.lm_struct_call_p)(
         tangents, roles=roles, model=model, struct=struct
     )
     return p_out, t_out

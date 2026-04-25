@@ -21,7 +21,7 @@
 
   - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
 
-  - `lm_call(...)` and `struct_lm_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
+  - `lm_call(...)` and `lm_struct_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
 
 ### New Features
 
@@ -271,7 +271,7 @@
     af.match("yes", "yes")  # True
     ```
 
-  - Language model integration via `lm_call` and `struct_lm_call` (powered by LiteLLM)
+  - Language model integration via `lm_call` and `lm_struct_call` (powered by LiteLLM)
   
     ```python
     def explain(topic):

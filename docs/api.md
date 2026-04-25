@@ -42,7 +42,7 @@ Language model calls.
 
 ```{eval-rst}
 .. autofunction:: autoform.lm_call
-.. autofunction:: autoform.struct_lm_call
+.. autofunction:: autoform.lm_struct_call
 .. autofunction:: autoform.lm_client
 ```
 
