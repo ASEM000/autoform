@@ -170,6 +170,13 @@ class State(af.Struct):
     status: Literal["continue", "done"]
 
 
+# tool implementations are application-specific. Each branch should have
+# signature (args, history) -> new_history.
+def search(query: str, history: str) -> str: ...
+def calc(expression: str, history: str) -> str: ...
+def done(_: str, history: str) -> str: ...
+
+
 # each tool branch is traced independently; switch dispatches at runtime.
 tool_branches = dict(
     search=af.trace(search)("...", "..."),  # (args, history) -> new_history
@@ -189,15 +196,15 @@ def body(state: State):
     ]
     d = af.lm_struct_call(messages, model="gpt-5.2", struct=Decision)
     new_history = af.switch(d.tool, tool_branches, d.args, state.history)
-    return State(history=new_history, result=d.answer, status=d.status)
+    return State.model_construct(history=new_history, result=d.answer, status=d.status)
 
 
-cond_ir = af.trace(cond)(State(history="...", result="", status="..."))
-body_ir = af.trace(body)(State(history="...", result="", status="..."))
+cond_ir = af.trace(cond)(State.model_construct(history="...", result="", status="continue"))
+body_ir = af.trace(body)(State.model_construct(history="...", result="", status="continue"))
 
 
 def agent(question: str):
-    init = State(history=question, result="", status="continue")
+    init = State.model_construct(history=question, result="", status="continue")
     return af.while_loop(cond_ir, body_ir, init, max_iters=5).result
 
 
