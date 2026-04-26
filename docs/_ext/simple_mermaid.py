@@ -12,8 +12,30 @@ const currentTheme = () => {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default";
 };
 
-mermaid.initialize({ startOnLoad: false, theme: currentTheme() });
-await mermaid.run({ querySelector: ".mermaid" });
+const restoreSources = () => {
+  document.querySelectorAll(".mermaid").forEach((element) => {
+    element.dataset.mermaidSource ||= element.textContent;
+    element.textContent = element.dataset.mermaidSource;
+    element.removeAttribute("data-processed");
+  });
+};
+
+let renderPromise = Promise.resolve();
+const render = () => {
+  renderPromise = renderPromise.then(async () => {
+    restoreSources();
+    mermaid.initialize({ startOnLoad: false, theme: currentTheme() });
+    await mermaid.run({ querySelector: ".mermaid" });
+  });
+  return renderPromise;
+};
+
+await render();
+
+new MutationObserver(render).observe(document.body, {
+  attributes: true,
+  attributeFilter: ["data-theme"],
+});
 """
 
 
@@ -44,7 +66,11 @@ def install_mermaid_js(app, pagename, templatename, context, doctree):
     if doctree is None or not doctree.next_node(MermaidNode):
         return
 
+    if getattr(app, "_simple_mermaid_js_installed", False):
+        return
+
     app.add_js_file(None, body=MERMAID_JS, priority=300, type="module")
+    app._simple_mermaid_js_installed = True
 
 
 def setup(app):
