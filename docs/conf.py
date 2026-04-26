@@ -18,6 +18,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, os.path.abspath("_ext"))
 
 project = "autoform"
 copyright = "2026, Mahmoud Asem"
@@ -31,6 +32,7 @@ extensions = [
     "sphinx_copybutton",  # copy button on code blocks
     "sphinx_design",  # grids, cards, tabs, dropdowns
     "myst_parser",
+    "simple_mermaid",
     "nbsphinx",
 ]
 
@@ -44,16 +46,29 @@ exclude_patterns = [
 ]
 master_doc = "index"
 suppress_warnings = ["epub.duplicated_toc_entry"]
+myst_fence_as_directive = ["mermaid"]
 
-html_theme = "piccolo_theme"
+html_theme = "furo"
 html_static_path = ["_static"]
 html_title = "autoform"
 html_short_title = "autoform"
 html_theme_options = {
-    "source_url": "https://github.com/ASEM000/autoform",
-    "source_icon": "github",
+    "source_repository": "https://github.com/ASEM000/autoform/",
+    "source_branch": "main",
+    "source_directory": "docs/",
+    "top_of_page_buttons": ["view", "edit"],
+    "light_css_variables": {
+        "color-brand-primary": "#0051ff",
+        "color-brand-content": "#0051ff",
+        "content-width": "60rem",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#7aa2ff",
+        "color-brand-content": "#7aa2ff",
+    },
 }
 pygments_style = "default"
+pygments_dark_style = "monokai"
 
 # Napoleon settings
 napoleon_google_docstring = True
