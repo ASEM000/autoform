@@ -13,17 +13,19 @@ const currentTheme = () => {
 };
 
 const restoreSources = () => {
-  document.querySelectorAll(".mermaid").forEach((element) => {
+  const elements = document.querySelectorAll(".mermaid");
+  elements.forEach((element) => {
     element.dataset.mermaidSource ||= element.textContent;
     element.textContent = element.dataset.mermaidSource;
     element.removeAttribute("data-processed");
   });
+  return elements.length > 0;
 };
 
 let renderPromise = Promise.resolve();
 const render = () => {
-  renderPromise = renderPromise.then(async () => {
-    restoreSources();
+  renderPromise = renderPromise.catch(() => {}).then(async () => {
+    if (!restoreSources()) return;
     mermaid.initialize({ startOnLoad: false, theme: currentTheme() });
     await mermaid.run({ querySelector: ".mermaid" });
   });
@@ -62,17 +64,6 @@ def visit_mermaid_text(self, node):
     raise nodes.SkipNode
 
 
-def install_mermaid_js(app, pagename, templatename, context, doctree):
-    if doctree is None or not doctree.next_node(MermaidNode):
-        return
-
-    if getattr(app, "_simple_mermaid_js_installed", False):
-        return
-
-    app.add_js_file(None, body=MERMAID_JS, priority=300, type="module")
-    app._simple_mermaid_js_installed = True
-
-
 def setup(app):
     app.add_node(
         MermaidNode,
@@ -80,6 +71,6 @@ def setup(app):
         text=(visit_mermaid_text, None),
     )
     app.add_directive("mermaid", MermaidDirective)
-    app.connect("html-page-context", install_mermaid_js)
+    app.add_js_file(None, body=MERMAID_JS, priority=300, type="module")
 
     return {"parallel_read_safe": True, "parallel_write_safe": True}
