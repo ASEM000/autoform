@@ -65,8 +65,8 @@ html_theme_options = {
         "color-brand-content": "#7aa2ff",
     },
 }
-pygments_style = "default"
-pygments_dark_style = "monokai"
+pygments_style = "github-light"
+pygments_dark_style = "github-dark"
 
 # Napoleon settings
 napoleon_google_docstring = True
