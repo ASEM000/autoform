@@ -18,7 +18,6 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
-sys.path.insert(0, os.path.abspath("_ext"))
 
 project = "autoform"
 copyright = "2026, Mahmoud Asem"
@@ -32,7 +31,7 @@ extensions = [
     "sphinx_copybutton",  # copy button on code blocks
     "sphinx_design",  # grids, cards, tabs, dropdowns
     "myst_parser",
-    "simple_mermaid",
+    "sphinxcontrib.mermaid",
     "nbsphinx",
 ]
 
@@ -92,3 +91,7 @@ nbsphinx_codecell_lexer = "python3"
 # copybutton settings
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
 copybutton_prompt_is_regexp = True
+
+# Mermaid settings
+mermaid_js_priority = 300
+mermaid_fullscreen = False
