@@ -25,7 +25,7 @@ import optree
 
 from autoform.utils import treelib
 
-__all__ = ["Boolean", "Doc", "Enum", "Float", "Integer", "String", "build_schema", "build_value"]
+__all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "build"]
 
 json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
@@ -41,11 +41,12 @@ type Path = tuple[Any, ...]
 type ObjectProperties = OrderedDict[str, Any]
 type SchemaLeaf = ScalarSpec[Any] | EnumSpec[Any]
 type SchemaKey = tuple[tuple[SchemaLeaf, ...], optree.PyTreeSpec]
-type ValueCache = tuple[
+type TreeCache = tuple[
     optree.PyTreeSpec,
     optree.PyTreeSpec,
     tuple[tuple[SchemaLeaf, ValueRule, optree.PyTreeAccessor], ...],
 ]
+
 
 # ==================================================================================================
 # USER SCHEMA NODES
@@ -83,11 +84,11 @@ class ScalarSpec[T](SchemaSpec):
         return self.name
 
 
-class StringSpec(ScalarSpec[str]):
+class StrSpec(ScalarSpec[str]):
     __slots__ = []
 
 
-class IntegerSpec(ScalarSpec[int]):
+class IntSpec(ScalarSpec[int]):
     __slots__ = []
 
 
@@ -95,7 +96,7 @@ class FloatSpec(ScalarSpec[float]):
     __slots__ = []
 
 
-class BooleanSpec(ScalarSpec[bool]):
+class BoolSpec(ScalarSpec[bool]):
     __slots__ = []
 
 
@@ -199,14 +200,13 @@ treelib.register_node(
 )
 
 
-String = StringSpec(name="String", schema="string")
-Integer = IntegerSpec(name="Integer", schema="integer")
+Str = StrSpec(name="Str", schema="string")
+Int = IntSpec(name="Int", schema="integer")
 Float = FloatSpec(name="Float", schema="number")
-Boolean = BooleanSpec(name="Boolean", schema="boolean")
+Bool = BoolSpec(name="Bool", schema="boolean")
 
 schema_message = (
-    "expected pytree containing String, Integer, Float, Boolean, Enum[...], "
-    "or schema nodes with @ Doc(...)"
+    "expected pytree containing Str, Int, Float, Bool, Enum[...], or schema nodes with @ Doc(...)"
 )
 
 
@@ -230,10 +230,10 @@ def doc_schema(node: DocNode) -> tuple[Path, Any]:
     return tuple(path), value | {"description": node.text}
 
 
-schema_rules[StringSpec] = lambda s: {"type": s.schema}
-schema_rules[IntegerSpec] = lambda s: {"type": s.schema}
+schema_rules[StrSpec] = lambda s: {"type": s.schema}
+schema_rules[IntSpec] = lambda s: {"type": s.schema}
 schema_rules[FloatSpec] = lambda s: {"type": s.schema}
-schema_rules[BooleanSpec] = lambda s: {"type": s.schema}
+schema_rules[BoolSpec] = lambda s: {"type": s.schema}
 schema_rules[EnumSpec] = enum_schema
 schema_node_rules[DocNode] = doc_schema
 value_node_rules[DocNode] = lambda node: node.value
@@ -251,10 +251,10 @@ value_rules: dict[object, ValueRule] = {}
 transport_node_rules = defaultdict(lambda: default_transport_node)
 
 
-value_rules[StringSpec] = lambda s, v, a, p: v if type(v) is str else error(a, p, s)
-value_rules[IntegerSpec] = lambda s, v, a, p: v if type(v) is int else error(a, p, s)
+value_rules[StrSpec] = lambda s, v, a, p: v if type(v) is str else error(a, p, s)
+value_rules[IntSpec] = lambda s, v, a, p: v if type(v) is int else error(a, p, s)
 value_rules[FloatSpec] = lambda s, v, a, p: float(v) if type(v) in (int, float) else error(a, p, s)
-value_rules[BooleanSpec] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
+value_rules[BoolSpec] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
 value_rules[EnumSpec] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
 
 
@@ -271,14 +271,10 @@ transport_node_rules[DocNode] = doc_transport
 # ==================================================================================================
 
 
-def build_schema(schema: Schema) -> dict[str, Any]:
+def build(schema: Schema) -> tuple[dict[str, Any], Callable[[Any], Any]]:
     leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    return build_schema_for_key((tuple(leaves), spec))
-
-
-def build_value(schema: Schema, value: Any, path: str = "$") -> Any:
-    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    return build_value_from_cache(value_cache_for_key((tuple(leaves), spec)), value, path)
+    key = (tuple(leaves), spec)
+    return build_schema_for_key(key), parser_for_key(key)
 
 
 # ==================================================================================================
@@ -346,7 +342,13 @@ def is_schema_spec(node: Any) -> bool:
 
 
 @ft.lru_cache(maxsize=256)
-def value_cache_for_key(key: SchemaKey) -> ValueCache:
+def parser_for_key(key: SchemaKey) -> Callable[[Any], Any]:
+    cache = tree_cache_for_key(key)
+    return lambda value: build_from_cache(cache, value)
+
+
+@ft.lru_cache(maxsize=256)
+def tree_cache_for_key(key: SchemaKey) -> TreeCache:
     leaves, spec = key
     _, transport = spec.traverse(
         zip(spec.paths(), spec.accessors(), leaves, strict=True),
@@ -392,12 +394,12 @@ def transport_object(node: Any) -> tuple[Path, ObjectProperties]:
     return tuple(path), object_properties(children)
 
 
-def build_value_from_cache(cache: ValueCache, value: Any, path: str = "$") -> Any:
+def build_from_cache(cache: TreeCache, value: Any) -> Any:
     transport_spec, value_spec, rules = cache
     try:
         leaves = transport_spec.flatten_up_to(value)
     except ValueError:
         _, spec = treelib.flatten(value)
-        raise ValueError(f"{path}: expected {transport_spec}, got {spec}") from None
-    output = (rule(l, v, a, path) for v, (l, rule, a) in zip(leaves, rules, strict=True))
+        raise ValueError(f"$: expected {transport_spec}, got {spec}") from None
+    output = (rule(l, v, a, "$") for v, (l, rule, a) in zip(leaves, rules, strict=True))
     return value_spec.unflatten(output)

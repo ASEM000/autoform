@@ -20,12 +20,14 @@ import autoform.schema as schema
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": schema.String @ schema.Doc("Subject name."),
+        "name": schema.Str @ schema.Doc("Subject name."),
         "kind": schema.Enum["summary", "definition"] @ schema.Doc("Answer kind."),
         "score": schema.Float @ schema.Doc("Confidence score."),
     } @ schema.Doc("Answer object.")
 
-    assert schema.build_schema(answer) == {
+    json_schema, parse = schema.build(answer)
+
+    assert json_schema == {
         "type": "object",
         "properties": {
             "kind": {
@@ -40,19 +42,27 @@ def test_schema_dsl_builds_described_schema():
         "additionalProperties": False,
         "description": "Answer object.",
     }
+    assert parse(
+        {"name": "subject", "kind": "summary", "score": 1},
+    ) == {
+        "name": "subject",
+        "kind": "summary",
+        "score": 1.0,
+    }
 
 
-def test_schema_dsl_builds_value_tree():
+def test_schema_dsl_builds_tree():
     answer = {
-        "name": schema.String,
-        "count": schema.Integer,
+        "name": schema.Str,
+        "count": schema.Int,
         "score": schema.Float,
-        "ok": schema.Boolean,
+        "ok": schema.Bool,
         "kind": schema.Enum["summary", "definition"],
     }
 
-    assert schema.build_value(
-        answer,
+    _, parse = schema.build(answer)
+
+    assert parse(
         {"name": "hello", "count": 2, "score": 1, "ok": True, "kind": "summary"},
     ) == {
         "name": "hello",
@@ -83,9 +93,11 @@ def test_schema_dsl_builds_custom_pytree_value():
         path_entry_type=optree.GetAttrEntry,
     )
 
-    answer = Answer(schema.String, schema.Float)
+    answer = Answer(schema.Str, schema.Float)
 
-    assert schema.build_schema(answer) == {
+    json_schema, parse = schema.build(answer)
+
+    assert json_schema == {
         "type": "object",
         "properties": {
             "text": {"type": "string"},
@@ -94,12 +106,12 @@ def test_schema_dsl_builds_custom_pytree_value():
         "required": ["text", "score"],
         "additionalProperties": False,
     }
-    assert schema.build_value(answer, {"text": "hello", "score": 2}) == Answer("hello", 2.0)
+    assert parse({"text": "hello", "score": 2}) == Answer("hello", 2.0)
 
 
 def test_schema_dsl_rejects_invalid_forms():
-    with pytest.raises(TypeError, match="use String"):
-        schema.String()
+    with pytest.raises(TypeError, match="use Str"):
+        schema.Str()
     with pytest.raises(TypeError, match=r"use Enum\[\.\.\.\]"):
         schema.Enum("summary", "definition")
     with pytest.raises(TypeError, match="Enum values must share one type"):
@@ -109,7 +121,10 @@ def test_schema_dsl_rejects_invalid_forms():
 
 
 def test_schema_dsl_reports_value_errors_by_path():
+    _, parse_count = schema.build({"count": schema.Int})
+    _, parse_score = schema.build({"score": schema.Float})
+
     with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer"):
-        schema.build_value({"count": schema.Integer}, {"count": True})
+        parse_count({"count": True})
     with pytest.raises(ValueError, match=r"\$\['score'\]: expected number"):
-        schema.build_value({"score": schema.Float}, {"score": "bad"})
+        parse_score({"score": "bad"})
