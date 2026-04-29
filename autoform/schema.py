@@ -205,9 +205,7 @@ Int = IntSpec(name="Int", schema="integer")
 Float = FloatSpec(name="Float", schema="number")
 Bool = BoolSpec(name="Bool", schema="boolean")
 
-schema_message = (
-    "expected pytree containing Str, Int, Float, Bool, Enum[...], or schema nodes with @ Doc(...)"
-)
+schema_message = "Expected a pytree containing Str, Int, Float, Bool, Enum[...]"
 
 
 # ==================================================================================================
