@@ -15,7 +15,7 @@
 import json
 
 import autoform as af
-import autoform.schema as schema
+from autoform.schemas import build
 
 
 class FakeMessage:
@@ -61,8 +61,8 @@ class SchemaRouter:
 def test_lm_schema_call_executes_with_response_format():
     router = SchemaRouter()
     answer = {
-        "text": schema.Str(min=1, max=80),
-        "score": schema.Float(min=0, max=1),
+        "text": af.Str(min=1, max=80),
+        "score": af.Float(min=0, max=1),
     }
 
     with af.lm_client(router):
@@ -95,9 +95,9 @@ def test_lm_schema_call_executes_with_response_format():
 
 def test_lm_schema_call_traces_schema_as_static_param():
     answer = {
-        "text": schema.Str() @ schema.Doc("Short text."),
-        "score": schema.Float(),
-    } @ schema.Doc("Answer object.")
+        "text": af.Str() @ af.Doc("Short text."),
+        "score": af.Float(),
+    } @ af.Doc("Answer object.")
 
     def program(prompt: str, model: str):
         result = af.lm_schema_call(
@@ -109,7 +109,7 @@ def test_lm_schema_call_traces_schema_as_static_param():
 
     ir = af.trace(program)("test", "gpt-5.2")
     assert [eqn.prim.name for eqn in ir.ir_eqns] == ["lm_schema_call", "format"]
-    assert schema.build(ir.ir_eqns[0].params["schema"])[0] == schema.build(answer)[0]
+    assert build(ir.ir_eqns[0].params["schema"])[0] == build(answer)[0]
     assert "model" not in ir.ir_eqns[0].params
     assert isinstance(ir.ir_eqns[0].in_ir_tree[1], af.core.IRVar)
     assert isinstance(ir.ir_eqns[0].out_ir_tree["text"], af.core.IRVar)
@@ -121,8 +121,8 @@ def test_lm_schema_call_traces_schema_as_static_param():
 
 def test_batch_lm_schema_call_supports_variable_models():
     answer = {
-        "text": schema.Str(),
-        "score": schema.Float(),
+        "text": af.Str(),
+        "score": af.Float(),
     }
 
     def program(prompt: str, model: str):

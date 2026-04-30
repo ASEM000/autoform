@@ -15,17 +15,19 @@
 import optree
 import pytest
 
-import autoform.schema as schema
+import autoform as af
+from autoform.schemas import build
+from autoform.utils import treelib
 
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": schema.Str() @ schema.Doc("Subject name."),
-        "kind": schema.Enum("summary", "definition") @ schema.Doc("Answer kind."),
-        "score": schema.Float() @ schema.Doc("Confidence score."),
-    } @ schema.Doc("Answer object.")
+        "name": af.Str() @ af.Doc("Subject name."),
+        "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
+        "score": af.Float() @ af.Doc("Confidence score."),
+    } @ af.Doc("Answer object.")
 
-    json_schema, parse = schema.build(answer)
+    json_schema, parse = build(answer)
 
     assert json_schema == {
         "type": "object",
@@ -53,14 +55,14 @@ def test_schema_dsl_builds_described_schema():
 
 def test_schema_dsl_builds_tree():
     answer = {
-        "name": schema.Str(),
-        "count": schema.Int(),
-        "score": schema.Float(),
-        "ok": schema.Bool(),
-        "kind": schema.Enum("summary", "definition"),
+        "name": af.Str(),
+        "count": af.Int(),
+        "score": af.Float(),
+        "ok": af.Bool(),
+        "kind": af.Enum("summary", "definition"),
     }
 
-    _, parse = schema.build(answer)
+    _, parse = build(answer)
 
     assert parse(
         {"name": "hello", "count": 2, "score": 1, "ok": True, "kind": "summary"},
@@ -74,7 +76,7 @@ def test_schema_dsl_builds_tree():
 
 
 def test_schema_dsl_builds_string_constraints():
-    json_schema, parse = schema.build({"name": schema.Str(min=2, max=4, pattern=r"^[a-z]+$")})
+    json_schema, parse = build({"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")})
 
     assert json_schema == {
         "type": "object",
@@ -99,9 +101,9 @@ def test_schema_dsl_builds_string_constraints():
 
 
 def test_schema_dsl_builds_number_constraints():
-    json_schema, parse = schema.build({
-        "count": schema.Int(min=-2, max=2),
-        "score": schema.Float(min=0, max=1),
+    json_schema, parse = build({
+        "count": af.Int(min=-2, max=2),
+        "score": af.Float(min=0, max=1),
     })
 
     assert json_schema == {
@@ -137,16 +139,16 @@ def test_schema_dsl_builds_custom_pytree_value():
                 type(self) is type(other) and self.text == other.text and self.score == other.score
             )
 
-    schema.treelib.register_node(
+    treelib.register_node(
         Answer,
         lambda answer: ((answer.text, answer.score), None, ("text", "score")),
         lambda _, children: Answer(*children),
         path_entry_type=optree.GetAttrEntry,
     )
 
-    answer = Answer(schema.Str(), schema.Float())
+    answer = Answer(af.Str(), af.Float())
 
-    json_schema, parse = schema.build(answer)
+    json_schema, parse = build(answer)
 
     assert json_schema == {
         "type": "object",
@@ -162,34 +164,34 @@ def test_schema_dsl_builds_custom_pytree_value():
 
 def test_schema_dsl_rejects_invalid_forms():
     with pytest.raises(TypeError, match="unexpected keyword"):
-        schema.Str(minimum=0)
+        af.Str(minimum=0)
     with pytest.raises(TypeError, match="pattern must be a string"):
-        schema.Str(pattern=1)
+        af.Str(pattern=1)
     with pytest.raises(ValueError, match="min must be >= 0"):
-        schema.Str(min=-1)
+        af.Str(min=-1)
     with pytest.raises(ValueError, match="max must be >= 0"):
-        schema.Str(max=-1)
+        af.Str(max=-1)
     with pytest.raises(ValueError, match="min must be <= max"):
-        schema.Str(min=2, max=1)
+        af.Str(min=2, max=1)
     with pytest.raises(TypeError, match="min must be an int"):
-        schema.Int(min=0.5)
+        af.Int(min=0.5)
     with pytest.raises(ValueError, match="min must be <= max"):
-        schema.Int(min=2, max=1)
+        af.Int(min=2, max=1)
     with pytest.raises(TypeError, match="min must be a number"):
-        schema.Float(min="0")
+        af.Float(min="0")
     with pytest.raises(ValueError, match="min must be <= max"):
-        schema.Float(min=2, max=1)
+        af.Float(min=2, max=1)
     with pytest.raises(TypeError, match="Enum must have at least one value"):
-        schema.Enum()
+        af.Enum()
     with pytest.raises(TypeError, match="Enum values must share one type"):
-        schema.Enum("summary", 1)
+        af.Enum("summary", 1)
     with pytest.raises(TypeError, match="description must be a string"):
-        schema.Doc(1)
+        af.Doc(1)
 
 
 def test_schema_dsl_reports_value_errors_by_path():
-    _, parse_count = schema.build({"count": schema.Int()})
-    _, parse_score = schema.build({"score": schema.Float()})
+    _, parse_count = build({"count": af.Int()})
+    _, parse_score = build({"score": af.Float()})
 
     with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer"):
         parse_count({"count": True})
