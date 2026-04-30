@@ -21,7 +21,7 @@ from autoform.control import stop_gradient, switch, while_loop
 from autoform.core import Tag, fold, tag, trace
 from autoform.custom import custom
 from autoform.dce import dce
-from autoform.lm import lm_call, lm_client, lm_struct_call
+from autoform.lm import lm_call, lm_client, lm_schema_call, lm_struct_call
 from autoform.memoize import memoize
 from autoform.scheduling import depends, gather, sched
 from autoform.string import concat, format, match
@@ -49,6 +49,7 @@ __all__ = [
     "concat",
     "match",
     "lm_call",
+    "lm_schema_call",
     "lm_struct_call",
     "stop_gradient",
     "checkpoint",
