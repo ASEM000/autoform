@@ -58,7 +58,6 @@ Schema nodes for structured LM output.
 .. autoclass:: autoform.Bool
 .. autoclass:: autoform.Enum
 .. autoclass:: autoform.Doc
-.. autofunction:: autoform.schemas.build
 ```
 
 ## String Primitives
