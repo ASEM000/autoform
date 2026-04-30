@@ -39,7 +39,7 @@ type SchemaRule = Callable[[Any], dict[str, Any]]
 type ValueRule = Callable[[Any, Any, optree.PyTreeAccessor, str], Any]
 type Path = tuple[Any, ...]
 type ObjectProperties = OrderedDict[str, Any]
-type SchemaLeaf = ScalarSpec[Any] | EnumSpec[Any]
+type SchemaLeaf = Spec
 type SchemaKey = tuple[tuple[SchemaLeaf, ...], optree.PyTreeSpec]
 type TreeCache = tuple[
     optree.PyTreeSpec,
@@ -53,57 +53,38 @@ type TreeCache = tuple[
 # ==================================================================================================
 
 
-class SchemaSpec:
+class Spec:
     __slots__ = []
 
 
-class ScalarSpec[T](SchemaSpec):
-    __slots__ = ["name", "schema"]
+class Scalar[T](Spec):
+    __slots__ = []
 
-    def __new__(cls, name: str, schema: str):
-        self = object.__new__(cls)
-        self.name = name
-        self.schema = schema
-        return self
-
-    def __call__(self, *args: Any, **kwargs: Any) -> NoReturn:
-        raise TypeError(f"use {self.name}, not {self.name}()")
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            type(self) is type(other)
-            and isinstance(other, ScalarSpec)
-            and self.name == other.name
-            and self.schema == other.schema
-        )
-
-    def __hash__(self) -> int:
-        return hash((type(self), self.name, self.schema))
-
-    def __repr__(self) -> str:
-        return self.name
+    def __init_subclass__(cls, *, schema: str):
+        super().__init_subclass__()
+        cls.schema = schema
 
 
-class StrSpec(ScalarSpec[str]):
+class Str(Scalar[str], schema="string"):
     __slots__ = []
 
 
-class IntSpec(ScalarSpec[int]):
+class Int(Scalar[int], schema="integer"):
     __slots__ = []
 
 
-class FloatSpec(ScalarSpec[float]):
+class Float(Scalar[float], schema="number"):
     __slots__ = []
 
 
-class BoolSpec(ScalarSpec[bool]):
+class Bool(Scalar[bool], schema="boolean"):
     __slots__ = []
 
 
-class EnumSpec[T](SchemaSpec):
+class Enum(Spec):
     __slots__ = ["values"]
 
-    def __new__(cls, values: tuple[T, ...]):
+    def __init__(self, *values: Any):
         if not values:
             raise TypeError("Enum must have at least one value")
         value_types = {type(value) for value in values}
@@ -111,19 +92,13 @@ class EnumSpec[T](SchemaSpec):
             raise TypeError(f"Enum values must share one type, got {value_types!r}")
         if next(iter(value_types)) not in json_types:
             raise TypeError("Enum values must be str, int, float, or bool")
-        self = object.__new__(cls)
         self.values = values
-        return self
 
     def __contains__(self, value: Any) -> bool:
         return type(value) is type(self.values[0]) and value in self.values
 
     def __eq__(self, other: object) -> bool:
-        return (
-            type(self) is type(other)
-            and isinstance(other, EnumSpec)
-            and self.values == other.values
-        )
+        return type(self) is type(other) and isinstance(other, Enum) and self.values == other.values
 
     def __hash__(self) -> int:
         return hash((type(self), self.values))
@@ -132,44 +107,12 @@ class EnumSpec[T](SchemaSpec):
         return f"Enum{self.values!r}"
 
 
-class Enum:
-    __slots__ = []
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> NoReturn:
-        raise TypeError("use Enum[...], not Enum(...)")
-
-    def __class_getitem__(cls, values: Any):
-        return EnumSpec(values if isinstance(values, tuple) else (values,))
-
-
-class DocNode[T]:
+class Documented[T]:
     __slots__ = ["value", "text"]
 
-    def __new__(cls, value: T, text: str):
-        if not isinstance(text, str):
-            raise TypeError(f"description must be a string, got {text!r}")
-        self = object.__new__(cls)
+    def __init__(self, value: T, text: str):
         self.value = value
         self.text = text
-        return self
-
-    def __init__(self, value: T, text: str): ...
-
-    def __matmul__(self, doc: Doc):
-        if not isinstance(doc, Doc):
-            raise TypeError(f"description must be Doc(...), got {doc!r}")
-        return doc.__rmatmul__(self)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            type(self) is type(other)
-            and isinstance(other, DocNode)
-            and self.value == other.value
-            and self.text == other.text
-        )
-
-    def __hash__(self) -> int:
-        return hash((type(self), self.value, self.text))
 
     def __repr__(self) -> str:
         return f"{self.value!r} @ {self.text!r}"
@@ -178,34 +121,27 @@ class DocNode[T]:
 class Doc:
     __slots__ = ["text"]
 
-    def __new__(cls, text: str):
+    def __init__(self, text: str):
         if not isinstance(text, str):
             raise TypeError(f"description must be a string, got {text!r}")
-        self = object.__new__(cls)
         self.text = text
-        return self
 
     def __rmatmul__(self, value: Any):
-        return DocNode(value, self.text)
+        return Documented(value, self.text)
 
     def __repr__(self) -> str:
         return f"Doc({self.text!r})"
 
 
 treelib.register_node(
-    DocNode,
-    lambda node: ((node.value,), node.text, ("doc",)),
-    lambda text, children: DocNode(children[0], text),
+    Documented,
+    lambda node: ((node.value,), node.text, ("value",)),
+    lambda text, children: Documented(children[0], text),
     path_entry_type=optree.GetAttrEntry,
 )
 
 
-Str = StrSpec(name="Str", schema="string")
-Int = IntSpec(name="Int", schema="integer")
-Float = FloatSpec(name="Float", schema="number")
-Bool = BoolSpec(name="Bool", schema="boolean")
-
-schema_message = "Expected a pytree containing Str, Int, Float, Bool, Enum[...]"
+schema_message = "Expected a pytree containing Str(), Int(), Float(), Bool(), Enum(...)"
 
 
 # ==================================================================================================
@@ -218,23 +154,19 @@ schema_node_rules = defaultdict(lambda: default_schema_node)
 value_node_rules = defaultdict(lambda: lambda x: x)
 
 
-def enum_schema(s: EnumSpec) -> dict[str, Any]:
-    return {"type": json_types[type(s.values[0])], "enum": list(s.values)}
-
-
-def doc_schema(node: DocNode) -> tuple[Path, Any]:
+def doc_schema(node: Documented) -> tuple[Path, Any]:
     path, value = node.value
     *path, _ = path
     return tuple(path), value | {"description": node.text}
 
 
-schema_rules[StrSpec] = lambda s: {"type": s.schema}
-schema_rules[IntSpec] = lambda s: {"type": s.schema}
-schema_rules[FloatSpec] = lambda s: {"type": s.schema}
-schema_rules[BoolSpec] = lambda s: {"type": s.schema}
-schema_rules[EnumSpec] = enum_schema
-schema_node_rules[DocNode] = doc_schema
-value_node_rules[DocNode] = lambda node: node.value
+schema_rules[Str] = lambda s: {"type": s.schema}
+schema_rules[Int] = lambda s: {"type": s.schema}
+schema_rules[Float] = lambda s: {"type": s.schema}
+schema_rules[Bool] = lambda s: {"type": s.schema}
+schema_rules[Enum] = lambda s: {"type": json_types[type(s.values[0])], "enum": list(s.values)}
+schema_node_rules[Documented] = doc_schema
+value_node_rules[Documented] = lambda node: node.value
 
 # ==================================================================================================
 # PARSE RULES
@@ -249,20 +181,20 @@ value_rules: dict[object, ValueRule] = {}
 transport_node_rules = defaultdict(lambda: default_transport_node)
 
 
-value_rules[StrSpec] = lambda s, v, a, p: v if type(v) is str else error(a, p, s)
-value_rules[IntSpec] = lambda s, v, a, p: v if type(v) is int else error(a, p, s)
-value_rules[FloatSpec] = lambda s, v, a, p: float(v) if type(v) in (int, float) else error(a, p, s)
-value_rules[BoolSpec] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
-value_rules[EnumSpec] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
+value_rules[Str] = lambda s, v, a, p: v if type(v) is str else error(a, p, s)
+value_rules[Int] = lambda s, v, a, p: v if type(v) is int else error(a, p, s)
+value_rules[Float] = lambda s, v, a, p: float(v) if type(v) in (int, float) else error(a, p, s)
+value_rules[Bool] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
+value_rules[Enum] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
 
 
-def doc_transport(node: DocNode) -> tuple[Path, Any]:
+def doc_transport(node: Documented) -> tuple[Path, Any]:
     path, value = node.value
     *path, _ = path
     return tuple(path), value
 
 
-transport_node_rules[DocNode] = doc_transport
+transport_node_rules[Documented] = doc_transport
 
 # ==================================================================================================
 # PUBLIC ENTRYPOINTS

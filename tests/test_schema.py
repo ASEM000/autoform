@@ -20,9 +20,9 @@ import autoform.schema as schema
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": schema.Str @ schema.Doc("Subject name."),
-        "kind": schema.Enum["summary", "definition"] @ schema.Doc("Answer kind."),
-        "score": schema.Float @ schema.Doc("Confidence score."),
+        "name": schema.Str() @ schema.Doc("Subject name."),
+        "kind": schema.Enum("summary", "definition") @ schema.Doc("Answer kind."),
+        "score": schema.Float() @ schema.Doc("Confidence score."),
     } @ schema.Doc("Answer object.")
 
     json_schema, parse = schema.build(answer)
@@ -53,11 +53,11 @@ def test_schema_dsl_builds_described_schema():
 
 def test_schema_dsl_builds_tree():
     answer = {
-        "name": schema.Str,
-        "count": schema.Int,
-        "score": schema.Float,
-        "ok": schema.Bool,
-        "kind": schema.Enum["summary", "definition"],
+        "name": schema.Str(),
+        "count": schema.Int(),
+        "score": schema.Float(),
+        "ok": schema.Bool(),
+        "kind": schema.Enum("summary", "definition"),
     }
 
     _, parse = schema.build(answer)
@@ -93,7 +93,7 @@ def test_schema_dsl_builds_custom_pytree_value():
         path_entry_type=optree.GetAttrEntry,
     )
 
-    answer = Answer(schema.Str, schema.Float)
+    answer = Answer(schema.Str(), schema.Float())
 
     json_schema, parse = schema.build(answer)
 
@@ -110,19 +110,19 @@ def test_schema_dsl_builds_custom_pytree_value():
 
 
 def test_schema_dsl_rejects_invalid_forms():
-    with pytest.raises(TypeError, match="use Str"):
-        schema.Str()
-    with pytest.raises(TypeError, match=r"use Enum\[\.\.\.\]"):
-        schema.Enum("summary", "definition")
+    with pytest.raises(TypeError, match="takes no arguments"):
+        schema.Str(minimum=0)
+    with pytest.raises(TypeError, match="Enum must have at least one value"):
+        schema.Enum()
     with pytest.raises(TypeError, match="Enum values must share one type"):
-        schema.Enum["summary", 1]
+        schema.Enum("summary", 1)
     with pytest.raises(TypeError, match="description must be a string"):
         schema.Doc(1)
 
 
 def test_schema_dsl_reports_value_errors_by_path():
-    _, parse_count = schema.build({"count": schema.Int})
-    _, parse_score = schema.build({"score": schema.Float})
+    _, parse_count = schema.build({"count": schema.Int()})
+    _, parse_score = schema.build({"score": schema.Float()})
 
     with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer"):
         parse_count({"count": True})
