@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import asyncio
 import functools as ft
+import json
+from collections import defaultdict
 from collections.abc import Awaitable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -38,6 +40,7 @@ from autoform.core import (
     push_rules,
     typeof,
 )
+from autoform.schemas import Bool, Documented, Enum, Float, Int, Str, build, is_schema_spec
 from autoform.utils import (
     Struct,
     Tree,
@@ -550,3 +553,292 @@ pull_bwd_rules.set(lm_struct_call_p, pullback_bwd_lm_struct_call)
 pull_bwd_rules.aset(lm_struct_call_p, apull_bwd_lm_struct_call)
 batch_rules.set(lm_struct_call_p, batch_lm_struct_call)
 batch_rules.aset(lm_struct_call_p, abatch_lm_struct_call)
+
+# ==================================================================================================
+# LM SCHEMA CALL
+# ==================================================================================================
+
+lm_schema_call_p = Prim("lm_schema_call")
+
+
+def lm_schema_call(
+    messages: list[dict[str, str]],
+    /,
+    *,
+    model: str,
+    schema: Any,
+) -> Any:
+    """Calls a language model with an autoform schema response format.
+
+    The schema tree is built from nodes such as :class:`autoform.Int`,
+    :class:`autoform.Enum`, and the other schema nodes exported by autoform.
+
+    Example:
+        >>> import autoform as af
+        >>> answer = {
+        ...     "name": af.Str() @ af.Doc("Subject name."),
+        ...     "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
+        ...     "score": af.Float(min=0, max=1) @ af.Doc("Confidence score."),
+        ... } @ af.Doc("Answer object.")
+
+    Example with a registered pytree:
+        >>> import optree
+        >>> import autoform as af
+        >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+        ... class Answer:
+        ...     answer: float
+        ...     reasoning: str
+        >>> schema = Answer(
+        ...     answer=af.Float() @ af.Doc("The numeric answer."),
+        ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
+        ... )
+        >>> msgs = [dict(role="user", content="1 + 1?")]
+        >>> output = af.lm_schema_call(  # doctest: +SKIP
+        ...     msgs,
+        ...     model="openai/gpt-5.2",
+        ...     schema=schema,
+        ... )
+        >>> output  # doctest: +SKIP
+        Answer(answer=2.0, reasoning='Adding 1 and 1 gives 2.')
+    """
+    for m in messages:
+        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
+        assert "role" in m, f"message must have a 'role' key, got {m=}"
+        assert "content" in m, f"message must have a 'content' key, got {m=}"
+
+    roles = [m["role"] for m in messages]
+    contents = [m["content"] for m in messages]
+    return lm_schema_call_p.bind((contents, model), roles=roles, schema=schema)
+
+
+def schema_response_format(json_schema: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "autoform_schema",
+            "strict": True,
+            "schema": json_schema,
+        },
+    }
+
+
+def impl_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> Any:
+    contents, model = in_tree
+    json_schema, parse = build(schema)
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    resp = active_client.get().completion(
+        messages=messages,
+        model=model,
+        response_format=schema_response_format(json_schema),
+    )
+    return parse(json.loads(resp.choices[0].message.content))
+
+
+async def aimpl_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> Any:
+    contents, model = in_tree
+    json_schema, parse = build(schema)
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    resp = await active_client.get().acompletion(
+        messages=messages,
+        model=model,
+        response_format=schema_response_format(json_schema),
+    )
+    return parse(json.loads(resp.choices[0].message.content))
+
+
+schema_abstract_rules = defaultdict(lambda: lambda node: node)
+schema_abstract_rules[Str] = lambda _: TypedAVal(str)
+schema_abstract_rules[Int] = lambda _: TypedAVal(int)
+schema_abstract_rules[Float] = lambda _: TypedAVal(float)
+schema_abstract_rules[Bool] = lambda _: TypedAVal(bool)
+schema_abstract_rules[Enum] = lambda _: TypedAVal(type(_.values[0]))
+schema_abstract_rules[Documented] = lambda s: s.value
+
+
+def schema_abstract_tree(schema: Any) -> Tree:
+    build(schema)
+    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
+    return spec.traverse(leaves, schema_abstract_rule, schema_abstract_rule)
+
+
+def schema_abstract_rule(node: Any) -> Any:
+    return schema_abstract_rules[type(node)](node)
+
+
+def abstract_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> Tree:
+    contents, model = in_tree
+    assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
+    assert typeof(model) is str, f"Expected string model, got {model!r}"
+    return schema_abstract_tree(schema)
+
+
+def pushforward_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> tuple[Tree, Tree]:
+    primals, tangents = in_tree
+    primal_contents, primal_model = primals
+    tangent_contents, *_ = tangents
+    p_tree = (primal_contents, primal_model)
+    t_tree = (materialize(tangent_contents), primal_model)
+    p_resp = lm_schema_call_p.bind(p_tree, roles=roles, schema=schema)
+    t_resp = lm_schema_call_p.bind(t_tree, roles=roles, schema=schema)
+    return p_resp, t_resp
+
+
+async def apush_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> tuple[Tree, Tree]:
+    primals, tangents = in_tree
+    primal_contents, primal_model = primals
+    tangent_contents, *_ = tangents
+    abind = ft.partial(lm_schema_call_p.abind, roles=roles, schema=schema)
+    p_tree = (primal_contents, primal_model)
+    t_tree = (materialize(tangent_contents), primal_model)
+    p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
+    return p_resp, t_resp
+
+
+def pullback_fwd_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> tuple[Tree, Tree]:
+    contents, model = in_tree
+    out = lm_schema_call_p.bind(in_tree, roles=roles, schema=schema)
+    residuals = (contents, model, out)
+    return out, residuals
+
+
+async def apull_fwd_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> tuple[Tree, Tree]:
+    contents, model = in_tree
+    out = await lm_schema_call_p.abind(in_tree, roles=roles, schema=schema)
+    residuals = (contents, model, out)
+    return out, residuals
+
+
+def pullback_bwd_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> Tree:
+    residuals, out_cotangent = in_tree
+    out_cotangent = materialize(out_cotangent)
+    contents, model, out = residuals
+    grads = []
+    for content in contents:
+        grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
+        grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
+        grads.append(grad_out)
+    return grads, Zero(str)
+
+
+async def apull_bwd_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> Tree:
+    residuals, out_cotangent = in_tree
+    out_cotangent = materialize(out_cotangent)
+    contents, model, out = residuals
+
+    async def grad(c):
+        prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
+        grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
+        return await grad_out
+
+    return (await asyncio.gather(*[grad(c) for c in contents]), Zero(str))
+
+
+def batch_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Any,
+) -> tuple[Tree, Tree]:
+    batch_size, in_batched, in_values = in_tree
+
+    if batch_spec(in_values, in_batched) is None:
+        result = lm_schema_call_p.bind(in_values, roles=roles, schema=schema)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
+    unbatch = ft.partial(batch_index, in_values, in_batched)
+    bind = ft.partial(lm_schema_call_p.bind, roles=roles, schema=schema)
+    results = [bind(unbatch(b)) for b in range(batch_size)]
+    out_batched = treelib.map(lambda _: True, results[0])
+    out_ib = batch_transpose(batch_size, out_batched, results)
+    return out_ib, out_batched
+
+
+async def abatch_lm_schema_call(
+    in_tree: Tree,
+    /,
+    *,
+    roles: list[str],
+    schema: Tree,
+) -> tuple[Tree, Tree]:
+    batch_size, in_batched, in_values = in_tree
+
+    if batch_spec(in_values, in_batched) is None:
+        result = await lm_schema_call_p.abind(in_values, roles=roles, schema=schema)
+        out_batched = treelib.map(lambda _: False, result)
+        return result, out_batched
+
+    unbatch = ft.partial(batch_index, in_values, in_batched)
+    abind = ft.partial(lm_schema_call_p.abind, roles=roles, schema=schema)
+    results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
+    out_batched = treelib.map(lambda _: True, results[0])
+    out_ib = batch_transpose(batch_size, out_batched, list(results))
+    return out_ib, out_batched
+
+
+impl_rules.set(lm_schema_call_p, impl_lm_schema_call)
+impl_rules.aset(lm_schema_call_p, aimpl_lm_schema_call)
+abstract_rules.set(lm_schema_call_p, abstract_lm_schema_call)
+push_rules.set(lm_schema_call_p, pushforward_lm_schema_call)
+push_rules.aset(lm_schema_call_p, apush_lm_schema_call)
+pull_fwd_rules.set(lm_schema_call_p, pullback_fwd_lm_schema_call)
+pull_fwd_rules.aset(lm_schema_call_p, apull_fwd_lm_schema_call)
+pull_bwd_rules.set(lm_schema_call_p, pullback_bwd_lm_schema_call)
+pull_bwd_rules.aset(lm_schema_call_p, apull_bwd_lm_schema_call)
+batch_rules.set(lm_schema_call_p, batch_lm_schema_call)
+batch_rules.aset(lm_schema_call_p, abatch_lm_schema_call)
