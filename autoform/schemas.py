@@ -12,7 +12,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Schema DSL"""
+"""Schema DSL.
+
+There are two ways to think about structured output.
+
+The first way is type-first. A class describes what should be generated, and the
+same class is also the return type:
+
+    class Answer(BaseModel):
+        name: str
+        score: float
+
+That works, but it is not a great fit for autoform. A type is a recipe, not the
+value that flows through the program. Tracing a type means inspecting
+annotations and rebuilding the result from that type later.
+
+The second way is instance-first. The schema is already a value with the shape
+we want back:
+
+    >>> import autoform as af
+    >>> answer = {"name": af.Str(), "score": af.Float(min=0, max=1)}
+
+This fits autoform better. The schema is an ordinary pytree.
+
+Docs attach to the thing they describe and are used to guide the generation process.
+The same form works for a leaf or for arbitrary nested structures:
+
+    >>> answer = {
+    ...     "name": af.Str() @ af.Doc("Subject name."),
+    ...     "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
+    ...     "score": af.Float(min=0, max=1) @ af.Doc("Confidence score."),
+    ... } @ af.Doc("Answer object.")
+
+Any registered pytree can carry the schema:
+
+    >>> import optree
+    >>> import autoform as af
+
+    >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+    >>> class Answer:
+    ...     answer: float
+    ...     reasoning: str
+
+    >>> schema = Answer(
+    ...     answer=af.Float() @ af.Doc("The numeric answer."),
+    ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
+    ... )
+    >>> msgs = [dict(role="user", content="1 + 1?")]
+    >>> output = af.lm_schema_call(msgs, model="openai/gpt-5.2", schema=schema)
+    Answer(answer=2.0, reasoning="Adding 1 and 1 gives 2.")
+
+"""
 
 from __future__ import annotations
 
@@ -70,12 +120,18 @@ class Scalar[T](Spec):
 
 
 class Str(Scalar[str], schema="string"):
-    """ "String schema node with optional length and pattern constraints.
+    """String schema node with optional length and pattern constraints.
+
+    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
 
     Args:
         min: Optional minimum length of the string.
         max: Optional maximum length of the string.
         pattern: Optional regular expression pattern that the string must match.
+
+    Example:
+        >>> import autoform as af
+        >>> name = af.Str(min=1, max=80, pattern=r"^[A-Za-z ]+$")
     """
 
     __slots__ = ["min", "max", "pattern"]
@@ -109,9 +165,15 @@ class Str(Scalar[str], schema="string"):
 class Int(Scalar[int], schema="integer"):
     """Integer schema node with optional range constraints.
 
+    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+
     Args:
         min: Optional minimum value.
         max: Optional maximum value.
+
+    Example:
+        >>> import autoform as af
+        >>> count = af.Int(min=0, max=10)
     """
 
     __slots__ = ["min", "max"]
@@ -130,9 +192,15 @@ class Int(Scalar[int], schema="integer"):
 class Float(Scalar[float], schema="number"):
     """Number schema node with optional range constraints.
 
+    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+
     Args:
         min: Optional minimum value.
         max: Optional maximum value.
+
+    Example:
+        >>> import autoform as af
+        >>> score = af.Float(min=0, max=1)
     """
 
     __slots__ = ["min", "max"]
@@ -154,10 +222,32 @@ class Float(Scalar[float], schema="number"):
 
 
 class Bool(Scalar[bool], schema="boolean"):
+    """Boolean schema node.
+
+    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+
+    Example:
+        >>> import autoform as af
+        >>> ok = af.Bool()
+    """
+
     __slots__ = []
 
 
 class Enum(Spec):
+    """Enum schema node with a fixed set of allowed values.
+
+    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+
+    Args:
+        *values: Allowed values. Values must be non-empty, share one type, and
+            be JSON scalar values.
+
+    Example:
+        >>> import autoform as af
+        >>> kind = af.Enum("summary", "definition")
+    """
+
     __slots__ = ["values"]
 
     def __init__(self, *values: Any) -> None:
@@ -166,7 +256,7 @@ class Enum(Spec):
         value_types = {type(value) for value in values}
         if len(value_types) != 1:
             raise TypeError(f"Enum values must share one type, got {value_types!r}")
-        if next(iter(value_types)) not in json_types:
+        if next(iter(value_types)) not in json_type:
             raise TypeError("Enum values must be str, int, float, or bool")
         self.values = values
 
@@ -195,6 +285,18 @@ class Documented[T]:
 
 
 class Doc:
+    """Description node for attaching JSON Schema descriptions.
+
+    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+
+    Args:
+        text: Description text.
+
+    Example:
+        >>> import autoform as af
+        >>> name = af.Str() @ af.Doc("Subject name.")
+    """
+
     __slots__ = ["text"]
 
     def __init__(self, text: str) -> None:
@@ -260,7 +362,7 @@ schema_rules[Str] = string_schema
 schema_rules[Int] = number_schema
 schema_rules[Float] = number_schema
 schema_rules[Bool] = lambda s: {"type": s.schema}
-schema_rules[Enum] = lambda s: {"type": json_types[type(s.values[0])], "enum": list(s.values)}
+schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
 schema_node_rules[Documented] = doc_schema
 value_node_rules[Documented] = lambda node: node.value
 
@@ -323,16 +425,6 @@ def doc_transport(node: Documented[tuple[Path, Any]]) -> tuple[Path, Any]:
 
 
 transport_node_rules[Documented] = doc_transport
-
-# ==================================================================================================
-# PUBLIC ENTRYPOINTS
-# ==================================================================================================
-
-
-def build(schema: Any) -> tuple[JsonSchema, Parser]:
-    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    key = (tuple(leaves), spec)
-    return build_schema_for_key(key), parser_for_key(key)
 
 
 # ==================================================================================================
@@ -461,3 +553,9 @@ def build_from_cache(cache: TreeCache, value: Any) -> Any:
         raise ValueError(f"$: expected {transport_spec}, got {spec}") from None
     output = (rule(l, v, a, "$") for v, (l, rule, a) in zip(leaves, rules, strict=True))
     return value_spec.unflatten(output)
+
+
+def build(schema: Any) -> tuple[JsonSchema, Parser]:
+    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
+    key = (tuple(leaves), spec)
+    return build_schema_for_key(key), parser_for_key(key)
