@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import functools as ft
+import re
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any, NoReturn
@@ -66,7 +67,40 @@ class Scalar[T](Spec):
 
 
 class Str(Scalar[str], schema="string"):
-    __slots__ = []
+    """ "String schema node with optional length and pattern constraints.
+
+    Args:
+        min: Optional minimum length of the string.
+        max: Optional maximum length of the string.
+        pattern: Optional regular expression pattern that the string must match.
+    """
+
+    __slots__ = ["min", "max", "pattern"]
+
+    def __init__(
+        self,
+        *,
+        min: int | None = None,
+        max: int | None = None,
+        pattern: str | None = None,
+    ):
+        if min is not None and type(min) is not int:
+            raise TypeError(f"min must be an int, got {min!r}")
+        if max is not None and type(max) is not int:
+            raise TypeError(f"max must be an int, got {max!r}")
+        if min is not None and min < 0:
+            raise ValueError(f"min must be >= 0, got {min!r}")
+        if max is not None and max < 0:
+            raise ValueError(f"max must be >= 0, got {max!r}")
+        if pattern is not None and type(pattern) is not str:
+            raise TypeError(f"pattern must be a string, got {pattern!r}")
+        if min is not None and max is not None and min > max:
+            raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
+        if pattern is not None:
+            re.compile(pattern)
+        self.min = min
+        self.max = max
+        self.pattern = pattern
 
 
 class Int(Scalar[int], schema="integer"):
@@ -160,7 +194,18 @@ def doc_schema(node: Documented) -> tuple[Path, Any]:
     return tuple(path), value | {"description": node.text}
 
 
-schema_rules[Str] = lambda s: {"type": s.schema}
+def string_schema(s: Str) -> dict[str, Any]:
+    schema = {"type": s.schema}
+    if s.min is not None:
+        schema["minLength"] = s.min
+    if s.max is not None:
+        schema["maxLength"] = s.max
+    if s.pattern is not None:
+        schema["pattern"] = s.pattern
+    return schema
+
+
+schema_rules[Str] = string_schema
 schema_rules[Int] = lambda s: {"type": s.schema}
 schema_rules[Float] = lambda s: {"type": s.schema}
 schema_rules[Bool] = lambda s: {"type": s.schema}
@@ -181,7 +226,19 @@ value_rules: dict[object, ValueRule] = {}
 transport_node_rules = defaultdict(lambda: default_transport_node)
 
 
-value_rules[Str] = lambda s, v, a, p: v if type(v) is str else error(a, p, s)
+def string_value(s: Str, value: Any, accessor: optree.PyTreeAccessor, path: str) -> str:
+    if type(value) is not str:
+        error(accessor, path, s)
+    if s.min is not None and len(value) < s.min:
+        error(accessor, path, f"string with length >= {s.min}")
+    if s.max is not None and len(value) > s.max:
+        error(accessor, path, f"string with length <= {s.max}")
+    if s.pattern is not None and not re.search(s.pattern, value):
+        error(accessor, path, f"string matching {s.pattern!r}")
+    return value
+
+
+value_rules[Str] = string_value
 value_rules[Int] = lambda s, v, a, p: v if type(v) is int else error(a, p, s)
 value_rules[Float] = lambda s, v, a, p: float(v) if type(v) in (int, float) else error(a, p, s)
 value_rules[Bool] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)

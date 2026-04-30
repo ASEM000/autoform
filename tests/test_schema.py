@@ -73,6 +73,31 @@ def test_schema_dsl_builds_tree():
     }
 
 
+def test_schema_dsl_builds_string_constraints():
+    json_schema, parse = schema.build({"name": schema.Str(min=2, max=4, pattern=r"^[a-z]+$")})
+
+    assert json_schema == {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 4,
+                "pattern": r"^[a-z]+$",
+            }
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    assert parse({"name": "okay"}) == {"name": "okay"}
+    with pytest.raises(ValueError, match=r"\$\['name'\]: expected string with length >= 2"):
+        parse({"name": "x"})
+    with pytest.raises(ValueError, match=r"\$\['name'\]: expected string with length <= 4"):
+        parse({"name": "hello"})
+    with pytest.raises(ValueError, match=r"\$\['name'\]: expected string matching"):
+        parse({"name": "OK"})
+
+
 def test_schema_dsl_builds_custom_pytree_value():
     class Answer:
         __slots__ = ["text", "score"]
@@ -110,8 +135,16 @@ def test_schema_dsl_builds_custom_pytree_value():
 
 
 def test_schema_dsl_rejects_invalid_forms():
-    with pytest.raises(TypeError, match="takes no arguments"):
+    with pytest.raises(TypeError, match="unexpected keyword"):
         schema.Str(minimum=0)
+    with pytest.raises(TypeError, match="pattern must be a string"):
+        schema.Str(pattern=1)
+    with pytest.raises(ValueError, match="min must be >= 0"):
+        schema.Str(min=-1)
+    with pytest.raises(ValueError, match="max must be >= 0"):
+        schema.Str(max=-1)
+    with pytest.raises(ValueError, match="min must be <= max"):
+        schema.Str(min=2, max=1)
     with pytest.raises(TypeError, match="Enum must have at least one value"):
         schema.Enum()
     with pytest.raises(TypeError, match="Enum values must share one type"):
