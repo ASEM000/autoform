@@ -42,8 +42,23 @@ Language model calls.
 
 ```{eval-rst}
 .. autofunction:: autoform.lm_call
+.. autofunction:: autoform.lm_schema_call
 .. autofunction:: autoform.lm_struct_call
 .. autofunction:: autoform.lm_client
+```
+
+## Schemas
+
+Schema nodes for structured LM output.
+
+```{eval-rst}
+.. autoclass:: autoform.Str
+.. autoclass:: autoform.Int
+.. autoclass:: autoform.Float
+.. autoclass:: autoform.Bool
+.. autoclass:: autoform.Enum
+.. autoclass:: autoform.Doc
+.. autofunction:: autoform.schemas.build
 ```
 
 ## String Primitives
