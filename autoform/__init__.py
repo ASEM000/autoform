@@ -24,6 +24,7 @@ from autoform.dce import dce
 from autoform.lm import lm_call, lm_client, lm_schema_call, lm_struct_call
 from autoform.memoize import memoize
 from autoform.scheduling import depends, gather, sched
+from autoform.schemas import Bool, Doc, Enum, Float, Int, Str
 from autoform.string import concat, format, match
 from autoform.utils import PYTREE_NAMESPACE, Struct
 
@@ -57,6 +58,13 @@ __all__ = [
     "while_loop",
     "gather",
     "depends",
+    # schemas
+    "Bool",
+    "Doc",
+    "Enum",
+    "Float",
+    "Int",
+    "Str",
     # types
     "Tag",
     "Struct",
