@@ -104,11 +104,45 @@ class Str(Scalar[str], schema="string"):
 
 
 class Int(Scalar[int], schema="integer"):
-    __slots__ = []
+    """Integer schema node with optional range constraints.
+
+    Args:
+        min: Optional minimum value.
+        max: Optional maximum value.
+    """
+
+    __slots__ = ["min", "max"]
+
+    def __init__(self, *, min: int | None = None, max: int | None = None):
+        if min is not None and type(min) is not int:
+            raise TypeError(f"min must be an int, got {min!r}")
+        if max is not None and type(max) is not int:
+            raise TypeError(f"max must be an int, got {max!r}")
+        if min is not None and max is not None and min > max:
+            raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
+        self.min = min
+        self.max = max
 
 
 class Float(Scalar[float], schema="number"):
-    __slots__ = []
+    """Number schema node with optional range constraints.
+
+    Args:
+        min: Optional minimum value.
+        max: Optional maximum value.
+    """
+
+    __slots__ = ["min", "max"]
+
+    def __init__(self, *, min: int | float | None = None, max: int | float | None = None):
+        if min is not None and type(min) not in (int, float):
+            raise TypeError(f"min must be a number, got {min!r}")
+        if max is not None and type(max) not in (int, float):
+            raise TypeError(f"max must be a number, got {max!r}")
+        if min is not None and max is not None and min > max:
+            raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
+        self.min = min
+        self.max = max
 
 
 class Bool(Scalar[bool], schema="boolean"):
@@ -205,9 +239,18 @@ def string_schema(s: Str) -> dict[str, Any]:
     return schema
 
 
+def number_schema(s: Int | Float) -> dict[str, Any]:
+    schema = {"type": s.schema}
+    if s.min is not None:
+        schema["minimum"] = s.min
+    if s.max is not None:
+        schema["maximum"] = s.max
+    return schema
+
+
 schema_rules[Str] = string_schema
-schema_rules[Int] = lambda s: {"type": s.schema}
-schema_rules[Float] = lambda s: {"type": s.schema}
+schema_rules[Int] = number_schema
+schema_rules[Float] = number_schema
 schema_rules[Bool] = lambda s: {"type": s.schema}
 schema_rules[Enum] = lambda s: {"type": json_types[type(s.values[0])], "enum": list(s.values)}
 schema_node_rules[Documented] = doc_schema
@@ -238,9 +281,29 @@ def string_value(s: Str, value: Any, accessor: optree.PyTreeAccessor, path: str)
     return value
 
 
+def integer_value(s: Int, value: Any, accessor: optree.PyTreeAccessor, path: str) -> int:
+    if type(value) is not int:
+        error(accessor, path, s)
+    if s.min is not None and value < s.min:
+        error(accessor, path, f"integer >= {s.min}")
+    if s.max is not None and value > s.max:
+        error(accessor, path, f"integer <= {s.max}")
+    return value
+
+
+def number_value(s: Float, value: Any, accessor: optree.PyTreeAccessor, path: str) -> float:
+    if type(value) not in (int, float):
+        error(accessor, path, s)
+    if s.min is not None and value < s.min:
+        error(accessor, path, f"number >= {s.min}")
+    if s.max is not None and value > s.max:
+        error(accessor, path, f"number <= {s.max}")
+    return float(value)
+
+
 value_rules[Str] = string_value
-value_rules[Int] = lambda s, v, a, p: v if type(v) is int else error(a, p, s)
-value_rules[Float] = lambda s, v, a, p: float(v) if type(v) in (int, float) else error(a, p, s)
+value_rules[Int] = integer_value
+value_rules[Float] = number_value
 value_rules[Bool] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
 value_rules[Enum] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
 

@@ -98,6 +98,32 @@ def test_schema_dsl_builds_string_constraints():
         parse({"name": "OK"})
 
 
+def test_schema_dsl_builds_number_constraints():
+    json_schema, parse = schema.build({
+        "count": schema.Int(min=-2, max=2),
+        "score": schema.Float(min=0, max=1),
+    })
+
+    assert json_schema == {
+        "type": "object",
+        "properties": {
+            "count": {"type": "integer", "minimum": -2, "maximum": 2},
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        "required": ["count", "score"],
+        "additionalProperties": False,
+    }
+    assert parse({"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
+    with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer >= -2"):
+        parse({"count": -3, "score": 0.5})
+    with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer <= 2"):
+        parse({"count": 3, "score": 0.5})
+    with pytest.raises(ValueError, match=r"\$\['score'\]: expected number >= 0"):
+        parse({"count": 0, "score": -0.1})
+    with pytest.raises(ValueError, match=r"\$\['score'\]: expected number <= 1"):
+        parse({"count": 0, "score": 1.1})
+
+
 def test_schema_dsl_builds_custom_pytree_value():
     class Answer:
         __slots__ = ["text", "score"]
@@ -145,6 +171,14 @@ def test_schema_dsl_rejects_invalid_forms():
         schema.Str(max=-1)
     with pytest.raises(ValueError, match="min must be <= max"):
         schema.Str(min=2, max=1)
+    with pytest.raises(TypeError, match="min must be an int"):
+        schema.Int(min=0.5)
+    with pytest.raises(ValueError, match="min must be <= max"):
+        schema.Int(min=2, max=1)
+    with pytest.raises(TypeError, match="min must be a number"):
+        schema.Float(min="0")
+    with pytest.raises(ValueError, match="min must be <= max"):
+        schema.Float(min=2, max=1)
     with pytest.raises(TypeError, match="Enum must have at least one value"):
         schema.Enum()
     with pytest.raises(TypeError, match="Enum values must share one type"):
