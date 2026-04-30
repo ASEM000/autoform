@@ -40,7 +40,7 @@ from autoform.core import (
     push_rules,
     typeof,
 )
-from autoform.schema import Bool, Documented, Enum, Float, Int, Str, build, is_schema_spec
+from autoform.schemas import Bool, Documented, Enum, Float, Int, Str, build, is_schema_spec
 from autoform.utils import (
     Struct,
     Tree,
@@ -568,7 +568,39 @@ def lm_schema_call(
     model: str,
     schema: Any,
 ) -> Any:
-    """Calls a language model with an autoform schema response format."""
+    """Calls a language model with an autoform schema response format.
+
+    The schema tree is built from nodes such as :class:`autoform.Int`,
+    :class:`autoform.Enum`, and the other schema nodes exported by autoform.
+
+    Example:
+        >>> import autoform as af
+        >>> answer = {
+        ...     "name": af.Str() @ af.Doc("Subject name."),
+        ...     "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
+        ...     "score": af.Float(min=0, max=1) @ af.Doc("Confidence score."),
+        ... } @ af.Doc("Answer object.")
+
+    Example with a registered pytree:
+        >>> import optree
+        >>> import autoform as af
+        >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+        ... class Answer:
+        ...     answer: float
+        ...     reasoning: str
+        >>> schema = Answer(
+        ...     answer=af.Float() @ af.Doc("The numeric answer."),
+        ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
+        ... )
+        >>> msgs = [dict(role="user", content="1 + 1?")]
+        >>> output = af.lm_schema_call(  # doctest: +SKIP
+        ...     msgs,
+        ...     model="openai/gpt-5.2",
+        ...     schema=schema,
+        ... )
+        >>> output  # doctest: +SKIP
+        Answer(answer=2.0, reasoning='Adding 1 and 1 gives 2.')
+    """
     for m in messages:
         assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
         assert "role" in m, f"message must have a 'role' key, got {m=}"
