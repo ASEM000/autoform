@@ -107,8 +107,18 @@ type TreeCache = tuple[
 # ==================================================================================================
 
 
+def slotted_values(node: Any) -> tuple[Any, ...]:
+    return tuple(getattr(node, name) for name in type(node).__slots__)
+
+
 class Spec:
     __slots__ = []
+
+    def __eq__(self, other: object) -> bool:
+        return type(self) is type(other) and slotted_values(self) == slotted_values(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), slotted_values(self)))
 
 
 class Scalar[T](Spec):
@@ -280,6 +290,12 @@ class Documented[T]:
         self.value = value
         self.text = text
 
+    def __eq__(self, other: object) -> bool:
+        return type(self) is type(other) and slotted_values(self) == slotted_values(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), slotted_values(self)))
+
     def __repr__(self) -> str:
         return f"{self.value!r} @ {self.text!r}"
 
@@ -303,6 +319,12 @@ class Doc:
         if not isinstance(text, str):
             raise TypeError(f"description must be a string, got {text!r}")
         self.text = text
+
+    def __eq__(self, other: object) -> bool:
+        return type(self) is type(other) and slotted_values(self) == slotted_values(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), slotted_values(self)))
 
     def __rmatmul__(self, value: Any) -> Documented[Any]:
         return Documented(value, self.text)

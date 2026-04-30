@@ -16,6 +16,7 @@ import optree
 import pytest
 
 import autoform as af
+import autoform.schemas as schemas
 from autoform.schemas import build
 from autoform.utils import treelib
 
@@ -197,3 +198,39 @@ def test_schema_dsl_reports_value_errors_by_path():
         parse_count({"count": True})
     with pytest.raises(ValueError, match=r"\$\['score'\]: expected number"):
         parse_score({"score": "bad"})
+
+
+def test_schema_dsl_nodes_compare_by_value():
+    pairs = [
+        (af.Str(min=1, max=3, pattern="x"), af.Str(min=1, max=3, pattern="x")),
+        (af.Int(min=0, max=10), af.Int(min=0, max=10)),
+        (af.Float(min=0, max=1), af.Float(min=0, max=1)),
+        (af.Bool(), af.Bool()),
+        (af.Enum("summary", "definition"), af.Enum("summary", "definition")),
+        (af.Doc("Subject name."), af.Doc("Subject name.")),
+        (af.Str() @ af.Doc("Subject name."), af.Str() @ af.Doc("Subject name.")),
+    ]
+
+    for left, right in pairs:
+        assert left == right
+        assert hash(left) == hash(right)
+
+
+def test_schema_dsl_reuses_cache_for_equal_schema_nodes():
+    schemas.build_schema_for_key.cache_clear()
+    schemas.parser_for_key.cache_clear()
+
+    def answer():
+        return {
+            "name": af.Str(min=1, max=80),
+            "count": af.Int(min=0, max=10),
+            "score": af.Float(min=0, max=1),
+            "ok": af.Bool(),
+            "kind": af.Enum("summary", "definition"),
+        } @ af.Doc("Answer object.")
+
+    build(answer())
+    build(answer())
+
+    assert schemas.build_schema_for_key.cache_info().hits == 1
+    assert schemas.parser_for_key.cache_info().hits == 1
