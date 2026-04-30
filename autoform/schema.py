@@ -20,7 +20,7 @@ import functools as ft
 import re
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Iterable
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypeGuard
 
 import optree
 
@@ -28,24 +28,27 @@ from autoform.utils import treelib
 
 __all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "build"]
 
-json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
+json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 # ==================================================================================================
 # TYPES
 # ==================================================================================================
 
 
-type Schema = Any
-type SchemaRule = Callable[[Any], dict[str, Any]]
-type ValueRule = Callable[[Any, Any, optree.PyTreeAccessor, str], Any]
 type Path = tuple[Any, ...]
+type JsonSchema = dict[str, Any]
 type ObjectProperties = OrderedDict[str, Any]
-type SchemaLeaf = Spec
-type SchemaKey = tuple[tuple[SchemaLeaf, ...], optree.PyTreeSpec]
+type Parser = Callable[[Any], Any]
+type SchemaRule = Callable[[Any], JsonSchema]
+type SchemaNodeRule = Callable[[Any], tuple[Path, JsonSchema]]
+type ValueNodeRule = Callable[[Any], Any]
+type ValueRule = Callable[[Any, Any, optree.PyTreeAccessor, str], Any]
+type TransportNodeRule = Callable[[Any], tuple[Path, Any]]
+type SchemaKey = tuple[tuple[Spec, ...], optree.PyTreeSpec]
 type TreeCache = tuple[
     optree.PyTreeSpec,
     optree.PyTreeSpec,
-    tuple[tuple[SchemaLeaf, ValueRule, optree.PyTreeAccessor], ...],
+    tuple[tuple[Spec, ValueRule, optree.PyTreeAccessor], ...],
 ]
 
 
@@ -61,7 +64,7 @@ class Spec:
 class Scalar[T](Spec):
     __slots__ = []
 
-    def __init_subclass__(cls, *, schema: str):
+    def __init_subclass__(cls, *, schema: str) -> None:
         super().__init_subclass__()
         cls.schema = schema
 
@@ -83,7 +86,7 @@ class Str(Scalar[str], schema="string"):
         min: int | None = None,
         max: int | None = None,
         pattern: str | None = None,
-    ):
+    ) -> None:
         if min is not None and type(min) is not int:
             raise TypeError(f"min must be an int, got {min!r}")
         if max is not None and type(max) is not int:
@@ -113,7 +116,7 @@ class Int(Scalar[int], schema="integer"):
 
     __slots__ = ["min", "max"]
 
-    def __init__(self, *, min: int | None = None, max: int | None = None):
+    def __init__(self, *, min: int | None = None, max: int | None = None) -> None:
         if min is not None and type(min) is not int:
             raise TypeError(f"min must be an int, got {min!r}")
         if max is not None and type(max) is not int:
@@ -134,7 +137,12 @@ class Float(Scalar[float], schema="number"):
 
     __slots__ = ["min", "max"]
 
-    def __init__(self, *, min: int | float | None = None, max: int | float | None = None):
+    def __init__(
+        self,
+        *,
+        min: int | float | None = None,
+        max: int | float | None = None,
+    ) -> None:
         if min is not None and type(min) not in (int, float):
             raise TypeError(f"min must be a number, got {min!r}")
         if max is not None and type(max) not in (int, float):
@@ -152,7 +160,7 @@ class Bool(Scalar[bool], schema="boolean"):
 class Enum(Spec):
     __slots__ = ["values"]
 
-    def __init__(self, *values: Any):
+    def __init__(self, *values: Any) -> None:
         if not values:
             raise TypeError("Enum must have at least one value")
         value_types = {type(value) for value in values}
@@ -178,7 +186,7 @@ class Enum(Spec):
 class Documented[T]:
     __slots__ = ["value", "text"]
 
-    def __init__(self, value: T, text: str):
+    def __init__(self, value: T, text: str) -> None:
         self.value = value
         self.text = text
 
@@ -189,12 +197,12 @@ class Documented[T]:
 class Doc:
     __slots__ = ["text"]
 
-    def __init__(self, text: str):
+    def __init__(self, text: str) -> None:
         if not isinstance(text, str):
             raise TypeError(f"description must be a string, got {text!r}")
         self.text = text
 
-    def __rmatmul__(self, value: Any):
+    def __rmatmul__(self, value: Any) -> Documented[Any]:
         return Documented(value, self.text)
 
     def __repr__(self) -> str:
@@ -217,19 +225,19 @@ schema_message = "Expected a pytree containing Str(), Int(), Float(), Bool(), En
 # ==================================================================================================
 
 
-schema_rules: dict[Any, SchemaRule] = {}
-schema_node_rules = defaultdict(lambda: default_schema_node)
-value_node_rules = defaultdict(lambda: lambda x: x)
+schema_rules: dict[type[Spec], SchemaRule] = {}
+schema_node_rules: defaultdict[type[Any], SchemaNodeRule] = defaultdict(lambda: object_schema)
+value_node_rules: defaultdict[type[Any], ValueNodeRule] = defaultdict(lambda: lambda x: x)
 
 
-def doc_schema(node: Documented) -> tuple[Path, Any]:
+def doc_schema(node: Documented[tuple[Path, JsonSchema]]) -> tuple[Path, JsonSchema]:
     path, value = node.value
     *path, _ = path
     return tuple(path), value | {"description": node.text}
 
 
-def string_schema(s: Str) -> dict[str, Any]:
-    schema = {"type": s.schema}
+def string_schema(s: Str) -> JsonSchema:
+    schema: JsonSchema = {"type": s.schema}
     if s.min is not None:
         schema["minLength"] = s.min
     if s.max is not None:
@@ -239,8 +247,8 @@ def string_schema(s: Str) -> dict[str, Any]:
     return schema
 
 
-def number_schema(s: Int | Float) -> dict[str, Any]:
-    schema = {"type": s.schema}
+def number_schema(s: Int | Float) -> JsonSchema:
+    schema: JsonSchema = {"type": s.schema}
     if s.min is not None:
         schema["minimum"] = s.min
     if s.max is not None:
@@ -265,7 +273,7 @@ def error(accessor: Any, path: str, expected: Any) -> NoReturn:
     raise ValueError(f"{accessor.codify(path)}: expected {getattr(expected, 'schema', expected)}")
 
 
-value_rules: dict[object, ValueRule] = {}
+value_rules: dict[type[Spec], ValueRule] = {}
 transport_node_rules = defaultdict(lambda: default_transport_node)
 
 
@@ -308,7 +316,7 @@ value_rules[Bool] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
 value_rules[Enum] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
 
 
-def doc_transport(node: Documented) -> tuple[Path, Any]:
+def doc_transport(node: Documented[tuple[Path, Any]]) -> tuple[Path, Any]:
     path, value = node.value
     *path, _ = path
     return tuple(path), value
@@ -321,7 +329,7 @@ transport_node_rules[Documented] = doc_transport
 # ==================================================================================================
 
 
-def build(schema: Schema) -> tuple[dict[str, Any], Callable[[Any], Any]]:
+def build(schema: Any) -> tuple[JsonSchema, Parser]:
     leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
     key = (tuple(leaves), spec)
     return build_schema_for_key(key), parser_for_key(key)
@@ -333,32 +341,28 @@ def build(schema: Schema) -> tuple[dict[str, Any], Callable[[Any], Any]]:
 
 
 @ft.lru_cache(maxsize=256)
-def build_schema_for_key(key: SchemaKey) -> dict[str, Any]:
+def build_schema_for_key(key: SchemaKey) -> JsonSchema:
     leaves, spec = key
     _, schema = spec.traverse(
         zip(spec.paths(), spec.accessors(), leaves, strict=True),
-        build_schema_node,
+        schema_node_rule,
         build_schema_leaf,
     )
     return schema
 
 
-def build_schema_node(node: Any):
+def schema_node_rule(node: Any) -> tuple[Path, JsonSchema]:
     return schema_node_rules[type(node)](node)
 
 
-def build_schema_leaf(node: Any) -> Any:
+def build_schema_leaf(node: Any) -> tuple[Path, JsonSchema]:
     path, accessor, leaf = node
     if not is_schema_spec(leaf):
         raise TypeError(f"{accessor.codify('$')}: {schema_message}, got {leaf!r}")
     return path, schema_rules[type(leaf)](leaf)
 
 
-def default_schema_node(node: Any):
-    return object_schema(node)
-
-
-def object_schema(node: Any):
+def object_schema(node: Any) -> tuple[Path, JsonSchema]:
     children, _, _, _ = treelib.flatten_one_level(node)
     (child_path, _), *_ = children
     *path, _ = child_path
@@ -382,7 +386,7 @@ def object_properties(children: Iterable[tuple[Path, Any]]) -> ObjectProperties:
     return properties
 
 
-def is_schema_spec(node: Any) -> bool:
+def is_schema_spec(node: Any) -> TypeGuard[Spec]:
     return type(node) in schema_rules
 
 
@@ -392,7 +396,7 @@ def is_schema_spec(node: Any) -> bool:
 
 
 @ft.lru_cache(maxsize=256)
-def parser_for_key(key: SchemaKey) -> Callable[[Any], Any]:
+def parser_for_key(key: SchemaKey) -> Parser:
     cache = tree_cache_for_key(key)
     return lambda value: build_from_cache(cache, value)
 
@@ -402,14 +406,14 @@ def tree_cache_for_key(key: SchemaKey) -> TreeCache:
     leaves, spec = key
     _, transport = spec.traverse(
         zip(spec.paths(), spec.accessors(), leaves, strict=True),
-        transport_node,
+        transport_node_rule,
         transport_leaf,
     )
     transport_leaves, transport_spec = treelib.flatten(transport, is_leaf=is_schema_spec)
     marker = object()
     value_tree = spec.traverse(
         leaves,
-        lambda node: value_node_rules[type(node)](node),
+        value_node_rule,
         lambda _: marker,
     )
     return (
@@ -422,7 +426,11 @@ def tree_cache_for_key(key: SchemaKey) -> TreeCache:
     )
 
 
-def transport_node(node: Any):
+def value_node_rule(node: Any) -> Any:
+    return value_node_rules[type(node)](node)
+
+
+def transport_node_rule(node: Any) -> tuple[Path, Any]:
     return transport_node_rules[type(node)](node)
 
 
@@ -433,7 +441,7 @@ def transport_leaf(node: Any) -> tuple[Path, Any]:
     return path, leaf
 
 
-def default_transport_node(node: Any):
+def default_transport_node(node: Any) -> tuple[Path, ObjectProperties]:
     return transport_object(node)
 
 
