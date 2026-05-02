@@ -50,7 +50,7 @@ Any registered pytree can carry the schema:
     >>> import autoform as af
 
     >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
-    >>> class Answer:
+    ... class Answer:
     ...     answer: float
     ...     reasoning: str
 
@@ -59,7 +59,12 @@ Any registered pytree can carry the schema:
     ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
     ... )
     >>> msgs = [dict(role="user", content="1 + 1?")]
-    >>> output = af.lm_schema_call(msgs, model="openai/gpt-5.2", schema=schema)
+    >>> output = af.lm_schema_call(  # doctest: +SKIP
+    ...     msgs,
+    ...     model="openai/gpt-5.2",
+    ...     schema=schema,
+    ... )
+    >>> output  # doctest: +SKIP
     Answer(answer=2.0, reasoning="Adding 1 and 1 gives 2.")
 
 """
@@ -90,7 +95,6 @@ type JsonSchema = dict[str, Any]
 type ObjectProperties = OrderedDict[str, Any]
 type Parser = Callable[[Any], Any]
 type SchemaRule = Callable[[Any], JsonSchema]
-type SchemaNodeRule = Callable[[Any], tuple[Path, JsonSchema]]
 type ValueNodeRule = Callable[[Any], Any]
 type ValueRule = Callable[[Any, Any, optree.PyTreeAccessor, str], Any]
 type TransportNodeRule = Callable[[Any], tuple[Path, Any]]
@@ -283,11 +287,12 @@ class Enum(Spec):
         return f"Enum{self.values!r}"
 
 
-class Documented[T]:
+class Meta[T]:
     __slots__ = ["value", "text"]
 
     def __init__(self, value: T, text: str) -> None:
         self.value = value
+        assert type(text) is str, f"description must be a string, got {text!r}"
         self.text = text
 
     def __eq__(self, other: object) -> bool:
@@ -297,7 +302,7 @@ class Documented[T]:
         return hash((type(self), slotted_values(self)))
 
     def __repr__(self) -> str:
-        return f"{self.value!r} @ {self.text!r}"
+        return f"Meta({self.value!r}, text={self.text!r})"
 
 
 class Doc:
@@ -326,17 +331,17 @@ class Doc:
     def __hash__(self) -> int:
         return hash((type(self), slotted_values(self)))
 
-    def __rmatmul__(self, value: Any) -> Documented[Any]:
-        return Documented(value, self.text)
+    def __rmatmul__[T](self, value: T) -> Meta[T]:
+        return Meta(value, self.text)
 
     def __repr__(self) -> str:
         return f"Doc({self.text!r})"
 
 
 treelib.register_node(
-    Documented,
+    Meta,
     lambda node: ((node.value,), node.text, ("value",)),
-    lambda text, children: Documented(children[0], text),
+    lambda text, children: Meta(children[0], text),
     path_entry_type=optree.GetAttrEntry,
 )
 
@@ -345,19 +350,15 @@ schema_message = "Expected a pytree containing Str(), Int(), Float(), Bool(), En
 
 
 # ==================================================================================================
-# SCHEMA RULES
+# SCHEMA BUILD
 # ==================================================================================================
 
 
-schema_rules: dict[type[Spec], SchemaRule] = {}
-schema_node_rules: defaultdict[type[Any], SchemaNodeRule] = defaultdict(lambda: object_schema)
-value_node_rules: defaultdict[type[Any], ValueNodeRule] = defaultdict(lambda: lambda x: x)
+schema_rules: dict[type[Any], SchemaRule] = {}
 
 
-def doc_schema(node: Documented[tuple[Path, JsonSchema]]) -> tuple[Path, JsonSchema]:
-    path, value = node.value
-    *path, _ = path
-    return tuple(path), value | {"description": node.text}
+def document_schema(node: Meta[Any]) -> JsonSchema:
+    return schema_build(node.value) | {"description": node.text}
 
 
 def string_schema(s: Str) -> JsonSchema:
@@ -385,11 +386,43 @@ schema_rules[Int] = number_schema
 schema_rules[Float] = number_schema
 schema_rules[Bool] = lambda s: {"type": s.schema}
 schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
-schema_node_rules[Documented] = doc_schema
-value_node_rules[Documented] = lambda node: node.value
+schema_rules[Meta] = document_schema
+
+
+@ft.lru_cache(maxsize=256)
+def build_schema_for_key(key: SchemaKey) -> JsonSchema:
+    leaves, spec = key
+    return schema_build(spec.unflatten(leaves))
+
+
+def schema_build(tree: Any) -> JsonSchema:
+    if rule := schema_rules.get(type(tree)):
+        return rule(tree)
+    if treelib.is_leaf(tree):
+        raise TypeError(f"{schema_message}, got {tree!r}")
+
+    children, _, entries, _ = treelib.flatten_one_level(tree)
+    properties = OrderedDict()
+    for entry, child in zip(entries, children, strict=True):
+        property_name = str(entry)
+        if property_name in properties:
+            raise TypeError(f"{schema_message}; duplicate object entries {(property_name,)!r}")
+        properties[property_name] = schema_build(child)
+
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(properties),
+        "additionalProperties": False,
+    }
+
+
+def is_schema_spec(node: Any) -> TypeGuard[Spec]:
+    return isinstance(node, Spec)
+
 
 # ==================================================================================================
-# PARSE RULES
+# VALUE VALIDATION
 # ==================================================================================================
 
 
@@ -398,7 +431,6 @@ def error(accessor: Any, path: str, expected: Any) -> NoReturn:
 
 
 value_rules: dict[type[Spec], ValueRule] = {}
-transport_node_rules = defaultdict(lambda: default_transport_node)
 
 
 def string_value(s: Str, value: Any, accessor: optree.PyTreeAccessor, path: str) -> str:
@@ -440,56 +472,12 @@ value_rules[Bool] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
 value_rules[Enum] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
 
 
-def doc_transport(node: Documented[tuple[Path, Any]]) -> tuple[Path, Any]:
-    path, value = node.value
-    *path, _ = path
-    return tuple(path), value
-
-
-transport_node_rules[Documented] = doc_transport
-
-
 # ==================================================================================================
-# SCHEMA TREE
+# PARSING
 # ==================================================================================================
 
 
-@ft.lru_cache(maxsize=256)
-def build_schema_for_key(key: SchemaKey) -> JsonSchema:
-    leaves, spec = key
-    _, schema = spec.traverse(
-        zip(spec.paths(), spec.accessors(), leaves, strict=True),
-        schema_node_rule,
-        build_schema_leaf,
-    )
-    return schema
-
-
-def schema_node_rule(node: Any) -> tuple[Path, JsonSchema]:
-    return schema_node_rules[type(node)](node)
-
-
-def build_schema_leaf(node: Any) -> tuple[Path, JsonSchema]:
-    path, accessor, leaf = node
-    if not is_schema_spec(leaf):
-        raise TypeError(f"{accessor.codify('$')}: {schema_message}, got {leaf!r}")
-    return path, schema_rules[type(leaf)](leaf)
-
-
-def object_schema(node: Any) -> tuple[Path, JsonSchema]:
-    children, _, _, _ = treelib.flatten_one_level(node)
-    (child_path, _), *_ = children
-    *path, _ = child_path
-    properties = object_properties(children)
-    return tuple(path), {
-        "type": "object",
-        "properties": properties,
-        "required": list(properties),
-        "additionalProperties": False,
-    }
-
-
-def object_properties(children: Iterable[tuple[Path, Any]]) -> ObjectProperties:
+def transport_properties(children: Iterable[tuple[Path, Any]]) -> ObjectProperties:
     properties = OrderedDict()
     for path, value in children:
         *_, entry = path
@@ -500,13 +488,18 @@ def object_properties(children: Iterable[tuple[Path, Any]]) -> ObjectProperties:
     return properties
 
 
-def is_schema_spec(node: Any) -> TypeGuard[Spec]:
-    return type(node) in schema_rules
+value_node_rules: defaultdict[type[Any], ValueNodeRule] = defaultdict(lambda: lambda x: x)
+transport_node_rules = defaultdict(lambda: default_transport_node)
 
 
-# ==================================================================================================
-# VALUE BUILD
-# ==================================================================================================
+def doc_transport(node: Meta[tuple[Path, Any]]) -> tuple[Path, Any]:
+    path, value = node.value
+    *path, _ = path
+    return tuple(path), value
+
+
+value_node_rules[Meta] = lambda node: node.value
+transport_node_rules[Meta] = doc_transport
 
 
 @ft.lru_cache(maxsize=256)
@@ -563,7 +556,7 @@ def transport_object(node: Any) -> tuple[Path, ObjectProperties]:
     children, _, _, _ = treelib.flatten_one_level(node)
     (path, _), *_ = children
     *path, _ = path
-    return tuple(path), object_properties(children)
+    return tuple(path), transport_properties(children)
 
 
 def build_from_cache(cache: TreeCache, value: Any) -> Any:
