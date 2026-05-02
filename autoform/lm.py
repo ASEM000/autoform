@@ -40,7 +40,7 @@ from autoform.core import (
     push_rules,
     typeof,
 )
-from autoform.schemas import Bool, Documented, Enum, Float, Int, Str, build, is_schema_spec
+from autoform.schemas import Bool, Meta, Enum, Float, Int, Str, build, schema_message
 from autoform.utils import (
     Struct,
     Tree,
@@ -673,23 +673,27 @@ async def aimpl_lm_schema_call(
     return parse(json.loads(resp.choices[0].message.content))
 
 
-schema_abstract_rules = defaultdict(lambda: lambda node: node)
+schema_abstract_rules = {}
 schema_abstract_rules[Str] = lambda _: TypedAVal(str)
 schema_abstract_rules[Int] = lambda _: TypedAVal(int)
 schema_abstract_rules[Float] = lambda _: TypedAVal(float)
 schema_abstract_rules[Bool] = lambda _: TypedAVal(bool)
-schema_abstract_rules[Enum] = lambda _: TypedAVal(type(_.values[0]))
-schema_abstract_rules[Documented] = lambda s: s.value
+schema_abstract_rules[Enum] = lambda s: TypedAVal(type(s.values[0]))
+schema_abstract_rules[Meta] = lambda s: schema_abstract_tree(s.value)
+
+
+def is_schema_abstract_leaf(x: Any) -> bool:
+    return type(x) in schema_abstract_rules
+
+
+def schema_abstract_node(x: Any) -> Any:
+    if rule := schema_abstract_rules.get(type(x)):
+        return rule(x)
+    raise TypeError(f"No abstract rule for schema node type {type(x)}")
 
 
 def schema_abstract_tree(schema: Any) -> Tree:
-    build(schema)
-    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    return spec.traverse(leaves, schema_abstract_rule, schema_abstract_rule)
-
-
-def schema_abstract_rule(node: Any) -> Any:
-    return schema_abstract_rules[type(node)](node)
+    return treelib.map(schema_abstract_node, schema, is_leaf=is_schema_abstract_leaf)
 
 
 def abstract_lm_schema_call(
