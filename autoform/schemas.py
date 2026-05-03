@@ -115,6 +115,10 @@ class Spec:
     def __hash__(self) -> int:
         return hash((type(self), slotted_values(self)))
 
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{name}={getattr(self, name)!r}" for name in type(self).__slots__)
+        return f"{type(self).__name__}({fields})"
+
 
 class Scalar[T](Spec):
     __slots__ = []
@@ -263,15 +267,6 @@ class Enum(Spec):
 
     def __contains__(self, value: Any) -> bool:
         return type(value) is type(self.values[0]) and value in self.values
-
-    def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and isinstance(other, Enum) and self.values == other.values
-
-    def __hash__(self) -> int:
-        return hash((type(self), self.values))
-
-    def __repr__(self) -> str:
-        return f"Enum{self.values!r}"
 
 
 class Meta[T]:
@@ -423,15 +418,15 @@ def is_schema_spec(node: Any) -> TypeGuard[Spec]:
 
 
 def error(path: str, expected: Any) -> NoReturn:
-    raise ValueError(f"{path}: expected {getattr(expected, 'schema', expected)}")
+    raise ValueError(f"{path}: expected {expected}")
 
 
-valid_rules: dict[type[Spec], ValidRule] = {}
+valid_rules: dict[type[Any], ValidRule] = {}
 
 
 def string_value(s: Str, value: Any, path: str) -> str:
     if type(value) is not str:
-        error(path, s)
+        error(path, "string")
     if s.min is not None and len(value) < s.min:
         error(path, f"string with length >= {s.min}")
     if s.max is not None and len(value) > s.max:
@@ -443,7 +438,7 @@ def string_value(s: Str, value: Any, path: str) -> str:
 
 def integer_value(s: Int, value: Any, path: str) -> int:
     if type(value) is not int:
-        error(path, s)
+        error(path, "integer")
     if s.min is not None and value < s.min:
         error(path, f"integer >= {s.min}")
     if s.max is not None and value > s.max:
@@ -453,7 +448,7 @@ def integer_value(s: Int, value: Any, path: str) -> int:
 
 def number_value(s: Float, value: Any, path: str) -> float:
     if type(value) not in (int, float):
-        error(path, s)
+        error(path, "number")
     if s.min is not None and value < s.min:
         error(path, f"number >= {s.min}")
     if s.max is not None and value > s.max:
@@ -464,7 +459,7 @@ def number_value(s: Float, value: Any, path: str) -> float:
 valid_rules[Str] = string_value
 valid_rules[Int] = integer_value
 valid_rules[Float] = number_value
-valid_rules[Bool] = lambda s, v, p: v if type(v) is bool else error(p, s)
+valid_rules[Bool] = lambda s, v, p: v if type(v) is bool else error(p, "boolean")
 valid_rules[Enum] = lambda s, v, p: v if v in s else error(p, f"one of {s.values!r}")
 valid_rules[Meta] = lambda s, v, p: parse_tree(s.value, v, p)
 
