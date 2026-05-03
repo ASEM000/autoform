@@ -119,12 +119,8 @@ class Spec:
 class Scalar[T](Spec):
     __slots__ = []
 
-    def __init_subclass__(cls, *, schema: str) -> None:
-        super().__init_subclass__()
-        cls.schema = schema
 
-
-class Str(Scalar[str], schema="string"):
+class Str(Scalar[str]):
     """String schema node with optional length and pattern constraints.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -167,7 +163,7 @@ class Str(Scalar[str], schema="string"):
         self.pattern = pattern
 
 
-class Int(Scalar[int], schema="integer"):
+class Int(Scalar[int]):
     """Integer schema node with optional range constraints.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -194,7 +190,7 @@ class Int(Scalar[int], schema="integer"):
         self.max = max
 
 
-class Float(Scalar[float], schema="number"):
+class Float(Scalar[float]):
     """Number schema node with optional range constraints.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -226,7 +222,7 @@ class Float(Scalar[float], schema="number"):
         self.max = max
 
 
-class Bool(Scalar[bool], schema="boolean"):
+class Bool(Scalar[bool]):
     """Boolean schema node.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -349,7 +345,7 @@ schema_rules: dict[type[Any], SchemaRule] = {}
 
 
 def string_schema(s: Str) -> JsonSchema:
-    schema: JsonSchema = {"type": s.schema}
+    schema: JsonSchema = {"type": "string"}
     if s.min is not None:
         schema["minLength"] = s.min
     if s.max is not None:
@@ -359,8 +355,17 @@ def string_schema(s: Str) -> JsonSchema:
     return schema
 
 
-def number_schema(s: Int | Float) -> JsonSchema:
-    schema: JsonSchema = {"type": s.schema}
+def integer_schema(s: Int) -> JsonSchema:
+    schema: JsonSchema = {"type": "integer"}
+    if s.min is not None:
+        schema["minimum"] = s.min
+    if s.max is not None:
+        schema["maximum"] = s.max
+    return schema
+
+
+def number_schema(s: Float) -> JsonSchema:
+    schema: JsonSchema = {"type": "number"}
     if s.min is not None:
         schema["minimum"] = s.min
     if s.max is not None:
@@ -369,9 +374,9 @@ def number_schema(s: Int | Float) -> JsonSchema:
 
 
 schema_rules[Str] = string_schema
-schema_rules[Int] = number_schema
+schema_rules[Int] = integer_schema
 schema_rules[Float] = number_schema
-schema_rules[Bool] = lambda s: {"type": s.schema}
+schema_rules[Bool] = lambda s: {"type": "boolean"}
 schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
 schema_rules[Meta] = lambda s: schema_build(s.value) | {"description": s.text}
 
