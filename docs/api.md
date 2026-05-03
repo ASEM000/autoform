@@ -23,7 +23,6 @@ IR-to-IR transformations.
 .. autofunction:: autoform.sched
 .. autofunction:: autoform.dce
 .. autofunction:: autoform.memoize
-.. autofunction:: autoform.weight
 ```
 
 ## Checkpointing
@@ -87,14 +86,6 @@ Concurrency and dependency management.
 ```{eval-rst}
 .. autofunction:: autoform.gather
 .. autofunction:: autoform.depends
-```
-
-## Inference
-
-Scoring primitives and inference transforms.
-
-```{eval-rst}
-.. autofunction:: autoform.factor
 ```
 
 ## Types

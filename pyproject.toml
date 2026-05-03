@@ -18,11 +18,12 @@ dev = [
 ]
 docs = [
     "sphinx>=7.0",
-    "piccolo-theme>=0.24.0",
+    "furo>=2025.9.25",
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
     "myst-parser>=2.0,<4.0",
     "nbsphinx>=0.9.8",
+    "sphinxcontrib-mermaid>=2.0.1",
 ]
 
 [tool.setuptools.packages.find]

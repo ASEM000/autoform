@@ -1,19 +1,5 @@
 /* Custom styles for autoform documentation */
 
-/* Nav bar color - GitHub dark */
-:root {
-    --mainNavColor: #0051ff;
-}
-
-/* Wider content area */
-div.document div.documentwrapper {
-    max-width: 60rem;
-}
-
-div.button_nav_wrapper div.button_nav {
-    max-width: 60rem;
-}
-
 /* Wrap long lines in code blocks */
 pre {
     white-space: pre-wrap;
