@@ -40,7 +40,7 @@ from autoform.core import (
     push_rules,
     typeof,
 )
-from autoform.schemas import Bool, Meta, Enum, Float, Int, Str, build, schema_message
+from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, build, SCHEMA_MSG
 from autoform.utils import (
     Struct,
     Tree,
@@ -679,7 +679,7 @@ schema_abstract_rules[Int] = lambda _: TypedAVal(int)
 schema_abstract_rules[Float] = lambda _: TypedAVal(float)
 schema_abstract_rules[Bool] = lambda _: TypedAVal(bool)
 schema_abstract_rules[Enum] = lambda s: TypedAVal(type(s.values[0]))
-schema_abstract_rules[Meta] = lambda s: schema_abstract_tree(s.value)
+schema_abstract_rules[Docd] = lambda s: schema_abstract_tree(s.value)
 
 
 def is_schema_abstract_leaf(x: Any) -> bool:

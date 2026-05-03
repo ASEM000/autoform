@@ -217,8 +217,8 @@ def test_schema_dsl_nodes_compare_by_value():
 
 
 def test_schema_dsl_reuses_cache_for_equal_schema_nodes():
-    schemas.build_schema_for_key.cache_clear()
-    schemas.parser_for_key.cache_clear()
+    schemas.schema_from_flattened_schema.cache_clear()
+    schemas.parser_from_flattened_schema.cache_clear()
 
     def answer():
         return {
@@ -232,5 +232,5 @@ def test_schema_dsl_reuses_cache_for_equal_schema_nodes():
     build(answer())
     build(answer())
 
-    assert schemas.build_schema_for_key.cache_info().hits == 1
-    assert schemas.parser_for_key.cache_info().hits == 1
+    assert schemas.schema_from_flattened_schema.cache_info().hits == 1
+    assert schemas.parser_from_flattened_schema.cache_info().hits == 1

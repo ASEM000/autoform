@@ -74,7 +74,7 @@ from __future__ import annotations
 import functools as ft
 import re
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from typing import Any, NoReturn, TypeGuard
 
 import optree
@@ -94,7 +94,7 @@ type JsonSchema = dict[str, Any]
 type Parser = Callable[[Any], Any]
 type SchemaRule = Callable[[Any], JsonSchema]
 type ValidRule = Callable[[Any, Any, str], Any]
-type SchemaKey = tuple[tuple[Spec, ...], optree.PyTreeSpec]
+type FlattenedSchema = tuple[tuple[Spec, ...], optree.PyTreeSpec]
 
 
 # ==================================================================================================
@@ -106,7 +106,7 @@ def slotted_values(node: Any) -> tuple[Any, ...]:
     return tuple(getattr(node, name) for name in type(node).__slots__)
 
 
-class Spec:
+class Spec(Hashable):
     __slots__ = []
 
     def __eq__(self, other: object) -> bool:
@@ -269,10 +269,10 @@ class Enum(Spec):
         return type(value) is type(self.values[0]) and value in self.values
 
 
-class Meta[T]:
+class Docd[T]:
     __slots__ = ["value", "text"]
 
-    def __init__(self, value: T, text: str) -> None:
+    def __init__(self, value: T, text: str, /) -> None:
         self.value = value
         assert type(text) is str, f"description must be a string, got {text!r}"
         self.text = text
@@ -284,7 +284,7 @@ class Meta[T]:
         return hash((type(self), slotted_values(self)))
 
     def __repr__(self) -> str:
-        return f"Meta({self.value!r}, text={self.text!r})"
+        return f"Docd({self.value!r}, text={self.text!r})"
 
 
 class Doc:
@@ -302,7 +302,7 @@ class Doc:
 
     __slots__ = ["text"]
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, /) -> None:
         if not isinstance(text, str):
             raise TypeError(f"description must be a string, got {text!r}")
         self.text = text
@@ -313,22 +313,22 @@ class Doc:
     def __hash__(self) -> int:
         return hash((type(self), slotted_values(self)))
 
-    def __rmatmul__[T](self, value: T) -> Meta[T]:
-        return Meta(value, self.text)
+    def __rmatmul__[T](self, value: T) -> Docd[T]:
+        return Docd(value, self.text)
 
     def __repr__(self) -> str:
         return f"Doc({self.text!r})"
 
 
 treelib.register_node(
-    Meta,
+    Docd,
     lambda node: ((node.value,), node.text, ("value",)),
-    lambda text, children: Meta(children[0], text),
+    lambda text, children: Docd(children[0], text),
     path_entry_type=optree.GetAttrEntry,
 )
 
 
-schema_message = "Expected a pytree containing Str(), Int(), Float(), Bool(), Enum(...)"
+SCHEMA_MSG = "Expected a pytree containing Str(), Int(), Float(), Bool(), Enum(...)"
 
 
 # ==================================================================================================
@@ -373,20 +373,14 @@ schema_rules[Int] = integer_schema
 schema_rules[Float] = number_schema
 schema_rules[Bool] = lambda s: {"type": "boolean"}
 schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
-schema_rules[Meta] = lambda s: schema_build(s.value) | {"description": s.text}
-
-
-@ft.lru_cache(maxsize=256)
-def build_schema_for_key(key: SchemaKey) -> JsonSchema:
-    leaves, spec = key
-    return schema_build(spec.unflatten(leaves))
+schema_rules[Docd] = lambda s: schema_build(s.value) | {"description": s.text}
 
 
 def schema_build(tree: Any) -> JsonSchema:
     if rule := schema_rules.get(type(tree)):
         return rule(tree)
     if treelib.is_leaf(tree):
-        raise TypeError(f"{schema_message}, got {tree!r}")
+        raise TypeError(f"{SCHEMA_MSG}, got {tree!r}")
 
     children, spec = treelib.flatten(
         tree,
@@ -397,7 +391,7 @@ def schema_build(tree: Any) -> JsonSchema:
     for entry, child in zip(spec.entries(), children, strict=True):
         property_name = str(entry)
         if property_name in properties:
-            raise TypeError(f"{schema_message}; duplicate object entries {(property_name,)!r}")
+            raise TypeError(f"{SCHEMA_MSG}; duplicate object entries {(property_name,)!r}")
         properties[property_name] = schema_build(child)
 
     return {
@@ -461,14 +455,14 @@ valid_rules[Int] = integer_value
 valid_rules[Float] = number_value
 valid_rules[Bool] = lambda s, v, p: v if type(v) is bool else error(p, "boolean")
 valid_rules[Enum] = lambda s, v, p: v if v in s else error(p, f"one of {s.values!r}")
-valid_rules[Meta] = lambda s, v, p: parse_tree(s.value, v, p)
+valid_rules[Docd] = lambda s, v, p: parse_tree(s.value, v, p)
 
 
 def parse_tree(tree: Any, value: Any, path: str = "$") -> Any:
     if rule := valid_rules.get(type(tree)):
         return rule(tree, value, path)
     if treelib.is_leaf(tree):
-        raise TypeError(f"{schema_message}, got {tree!r}")
+        raise TypeError(f"{SCHEMA_MSG}, got {tree!r}")
 
     children, spec = treelib.flatten(
         tree,
@@ -483,10 +477,21 @@ def parse_tree(tree: Any, value: Any, path: str = "$") -> Any:
     return spec.unflatten(values)
 
 
+# ==================================================================================================
+# CACHED BUILD
+# ==================================================================================================
+
+
 @ft.lru_cache(maxsize=256)
-def parser_for_key(key: SchemaKey) -> Parser:
-    schema_leaves, spec = key
-    schema = spec.unflatten(schema_leaves)
+def schema_from_flattened_schema(schema: FlattenedSchema) -> JsonSchema:
+    leaves, treespec = schema
+    return schema_build(treespec.unflatten(leaves))
+
+
+@ft.lru_cache(maxsize=256)
+def parser_from_flattened_schema(flattened_schema: FlattenedSchema) -> Parser:
+    schema_leaves, treespec = flattened_schema
+    schema = treespec.unflatten(schema_leaves)
 
     def parse(value: Any) -> Any:
         return parse_tree(schema, value)
@@ -495,6 +500,9 @@ def parser_for_key(key: SchemaKey) -> Parser:
 
 
 def build(schema: Any) -> tuple[JsonSchema, Parser]:
-    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    key = (tuple(leaves), spec)
-    return build_schema_for_key(key), parser_for_key(key)
+    leaves, treespec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
+    flattened_schema = (tuple(leaves), treespec)
+    return (
+        schema_from_flattened_schema(flattened_schema),
+        parser_from_flattened_schema(flattened_schema),
+    )
