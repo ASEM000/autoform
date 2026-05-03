@@ -101,8 +101,8 @@ flowchart LR
 ```
 
 ```python
-scheduled = af.sched(ir)  # groups independent equations into gather stages
-result = await scheduled.acall("DNA")  # runs each gather stage concurrently
+scheduled = af.sched(ir)
+result = await scheduled.acall("DNA")
 ```
 
 ## Debugging

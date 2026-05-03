@@ -17,73 +17,33 @@ import functools as ft
 import pytest
 
 import autoform as af
+import autoform.scheduling as scheduling
 from autoform.scheduling import toposort_levels
 
 
-class TestGatherBasic:
-    def test_single_ir(self):
-        ir = af.trace(lambda x: af.format("[{}]", x))("a")
-        result = af.gather([(ir, ("A",))])
-        assert result == ["[A]"]
+def scheduled_parallel_formats():
+    def program(x):
+        a = af.format("[{}]", x)
+        b = af.format("<{}>", x)
+        return a, b
+
+    return af.sched(af.trace(program)("a"))
+
+
+class TestInternalGatherViaSched:
+    def test_two_independent_ops(self):
+        scheduled = scheduled_parallel_formats()
+
+        prim_names = [e.prim.name for e in scheduled.ir_eqns]
+        assert prim_names == ["gather"]
+        assert scheduled.call("A") == ("[A]", "<A>")
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_single_ir_async(self):
-        ir = af.trace(lambda x: af.format("[{}]", x))("a")
+    async def test_two_independent_ops_async(self):
+        scheduled = scheduled_parallel_formats()
 
-        def program(x):
-            return af.gather([(ir, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        result = await prog_ir.acall("A")
-        assert result == ["[A]"]
-
-    def test_two_irs(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-        result = af.gather([(ir1, ("A",)), (ir2, ("B",))])
-        assert result == ["[A]", "<B>"]
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_two_irs_async(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(a, b):
-            return af.gather([(ir1, (a,)), (ir2, (b,))])
-
-        prog_ir = af.trace(program)("a", "b")
-        result = await prog_ir.acall("A", "B")
-        assert result == ["[A]", "<B>"]
-
-    def test_three_irs(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-        ir3 = af.trace(lambda x: af.format("{{{}}}", x))("a")
-        result = af.gather([(ir1, ("X",)), (ir2, ("Y",)), (ir3, ("Z",))])
-        assert result == ["[X]", "<Y>", "{Z}"]
-
-    def test_chained_operations(self):
-        def chain(x):
-            a = af.concat(x, "!")
-            return af.format("[{}]", a)
-
-        ir = af.trace(chain)("a")
-        result = af.gather([(ir, ("hello",)), (ir, ("world",))])
-        assert result == ["[hello!]", "[world!]"]
-
-
-class TestGatherValidation:
-    def test_empty_raises(self):
-        with pytest.raises(AssertionError):
-            af.gather([])
-
-    def test_invalid_pair_raises(self):
-        with pytest.raises(TypeError, match="Expected \\(ir, inputs\\) tuple"):
-            af.gather(["not_a_tuple"])
-
-    def test_non_ir_raises(self):
-        with pytest.raises(TypeError, match="Expected \\(ir, inputs\\) tuple"):
-            af.gather([("not_an_ir", ("input",))])
+        result = await scheduled.acall("A")
+        assert result == ("[A]", "<A>")
 
     def test_exception_propagates(self):
         error_p = af.core.Prim("error")
@@ -96,178 +56,122 @@ class TestGatherValidation:
         def impl_error(x):
             raise ValueError("intentional error")
 
-        ir_ok = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir_error = af.trace(lambda x: error_p.bind(x))("a")
+        def program(x):
+            ok = af.format("[{}]", x)
+            err = error_p.bind(x)
+            return ok, err
+
+        scheduled = af.sched(af.trace(program)("a"))
 
         with pytest.raises(ValueError, match="intentional error"):
-            af.gather([(ir_ok, ("A",)), (ir_error, ("B",))])
+            scheduled.call("A")
 
 
 class TestGatherWithTransforms:
     def test_pushforward(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            return af.gather([(ir1, (x,)), (ir2, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        pf_ir = af.pushforward(prog_ir)
+        pf_ir = af.pushforward(scheduled_parallel_formats())
         (p_out, t_out) = pf_ir.call(("primal",), ("tangent",))
-        assert p_out == ["[primal]", "<primal>"]
-        assert t_out == ["[tangent]", "<tangent>"]
+        assert p_out == ("[primal]", "<primal>")
+        assert t_out == ("[tangent]", "<tangent>")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_async(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            return af.gather([(ir1, (x,)), (ir2, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        pf_ir = af.pushforward(prog_ir)
+        pf_ir = af.pushforward(scheduled_parallel_formats())
         (p_out, t_out) = await pf_ir.acall(("primal",), ("tangent",))
-        assert p_out == ["[primal]", "<primal>"]
-        assert t_out == ["[tangent]", "<tangent>"]
+        assert p_out == ("[primal]", "<primal>")
+        assert t_out == ("[tangent]", "<tangent>")
 
     def test_pullback(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            return af.gather([(ir1, (x,)), (ir2, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        pb_ir = af.pullback(prog_ir)
-        out, cotangent = pb_ir.call(("primal",), ["grad1", "grad2"])
-        assert out == ["[primal]", "<primal>"]
+        pb_ir = af.pullback(scheduled_parallel_formats())
+        out, cotangent = pb_ir.call(("primal",), ("grad1", "grad2"))
+        assert out == ("[primal]", "<primal>")
         assert cotangent == ("grad1grad2",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_async(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            return af.gather([(ir1, (x,)), (ir2, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        pb_ir = af.pullback(prog_ir)
-        out, cotangent = await pb_ir.acall(("primal",), ["grad1", "grad2"])
-        assert out == ["[primal]", "<primal>"]
+        pb_ir = af.pullback(scheduled_parallel_formats())
+        out, cotangent = await pb_ir.acall(("primal",), ("grad1", "grad2"))
+        assert out == ("[primal]", "<primal>")
         assert cotangent == ("grad1grad2",)
 
 
 class TestGatherWithBatch:
     def test_batch_gather(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            return af.gather([(ir1, (x,)), (ir2, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        batched_ir = af.batch(prog_ir)
+        batched_ir = af.batch(scheduled_parallel_formats())
         result = batched_ir.call(["A", "B", "C"])
-        assert result == [["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"]]
+        assert result == (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"])
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_gather_async(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            return af.gather([(ir1, (x,)), (ir2, (x,))])
-
-        prog_ir = af.trace(program)("a")
-        batched_ir = af.batch(prog_ir)
+        batched_ir = af.batch(scheduled_parallel_formats())
         result = await batched_ir.acall(["A", "B", "C"])
-        assert result == [["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"]]
+        assert result == (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"])
 
     def test_batch_gather_mixed_axes(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("sample")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("sample")
-
         def program(x, y):
-            return af.gather([(ir1, (x,)), (ir2, (y,))])
+            a = af.format("[{}]", x)
+            b = af.format("<{}>", y)
+            return a, b
 
-        prog_ir = af.trace(program)("x", "y")
-        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        scheduled = af.sched(af.trace(program)("x", "y"))
+        batched_ir = af.batch(scheduled, in_axes=(True, False))
         result = batched_ir.call(["A", "B", "C"], "STATIC")
-        assert result == [["[A]", "[B]", "[C]"], ["<STATIC>", "<STATIC>", "<STATIC>"]]
+        assert result == (["[A]", "[B]", "[C]"], ["<STATIC>", "<STATIC>", "<STATIC>"])
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_gather_mixed_axes_async(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("sample")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("sample")
-
         def program(x, y):
-            return af.gather([(ir1, (x,)), (ir2, (y,))])
+            a = af.format("[{}]", x)
+            b = af.format("<{}>", y)
+            return a, b
 
-        prog_ir = af.trace(program)("x", "y")
-        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        scheduled = af.sched(af.trace(program)("x", "y"))
+        batched_ir = af.batch(scheduled, in_axes=(True, False))
         result = await batched_ir.acall(["X", "Y"], "STATIC")
-        assert result == [["[X]", "[Y]"], ["<STATIC>", "<STATIC>"]]
+        assert result == (["[X]", "[Y]"], ["<STATIC>", "<STATIC>"])
 
 
 class TestGatherWithDCE:
     def test_gather_kept_when_used(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
-        def program(x):
-            results = af.gather([(ir1, (x,)), (ir2, (x,))])
-            return results
-
-        prog_ir = af.trace(program)("a")
-        dce_ir = af.dce(prog_ir)
+        dce_ir = af.dce(scheduled_parallel_formats())
 
         assert len(dce_ir.ir_eqns) == 1
         assert dce_ir.ir_eqns[0].prim.name == "gather"
 
     def test_gather_removed_when_unused(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
         def program(x):
-            _ = af.gather([(ir1, (x,)), (ir2, (x,))])
-            return af.format("constant: {}", x)
+            _ = af.format("[{}]", x)
+            _ = af.format("<{}>", x)
+            return af.concat(x, "!")
 
-        prog_ir = af.trace(program)("a")
-        dce_ir = af.dce(prog_ir)
+        ir = af.trace(program)("a")
+        scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
+        dce_ir = af.dce(scheduled)
 
         assert all(eqn.prim.name != "gather" for eqn in dce_ir.ir_eqns)
 
     def test_gather_dce_propagates_to_branches(self):
-        def with_dead_code(x):
-            _ = af.format("dead: {}", x)
-            return af.format("[{}]", x)
-
-        ir_with_dead = af.trace(with_dead_code)("a")
-        ir_simple = af.trace(lambda x: af.format("<{}>", x))("a")
-
         def program(x):
-            return af.gather([(ir_with_dead, (x,)), (ir_simple, (x,))])
+            live = af.format("[{}]", x)
+            dead = af.format("<{}>", x)
+            return live
 
-        prog_ir = af.trace(program)("a")
-        dce_ir = af.dce(prog_ir)
+        scheduled = af.sched(af.trace(program)("a"))
+        dce_ir = af.dce(scheduled, out_used=True)
 
         gather_eqn = dce_ir.ir_eqns[0]
-        dce_branch = gather_eqn.params["irs"][0]
+        dce_branch = gather_eqn.params["irs"][1]
 
-        assert len(dce_branch.ir_eqns) == 1
+        assert len(dce_branch.ir_eqns) == 0
 
     def test_gather_partial_output_used(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
         def program(x):
-            results = af.gather([(ir1, (x,)), (ir2, (x,))])
-            return results[0]
+            a = af.format("[{}]", x)
+            _ = af.format("<{}>", x)
+            return a
 
-        prog_ir = af.trace(program)("a")
-        dce_ir = af.dce(prog_ir, out_used=True)
+        scheduled = af.sched(af.trace(program)("a"))
+        dce_ir = af.dce(scheduled, out_used=True)
         gather_eqns = [e for e in dce_ir.ir_eqns if e.prim.name == "gather"]
         assert len(gather_eqns) == 1
         inner_irs = gather_eqns[0].params["irs"]
@@ -284,11 +188,13 @@ class TestGatherWithDCE:
         ir_dead = af.trace(structured_with_dead)("x")
 
         def program(x):
-            result, _ = af.gather([(ir_live, (x,)), (ir_dead, (x,))])
+            result = af.switch("live", {"live": ir_live}, x)
+            _ = af.switch("dead", {"dead": ir_dead}, x)
             return result
 
         prog_ir = af.trace(program)("x")
-        dce_ir = af.dce(prog_ir)
+        scheduled = af.sched(prog_ir)
+        dce_ir = af.dce(scheduled)
 
         assert dce_ir.call("X") == "X!"
 
@@ -301,48 +207,54 @@ class TestGatherWithDCE:
 
 class TestGatherContextPreservation:
     def test_preserves_collect(self):
-        def func(x):
-            return af.checkpoint(x, key="val", collection="debug")
+        def program(a, b):
+            x = af.checkpoint(a, key="val", collection="debug")
+            y = af.checkpoint(b, key="val", collection="debug")
+            return x, y
 
-        ir1 = af.trace(func)("a")
-        ir2 = af.trace(func)("b")
+        scheduled = af.sched(af.trace(program)("a", "b"))
 
         with af.collect(collection="debug") as collected:
-            results = af.gather([(ir1, ("A",)), (ir2, ("B",))])
+            results = scheduled.call("A", "B")
 
-        assert results == ["A", "B"]
+        assert results == ("A", "B")
         assert "val" in collected
         assert set(collected["val"]) == {"A", "B"}
 
     def test_preserves_inject(self):
-        def func(x):
-            return af.checkpoint(af.format("[{}]", x), key="val", collection="cache")
+        def program(a, b):
+            x = af.checkpoint(af.format("[{}]", a), key="val", collection="cache")
+            y = af.checkpoint(af.format("<{}>", b), key="val", collection="cache")
+            return x, y
 
-        ir1 = af.trace(func)("a")
-        ir2 = af.trace(func)("b")
+        scheduled = af.sched(af.trace(program)("a", "b"))
 
         with af.inject(collection="cache", values={"val": ["CACHED1", "CACHED2"]}):
-            results = af.gather([(ir1, ("A",)), (ir2, ("B",))])
+            results = scheduled.call("A", "B")
 
-        assert results == ["CACHED1", "CACHED2"]
+        assert results == ("CACHED1", "CACHED2")
 
     def test_nested_gather(self):
         def inner(x):
             return af.checkpoint(x, key="inner", collection="debug")
 
-        inner_ir = af.trace(inner)("x")
+        branches = {
+            "a": af.sched(af.trace(lambda x: (inner(x), inner(x)))("x")),
+            "b": af.sched(af.trace(lambda x: (inner(x), inner(x)))("x")),
+        }
 
-        def outer(x):
-            results = af.gather([(inner_ir, (x,)), (inner_ir, (x,))])
-            return af.concat(results[0], results[1])
+        def outer(key, x):
+            left, right = af.switch(key, branches, x)
+            return af.concat(left, right)
 
-        outer_ir = af.trace(outer)("x")
+        outer_ir = af.sched(af.trace(outer)("a", "x"))
 
         with af.collect(collection="debug") as collected:
-            results = af.gather([(outer_ir, ("A",)), (outer_ir, ("B",))])
+            results = outer_ir.call("a", "A")
 
+        assert results == "AA"
         assert "inner" in collected
-        assert len(collected["inner"]) == 4
+        assert len(collected["inner"]) == 2
 
 
 class TestSched:
@@ -478,22 +390,29 @@ class TestSchedRecursive:
         assert scheduled.call("B", "ignored", "world") == "ignored world"
 
     def test_sched_gather_nested_irs(self):
-        ir1 = af.trace(lambda x: af.concat(af.format("[{}]", x), af.format("<{}>", x)))("x")
-        ir2 = af.trace(lambda x: af.concat(af.format("({})", x), af.format("{{{}}}", x)))("x")
+        branches1 = {
+            "a": af.trace(lambda x: af.concat(af.format("[{}]", x), af.format("<{}>", x)))("x")
+        }
+        branches2 = {
+            "a": af.trace(lambda x: af.concat(af.format("({})", x), af.format("{{{}}}", x)))("x")
+        }
 
-        def program(a, b):
-            results = af.gather([(ir1, (a,)), (ir2, (b,))])
-            return results
+        def program(key, a, b):
+            left = af.switch(key, branches1, a)
+            right = af.switch(key, branches2, b)
+            return left, right
 
-        ir = af.trace(program)("a", "b")
+        ir = af.trace(program)("a", "hello", "world")
         scheduled = af.sched(ir)
 
         outer_gather = scheduled.ir_eqns[0]
         for inner_ir in outer_gather.params["irs"]:
-            assert any(e.prim.name == "gather" for e in inner_ir.ir_eqns)
+            switch_eqn = inner_ir.ir_eqns[0]
+            branch = switch_eqn.params["branches"]["a"]
+            assert any(e.prim.name == "gather" for e in branch.ir_eqns)
 
-        result = scheduled.call("hello", "world")
-        assert result == ["[hello]<hello>", "(world){world}"]
+        result = scheduled.call("a", "hello", "world")
+        assert result == ("[hello]<hello>", "(world){world}")
 
     def test_sched_with_cond_propagates_to_nested(self):
         branches = {
@@ -1280,7 +1199,7 @@ class TestGatherBatchAllUnbatched:
         in_batched = [False, False]
         in_values = [("hello",), ("world",)]
 
-        out_vals, out_batched = af.core.batch_rules.get(af.scheduling.gather_p)(
+        out_vals, out_batched = af.core.batch_rules.get(scheduling.gather_p)(
             (batch_size, in_batched, in_values), irs=irs
         )
         assert out_vals == ["[hello]", "<world>"]
@@ -1296,7 +1215,7 @@ class TestGatherBatchAllUnbatched:
         in_batched = [False, False]
         in_values = [("hello",), ("world",)]
 
-        out_vals, out_batched = await af.core.batch_rules.aget(af.scheduling.gather_p)(
+        out_vals, out_batched = await af.core.batch_rules.aget(scheduling.gather_p)(
             (batch_size, in_batched, in_values), irs=irs
         )
         assert out_vals == ["[hello]", "<world>"]
@@ -1310,33 +1229,31 @@ class TestGatherBatchAllUnbatched:
         in_batched = [False]
         in_values = [("hello",)]
 
-        out_vals, out_batched = af.core.batch_rules.get(af.scheduling.gather_p)(
+        out_vals, out_batched = af.core.batch_rules.get(scheduling.gather_p)(
             (batch_size, in_batched, in_values), irs=irs
         )
         assert out_vals == ["[hello]"]
         assert out_batched == [False]
 
     def test_gather_integration_mixed_batched(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
         def program(x, y):
-            return af.gather([(ir1, (x,)), (ir2, (y,))])
+            a = af.format("[{}]", x)
+            b = af.format("<{}>", y)
+            return a, b
 
-        prog_ir = af.trace(program)("a", "b")
-        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        scheduled = af.sched(af.trace(program)("a", "b"))
+        batched_ir = af.batch(scheduled, in_axes=(True, False))
         result = batched_ir.call(["a", "b"], "constant")
-        assert result == [["[a]", "[b]"], ["<constant>", "<constant>"]]
+        assert result == (["[a]", "[b]"], ["<constant>", "<constant>"])
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_gather_integration_mixed_batched_async(self):
-        ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-
         def program(x, y):
-            return af.gather([(ir1, (x,)), (ir2, (y,))])
+            a = af.format("[{}]", x)
+            b = af.format("<{}>", y)
+            return a, b
 
-        prog_ir = af.trace(program)("a", "b")
-        batched_ir = af.batch(prog_ir, in_axes=(True, False))
+        scheduled = af.sched(af.trace(program)("a", "b"))
+        batched_ir = af.batch(scheduled, in_axes=(True, False))
         result = await batched_ir.acall(["a", "b"], "constant")
-        assert result == [["[a]", "[b]"], ["<constant>", "<constant>"]]
+        assert result == (["[a]", "[b]"], ["<constant>", "<constant>"])

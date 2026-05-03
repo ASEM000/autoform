@@ -84,7 +84,6 @@ Control flow primitives.
 Concurrency and dependency management.
 
 ```{eval-rst}
-.. autofunction:: autoform.gather
 .. autofunction:: autoform.depends
 ```
 
