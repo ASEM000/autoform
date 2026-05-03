@@ -455,10 +455,10 @@ valid_rules[Int] = integer_value
 valid_rules[Float] = number_value
 valid_rules[Bool] = lambda s, v, p: v if type(v) is bool else error(p, "boolean")
 valid_rules[Enum] = lambda s, v, p: v if v in s else error(p, f"one of {s.values!r}")
-valid_rules[Docd] = lambda s, v, p: parse_tree(s.value, v, p)
+valid_rules[Docd] = lambda s, v, p: tree_build(s.value, v, p)
 
 
-def parse_tree(tree: Any, value: Any, path: str = "$") -> Any:
+def tree_build(tree: Any, value: Any, path: str = "$") -> Any:
     if rule := valid_rules.get(type(tree)):
         return rule(tree, value, path)
     if treelib.is_leaf(tree):
@@ -469,9 +469,9 @@ def parse_tree(tree: Any, value: Any, path: str = "$") -> Any:
         is_leaf=lambda node: id(node) != id(tree),
         none_is_leaf=True,
     )
-
+    assert isinstance(value, dict), f"{path}: expected object, got {value!r}"
     values = (
-        parse_tree(child, value.get(str(entry)), f"{path}[{entry!r}]")
+        tree_build(child, value.get(str(entry)), f"{path}[{entry!r}]")
         for entry, child in zip(spec.entries(), children, strict=True)
     )
     return spec.unflatten(values)
@@ -483,26 +483,25 @@ def parse_tree(tree: Any, value: Any, path: str = "$") -> Any:
 
 
 @ft.lru_cache(maxsize=256)
-def schema_from_flattened_schema(schema: FlattenedSchema) -> JsonSchema:
+def schema_from_flat_and_spec(schema: FlattenedSchema) -> JsonSchema:
     leaves, treespec = schema
     return schema_build(treespec.unflatten(leaves))
 
 
 @ft.lru_cache(maxsize=256)
-def parser_from_flattened_schema(flattened_schema: FlattenedSchema) -> Parser:
+def parser_from_flat_and_spec(flattened_schema: FlattenedSchema) -> Parser:
     schema_leaves, treespec = flattened_schema
     schema = treespec.unflatten(schema_leaves)
 
     def parse(value: Any) -> Any:
-        return parse_tree(schema, value)
+        return tree_build(schema, value)
 
     return parse
 
 
 def build(schema: Any) -> tuple[JsonSchema, Parser]:
     leaves, treespec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    flattened_schema = (tuple(leaves), treespec)
-    return (
-        schema_from_flattened_schema(flattened_schema),
-        parser_from_flattened_schema(flattened_schema),
-    )
+    flat_and_spec = (tuple(leaves), treespec)
+    json_schema = schema_from_flat_and_spec(flat_and_spec)
+    parser = parser_from_flat_and_spec(flat_and_spec)
+    return json_schema, parser
