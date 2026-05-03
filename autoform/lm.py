@@ -27,7 +27,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import acompletion, completion
 
-from autoform.ad import Zero, materialize
+from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
     EvalType,
     Prim,
@@ -40,7 +40,7 @@ from autoform.core import (
     push_rules,
     typeof,
 )
-from autoform.schemas import Bool, Documented, Enum, Float, Int, Str, build, is_schema_spec
+from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, build, SCHEMA_MSG
 from autoform.utils import (
     Struct,
     Tree,
@@ -561,6 +561,21 @@ batch_rules.aset(lm_struct_call_p, abatch_lm_struct_call)
 lm_schema_call_p = Prim("lm_schema_call")
 
 
+SCHEMA_GRAD_PROMPT = """Given this LLM interaction:
+
+INPUT: {content}
+STRUCTURED OUTPUT FEEDBACK:
+{feedback}
+
+Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise.
+
+- Each field is one leaf of the generated output.
+- Path locates the field from the root output object.
+- Value is the generated value.
+- Feedback is natural-language feedback for that field; empty feedback means no change.
+"""
+
+
 def lm_schema_call(
     messages: list[dict[str, str]],
     /,
@@ -658,23 +673,27 @@ async def aimpl_lm_schema_call(
     return parse(json.loads(resp.choices[0].message.content))
 
 
-schema_abstract_rules = defaultdict(lambda: lambda node: node)
+schema_abstract_rules = {}
 schema_abstract_rules[Str] = lambda _: TypedAVal(str)
 schema_abstract_rules[Int] = lambda _: TypedAVal(int)
 schema_abstract_rules[Float] = lambda _: TypedAVal(float)
 schema_abstract_rules[Bool] = lambda _: TypedAVal(bool)
-schema_abstract_rules[Enum] = lambda _: TypedAVal(type(_.values[0]))
-schema_abstract_rules[Documented] = lambda s: s.value
+schema_abstract_rules[Enum] = lambda s: TypedAVal(type(s.values[0]))
+schema_abstract_rules[Docd] = lambda s: schema_abstract_tree(s.value)
+
+
+def is_schema_abstract_leaf(x: Any) -> bool:
+    return type(x) in schema_abstract_rules
+
+
+def schema_abstract_node(x: Any) -> Any:
+    if rule := schema_abstract_rules.get(type(x)):
+        return rule(x)
+    raise TypeError(f"No abstract rule for schema node type {type(x)}")
 
 
 def schema_abstract_tree(schema: Any) -> Tree:
-    build(schema)
-    leaves, spec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    return spec.traverse(leaves, schema_abstract_rule, schema_abstract_rule)
-
-
-def schema_abstract_rule(node: Any) -> Any:
-    return schema_abstract_rules[type(node)](node)
+    return treelib.map(schema_abstract_node, schema, is_leaf=is_schema_abstract_leaf)
 
 
 def abstract_lm_schema_call(
@@ -750,6 +769,27 @@ async def apull_fwd_lm_schema_call(
     return out, residuals
 
 
+def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
+
+    def validate_schema_feedback(path: str, feedback: Any) -> str:
+        if is_zero(feedback):
+            return "No feedback"
+        if type(feedback) is str:
+            return feedback
+        raise TypeError(f"{path}: schema output cotangent leaves must be text, got {feedback!r}")
+
+    out_leaves, out_spec = treelib.flatten(out)
+    cotangents = out_spec.flatten_up_to(cotangent)
+    lines = ["Fields:"]
+
+    for accessor, value, feedback in zip(out_spec.accessors(), out_leaves, cotangents, strict=True):
+        feedback = validate_schema_feedback(accessor.codify("$"), feedback)
+        lines.append(accessor.codify("$"))
+        lines.append(f"\tvalue: {value!r}")
+        lines.append(f"\tfeedback: {feedback!r}")
+    return "\n".join(lines).expandtabs(2)
+
+
 def pullback_bwd_lm_schema_call(
     in_tree: Tree,
     /,
@@ -758,11 +798,11 @@ def pullback_bwd_lm_schema_call(
     schema: Any,
 ) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = materialize(out_cotangent)
     contents, model, out = residuals
+    feedback = build_cotangent_schema_summary(out, out_cotangent)
     grads = []
     for content in contents:
-        grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
+        grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
     return grads, Zero(str)
@@ -776,11 +816,11 @@ async def apull_bwd_lm_schema_call(
     schema: Any,
 ) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = materialize(out_cotangent)
     contents, model, out = residuals
+    feedback = build_cotangent_schema_summary(out, out_cotangent)
 
     async def grad(c):
-        prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
+        prompt = SCHEMA_GRAD_PROMPT.format(content=c, feedback=feedback)
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
