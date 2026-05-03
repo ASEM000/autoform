@@ -51,7 +51,7 @@ def asyncify[**P, R](func: Callable[P, R], /) -> Callable[P, Awaitable[R]]:
 # PYTREE UTILITIES
 # ==================================================================================================
 
-PYTREE_NAMESPACE = "AUTOFORM"
+PYTREE_NAMESPACE = "OPTREE_AUTOFORM_NAMESPACE"
 treelib = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
 type Tree[T] = Any
 
@@ -60,10 +60,10 @@ def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R
     return cast(Callable[P, R], ft.lru_cache(maxsize=maxsize)(func))
 
 
-def tree_index(node: Tree, b: int, /) -> Tree:
+def index(node: Tree, b: int, /) -> Tree:
     # NOTE(asem): index a struct without indexing support
     # useful to deal with arbitrary pytrees
-    children, *_ = treelib.flatten_one_level(node)
+    children = treelib.leaves(node, is_leaf=lambda x: id(x) != id(node), none_is_leaf=True)
     return children[b]
 
 
@@ -287,7 +287,7 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
     zipped = zip(flat_in_tree, flat_in_batched, strict=True)
-    leaves_i = (tree_index(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
+    leaves_i = (index(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
 
