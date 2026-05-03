@@ -226,12 +226,18 @@
     lhs, rhs = af.split(ir, key="mid")
     ```
 
-  - `gather` and `depends` for concurrent execution with explicit dependency tracking
+  - `sched` and `depends` for concurrent execution with explicit dependency tracking
   
     ```python
-    ir1 = af.trace(lambda x: af.format("[{}]", x))("...")
-    ir2 = af.trace(lambda x: af.format("<{}>", x))("...")
-    result = af.gather([(ir1, "A"), (ir2, "B")])  # ["[A]", "<B>"]
+    def program(x):
+        a = af.format("[{}]", x)
+        b = af.format("<{}>", x)
+        return a, b
+
+
+    ir = af.trace(program)("...")
+    scheduled = af.sched(ir)
+    result = await scheduled.acall("A")  # ("[A]", "<A>")
     ```
 
   - Custom intercept system with default interceptor support
