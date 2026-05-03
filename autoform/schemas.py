@@ -73,8 +73,8 @@ from __future__ import annotations
 
 import functools as ft
 import re
-from collections import OrderedDict, defaultdict
-from collections.abc import Callable, Iterable
+from collections import OrderedDict
+from collections.abc import Callable
 from typing import Any, NoReturn, TypeGuard
 
 import optree
@@ -90,20 +90,11 @@ json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 # ==================================================================================================
 
 
-type Path = tuple[Any, ...]
 type JsonSchema = dict[str, Any]
-type ObjectProperties = OrderedDict[str, Any]
 type Parser = Callable[[Any], Any]
 type SchemaRule = Callable[[Any], JsonSchema]
-type ValueNodeRule = Callable[[Any], Any]
-type ValueRule = Callable[[Any, Any, optree.PyTreeAccessor, str], Any]
-type TransportNodeRule = Callable[[Any], tuple[Path, Any]]
+type ValidRule = Callable[[Any, Any, str], Any]
 type SchemaKey = tuple[tuple[Spec, ...], optree.PyTreeSpec]
-type TreeCache = tuple[
-    optree.PyTreeSpec,
-    optree.PyTreeSpec,
-    tuple[tuple[Spec, ValueRule, optree.PyTreeAccessor], ...],
-]
 
 
 # ==================================================================================================
@@ -357,10 +348,6 @@ schema_message = "Expected a pytree containing Str(), Int(), Float(), Bool(), En
 schema_rules: dict[type[Any], SchemaRule] = {}
 
 
-def document_schema(node: Meta[Any]) -> JsonSchema:
-    return schema_build(node.value) | {"description": node.text}
-
-
 def string_schema(s: Str) -> JsonSchema:
     schema: JsonSchema = {"type": s.schema}
     if s.min is not None:
@@ -386,7 +373,7 @@ schema_rules[Int] = number_schema
 schema_rules[Float] = number_schema
 schema_rules[Bool] = lambda s: {"type": s.schema}
 schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
-schema_rules[Meta] = document_schema
+schema_rules[Meta] = lambda s: schema_build(s.value) | {"description": s.text}
 
 
 @ft.lru_cache(maxsize=256)
@@ -401,9 +388,13 @@ def schema_build(tree: Any) -> JsonSchema:
     if treelib.is_leaf(tree):
         raise TypeError(f"{schema_message}, got {tree!r}")
 
-    children, _, entries, _ = treelib.flatten_one_level(tree)
+    children, spec = treelib.flatten(
+        tree,
+        is_leaf=lambda node: id(node) != id(tree),
+        none_is_leaf=True,
+    )
     properties = OrderedDict()
-    for entry, child in zip(entries, children, strict=True):
+    for entry, child in zip(spec.entries(), children, strict=True):
         property_name = str(entry)
         if property_name in properties:
             raise TypeError(f"{schema_message}; duplicate object entries {(property_name,)!r}")
@@ -422,152 +413,85 @@ def is_schema_spec(node: Any) -> TypeGuard[Spec]:
 
 
 # ==================================================================================================
-# VALUE VALIDATION
-# ==================================================================================================
-
-
-def error(accessor: Any, path: str, expected: Any) -> NoReturn:
-    raise ValueError(f"{accessor.codify(path)}: expected {getattr(expected, 'schema', expected)}")
-
-
-value_rules: dict[type[Spec], ValueRule] = {}
-
-
-def string_value(s: Str, value: Any, accessor: optree.PyTreeAccessor, path: str) -> str:
-    if type(value) is not str:
-        error(accessor, path, s)
-    if s.min is not None and len(value) < s.min:
-        error(accessor, path, f"string with length >= {s.min}")
-    if s.max is not None and len(value) > s.max:
-        error(accessor, path, f"string with length <= {s.max}")
-    if s.pattern is not None and not re.search(s.pattern, value):
-        error(accessor, path, f"string matching {s.pattern!r}")
-    return value
-
-
-def integer_value(s: Int, value: Any, accessor: optree.PyTreeAccessor, path: str) -> int:
-    if type(value) is not int:
-        error(accessor, path, s)
-    if s.min is not None and value < s.min:
-        error(accessor, path, f"integer >= {s.min}")
-    if s.max is not None and value > s.max:
-        error(accessor, path, f"integer <= {s.max}")
-    return value
-
-
-def number_value(s: Float, value: Any, accessor: optree.PyTreeAccessor, path: str) -> float:
-    if type(value) not in (int, float):
-        error(accessor, path, s)
-    if s.min is not None and value < s.min:
-        error(accessor, path, f"number >= {s.min}")
-    if s.max is not None and value > s.max:
-        error(accessor, path, f"number <= {s.max}")
-    return float(value)
-
-
-value_rules[Str] = string_value
-value_rules[Int] = integer_value
-value_rules[Float] = number_value
-value_rules[Bool] = lambda s, v, a, p: v if type(v) is bool else error(a, p, s)
-value_rules[Enum] = lambda s, v, a, p: v if v in s else error(a, p, f"one of {s.values!r}")
-
-
-# ==================================================================================================
 # PARSING
 # ==================================================================================================
 
 
-def transport_properties(children: Iterable[tuple[Path, Any]]) -> ObjectProperties:
-    properties = OrderedDict()
-    for path, value in children:
-        *_, entry = path
-        property_name = str(entry)
-        if property_name in properties:
-            raise TypeError(f"{schema_message}; duplicate object entries {(property_name,)!r}")
-        properties[property_name] = value
-    return properties
+def error(path: str, expected: Any) -> NoReturn:
+    raise ValueError(f"{path}: expected {getattr(expected, 'schema', expected)}")
 
 
-value_node_rules: defaultdict[type[Any], ValueNodeRule] = defaultdict(lambda: lambda x: x)
-transport_node_rules = defaultdict(lambda: default_transport_node)
+valid_rules: dict[type[Spec], ValidRule] = {}
 
 
-def doc_transport(node: Meta[tuple[Path, Any]]) -> tuple[Path, Any]:
-    path, value = node.value
-    *path, _ = path
-    return tuple(path), value
+def string_value(s: Str, value: Any, path: str) -> str:
+    if type(value) is not str:
+        error(path, s)
+    if s.min is not None and len(value) < s.min:
+        error(path, f"string with length >= {s.min}")
+    if s.max is not None and len(value) > s.max:
+        error(path, f"string with length <= {s.max}")
+    if s.pattern is not None and not re.search(s.pattern, value):
+        error(path, f"string matching {s.pattern!r}")
+    return value
 
 
-value_node_rules[Meta] = lambda node: node.value
-transport_node_rules[Meta] = doc_transport
+def integer_value(s: Int, value: Any, path: str) -> int:
+    if type(value) is not int:
+        error(path, s)
+    if s.min is not None and value < s.min:
+        error(path, f"integer >= {s.min}")
+    if s.max is not None and value > s.max:
+        error(path, f"integer <= {s.max}")
+    return value
+
+
+def number_value(s: Float, value: Any, path: str) -> float:
+    if type(value) not in (int, float):
+        error(path, s)
+    if s.min is not None and value < s.min:
+        error(path, f"number >= {s.min}")
+    if s.max is not None and value > s.max:
+        error(path, f"number <= {s.max}")
+    return float(value)
+
+
+valid_rules[Str] = string_value
+valid_rules[Int] = integer_value
+valid_rules[Float] = number_value
+valid_rules[Bool] = lambda s, v, p: v if type(v) is bool else error(p, s)
+valid_rules[Enum] = lambda s, v, p: v if v in s else error(p, f"one of {s.values!r}")
+valid_rules[Meta] = lambda s, v, p: parse_tree(s.value, v, p)
+
+
+def parse_tree(tree: Any, value: Any, path: str = "$") -> Any:
+    if rule := valid_rules.get(type(tree)):
+        return rule(tree, value, path)
+    if treelib.is_leaf(tree):
+        raise TypeError(f"{schema_message}, got {tree!r}")
+
+    children, spec = treelib.flatten(
+        tree,
+        is_leaf=lambda node: id(node) != id(tree),
+        none_is_leaf=True,
+    )
+
+    values = (
+        parse_tree(child, value.get(str(entry)), f"{path}[{entry!r}]")
+        for entry, child in zip(spec.entries(), children, strict=True)
+    )
+    return spec.unflatten(values)
 
 
 @ft.lru_cache(maxsize=256)
 def parser_for_key(key: SchemaKey) -> Parser:
-    cache = tree_cache_for_key(key)
-    return lambda value: build_from_cache(cache, value)
+    schema_leaves, spec = key
+    schema = spec.unflatten(schema_leaves)
 
+    def parse(value: Any) -> Any:
+        return parse_tree(schema, value)
 
-@ft.lru_cache(maxsize=256)
-def tree_cache_for_key(key: SchemaKey) -> TreeCache:
-    leaves, spec = key
-    _, transport = spec.traverse(
-        zip(spec.paths(), spec.accessors(), leaves, strict=True),
-        transport_node_rule,
-        transport_leaf,
-    )
-    transport_leaves, transport_spec = treelib.flatten(transport, is_leaf=is_schema_spec)
-    marker = object()
-    value_tree = spec.traverse(
-        leaves,
-        value_node_rule,
-        lambda _: marker,
-    )
-    return (
-        transport_spec,
-        treelib.structure(value_tree, is_leaf=lambda node: node is marker),
-        tuple(
-            (leaf, value_rules[type(leaf)], accessor)
-            for leaf, accessor in zip(transport_leaves, transport_spec.accessors(), strict=True)
-        ),
-    )
-
-
-def value_node_rule(node: Any) -> Any:
-    return value_node_rules[type(node)](node)
-
-
-def transport_node_rule(node: Any) -> tuple[Path, Any]:
-    return transport_node_rules[type(node)](node)
-
-
-def transport_leaf(node: Any) -> tuple[Path, Any]:
-    path, accessor, leaf = node
-    if not is_schema_spec(leaf):
-        raise TypeError(f"{accessor.codify('$')}: {schema_message}, got {leaf!r}")
-    return path, leaf
-
-
-def default_transport_node(node: Any) -> tuple[Path, ObjectProperties]:
-    return transport_object(node)
-
-
-def transport_object(node: Any) -> tuple[Path, ObjectProperties]:
-    children, _, _, _ = treelib.flatten_one_level(node)
-    (path, _), *_ = children
-    *path, _ = path
-    return tuple(path), transport_properties(children)
-
-
-def build_from_cache(cache: TreeCache, value: Any) -> Any:
-    transport_spec, value_spec, rules = cache
-    try:
-        leaves = transport_spec.flatten_up_to(value)
-    except ValueError:
-        _, spec = treelib.flatten(value)
-        raise ValueError(f"$: expected {transport_spec}, got {spec}") from None
-    output = (rule(l, v, a, "$") for v, (l, rule, a) in zip(leaves, rules, strict=True))
-    return value_spec.unflatten(output)
+    return parse
 
 
 def build(schema: Any) -> tuple[JsonSchema, Parser]:
