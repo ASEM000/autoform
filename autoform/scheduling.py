@@ -46,41 +46,6 @@ from autoform.utils import Tree, asyncify, batch_spec, lru_cache, treelib
 gather_p = Prim("gather")
 
 
-def gather(ir_input_pairs: list[tuple[IR, Tree]], /) -> list[Tree]:
-    """Run multiple IRs, concurrently when using acall().
-
-    When executed with call(), runs sequentially.
-    When executed with acall(), runs concurrently via asyncio.gather.
-
-    Args:
-        ir_input_pairs: pairs of (ir, inputs) to execute.
-
-    Returns:
-        List of results in same order as inputs.
-
-    Example:
-        >>> import autoform as af
-        >>> ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
-        >>> ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
-        >>> result = af.gather([(ir1, ("A",)), (ir2, ("B",))])
-        >>> result
-        ['[A]', '<B>']
-    """
-    assert len(ir_input_pairs), "gather requires at least one (ir, inputs) pair"
-    ins, irs = [], []
-    for pair in ir_input_pairs:
-        match pair:
-            case (IR(), _):
-                ir, inp = pair
-                irs.append(ir)
-                assert isinstance(inp, tuple), "gather inputs must be positional-args tuples"
-                ins.append(inp)
-            case _:
-                raise TypeError(f"Expected (ir, inputs) tuple, got {pair}")
-
-    return gather_p.bind(ins, irs=irs)
-
-
 def impl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
     assert len(in_tree) == len(irs)
     return [ir.call(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
@@ -351,7 +316,7 @@ batch_rules.aset(depends_p, asyncify(batch_depends))
 
 @ft.partial(lru_cache, maxsize=256)
 def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = None) -> IR[*A, R]:
-    """Schedule independent operations for parallel execution using gather.
+    """Schedule independent operations for parallel execution.
 
     Args:
         ir: The IR to schedule.
@@ -360,7 +325,7 @@ def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = Non
               candidates for parallelization.
 
     Returns:
-        A new IR with gather operations.
+        A new IR with independent operations grouped together for parallel execution.
 
     Example:
         >>> import autoform as af
