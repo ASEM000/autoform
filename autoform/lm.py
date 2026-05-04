@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 import json
-from collections import defaultdict
 from collections.abc import Awaitable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -40,14 +39,12 @@ from autoform.core import (
     push_rules,
     typeof,
 )
-from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, build, SCHEMA_MSG
+from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, make_json_schema_and_parser
 from autoform.utils import (
-    Struct,
     Tree,
     batch_index,
     batch_spec,
     batch_transpose,
-    struct_type_tree,
     treelib,
 )
 
@@ -300,261 +297,6 @@ batch_rules.set(lm_call_p, batch_lm_call)
 batch_rules.aset(lm_call_p, abatch_lm_call)
 
 # ==================================================================================================
-# STRUCT LM CALL
-# ==================================================================================================
-
-lm_struct_call_p = Prim("lm_struct_call")
-
-
-def lm_struct_call[T: Struct](
-    messages: list[dict[str, str]],
-    /,
-    *,
-    model: str,
-    struct: type[T],
-) -> T:
-    """Calls a language model with structured output using response_format.
-
-    Uses LLM's built-in JSON mode with a schema to extract structured
-    data. The model response is automatically parsed and validated.
-
-    Args:
-        messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The name of the language model to use.
-        struct: A ``Struct`` subclass defining the output schema.
-
-    Returns:
-        A validated instance of the struct type.
-
-    Example:
-        >>> import autoform as af
-        >>> class Answer(af.Struct):
-        ...     reasoning: str
-        ...     answer: int
-        >>> def solver(question):
-        ...     messages = [{"role": "user", "content": question}]
-        ...     return af.lm_struct_call(messages, model="gpt-5.2", struct=Answer)
-        >>> ir = af.trace(solver)("What is 2+2?")  # doctest: +SKIP
-        >>> result = ir.call("What is 2+2?")  # doctest: +SKIP
-        >>> result.answer  # doctest: +SKIP
-        4
-    """
-    assert issubclass(struct, Struct), "struct must be a subclass of ``Struct``"
-    for m in messages:
-        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
-        assert "role" in m, f"message must have a 'role' key, got {m=}"
-        assert "content" in m, f"message must have a 'content' key, got {m=}"
-
-    roles = [m["role"] for m in messages]
-    contents = [m["content"] for m in messages]
-    in_tree = (contents, model)
-    return lm_struct_call_p.bind(in_tree, roles=roles, struct=struct)
-
-
-def impl_lm_struct_call[T: Struct](
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[T],
-) -> T:
-    contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    resp = active_client.get().completion(
-        messages=messages,
-        model=model,
-        response_format=struct,
-    )
-    return struct.model_validate_json(resp.choices[0].message.content)
-
-
-async def aimpl_lm_struct_call[T: Struct](
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[T],
-) -> T:
-    contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    resp = await active_client.get().acompletion(
-        messages=messages,
-        model=model,
-        response_format=struct,
-    )
-    return struct.model_validate_json(resp.choices[0].message.content)
-
-
-def abstract_lm_struct_call[T: Struct](
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[T],
-) -> Tree:
-    contents, model = in_tree
-    assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
-    assert typeof(model) is str, f"Expected string model, got {model!r}"
-    return treelib.map(TypedAVal, struct_type_tree(struct))
-
-
-def pushforward_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, *_ = tangents
-    p_tree = (primal_contents, primal_model)
-    t_tree = (materialize(tangent_contents), primal_model)
-    p_resp = lm_struct_call_p.bind(p_tree, roles=roles, struct=struct)
-    t_resp = lm_struct_call_p.bind(t_tree, roles=roles, struct=struct)
-    return p_resp, t_resp
-
-
-async def apush_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> tuple[Tree, Tree]:
-    primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, *_ = tangents
-    abind = ft.partial(lm_struct_call_p.abind, roles=roles, struct=struct)
-    p_tree = (primal_contents, primal_model)
-    t_tree = (materialize(tangent_contents), primal_model)
-    p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
-    return p_resp, t_resp
-
-
-def pullback_fwd_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> tuple[Tree, Tree]:
-    contents, model = in_tree
-    out = lm_struct_call_p.bind(in_tree, roles=roles, struct=struct)
-    residuals = (contents, model, out)
-    return out, residuals
-
-
-async def apull_fwd_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> tuple[Tree, Tree]:
-    contents, model = in_tree
-    out = await lm_struct_call_p.abind(in_tree, roles=roles, struct=struct)
-    residuals = (contents, model, out)
-    return out, residuals
-
-
-def pullback_bwd_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> Tree:
-    residuals, out_cotangent = in_tree
-    out_cotangent = materialize(out_cotangent)
-    contents, model, out = residuals
-    grads = []
-    for content in contents:
-        grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
-        grads.append(grad_out)
-    return grads, Zero(str)
-
-
-async def apull_bwd_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> Tree:
-    residuals, out_cotangent = in_tree
-    out_cotangent = materialize(out_cotangent)
-    contents, model, out = residuals
-
-    async def grad(c):
-        prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
-        return await grad_out
-
-    return (
-        await asyncio.gather(*[grad(c) for c in contents]),
-        Zero(str),
-    )
-
-
-def batch_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> tuple[Tree, Tree]:
-    batch_size, in_batched, in_values = in_tree
-
-    if batch_spec(in_values, in_batched) is None:
-        result = lm_struct_call_p.bind(in_values, roles=roles, struct=struct)
-        out_batched = treelib.map(lambda _: False, result)
-        return result, out_batched
-
-    unbatch = ft.partial(batch_index, in_values, in_batched)
-    bind = ft.partial(lm_struct_call_p.bind, roles=roles, struct=struct)
-    results = [bind(unbatch(b)) for b in range(batch_size)]
-    out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = batch_transpose(batch_size, out_batched, results)
-    return out_ib, out_batched
-
-
-async def abatch_lm_struct_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    struct: type[Struct],
-) -> tuple[Tree, Tree]:
-    batch_size, in_batched, in_values = in_tree
-
-    if batch_spec(in_values, in_batched) is None:
-        result = await lm_struct_call_p.abind(in_values, roles=roles, struct=struct)
-        out_batched = treelib.map(lambda _: False, result)
-        return result, out_batched
-
-    unbatch = ft.partial(batch_index, in_values, in_batched)
-    abind = ft.partial(lm_struct_call_p.abind, roles=roles, struct=struct)
-    results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
-    out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = batch_transpose(batch_size, out_batched, list(results))
-    return out_ib, out_batched
-
-
-impl_rules.set(lm_struct_call_p, impl_lm_struct_call)
-impl_rules.aset(lm_struct_call_p, aimpl_lm_struct_call)
-abstract_rules.set(lm_struct_call_p, abstract_lm_struct_call)
-push_rules.set(lm_struct_call_p, pushforward_lm_struct_call)
-push_rules.aset(lm_struct_call_p, apush_lm_struct_call)
-pull_fwd_rules.set(lm_struct_call_p, pullback_fwd_lm_struct_call)
-pull_fwd_rules.aset(lm_struct_call_p, apull_fwd_lm_struct_call)
-pull_bwd_rules.set(lm_struct_call_p, pullback_bwd_lm_struct_call)
-pull_bwd_rules.aset(lm_struct_call_p, apull_bwd_lm_struct_call)
-batch_rules.set(lm_struct_call_p, batch_lm_struct_call)
-batch_rules.aset(lm_struct_call_p, abatch_lm_struct_call)
-
-# ==================================================================================================
 # LM SCHEMA CALL
 # ==================================================================================================
 
@@ -645,7 +387,7 @@ def impl_lm_schema_call(
     schema: Any,
 ) -> Any:
     contents, model = in_tree
-    json_schema, parse = build(schema)
+    json_schema, parse = make_json_schema_and_parser(schema)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = active_client.get().completion(
         messages=messages,
@@ -663,7 +405,7 @@ async def aimpl_lm_schema_call(
     schema: Any,
 ) -> Any:
     contents, model = in_tree
-    json_schema, parse = build(schema)
+    json_schema, parse = make_json_schema_and_parser(schema)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = await active_client.get().acompletion(
         messages=messages,

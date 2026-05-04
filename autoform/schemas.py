@@ -77,11 +77,11 @@ from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from typing import Any, NoReturn, TypeGuard
 
-import optree
+from optree import GetAttrEntry, PyTreeAccessor, PyTreeSpec
 
-from autoform.utils import treelib
+from autoform.utils import Tree, treelib
 
-__all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "build"]
+__all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "make_json_schema_and_parser"]
 
 json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
@@ -91,10 +91,10 @@ json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 
 type JsonSchema = dict[str, Any]
-type Parser = Callable[[Any], Any]
+type Parser[T] = Callable[[Any], T]
 type SchemaRule = Callable[[Any], JsonSchema]
-type ValidRule = Callable[[Any, Any, str], Any]
-type FlattenedSchema = tuple[tuple[Spec, ...], optree.PyTreeSpec]
+type ValidRule = Callable[[Any, Any, PyTreeAccessor, PyTreeAccessor], Any]
+type FlattenedSchema = tuple[tuple[Spec, ...], PyTreeSpec]
 
 
 # ==================================================================================================
@@ -324,7 +324,7 @@ treelib.register_node(
     Docd,
     lambda node: ((node.value,), node.text, ("value",)),
     lambda text, children: Docd(children[0], text),
-    path_entry_type=optree.GetAttrEntry,
+    path_entry_type=GetAttrEntry,
 )
 
 
@@ -411,70 +411,123 @@ def is_schema_spec(node: Any) -> TypeGuard[Spec]:
 # ==================================================================================================
 
 
-def error(path: str, expected: Any) -> NoReturn:
-    raise ValueError(f"{path}: expected {expected}")
+def error(
+    in_acc: PyTreeAccessor,
+    out_acc: PyTreeAccessor,
+    expected: Any,
+) -> NoReturn:
+    source, target = out_acc.codify("$"), in_acc.codify("$")
+    raise ValueError(f"json {source} -> tree {target}: expected {expected}")
 
 
 valid_rules: dict[type[Any], ValidRule] = {}
 
 
-def string_value(s: Str, value: Any, path: str) -> str:
+def string_value(
+    s: Str,
+    value: str,
+    in_acc: PyTreeAccessor,
+    out_acc: PyTreeAccessor,
+) -> str:
     if type(value) is not str:
-        error(path, "string")
+        error(in_acc, out_acc, "string")
     if s.min is not None and len(value) < s.min:
-        error(path, f"string with length >= {s.min}")
+        error(in_acc, out_acc, f"string with length >= {s.min}")
     if s.max is not None and len(value) > s.max:
-        error(path, f"string with length <= {s.max}")
+        error(in_acc, out_acc, f"string with length <= {s.max}")
     if s.pattern is not None and not re.search(s.pattern, value):
-        error(path, f"string matching {s.pattern!r}")
+        error(in_acc, out_acc, f"string matching {s.pattern!r}")
     return value
 
 
-def integer_value(s: Int, value: Any, path: str) -> int:
+def integer_value(
+    s: Int,
+    value: int,
+    in_acc: PyTreeAccessor,
+    out_acc: PyTreeAccessor,
+) -> int:
     if type(value) is not int:
-        error(path, "integer")
+        error(in_acc, out_acc, "integer")
     if s.min is not None and value < s.min:
-        error(path, f"integer >= {s.min}")
+        error(in_acc, out_acc, f"integer >= {s.min}")
     if s.max is not None and value > s.max:
-        error(path, f"integer <= {s.max}")
+        error(in_acc, out_acc, f"integer <= {s.max}")
     return value
 
 
-def number_value(s: Float, value: Any, path: str) -> float:
+def number_value(
+    s: Float,
+    value: int | float,
+    in_acc: PyTreeAccessor,
+    out_acc: PyTreeAccessor,
+) -> float:
     if type(value) not in (int, float):
-        error(path, "number")
+        error(in_acc, out_acc, "number")
     if s.min is not None and value < s.min:
-        error(path, f"number >= {s.min}")
+        error(in_acc, out_acc, f"number >= {s.min}")
     if s.max is not None and value > s.max:
-        error(path, f"number <= {s.max}")
+        error(in_acc, out_acc, f"number <= {s.max}")
     return float(value)
 
 
 valid_rules[Str] = string_value
 valid_rules[Int] = integer_value
 valid_rules[Float] = number_value
-valid_rules[Bool] = lambda s, v, p: v if type(v) is bool else error(p, "boolean")
-valid_rules[Enum] = lambda s, v, p: v if v in s else error(p, f"one of {s.values!r}")
-valid_rules[Docd] = lambda s, v, p: tree_build(s.value, v, p)
+valid_rules[Bool] = lambda _, v, i, o: v if type(v) is bool else error(i, o, "boolean")
+valid_rules[Enum] = lambda s, v, i, o: v if v in s else error(i, o, f"one of {s.values!r}")
+valid_rules[Docd] = lambda s, v, i, o: tree_parse(s.value, v, i, o)
 
 
-def tree_build(tree: Any, value: Any, path: str = "$") -> Any:
-    if rule := valid_rules.get(type(tree)):
-        return rule(tree, value, path)
-    if treelib.is_leaf(tree):
-        raise TypeError(f"{SCHEMA_MSG}, got {tree!r}")
+def tree_parse[T: Tree[Spec | Docd[Spec]]](
+    schema_tree: T,
+    value_tree: Any,
+    schema_acc: PyTreeAccessor,
+    value_acc: PyTreeAccessor,
+) -> T:
+    # NOTE(asem): recursively validate value_tree against schema_tree,
+    # using the accessors to track the path for error messages.
+    # while the value tree is the json output with a dict structure, this code does not assume
+    # dicts.
+    if rule := valid_rules.get(type(schema_tree)):
+        return rule(schema_tree, value_tree, schema_acc, value_acc)
+    if treelib.is_leaf(schema_tree):
+        raise TypeError(f"{schema_acc.codify('$')}: {SCHEMA_MSG}, got {schema_tree!r}")
 
-    children, spec = treelib.flatten(
-        tree,
-        is_leaf=lambda node: id(node) != id(tree),
+    flat_schema, spec_schema = treelib.flatten(
+        schema_tree,
+        is_leaf=lambda node: id(node) != id(schema_tree),
         none_is_leaf=True,
     )
-    assert isinstance(value, dict), f"{path}: expected object, got {value!r}"
-    values = (
-        tree_build(child, value.get(str(entry)), f"{path}[{entry!r}]")
-        for entry, child in zip(spec.entries(), children, strict=True)
+
+    flat_value, spec_value = treelib.flatten(
+        value_tree,
+        is_leaf=lambda node: id(node) != id(value_tree),
+        none_is_leaf=True,
     )
-    return spec.unflatten(values)
+
+    schema_keys = [str(entry) for entry in spec_schema.entries()]
+    value_keys = [str(entry) for entry in spec_value.entries()]
+
+    if len(schema_keys) != len(value_keys) or set(schema_keys) != set(value_keys):
+        raise ValueError(f"Key mismatch: expected entries {schema_keys!r}, got {value_keys!r}")
+
+    out_pos = {key: i for i, key in enumerate(value_keys)}
+    out_accessors = spec_value.accessors()
+    values = (
+        tree_parse(
+            in_child,
+            flat_value[out_pos[in_key]],
+            schema_acc + in_accessor,
+            value_acc + out_accessors[out_pos[in_key]],
+        )
+        for in_key, in_child, in_accessor in zip(
+            schema_keys,
+            flat_schema,
+            spec_schema.accessors(),
+            strict=True,
+        )
+    )
+    return spec_schema.unflatten(values)
 
 
 # ==================================================================================================
@@ -489,17 +542,17 @@ def schema_from_flat_and_spec(schema: FlattenedSchema) -> JsonSchema:
 
 
 @ft.lru_cache(maxsize=256)
-def parser_from_flat_and_spec(flattened_schema: FlattenedSchema) -> Parser:
+def parser_from_flat_and_spec[T](flattened_schema: FlattenedSchema) -> Parser[T]:
     schema_leaves, treespec = flattened_schema
-    schema = treespec.unflatten(schema_leaves)
+    in_schema = treespec.unflatten(schema_leaves)
 
-    def parse(value: Any) -> Any:
-        return tree_build(schema, value)
+    def parse(out_json: Any) -> T:
+        return tree_parse(in_schema, out_json, PyTreeAccessor(), PyTreeAccessor())
 
     return parse
 
 
-def build(schema: Any) -> tuple[JsonSchema, Parser]:
+def make_json_schema_and_parser[T](schema: T) -> tuple[JsonSchema, Parser[T]]:
     leaves, treespec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
     flat_and_spec = (tuple(leaves), treespec)
     json_schema = schema_from_flat_and_spec(flat_and_spec)

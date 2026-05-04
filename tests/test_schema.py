@@ -17,7 +17,7 @@ import pytest
 
 import autoform as af
 import autoform.schemas as schemas
-from autoform.schemas import build
+from autoform.schemas import make_json_schema_and_parser
 from autoform.utils import treelib
 
 
@@ -28,7 +28,7 @@ def test_schema_dsl_builds_described_schema():
         "score": af.Float() @ af.Doc("Confidence score."),
     } @ af.Doc("Answer object.")
 
-    json_schema, parse = build(answer)
+    json_schema, parse = make_json_schema_and_parser(answer)
 
     assert json_schema == {
         "type": "object",
@@ -63,7 +63,7 @@ def test_schema_dsl_builds_tree():
         "kind": af.Enum("summary", "definition"),
     }
 
-    _, parse = build(answer)
+    _, parse = make_json_schema_and_parser(answer)
 
     assert parse(
         {"name": "hello", "count": 2, "score": 1, "ok": True, "kind": "summary"},
@@ -77,7 +77,7 @@ def test_schema_dsl_builds_tree():
 
 
 def test_schema_dsl_builds_string_constraints():
-    json_schema, parse = build({"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")})
+    json_schema, parse = make_json_schema_and_parser({"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")})
 
     assert json_schema == {
         "type": "object",
@@ -102,7 +102,7 @@ def test_schema_dsl_builds_string_constraints():
 
 
 def test_schema_dsl_builds_number_constraints():
-    json_schema, parse = build({
+    json_schema, parse = make_json_schema_and_parser({
         "count": af.Int(min=-2, max=2),
         "score": af.Float(min=0, max=1),
     })
@@ -149,7 +149,7 @@ def test_schema_dsl_builds_custom_pytree_value():
 
     answer = Answer(af.Str(), af.Float())
 
-    json_schema, parse = build(answer)
+    json_schema, parse = make_json_schema_and_parser(answer)
 
     assert json_schema == {
         "type": "object",
@@ -191,8 +191,8 @@ def test_schema_dsl_rejects_invalid_forms():
 
 
 def test_schema_dsl_reports_value_errors_by_path():
-    _, parse_count = build({"count": af.Int()})
-    _, parse_score = build({"score": af.Float()})
+    _, parse_count = make_json_schema_and_parser({"count": af.Int()})
+    _, parse_score = make_json_schema_and_parser({"score": af.Float()})
 
     with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer"):
         parse_count({"count": True})
@@ -229,8 +229,8 @@ def test_schema_dsl_reuses_cache_for_equal_schema_nodes():
             "kind": af.Enum("summary", "definition"),
         } @ af.Doc("Answer object.")
 
-    build(answer())
-    build(answer())
+    make_json_schema_and_parser(answer())
+    make_json_schema_and_parser(answer())
 
     assert schemas.schema_from_flat_and_spec.cache_info().hits == 1
     assert schemas.parser_from_flat_and_spec.cache_info().hits == 1

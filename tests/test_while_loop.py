@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import optree
 import pytest
 
 import autoform as af
 from autoform.core import trace
 from tests.conftest import TEST_MODEL, requires_llm
+
+treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
 
 class TestWhileLoopImpl:
@@ -964,15 +967,22 @@ class TestWhileLoopWithLLM:
             assert len(r) > 0
 
     @requires_llm
-    def test_lm_struct_call(self):
-        class Sentiment(af.Struct):
+    def test_lm_schema_call_with_pytree(self):
+        @treelib.dataclasses.dataclass
+        class Sentiment:
             positive: bool
             confidence: float
             summary: str
 
+        sentiment_schema = Sentiment(
+            positive=af.Bool(),
+            confidence=af.Float(min=0, max=1),
+            summary=af.Str(),
+        )
+
         def analyze(text):
             msgs = [{"role": "user", "content": af.format("Analyze sentiment: {}", text)}]
-            return af.lm_struct_call(msgs, model=TEST_MODEL, struct=Sentiment)
+            return af.lm_schema_call(msgs, model=TEST_MODEL, schema=sentiment_schema)
 
         analyze_ir = trace(analyze)("text")
         result = analyze_ir.call("I love this product! It's amazing!")
@@ -1030,12 +1040,18 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_refine_then_update(self):
-        class QualityCheck(af.Struct):
+        @treelib.dataclasses.dataclass
+        class QualityCheck:
             needs_improvement: bool
             reason: str
 
+        quality_schema = QualityCheck(
+            needs_improvement=af.Bool(),
+            reason=af.Str(),
+        )
+
         def cond(text):
-            verdict = af.lm_struct_call(
+            verdict = af.lm_schema_call(
                 [
                     {
                         "role": "user",
@@ -1046,7 +1062,7 @@ class TestWhileLoopWithLLM:
                     }
                 ],
                 model=TEST_MODEL,
-                struct=QualityCheck,
+                schema=quality_schema,
             )
             return verdict.needs_improvement
 

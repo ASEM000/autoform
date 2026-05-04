@@ -14,10 +14,13 @@
 
 import functools as ft
 
+import optree
 import pytest
 
 import autoform as af
 from autoform.utils import batch_spec, batch_transpose
+
+treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
 
 class TestBatchBasic:
@@ -632,7 +635,8 @@ class TestTransposeBatch:
         assert out == {"a": [1, 3], "b": [2, 4]}
 
     def test_struct_structure(self):
-        class Point(af.Struct):
+        @treelib.dataclasses.dataclass
+        class Point:
             x: int
             y: int
 
@@ -679,7 +683,8 @@ class TestBatchSpec:
         assert out == ("x", "y", "z")
 
     def test_struct_container(self):
-        class Point(af.Struct):
+        @treelib.dataclasses.dataclass
+        class Point:
             x: int
             y: int
 
