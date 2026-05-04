@@ -4,9 +4,24 @@
 
 ### Breaking Changes
 
-  - `Struct` fields are now restricted to leaf types (`str`, `int`, `float`, `bool`), `Struct` subclasses, `Literal[v, ...]`, and fixed-size containers (`Annotated[list[T], Len(n, n)]`). Previously dyamic containers (e.g., `list`, `dict`) and unions were allowed, but they complicate static analysis and tracing. Use nested `Struct`s for complex data.
+  - Removed `af.Struct`, `af.lm_struct_call`, and the Struct-specific type-tree helpers. Use Optree-registered pytrees under `af.PYTREE_NAMESPACE` for object structure, and use `af.lm_schema_call(..., schema=...)` for structured LM outputs.
 
-  - `Struct` instances are now **frozen** (immutable). Direct attribute assignment after construction raises an error. Use `model_construct()` or pytree `unflatten` for bypass semantics (e.g., tracing, batch axes).
+    ```python
+    import optree
+    import autoform as af
+
+    treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
+
+    @treelib.dataclasses.dataclass
+    class Answer:
+        reasoning: str
+        answer: float
+
+    schema = Answer(
+        reasoning=af.Str() @ af.Doc("Reasoning behind the answer."),
+        answer=af.Float() @ af.Doc("Numeric answer."),
+    )
+    ```
 
   - Public tracing and IR execution boundaries are now positional-only. `trace`, `call`, `acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`.
 
@@ -21,7 +36,7 @@
 
   - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
 
-  - `lm_call(...)` and `lm_struct_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
+  - `lm_call(...)` and `lm_schema_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
 
 ### New Features
 
@@ -50,6 +65,18 @@
     client = Router(model_list=model_list, max_parallel_requests=10)
     with af.lm_client(client):
         result = af.call(ir)(inputs)
+    ```
+
+  - Added `lm_schema_call(...)` and schema nodes (`Str`, `Int`, `Float`, `Bool`, `Enum`, `Doc`) for structured LM outputs. Schemas are ordinary pytrees and can be dictionaries, lists, tuples, or custom Optree-registered objects.
+
+    ```python
+    schema = {
+        "kind": af.Enum("summary", "definition"),
+        "score": af.Float(min=0, max=1),
+        "text": af.Str(),
+    }
+
+    out = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
     ```
 
   - Added inference primitives `factor` and `weight`.
