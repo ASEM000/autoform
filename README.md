@@ -153,28 +153,47 @@ flowchart TD
 
 ```python
 from typing import Literal
+
+import optree  # tree manipulation (https://optree.readthedocs.io/en/latest/)
 import autoform as af
 
 
-# Struct: a tree node; each field becomes an IR leaf during tracing.
-class Decision(af.Struct):
-    tool: Literal["search", "calc", "done"]
+treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
+
+
+@treelib.dataclasses.dataclass
+class Decision:
+    tool: str
     args: str
     answer: str
     status: Literal["continue", "done"]
 
 
-class State(af.Struct):
+@treelib.dataclasses.dataclass
+class State:
     history: str
     result: str
     status: Literal["continue", "done"]
 
 
-# tool implementations are application-specific. Each branch should have
-# signature (args, history) -> new_history.
+# - Str, Enum are used to define the schema of the LLM's decision output
+# - Doc is used to guide the LLM's output with natural language descriptions
+#   of each field.
+decision_schema = Decision(
+    tool=af.Enum("search", "calc", "done") @ af.Doc("Tool to call next."),
+    args=af.Str() @ af.Doc("Tool arguments."),
+    answer=af.Str() @ af.Doc("Current answer."),
+    status=af.Enum("continue", "done") @ af.Doc("Whether to continue."),
+)
+
+
 def search(query: str, history: str) -> str: ...
+
+
 def calc(expression: str, history: str) -> str: ...
-def done(_: str, history: str) -> str: ...
+
+
+def done(answer: str, history: str) -> str: ...
 
 
 # each tool branch is traced independently; switch dispatches at runtime.
@@ -186,6 +205,8 @@ tool_branches = dict(
 
 
 def cond(state: State):
+    # continue if status is "continue", else stop
+    # used by the while loop to determine when to stop iterating
     return af.match(state.status, "continue")
 
 
@@ -194,17 +215,18 @@ def body(state: State):
         dict(role="system", content="You are a tool-use agent."),
         dict(role="user", content=state.history),
     ]
-    d = af.lm_struct_call(messages, model="gpt-5.2", struct=Decision)
+    d = af.lm_schema_call(messages, model="gpt-5.2", schema=decision_schema)
     new_history = af.switch(d.tool, tool_branches, d.args, state.history)
-    return State.model_construct(history=new_history, result=d.answer, status=d.status)
+    return State(history=new_history, result=d.answer, status=d.status)
 
 
-cond_ir = af.trace(cond)(State.model_construct(history="...", result="", status="continue"))
-body_ir = af.trace(body)(State.model_construct(history="...", result="", status="continue"))
+example_state = State(history="...", result="", status="continue")
+cond_ir = af.trace(cond)(example_state)
+body_ir = af.trace(body)(example_state)
 
 
 def agent(question: str):
-    init = State.model_construct(history=question, result="", status="continue")
+    init = State(history=question, result="", status="continue")
     return af.while_loop(cond_ir, body_ir, init, max_iters=5).result
 
 
