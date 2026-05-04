@@ -21,12 +21,12 @@ from autoform.control import stop_gradient, switch, while_loop
 from autoform.core import Tag, fold, tag, trace
 from autoform.custom import custom
 from autoform.dce import dce
-from autoform.lm import lm_call, lm_client, lm_schema_call, lm_struct_call
+from autoform.lm import lm_call, lm_client, lm_schema_call
 from autoform.memoize import memoize
 from autoform.scheduling import depends, sched
 from autoform.schemas import Bool, Doc, Enum, Float, Int, Str
 from autoform.string import concat, format, match
-from autoform.utils import PYTREE_NAMESPACE, Struct
+from autoform.utils import PYTREE_NAMESPACE
 
 __all__ = [
     # core
@@ -51,7 +51,6 @@ __all__ = [
     "match",
     "lm_call",
     "lm_schema_call",
-    "lm_struct_call",
     "stop_gradient",
     "checkpoint",
     "switch",
@@ -66,6 +65,5 @@ __all__ = [
     "Str",
     # types
     "Tag",
-    "Struct",
     "PYTREE_NAMESPACE",
 ]
