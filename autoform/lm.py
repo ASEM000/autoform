@@ -39,7 +39,7 @@ from autoform.core import (
     push_rules,
     typeof,
 )
-from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, build
+from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, make_json_schema_and_parser
 from autoform.utils import (
     Tree,
     batch_index,
@@ -387,7 +387,7 @@ def impl_lm_schema_call(
     schema: Any,
 ) -> Any:
     contents, model = in_tree
-    json_schema, parse = build(schema)
+    json_schema, parse = make_json_schema_and_parser(schema)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = active_client.get().completion(
         messages=messages,
@@ -405,7 +405,7 @@ async def aimpl_lm_schema_call(
     schema: Any,
 ) -> Any:
     contents, model = in_tree
-    json_schema, parse = build(schema)
+    json_schema, parse = make_json_schema_and_parser(schema)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = await active_client.get().acompletion(
         messages=messages,

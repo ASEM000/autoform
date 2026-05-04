@@ -17,7 +17,7 @@ import json
 import pytest
 
 import autoform as af
-from autoform.schemas import build
+from autoform.schemas import make_json_schema_and_parser
 
 
 class FakeMessage:
@@ -135,7 +135,7 @@ def test_lm_schema_call_traces_schema_as_static_param():
 
     ir = af.trace(program)("test", "gpt-5.2")
     assert [eqn.prim.name for eqn in ir.ir_eqns] == ["lm_schema_call", "format"]
-    assert build(ir.ir_eqns[0].params["schema"])[0] == build(answer)[0]
+    assert make_json_schema_and_parser(ir.ir_eqns[0].params["schema"])[0] == make_json_schema_and_parser(answer)[0]
     assert "model" not in ir.ir_eqns[0].params
     assert isinstance(ir.ir_eqns[0].in_ir_tree[1], af.core.IRVar)
     assert isinstance(ir.ir_eqns[0].out_ir_tree["text"], af.core.IRVar)
