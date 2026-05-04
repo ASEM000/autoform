@@ -42,7 +42,6 @@ Language model calls.
 ```{eval-rst}
 .. autofunction:: autoform.lm_call
 .. autofunction:: autoform.lm_schema_call
-.. autofunction:: autoform.lm_struct_call
 .. autofunction:: autoform.lm_client
 ```
 
@@ -89,12 +88,8 @@ Concurrency and dependency management.
 
 ## Types
 
-Data structures.
+Pytree namespace.
 
 ```{eval-rst}
-.. autoclass:: autoform.Struct
-   :members:
-   :undoc-members:
-
 .. autodata:: autoform.PYTREE_NAMESPACE
 ```
