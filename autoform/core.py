@@ -26,6 +26,7 @@ from operator import setitem
 from threading import RLock
 from typing import Any, ClassVar, Protocol, Self, TypeGuard, cast
 
+import autoform.pp as pp
 from autoform.utils import Tree, lru_cache, treelib
 
 __all__ = [
@@ -307,7 +308,7 @@ class IR[*A, R]:
         self.out_ir_tree = out_ir_tree
 
     def __repr__(self) -> str:
-        return generate_text_code(ir=self, expand_ir=True)
+        return pp.pretty(self, width=100)
 
     def call(self, *args: *A) -> R:
         """Run IR with concrete runtime inputs.
@@ -374,58 +375,82 @@ class IR[*A, R]:
         return walk(self)(*args)
 
 
-def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
+# ==================================================================================================
+# PRETTY PRINTING
+# ==================================================================================================
+
+
+@pp.register(TypedAVal)
+def pretty_typed_aval(obj: TypedAVal) -> pp.Layout:
+    return pp.text(obj.type.__name__)
+
+
+@pp.register(AVal)
+def pretty_aval(obj: AVal) -> pp.Layout:
+    return pp.safe_text(repr(obj))
+
+
+@pp.register(IRVar)
+def pretty_irvar(obj: IRVar) -> pp.Layout:
+    return pp.concat([
+        pp.text(f"%{obj.id}:{type(obj).__name__}["),
+        pp.lay(obj.aval),
+        pp.text("]"),
+    ])
+
+
+@pp.register(Prim)
+def pretty_prim(obj: Prim) -> pp.Layout:
+    return pp.text(obj.name)
+
+
+@pp.register(Tag)
+def pretty_tag(obj: Tag) -> pp.Layout:
+    return pp.safe_text(repr(obj))
+
+
+def ir_value_lay(value: Any) -> pp.Layout:
+    if is_irvar(value):
+        return pp.lay(value)
+    return pp.concat([pp.lay(value), pp.text(":Lit")])
+
+
+def tree_lay(tree: Tree) -> pp.Layout:
+    leaves = treelib.leaves(tree)
+    if not leaves:
+        return pp.text("()")
+    sep = pp.concat([pp.text(","), pp.line()])
+    return pp.align(pp.group(pp.join(sep, map(ir_value_lay, leaves))))
+
+
+@pp.register(IREqn)
+def pretty_ireqn(eqn: IREqn) -> pp.Layout:
+    args = [tree_lay(eqn.in_ir_tree)]
+    args.extend(pp.concat([pp.text(f"{key}="), pp.lay(eqn.params[key])]) for key in eqn.params)
+    if eqn.tags:
+        tags = [pp.lay(tag) for tag in sorted(eqn.tags, key=repr)]
+        args.append(pp.concat([pp.text("tags="), pp.seq("{", tags, "}")]))
+
+    rhs = pp.concat([pp.lay(eqn.prim), pp.seq("(", args, ")")])
+    return pp.group(pp.concat([pp.text("("), tree_lay(eqn.out_ir_tree), pp.text(") = "), rhs]))
+
+
+@pp.register(IR)
+def ir_lay(ir: IR, indent: int = 2) -> pp.Layout:
     assert isinstance(indent, int) and indent >= 0
-    sp = " " * indent
+    header = pp.concat([
+        pp.text("func("),
+        tree_lay(ir.in_ir_tree),
+        pp.text(") -> ("),
+        tree_lay(ir.out_ir_tree),
+        pp.text(") {"),
+    ])
+    if not ir.ir_eqns:
+        return pp.concat([header, pp.hardline(), pp.text("}")])
 
-    def format_ir_val(ir_val) -> str:
-        if is_irvar(ir_val):
-            var_type = type(ir_val).__name__
-            aval_info = (
-                ir_val.aval.type.__name__
-                if isinstance(ir_val.aval, TypedAVal)
-                else repr(ir_val.aval)
-            )
-            type_info = f"[{aval_info}]"
-            return f"%{ir_val.id}:{var_type}{type_info}"
-        val = ir_val
-        if isinstance(val, IR):
-            if expand_ir:
-                sub_code = generate_text_code(val, indent, expand_ir=True)
-                return f"<IR:{{\n{sub_code}\n}}>"
-            else:
-                prim_names = ",".join(e.prim.name for e in val.ir_eqns)
-                if len(prim_names) > 20:
-                    prim_names = prim_names[:17] + "..."
-                return f"<IR:[{prim_names}]>"
-        else:
-            val_repr = repr(val)
-            if len(val_repr) > 30:
-                val_repr = val_repr[:27] + "..."
-            return f"{val_repr}:Lit"
-
-    def format_tree(tree: Tree) -> str:
-        leaves = treelib.leaves(tree)
-        return ", ".join(format_ir_val(leaf) for leaf in leaves) if leaves else "()"
-
-    in_sig = format_tree(ir.in_ir_tree)
-    out_sig = format_tree(ir.out_ir_tree)
-
-    header = f"func({in_sig}) -> ({out_sig}) {{"
-    lines = [header]
-
-    for ir_eqn in ir.ir_eqns:
-        lhs = format_tree(ir_eqn.out_ir_tree)
-        rhs = format_tree(ir_eqn.in_ir_tree)
-        eqn_args = [rhs]
-        eqn_args.extend(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
-        if ir_eqn.tags:
-            tags = ", ".join(sorted(repr(tag) for tag in ir_eqn.tags))
-            eqn_args.append(f"tags={{{tags}}}")
-        lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({', '.join(eqn_args)})")
-
-    lines.append("}")
-    return "\n".join(lines)
+    body = pp.join(pp.hardline(), (pp.lay(ir_eqn) for ir_eqn in ir.ir_eqns))
+    body = pp.nest(indent, pp.concat([pp.hardline(), body]))
+    return pp.concat([header, body, pp.hardline(), pp.text("}")])
 
 
 # ==================================================================================================
