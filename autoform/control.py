@@ -30,10 +30,10 @@ from autoform.core import (
     impl_rules,
     ir_aval,
     is_irvar,
-    is_val,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    typeof,
 )
 from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import (
@@ -157,7 +157,6 @@ def switch(key: str, branches: dict[str, IR], *args, **kwargs) -> Tree:
         >>> ir.call("zero", "hello")
         'zero: hello'
     """
-    assert is_val(key) or is_irvar(key), "key must be a user-type (traceable) value"
     assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], IR) for k in branches)
     tree_struct0 = treelib.structure(branches[next(iter(branches))].in_ir_tree)
@@ -178,7 +177,8 @@ async def aimpl_switch(in_tree, /, *, branches: dict[str, IR]):
 
 
 def abstract_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
-    del in_tree
+    key, _ = in_tree
+    assert typeof(key) is str, f"`switch` expects a string key, got {key!r}"
     key0 = next(iter(branches))
     branch0 = branches[key0]
     return treelib.map(ir_aval, branch0.out_ir_tree)
