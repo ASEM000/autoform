@@ -638,7 +638,7 @@ class TracingInterpreter(BoxedInterpreter[TraceBox]):
             # NOTE(asem): this catches leaked live trace values.
             # >>> leaked = {}
             # >>> def first_func(x):
-            # ...     leak["first"] = x
+            # ...     leaked["first"] = x
             # ...     return x
             # >>> def second_func(y):
             # ...     return concat(leaked["first"], y)
