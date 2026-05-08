@@ -207,7 +207,7 @@ tool_branches = dict(
 def cond(state: State):
     # continue if status is "continue", else stop
     # used by the while loop to determine when to stop iterating
-    return af.match(state.status, "continue")
+    return state.status == "continue"
 
 
 def body(state: State):
