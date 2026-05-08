@@ -642,11 +642,11 @@ class TracingInterpreter(BoxedInterpreter[TraceBox]):
             assert not is_irvar(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
             return value
 
-        in_tree = self.unbox(in_tree)
+        in_ir_tree = self.unbox(in_tree)
         params = self.unbox(params)
         params = treelib.map_with_path(to_concrete, params)
 
-        in_ir_tree = treelib.map(to_in_ir_atom, in_tree)
+        in_ir_tree = treelib.map(to_in_ir_atom, in_ir_tree)
         in_aval_tree = treelib.map(ir_aval, in_ir_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
@@ -708,12 +708,12 @@ def trace[*A, R](
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
-        in_tree = args
-        in_static_tree = treelib.broadcast_prefix(static, in_tree, is_leaf=is_static_spec)
-        in_ir_tree = treelib.map(to_in_ir_atom, in_tree, in_static_tree, is_leaf=is_val)
+        arg_tree = args
+        in_static_tree = treelib.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
+        in_ir_tree = treelib.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_val)
         with using_interpreter(TracingInterpreter()) as tracer:
-            out_prog_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
-        out_ir_tree = tracer.unbox(out_prog_tree)
+            out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
+        out_ir_tree = tracer.unbox(out_trace_tree)
         return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
     return wrapper
