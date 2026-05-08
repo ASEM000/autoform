@@ -19,6 +19,20 @@ import pytest
 import autoform as af
 
 
+class TestTraceValuePythonOps:
+    def test_len_on_traced_value_has_informative_error(self):
+        def program(x):
+            return len(x)
+
+        with pytest.raises(
+            TypeError,
+            match=r"Cannot use len\(\) on traced value TraceBox\[str\].*"
+            r"Python len\(\) needs a concrete runtime value.*"
+            r"af\.trace\(\.\.\., static=\.\.\.\)",
+        ):
+            af.trace(program)("seed")
+
+
 class CountingInterpreter(af.core.Interpreter):
     def __init__(self):
         self.parent = af.core.active_interpreter.get()
@@ -184,7 +198,7 @@ class TestFold:
         with af.core.using_interpreter(af.core.TracingInterpreter()) as tracer:
             result = await async_probe_p.abind("literal")
 
-        assert isinstance(result, af.core.IRVar)
+        assert isinstance(result, af.core.TraceBox)
         assert [eqn.prim.name for eqn in tracer.ir_eqns] == ["async_dynamic_fold_probe"]
 
     @pytest.mark.asyncio(loop_scope="function")
