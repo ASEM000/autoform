@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
 from threading import RLock
-from typing import Any, ClassVar, Protocol, Self, TypeGuard, cast
+from typing import Any, ClassVar, NoReturn, Protocol, Self, TypeGuard, cast
 
 from autoform.utils import Tree, lru_cache, treelib
 
@@ -70,6 +70,7 @@ __all__ = [
     "BoxedInterpreter",
     "Interpreter",
     "EvalInterpreter",
+    "TraceBox",
     "TracingInterpreter",
     "active_interpreter",
     "using_interpreter",
@@ -542,19 +543,110 @@ def fold() -> Generator[None, None, None]:
         fold_flag.reset(token)
 
 
+TRACE_ERROR = (
+    "Cannot use {desc} on a traced value."
+    "During af.trace(), values only carry abstract type information; "
+    "Python {desc} needs a concrete runtime value and cannot be staged "
+    "implicitly. If this value should be known while tracing, mark it static with "
+    "af.trace(..., static=...) or compute this operation outside the traced function. "
+    "If you need this operation at runtime in the IR, define an explicit autoform "
+    "primitive for it."
+)
+
+
+def trace_error(box: TraceBox, desc: str, /) -> NoReturn:
+    aval = box.aval.type.__name__ if isinstance(box.aval, TypedAVal) else repr(box.aval)
+    raise TypeError(TRACE_ERROR.format(desc=desc))
+
+
+class TraceBox:
+    __slots__ = ["owner", "ir_var"]
+
+    def __init__(self, /, *, owner: TracingInterpreter, ir_var: IRVar):
+        assert isinstance(owner, TracingInterpreter)
+        assert is_irvar(ir_var)
+        self.owner = owner
+        self.ir_var = ir_var
+
+    @property
+    def aval(self) -> AVal:
+        return self.ir_var.aval
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.ir_var!r})"
+
+    def __bool__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="truthiness"))
+
+    def __bytes__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="bytes coercion"))
+
+    def __complex__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="complex number coercion"))
+
+    def __contains__(self, _) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="membership testing"))
+
+    def __float__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="float coercion"))
+
+    def __format__(self, _) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="string formatting"))
+
+    def __getitem__(self, _) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="indexing"))
+
+    def __index__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="integer-index coercion"))
+
+    def __int__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="integer coercion"))
+
+    def __iter__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="iteration"))
+
+    def __len__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="length"))
+
+    def __str__(self) -> NoReturn:
+        raise TypeError(TRACE_ERROR.format(desc="string coercion"))
+
+
 def assert_foldable(prim: Prim, tree: Tree) -> None:
-    ir_vars = [x for x in treelib.leaves(tree) if is_irvar(x)]
-    assert not ir_vars, (
+    traced_values = [x for x in treelib.leaves(tree) if isinstance(x, TraceBox)]
+    assert not traced_values, (
         f"Cannot evaluate {prim.name} in af.fold() because it depends on traced values "
-        f"{ir_vars!r}. Mark the dependencies static or move this computation outside af.fold()."
+        f"{traced_values!r}. Mark the dependencies static or move this computation outside af.fold()."
     )
 
 
-class TracingInterpreter(Interpreter):
+class TracingInterpreter(BoxedInterpreter[TraceBox]):
     __slots__ = ["ir_eqns"]
 
     def __init__(self):
         self.ir_eqns: list[IREqn] = []
+
+    def box(self, value, /) -> Tree:
+        return treelib.map(lambda v: TraceBox(owner=self, ir_var=v) if is_irvar(v) else v, value)
+
+    def unbox(self, value: Tree, /) -> Tree:
+        def func(value, /):
+            if not isinstance(value, TraceBox):
+                # NOTE(asem): basically literals case.
+                return value
+            assert value.owner is self, "Encountered TraceBox from a different tracer."
+            # NOTE(asem): this catches leaked live trace values.
+            # >>> leaked = {}
+            # >>> def first_func(x):
+            # ...     leaked["first"] = x
+            # ...     return x
+            # >>> def second_func(y):
+            # ...     return concat(leaked["first"], y)
+            # >>> ir1 = af.trace(first_func)("input")
+            # >>> ir2 = af.trace(second_func)("input")
+            return value.ir_var
+
+        return treelib.map(func, value)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         if fold_flag.get():
@@ -590,9 +682,11 @@ class TracingInterpreter(Interpreter):
             assert not is_irvar(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
             return value
 
+        in_ir_tree = self.unbox(in_tree)
+        params = self.unbox(params)
         params = treelib.map_with_path(to_concrete, params)
 
-        in_ir_tree = treelib.map(to_in_ir_atom, in_tree)
+        in_ir_tree = treelib.map(to_in_ir_atom, in_ir_tree)
         in_aval_tree = treelib.map(ir_aval, in_ir_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
@@ -604,7 +698,7 @@ class TracingInterpreter(Interpreter):
 
         out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
         self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
-        return out_ir_tree
+        return self.box(out_ir_tree)
 
 
 def trace[*A, R](
@@ -654,12 +748,13 @@ def trace[*A, R](
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
-        in_tree = args
-        in_static_tree = treelib.broadcast_prefix(static, in_tree, is_leaf=is_static_spec)
-        in_ir_tree = treelib.map(to_in_ir_atom, in_tree, in_static_tree, is_leaf=is_val)
+        arg_tree = args
+        in_static_tree = treelib.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
+        in_ir_tree = treelib.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_val)
         with using_interpreter(TracingInterpreter()) as tracer:
-            out_prog_tree = func(*cast(tuple, in_ir_tree))
-        return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_prog_tree)
+            out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
+        out_ir_tree = tracer.unbox(out_trace_tree)
+        return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
     return wrapper
 

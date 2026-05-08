@@ -64,7 +64,8 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
 
     in_ir_tree = treelib.map(to_ir_input, in_ir_tree)
     with using_interpreter(TracingInterpreter()) as tracer:
-        out_ir_tree = func(*in_ir_tree)
+        out_trace_tree = func(*tracer.box(in_ir_tree))
+    out_ir_tree = tracer.unbox(out_trace_tree)
     return IR(tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
 

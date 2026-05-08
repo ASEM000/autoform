@@ -112,6 +112,18 @@ class TestIRVar:
         assert isinstance(ir_var.aval, af.core.AVal)
         assert ir_var.aval.type is str
 
+    def test_len_on_trace_box_has_informative_error(self):
+        tracer = af.core.TracingInterpreter()
+        ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        traced = tracer.box(ir_var)
+
+        with pytest.raises(
+            TypeError,
+            match=r"Cannot use length on a traced value\..*"
+            r"Python length needs a concrete runtime value",
+        ):
+            len(traced)
+
     def test_plain_literal_is_not_irvar(self):
         assert not af.core.is_irvar("hello")
 
