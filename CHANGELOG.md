@@ -12,10 +12,12 @@
 
     treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
+
     @treelib.dataclasses.dataclass
     class Answer:
         reasoning: str
         answer: float
+
 
     schema = Answer(
         reasoning=af.Str() @ af.Doc("Reasoning behind the answer."),

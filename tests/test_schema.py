@@ -77,7 +77,9 @@ def test_schema_dsl_builds_tree():
 
 
 def test_schema_dsl_builds_string_constraints():
-    json_schema, parse = make_json_schema_and_parser({"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")})
+    json_schema, parse = make_json_schema_and_parser({
+        "name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")
+    })
 
     assert json_schema == {
         "type": "object",
