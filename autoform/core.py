@@ -71,6 +71,9 @@ __all__ = [
     "Interpreter",
     "EvalInterpreter",
     "TraceBox",
+    "trace_add_rules",
+    "trace_eq_rules",
+    "trace_radd_rules",
     "TracingInterpreter",
     "active_interpreter",
     "using_interpreter",
@@ -554,9 +557,9 @@ TRACE_ERROR = (
 )
 
 
-def trace_error(box: TraceBox, desc: str, /) -> NoReturn:
-    aval = box.aval.type.__name__ if isinstance(box.aval, TypedAVal) else repr(box.aval)
-    raise TypeError(TRACE_ERROR.format(desc=desc))
+trace_eq_rules: dict[type, Callable[[Any, Any], Any]] = {}
+trace_add_rules: dict[type, Callable[[Any, Any], Any]] = {}
+trace_radd_rules: dict[type, Callable[[Any, Any], Any]] = {}
 
 
 class TraceBox:
@@ -574,6 +577,24 @@ class TraceBox:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.ir_var!r})"
+
+    def __hash__(self):
+        return object.__hash__(self)
+
+    def __eq__(self, other) -> Any:
+        if isinstance(self.aval, TypedAVal) and (rule := trace_eq_rules.get(self.aval.type)):
+            return rule(self, other)
+        raise TypeError(TRACE_ERROR.format(desc="equality comparison"))
+
+    def __add__(self, other) -> Any:
+        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+            return rule(self, other)
+        raise TypeError(TRACE_ERROR.format(desc="addition"))
+
+    def __radd__(self, other) -> Any:
+        if isinstance(self.aval, TypedAVal) and (rule := trace_radd_rules.get(self.aval.type)):
+            return rule(other, self)
+        raise TypeError(TRACE_ERROR.format(desc="reverse addition"))
 
     def __bool__(self) -> NoReturn:
         raise TypeError(TRACE_ERROR.format(desc="truthiness"))

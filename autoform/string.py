@@ -17,11 +17,13 @@
 from __future__ import annotations
 
 import functools as ft
+from typing import Any
 
 from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
     EvalType,
     Prim,
+    TraceBox,
     TypedAVal,
     abstract_rules,
     batch_rules,
@@ -29,6 +31,9 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    trace_add_rules,
+    trace_eq_rules,
+    trace_radd_rules,
     typeof,
 )
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
@@ -190,6 +195,28 @@ batch_rules.set(concat_p, batch_concat)
 batch_rules.aset(concat_p, asyncify(batch_concat))
 
 
+def trace_str_add(left: TraceBox, right: Any, /) -> Any:
+    match right:
+        case TraceBox(aval=TypedAVal(type=rtype)) if rtype is str:
+            return concat(left, right)
+        case str() if type(right) is str:
+            return concat(left, right)
+        case _:
+            assert False, f"trace_str_add expected string inputs, got {left!r} and {right!r}"
+
+
+def trace_str_radd(left: Any, right: TraceBox, /) -> Any:
+    match left:
+        case str() if type(left) is str:
+            return concat(left, right)
+        case _:
+            assert False, f"trace_str_radd expected string inputs, got {left!r} and {right!r}"
+
+
+trace_add_rules[str] = trace_str_add
+trace_radd_rules[str] = trace_str_radd
+
+
 # ==================================================================================================
 # MATCH
 # ==================================================================================================
@@ -267,3 +294,16 @@ pull_bwd_rules.set(match_p, pullback_bwd_match)
 pull_bwd_rules.aset(match_p, asyncify(pullback_bwd_match))
 batch_rules.set(match_p, batch_match)
 batch_rules.aset(match_p, asyncify(batch_match))
+
+
+def trace_str_eq(left: TraceBox, right: Any, /) -> Any:
+    match right:
+        case TraceBox(aval=TypedAVal(type=rtype)) if rtype is str:
+            return match(left, right)
+        case str() if type(right) is str:
+            return match(left, right)
+        case _:
+            return False
+
+
+trace_eq_rules[str] = trace_str_eq

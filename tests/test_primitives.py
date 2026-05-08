@@ -176,6 +176,36 @@ class TestConcatPrimitive:
         assert len(ir.ir_eqns) == 1
         assert ir.ir_eqns[0].prim.name == "concat"
 
+    def test_traced_string_add_lowers_to_concat(self):
+        def func(x):
+            return x + "!"
+
+        ir = af.trace(func)("a")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("hello") == "hello!"
+
+    def test_traced_string_radd_lowers_to_concat(self):
+        def func(x):
+            return "Hello, " + x
+
+        ir = af.trace(func)("a")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("world") == "Hello, world"
+
+    def test_traced_string_add_both_args_lowers_to_concat(self):
+        def func(a, b):
+            return a + b
+
+        ir = af.trace(func)("a", "b")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("left", "right") == "leftright"
+
     def test_concat_trace_rejects_non_string_input(self):
         def func(x, y, z):
             return af.concat(x, y, z)
