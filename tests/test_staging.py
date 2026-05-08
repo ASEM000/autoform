@@ -39,7 +39,7 @@ class TestTraceValuePythonOps:
     def test_host_python_operations_on_traced_values_error(self, description, program):
         with pytest.raises(
             TypeError,
-            match=rf"Cannot use {re.escape(description)} on traced value TraceBox\[str\]",
+            match=rf"Cannot use {re.escape(description)} on a traced value\.",
         ):
             af.trace(program)("seed")
 
@@ -49,7 +49,7 @@ class TestTraceValuePythonOps:
 
         with pytest.raises(
             TypeError,
-            match=r"Cannot use length on traced value TraceBox\[str\].*"
+            match=r"Cannot use length on a traced value\..*"
             r"Python length needs a concrete runtime value.*"
             r"af\.trace\(\.\.\., static=\.\.\.\)",
         ):

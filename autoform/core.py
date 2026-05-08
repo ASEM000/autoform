@@ -544,9 +544,9 @@ def fold() -> Generator[None, None, None]:
 
 
 TRACE_ERROR = (
-    "Cannot use {description} on traced value {name}[{aval}](id={ir_var_id}). "
+    "Cannot use {desc} on a traced value."
     "During af.trace(), values only carry abstract type information; "
-    "Python {description} needs a concrete runtime value and cannot be staged "
+    "Python {desc} needs a concrete runtime value and cannot be staged "
     "implicitly. If this value should be known while tracing, mark it static with "
     "af.trace(..., static=...) or compute this operation outside the traced function. "
     "If you need this operation at runtime in the IR, define an explicit autoform "
@@ -554,16 +554,9 @@ TRACE_ERROR = (
 )
 
 
-def trace_error(box: TraceBox, description: str, /) -> NoReturn:
+def trace_error(box: TraceBox, desc: str, /) -> NoReturn:
     aval = box.aval.type.__name__ if isinstance(box.aval, TypedAVal) else repr(box.aval)
-    raise TypeError(
-        TRACE_ERROR.format(
-            description=description,
-            name=type(box).__name__,
-            aval=aval,
-            ir_var_id=box.ir_var.id,
-        )
-    )
+    raise TypeError(TRACE_ERROR.format(desc=desc))
 
 
 class TraceBox:
@@ -583,40 +576,40 @@ class TraceBox:
         return f"{type(self).__name__}({self.ir_var!r})"
 
     def __bool__(self) -> NoReturn:
-        trace_error(self, "truthiness")
+        raise TypeError(TRACE_ERROR.format(desc="truthiness"))
 
     def __bytes__(self) -> NoReturn:
-        trace_error(self, "bytes coercion")
+        raise TypeError(TRACE_ERROR.format(desc="bytes coercion"))
 
     def __complex__(self) -> NoReturn:
-        trace_error(self, "complex-number coercion")
+        raise TypeError(TRACE_ERROR.format(desc="complex number coercion"))
 
     def __contains__(self, _) -> NoReturn:
-        trace_error(self, "membership testing")
+        raise TypeError(TRACE_ERROR.format(desc="membership testing"))
 
     def __float__(self) -> NoReturn:
-        trace_error(self, "float coercion")
+        raise TypeError(TRACE_ERROR.format(desc="float coercion"))
 
     def __format__(self, _) -> NoReturn:
-        trace_error(self, "string formatting")
+        raise TypeError(TRACE_ERROR.format(desc="string formatting"))
 
     def __getitem__(self, _) -> NoReturn:
-        trace_error(self, "indexing")
+        raise TypeError(TRACE_ERROR.format(desc="indexing"))
 
     def __index__(self) -> NoReturn:
-        trace_error(self, "integer-index coercion")
+        raise TypeError(TRACE_ERROR.format(desc="integer-index coercion"))
 
     def __int__(self) -> NoReturn:
-        trace_error(self, "integer coercion")
+        raise TypeError(TRACE_ERROR.format(desc="integer coercion"))
 
     def __iter__(self) -> NoReturn:
-        trace_error(self, "iteration")
+        raise TypeError(TRACE_ERROR.format(desc="iteration"))
 
     def __len__(self) -> NoReturn:
-        trace_error(self, "length")
+        raise TypeError(TRACE_ERROR.format(desc="length"))
 
     def __str__(self) -> NoReturn:
-        trace_error(self, "string coercion")
+        raise TypeError(TRACE_ERROR.format(desc="string coercion"))
 
 
 def assert_foldable(prim: Prim, tree: Tree) -> None:
