@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
 from threading import RLock
-from typing import Any, ClassVar, Protocol, Self, TypeGuard, cast
+from typing import Any, ClassVar, NoReturn, Protocol, Self, TypeGuard, cast
 
 from autoform.utils import Tree, lru_cache, treelib
 
@@ -543,6 +543,29 @@ def fold() -> Generator[None, None, None]:
         fold_flag.reset(token)
 
 
+TRACE_ERROR = (
+    "Cannot use {description} on traced value {name}[{aval}](id={ir_var_id}). "
+    "During af.trace(), values only carry abstract type information; "
+    "Python {description} needs a concrete runtime value and cannot be staged "
+    "implicitly. If this value should be known while tracing, mark it static with "
+    "af.trace(..., static=...) or compute this operation outside the traced function. "
+    "If you need this operation at runtime in the IR, define an explicit autoform "
+    "primitive for it."
+)
+
+
+def trace_error(box: TraceBox, description: str, /) -> NoReturn:
+    aval = box.aval.type.__name__ if isinstance(box.aval, TypedAVal) else repr(box.aval)
+    raise TypeError(
+        TRACE_ERROR.format(
+            description=description,
+            name=type(box).__name__,
+            aval=aval,
+            ir_var_id=box.ir_var.id,
+        )
+    )
+
+
 class TraceBox:
     __slots__ = ["owner", "ir_var"]
 
@@ -559,17 +582,41 @@ class TraceBox:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.ir_var!r})"
 
-    def __len__(self) -> int:
-        aval = self.aval.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
-        raise TypeError(
-            "Cannot use len() on traced value "
-            f"{type(self).__name__}[{aval}](id={self.ir_var.id}). "
-            "During af.trace(), values only carry abstract type information; Python len() "
-            "needs a concrete runtime value and cannot be staged implicitly. If this length "
-            "should be known while tracing, mark the value static with af.trace(..., static=...) "
-            "or compute len() outside the traced function. If you need runtime length in the IR, "
-            "define an explicit autoform primitive for that operation."
-        )
+    def __bool__(self) -> NoReturn:
+        trace_error(self, "truthiness")
+
+    def __bytes__(self) -> NoReturn:
+        trace_error(self, "bytes coercion")
+
+    def __complex__(self) -> NoReturn:
+        trace_error(self, "complex-number coercion")
+
+    def __contains__(self, _) -> NoReturn:
+        trace_error(self, "membership testing")
+
+    def __float__(self) -> NoReturn:
+        trace_error(self, "float coercion")
+
+    def __format__(self, _) -> NoReturn:
+        trace_error(self, "string formatting")
+
+    def __getitem__(self, _) -> NoReturn:
+        trace_error(self, "indexing")
+
+    def __index__(self) -> NoReturn:
+        trace_error(self, "integer-index coercion")
+
+    def __int__(self) -> NoReturn:
+        trace_error(self, "integer coercion")
+
+    def __iter__(self) -> NoReturn:
+        trace_error(self, "iteration")
+
+    def __len__(self) -> NoReturn:
+        trace_error(self, "length")
+
+    def __str__(self) -> NoReturn:
+        trace_error(self, "string coercion")
 
 
 def assert_foldable(prim: Prim, tree: Tree) -> None:

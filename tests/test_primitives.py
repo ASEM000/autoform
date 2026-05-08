@@ -119,8 +119,8 @@ class TestIRVar:
 
         with pytest.raises(
             TypeError,
-            match=r"Cannot use len\(\) on traced value TraceBox\[str\].*"
-            r"Python len\(\) needs a concrete runtime value",
+            match=r"Cannot use length on traced value TraceBox\[str\].*"
+            r"Python length needs a concrete runtime value",
         ):
             len(traced)
 

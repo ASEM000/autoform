@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -20,14 +21,36 @@ import autoform as af
 
 
 class TestTraceValuePythonOps:
+    @pytest.mark.parametrize(
+        ("description", "program"),
+        [
+            ("truthiness", lambda x: "yes" if x else "no"),
+            ("string coercion", lambda x: str(x)),
+            ("string formatting", lambda x: f"{x}"),
+            ("iteration", lambda x: list(x)),
+            ("integer-index coercion", lambda x: range(x)),
+            ("integer coercion", lambda x: int(x)),
+            ("float coercion", lambda x: float(x)),
+            ("bytes coercion", lambda x: bytes(x)),
+            ("indexing", lambda x: x[0]),
+            ("membership testing", lambda x: "a" in x),
+        ],
+    )
+    def test_host_python_operations_on_traced_values_error(self, description, program):
+        with pytest.raises(
+            TypeError,
+            match=rf"Cannot use {re.escape(description)} on traced value TraceBox\[str\]",
+        ):
+            af.trace(program)("seed")
+
     def test_len_on_traced_value_has_informative_error(self):
         def program(x):
             return len(x)
 
         with pytest.raises(
             TypeError,
-            match=r"Cannot use len\(\) on traced value TraceBox\[str\].*"
-            r"Python len\(\) needs a concrete runtime value.*"
+            match=r"Cannot use length on traced value TraceBox\[str\].*"
+            r"Python length needs a concrete runtime value.*"
             r"af\.trace\(\.\.\., static=\.\.\.\)",
         ):
             af.trace(program)("seed")
