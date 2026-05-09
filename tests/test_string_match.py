@@ -101,6 +101,20 @@ class TestMatchTraced:
         with pytest.raises(AssertionError, match="`match` expects string inputs"):
             trace(check)("yes", 1)
 
+    def test_traced_string_eq_unsupported_operand_raises_match_error(self):
+        def check(x):
+            return x == 1
+
+        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+            trace(check)("yes")
+
+    def test_traced_non_string_eq_raises_rule_error(self):
+        def check(x):
+            return x == 1
+
+        with pytest.raises(TypeError, match=r"No trace rule for == on TypedAVal\(int\)"):
+            trace(check)(1)
+
 
 class TestMatchBatch:
     def test_batch_match_all_equal(self):

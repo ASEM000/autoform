@@ -206,6 +206,27 @@ class TestConcatPrimitive:
         assert ir.ir_eqns[0].prim is af.string.concat_p
         assert ir.call("left", "right") == "leftright"
 
+    def test_traced_string_add_unsupported_operand_raises_concat_error(self):
+        def func(x):
+            return x + 1
+
+        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+            af.trace(func)("a")
+
+    def test_traced_string_radd_unsupported_operand_raises_concat_error(self):
+        def func(x):
+            return 1 + x
+
+        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+            af.trace(func)("a")
+
+    def test_traced_non_string_add_raises_rule_error(self):
+        def func(x):
+            return x + 1
+
+        with pytest.raises(TypeError, match=r"No trace rule for \+ on TypedAVal\(int\)"):
+            af.trace(func)(1)
+
     def test_concat_trace_rejects_non_string_input(self):
         def func(x, y, z):
             return af.concat(x, y, z)
