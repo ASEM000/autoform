@@ -3,8 +3,12 @@
 
 ```{toctree}
 :maxdepth: 2
-:caption: Getting Started
+:caption: Documentation
 :hidden:
+
+concepts/index
+tutorial/index
+recipes/index
 ```
 
 ```{toctree}
@@ -13,4 +17,5 @@
 :hidden:
 
 api
+reference/glossary
 ```
