@@ -21,7 +21,13 @@ from typing import cast
 from autoform.core import IR, IREqn, IRVar, is_irvar
 from autoform.utils import Tree, treelib
 
-__all__ = ["ir_tree_ir_vars", "ir_var_producers", "ir_eqn_graph", "ir_liveness"]
+__all__ = [
+    "ir_tree_ir_vars",
+    "ir_var_producers",
+    "ir_eqn_graph",
+    "ir_liveness",
+    "ir_tree_used_ir_vars",
+]
 
 
 def ir_tree_ir_vars(tree: Tree, /) -> tuple[IRVar, ...]:
