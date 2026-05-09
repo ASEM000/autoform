@@ -176,6 +176,59 @@ class TestConcatPrimitive:
         assert len(ir.ir_eqns) == 1
         assert ir.ir_eqns[0].prim.name == "concat"
 
+    def test_traced_string_add_lowers_to_concat(self):
+        def func(x):
+            return x + "!"
+
+        ir = af.trace(func)("a")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("hello") == "hello!"
+
+    def test_traced_string_radd_lowers_to_concat(self):
+        def func(x):
+            return "Hello, " + x
+
+        ir = af.trace(func)("a")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("world") == "Hello, world"
+
+    def test_traced_string_add_both_args_lowers_to_concat(self):
+        def func(a, b):
+            return a + b
+
+        ir = af.trace(func)("a", "b")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("left", "right") == "leftright"
+
+    def test_traced_string_add_unsupported_operand_raises_concat_error(self):
+        def func(x):
+            return x + 1
+
+        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+            af.trace(func)("a")
+
+    def test_traced_string_radd_unsupported_operand_raises_concat_error(self):
+        def func(x):
+            return 1 + x
+
+        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+            af.trace(func)("a")
+
+    def test_traced_non_string_add_raises_rule_error(self):
+        def func(x):
+            return x + 1
+
+        with pytest.raises(
+            TypeError, match=r"No trace rule for \+ on values of type TypedAVal\(int\)"
+        ):
+            af.trace(func)(1)
+
     def test_concat_trace_rejects_non_string_input(self):
         def func(x, y, z):
             return af.concat(x, y, z)

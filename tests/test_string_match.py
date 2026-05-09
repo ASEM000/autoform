@@ -45,6 +45,39 @@ class TestMatchTraced:
         assert ir.call("yes") is True
         assert ir.call("no") is False
 
+    def test_traced_string_eq_lowers_to_match(self):
+        def check(x):
+            return x == "yes"
+
+        ir = trace(check)("dummy")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert ir.call("yes") is True
+        assert ir.call("no") is False
+
+    def test_traced_reverse_string_eq_lowers_to_match(self):
+        def check(x):
+            return "yes" == x
+
+        ir = trace(check)("dummy")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert ir.call("yes") is True
+        assert ir.call("no") is False
+
+    def test_traced_string_eq_both_args_lowers_to_match(self):
+        def check(a, b):
+            return a == b
+
+        ir = trace(check)("a", "b")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert ir.call("same", "same") is True
+        assert ir.call("same", "other") is False
+
     def test_traced_match_both_args(self):
         def check(a, b):
             return af.match(a, b)
@@ -67,6 +100,22 @@ class TestMatchTraced:
 
         with pytest.raises(AssertionError, match="`match` expects string inputs"):
             trace(check)("yes", 1)
+
+    def test_traced_string_eq_unsupported_operand_raises_match_error(self):
+        def check(x):
+            return x == 1
+
+        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+            trace(check)("yes")
+
+    def test_traced_non_string_eq_raises_rule_error(self):
+        def check(x):
+            return x == 1
+
+        with pytest.raises(
+            TypeError, match=r"No trace rule for == on values of type TypedAVal\(int\)"
+        ):
+            trace(check)(1)
 
 
 class TestMatchBatch:

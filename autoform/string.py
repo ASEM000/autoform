@@ -29,6 +29,8 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    trace_add_rules,
+    trace_eq_rules,
     typeof,
 )
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
@@ -190,6 +192,9 @@ batch_rules.set(concat_p, batch_concat)
 batch_rules.aset(concat_p, asyncify(batch_concat))
 
 
+trace_add_rules[str] = concat
+
+
 # ==================================================================================================
 # MATCH
 # ==================================================================================================
@@ -267,3 +272,6 @@ pull_bwd_rules.set(match_p, pullback_bwd_match)
 pull_bwd_rules.aset(match_p, asyncify(pullback_bwd_match))
 batch_rules.set(match_p, batch_match)
 batch_rules.aset(match_p, asyncify(batch_match))
+
+
+trace_eq_rules[str] = match

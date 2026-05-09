@@ -71,6 +71,8 @@ __all__ = [
     "Interpreter",
     "EvalInterpreter",
     "TraceBox",
+    "trace_add_rules",
+    "trace_eq_rules",
     "TracingInterpreter",
     "active_interpreter",
     "using_interpreter",
@@ -543,7 +545,7 @@ def fold() -> Generator[None, None, None]:
         fold_flag.reset(token)
 
 
-TRACE_ERROR = (
+TRACE_UNSUPPORTED_OP_ERROR = (
     "Cannot use {desc} on a traced value."
     "During af.trace(), values only carry abstract type information; "
     "Python {desc} needs a concrete runtime value and cannot be staged "
@@ -553,10 +555,13 @@ TRACE_ERROR = (
     "primitive for it."
 )
 
+TRACE_MISSING_RULE_ERROR = "No trace rule for {desc} on values of type {aval!r}. "
 
-def trace_error(box: TraceBox, desc: str, /) -> NoReturn:
-    aval = box.aval.type.__name__ if isinstance(box.aval, TypedAVal) else repr(box.aval)
-    raise TypeError(TRACE_ERROR.format(desc=desc))
+type TraceRule = Callable[[Any, Any], Any]
+
+
+trace_eq_rules: dict[type, TraceRule] = {}
+trace_add_rules: dict[type, TraceRule] = {}
 
 
 class TraceBox:
@@ -575,41 +580,59 @@ class TraceBox:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.ir_var!r})"
 
+    def __hash__(self):
+        return object.__hash__(self)
+
+    def __eq__(self, other) -> Any:
+        if isinstance(self.aval, TypedAVal) and (rule := trace_eq_rules.get(self.aval.type)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="==", aval=self.aval))
+
+    def __add__(self, other) -> Any:
+        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
+
+    def __radd__(self, other) -> Any:
+        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+            return rule(other, self)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
+
     def __bool__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="truthiness"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="truthiness"))
 
     def __bytes__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="bytes coercion"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="bytes coercion"))
 
     def __complex__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="complex number coercion"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="complex number coercion"))
 
     def __contains__(self, _) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="membership testing"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="membership testing"))
 
     def __float__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="float coercion"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="float coercion"))
 
     def __format__(self, _) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="string formatting"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="string formatting"))
 
     def __getitem__(self, _) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="indexing"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="indexing"))
 
     def __index__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="integer-index coercion"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="integer-index coercion"))
 
     def __int__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="integer coercion"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="integer coercion"))
 
     def __iter__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="iteration"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="iteration"))
 
     def __len__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="length"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="length"))
 
     def __str__(self) -> NoReturn:
-        raise TypeError(TRACE_ERROR.format(desc="string coercion"))
+        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="string coercion"))
 
 
 def assert_foldable(prim: Prim, tree: Tree) -> None:
