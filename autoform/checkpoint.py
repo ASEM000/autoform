@@ -255,8 +255,43 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
 def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, None]:
     """Inject values for checkpoints within the context.
 
-    Values are consumed from lists in order (matching collect's list output).
-    This allows round-tripping: collect values, then inject them back.
+    Values are consumed from lists in encounter order for each key. A dictionary
+    produced by :func:`autoform.collect` can be supplied here to reproduce or
+    modify checkpointed intermediates.
+
+    Around ``ir.call(...)`` or ``ir.acall(...)``, ``inject`` performs runtime
+    checkpoint substitution by replacing matching checkpoint values as the IR
+    executes.
+
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     normalized = af.format("item: {}", x)
+        ...     normalized = af.checkpoint(normalized, key="normalized", collection="cache")
+        ...     return af.concat(normalized, "!")
+        >>> ir = af.trace(program)("test")
+        >>> with af.inject(collection="cache", values={"normalized": ["cached item"]}):
+        ...     ir.call("alpha")
+        'cached item!'
+
+    Inside the function being traced, ``inject`` performs trace-time
+    specialization. A matching checkpoint is replaced by the injected literal
+    while the IR is being built, so later calls to the traced IR reuse that
+    specialized value.
+
+    Example:
+        >>> def program(x):
+        ...     normalized = af.format("item: {}", x)
+        ...     with af.inject(collection="cache", values={"normalized": ["cached item"]}):
+        ...         normalized = af.checkpoint(normalized, key="normalized", collection="cache")
+        ...     return af.concat(normalized, "!")
+        >>> ir = af.trace(program)("test")
+        >>> [ir_eqn.prim.name for ir_eqn in ir.ir_eqns]
+        ['format', 'concat']
+        >>> ir.call("alpha")
+        'cached item!'
+        >>> ir.call("beta")
+        'cached item!'
 
     Args:
         collection: The collection to filter checkpoint locations by.
@@ -264,15 +299,6 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
 
     Yields:
         None.
-
-    Example:
-        >>> import autoform as af
-        >>> def program(x):
-        ...     return af.checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
-        >>> ir = af.trace(program)("test")
-        >>> with af.inject(collection="cache", values={"greeting": ["CACHED"]}):
-        ...     ir.call("World")
-        'CACHED'
     """
     assert isinstance(values, dict)
     for key in values:
