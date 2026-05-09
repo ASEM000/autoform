@@ -25,18 +25,19 @@
     )
     ```
 
-  - Public tracing and IR execution boundaries are now positional-only. `trace`, `call`, `acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`.
+  - Removed the old `split` / `splitpoint` and primitive-local intercept/effect APIs from the public surface.
+
+  - Public tracing and IR execution boundaries are now positional-only. `trace`, `IR.call`, `IR.acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`. Use the methods on traced IR objects rather than removed top-level `af.call(...)` / `af.acall(...)` helpers.
 
     ```python
-    def greet(name, punctuation):
-        return af.format("Hello, {}{}", name, punctuation)
+    def label(item, punctuation):
+        return af.format("item: {}{}", item, punctuation)
 
 
-    ir = af.trace(greet)("world", "!")
-    af.call(ir)("Alice", "?")
+    ir = af.trace(label)("alpha", "!")
+    ir.call("beta", "?")
+    # "item: beta?"
     ```
-
-  - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
 
   - `lm_call(...)` and `lm_schema_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
 
@@ -52,7 +53,7 @@
 
 
     ir = af.trace(label, static=(True, False))(True, "disk full")
-    af.call(ir)(True, "timeout")
+    ir.call(True, "timeout")
     # "error: timeout"
     ```
 
@@ -65,8 +66,15 @@
     litellm_params = dict(model="gpt-5.2", tpm=100_000, rpm=1_000)
     model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
     client = Router(model_list=model_list, max_parallel_requests=10)
+
+    def program(topic):
+        prompt = af.format("Summarize {} in one sentence.", topic)
+        return af.lm_call([dict(role="user", content=prompt)], model="gpt-5.2")
+
+
+    ir = af.trace(program)("topic")
     with af.lm_client(client):
-        result = af.call(ir)(inputs)
+        result = ir.call("release notes")
     ```
 
   - Added `lm_schema_call(...)` and schema nodes (`Str`, `Int`, `Float`, `Bool`, `Enum`, `Doc`) for structured LM outputs. Schemas are ordinary pytrees and can be dictionaries, lists, tuples, or custom Optree-registered objects.
@@ -80,21 +88,6 @@
 
     out = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
     ```
-
-  - Added inference primitives `factor` and `weight`.
-
-    ```python
-    def program(x):
-        y = af.concat(x, "!")
-        af.factor(y, judge=lambda s: float(len(s)))
-        return y
-
-
-    ir = af.trace(program)("x")
-    out, total = af.call(af.weight(ir))("ab")
-    # ("ab!", 3.0)
-    ```
-
 
 ### Improvements
 
@@ -110,8 +103,6 @@
     af.trace(bad)("a", "b", 1)  # AssertionError during tracing
     ```
 
-  - `split` now returns the value marked by `splitpoint`, even when unrelated equations appear before the splitpoint. previously `lhs` could incorrectly return the output of the last preceding equation instead of the marked value.
-
   - `batch` now preserves its batch axis at the HOP boundary. if an inner batch rule returns a scalar leaf, the HOP broadcasts it back into the common batch container instead of dropping the axis on that output.
 
     ```python
@@ -122,9 +113,13 @@
     ir = af.trace(program)("...", "...")
     batched = af.batch(ir, in_axes=(True, False))
 
-    af.call(batched)(["a", "b"], "constant")
+    batched.call(["a", "b"], "constant")
     # (["x=a", "x=b"], ["y=constant", "y=constant"])
     ```
+
+  - `collect` and `inject` documentation now distinguishes execution-time checkpoint collection/substitution from trace-time specialization. `collect` is documented as execution-only; `inject` is documented as runtime checkpoint substitution around `ir.call(...)` and trace-time checkpoint specialization when used inside the function being traced.
+
+  - `autoform.analysis.ir_tree_used_ir_vars` is now part of the module's documented export surface because `dce` depends on it for partial-output liveness.
 
 ## v0.2.0 (February 7, 2026)
 
