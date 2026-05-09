@@ -16,6 +16,28 @@ def bracket(text: str) -> str:
     return af.format("[{}]", text)
 
 
+@bracket.set_pushforward
+def pushforward_bracket(in_tree, /, *, call):
+    primals, tangents = in_tree
+    (text_tangent,) = tangents
+
+    # keep the forward value and define the tangent behavior
+    output = call(*primals)
+    tangent = af.format("bracket change: {}", text_tangent)
+    return output, tangent
+
+
+@bracket.set_pullback
+def pullback_bracket(in_tree, /, *, call):
+    del call
+    (primals, output), feedback = in_tree
+    (text,) = primals
+
+    # turn output feedback into feedback for the input text
+    text_feedback = af.format("{} via {} from {}", feedback, output, text)
+    return (text_feedback,)
+
+
 @bracket.set_batch
 def batch_bracket(in_tree, /, *, call):
     batch_size, axes, values = in_tree
@@ -38,23 +60,31 @@ def clean(text: str) -> str:
 
 
 ir = af.trace(clean)("  Hello  ")
+
+output, tangent = af.pushforward(ir).call(("alpha",), ("make it direct",))
+print(output)
+print(tangent)
+
+output, (text_feedback,) = af.pullback(ir).call(("alpha",), "too decorated")
+print(output)
+print(text_feedback)
+
 batched = af.batch(ir)
 
 print(batched.call(["a", "b"]))
 print(calls)
 ```
 
-The batch rule receives three pieces:
+Each rule receives one `in_tree` argument:
 
-| Value | Meaning |
-| --- | --- |
-| `batch_size` | the inferred batch length |
-| `axes` | booleans matching the input leaves |
-| `values` | the actual input values |
+| Hook | `in_tree` shape | Return shape |
+| --- | --- | --- |
+| `set_pushforward` | `(primals, tangents)` | `(output, tangent)` |
+| `set_pullback` | `((primals, output), feedback)` | input-shaped feedback |
+| `set_batch` | `(batch_size, axes, values)` | `(output, output_axes)` |
 
-Return `(output, output_axes)`, where `output_axes` has the same pytree shape as
-the output and marks which output leaves are batched.
+For batch, `output_axes` has the same pytree shape as the output and marks which
+output leaves are batched.
 
-Add only the rules your program needs. If a custom boundary should participate
-in prompt feedback, add `set_pullback`. If it should run under scheduled async
-execution, add the matching async rule.
+Add only the rules your program needs. If a custom boundary should run under
+scheduled async execution, add the matching async rule.
