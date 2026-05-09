@@ -22,7 +22,7 @@ def program(text: str) -> str:
 
 
 ir = af.trace(program)("seed")
-scheduled = af.sched(ir, cond=lambda eqn: Label("draft") in eqn.tags)
+scheduled = af.sched(ir, cond=lambda ir_eqn: Label("draft") in ir_eqn.tags)
 assert scheduled.call("world") == "world!"
 ```
 

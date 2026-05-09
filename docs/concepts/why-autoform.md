@@ -34,7 +34,17 @@ Suppose you have a three-step pipeline and you want batched prompt feedback: run
 
 ``````{tab-set}
 
-`````{tab-item} Without
+
+`````{tab-item} autoform
+````python
+ir = af.trace(pipeline)("...")
+transformed = af.batch(af.pullback(ir))
+outputs, (topic_hints,) = transformed.call((topics,), critiques)
+````
+`````
+
+
+`````{tab-item} Manual
 ````python
 results = []
 hints = []
@@ -57,14 +67,6 @@ for topic, critique in zip(topics, critiques):
 
     results.append(answer)
     hints.append(c_topic)
-````
-`````
-
-`````{tab-item} With
-````python
-ir = af.trace(pipeline)("...")
-transformed = af.batch(af.pullback(ir))
-outputs, (topic_hints,) = transformed.call((topics,), critiques)
 ````
 `````
 
