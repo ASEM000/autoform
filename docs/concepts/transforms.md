@@ -39,11 +39,15 @@ output, input_feedback = pb.call(("topic",), "too abstract")
 
 **`sched(ir, /, *, cond=None) -> IR`**
 
-`sched` groups independent equations into parallel stages. The resulting IR can still run with `.call(...)`, but `await .acall(...)` is where concurrent stages become useful.
+`sched` groups independent equations into parallel stages. The resulting IR can
+still run with `.call(...)`, but `.acall(...)` is where concurrent stages become
+useful.
 
 ```python
+import asyncio
+
 scheduled = af.sched(ir)
-result = await scheduled.acall("topic")
+result = asyncio.run(scheduled.acall("topic"))
 ```
 
 **`dce(ir, /, *, out_used=None) -> IR`**
@@ -61,7 +65,7 @@ Composition works because every transform returns an IR:
 
 ```python
 transformed = af.batch(af.pullback(ir))
-outputs, input_feedback = transformed.call((topics, critiques))
+outputs, (topic_hints,) = transformed.call((topics,), critiques)
 ```
 
 There is no special combined mode. `pullback(ir)` returns an IR; `batch(...)` consumes that IR.
@@ -71,7 +75,7 @@ Order still matters:
 | Expression | Meaning |
 | --- | --- |
 | `batch(pullback(ir))` | Run many independent pullback calls at once. Each input pairs with its own output feedback. |
-| `pullback(batch(ir))` | Treat the whole batched function as the differentiated program. The cotangent matches the batched output. |
+| `pullback(batch(ir))` | Treat the whole batched function as the program receiving feedback. The cotangent matches the batched output. |
 
 ## What Is Not A Transform
 
@@ -90,10 +94,12 @@ The IR transforms reshape the IR. `custom` changes rule lookup at a boundary. Co
 The transform axis and execution axis compose independently:
 
 ```python
+import asyncio
+
 transformed = af.batch(af.pullback(ir))
 
-sync_result = transformed.call((topics, critiques))
-async_result = await transformed.acall((topics, critiques))
+sync_result = transformed.call((topics,), critiques)
+async_result = asyncio.run(transformed.acall((topics,), critiques))
 ```
 
 You did not write the original function as `async def`. You chose async execution when running the transformed IR.

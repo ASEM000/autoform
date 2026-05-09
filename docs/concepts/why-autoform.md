@@ -64,7 +64,7 @@ for topic, critique in zip(topics, critiques):
 ````python
 ir = af.trace(pipeline)("...")
 transformed = af.batch(af.pullback(ir))
-outputs, hints = transformed.call((topics, critiques))
+outputs, (topic_hints,) = transformed.call((topics,), critiques)
 ````
 `````
 

@@ -56,10 +56,10 @@ def duplicated(text: str) -> tuple[str, str]:
 
 
 ir = af.trace(duplicated)("seed")
-print(len(ir.ir_eqns))
 print(ir.call("alpha"))
 ```
 
-`checkpoint` is not memoized because repeated checkpoints are meant to remain
-visible to `collect` and `inject`. For other primitives, use `memoize` when the
-same inputs really should mean the same result.
+The repeated `concat` call is cached while the trace is being built. `checkpoint`
+is not memoized because repeated checkpoints are meant to remain visible to
+`collect` and `inject`. For other primitives, use `memoize` when the same inputs
+really should mean the same result.
