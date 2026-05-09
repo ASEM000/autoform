@@ -13,7 +13,7 @@ program transforms around it.*
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
 
-[Quickstart](#quickstart) - [Composition](#composition) - [Concurrency](#concurrency) - [Reference](#reference) - [Documentation](https://autoform.readthedocs.io)
+[Quickstart](#quickstart) - [Composition](#composition) - [Concurrency](#concurrency) - [Reference](#reference) - [GitHub](https://github.com/ASEM000/autoform) - [Documentation](https://autoform.readthedocs.io)
 
 </div>
 
@@ -193,7 +193,7 @@ for the full version.
 
 ## Reference
 
-- [Tutorial](https://autoform.readthedocs.io/en/latest/tutorial/)
+- [Getting Started](https://autoform.readthedocs.io/en/latest/tutorial/)
 - [Concepts](https://autoform.readthedocs.io/en/latest/concepts/)
 - [Recipes](https://autoform.readthedocs.io/en/latest/recipes/)
 - [API Reference](https://autoform.readthedocs.io/en/latest/api.html)

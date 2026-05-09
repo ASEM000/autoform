@@ -6,8 +6,8 @@
 :caption: Documentation
 :hidden:
 
-concepts/index
 tutorial/index
+concepts/index
 recipes/index
 ```
 
