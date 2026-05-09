@@ -26,10 +26,10 @@ author = "Mahmoud Asem"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",  # link to external docs
     "sphinx_copybutton",  # copy button on code blocks
     "sphinx_design",  # grids, cards, tabs, dropdowns
+    "sphinx_github_style",
     "myst_parser",
     "sphinxcontrib.mermaid",
     "nbsphinx",
@@ -95,3 +95,8 @@ copybutton_prompt_is_regexp = True
 # Mermaid settings
 mermaid_js_priority = 300
 mermaid_fullscreen = False
+
+# GitHub source links for autodoc objects
+linkcode_url = "https://github.com/ASEM000/autoform"
+linkcode_blob = "main"
+linkcode_link_text = "[source]"
