@@ -92,7 +92,7 @@ accepts an IR.
 
 The pieces do different jobs:
 
-| Job | API | Use it for |
+| Job | API | For |
 | --- | --- | --- |
 | Transform an IR | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Build another IR from an existing IR. |
 | Customize a boundary | `@af.custom` | Give a Python function transform-specific rules. |
