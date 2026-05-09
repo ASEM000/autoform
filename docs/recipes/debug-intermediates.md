@@ -1,0 +1,50 @@
+# Debug Intermediate Values
+
+Use [`checkpoint`](../concepts/intercepts.md) for values you may want to inspect
+or replace while running the same IR.
+
+```python
+import autoform as af
+
+
+def draft_answer(topic: str) -> str:
+    outline_msg = dict(role="user", content=af.format("Outline {}.", topic))
+    outline = af.lm_call([outline_msg], model="gpt-5.2")
+    outline = af.checkpoint(outline, key="outline", collection="debug")
+
+    draft_prompt = af.format("Write a short answer from this outline:\n{}", outline)
+    draft_msg = dict(role="user", content=draft_prompt)
+    draft = af.lm_call([draft_msg], model="gpt-5.2")
+    draft = af.checkpoint(draft, key="draft", collection="debug")
+
+    final_prompt = af.format("Tighten this answer:\n{}", draft)
+    final_msg = dict(role="user", content=final_prompt)
+    return af.lm_call([final_msg], model="gpt-5.2")
+
+
+ir = af.trace(draft_answer)("recursion")
+
+# collect stores checkpointed values during execution
+with af.collect("debug") as collected:
+    result = ir.call("recursion")
+
+print(result)
+print(collected["outline"])
+print(collected["draft"])
+```
+
+To rerun from a known intermediate value, inject a replacement:
+
+```python
+# inject replaces the named checkpoint during execution
+replacements = {"draft": "Recursion is a function calling itself to solve a smaller case."}
+
+with af.inject("debug", replacements):
+    result = ir.call("recursion")
+
+print(result)
+```
+
+`collect` and `inject` are runtime contexts. They do not change the original
+function or the traced IR. That makes them useful for inspecting a bad value,
+trying a corrected intermediate, and then going back to normal execution.
