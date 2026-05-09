@@ -31,4 +31,6 @@ import asyncio
 output = asyncio.run(ir.acall("quantum entanglement"))
 ```
 
-You do not need async execution yet. It becomes useful when the scheduled form of an IR can run independent equations concurrently.
+Use `.call(...)` from synchronous code. Use `.acall(...)` when the caller is
+already async, or when a transformed IR such as `sched(ir)` can overlap
+independent work.
