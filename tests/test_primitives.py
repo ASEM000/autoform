@@ -224,7 +224,9 @@ class TestConcatPrimitive:
         def func(x):
             return x + 1
 
-        with pytest.raises(TypeError, match=r"No trace rule for \+ on TypedAVal\(int\)"):
+        with pytest.raises(
+            TypeError, match=r"No trace rule for \+ on values of type TypedAVal\(int\)"
+        ):
             af.trace(func)(1)
 
     def test_concat_trace_rejects_non_string_input(self):

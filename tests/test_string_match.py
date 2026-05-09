@@ -112,7 +112,9 @@ class TestMatchTraced:
         def check(x):
             return x == 1
 
-        with pytest.raises(TypeError, match=r"No trace rule for == on TypedAVal\(int\)"):
+        with pytest.raises(
+            TypeError, match=r"No trace rule for == on values of type TypedAVal\(int\)"
+        ):
             trace(check)(1)
 
 
