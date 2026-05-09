@@ -113,7 +113,7 @@ class TestIRVar:
         assert ir_var.aval.type is str
 
     def test_len_on_trace_box_has_informative_error(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
         traced = tracer.box(ir_var)
 
@@ -351,7 +351,7 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_use_interpreter_context(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
             af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
@@ -360,7 +360,7 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_tracing_interpreter_creates_ir_eqns(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
             af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
         assert len(tracer.ir_eqns) == 1

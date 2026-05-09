@@ -218,7 +218,7 @@ class TestFold:
 
         af.core.abstract_rules.set(async_probe_p, abstract_async_probe)
 
-        with af.core.using_interpreter(af.core.TracingInterpreter()) as tracer:
+        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
             result = await async_probe_p.abind("literal")
 
         assert isinstance(result, af.core.TraceBox)
@@ -233,7 +233,7 @@ class TestFold:
 
         af.core.impl_rules.aset(async_probe_p, aimpl_async_probe)
 
-        with af.core.using_interpreter(af.core.TracingInterpreter()) as tracer:
+        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
             with af.fold():
                 result = await async_probe_p.abind("literal")
 
