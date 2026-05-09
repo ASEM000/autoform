@@ -23,6 +23,50 @@ def bracket(text: str) -> str:
 
 With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform you want to override.
 
+## A Custom Pushforward Rule
+
+```python
+@bracket.set_pushforward
+def bracket_pushforward(in_tree, /, *, call):
+    primals, tangents = in_tree
+    (text_tangent,) = tangents
+    output = call(*primals)
+    tangent = af.format("bracket change: {}", text_tangent)
+    return output, tangent
+
+
+ir = af.trace(lambda text: bracket(text))("seed")
+output, tangent = af.pushforward(ir).call(("hello",), ("make it direct",))
+
+assert output == "[hello]"
+assert tangent == "bracket change: make it direct"
+```
+
+The pushforward rule receives `(primals, tangents)` and returns
+`(primal_output, tangent_output)`.
+
+## A Custom Pullback Rule
+
+```python
+@bracket.set_pullback
+def bracket_pullback(in_tree, /, *, call):
+    del call
+    (primals, output), feedback = in_tree
+    (text,) = primals
+    text_feedback = af.format("{} via {} from {}", feedback, output, text)
+    return (text_feedback,)
+
+
+ir = af.trace(lambda text: bracket(text))("seed")
+output, (text_feedback,) = af.pullback(ir).call(("hello",), "too decorated")
+
+assert output == "[hello]"
+assert text_feedback == "too decorated via [hello] from hello"
+```
+
+The pullback rule receives `((primals, output), feedback)` and returns
+feedback with the same shape as the original inputs.
+
 ## A Custom Batch Rule
 
 ```python
