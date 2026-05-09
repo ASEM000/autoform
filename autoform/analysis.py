@@ -69,6 +69,8 @@ def ir_tree_used_ir_vars(tree: Tree, used: Tree[bool], /) -> set[IRVar]:
     # >>> used = (True, False)
     # >>> ir_tree_used_ir_vars(tree, used)
     # {IRVar(id=1)}
+    assert treelib.structure(tree) == treelib.structure(used)
+    assert treelib.all(isinstance(leaf, bool) for leaf in treelib.leaves(used))
     used_ir_vars: set[IRVar] = set()
     flat_tree, flat_used = treelib.leaves(tree), treelib.leaves(used)
     for ir_atom, keep in zip(flat_tree, flat_used, strict=True):
