@@ -29,27 +29,14 @@ export OPENAI_API_KEY=...
 
 ## Why
 
-An LM program written as ordinary Python tends to harden around the first way
-you run it:
+An LM program written as ordinary Python tends to grow a second implementation
+for each new execution concern: batching, feedback, concurrency, debugging, or
+provider routing.
 
-- evaluate it on 100 inputs, and you write a batched loop;
-- send feedback through every LM call, and you rewrite the pipeline again;
-- run independent calls concurrently, and you introduce `async def`;
-- inspect a bad intermediate, and you split the function apart.
-
-`autoform` factors those requirements differently:
-
-- write the function once;
-- trace it into an IR with `af.trace(func)(*example_args)`;
-- transform the IR with `batch`, `pullback`, `pushforward`, `sched`, or `dce`;
-- wrap execution with contexts such as `collect`, `inject`, `memoize`, or
-  `lm_client`.
-
-Because each IR transform is `IR -> IR`, transforms compose as ordinary Python:
-
-```python
-fast_feedback = af.sched(af.batch(af.pullback(ir)))
-```
+`autoform` keeps those concerns outside the function. It records the function
+once as an IR, then applies transforms and execution contexts around that
+recorded program. The quickstart shows the split: write normal Python, trace it
+once, then decide how to transform or run it.
 
 ## Quickstart
 
