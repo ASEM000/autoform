@@ -15,7 +15,13 @@
 import pytest
 
 import autoform as af
-from autoform.analysis import ir_eqn_graph, ir_liveness, ir_tree_ir_vars, ir_var_producers
+from autoform.analysis import (
+    ir_eqn_graph,
+    ir_liveness,
+    ir_tree_ir_vars,
+    ir_tree_used_ir_vars,
+    ir_var_producers,
+)
 
 
 class TestIrTreeIrVars:
@@ -56,6 +62,29 @@ class TestIrTreeIrVars:
         ir = af.trace(program)("seed")
 
         assert ir_tree_ir_vars(ir.out_ir_tree) == (ir.out_ir_tree[1]["value"],)
+
+
+class TestIrTreeUsedIrVars:
+    def test_returns_only_used_ir_vars(self):
+        def program(x):
+            left = af.concat(x, "1")
+            right = af.concat(x, "2")
+            return left, right, "const"
+
+        ir = af.trace(program)("seed")
+        left, right, _ = ir.out_ir_tree
+
+        assert ir_tree_used_ir_vars(ir.out_ir_tree, (True, False, True)) == {left}
+        assert ir_tree_used_ir_vars(ir.out_ir_tree, (False, True, False)) == {right}
+
+    def test_requires_matching_tree_structure(self):
+        def program(x):
+            return af.concat(x, "!")
+
+        ir = af.trace(program)("seed")
+
+        with pytest.raises(AssertionError):
+            ir_tree_used_ir_vars(ir.out_ir_tree, (True,))
 
 
 class TestIrVarProducers:
