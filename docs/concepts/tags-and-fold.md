@@ -22,18 +22,12 @@ def program(text: str) -> str:
 
 
 ir = af.trace(program)("seed")
-assert ir.ir_eqns[0].tags == frozenset({Label("draft")})
-```
-
-The tags are stored on each `IREqn` created inside the active context. Nested tag blocks accumulate tags. Code outside the block does not receive them.
-
-One use is selective scheduling:
-
-```python
 scheduled = af.sched(ir, cond=lambda eqn: Label("draft") in eqn.tags)
+assert scheduled.call("world") == "world!"
 ```
 
-That predicate can decide which equations are eligible for grouping.
+The scheduling predicate receives each recorded equation. Nested tag blocks
+accumulate tags. Code outside the block does not receive them.
 
 ## Tag Class Rules
 
@@ -54,7 +48,6 @@ def program(text: str) -> str:
 
 ir = af.trace(program)("seed")
 
-assert len(ir.ir_eqns) == 1
 assert ir.call("world") == "hello world"
 ```
 

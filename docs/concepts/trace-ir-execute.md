@@ -64,7 +64,7 @@ The IR has two execution methods:
 ```python
 output = ir.call("gravity")
 print(output)
-# Prompt: Explain gravity.
+# prompt: Explain gravity.
 ```
 
 The runtime input `"gravity"` replaces the traced placeholder input. Execution walks the equations in order and dispatches each primitive to its registered implementation rule.
@@ -76,7 +76,7 @@ import asyncio
 
 output = asyncio.run(ir.acall("recursion"))
 print(output)
-# Prompt: Explain recursion.
+# prompt: Explain recursion.
 ```
 
 The original function was not written as `async def`. Execution mode is chosen at the call site.

@@ -17,8 +17,6 @@ def program(text: str) -> str:
 ir = af.trace(program)("seed")
 cleaned = af.dce(ir)
 
-print(len(ir.ir_eqns))
-print(len(cleaned.ir_eqns))
 print(cleaned.call("alpha"))
 ```
 
@@ -42,8 +40,6 @@ def pair(text: str) -> tuple[str, str]:
 ir = af.trace(pair)("seed")
 left_only = af.dce(ir, out_used=(True, False))
 
-print(len(ir.ir_eqns))
-print(len(left_only.ir_eqns))
 print(left_only.call("alpha"))
 ```
 

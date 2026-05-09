@@ -36,9 +36,9 @@ def render(request: dict[str, str]) -> str:
 
 
 # the single function argument is a dict, so the axes sit inside a one-item tuple
-example = {"system": "explain simply", "topic": "recursion"}
+example = {"system": "explain briefly", "topic": "recursion"}
 axes = ({"system": False, "topic": True},)
-requests = {"system": "explain simply", "topic": ["recursion", "gravity"]}
+requests = {"system": "explain briefly", "topic": ["recursion", "gravity"]}
 
 ir = af.trace(render)(example)
 batched = af.batch(ir, in_axes=axes)

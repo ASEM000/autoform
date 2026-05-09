@@ -38,7 +38,7 @@ a topic. `pullback(ir)` makes a second IR whose input is the original inputs plu
 feedback on the output.
 
 This is not a special optimizer. It is a feedback channel. The update policy
-above is deliberately simple: append the returned instruction hint to the next
+above is deliberately small: append the returned instruction hint to the next
 instruction. A production loop can score examples, keep the best instruction,
 or batch many `(topic, critique)` pairs with `batch(pullback(ir))`.
 

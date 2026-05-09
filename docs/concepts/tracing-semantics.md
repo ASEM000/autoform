@@ -80,7 +80,7 @@ Use `while_loop` when the loop condition is runtime data:
 ```python
 def cond(state: tuple[str, str]) -> bool:
     text, target = state
-    return af.match(text, target)
+    return text == target
 
 
 def body(state: tuple[str, str]) -> tuple[str, str]:

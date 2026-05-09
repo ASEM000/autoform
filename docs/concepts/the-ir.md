@@ -10,12 +10,13 @@ The IR is not Python source and it is not bytecode. It is a small data structure
 
 ## The Pieces
 
-- **`IRVar`**: a typed placeholder for a value that will exist at execution time.
-- **`Prim`**: a named operation such as `format`, `concat`, or `lm_call`.
-- **`IREqn`**: one equation: a primitive, input tree, output tree, static parameters, and tags.
-- **`IR`**: the whole program: input tree, equation list, and output tree.
+- input and output trees describe the runtime values entering and leaving the program;
+- equations record one primitive call, its input tree, its output tree, static parameters, and tags;
+- primitive names identify operations such as `format`, `concat`, and `lm_call`;
+- the whole IR is the input tree, the equation list, and the output tree.
 
-These classes live in `autoform.core`. They are useful for inspection and analysis, but they are not part of the recommended everyday user surface. Most code should get an IR from `af.trace(...)`, transform it, and run it.
+Most code should get an IR from `af.trace(...)`, transform it, and run it. You do
+not need to construct the internal IR classes directly.
 
 ## A Worked Example
 
@@ -50,13 +51,13 @@ Read it left to right:
 - `concat(...)` consumes the literal `"Prompt: "` and `prompt`, then produces `output`.
 - `output` is the function output.
 
-Literal values can appear directly in an equation. Runtime values are represented as `IRVar` leaves.
+Literal values can appear directly in an equation. Runtime values are represented
+by placeholders until execution supplies concrete inputs.
 
 ## What You Can Do With It
 
 Once you have an IR, there are three broad operations:
 
-- **Query it**: helpers in `autoform.analysis` can find variable producers, equation dependencies, and liveness.
 - **Transform it**: `batch`, `pushforward`, `pullback`, `sched`, and `dce` consume an IR and return another IR.
 - **Execute it**: `.call(...)` and `.acall(...)` run the equation list with concrete inputs.
 
@@ -71,6 +72,9 @@ That is why the trace/transform/execute split matters. A transform does not need
 
 ## Inspecting An IR
 
-For execution-time diagnostics, prefer checkpoints with `collect` and `inject`. For transform work, helpers in `autoform.analysis` can inspect producers, dependencies, and liveness. If an expected operation is missing, the original function probably used ordinary Python outside an `autoform` primitive. If an operation is present but not used, `dce(ir)` may be able to remove it.
+For execution-time diagnostics, prefer checkpoints with `collect` and `inject`.
+If an expected operation is missing, the original function probably used
+ordinary Python outside an `autoform` primitive. If an operation is present but
+not used, `dce(ir)` may be able to remove it.
 
 The public workflow is still trace, transform, execute. Inspect these internals when you are debugging, analyzing, or writing a transform.
