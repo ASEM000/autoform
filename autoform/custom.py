@@ -33,7 +33,7 @@ from autoform.core import (
     Prim,
     PullbackBwdRule,
     PushforwardRule,
-    TracingInterpreter,
+    TraceInterpreter,
     TypedAVal,
     abstract_rules,
     batch_rules,
@@ -63,7 +63,7 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
         return IRVar.fresh(aval=TypedAVal(type(x)))
 
     in_ir_tree = treelib.map(to_ir_input, in_ir_tree)
-    with using_interpreter(TracingInterpreter()) as tracer:
+    with using_interpreter(TraceInterpreter()) as tracer:
         out_trace_tree = func(*tracer.box(in_ir_tree))
     out_ir_tree = tracer.unbox(out_trace_tree)
     return IR(tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)

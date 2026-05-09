@@ -73,7 +73,7 @@ __all__ = [
     "TraceBox",
     "trace_add_rules",
     "trace_eq_rules",
-    "TracingInterpreter",
+    "TraceInterpreter",
     "active_interpreter",
     "using_interpreter",
     "active_tags",
@@ -537,8 +537,8 @@ trace_add_rules: dict[type, TraceRule] = {}
 class TraceBox:
     __slots__ = ["owner", "ir_var"]
 
-    def __init__(self, /, *, owner: TracingInterpreter, ir_var: IRVar):
-        assert isinstance(owner, TracingInterpreter)
+    def __init__(self, /, *, owner: TraceInterpreter, ir_var: IRVar):
+        assert isinstance(owner, TraceInterpreter)
         assert is_irvar(ir_var)
         self.owner = owner
         self.ir_var = ir_var
@@ -613,7 +613,7 @@ def assert_foldable(prim: Prim, tree: Tree) -> None:
     )
 
 
-class TracingInterpreter(BoxedInterpreter[TraceBox]):
+class TraceInterpreter(BoxedInterpreter[TraceBox]):
     __slots__ = ["ir_eqns"]
 
     def __init__(self):
@@ -744,7 +744,7 @@ def trace[*A, R](
         arg_tree = args
         in_static_tree = treelib.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
         in_ir_tree = treelib.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_val)
-        with using_interpreter(TracingInterpreter()) as tracer:
+        with using_interpreter(TraceInterpreter()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
         out_ir_tree = tracer.unbox(out_trace_tree)
         return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
