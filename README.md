@@ -103,15 +103,14 @@ accepts an IR.
 
 ## Composition
 
-| Category | API | What it changes |
-| --- | --- | --- |
-| IR transforms | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Take an IR and return another IR. These compose directly. |
-| Custom boundary rules | `@af.custom` | Wrap one Python function as a boundary and register rules for transforms. |
-| Trace/execute contexts | `memoize`, `lm_client`, `collect`, `inject`, `tag`, `fold` | Change behavior inside a `with` block without being IR transforms. |
-| Execution mode | `.call(...)`, `.acall(...)` | Run the same IR synchronously or asynchronously. |
+The pieces do different jobs:
 
-Keep the categories separate. `custom` is not an IR transform. `lm_client` and
-`memoize` are context managers, not functions that transform an IR.
+| Job | API | Use it for |
+| --- | --- | --- |
+| Transform an IR | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Build another IR from an existing IR. |
+| Customize a boundary | `@af.custom` | Give a Python function transform-specific rules. |
+| Wrap tracing or execution | `memoize`, `lm_client`, `collect`, `inject`, `tag`, `fold` | Change behavior inside a `with` block. |
+| Choose execution mode | `.call(...)`, `.acall(...)` | Run the same IR synchronously or asynchronously. |
 
 ## Concurrency
 
@@ -149,8 +148,8 @@ flowchart TD
     example --> combine
 ```
 
-There is no `async def` in `compare`. Execution mode is a property of how you
-run the IR, not of how you wrote the function.
+There is no `async def` in `compare`. Use `.call(...)` when you want a sync
+run and `.acall(...)` when you want an async run.
 
 ## Debugging
 

@@ -74,6 +74,7 @@
     model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
     client = Router(model_list=model_list, max_parallel_requests=10)
 
+
     def program(topic):
         prompt = af.format("Summarize {} in one sentence.", topic)
         return af.lm_call([dict(role="user", content=prompt)], model="gpt-5.2")

@@ -23,7 +23,8 @@ def compare(topic: str) -> str:
     return af.lm_call([combine_msg], model="gpt-5.2")
 ```
 
-There is no `async def` in `compare`. The first two calls read only `topic`, so they are independent. The final call depends on both results.
+There is no `async def` in `compare`. The first two calls read only `topic`, so
+they are independent. The final call depends on both results.
 
 ```{mermaid}
 flowchart TD
@@ -71,15 +72,16 @@ Compare the two pieces of code:
 
 ```python
 # compare stays a normal function
-def compare(topic: str) -> str:
-    ...
+def compare(topic: str) -> str: ...
 
 
 scheduled = af.sched(ir)
 parallel = asyncio.run(scheduled.acall("recursion"))
 ```
 
-The execution mode is a property of how you run the IR, not of the original function. You did not rewrite the function into async Python. You changed the IR that executes it.
+Execution mode is chosen at the call site: `.call(...)` for sync execution,
+`.acall(...)` for async execution. `sched` changes the IR that executes, so the
+original function stays sequential.
 
 `sched` is another `IR -> IR` transform, so it composes with the earlier transforms:
 
