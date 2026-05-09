@@ -110,7 +110,8 @@ Execution mode is its own axis:
 - `af.sched(ir)` returns a scheduled IR where async execution is usually the useful path, because independent equations can run concurrently.
 - `acall` is available even without `sched`, and `call` is available even after `sched`.
 
-The choice is made where you run the IR, not where you define the function. Engineers may recognize this as avoiding the function-coloring problem: the function itself does not become permanently sync or async.
+The choice is made where you run the IR, not where you define the function.
+Use `.call(...)` for sync execution and `.acall(...)` for async execution.
 
 ```{mermaid}
 flowchart TD

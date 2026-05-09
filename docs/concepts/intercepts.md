@@ -61,6 +61,5 @@ with af.collect(collection="debug") as captured:
     af.batch(ir).call(["alpha", "beta"])
 ```
 
-Transformed IR execution is still execution, so checkpoints work after `batch`, `pullback`, or `sched`.
-
-The current user-facing mechanism is checkpoint-based intercept capture and injection.
+Transformed IR execution is still execution, so checkpoints work after `batch`,
+`pullback`, or `sched`.
