@@ -127,7 +127,7 @@ Some nearby public APIs are intentionally not `IR -> IR`:
 - [`memoize`](../recipes/memoize.md) is a context manager. It caches primitive results within a `with` block.
 - [`lm_client`](../recipes/litellm-config.md) is a context manager. It changes provider routing during execution.
 - [`collect` and `inject`](intercepts.md) are context managers. They capture or replace checkpointed values during execution.
-- [`tag` and `fold`](tags-and-fold.md) are context managers. They alter trace-time annotation or trace-time evaluation.
+- [`tag`](tags.md) and [`fold`](fold.md) are context managers. They alter trace-time annotation or trace-time evaluation.
 
 The IR transforms reshape the IR. `custom` changes rule lookup at a boundary. Contexts wrap trace-time or execute-time behavior. They are complementary axes.
 
