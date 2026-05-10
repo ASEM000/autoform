@@ -53,4 +53,4 @@ assert output == "[world!]"
 
 `walk` is not a context manager. It does not wrap trace-time or execution-time behavior around a block.
 
-It is an advanced execution interface for the traced object. The built-in `.call(...)` and `.acall(...)` methods are implemented on top of the same stepping model in `autoform/core.py` around the `IR.walk`, `walk`, `call`, and `acall` definitions.
+It is an advanced execution interface for the traced object. The built-in `.call(...)` and `.acall(...)` methods use the same stepping model.
