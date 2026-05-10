@@ -2,9 +2,17 @@
 
 `autoform` has three phases:
 
-- **Trace**: run a Python function once with placeholder values and record [`autoform` primitive](primitives.md) calls.
-- **Transform**: take the recorded [IR](the-ir.md) and produce another IR, without re-running the original Python function.
-- **Execute**: run the IR with concrete runtime inputs, synchronously or asynchronously.
+Trace records the function using example arguments. Transform rewrites the recorded IR. Execute runs the final IR with real inputs.
+
+```{mermaid}
+flowchart TD
+    F["Python function + example args"] --> T["Trace"]
+    T --> IR1["IR"]
+    IR1 --> X["Transform"]
+    X --> IR2["IR"]
+    IR2 --> E["Execute with real inputs"]
+    E --> O["Output"]
+```
 
 That split is the core model. The function is ordinary Python; the trace is data; transforms rewrite that data; execution happens later.
 
@@ -131,8 +139,8 @@ flowchart TD
 
 ## Common Gotchas
 
-- **Python `if` on a traced value**: use `switch`, or mark the controlling input static if the branch is intentionally fixed at trace time.
-- **Loops with runtime-dependent length**: use `while_loop`; ordinary Python loops are only appropriate when the iteration structure is known at trace time.
-- **Mutating closure state**: pass state through the function inputs and outputs instead, preferably as registered [pytrees](pytrees.md) for structured state.
+- Python `if` on a traced value: use `switch`, or mark the controlling input static if the branch is intentionally fixed at trace time.
+- Loops with runtime-dependent length: use `while_loop`; ordinary Python loops are only appropriate when the iteration structure is known at trace time.
+- Mutating closure state: pass state through the function inputs and outputs instead, preferably as registered [pytrees](pytrees.md) for structured state.
 
 Next, read [The IR](the-ir.md) for the IR structure in more detail.

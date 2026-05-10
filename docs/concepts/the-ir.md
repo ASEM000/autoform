@@ -63,8 +63,8 @@ by placeholders until execution supplies concrete inputs.
 
 Once an IR exists, there are two broad operations:
 
-- **Transform it**: `batch`, `pushforward`, `pullback`, `sched`, and `dce` consume an IR and return another IR.
-- **Execute it**: `.call(...)` and `.acall(...)` run the equation list with concrete inputs.
+- Transform it: `batch`, `pushforward`, `pullback`, `sched`, and `dce` consume an IR and return another IR.
+- Execute it: `.call(...)` and `.acall(...)` run the equation list with concrete inputs.
 
 That is why the trace/transform/execute split matters. A transform does not need the original Python function. It only needs the equation list.
 
