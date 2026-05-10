@@ -20,6 +20,7 @@ assert ir.call("world") == "hello world"
 
 Without `fold`, the prefix concat would also be an equation. With `fold`, it is computed at trace time.
 
+(trace-time-decisions)=
 ## Trace-Time Decisions
 
 Folded work can choose ordinary Python control flow because it runs while tracing:

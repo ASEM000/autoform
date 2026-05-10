@@ -4,6 +4,7 @@ At trace time, the function runs once with placeholder values for every dynamic 
 
 That rule explains most tracing surprises.
 
+(static-and-dynamic-inputs)=
 ## Static and Dynamic Inputs
 
 The trace API is:

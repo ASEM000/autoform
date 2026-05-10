@@ -6,12 +6,12 @@ Trace records the function using example arguments. Transform rewrites the recor
 
 ```{mermaid}
 flowchart TD
-    F["Python function + example args"] --> T["Trace"]
-    T --> IR1["IR"]
+    F([Python function + example args]) --> T["Trace"]
+    T --> IR1[(IR)]
     IR1 --> X["Transform"]
-    X --> IR2["IR"]
+    X --> IR2[(IR)]
     IR2 --> E["Execute with real inputs"]
-    E --> O["Output"]
+    E --> O[/output/]
 ```
 
 That split is the core model. The function is ordinary Python; the trace is data; transforms rewrite that data; execution happens later.
@@ -120,6 +120,7 @@ Execution mode is its own axis:
 
 The choice is made where the IR runs, not where the function is defined.
 Use `.call(...)` for sync execution and `.acall(...)` for async execution.
+This avoids the [function-coloring](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/) split: the original Python function stays ordinary, while `.call(...)` and `.acall(...)` choose execution at the IR boundary.
 
 ```{mermaid}
 flowchart TD
@@ -139,7 +140,7 @@ flowchart TD
 
 ## Common Gotchas
 
-- Python `if` on a traced value: use `switch`, or mark the controlling input static if the branch is intentionally fixed at trace time.
+- Python `if` on a traced value: use [`switch`](primitives.md) for runtime decisions. If the branch should be fixed while tracing, mark the controlling input {ref}`static <static-and-dynamic-inputs>` or use {ref}`fold <trace-time-decisions>`.
 - Loops with runtime-dependent length: use `while_loop`; ordinary Python loops are only appropriate when the iteration structure is known at trace time.
 - Mutating closure state: pass state through the function inputs and outputs instead, preferably as registered [pytrees](pytrees.md) for structured state.
 
