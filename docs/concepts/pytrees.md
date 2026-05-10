@@ -4,6 +4,8 @@ Transforms need to walk values. A string is one leaf. A tuple is a container. A 
 
 That container/leaf view is called a pytree. `autoform` uses pytrees so transforms can apply per-leaf logic to user-defined structures.
 
+`autoform` uses [Optree's pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html) for traversal and registration.
+
 ## Why Registration Matters
 
 Without pytree registration, a custom object is opaque. `batch` cannot know which fields are batched. `pullback` cannot route cotangents into the right fields.
@@ -19,22 +21,19 @@ import optree
 import autoform as af
 
 
-treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
-
-
-@treelib.dataclasses.dataclass
+@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
 class State:
     topic: str
     draft: str
 
 
 state = State(topic="dna", draft="short")
-upper = treelib.map(str.upper, state)
+upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 
 assert upper == State(topic="DNA", draft="SHORT")
 ```
 
-That is the canonical pattern: create a namespace-specific `treelib`, then use its dataclass decorator.
+That is the canonical pattern: pass `af.PYTREE_NAMESPACE` to Optree's dataclass decorator.
 
 ## What This Enables
 
