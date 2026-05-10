@@ -1,19 +1,19 @@
 # Why `autoform`
 
-An LM program written in ordinary Python tends to harden around the first way it runs. The rewrite pressure usually shows up as the same few demands:
+An LM program written in ordinary Python often hardens around the first way it runs. Later requirements tend to ask for the same logic in new shapes:
 
-- **Evaluate on 100 inputs**: write a batched loop.
-- **Route prompt-tuning feedback through every LM call**: thread critiques backward by hand.
-- **Run independent calls concurrently**: rewrite with `async def` and `asyncio.gather`, then make every caller async too.
-- **Inspect a bad intermediate value**: wrap each step manually or split the function apart.
+- Evaluate on 100 inputs: write a batched loop.
+- Route prompt-tuning feedback through every LM call: thread critiques backward by hand.
+- Run independent calls concurrently: rewrite with `async def` and `asyncio.gather`.
+- Inspect a bad intermediate value: wrap each step manually or split the function apart.
 
 Each new requirement becomes another version of the same program: batched rewrite, feedback rewrite, async rewrite, debugging rewrite.
 
-`autoform` factors those requirements differently. The function is written once, normally, then different mechanisms wrap the same traced structure:
+`autoform` factors those requirements differently:
 
-- **Trace once**: `af.trace(func)(*example_args)` captures the function as an IR.
-- **Transform the IR**: `batch`, `pullback`, and `sched` each take an IR and produce another IR.
-- **Wrap execution**: `collect` / `inject` capture or replace intermediates; `lm_client` changes provider routing.
+- `af.trace(func)(*example_args)` captures the function as an IR.
+- `batch`, `pullback`, and `sched` transform that IR into another IR.
+- `collect`, `inject`, and `lm_client` wrap execution without changing the function.
 
 The IR transforms compose because their input and output type is the same. The contexts wrap execution without changing the original function.
 
@@ -44,7 +44,7 @@ outputs, (topic_hints,) = transformed.call((topics,), critiques)
 `````
 
 
-`````{tab-item} Manual
+`````{tab-item} Plain Python Rewrite
 ````python
 results = []
 hints = []
@@ -72,28 +72,24 @@ for topic, critique in zip(topics, critiques):
 
 ``````
 
-The manual version is not replaced by a special combined feature. `pullback(ir)` returns an IR. `batch(...)` accepts an IR. The composition is ordinary Python function composition applied to a traced program.
+The rewritten version is not replaced by a special combined feature. `pullback(ir)` returns an IR. `batch(...)` accepts an IR. Composition is ordinary Python function composition applied to a traced program.
 
 ## How This Differs from Other LM Frameworks
 
-- **LangChain / LangGraph**: chain construction and chain execution are unified: a chain object is built and called. `autoform` separates the phases. Tracing produces an inert IR, transforms reshape it, and execution is a later step. The tradeoff is one extra concept, the IR, in exchange for transforms composing by ordinary function composition.
-- **DSPy**: programs are described with signatures and modules. DSPy then uses examples and a metric to search for better instructions, select few-shot demonstrations, or fine-tune model weights, returning a tuned version of the program. `autoform` exposes a traced program as an IR, so feedback, batching, and scheduling are directly composable transforms. The tradeoff is that DSPy provides optimization algorithms; `autoform` provides the substrate for writing and composing transformations.
-- **Outlines / Instructor / Pydantic AI**: the design center is structured output for one LM call. `autoform`'s `lm_schema_call` covers structured output, but the schema call is one node inside a traceable program. That means structured output composes with batching, pullback, and scheduling. If structured output is the whole task, a narrower tool may be the right choice.
+| Framework family | Architectural choice | `autoform` choice |
+| --- | --- | --- |
+| LangChain / LangGraph | Build a chain object and call it. | Separate trace, transform, and execute phases. The extra concept is the IR; the payoff is ordinary composition between transforms. |
+| DSPy | Describe programs with signatures and modules, then use examples and metrics to tune them. | Expose the traced program as IR data, so feedback, batching, and scheduling are directly composable transforms. |
+| Outlines / Instructor / Pydantic AI | Focus on structured output for one LM call. | Put structured output inside a traceable program, so it can compose with batching, pullback, and scheduling. |
 
-## Good Fit
+## Fit
 
-- Agents or multi-step LM pipelines expected to evolve.
-- Prompt optimization where text feedback flows backward through the full program.
-- Batched evaluation over many inputs where the batch form should compose with other transforms.
-- Intermediate-value debugging without splitting the function into a test-only version.
-- Concurrent execution experiments without rewriting the program as async Python.
-
-## Poor Fit
-
-- One-shot scripts with no expectation of reuse.
-- Single-call programs where structured output is the only requirement.
-- One latency-critical request where an abstraction layer is not acceptable.
-- Projects that cannot take on a trace/IR/execute model yet.
+| Good fit | Poor fit |
+| --- | --- |
+| Agents or multi-step LM pipelines are expected to evolve. | The program is a one-shot script. |
+| Text feedback should flow backward through the full program. | Structured output for one LM call is the whole task. |
+| Batched evaluation should compose with other transforms. | One latency-critical request cannot afford another layer. |
+| Debugging or concurrency experiments should not require rewrites. | The project cannot take on a trace/IR/execute model yet. |
 
 Next, read [Getting Started](tutorial/index.md), or go deeper on the model in [Trace, IR, Execute](concepts/trace-ir-execute.md).
 
