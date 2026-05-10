@@ -2,13 +2,13 @@
 
 Tags attach metadata to IR equations while tracing. They do not change execution by themselves; they give later code a way to recognize equations that belong to a logical region.
 
-Create a tag from any hashable value, then activate it with `af.tag(...)`:
+Pass any hashable value to `af.tag(...)`:
 
 ```python
 import autoform as af
 
 
-draft = af.Tag("draft")
+draft = "draft"
 
 
 def program(text: str) -> str:
@@ -58,13 +58,11 @@ assert output == "[world!]"
 assert tagged_prims == ["concat"]
 ```
 
-## `Tag` Values
+## Hashable Values
 
-`Tag(value)` asserts that `value` is hashable because equation tags are stored in a `frozenset`. Strings, integers, tuples of hashable values, and other immutable identifiers work.
+`af.tag(...)` asserts that every tag value is hashable because equation tags are stored in a `frozenset`. Strings, integers, tuples of hashable values, and other immutable identifiers work.
 
-Two plain `Tag` instances compare by their wrapped value: `af.Tag("draft") == af.Tag("draft")`.
-
-For structured tags, wrap a hashable object. A frozen dataclass is usually the most convenient payload:
+For structured tags, use a hashable object directly. A frozen dataclass is usually the most convenient payload:
 
 ```python
 from dataclasses import dataclass
@@ -76,7 +74,5 @@ class Region:
     stage: int
 
 
-draft_region = af.Tag(Region("draft", 1))
+draft_region = Region("draft", 1)
 ```
-
-Do not subclass `Tag`; keep `Tag` as the wrapper around a hashable value.
