@@ -6,7 +6,7 @@ That container/leaf view is called a pytree. `autoform` uses pytrees so transfor
 
 `autoform` uses [Optree's pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html) for traversal and registration.
 
-## Why Registration Matters
+## Registration
 
 Without pytree registration, a custom object is opaque. `batch` cannot know which fields are batched. `pullback` cannot route cotangents into the right fields.
 
@@ -35,7 +35,7 @@ assert upper == State(topic="DNA", draft="SHORT")
 
 That is the canonical pattern: pass `af.PYTREE_NAMESPACE` to [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
-## What This Enables
+## Transform Behavior
 
 Once `State` is a pytree, an IR can accept and return it. Transforms see the leaves:
 

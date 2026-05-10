@@ -1,4 +1,4 @@
-# Define A Custom Transform Rule
+# Define a `custom` Rule
 
 Use [`custom`](../concepts/custom-rules.md) when a block of ordinary Python
 should appear as one primitive boundary in the [IR](../concepts/the-ir.md). Add transform rules for the

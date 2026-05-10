@@ -29,7 +29,7 @@ def bracket(text: str) -> str:
 
 With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform to override.
 
-## A Custom Pushforward Rule
+## `pushforward` Rule
 
 ```python
 @bracket.set_pushforward
@@ -51,7 +51,7 @@ assert tangent == "bracket change: make it direct"
 The pushforward rule receives `(primals, tangents)` and returns
 `(primal_output, tangent_output)`.
 
-## A Custom Pullback Rule
+## `pullback` Rule
 
 ```python
 @bracket.set_pullback
@@ -73,7 +73,7 @@ assert text_feedback == "too decorated via [hello] from hello"
 The pullback rule receives `((primals, output), feedback)` and returns
 feedback with the same shape as the original inputs.
 
-## A Custom Batch Rule
+## `batch` Rule
 
 ```python
 @bracket.set_batch

@@ -1,4 +1,4 @@
-# Vectorize Inputs With `in_axes`
+# Vectorize Inputs with `in_axes`
 
 [`batch`](../concepts/transforms.md) needs to know which inputs are batched and
 which inputs should be reused for every example. That is what `in_axes` describes.
@@ -23,7 +23,7 @@ print(result)
 
 `True` means "this leaf has a batch axis." `False` means "broadcast this leaf."
 
-## Batch A Nested Input
+## Batch a Nested Input
 
 `in_axes` can match a nested [pytree](../concepts/pytrees.md).
 

@@ -203,7 +203,7 @@ agent_ir = af.trace(agent)("question")
 batched_feedback = af.batch(af.pullback(agent_ir))
 ```
 
-See the [tool-use agent recipe](https://autoform.readthedocs.io/en/latest/recipes/tool-use-agent.html)
+See the [Tool-Use Agent recipe](https://autoform.readthedocs.io/en/latest/recipes/tool-use-agent.html)
 for the full version.
 
 ## Reference

@@ -2,7 +2,7 @@
 
 This is the first path through `autoform`: install it, trace one ordinary Python function, run the resulting IR, then apply the core transforms and execution contexts.
 
-## Install
+## Install and Smoke Test
 
 `autoform` requires Python 3.12 or newer.
 
@@ -42,7 +42,7 @@ This is only a provider smoke test. It does not use tracing.
 | Provider authentication error | Set the provider API key expected by LiteLLM, such as `OPENAI_API_KEY` for OpenAI. |
 | Provider model error | Use a model name supported by the configured provider or route through [`litellm.Router`](https://docs.litellm.ai/docs/routing). |
 
-## Trace A Function
+## Trace a Function
 
 Start with an ordinary Python function. This one formats a prompt and makes one LM call:
 
@@ -77,7 +77,7 @@ The resulting IR contains:
 
 The result, `ir`, is the object every [transform](../concepts/transforms.md) consumes.
 
-## Execute The IR
+## Run the IR
 
 The [IR](../concepts/the-ir.md) is the recipe. [Execution](../concepts/trace-ir-execute.md) runs that recipe with real inputs.
 
@@ -157,7 +157,7 @@ batched = af.batch(two_arg_ir, in_axes=(True, False))
 
 That means: batch over the first positional input, reuse the second input for every item.
 
-## Pullback
+## Send Feedback Backward
 
 [`pullback`](../concepts/transforms.md) sends feedback backward through an IR.
 
@@ -201,7 +201,7 @@ Pullback becomes more useful as the program grows. If the IR has several LM call
 
 Cotangent shapes must match output shapes. If the function returns a tuple, pass tuple-shaped feedback. If it returns a [schema](../concepts/schemas.md)-shaped object, pass feedback with the same [pytree](../concepts/pytrees.md) shape.
 
-## Compose Transforms
+## Compose `batch` and `pullback`
 
 The next task combines [`batch`](../concepts/transforms.md) and [`pullback`](../concepts/transforms.md): run prompt-feedback gradients across many inputs.
 
@@ -258,7 +258,7 @@ Order matters:
 
 Every other IR transform composes the same way. `sched(batch(pullback(ir)))` is a real expression. So is `batch(sched(ir))`.
 
-## Structured Results
+## Return Structured Results
 
 Plain `lm_call` returns text. That is fine for prose, but many LM programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
 
@@ -515,7 +515,7 @@ The main conceptual pages are useful when building larger programs:
 | Compose `batch`, `pullback`, and `sched` | [Transforms](../concepts/transforms.md) |
 | Inspect or replace intermediate values | [Intercepts](../concepts/intercepts.md) |
 | Use structured LM outputs | [Schemas](../concepts/schemas.md) |
-| Build a tool-use agent | [Tool-Use Agent](../recipes/tool-use-agent.md) |
+| Build a Tool-Use Agent | [Build a Tool-Use Agent](../recipes/tool-use-agent.md) |
 | Read API names quickly | [Glossary](../reference/glossary.md) |
 
 For exact call signatures, use the [API Reference](../api/index.md).

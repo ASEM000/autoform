@@ -1,4 +1,4 @@
-# Prompt Optimization With Pullback Feedback
+# Optimize Prompts with `pullback` Feedback
 
 Use [`pullback`](../concepts/transforms.md) when feedback on an output should become
 feedback for the inputs that produced it. For prompt work, the input is often an

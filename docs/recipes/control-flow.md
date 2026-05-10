@@ -1,9 +1,9 @@
-# Use Control Flow Inside A Traced Function
+# Use Control Flow Inside a Traced Function
 
 `autoform` [control-flow primitives](../concepts/primitives.md) keep branches and loops visible to the [IR](../concepts/the-ir.md).
 Use them when the branch condition or loop state is part of the traced program.
 
-## Route With `switch`
+## Route with `switch`
 
 ```python
 import autoform as af
@@ -31,7 +31,7 @@ ir = af.trace(route)("brief", "recursion")
 print(ir.call("detailed", "recursion"))
 ```
 
-## Repeat With `while_loop`
+## Repeat with `while_loop`
 
 ```python
 import optree
@@ -63,7 +63,7 @@ print(result)
 
 The loop state is a registered [pytree](../concepts/pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
-## Block Feedback With `stop_gradient`
+## Block Feedback with `stop_gradient`
 
 ```python
 import autoform as af
@@ -85,7 +85,7 @@ print(editable_feedback)
 
 The forward value of `locked` is unchanged. Feedback for that input is blocked.
 
-## Force Ordering With `depends`
+## Force Ordering with `depends`
 
 ```python
 import autoform as af
