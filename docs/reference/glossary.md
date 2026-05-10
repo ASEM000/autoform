@@ -31,7 +31,7 @@
 | `Tag` | A hashable metadata object attached to equations during tracing. |
 | `tag` | A context manager that activates one or more `Tag` instances for equations created in its block. |
 | Trace | The phase that runs a Python function once with placeholders and records `autoform` primitive calls as IR equations. |
-| Transform | A function that consumes an IR and returns another IR. The five core IR transforms are `batch`, `pushforward`, `pullback`, `sched`, and `dce`. |
+| Transform | A function that consumes an IR and returns another IR. Current IR transforms include `batch`, `pushforward`, `pullback`, `sched`, and `dce`. |
 
 ## Internal / IR Machinery
 

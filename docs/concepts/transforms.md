@@ -8,9 +8,23 @@ IR -> IR
 
 The output is another executable IR. That one property is what makes composition ordinary Python function composition.
 
-## The Five IR Transforms
+| Transform | Returned IR expects | Returned IR produces | Use when |
+| --- | --- | --- | --- |
+| `batch(ir)` | Batched leaves where `in_axes=True`; broadcast leaves where `in_axes=False`. | Batched outputs. | Run the same program over many examples. |
+| `pushforward(ir)` | Original inputs plus input tangents. | Original output plus output tangent. | Push a proposed input change forward. |
+| `pullback(ir)` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
+| `sched(ir)` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
+| `dce(ir)` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the outputs you need. |
 
-**`batch(ir, /, *, in_axes=True) -> IR`**
+## IR Transforms
+
+``````{tab-set}
+
+`````{tab-item} batch
+
+```python
+batch(ir, /, *, in_axes=True) -> IR
+```
 
 `batch` vectorizes an IR over one or more input leaves. `in_axes` is a bool [pytree](pytrees.md) matching the input structure: `True` means batched, `False` means broadcast.
 
@@ -19,7 +33,13 @@ batched = af.batch(ir)
 outputs = batched.call(["DNA", "gravity", "recursion"])
 ```
 
-**`pushforward(ir, /) -> IR`**
+`````
+
+`````{tab-item} pushforward
+
+```python
+pushforward(ir, /) -> IR
+```
 
 `pushforward` builds a forward-mode-style IR. The transformed IR takes primals and tangents, then returns output primals and output tangents.
 
@@ -28,7 +48,13 @@ pf = af.pushforward(ir)
 output, tangent = pf.call(("topic",), ("make it concrete",))
 ```
 
-**`pullback(ir, /) -> IR`**
+`````
+
+`````{tab-item} pullback
+
+```python
+pullback(ir, /) -> IR
+```
 
 `pullback` builds a reverse-mode-style IR. In `autoform`, cotangents are text feedback. The transformed IR takes the original inputs plus an output cotangent, then returns the output and input cotangents.
 
@@ -37,7 +63,13 @@ pb = af.pullback(ir)
 output, input_feedback = pb.call(("topic",), "too abstract")
 ```
 
-**`sched(ir, /, *, cond=None) -> IR`**
+`````
+
+`````{tab-item} sched
+
+```python
+sched(ir, /, *, cond=None) -> IR
+```
 
 `sched` groups independent equations into parallel stages. The resulting IR can
 still run with `.call(...)`, but `.acall(...)` is where concurrent stages become
@@ -50,7 +82,13 @@ scheduled = af.sched(ir)
 result = asyncio.run(scheduled.acall("topic"))
 ```
 
-**`dce(ir, /, *, out_used=None) -> IR`**
+`````
+
+`````{tab-item} dce
+
+```python
+dce(ir, /, *, out_used=None) -> IR
+```
 
 `dce` removes equations that do not contribute to the selected output leaves.
 
@@ -58,6 +96,10 @@ result = asyncio.run(scheduled.acall("topic"))
 trimmed = af.dce(ir)
 result = trimmed.call("topic")
 ```
+
+`````
+
+``````
 
 ## Composition
 
