@@ -8,12 +8,12 @@ The name matters because [transforms](transforms.md) dispatch on primitive ident
 
 Every primitive can have rules for different phases and transforms:
 
-- **`impl_rules`**: synchronous execution.
-- **`abstract_rules`**: output-shape and output-type inference while tracing.
-- **`batch_rules`**: vectorized behavior for `batch`.
-- **`push_rules`**: forward-mode behavior for `pushforward`.
-- **`pull_fwd_rules`**: the forward sweep for `pullback`.
-- **`pull_bwd_rules`**: the backward sweep for `pullback`.
+- `impl_rules`: synchronous execution.
+- `abstract_rules`: output-shape and output-type inference while tracing.
+- `batch_rules`: vectorized behavior for `batch`.
+- `push_rules`: forward-mode behavior for `pushforward`.
+- `pull_fwd_rules`: the forward sweep for `pullback`.
+- `pull_bwd_rules`: the backward sweep for `pullback`.
 
 The split pullback rules matter: the forward sweep records the values needed later, and the backward sweep uses those residuals plus the cotangent to produce input cotangents.
 
