@@ -1,28 +1,25 @@
 # Tags
 
-Tags attach structured metadata to IR equations while tracing. They do not change execution by themselves; they give later code a way to recognize equations that belong to a logical region.
+Tags attach metadata to IR equations while tracing. They do not change execution by themselves; they give later code a way to recognize equations that belong to a logical region.
 
-Define a hashable `Tag` subclass, then activate tag instances with `af.tag(...)`:
+Create a tag from any hashable value, then activate it with `af.tag(...)`:
 
 ```python
-from dataclasses import dataclass
 import autoform as af
 
 
-@dataclass(frozen=True)
-class Region(af.Tag):
-    name: str
+draft = af.Tag("draft")
 
 
 def program(text: str) -> str:
-    with af.tag(Region("draft")):
+    with af.tag(draft):
         text = af.concat(text, "!")
     return af.format("[{}]", text)
 
 
 ir = af.trace(program)("seed")
-assert Region("draft") in ir.ir_eqns[0].tags
-assert Region("draft") not in ir.ir_eqns[1].tags
+assert draft in ir.ir_eqns[0].tags
+assert draft not in ir.ir_eqns[1].tags
 ```
 
 Nested tag blocks accumulate tags. Code outside the block does not receive the tags from the block.
@@ -32,14 +29,54 @@ Nested tag blocks accumulate tags. Code outside the block does not receive the t
 `sched` accepts a `cond` callback that receives each IR equation. Tags give that callback a stable way to select only part of a traced program.
 
 ```python
-scheduled = af.sched(ir, cond=lambda ir_eqn: Region("draft") in ir_eqn.tags)
+scheduled = af.sched(ir, cond=lambda ir_eqn: draft in ir_eqn.tags)
 assert scheduled.call("world") == "[world!]"
 ```
 
-Tags are also visible when manually stepping through an IR. See [Walk](walk.md) for the advanced execution interface.
+## Use Tags With `walk`
+
+[Walk](walk.md) lets you step through an IR equation by equation. Tags are available on each yielded equation, so a debugger or custom runner can act on tagged regions without guessing from primitive names or source order.
+
+```python
+def run_and_record_tagged_prims(ir, text: str):
+    tagged_prims = []
+    gen = ir.walk(text)
+    ir_eqn, in_values = next(gen)
+
+    while ir_eqn is not None:
+        if draft in ir_eqn.tags:
+            tagged_prims.append(ir_eqn.prim.name)
+        out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+        ir_eqn, in_values = gen.send(out_values)
+
+    return in_values, tagged_prims
+
+
+output, tagged_prims = run_and_record_tagged_prims(ir, "world")
+
+assert output == "[world!]"
+assert tagged_prims == ["concat"]
+```
 
 ## Tag Class Rules
 
-`Tag` itself cannot be instantiated directly. Subclasses must be hashable because equation tags are stored in a `frozenset`. A frozen dataclass is usually the most convenient shape.
+`Tag(value)` asserts that `value` is hashable because equation tags are stored in a `frozenset`. Strings, integers, tuples of hashable values, and other immutable identifiers work.
 
-Equality is whatever your subclass defines. A frozen dataclass compares by fields; a plain class compares by identity unless you implement equality.
+Two plain `Tag` instances compare by their wrapped value: `af.Tag("draft") == af.Tag("draft")`.
+
+For structured tags, wrap a hashable object. A frozen dataclass is usually the most convenient payload:
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Region:
+    name: str
+    stage: int
+
+
+draft_region = af.Tag(Region("draft", 1))
+```
+
+Do not subclass `Tag`; keep `Tag` as the wrapper around a hashable value.

@@ -14,7 +14,7 @@ pytrees
 schemas
 intercepts
 custom-rules
-tags
 walk
+tags
 fold
 ```
