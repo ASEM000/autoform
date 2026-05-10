@@ -95,7 +95,7 @@ The right column is not a special combined feature. `pullback(ir)` returns an IR
 - You are optimizing one latency-critical request where an abstraction layer is not acceptable.
 - Your project cannot take on a trace/IR/execute model yet.
 
-Next, read [Getting Started](../tutorial/index.md), or go deeper on the model in [Trace, IR, Execute](trace-ir-execute.md).
+Next, read [Getting Started](tutorial/index.md), or go deeper on the model in [Trace, IR, Execute](concepts/trace-ir-execute.md).
 
 ```{warning}
 API may change before a stable release.

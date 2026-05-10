@@ -5,7 +5,6 @@ These pages explain the mental model behind `autoform`: trace once, transform th
 ```{toctree}
 :maxdepth: 2
 
-why-autoform
 trace-ir-execute
 the-ir
 primitives
