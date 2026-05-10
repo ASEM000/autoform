@@ -19,7 +19,7 @@ from __future__ import annotations
 import functools as ft
 import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
@@ -76,7 +76,6 @@ __all__ = [
     "TraceInterpreter",
     "active_interpreter",
     "using_interpreter",
-    "Tag",
     "active_tags",
     "tag",
     # ir building and execution
@@ -192,66 +191,22 @@ class Prim:
 
 
 # ==================================================================================================
-# TAG
+# TAGS
 # ==================================================================================================
 
 
-class Tag:
-    """Equation tag.
-
-    The value must be hashable because tags are stored in a ``frozenset``.
-    Do not subclass ``Tag``; wrap a hashable payload instead.
-
-    Example:
-        >>> import autoform as af
-        >>> draft = af.Tag("draft")
-        >>> with af.tag(draft):
-        ...     ir = af.trace(lambda x: af.concat(x, "!"))("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({draft})
-        True
-
-    Structured example:
-        >>> from dataclasses import dataclass
-        >>> import autoform as af
-        >>> @dataclass(frozen=True)
-        ... class Region:
-        ...     name: str
-        ...     stage: int
-        >>> region = af.Tag(Region("draft", 1))
-        >>> with af.tag(region):
-        ...     ir = af.trace(lambda x: af.concat(x, "!"))("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({region})
-        True
-    """
-
-    __slots__ = ["value"]
-
-    def __init__(self, value: Any, /):
-        try:
-            hash(value)
-        except TypeError:
-            assert False, f"Tag value must be hashable, got {value!r}"
-        self.value = value
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.value!r})"
-
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other) and self.value == other.value
-
-    def __hash__(self) -> int:
-        return hash((type(self), self.value))
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        assert False, "Tag does not support subclassing; wrap a hashable value with Tag(...)"
+def assert_hashable_tag(value: Any, /) -> None:
+    try:
+        hash(value)
+    except TypeError:
+        assert False, f"Tags must be hashable, got {value!r}"
 
 
-active_tags: ContextVar[frozenset[Tag]] = ContextVar("active_tags", default=frozenset())
+active_tags: ContextVar[frozenset[Hashable]] = ContextVar("active_tags", default=frozenset())
 
 
 @contextmanager
-def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
+def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
     """Attach tags to equations at trace time.
 
     Equations built inside nested ``tag`` blocks receive the tags from all active
@@ -259,21 +214,20 @@ def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
 
     Example:
         >>> import autoform as af
-        >>> outer = af.Tag("outer")
-        >>> inner = af.Tag("inner")
         >>> def program(x):
-        ...     with af.tag(outer):
+        ...     with af.tag("outer"):
         ...         head = af.concat(x, "!")
-        ...         with af.tag(inner):
+        ...         with af.tag("inner"):
         ...             return af.concat(head, "?")
         >>> ir = af.trace(program)("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({outer})
+        >>> ir.ir_eqns[0].tags == frozenset({"outer"})
         True
-        >>> ir.ir_eqns[1].tags == frozenset({outer, inner})
+        >>> ir.ir_eqns[1].tags == frozenset({"outer", "inner"})
         True
     """
 
-    assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
+    for value in tags:
+        assert_hashable_tag(value)
     token = active_tags.set(active_tags.get() | frozenset(tags))
     try:
         yield tags
@@ -295,16 +249,17 @@ class IREqn:
         in_ir_tree: Tree,
         out_ir_tree: Tree,
         params: dict[str, Any] | None = None,
-        tags: frozenset[Tag] = frozenset(),
+        tags: frozenset[Hashable] = frozenset(),
     ):
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
         assert isinstance(tags, frozenset)
+        for value in tags:
+            assert_hashable_tag(value)
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
-        assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
         self.tags = tags
 
     def bind(self, in_tree: Tree, /, **params):

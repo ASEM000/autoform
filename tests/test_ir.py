@@ -29,12 +29,12 @@ class CostTag:
     pass
 
 
-def tag_label(name: str) -> af.Tag:
-    return af.Tag(Label(name))
+def tag_label(name: str) -> Label:
+    return Label(name)
 
 
-def cost_tag() -> af.Tag:
-    return af.Tag(CostTag())
+def cost_tag() -> CostTag:
+    return CostTag()
 
 
 class TestBuildIR:
@@ -250,23 +250,14 @@ class TestTags:
             cost_tag(),
         })
 
-    def test_tag_rejects_non_tags(self):
-        with pytest.raises(AssertionError, match="Expected Tag instances"):
-            with af.tag("draft"):
-                pass
+    def test_tag_accepts_hashable_values(self):
+        with af.tag("draft", 1) as active:
+            assert active == ("draft", 1)
+            assert af.core.active_tags.get() == frozenset({"draft", 1})
 
-    def test_tag_base_accepts_hashable_value(self):
-        assert af.Tag("draft") == af.Tag("draft")
-        assert af.Tag("draft") != af.Tag("final")
-
-    def test_tag_base_rejects_unhashable_value(self):
-        with pytest.raises(AssertionError, match="Tag value must be hashable"):
-            af.Tag(["draft"])
-
-    def test_tag_rejects_subclassing(self):
-        with pytest.raises(AssertionError, match="Tag does not support subclassing"):
-
-            class Region(af.Tag):
+    def test_tag_rejects_unhashable_value(self):
+        with pytest.raises(AssertionError, match="Tags must be hashable"):
+            with af.tag(["draft"]):
                 pass
 
     def test_tag_unions_active_tags_and_restores_on_exit(self):
@@ -304,9 +295,7 @@ class TestTags:
             return af.core.TypedAVal(str)
 
         def impl_probe(x):
-            names = sorted(
-                tag.value.name for tag in af.core.active_tags.get() if isinstance(tag.value, Label)
-            )
+            names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))
             return f"{','.join(names)}|{x}"
 
         af.core.abstract_rules.set(probe_p, abstract_probe)
@@ -347,7 +336,7 @@ class TestTags:
         lines = repr(af.trace(program)("seed")).splitlines()
 
         assert "tags=" not in lines[1]
-        assert "tags={Tag(CostTag()), Tag(Label(name='draft'))}" in lines[2]
+        assert "tags={CostTag(), Label(name='draft')}" in lines[2]
 
     def test_calling_existing_ir_while_tracing_unions_runtime_and_equation_tags(self):
         def inner_program(x):

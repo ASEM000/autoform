@@ -28,8 +28,8 @@
 | `sched` | An IR transform that groups independent equations for concurrent async execution. |
 | Schema | A pytree of schema leaves such as `Str`, `Float`, and `Enum`, used by `lm_schema_call` for structured output. |
 | Static argument | An input leaf fixed at trace time by `af.trace(func, static=...)`. The `static` value is a bool pytree matching positional input structure. |
-| `Tag` | A hashable metadata object attached to equations during tracing. |
-| `tag` | A context manager that activates one or more `Tag` instances for equations created in its block. |
+| tag value | A hashable metadata value attached to equations during tracing. |
+| `tag` | A context manager that activates one or more tag values for equations created in its block. |
 | Trace | The phase that runs a Python function once with placeholders and records `autoform` primitive calls as IR equations. |
 | Transform | A function that consumes an IR and returns another IR. Current IR transforms include `batch`, `pushforward`, `pullback`, `sched`, and `dce`. |
 
