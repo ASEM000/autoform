@@ -197,7 +197,7 @@ for the full version.
 - [Getting Started](https://autoform.readthedocs.io/en/latest/tutorial/)
 - [Concepts](https://autoform.readthedocs.io/en/latest/concepts/)
 - [Recipes](https://autoform.readthedocs.io/en/latest/recipes/)
-- [API Reference](https://autoform.readthedocs.io/en/latest/api.html)
+- [API Reference](https://autoform.readthedocs.io/en/latest/api/)
 - [Glossary](https://autoform.readthedocs.io/en/latest/reference/glossary.html)
 
 > Early development: API may change before a stable release.
