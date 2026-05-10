@@ -1,5 +1,11 @@
 # Walk
 
+```{admonition} Advanced
+:class: info
+
+Use this when you need manual equation stepping for debugging, visualization, or a custom runner. For ordinary execution, prefer `ir.call(...)` or `await ir.acall(...)`.
+```
+
 `ir.walk(...)` is the manual execution interface on the object returned by `af.trace(...)`. It exposes the same equation stream that `.call(...)` and `.acall(...)` execute for you.
 
 Use it when you are building a debugger, visualizer, custom runner, or test harness that needs to observe or replace individual equation results. For ordinary execution, use `ir.call(...)` or `await ir.acall(...)`.
