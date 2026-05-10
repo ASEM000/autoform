@@ -33,7 +33,7 @@
 | Trace | The phase that runs a Python function once with placeholders and records `autoform` primitive calls as IR equations. |
 | Transform | A function that consumes an IR and returns another IR. Current IR transforms include `batch`, `pushforward`, `pullback`, `sched`, and `dce`. |
 
-## Internal / IR Machinery
+## Internal IR Machinery
 
 These names are useful when reading internals or debugging a transform. They are
 not part of the everyday user surface.

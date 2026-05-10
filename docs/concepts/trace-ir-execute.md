@@ -111,7 +111,7 @@ optimized_batch = af.batch(af.pullback(ir))
 
 ## Execution Axis
 
-Execution mode is its own axis:
+Execution mode is chosen at the IR boundary:
 
 - `ir.call(...)` runs synchronously.
 - `await ir.acall(...)` runs asynchronously.
