@@ -16,7 +16,7 @@ pip install git+https://github.com/ASEM000/autoform.git
 `autoform` uses [LiteLLM](https://docs.litellm.ai/) for provider calls. For OpenAI, set `OPENAI_API_KEY` and use an OpenAI model name:
 
 ```bash
-# set your provider key
+# set the provider key
 export OPENAI_API_KEY="..."
 ```
 
@@ -42,7 +42,7 @@ This is only a provider smoke test. It does not use tracing.
 | Provider authentication error | Set the provider API key expected by LiteLLM, such as `OPENAI_API_KEY` for OpenAI. |
 | Provider model error | Use a model name supported by the configured provider or route through [`litellm.Router`](https://docs.litellm.ai/docs/routing). |
 
-## Trace Your First Function
+## Trace A Function
 
 Start with an ordinary Python function. This one formats a prompt and makes one LM call:
 
@@ -114,7 +114,7 @@ Use `.call(...)` from synchronous code. Use `.acall(...)` when the caller is alr
 
 ## Batch Inputs
 
-You traced `explain` once. Now run the same IR over several topics.
+The `explain` function has been traced once. The same IR can now run over several topics.
 
 The direct Python version is a loop:
 
@@ -123,7 +123,7 @@ The direct Python version is a loop:
 outputs = [ir.call(topic) for topic in ["DNA", "gravity", "recursion"]]
 ```
 
-That works, but the loop is not itself an IR. [`batch`](../concepts/transforms.md) gives you an IR that accepts batched inputs:
+That works, but the loop is not itself an IR. [`batch`](../concepts/transforms.md) returns an IR that accepts batched inputs:
 
 ```python
 import autoform as af
@@ -143,8 +143,8 @@ for topic, output in zip(topics, outputs):
 
 The result is equivalent to the list comprehension, but the representation is different:
 
-- the list comprehension gives you a Python list of results;
-- `af.batch(ir)` gives you a transformed IR that can be transformed again.
+- the list comprehension returns a Python list of results;
+- `af.batch(ir)` returns a transformed IR that can be transformed again.
 
 That second point is the reason to use `batch` in `autoform`. The batched form can be composed with `pullback`, `sched`, or other IR transforms.
 
@@ -163,9 +163,9 @@ That means: batch over the first positional input, reuse the second input for ev
 
 The situation is:
 
-- you have an output;
-- you have a critique of that output;
-- you want feedback for the inputs that contributed to it.
+- there is an output;
+- there is a critique of that output;
+- the goal is feedback for the inputs that contributed to it.
 
 In autodiff terms, that critique is a [cotangent](../reference/glossary.md). In `autoform`, cotangents are usually text.
 
@@ -203,9 +203,9 @@ Cotangent shapes must match output shapes. If the function returns a tuple, pass
 
 ## Compose Transforms
 
-You have [`batch`](../concepts/transforms.md). You have [`pullback`](../concepts/transforms.md). How do you do both at once: run prompt-feedback gradients across many inputs?
+The next task combines [`batch`](../concepts/transforms.md) and [`pullback`](../concepts/transforms.md): run prompt-feedback gradients across many inputs.
 
-Without composition, you own the loop:
+Without composition, the loop is manual:
 
 ```python
 # manual version: run one pullback per input
@@ -220,14 +220,14 @@ for topic, critique in zip(topics, critiques):
     hints.append(topic_hint)
 ```
 
-That is the glue you would actually write: pair every input with its critique, run the backward pass, unpack the one input cotangent, and keep the result aligned with the original batch.
+That glue pairs every input with its critique, runs the backward pass, unpacks the one input cotangent, and keeps the result aligned with the original batch.
 
 ```python
 # compose the transforms instead
 composed = af.batch(af.pullback(ir))
 ```
 
-*`pullback` returned an IR. `batch` accepts an IR. So `batch(pullback(ir))` is just function composition, and there was nothing special we had to add for them to compose.*
+*`pullback` returned an IR. `batch` accepts an IR. So `batch(pullback(ir))` is just function composition, and no special combined mode was added for the composition.*
 
 Run it:
 
@@ -336,9 +336,9 @@ The field feedback is summarized into a prompt-feedback request for the input me
 
 ## Inspect Intermediates
 
-Tracing gives you an IR, but debugging often starts with a smaller question: what did the middle of the program produce?
+Tracing produces an IR, but debugging often starts with a smaller question: what did the middle of the program produce?
 
-Put a [`checkpoint`](../concepts/intercepts.md) at the value you want to inspect:
+Put a [`checkpoint`](../concepts/intercepts.md) at the value to inspect:
 
 ```python
 import autoform as af
@@ -382,7 +382,7 @@ print(captured["step1"])
 
 The captured value is a list because the same key can be reached more than once. In this function there is one `step1` value per run.
 
-Use [`inject`](../concepts/intercepts.md) when you want to replace an intermediate and keep the rest of the IR unchanged:
+Use [`inject`](../concepts/intercepts.md) to replace an intermediate and keep the rest of the IR unchanged:
 
 ```python
 # replace step1 only for this execution
@@ -493,11 +493,11 @@ fast_batch = af.sched(af.batch(ir))
 fast_feedback = af.sched(af.batch(af.pullback(ir)))
 ```
 
-Custom primitives need matching async behavior when they should run under `acall`. If you add custom rules, define the async rule alongside the synchronous rule so scheduled async execution does the same work. See [Custom Rules](../concepts/custom-rules.md).
+Custom primitives need matching async behavior when they should run under `acall`. When custom rules are added, define the async rule alongside the synchronous rule so scheduled async execution does the same work. See [Custom Rules](../concepts/custom-rules.md).
 
 ## Next Steps
 
-You have seen the core loop:
+The core loop is now visible:
 
 - write an LM program as ordinary Python;
 - trace it into an IR;
@@ -506,7 +506,7 @@ You have seen the core loop:
 - inspect or replace intermediates with `collect` and `inject`;
 - return structured values with `lm_schema_call`.
 
-The main conceptual pages are useful once you start building larger programs:
+The main conceptual pages are useful when building larger programs:
 
 | Need | Go to |
 | --- | --- |

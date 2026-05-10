@@ -8,7 +8,7 @@ Use custom rules when a function boundary needs transform-specific behavior. Mos
 
 Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
 
-Reach for `@af.custom` when you need one of these:
+Reach for `@af.custom` when one of these applies:
 
 - a sub-function should be treated as an atomic boundary by a transform;
 - a domain-specific rule is more correct than the default decomposition;
@@ -27,7 +27,7 @@ def bracket(text: str) -> str:
     return af.format("[{}]", text)
 ```
 
-With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform you want to override.
+With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform to override.
 
 ## A Custom Pushforward Rule
 
@@ -105,7 +105,7 @@ The wrapper exposes three sync/async pairs:
 
 The pullback hook overrides the backward sweep. The forward sweep still records the primal output and residuals needed by the backward rule.
 
-Sync and async registrations are independent. If you register only `set_batch`, then `af.batch(ir).call(...)` uses your rule, while `await af.batch(ir).acall(...)` may use the default async behavior. Register both sides when both execution modes need the same custom semantics.
+Sync and async registrations are independent. If only `set_batch` is registered, then `af.batch(ir).call(...)` uses that rule, while `await af.batch(ir).acall(...)` may use the default async behavior. Register both sides when both execution modes need the same custom semantics.
 
 ## Caveat
 

@@ -21,24 +21,15 @@ program transforms around it.*
 pip install git+https://github.com/ASEM000/autoform.git
 ```
 
-Set provider credentials for the LM client you use. For OpenAI through [LiteLLM](https://docs.litellm.ai/):
+Set provider credentials for the active LM client. For OpenAI through [LiteLLM](https://docs.litellm.ai/):
 
 ```bash
 export OPENAI_API_KEY=...
 ```
 
-## Why
-
-An LM program written as ordinary Python tends to grow a second implementation
-for each new execution concern: batching, feedback, concurrency, debugging, or
-provider routing.
-
-`autoform` keeps those concerns outside the function. It records the function
-once as an IR, then applies transforms and execution contexts around that
-recorded program. The quickstart shows the split: write normal Python, trace it
-once, then decide how to transform or run it.
-
 ## Quickstart
+
+The quickstart writes one function, traces it once, then reuses the same IR in a few ways.
 
 ```python
 import autoform as af
@@ -58,13 +49,19 @@ answer = ir.call("recursion")
 print(answer)
 ```
 
+Expected result: one paragraph about recursion.
+
 Batch the same program without rewriting `explain`:
 
 ```python
 # batch vectorizes the original ir over the input leaf
 topics = ["recursion", "gravity", "memoization"]
 answers = af.batch(ir).call(topics)
+
+assert len(answers) == len(topics)
 ```
+
+The result is one answer per topic.
 
 Send output feedback backward to the original input:
 
@@ -72,7 +69,11 @@ Send output feedback backward to the original input:
 # pullback returns the output and feedback for the original inputs
 pb_ir = af.pullback(ir)
 answer, (topic_hint,) = pb_ir.call(("recursion",), "too abstract")
+
+print(topic_hint)
 ```
+
+Expected result: text feedback for the input topic.
 
 Compose both:
 
@@ -83,10 +84,23 @@ critiques = ["too abstract", "too terse", "needs an example"]
 
 composed = af.batch(af.pullback(ir))
 answers, (topic_hints,) = composed.call((topics,), critiques)
+
+assert len(topic_hints) == len(topics)
 ```
 
 That last line is the core design: `pullback(ir)` returns an IR, and `batch`
 accepts an IR.
+
+## Why
+
+An LM program written as ordinary Python tends to grow a second implementation
+for each new execution concern: batching, feedback, concurrency, debugging, or
+provider routing.
+
+`autoform` keeps those concerns outside the function. It records the function
+once as an IR, then applies transforms and execution contexts around that
+recorded program. The quickstart shows the split: write normal Python, trace it
+once, then decide how to transform or run it.
 
 ## Composition
 
@@ -135,8 +149,8 @@ flowchart TD
     example --> combine
 ```
 
-There is no `async def` in `compare`. Use `.call(...)` when you want a sync
-run and `.acall(...)` when you want an async run.
+There is no `async def` in `compare`. Use `.call(...)` for a sync run and
+`.acall(...)` for an async run.
 
 ## Debugging
 

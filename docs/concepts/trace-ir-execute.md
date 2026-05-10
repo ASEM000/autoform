@@ -24,7 +24,7 @@ def label(topic: str) -> str:
 ir = af.trace(label)("DNA")
 ```
 
-The argument `"DNA"` is not the real input you intend to run forever. It is a shape/type witness. `trace` uses it to build placeholder input variables with the right Python leaf types, then runs the function body once under the tracing interpreter. See [Tracing Semantics](tracing-semantics.md) for static and dynamic input rules.
+The argument `"DNA"` is not the real input for later runs. It is a shape/type witness. `trace` uses it to build placeholder input variables with the right Python leaf types, then runs the function body once under the tracing interpreter. See [Tracing Semantics](tracing-semantics.md) for static and dynamic input rules.
 
 During that run:
 
@@ -36,7 +36,7 @@ When the path depends on runtime data, use explicit [control-flow primitives](pr
 
 ## The IR
 
-An IR is the recorded program. It has input variables, equations, and output variables. You usually do not import or construct the IR classes directly; you get an IR from `af.trace(...)`.
+An IR is the recorded program. It has input variables, equations, and output variables. Most code does not import or construct the IR classes directly; `af.trace(...)` returns the IR.
 
 The example above records this logical structure:
 
@@ -83,7 +83,7 @@ The original function was not written as `async def`. Execution mode is chosen a
 
 ## Transform
 
-A transform is a function from IR to IR. Given one traced program, you can create several transformed versions without re-running `label`:
+A transform is a function from IR to IR. Given one traced program, several transformed versions can be created without re-running `label`:
 
 ```python
 batched = af.batch(ir)
@@ -110,7 +110,7 @@ Execution mode is its own axis:
 - `af.sched(ir)` returns a scheduled IR where async execution is usually the useful path, because independent equations can run concurrently.
 - `acall` is available even without `sched`, and `call` is available even after `sched`.
 
-The choice is made where you run the IR, not where you define the function.
+The choice is made where the IR runs, not where the function is defined.
 Use `.call(...)` for sync execution and `.acall(...)` for async execution.
 
 ```{mermaid}

@@ -1,6 +1,6 @@
 # Debug Intermediate Values
 
-Use [`checkpoint`](../concepts/intercepts.md) for values you may want to inspect
+Use [`checkpoint`](../concepts/intercepts.md) for values that may need inspection
 or replace while running the same IR.
 
 ```python

@@ -1,6 +1,6 @@
 # Tracing Semantics
 
-At trace time, your function runs once with placeholder values for every dynamic input. Operations that hit [`autoform` primitives](primitives.md) are recorded as [IR equations](the-ir.md). Everything else is ordinary Python and runs immediately.
+At trace time, the function runs once with placeholder values for every dynamic input. Operations that hit [`autoform` primitives](primitives.md) are recorded as [IR equations](the-ir.md). Everything else is ordinary Python and runs immediately.
 
 That rule explains most tracing surprises.
 
@@ -104,7 +104,7 @@ def noisy(text: str) -> str:
     return prompt
 ```
 
-Use [checkpoints](intercepts.md) when you want execution-time diagnostics:
+Use [checkpoints](intercepts.md) when execution-time diagnostics are needed:
 
 ```python
 def inspectable(text: str) -> str:

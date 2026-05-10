@@ -1,6 +1,6 @@
 # Schemas
 
-An `autoform` schema is a Python instance that describes the structured value you want from an LM. It is instance-first: you build a value-shaped schema, not a separate output class definition.
+An `autoform` schema is a Python instance that describes the structured value expected from an LM. It is instance-first: the schema is a value shape, not a separate output class definition.
 
 ```python
 answer_schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
@@ -52,7 +52,7 @@ The schema is the instance `decision_schema`, not the class `Decision`.
 
 ## Calling With A Schema
 
-`lm_schema_call` uses the active LM client. By default, that is [LiteLLM's completion API](https://docs.litellm.ai/docs/completion), so pass a model name that your environment is configured to use. For routing, retries, aliases, or fallback chains, install a [`litellm.Router`](https://docs.litellm.ai/docs/routing) with [`af.lm_client(...)`](../recipes/litellm-config.md).
+`lm_schema_call` uses the active LM client. By default, that is [LiteLLM's completion API](https://docs.litellm.ai/docs/completion), so pass a model name configured in the active environment. For routing, retries, aliases, or fallback chains, install a [`litellm.Router`](https://docs.litellm.ai/docs/routing) with [`af.lm_client(...)`](../recipes/litellm-config.md).
 
 ```python
 import autoform as af

@@ -35,7 +35,7 @@ assert scheduled.call("world") == "[world!]"
 
 ## Use Tags With `walk`
 
-[Walk](walk.md) lets you step through an IR equation by equation. Tags are available on each yielded equation, so a debugger or custom runner can act on tagged regions without guessing from primitive names or source order.
+[Walk](walk.md) steps through an IR equation by equation. Tags are available on each yielded equation, so a debugger or custom runner can act on tagged regions without guessing from primitive names or source order.
 
 ```python
 def run_and_record_tagged_prims(ir, text: str):
