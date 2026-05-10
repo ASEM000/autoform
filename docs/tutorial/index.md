@@ -277,7 +277,7 @@ class Summary:
     confidence: float
 ```
 
-That two-line pattern, the decorator plus `namespace=af.PYTREE_NAMESPACE`, registers the dataclass as an `autoform` [pytree](../concepts/pytrees.md). The schema is an instance of that class:
+The `namespace=af.PYTREE_NAMESPACE` argument registers `Summary` as an `autoform` [pytree](../concepts/pytrees.md). The schema is an instance of that class:
 
 ```python
 # build schema leaves first so the schema instance stays compact
@@ -432,9 +432,9 @@ There is no `async def` in `compare`. The first two calls read only `topic`, so 
 
 ```{mermaid}
 flowchart TD
-    topic["topic"] --> explain["LM: explain"]
-    topic --> example["LM: example"]
-    explain --> combine["LM: combine"]
+    topic[/topic/] --> explain[["LM: explain"]]
+    topic --> example[["LM: example"]]
+    explain --> combine[["LM: combine"]]
     example --> combine
 ```
 

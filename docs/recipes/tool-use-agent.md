@@ -4,14 +4,15 @@ Build an agent as one traced function, then use IR transforms around it. The age
 
 ```{mermaid}
 flowchart TD
-    Q["question"] --> I["initial State"]
-    I --> C["cond_ir"]
-    C --> B["body_ir"]
-    B --> D["LM decision"]
-    D --> S["switch tool"]
+    Q[/question/] --> I[(State)]
+    I --> C{"continue?"}
+    C -- yes --> B["body_ir"]
+    B --> D{"tool?"}
+    D -- search --> S["search branch"]
     S --> H["new history"]
     H --> C
-    C --> R["result"]
+    D -- done --> R[/result/]
+    C -- no --> R
 ```
 
 ## Code
@@ -25,12 +26,8 @@ from urllib.request import Request, urlopen
 import autoform as af
 
 
-# use the same pytree namespace as autoform
-treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
-
-
 # decision is the structured output returned by the lm
-@treelib.dataclasses.dataclass
+@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
 class Decision:
     tool: str
     args: str
@@ -39,7 +36,7 @@ class Decision:
 
 
 # state is the value carried through the loop
-@treelib.dataclasses.dataclass
+@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
 class State:
     history: str
     result: str

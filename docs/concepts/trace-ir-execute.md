@@ -115,17 +115,17 @@ Use `.call(...)` for sync execution and `.acall(...)` for async execution.
 
 ```{mermaid}
 flowchart TD
-    F["Python func"] --> T["trace(func)(...)"]
-    T --> IR["IR"]
+    F([Python func]) --> T["trace(func)(...)"]
+    T --> IR[(IR)]
     IR --> B["batch"]
     IR --> P["pullback"]
     IR --> S["sched"]
-    B --> IR2["IR'"]
+    B --> IR2[(transformed IR)]
     P --> IR2
     S --> IR2
     IR2 --> C[".call(...)"]
-    IR2 --> A["await .acall(...)"]
-    C --> O["output"]
+    IR2 --> A[".acall(...)"]
+    C --> O[/output/]
     A --> O
 ```
 
