@@ -84,7 +84,7 @@ The rewritten version is not replaced by a special combined feature. `pullback(i
 | Microsoft Trace | Center agent training on a traced computation graph with trainable values and generative optimizers. | Keep trace, transform, and execute separate; training-style feedback is one use of the IR, not the whole interface. |
 | Outlines<br>Instructor<br>Pydantic AI | Focus on structured output for one LM call. | Put structured output inside a traceable program, so it can compose with batching, pullback, and scheduling. |
 
-## Fit
+## Project Fit
 
 | Good fit | Poor fit |
 | --- | --- |

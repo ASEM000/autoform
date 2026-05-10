@@ -12,7 +12,7 @@ Without pytree registration, a custom object is opaque. `batch` cannot know whic
 
 With registration, the object becomes part of the same tree machinery as tuples and dictionaries.
 
-## The Namespace
+## `PYTREE_NAMESPACE`
 
 `autoform` reserves `af.PYTREE_NAMESPACE`. Register project dataclasses in that namespace so `autoform` and project code agree on the same tree rules.
 
@@ -43,7 +43,7 @@ Once `State` is a pytree, an IR can accept and return it. Transforms see the lea
 - `pullback` can return field-shaped feedback such as `State(topic="be more specific", draft="too terse")`.
 - `while_loop` can carry structured state as long as the body input and output structures match.
 
-## Good Leaves
+## Leaf Guidelines
 
 Use leaves that are ordinary values or traced values:
 

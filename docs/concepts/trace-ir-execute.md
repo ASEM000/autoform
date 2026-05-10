@@ -109,7 +109,7 @@ optimized_batch = af.batch(af.pullback(ir))
 
 `pullback(ir)` returns an IR. `batch(...)` accepts an IR. Neither transform needs to know how the original Python function was written.
 
-## Execution Mode Is Separate
+## Execution Axis
 
 Execution mode is its own axis:
 
@@ -138,7 +138,7 @@ flowchart TD
     A --> O
 ```
 
-## Common Gotchas
+## Gotchas
 
 - Python `if` on a traced value: use [`switch`](primitives.md) for runtime decisions. If the branch should be fixed while tracing, mark the controlling input {ref}`static <static-and-dynamic-inputs>` or use {ref}`fold <trace-time-decisions>`.
 - Loops with runtime-dependent length: use `while_loop`; ordinary Python loops are only appropriate when the iteration structure is known at trace time.

@@ -34,7 +34,7 @@ assert ir.call("short", "DNA") == "Short: DNA"
 
 The static value is part of the trace. Later calls must pass the same static value.
 
-## Python Branch on a Traced Value
+## Traced Branches
 
 ```python
 def bad(kind: str, text: str) -> str:
@@ -64,7 +64,7 @@ ir = af.trace(routed)("short", "seed")
 assert ir.call("long", "DNA") == "Long: DNA"
 ```
 
-## Runtime-Dependent Loop Shape
+## Runtime Loops
 
 ```python
 def bad_repeat(n: int, text: str) -> str:
@@ -96,7 +96,7 @@ looped = af.while_loop(cond_ir, body_ir, ("go", "go"), max_iters=1)
 
 The loop is now one explicit primitive in the surrounding IR.
 
-## Printing Runtime Values
+## Runtime Value Inspection
 
 ```python
 def noisy(text: str) -> str:
