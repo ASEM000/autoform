@@ -18,12 +18,12 @@ Each new requirement becomes another version of the same program: batched rewrit
 The IR transforms compose because their input and output type is the same. The contexts wrap execution without changing the original function.
 
 ```python
-ir = af.trace(explain)("...")        # capture once
+ir = af.trace(explain)("...")  # capture once
 
-af.batch(ir)                         # 100 inputs at once
-af.pullback(ir)                      # text feedback flows backward
-af.sched(ir)                         # independent calls run concurrently
-af.batch(af.pullback(ir))            # batched prompt optimization
+af.batch(ir)  # 100 inputs at once
+af.pullback(ir)  # text feedback flows backward
+af.sched(ir)  # independent calls run concurrently
+af.batch(af.pullback(ir))  # batched prompt optimization
 ```
 
 *the original `explain` was not modified, was not rewritten, did not know any of this would happen.*
