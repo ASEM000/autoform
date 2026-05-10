@@ -10,34 +10,23 @@ with the same inputs.
 import autoform as af
 
 
-calls = {"count": 0}
-
-
-@af.custom
-def expensive(text: str) -> str:
-    calls["count"] += 1
-    return af.format("<{}>", text)
-
-
 def program(text: str) -> str:
-    left = expensive(text)
-    right = expensive(text)
+    left = af.format("<{}>", text)
+    right = af.format("<{}>", text)
     return af.concat(left, right)
 
 
 ir = af.trace(program)("seed")
-calls["count"] = 0
 
-# both custom calls have the same primitive and inputs
+# both format calls have the same primitive and inputs
 with af.memoize():
     result = ir.call("alpha")
 
 print(result)
-print(calls["count"])
 ```
 
-The two `expensive("alpha")` calls are the same primitive call, so the second
-one reads the cached result.
+The two `af.format("<{}>", "alpha")` calls are the same primitive call, so the
+second one reads the cached result.
 
 ## Deduplicate During Tracing
 
