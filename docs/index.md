@@ -6,6 +6,7 @@
 :caption: Documentation
 :hidden:
 
+why-autoform
 tutorial/index
 concepts/index
 recipes/index
