@@ -37,10 +37,7 @@ import optree
 import autoform as af
 
 
-treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
-
-
-@treelib.dataclasses.dataclass
+@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
 class Decision:
     tool: str
     answer: str
