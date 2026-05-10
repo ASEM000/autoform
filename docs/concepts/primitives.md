@@ -1,8 +1,8 @@
 # Primitives
 
-A primitive is a named operation that the IR records instead of executing inline during tracing. Examples include `format`, `concat`, `lm_call`, `switch`, and `checkpoint`.
+A primitive is a named operation that the [IR](the-ir.md) records instead of executing inline during [tracing](tracing-semantics.md). Examples include `format`, `concat`, `lm_call`, `switch`, and `checkpoint`.
 
-The name matters because transforms dispatch on primitive identity. `pullback` knows how to route feedback through `lm_call` because a rule is registered for the `lm_call` primitive. Plain Python operations do not have those rules, so they either run at trace time or fail when they need a concrete runtime value.
+The name matters because [transforms](transforms.md) dispatch on primitive identity. `pullback` knows how to route feedback through `lm_call` because a rule is registered for the `lm_call` primitive. Plain Python operations do not have those rules, so they either run at trace time or fail when they need a concrete runtime value.
 
 ## Rule Registries
 
@@ -28,7 +28,7 @@ The split pullback rules matter: the forward sweep records the values needed lat
 **LM**
 
 - `lm_call(messages, /, *, model: str) -> str`: chat completion through the active LM client.
-- `lm_schema_call(messages, /, *, model: str, schema) -> Any`: structured completion parsed into the schema shape.
+- `lm_schema_call(messages, /, *, model: str, schema) -> Any`: structured completion parsed into the [schema](schemas.md) shape.
 
 **Control flow**
 
@@ -45,4 +45,4 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 Defining a primitive means defining its behavior under execution, tracing, batching, pushforward, pullback, and sometimes DCE. Most user code should not do that.
 
-Use `@af.custom` when you need a boundary around a Python function and want to override how a transform treats that boundary. That gives you the control point without making you build a new primitive from scratch.
+Use [`@af.custom`](custom-rules.md) when you need a boundary around a Python function and want to override how a transform treats that boundary. That gives you the control point without making you build a new primitive from scratch.

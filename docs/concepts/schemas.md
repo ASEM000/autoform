@@ -6,7 +6,7 @@ An `autoform` schema is a Python instance that describes the structured value yo
 answer_schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
 ```
 
-The result of `lm_schema_call` has the same pytree shape, with schema leaves replaced by parsed values.
+The result of `lm_schema_call` has the same [pytree](pytrees.md) shape, with schema leaves replaced by parsed values.
 
 ## Leaf Types
 
@@ -30,7 +30,7 @@ The descriptions become JSON Schema descriptions in the provider request.
 
 ## Composing With Pytrees
 
-Schema trees can use registered pytree dataclasses:
+Schema trees can use [Optree-registered dataclasses](https://optree.readthedocs.io/en/latest/dataclasses.html):
 
 ```python
 import optree
@@ -52,7 +52,7 @@ The schema is the instance `decision_schema`, not the class `Decision`.
 
 ## Calling With A Schema
 
-`lm_schema_call` uses the active LM client. By default, that is LiteLLM's direct completion API, so pass a model name that your environment is configured to use. For routing, retries, aliases, or fallback chains, install a `litellm.Router` with `af.lm_client(...)`.
+`lm_schema_call` uses the active LM client. By default, that is [LiteLLM's completion API](https://docs.litellm.ai/docs/completion), so pass a model name that your environment is configured to use. For routing, retries, aliases, or fallback chains, install a [`litellm.Router`](https://docs.litellm.ai/docs/routing) with [`af.lm_client(...)`](../recipes/litellm-config.md).
 
 ```python
 import autoform as af
@@ -88,6 +88,6 @@ Under the hood, `lm_schema_call` sends a JSON Schema response format, parses the
 
 ## Pullback Through Schemas
 
-When a schema call is used inside `pullback`, feedback is still text. The output cotangent should match the schema shape, with text feedback at leaves. For example, feedback might be `{"text": "too terse", "score": "overconfident"}`.
+When a schema call is used inside [`pullback`](transforms.md), feedback is still text. The output cotangent should match the schema shape, with text feedback at leaves. For example, feedback might be `{"text": "too terse", "score": "overconfident"}`.
 
 If the provider returns malformed structured output, `lm_schema_call` raises while parsing the response.

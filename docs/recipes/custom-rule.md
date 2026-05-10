@@ -1,8 +1,8 @@
 # Define A Custom Transform Rule
 
 Use [`custom`](../concepts/custom-rules.md) when a block of ordinary Python
-should appear as one primitive boundary in the IR. Add transform rules for the
-transforms you need.
+should appear as one primitive boundary in the [IR](../concepts/the-ir.md). Add transform rules for the
+[transforms](../concepts/transforms.md) you need.
 
 ```python
 import autoform as af
@@ -83,7 +83,7 @@ Each rule receives one `in_tree` argument:
 | `set_pullback` | `((primals, output), feedback)` | input-shaped feedback |
 | `set_batch` | `(batch_size, axes, values)` | `(output, output_axes)` |
 
-For batch, `output_axes` has the same pytree shape as the output and marks which
+For batch, `output_axes` has the same [pytree](../concepts/pytrees.md) shape as the output and marks which
 output leaves are batched.
 
 Add only the rules your program needs. If a custom boundary should run under

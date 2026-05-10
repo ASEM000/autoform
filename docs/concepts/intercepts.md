@@ -1,6 +1,6 @@
 # Intercepts
 
-Interceptors are the runtime side-channel for intermediate values. Use them when you want to inspect or replace a value inside an IR without rewriting the original function.
+Interceptors are the runtime side-channel for intermediate values. Use them when you want to inspect or replace a value inside an [IR](the-ir.md) without rewriting the original function.
 
 The three public pieces are:
 
@@ -61,5 +61,5 @@ with af.collect(collection="debug") as captured:
     af.batch(ir).call(["alpha", "beta"])
 ```
 
-Transformed IR execution is still execution, so checkpoints work after `batch`,
-`pullback`, or `sched`.
+Transformed IR execution is still execution, so checkpoints work after [`batch`,
+`pullback`, or `sched`](transforms.md).

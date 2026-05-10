@@ -45,6 +45,6 @@ with af.inject("debug", replacements):
 print(result)
 ```
 
-`collect` and `inject` are runtime contexts. They do not change the original
-function or the traced IR. That makes them useful for inspecting a bad value,
+[`collect` and `inject`](../concepts/intercepts.md) are runtime contexts. They do not change the original
+function or the traced [IR](../concepts/the-ir.md). That makes them useful for inspecting a bad value,
 trying a corrected intermediate, and then going back to normal execution.
