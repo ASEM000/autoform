@@ -46,3 +46,4 @@ not part of the everyday user surface.
 | `Prim` | A named primitive operation used as the dispatch key for execution and transform rules. |
 | `TraceBox` | The internal wrapper used by the trace interpreter to carry an `IRVar` through Python code. |
 | Tracer | The trace-time interpreter machinery that records primitive calls instead of executing them normally. |
+| `walk` | The manual IR stepping interface used by execution internals and advanced debugging code. See [Walk](../concepts/walk.md). |
