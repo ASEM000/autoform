@@ -1,4 +1,4 @@
-# Tool-Use Agent
+# Build a Tool-Use Agent
 
 Build an agent as one traced function, then use [IR transforms](../concepts/transforms.md) around it. The agent below can ask for a local search observation, finish with `done`, and keep its loop state in a registered [pytree](../concepts/pytrees.md).
 
@@ -15,7 +15,7 @@ flowchart TD
     C -- no --> R
 ```
 
-## Code
+## Build the Agent
 
 ```python
 import json
@@ -146,7 +146,7 @@ The provider decides which branch to run by returning a [`Decision` schema value
 
 `wikipedia_search` is a [custom boundary](../concepts/custom-rules.md) around a real HTTP call. The registered batch and pullback rules tell `autoform` how that boundary behaves under the transforms used below.
 
-## Transform It
+## Transform the Agent
 
 The agent is still one IR:
 

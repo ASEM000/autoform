@@ -4,7 +4,7 @@ At trace time, the function runs once with placeholder values for every dynamic 
 
 That rule explains most tracing surprises.
 
-## Static And Dynamic Inputs
+## Static and Dynamic Inputs
 
 The trace API is:
 
@@ -33,7 +33,7 @@ assert ir.call("short", "DNA") == "Short: DNA"
 
 The static value is part of the trace. Later calls must pass the same static value.
 
-## Wrong: Python Branch On A Traced Value
+## Python Branch on a Traced Value
 
 ```python
 def bad(kind: str, text: str) -> str:
@@ -63,7 +63,7 @@ ir = af.trace(routed)("short", "seed")
 assert ir.call("long", "DNA") == "Long: DNA"
 ```
 
-## Wrong: Runtime-Dependent Loop Shape
+## Runtime-Dependent Loop Shape
 
 ```python
 def bad_repeat(n: int, text: str) -> str:
@@ -95,7 +95,7 @@ looped = af.while_loop(cond_ir, body_ir, ("go", "go"), max_iters=1)
 
 The loop is now one explicit primitive in the surrounding IR.
 
-## Wrong: Printing Runtime Values
+## Printing Runtime Values
 
 ```python
 def noisy(text: str) -> str:
@@ -119,7 +119,7 @@ with af.collect(collection="debug") as captured:
 assert captured["prompt"] == ["Explain recursion"]
 ```
 
-## Closures And Mutation
+## Closures and Mutation
 
 Closure values are captured by the Python function while tracing. Mutating a list inside a traced function is still Python mutation; it is not an IR equation.
 

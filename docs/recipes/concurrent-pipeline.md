@@ -1,4 +1,4 @@
-# Run An LM Pipeline Concurrently
+# Run an LM Pipeline Concurrently
 
 [`sched`](../concepts/transforms.md) turns independent equations into async
 gather steps. The Python function can stay sequential.

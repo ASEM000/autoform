@@ -8,7 +8,7 @@ The three public pieces are:
 - `collect(collection=...)`: capture marked values during execution.
 - `inject(collection=..., values=...)`: substitute marked values during execution.
 
-## The Primitive
+## `checkpoint`
 
 `checkpoint` is transparent by default:
 
@@ -18,7 +18,7 @@ step = af.checkpoint(step, key="step", collection="debug")
 
 Without `collect` or `inject`, it returns `step`. With a context active, the same checkpoint becomes a hook.
 
-## Capture And Inject
+## `collect` and `inject`
 
 ```python
 import autoform as af
@@ -46,7 +46,7 @@ assert result == "cached item!"
 
 Values are stored in lists because the same key may be encountered more than once. `inject` consumes values in encounter order.
 
-## Why Not Just Print?
+## Print During Tracing
 
 `print` inside the traced function runs while tracing. It sees placeholders or trace-time constants, not the concrete values from every later execution.
 

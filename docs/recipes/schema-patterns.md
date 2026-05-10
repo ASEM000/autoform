@@ -1,9 +1,9 @@
-# Schema Patterns
+# Use Schema Patterns
 
 [`lm_schema_call`](../concepts/schemas.md) returns a structured value whose
 shape can be transformed like any other [pytree](../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
-## Enum Routing
+## Route with `Enum`
 
 ```python
 import optree
@@ -30,7 +30,7 @@ def choose_route(question: str) -> Route:
 Use `Enum` for finite decisions that should feed [`switch`](../concepts/primitives.md), status fields, or
 other control values.
 
-## Nested Arguments
+## Use Nested Arguments
 
 ```python
 import optree
@@ -65,7 +65,7 @@ def choose_search(question: str) -> SearchDecision:
 Nested dataclasses keep related fields together and still register as one
 pytree-shaped schema.
 
-## Optional-Like Fields
+## Represent Optional-Like Fields
 
 There is no special optional schema node. Model presence explicitly.
 
@@ -87,7 +87,7 @@ maybe_schema = MaybeAnswer(state=state, text=text)
 
 This keeps the output shape stable for [`batch`, `pullback`](../concepts/transforms.md), and [`switch`](../concepts/primitives.md).
 
-## Field Feedback
+## Send Field Feedback
 
 Structured outputs also work with `pullback`.
 

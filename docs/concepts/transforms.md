@@ -120,7 +120,7 @@ Order still matters:
 | `batch(pullback(ir))` | Run many independent pullback calls at once. Each input pairs with its own output feedback. |
 | `pullback(batch(ir))` | Treat the whole batched function as the program receiving feedback. The cotangent matches the batched output. |
 
-## What Is Not A Transform
+## Non-Transforms
 
 Some nearby public APIs are intentionally not `IR -> IR`:
 
@@ -132,7 +132,7 @@ Some nearby public APIs are intentionally not `IR -> IR`:
 
 The IR transforms reshape the IR. `custom` changes rule lookup at a boundary. Contexts wrap trace-time or execute-time behavior. They are complementary axes.
 
-## Axes
+## Transform and Execution Axes
 
 The transform axis and execution axis compose independently:
 

@@ -74,7 +74,7 @@ for topic, critique in zip(topics, critiques):
 
 The manual version is not replaced by a special combined feature. `pullback(ir)` returns an IR. `batch(...)` accepts an IR. The composition is ordinary Python function composition applied to a traced program.
 
-## How This Differs From Other LM Frameworks
+## How This Differs from Other LM Frameworks
 
 - **LangChain / LangGraph**: chain construction and chain execution are unified: a chain object is built and called. `autoform` separates the phases. Tracing produces an inert IR, transforms reshape it, and execution is a later step. The tradeoff is one extra concept, the IR, in exchange for transforms composing by ordinary function composition.
 - **DSPy**: programs are described with signatures and modules. DSPy then uses examples and a metric to search for better instructions, select few-shot demonstrations, or fine-tune model weights, returning a tuned version of the program. `autoform` exposes a traced program as an IR, so feedback, batching, and scheduling are directly composable transforms. The tradeoff is that DSPy provides optimization algorithms; `autoform` provides the substrate for writing and composing transformations.

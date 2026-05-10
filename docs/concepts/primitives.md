@@ -30,7 +30,7 @@ The split pullback rules matter: the forward sweep records the values needed lat
 - `lm_call(messages, /, *, model: str) -> str`: chat completion through the active LM client.
 - `lm_schema_call(messages, /, *, model: str, schema) -> Any`: structured completion parsed into the [schema](schemas.md) shape.
 
-**Control flow**
+**Control Flow**
 
 - `switch(key: str, branches: dict[str, IR], *args) -> Tree`: choose one traced branch at execution time.
 - `while_loop(cond_ir, body_ir, init_val, *, max_iters: int) -> Tree`: run a traced loop with an explicit iteration cap.
@@ -41,7 +41,7 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 - `checkpoint(value, /, *, key, collection=None) -> Tree`: mark an intermediate value for `collect` or `inject`.
 
-## Why User Code Usually Does Not Define Primitives
+## Primitive Definitions
 
 Defining a primitive means defining its behavior under execution, tracing, batching, pushforward, pullback, and sometimes DCE. Most user code should not do that.
 

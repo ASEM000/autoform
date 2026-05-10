@@ -28,7 +28,7 @@ schema = {"kind": kind, "text": text} @ af.Doc("Answer object.")
 
 The descriptions become JSON Schema descriptions in the provider request.
 
-## Composing With Pytrees
+## Composing with Pytrees
 
 Schema trees can use [Optree-registered dataclasses](https://optree.readthedocs.io/en/latest/dataclasses.html):
 
@@ -50,7 +50,7 @@ decision_schema = Decision(tool=tool, answer=answer)
 
 The schema is the instance `decision_schema`, not the class `Decision`.
 
-## Calling With A Schema
+## Calling with a Schema
 
 `lm_schema_call` uses the active LM client. By default, that is [LiteLLM's completion API](https://docs.litellm.ai/docs/completion), so pass a model name configured in the active environment. For routing, retries, aliases, or fallback chains, install a [`litellm.Router`](https://docs.litellm.ai/docs/routing) with [`af.lm_client(...)`](../recipes/litellm-config.md).
 

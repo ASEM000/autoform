@@ -53,7 +53,7 @@ assert output == "[world!]"
 
 `ir_eqn.bind(...)` runs the primitive's synchronous implementation for that one equation. Async runners can use `await ir_eqn.abind(...)` instead.
 
-## What Walk Is Not
+## What `walk` Is Not
 
 `walk` is not an IR transform. It does not take an IR and return another IR.
 

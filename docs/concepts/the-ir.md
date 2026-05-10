@@ -23,7 +23,7 @@ The IR is not Python source and it is not bytecode. It is a small data structure
 
 Most code should get an IR from `af.trace(...)`, transform it, and run it. Direct construction of the internal IR classes is not needed.
 
-## A Worked Example
+## Worked Example
 
 Start with a short function:
 
@@ -75,7 +75,7 @@ That is why the trace/transform/execute split matters. A transform does not need
 - It is not a provider call log. An `lm_call` is one equation whose implementation runs later.
 - It is not the usual public API for application code. It is the substrate that makes the public transforms compose.
 
-## Inspecting An IR
+## Inspecting an IR
 
 For execution-time diagnostics, prefer checkpoints with `collect` and `inject`.
 If an expected operation is missing, the original function probably used
