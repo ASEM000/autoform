@@ -197,31 +197,54 @@ class Prim:
 
 
 class Tag:
-    """Base class for structured equation tags.
+    """Equation tag.
 
-    Subclasses must be hashable.
+    The value must be hashable because tags are stored in a ``frozenset``.
+    Do not subclass ``Tag``; wrap a hashable payload instead.
 
     Example:
+        >>> import autoform as af
+        >>> draft = af.Tag("draft")
+        >>> with af.tag(draft):
+        ...     ir = af.trace(lambda x: af.concat(x, "!"))("seed")
+        >>> ir.ir_eqns[0].tags == frozenset({draft})
+        True
+
+    Structured example:
         >>> from dataclasses import dataclass
         >>> import autoform as af
         >>> @dataclass(frozen=True)
-        ... class Label(af.Tag):
+        ... class Region:
         ...     name: str
-        >>> with af.tag(Label("draft")):
+        ...     stage: int
+        >>> region = af.Tag(Region("draft", 1))
+        >>> with af.tag(region):
         ...     ir = af.trace(lambda x: af.concat(x, "!"))("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({Label("draft")})
+        >>> ir.ir_eqns[0].tags == frozenset({region})
         True
     """
 
-    __slots__ = []
+    __slots__ = ["value"]
 
-    def __new__(cls, *args, **kwargs):
-        assert cls is not Tag, "Tag cannot be instantiated directly"
-        return super().__new__(cls)
+    def __init__(self, value: Any, /):
+        try:
+            hash(value)
+        except TypeError:
+            assert False, f"Tag value must be hashable, got {value!r}"
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.value!r})"
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.value))
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        assert cls.__hash__ is not None, "Tag subclasses must be hashable"
+        assert False, "Tag does not support subclassing; wrap a hashable value with Tag(...)"
 
 
 active_tags: ContextVar[frozenset[Tag]] = ContextVar("active_tags", default=frozenset())
@@ -235,20 +258,18 @@ def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
     blocks. Equations built after a block exits do not receive that block's tags.
 
     Example:
-        >>> from dataclasses import dataclass
         >>> import autoform as af
-        >>> @dataclass(frozen=True)
-        ... class Label(af.Tag):
-        ...     name: str
+        >>> outer = af.Tag("outer")
+        >>> inner = af.Tag("inner")
         >>> def program(x):
-        ...     with af.tag(Label("outer")):
+        ...     with af.tag(outer):
         ...         head = af.concat(x, "!")
-        ...         with af.tag(Label("inner")):
+        ...         with af.tag(inner):
         ...             return af.concat(head, "?")
         >>> ir = af.trace(program)("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({Label("outer")})
+        >>> ir.ir_eqns[0].tags == frozenset({outer})
         True
-        >>> ir.ir_eqns[1].tags == frozenset({Label("outer"), Label("inner")})
+        >>> ir.ir_eqns[1].tags == frozenset({outer, inner})
         True
     """
 

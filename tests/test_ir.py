@@ -20,13 +20,21 @@ import autoform as af
 
 
 @dataclass(frozen=True)
-class Label(af.Tag):
+class Label:
     name: str
 
 
 @dataclass(frozen=True)
-class CostTag(af.Tag):
+class CostTag:
     pass
+
+
+def tag_label(name: str) -> af.Tag:
+    return af.Tag(Label(name))
+
+
+def cost_tag() -> af.Tag:
+    return af.Tag(CostTag())
 
 
 class TestBuildIR:
@@ -226,20 +234,20 @@ class TestTags:
     def test_trace_snapshots_tags_per_equation(self):
         def program(x):
             head = af.concat(x, "!")
-            with af.tag(Label("planner")):
+            with af.tag(tag_label("planner")):
                 mid = af.concat(head, "?")
-                with af.tag(Label("draft"), CostTag()):
+                with af.tag(tag_label("draft"), cost_tag()):
                     tail = af.concat(mid, ".")
             return tail
 
         ir = af.trace(program)("seed")
 
         assert ir.ir_eqns[0].tags == frozenset()
-        assert ir.ir_eqns[1].tags == frozenset({Label("planner")})
+        assert ir.ir_eqns[1].tags == frozenset({tag_label("planner")})
         assert ir.ir_eqns[2].tags == frozenset({
-            Label("planner"),
-            Label("draft"),
-            CostTag(),
+            tag_label("planner"),
+            tag_label("draft"),
+            cost_tag(),
         })
 
     def test_tag_rejects_non_tags(self):
@@ -247,40 +255,46 @@ class TestTags:
             with af.tag("draft"):
                 pass
 
-    def test_tag_base_is_not_instantiable(self):
-        with pytest.raises(AssertionError, match="Tag cannot be instantiated directly"):
-            af.Tag()
+    def test_tag_base_accepts_hashable_value(self):
+        assert af.Tag("draft") == af.Tag("draft")
+        assert af.Tag("draft") != af.Tag("final")
 
-    def test_tag_subclasses_must_be_hashable(self):
-        with pytest.raises(AssertionError, match="Tag subclasses must be hashable"):
+    def test_tag_base_rejects_unhashable_value(self):
+        with pytest.raises(AssertionError, match="Tag value must be hashable"):
+            af.Tag(["draft"])
 
-            class EqOnlyTag(af.Tag):
-                def __eq__(self, other):
-                    return isinstance(other, EqOnlyTag)
+    def test_tag_rejects_subclassing(self):
+        with pytest.raises(AssertionError, match="Tag does not support subclassing"):
+
+            class Region(af.Tag):
+                pass
 
     def test_tag_unions_active_tags_and_restores_on_exit(self):
         assert af.core.active_tags.get() == frozenset()
 
-        with af.tag(Label("outer")) as outer_tags:
-            assert outer_tags == (Label("outer"),)
-            assert af.core.active_tags.get() == frozenset({Label("outer")})
+        with af.tag(tag_label("outer")) as outer_tags:
+            assert outer_tags == (tag_label("outer"),)
+            assert af.core.active_tags.get() == frozenset({tag_label("outer")})
 
-            with af.tag(Label("inner")) as inner_tags:
-                assert inner_tags == (Label("inner"),)
-                assert af.core.active_tags.get() == frozenset({Label("outer"), Label("inner")})
+            with af.tag(tag_label("inner")) as inner_tags:
+                assert inner_tags == (tag_label("inner"),)
+                assert af.core.active_tags.get() == frozenset({
+                    tag_label("outer"),
+                    tag_label("inner"),
+                })
 
-            assert af.core.active_tags.get() == frozenset({Label("outer")})
+            assert af.core.active_tags.get() == frozenset({tag_label("outer")})
 
         assert af.core.active_tags.get() == frozenset()
 
     def test_ireqn_tags_input_is_frozenset(self):
         prim = af.core.Prim("tag_set")
-        eqn = af.core.IREqn(prim, (), (), None, frozenset({Label("draft")}))
+        eqn = af.core.IREqn(prim, (), (), None, frozenset({tag_label("draft")}))
 
-        assert eqn.tags == frozenset({Label("draft")})
+        assert eqn.tags == frozenset({tag_label("draft")})
 
         with pytest.raises(AssertionError):
-            af.core.IREqn(prim, (), (), None, (Label("draft"),))
+            af.core.IREqn(prim, (), (), None, (tag_label("draft"),))
 
     def test_bind_reinstalls_equation_tags(self):
         probe_p = af.core.Prim("tag_probe")
@@ -290,28 +304,30 @@ class TestTags:
             return af.core.TypedAVal(str)
 
         def impl_probe(x):
-            names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))
+            names = sorted(
+                tag.value.name for tag in af.core.active_tags.get() if isinstance(tag.value, Label)
+            )
             return f"{','.join(names)}|{x}"
 
         af.core.abstract_rules.set(probe_p, abstract_probe)
         af.core.impl_rules.set(probe_p, impl_probe)
 
         def program(x):
-            with af.tag(Label("draft"), Label("cost")):
+            with af.tag(tag_label("draft"), tag_label("cost")):
                 return probe_p.bind(x)
 
         ir = af.trace(program)("seed")
 
         assert ir.call("hello") == "cost,draft|hello"
 
-        with af.tag(Label("runtime")):
+        with af.tag(tag_label("runtime")):
             assert ir.call("hello") == "cost,draft,runtime|hello"
 
-        assert ir.ir_eqns[0].tags == frozenset({Label("draft"), Label("cost")})
+        assert ir.ir_eqns[0].tags == frozenset({tag_label("draft"), tag_label("cost")})
 
     def test_using_preserves_tags(self):
         def program(x):
-            with af.tag(Label("draft")):
+            with af.tag(tag_label("draft")):
                 return af.concat(x, "!")
 
         ir = af.trace(program)("seed")
@@ -320,33 +336,33 @@ class TestTags:
         new_eqn = eqn.using(collection="debug")
 
         assert new_eqn.params["collection"] == "debug"
-        assert new_eqn.tags == frozenset({Label("draft")})
+        assert new_eqn.tags == frozenset({tag_label("draft")})
 
     def test_repr_includes_non_empty_tags(self):
         def program(x):
             head = af.concat(x, "!")
-            with af.tag(Label("draft"), CostTag()):
+            with af.tag(tag_label("draft"), cost_tag()):
                 return af.concat(head, "?")
 
         lines = repr(af.trace(program)("seed")).splitlines()
 
         assert "tags=" not in lines[1]
-        assert "tags={CostTag(), Label(name='draft')}" in lines[2]
+        assert "tags={Tag(CostTag()), Tag(Label(name='draft'))}" in lines[2]
 
     def test_calling_existing_ir_while_tracing_unions_runtime_and_equation_tags(self):
         def inner_program(x):
-            with af.tag(Label("inner")):
+            with af.tag(tag_label("inner")):
                 return af.concat(x, "!")
 
         inner_ir = af.trace(inner_program)("seed")
 
         def outer_program(x):
-            with af.tag(Label("outer")):
+            with af.tag(tag_label("outer")):
                 return inner_ir.call(x)
 
         outer_ir = af.trace(outer_program)("seed")
 
-        assert outer_ir.ir_eqns[0].tags == frozenset({Label("inner"), Label("outer")})
+        assert outer_ir.ir_eqns[0].tags == frozenset({tag_label("inner"), tag_label("outer")})
 
 
 class TestRunIR:
