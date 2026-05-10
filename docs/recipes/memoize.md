@@ -1,6 +1,6 @@
 # Cache Repeated Computations With `memoize`
 
-[`memoize`](../reference/glossary.md) is a runtime context that caches primitive
+[`memoize`](../reference/glossary.md) is a runtime context that caches [primitive](../concepts/primitives.md)
 results inside the `with` block. Use it when the same primitive call is repeated
 with the same inputs.
 

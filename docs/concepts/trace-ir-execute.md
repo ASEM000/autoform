@@ -2,8 +2,8 @@
 
 `autoform` has three phases:
 
-- **Trace**: run a Python function once with placeholder values and record `autoform` primitive calls.
-- **Transform**: take the recorded IR and produce another IR, without re-running the original Python function.
+- **Trace**: run a Python function once with placeholder values and record [`autoform` primitive](primitives.md) calls.
+- **Transform**: take the recorded [IR](the-ir.md) and produce another IR, without re-running the original Python function.
 - **Execute**: run the IR with concrete runtime inputs, synchronously or asynchronously.
 
 That split is the core model. The function is ordinary Python; the trace is data; transforms rewrite that data; execution happens later.
@@ -24,7 +24,7 @@ def label(topic: str) -> str:
 ir = af.trace(label)("DNA")
 ```
 
-The argument `"DNA"` is not the real input you intend to run forever. It is a shape/type witness. `trace` uses it to build placeholder input variables with the right Python leaf types, then runs the function body once under the tracing interpreter.
+The argument `"DNA"` is not the real input you intend to run forever. It is a shape/type witness. `trace` uses it to build placeholder input variables with the right Python leaf types, then runs the function body once under the tracing interpreter. See [Tracing Semantics](tracing-semantics.md) for static and dynamic input rules.
 
 During that run:
 
@@ -32,7 +32,7 @@ During that run:
 - ordinary Python that depends only on concrete or static values runs immediately and is baked into the trace;
 - Python control flow that depends on a traced value is not available as a normal `if` or variable-length loop.
 
-When the path depends on runtime data, use explicit control-flow primitives: `switch` for branching and `while_loop` for loops.
+When the path depends on runtime data, use explicit [control-flow primitives](primitives.md): `switch` for branching and `while_loop` for loops.
 
 ## The IR
 
@@ -133,6 +133,6 @@ flowchart TD
 
 - **Python `if` on a traced value**: use `switch`, or mark the controlling input static if the branch is intentionally fixed at trace time.
 - **Loops with runtime-dependent length**: use `while_loop`; ordinary Python loops are only appropriate when the iteration structure is known at trace time.
-- **Mutating closure state**: pass state through the function inputs and outputs instead, preferably as registered pytrees for structured state.
+- **Mutating closure state**: pass state through the function inputs and outputs instead, preferably as registered [pytrees](pytrees.md) for structured state.
 
-Next, read `concepts/the-ir.md` for the IR structure in more detail.
+Next, read [The IR](the-ir.md) for the IR structure in more detail.

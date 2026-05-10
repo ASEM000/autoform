@@ -21,7 +21,7 @@ program transforms around it.*
 pip install git+https://github.com/ASEM000/autoform.git
 ```
 
-Set provider credentials for the LM client you use. For OpenAI through LiteLLM:
+Set provider credentials for the LM client you use. For OpenAI through [LiteLLM](https://docs.litellm.ai/):
 
 ```bash
 export OPENAI_API_KEY=...

@@ -1,6 +1,6 @@
 # Transforms
 
-An IR transform is a function with this shape:
+An [IR](the-ir.md) transform is a function with this shape:
 
 ```text
 IR -> IR
@@ -12,7 +12,7 @@ The output is another executable IR. That one property is what makes composition
 
 **`batch(ir, /, *, in_axes=True) -> IR`**
 
-`batch` vectorizes an IR over one or more input leaves. `in_axes` is a bool pytree matching the input structure: `True` means batched, `False` means broadcast.
+`batch` vectorizes an IR over one or more input leaves. `in_axes` is a bool [pytree](pytrees.md) matching the input structure: `True` means batched, `False` means broadcast.
 
 ```python
 batched = af.batch(ir)
@@ -81,11 +81,11 @@ Order still matters:
 
 Some nearby public APIs are intentionally not `IR -> IR`:
 
-- `custom` is a decorator on user functions. It marks a function boundary and lets transforms consult your custom rules at that boundary.
-- `memoize` is a context manager. It caches primitive results within a `with` block.
-- `lm_client` is a context manager. It changes provider routing during execution.
-- `collect` and `inject` are context managers. They capture or replace checkpointed values during execution.
-- `tag` and `fold` are context managers. They alter trace-time annotation or trace-time evaluation.
+- [`custom`](custom-rules.md) is a decorator on user functions. It marks a function boundary and lets transforms consult your custom rules at that boundary.
+- [`memoize`](../recipes/memoize.md) is a context manager. It caches primitive results within a `with` block.
+- [`lm_client`](../recipes/litellm-config.md) is a context manager. It changes provider routing during execution.
+- [`collect` and `inject`](intercepts.md) are context managers. They capture or replace checkpointed values during execution.
+- [`tag` and `fold`](tags-and-fold.md) are context managers. They alter trace-time annotation or trace-time evaluation.
 
 The IR transforms reshape the IR. `custom` changes rule lookup at a boundary. Contexts wrap trace-time or execute-time behavior. They are complementary axes.
 
@@ -102,4 +102,4 @@ sync_result = transformed.call((topics,), critiques)
 async_result = asyncio.run(transformed.acall((topics,), critiques))
 ```
 
-You did not write the original function as `async def`. You chose async execution when running the transformed IR.
+You did not write the original function as `async def`. You chose async execution when running the transformed IR. See [Trace, IR, Execute](trace-ir-execute.md) for the execution split.

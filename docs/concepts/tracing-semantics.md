@@ -1,6 +1,6 @@
 # Tracing Semantics
 
-At trace time, your function runs once with placeholder values for every dynamic input. Operations that hit `autoform` primitives are recorded as IR equations. Everything else is ordinary Python and runs immediately.
+At trace time, your function runs once with placeholder values for every dynamic input. Operations that hit [`autoform` primitives](primitives.md) are recorded as [IR equations](the-ir.md). Everything else is ordinary Python and runs immediately.
 
 That rule explains most tracing surprises.
 
@@ -12,7 +12,7 @@ The trace API is:
 af.trace(func, /, *, static: Tree[bool] = False)
 ```
 
-`static` is a bool pytree matching the positional input structure:
+`static` is a bool [pytree](pytrees.md) matching the positional input structure:
 
 - `static=False`: every input leaf is dynamic. This is the default.
 - `static=True`: every input leaf is fixed at trace time.
@@ -47,7 +47,7 @@ ir = af.trace(bad)("short", "seed")
 
 The comparison would need a concrete value while tracing. A dynamic input only carries abstract type information.
 
-Use `switch` when the branch is a runtime decision:
+Use [`switch`](primitives.md) when the branch is a runtime decision:
 
 ```python
 short = af.trace(lambda text: af.format("Short: {}", text))("seed")
@@ -75,7 +75,7 @@ def bad_repeat(n: int, text: str) -> str:
 
 Python needs `n` while tracing to decide how many equations to create.
 
-Use `while_loop` when the loop condition is runtime data:
+Use [`while_loop`](primitives.md) when the loop condition is runtime data:
 
 ```python
 def cond(state: tuple[str, str]) -> bool:
@@ -104,7 +104,7 @@ def noisy(text: str) -> str:
     return prompt
 ```
 
-Use checkpoints when you want execution-time diagnostics:
+Use [checkpoints](intercepts.md) when you want execution-time diagnostics:
 
 ```python
 def inspectable(text: str) -> str:
@@ -123,6 +123,6 @@ assert captured["prompt"] == ["Explain recursion"]
 
 Closure values are captured by the Python function while tracing. Mutating a list inside a traced function is still Python mutation; it is not an IR equation.
 
-Pass state through inputs and outputs instead. If the state is structured, register it as a pytree so transforms can walk its leaves.
+Pass state through inputs and outputs instead. If the state is structured, register it as a [pytree](pytrees.md) so transforms can walk its leaves.
 
 Missing equations usually mean the operation ran as Python instead of going through an `autoform` primitive.

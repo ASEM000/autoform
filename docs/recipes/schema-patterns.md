@@ -1,7 +1,7 @@
 # Schema Patterns
 
 [`lm_schema_call`](../concepts/schemas.md) returns a structured value whose
-shape can be transformed like any other [pytree](../concepts/pytrees.md).
+shape can be transformed like any other [pytree](../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ## Enum Routing
 
@@ -27,7 +27,7 @@ def choose_route(question: str) -> Route:
     return af.lm_schema_call([msg], model="gpt-5.2", schema=route_schema)
 ```
 
-Use `Enum` for finite decisions that should feed `switch`, status fields, or
+Use `Enum` for finite decisions that should feed [`switch`](../concepts/primitives.md), status fields, or
 other control values.
 
 ## Nested Arguments
@@ -85,7 +85,7 @@ text = af.Str() @ af.Doc("Answer text, or empty string when absent.")
 maybe_schema = MaybeAnswer(state=state, text=text)
 ```
 
-This keeps the output shape stable for `batch`, `pullback`, and `switch`.
+This keeps the output shape stable for [`batch`, `pullback`](../concepts/transforms.md), and [`switch`](../concepts/primitives.md).
 
 ## Field Feedback
 

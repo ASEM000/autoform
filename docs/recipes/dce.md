@@ -20,7 +20,7 @@ cleaned = af.dce(ir)
 print(cleaned.call("alpha"))
 ```
 
-`dce` walks backward from the output tree. The unused `format` call is not on
+`dce` walks backward from the output [pytree](../concepts/pytrees.md). The unused `format` call is not on
 that path, so the cleaned IR can drop it.
 
 ## Keep Part Of The Output

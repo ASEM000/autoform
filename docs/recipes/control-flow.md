@@ -1,6 +1,6 @@
 # Use Control Flow Inside A Traced Function
 
-`autoform` control-flow primitives keep branches and loops visible to the IR.
+`autoform` [control-flow primitives](../concepts/primitives.md) keep branches and loops visible to the [IR](../concepts/the-ir.md).
 Use them when the branch condition or loop state is part of the traced program.
 
 ## Route With `switch`
@@ -60,6 +60,8 @@ body_ir = af.trace(add_step)(example)
 result = af.while_loop(cond_ir, body_ir, example, max_iters=3)
 print(result)
 ```
+
+The loop state is a registered [pytree](../concepts/pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ## Block Feedback With `stop_gradient`
 

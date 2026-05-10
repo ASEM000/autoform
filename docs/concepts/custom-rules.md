@@ -1,6 +1,6 @@
 # Custom Rules
 
-Most functions do not need custom rules. The default transform behavior traces through the function body and applies primitive rules inside it.
+Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
 
 Reach for `@af.custom` when you need one of these:
 
@@ -10,7 +10,7 @@ Reach for `@af.custom` when you need one of these:
 
 ## Mental Model
 
-`custom` is a decorator on a Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but transforms can stop at that boundary and use a registered rule.
+`custom` is a decorator on a Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule.
 
 ```python
 import autoform as af

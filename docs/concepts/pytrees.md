@@ -33,7 +33,7 @@ upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 assert upper == State(topic="DNA", draft="SHORT")
 ```
 
-That is the canonical pattern: pass `af.PYTREE_NAMESPACE` to Optree's dataclass decorator.
+That is the canonical pattern: pass `af.PYTREE_NAMESPACE` to [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ## What This Enables
 
@@ -61,4 +61,4 @@ Avoid leaves that are runtime resources or trace-local implementation details:
 
 Pytrees describe structure. They do not make a value serializable, replayable, or safe to mutate.
 
-Schemas are adjacent but different: a schema describes structured LM output. A pytree describes how `autoform` walks user data. See `schemas.md` for schema output.
+Schemas are adjacent but different: a schema describes structured LM output. A pytree describes how `autoform` walks user data. See [Schemas](schemas.md) for schema output.

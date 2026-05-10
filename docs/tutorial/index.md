@@ -13,14 +13,14 @@ Install from GitHub:
 pip install git+https://github.com/ASEM000/autoform.git
 ```
 
-`autoform` uses LiteLLM for provider calls. For OpenAI, set `OPENAI_API_KEY` and use an OpenAI model name:
+`autoform` uses [LiteLLM](https://docs.litellm.ai/) for provider calls. For OpenAI, set `OPENAI_API_KEY` and use an OpenAI model name:
 
 ```bash
 # set your provider key
 export OPENAI_API_KEY="..."
 ```
 
-Any LiteLLM-supported provider works if the provider credentials and model name are configured for that provider.
+Any [LiteLLM-supported provider](https://docs.litellm.ai/docs/providers) works if the provider credentials and model name are configured for that provider.
 
 Run one direct LM call before starting with [tracing](../concepts/trace-ir-execute.md):
 
@@ -40,7 +40,7 @@ This is only a provider smoke test. It does not use tracing.
 | `ModuleNotFoundError: autoform` | Install into the same environment that runs Python. |
 | Python version error | Use Python 3.12 or newer. |
 | Provider authentication error | Set the provider API key expected by LiteLLM, such as `OPENAI_API_KEY` for OpenAI. |
-| Provider model error | Use a model name supported by the configured provider or route through `litellm.Router`. |
+| Provider model error | Use a model name supported by the configured provider or route through [`litellm.Router`](https://docs.litellm.ai/docs/routing). |
 
 ## Trace Your First Function
 
@@ -277,7 +277,7 @@ class Summary:
     confidence: float
 ```
 
-The `namespace=af.PYTREE_NAMESPACE` argument registers `Summary` as an `autoform` [pytree](../concepts/pytrees.md). The schema is an instance of that class:
+The `namespace=af.PYTREE_NAMESPACE` argument uses [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html) to register `Summary` as an `autoform` [pytree](../concepts/pytrees.md). The schema is an instance of that class:
 
 ```python
 # build schema leaves first so the schema instance stays compact
@@ -470,7 +470,7 @@ print(f"scheduled:  {parallel_s:.2f}s")
 
 The scheduled form groups independent [equations](../concepts/the-ir.md) into `gather` steps. With `scheduled.acall(...)`, those groups use `asyncio.gather`, so the two first LM calls can overlap. The final LM call still waits for both inputs.
 
-The measured speedup depends on provider latency, provider-side rate limits, and the active LiteLLM client. The invariant is the dependency structure: independent equations can share a scheduling level; dependent equations cannot.
+The measured speedup depends on provider latency, provider-side rate limits, and the active [LiteLLM client](../recipes/litellm-config.md). The invariant is the dependency structure: independent equations can share a scheduling level; dependent equations cannot.
 
 Compare the two pieces of code:
 

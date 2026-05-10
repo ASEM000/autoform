@@ -98,5 +98,5 @@ The right column is not a special combined feature. `pullback(ir)` returns an IR
 Next, read [Getting Started](../tutorial/index.md), or go deeper on the model in [Trace, IR, Execute](trace-ir-execute.md).
 
 ```{warning}
-API may change. See `reference/stability.md`.
+API may change before a stable release.
 ```

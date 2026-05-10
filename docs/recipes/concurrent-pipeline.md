@@ -60,6 +60,6 @@ Only the first two LM calls can overlap. The combine call waits for both, and
 the final call waits for the combined text.
 
 Measured speed depends on provider latency, provider-side rate limits, and the
-active LiteLLM client. The property that matters is the dependency graph: if two
+active [LiteLLM client](litellm-config.md). The property that matters is the dependency graph: if two
 equations do not depend on each other, `sched(...).acall(...)` can run them in
 the same async level.
