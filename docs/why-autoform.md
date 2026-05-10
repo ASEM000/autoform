@@ -74,13 +74,15 @@ for topic, critique in zip(topics, critiques):
 
 The rewritten version is not replaced by a special combined feature. `pullback(ir)` returns an IR. `batch(...)` accepts an IR. Composition is ordinary Python function composition applied to a traced program.
 
-## How This Differs from Other LM Frameworks
+## Adjacent LM Frameworks
 
 | Framework family | Architectural choice | `autoform` choice |
 | --- | --- | --- |
-| LangChain / LangGraph | Build a chain object and call it. | Separate trace, transform, and execute phases. The extra concept is the IR; the payoff is ordinary composition between transforms. |
-| DSPy | Describe programs with signatures and modules, then use examples and metrics to tune them. | Expose the traced program as IR data, so feedback, batching, and scheduling are directly composable transforms. |
-| Outlines / Instructor / Pydantic AI | Focus on structured output for one LM call. | Put structured output inside a traceable program, so it can compose with batching, pullback, and scheduling. |
+| LangChain<br>LangGraph | Build a chain object and call it. | Separate trace, transform, and execute phases. The extra concept is the IR; the payoff is ordinary composition between transforms. |
+| DSPy | Describe programs with signatures and modules, then use examples and metrics to tune them. | Expose the traced program as IR data, so feedback, batching, and scheduling are directly *composable* transforms. |
+| TextGrad | Center the interface on textual-gradient optimization with an autograd-style workflow. | Treat text feedback as `pullback`, one IR transform that composes with batching, scheduling, and other transforms. |
+| Microsoft Trace | Center agent training on a traced computation graph with trainable values and generative optimizers. | Keep trace, transform, and execute separate; training-style feedback is one use of the IR, not the whole interface. |
+| Outlines<br>Instructor<br>Pydantic AI | Focus on structured output for one LM call. | Put structured output inside a traceable program, so it can compose with batching, pullback, and scheduling. |
 
 ## Fit
 
