@@ -1,6 +1,6 @@
 # Recipes
 
-These are task-shaped examples that build on the tutorial.
+These are task-shaped examples that build on [Getting Started](../tutorial/index.md).
 
 ```{toctree}
 :maxdepth: 2
