@@ -1,5 +1,11 @@
 # The IR
 
+```{admonition} Advanced
+:class: info
+
+This page describes the IR as a concept so you can reason about transforms. Most code should get an IR from `af.trace(...)`, then use public transforms and execution methods rather than constructing internal IR classes directly.
+```
+
 An `autoform` IR is an equation list. Each equation has this conceptual shape:
 
 ```text

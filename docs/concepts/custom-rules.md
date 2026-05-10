@@ -1,5 +1,11 @@
 # Custom Rules
 
+```{admonition} Advanced
+:class: info
+
+Use custom rules when a function boundary needs transform-specific behavior. Most functions should rely on the default behavior, where transforms trace through the function body.
+```
+
 Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
 
 Reach for `@af.custom` when you need one of these:
