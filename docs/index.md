@@ -17,6 +17,6 @@ recipes/index
 :caption: Reference
 :hidden:
 
-api
+api/index
 reference/glossary
 ```

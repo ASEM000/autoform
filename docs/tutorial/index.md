@@ -518,6 +518,6 @@ The main conceptual pages are useful once you start building larger programs:
 | Build a tool-use agent | [Tool-Use Agent](../recipes/tool-use-agent.md) |
 | Read API names quickly | [Glossary](../reference/glossary.md) |
 
-For exact call signatures, use the [API Reference](../api.md).
+For exact call signatures, use the [API Reference](../api/index.md).
 
 For bugs, design questions, or examples that do not behave as expected, open a [GitHub issue](https://github.com/ASEM000/autoform/issues).
