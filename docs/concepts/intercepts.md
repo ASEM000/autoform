@@ -1,6 +1,6 @@
 # Intercepts
 
-Interceptors are the runtime side-channel for intermediate values. Use them when you want to inspect or replace a value inside an [IR](the-ir.md) without rewriting the original function.
+Interceptors are the runtime side-channel for intermediate values. Use them to inspect or replace a value inside an [IR](the-ir.md) without rewriting the original function.
 
 The three public pieces are:
 

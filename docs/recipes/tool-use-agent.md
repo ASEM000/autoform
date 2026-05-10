@@ -164,4 +164,4 @@ pb_agent = af.pullback(agent_ir)
 answer, (question_hint,) = pb_agent.call(("What is autoform?",), "too vague")
 ```
 
-For real tools, keep the branch signature stable: each branch here is `(args, history) -> history`. External APIs, retrieval systems, and calculators should sit behind traceable adapters or a custom boundary with rules for the transforms you plan to use. See [Custom Rules](../concepts/custom-rules.md).
+For real tools, keep the branch signature stable: each branch here is `(args, history) -> history`. External APIs, retrieval systems, and calculators should sit behind traceable adapters or a custom boundary with rules for the intended transforms. See [Custom Rules](../concepts/custom-rules.md).

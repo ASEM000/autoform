@@ -10,11 +10,11 @@ That container/leaf view is called a pytree. `autoform` uses pytrees so transfor
 
 Without pytree registration, a custom object is opaque. `batch` cannot know which fields are batched. `pullback` cannot route cotangents into the right fields.
 
-With registration, your object becomes part of the same tree machinery as tuples and dictionaries.
+With registration, the object becomes part of the same tree machinery as tuples and dictionaries.
 
 ## The Namespace
 
-`autoform` reserves `af.PYTREE_NAMESPACE`. Register project dataclasses in that namespace so `autoform` and your code agree on the same tree rules.
+`autoform` reserves `af.PYTREE_NAMESPACE`. Register project dataclasses in that namespace so `autoform` and project code agree on the same tree rules.
 
 ```python
 import optree

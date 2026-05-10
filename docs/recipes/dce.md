@@ -25,7 +25,7 @@ that path, so the cleaned IR can drop it.
 
 ## Keep Part Of The Output
 
-Use `out_used` when the original function returns more than you need.
+Use `out_used` when the original function returns more than needed.
 
 ```python
 import autoform as af
@@ -47,4 +47,4 @@ The returned tree keeps the same shape. Output leaves removed by `out_used` are
 returned as `None`.
 
 Use `dce` after transforms or debugging edits when the IR contains work that no
-longer contributes to the value you need.
+longer contributes to the needed value.

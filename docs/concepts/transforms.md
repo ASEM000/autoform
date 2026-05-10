@@ -15,7 +15,7 @@ The output is another executable IR. That one property is what makes composition
 | `pushforward(ir)` | Original inputs plus input tangents. | Original output plus output tangent. | Push a proposed input change forward. |
 | `pullback(ir)` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
 | `sched(ir)` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
-| `dce(ir)` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the outputs you need. |
+| `dce(ir)` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the needed outputs. |
 
 ## IR Transforms
 
@@ -124,7 +124,7 @@ Order still matters:
 
 Some nearby public APIs are intentionally not `IR -> IR`:
 
-- [`custom`](custom-rules.md) is a decorator on user functions. It marks a function boundary and lets transforms consult your custom rules at that boundary.
+- [`custom`](custom-rules.md) is a decorator on user functions. It marks a function boundary and lets transforms consult custom rules at that boundary.
 - [`memoize`](../recipes/memoize.md) is a context manager. It caches primitive results within a `with` block.
 - [`lm_client`](../recipes/litellm-config.md) is a context manager. It changes provider routing during execution.
 - [`collect` and `inject`](intercepts.md) are context managers. They capture or replace checkpointed values during execution.
@@ -145,4 +145,4 @@ sync_result = transformed.call((topics,), critiques)
 async_result = asyncio.run(transformed.acall((topics,), critiques))
 ```
 
-You did not write the original function as `async def`. You chose async execution when running the transformed IR. See [Trace, IR, Execute](trace-ir-execute.md) for the execution split.
+The original function was not written as `async def`. Async execution is chosen when running the transformed IR. See [Trace, IR, Execute](trace-ir-execute.md) for the execution split.

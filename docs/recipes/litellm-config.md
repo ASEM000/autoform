@@ -1,8 +1,8 @@
 # Configure LiteLLM Routing
 
 `autoform` uses the active LM client at execution time. By default that client
-calls [LiteLLM](https://docs.litellm.ai/) directly. Use `lm_client` when you
-want a configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) for retries, aliases, or provider fallback.
+calls [LiteLLM](https://docs.litellm.ai/) directly. Use `lm_client` for a
+configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) with retries, aliases, or provider fallback.
 
 ```python
 from litellm import Router

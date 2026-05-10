@@ -2,7 +2,7 @@
 
 Use [`custom`](../concepts/custom-rules.md) when a block of ordinary Python
 should appear as one primitive boundary in the [IR](../concepts/the-ir.md). Add transform rules for the
-[transforms](../concepts/transforms.md) you need.
+[transforms](../concepts/transforms.md) required by the program.
 
 ```python
 import autoform as af
@@ -86,5 +86,5 @@ Each rule receives one `in_tree` argument:
 For batch, `output_axes` has the same [pytree](../concepts/pytrees.md) shape as the output and marks which
 output leaves are batched.
 
-Add only the rules your program needs. If a custom boundary should run under
+Add only the rules the program needs. If a custom boundary should run under
 scheduled async execution, add the matching async rule.
