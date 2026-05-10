@@ -49,11 +49,11 @@ print(f"scheduled:  {parallel_s:.2f}s")
 
 ```{mermaid}
 flowchart TD
-    topic["topic"] --> summary["LM: summary"]
-    topic --> analogy["LM: analogy"]
-    summary --> join["LM: combine notes"]
+    topic[/topic/] --> summary[["LM: summary"]]
+    topic --> analogy[["LM: analogy"]]
+    summary --> join[["LM: combine notes"]]
     analogy --> join
-    join --> final["LM: final answer"]
+    join --> final[["LM: final answer"]]
 ```
 
 Only the first two LM calls can overlap. The combine call waits for both, and

@@ -129,9 +129,9 @@ answer = asyncio.run(scheduled.acall("recursion"))
 
 ```mermaid
 flowchart TD
-    topic["topic"] --> explain["LM: explain"]
-    topic --> example["LM: example"]
-    explain --> combine["LM: combine"]
+    topic[/topic/] --> explain[["LM: explain"]]
+    topic --> example[["LM: example"]]
+    explain --> combine[["LM: combine"]]
     example --> combine
 ```
 
@@ -173,12 +173,13 @@ branches, and bounded `while_loop` state.
 
 ```mermaid
 flowchart TD
-    question["question"] --> state["initial state"]
-    state --> condition["condition"]
-    condition --> decision["LM schema decision"]
-    decision --> tool["switch tool branch"]
+    question[/question/] --> state[(State)]
+    state --> condition{"continue?"}
+    condition -- yes --> decision{"tool?"}
+    decision -- search --> tool["search branch"]
     tool --> state
-    condition --> result["result"]
+    decision -- done --> result[/result/]
+    condition -- no --> result
 ```
 
 Because the agent is one IR, the same transforms still apply:
