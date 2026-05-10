@@ -14,7 +14,7 @@ out_vars = primitive(in_vars; static_params)
 
 The IR is not Python source and it is not bytecode. It is a small data structure that records the parts of a function that `autoform` can transform and execute later.
 
-## The Pieces
+## IR Components
 
 - input and output trees describe the runtime values entering and leaving the program;
 - equations record one primitive call, its input tree, its output tree, static parameters, and tags;
@@ -59,7 +59,7 @@ Read it left to right:
 Literal values can appear directly in an equation. Runtime values are represented
 by placeholders until execution supplies concrete inputs.
 
-## Available Operations
+## IR Operations
 
 Once an IR exists, there are two broad operations:
 
@@ -68,14 +68,14 @@ Once an IR exists, there are two broad operations:
 
 That is why the trace/transform/execute split matters. A transform does not need the original Python function. It only needs the equation list.
 
-## What It Is Not
+## Non-Goals
 
 - It is not a graph database. The main representation is an ordered equation list.
 - It is not Python source. Recovering arbitrary Python syntax from it is not supported.
 - It is not a provider call log. An `lm_call` is one equation whose implementation runs later.
 - It is not the usual public API for application code. It is the substrate that makes the public transforms compose.
 
-## Inspecting an IR
+## IR Inspection
 
 For execution-time diagnostics, prefer checkpoints with `collect` and `inject`.
 If an expected operation is missing, the original function probably used

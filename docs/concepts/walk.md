@@ -6,11 +6,15 @@
 Use this when manual equation stepping is needed for debugging, visualization, or a custom runner. For ordinary execution, prefer `ir.call(...)` or `await ir.acall(...)`.
 ```
 
+## Manual Execution
+
 `ir.walk(...)` is the manual execution interface on the object returned by `af.trace(...)`. It exposes the same equation stream that `.call(...)` and `.acall(...)` execute.
+
+## Use Cases
 
 It is useful for debuggers, visualizers, custom runners, or test harnesses that need to observe or replace individual equation results. For ordinary execution, use `ir.call(...)` or `await ir.acall(...)`.
 
-## The Contract
+## Generator Contract
 
 `ir.walk(*inputs)` returns a generator:
 
@@ -21,6 +25,8 @@ It is useful for debuggers, visualizers, custom runners, or test harnesses that 
 | Finish | send the last equation output | `None` and the final output tree. |
 
 Each yielded equation carries its primitive and parameters. The concrete input values have the same pytree shape as that equation's inputs.
+
+## Minimal Example
 
 ```python
 import autoform as af
@@ -53,7 +59,7 @@ assert output == "[world!]"
 
 `ir_eqn.bind(...)` runs the primitive's synchronous implementation for that one equation. Async runners can use `await ir_eqn.abind(...)` instead.
 
-## What `walk` Is Not
+## Non-Goals
 
 `walk` is not an IR transform. It does not take an IR and return another IR.
 

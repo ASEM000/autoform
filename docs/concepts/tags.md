@@ -24,7 +24,7 @@ assert draft not in ir.ir_eqns[1].tags
 
 Nested tag blocks accumulate tags. Code outside the block does not receive the tags from the block.
 
-## Tags in `sched`
+## Scheduling Tags
 
 `sched` accepts a `cond` callback that receives each IR equation. Tags give that callback a stable way to select only part of a traced program.
 
@@ -33,7 +33,7 @@ scheduled = af.sched(ir, cond=lambda ir_eqn: draft in ir_eqn.tags)
 assert scheduled.call("world") == "[world!]"
 ```
 
-## Tags in `walk`
+## Walk Tags
 
 [Walk](walk.md) steps through an IR equation by equation. Tags are available on each yielded equation, so a debugger or custom runner can act on tagged regions without guessing from primitive names or source order.
 

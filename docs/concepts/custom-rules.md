@@ -95,7 +95,7 @@ assert af.batch(ir).call(["a", "b"]) == ["<a>", "<b>"]
 
 The rule receives one `in_tree` argument. For batch, that tree is `(batch_size, axes, values)`, and the rule returns `(outputs, output_axes)`.
 
-## Available Rule Hooks
+## Rule Hooks
 
 The wrapper exposes three sync/async pairs:
 
@@ -107,6 +107,6 @@ The pullback hook overrides the backward sweep. The forward sweep still records 
 
 Sync and async registrations are independent. If only `set_batch` is registered, then `af.batch(ir).call(...)` uses that rule, while `await af.batch(ir).acall(...)` may use the default async behavior. Register both sides when both execution modes need the same custom semantics.
 
-## Caveat
+## Rule Correctness
 
 A custom rule is trusted. If the rule returns the wrong structure, wrong axes, or wrong cotangents, the transformed IR is wrong. Use custom rules for real boundaries, not as a general extension point for ordinary application code.

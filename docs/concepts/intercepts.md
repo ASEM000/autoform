@@ -46,13 +46,13 @@ assert result == "cached item!"
 
 Values are stored in lists because the same key may be encountered more than once. `inject` consumes values in encounter order.
 
-## Print During Tracing
+## Trace-Time Printing
 
 `print` inside the traced function runs while tracing. It sees placeholders or trace-time constants, not the concrete values from every later execution.
 
 `collect` runs around `ir.call(...)` or `ir.acall(...)`. It sees the runtime values produced by the IR.
 
-## Runtime Context, Not Transform
+## Runtime Contexts
 
 `collect` and `inject` do not produce new IRs. They wrap execution:
 

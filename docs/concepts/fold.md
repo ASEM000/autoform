@@ -40,7 +40,7 @@ assert ir.call("answer") == "yes: answer"
 
 The branch is chosen during tracing. The resulting IR contains only the path that was taken.
 
-## Dynamic Values Cannot Be Folded
+## Dynamic Value Limits
 
 Folded work must not depend on dynamic traced values:
 
