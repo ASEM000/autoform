@@ -2,10 +2,6 @@
 
 This is the first path through `autoform`: install it, trace one ordinary Python function, run the resulting IR, then apply the core transforms and execution contexts.
 
-```{admonition} Concept
-[Trace, IR, Execute](concepts/trace-ir-execute.md) · [Transforms](concepts/transforms.md) · [Schemas](concepts/schemas.md) · [Pytrees](concepts/pytrees.md) · [Intercepts](concepts/intercepts.md) · [Primitives](concepts/primitives.md)
-```
-
 ## Install and Smoke Test
 
 `autoform` requires Python 3.12 or newer.
