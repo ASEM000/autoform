@@ -40,6 +40,13 @@
 
   - `lm_call(...)` and `lm_schema_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
 
+  - Removed `af.Tag`. Pass any hashable value directly to `af.tag(...)` instead of subclassing `af.Tag`.
+
+    ```python
+    with af.tag("draft"):
+        ir = af.trace(program)("seed")
+    ```
+
 ### New Features
 
   - `trace(..., static=...)` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.

@@ -19,7 +19,7 @@ from __future__ import annotations
 import functools as ft
 import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
@@ -76,7 +76,6 @@ __all__ = [
     "TracingInterpreter",
     "active_interpreter",
     "using_interpreter",
-    "Tag",
     "active_tags",
     "tag",
     # ir building and execution
@@ -192,67 +191,43 @@ class Prim:
 
 
 # ==================================================================================================
-# TAG
+# TAGS
 # ==================================================================================================
 
 
-class Tag:
-    """Base class for structured equation tags.
-
-    Subclasses must be hashable.
-
-    Example:
-        >>> from dataclasses import dataclass
-        >>> import autoform as af
-        >>> @dataclass(frozen=True)
-        ... class Label(af.Tag):
-        ...     name: str
-        >>> with af.tag(Label("draft")):
-        ...     ir = af.trace(lambda x: af.concat(x, "!"))("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({Label("draft")})
-        True
-    """
-
-    __slots__ = []
-
-    def __new__(cls, *args, **kwargs):
-        assert cls is not Tag, "Tag cannot be instantiated directly"
-        return super().__new__(cls)
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        assert cls.__hash__ is not None, "Tag subclasses must be hashable"
+def assert_hashable_tag(value: Any, /) -> None:
+    try:
+        hash(value)
+    except TypeError:
+        raise TypeError(f"Tags must be hashable, got {value!r}") from None
 
 
-active_tags: ContextVar[frozenset[Tag]] = ContextVar("active_tags", default=frozenset())
+active_tags: ContextVar[frozenset[Hashable]] = ContextVar("active_tags", default=frozenset())
 
 
 @contextmanager
-def tag(*tags: Tag) -> Generator[tuple[Tag, ...], None, None]:
+def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
     """Attach tags to equations at trace time.
 
     Equations built inside nested ``tag`` blocks receive the tags from all active
     blocks. Equations built after a block exits do not receive that block's tags.
 
     Example:
-        >>> from dataclasses import dataclass
         >>> import autoform as af
-        >>> @dataclass(frozen=True)
-        ... class Label(af.Tag):
-        ...     name: str
         >>> def program(x):
-        ...     with af.tag(Label("outer")):
+        ...     with af.tag("outer"):
         ...         head = af.concat(x, "!")
-        ...         with af.tag(Label("inner")):
+        ...         with af.tag("inner"):
         ...             return af.concat(head, "?")
         >>> ir = af.trace(program)("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({Label("outer")})
+        >>> ir.ir_eqns[0].tags == frozenset({"outer"})
         True
-        >>> ir.ir_eqns[1].tags == frozenset({Label("outer"), Label("inner")})
+        >>> ir.ir_eqns[1].tags == frozenset({"outer", "inner"})
         True
     """
 
-    assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
+    for value in tags:
+        assert_hashable_tag(value)
     token = active_tags.set(active_tags.get() | frozenset(tags))
     try:
         yield tags
@@ -274,16 +249,17 @@ class IREqn:
         in_ir_tree: Tree,
         out_ir_tree: Tree,
         params: dict[str, Any] | None = None,
-        tags: frozenset[Tag] = frozenset(),
+        tags: frozenset[Hashable] = frozenset(),
     ):
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
         assert isinstance(tags, frozenset)
+        for value in tags:
+            assert_hashable_tag(value)
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
         self.params = params if params is not None else {}
-        assert all(isinstance(tag, Tag) for tag in tags), f"Expected Tag instances, got {tags!r}"
         self.tags = tags
 
     def bind(self, in_tree: Tree, /, **params):

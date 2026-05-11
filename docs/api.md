@@ -8,7 +8,6 @@ Tracing and execution.
 .. autofunction:: autoform.trace
 .. autofunction:: autoform.fold
 .. autofunction:: autoform.tag
-.. autoclass:: autoform.Tag
 ```
 
 ## Transforms

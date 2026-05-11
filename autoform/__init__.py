@@ -18,7 +18,7 @@ from autoform.ad import pullback, pushforward
 from autoform.batch import batch
 from autoform.checkpoint import checkpoint, collect, inject
 from autoform.control import stop_gradient, switch, while_loop
-from autoform.core import Tag, fold, tag, trace
+from autoform.core import fold, tag, trace
 from autoform.custom import custom
 from autoform.dce import dce
 from autoform.lm import lm_call, lm_client, lm_schema_call
@@ -64,6 +64,5 @@ __all__ = [
     "Int",
     "Str",
     # types
-    "Tag",
     "PYTREE_NAMESPACE",
 ]
