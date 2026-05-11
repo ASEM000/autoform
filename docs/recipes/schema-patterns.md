@@ -20,9 +20,7 @@ class Route:
     answer: str
 
 
-tool = af.Enum("search", "done") @ af.Doc("Next action.")
-answer = af.Str() @ af.Doc("Final answer when tool is done.")
-route_schema = Route(tool=tool, answer=answer)
+route_schema = Route(tool=af.Enum("search", "done"), answer=af.Str())
 
 
 def choose_route(question: str) -> Route:
@@ -53,11 +51,7 @@ class SearchDecision:
     args: SearchArgs
 
 
-query = af.Str() @ af.Doc("Search query.")
-limit = af.Int(min=1, max=5) @ af.Doc("Number of results.")
-args_schema = SearchArgs(query=query, limit=limit)
-tool_schema = af.Enum("search", "done") @ af.Doc("Selected tool.")
-decision_schema = SearchDecision(tool=tool_schema, args=args_schema)
+decision_schema = SearchDecision(tool=af.Enum("search", "done"), args=SearchArgs(query=af.Str(), limit=af.Int(min=1, max=5)))
 
 
 def choose_search(question: str) -> SearchDecision:
@@ -68,6 +62,46 @@ def choose_search(question: str) -> SearchDecision:
 
 Nested dataclasses keep related fields together and still register as one
 pytree-shaped schema.
+
+## Build Schema Variants
+
+Schemas are [pytrees](../concepts/pytrees.md), so regular pytree utilities can derive call-specific variants before a call.
+
+```python
+import optree
+import autoform as af
+
+
+schema = {"answer": af.Str(), "confidence": af.Float(min=0, max=1)}
+
+extract_schema = optree.tree_map(
+    lambda leaf: leaf @ af.Doc("Extract only facts explicitly present in the input."),
+    schema,
+    namespace=af.PYTREE_NAMESPACE,
+)
+
+critique_schema = optree.tree_map(
+    lambda leaf: leaf @ af.Doc("Critique the draft and report uncertainty conservatively."),
+    schema,
+    namespace=af.PYTREE_NAMESPACE,
+)
+```
+
+Both schemas return `{"answer": ..., "confidence": ...}`. The downstream code stays fixed while each LM call receives different field guidance.
+
+For a one-off call, the schema can stay inline:
+
+```python
+messages = [dict(role="user", content="Classify this request.")]
+result = af.lm_schema_call(
+    messages,
+    model="gpt-5.2",
+    schema={
+        "kind": af.Enum("question", "request") @ af.Doc("Request type."),
+        "reply": af.Str() @ af.Doc("Short reply."),
+    },
+)
+```
 
 ## Represent Optional-Like Fields
 
@@ -84,9 +118,7 @@ class MaybeAnswer:
     text: str
 
 
-state = af.Enum("present", "absent") @ af.Doc("Whether text is present.")
-text = af.Str() @ af.Doc("Answer text, or empty string when absent.")
-maybe_schema = MaybeAnswer(state=state, text=text)
+maybe_schema = MaybeAnswer(state=af.Enum("present", "absent"), text=af.Str())
 ```
 
 This keeps the output shape stable for [`batch`, `pullback`](../concepts/transforms.md), and [`switch`](../concepts/primitives.md).
@@ -106,9 +138,7 @@ class Summary:
     score: float
 
 
-title = af.Str(max=80) @ af.Doc("Short title.")
-score = af.Float(min=0, max=1) @ af.Doc("Confidence.")
-summary_schema = Summary(title=title, score=score)
+summary_schema = Summary(title=af.Str(max=80), score=af.Float(min=0, max=1))
 
 
 def summarize(topic: str) -> Summary:

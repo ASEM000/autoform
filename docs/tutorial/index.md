@@ -284,11 +284,8 @@ class Summary:
 The `namespace=af.PYTREE_NAMESPACE` argument uses [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html) to register `Summary` as an `autoform` [pytree](../concepts/pytrees.md). The schema is an instance of that class:
 
 ```python
-# build schema leaves first so the schema instance stays compact
-title = af.Str(max=80) @ af.Doc("Short title.")
-kind = af.Enum("definition", "analogy", "warning") @ af.Doc("Best category.")
-confidence = af.Float(min=0, max=1) @ af.Doc("Confidence score.")
-summary_schema = Summary(title=title, kind=kind, confidence=confidence)
+# build the schema directly as a value-shaped instance
+summary_schema = Summary(title=af.Str(max=80), kind=af.Enum("definition", "analogy", "warning"), confidence=af.Float(min=0, max=1))
 ```
 
 Now write the function normally:
@@ -327,6 +324,8 @@ Schemas also work with transforms:
 - `batch(ir)` returns a batched `Summary` tree.
 - `pullback(ir)` accepts feedback with the same schema shape.
 - `sched(ir)` can schedule schema calls like any other primitive.
+
+Schemas are not tied to dataclasses. Any [pytree](../concepts/pytrees.md) shape works, and the schema can be built inline for one-off calls or transformed with `optree.tree_map` before execution. See [Schemas](../concepts/schemas.md) for those patterns.
 
 For `pullback`, feedback lands on fields:
 

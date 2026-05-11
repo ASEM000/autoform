@@ -1,36 +1,61 @@
 # Schemas
 
-An `autoform` schema is a Python instance that describes the structured value expected from an LM. It is instance-first: the schema is a value shape, not a separate output class definition.
+An `autoform` schema is a [pytree](pytrees.md) whose leaves are schema specs. It is instance-first: the schema is a value shape, not a separate output class definition. `lm_schema_call` returns the same pytree structure, with each schema leaf replaced by a parsed value.
 
 ```python
 answer_schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
 ```
 
-The result of `lm_schema_call` has the same [pytree](pytrees.md) shape, with schema leaves replaced by parsed values.
-
 ## Leaf Types
 
-- `Str(min=None, max=None, pattern=None)`: a string, optionally constrained by length or regex.
-- `Int(min=None, max=None)`: an integer, optionally range constrained.
-- `Float(min=None, max=None)`: a number, optionally range constrained.
-- `Bool()`: a boolean.
-- `Enum(*values)`: one of a non-empty set of JSON scalar values of the same type.
+| Python | Args | Meaning |
+| --- | --- | --- |
+| `af.Str(...)` | `min=None, max=None, pattern=None` | A string, optionally constrained by length or regex. |
+| `af.Int(...)` | `min=None, max=None` | An integer, optionally range constrained. |
+| `af.Float(...)` | `min=None, max=None` | A number, optionally range constrained. |
+| `af.Bool()` | none | A boolean. |
+| `af.Enum(...)` | `*values` | One of a non-empty set of JSON scalar values of the same type. |
 
 ## Descriptions
 
 Use `Doc` with the `@` operator to attach descriptions:
 
 ```python
-kind = af.Enum("summary", "definition") @ af.Doc("Kind of answer.")
-text = af.Str() @ af.Doc("Short answer text.")
-schema = {"kind": kind, "text": text} @ af.Doc("Answer object.")
+schema = {"kind": af.Enum("summary", "definition") @ af.Doc("Kind."), "text": af.Str() @ af.Doc("Text.")}
 ```
 
 The descriptions become JSON Schema descriptions in the provider request.
 
-## Pytree Composition
+## Pytree Shapes
 
-Schema trees can use [Optree-registered dataclasses](https://optree.readthedocs.io/en/latest/dataclasses.html):
+A schema can have any [pytree](pytrees.md) shape that `autoform` can walk. It does not need a special schema class. Dictionaries, tuples, lists, and registered dataclasses all work.
+
+```python
+schema = {"route": (af.Enum("search", "done"), af.Str()), "answer": af.Str()}
+```
+
+`lm_schema_call` returns the same shape with schema leaves replaced by parsed values. The example above returns a dictionary whose `"route"` value is a tuple and whose `"answer"` value is a string.
+
+Fixed-size repeated fields are just list-shaped schemas:
+
+```python
+score_schema = [af.Float(min=0, max=1)] * 4
+schema = {"scores": score_schema}
+```
+
+This is a fixed-size schema. The parsed result has the same list shape:
+
+```python
+result = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
+assert isinstance(result["scores"], list)
+assert len(result["scores"]) == 4
+```
+
+For variable-length output, choose a bounded representation in the schema, such as a fixed number of slots plus a count or status field.
+
+## Define a Custom Pytree
+
+Schema trees can use any registered custom pytree. For dataclasses, use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html):
 
 ```python
 import optree
@@ -43,24 +68,66 @@ class Decision:
     answer: str
 
 
-tool = af.Enum("search", "done") @ af.Doc("Tool to call next.")
-answer = af.Str() @ af.Doc("Answer when done.")
-decision_schema = Decision(tool=tool, answer=answer)
+decision_schema = Decision(tool=af.Enum("search", "done"), answer=af.Str())
 ```
 
 The schema is the instance `decision_schema`, not the class `Decision`.
 
+## Transform Schema Trees
+
+Because schemas are [pytrees](pytrees.md), project code can build one base schema and derive call-specific variants with pytree utilities. `tree_map` changes the schema value before tracing or execution; it is not post-processing model output. Use the `autoform` namespace when mapping over registered dataclasses.
+
+```python
+import optree
+import autoform as af
+
+
+base_schema = {"answer": af.Str(), "confidence": af.Float(min=0, max=1)}
+
+extract_schema = optree.tree_map(
+    lambda leaf: leaf @ af.Doc("Extract only facts explicitly present in the input."),
+    base_schema,
+    namespace=af.PYTREE_NAMESPACE,
+)
+
+critique_schema = optree.tree_map(
+    lambda leaf: leaf @ af.Doc("Critique the draft and report uncertainty conservatively."),
+    base_schema,
+    namespace=af.PYTREE_NAMESPACE,
+)
+```
+
+Both calls return the same shape, so downstream code still reads `result["answer"]` and `result["confidence"]`. Only the schema guidance changes.
+
+The same pattern works for dataclass-shaped schemas:
+
+```python
+plain_decision_schema = Decision(tool=af.Enum("search", "done"), answer=af.Str())
+
+documented_decision_schema = optree.tree_map(
+    lambda leaf: leaf @ af.Doc("Decision field."),
+    plain_decision_schema,
+    namespace=af.PYTREE_NAMESPACE,
+)
+```
+
+This is useful when several calls share the same shape but differ by descriptions, ranges, or other schema leaf metadata.
+
+The same shape-preserving rule is what makes schemas compose with `autoform` transforms:
+
+- `batch(ir)` returns a batched version of the schema-shaped output.
+- `pullback(ir)` accepts feedback with the same schema shape.
+- `tree_map` can derive schema variants before the IR is traced or executed.
+
 ## Schema Calls
 
-`lm_schema_call` uses the active LM client. By default, that is [LiteLLM's completion API](https://docs.litellm.ai/docs/completion), so pass a model name configured in the active environment. For routing, retries, aliases, or fallback chains, install a [`litellm.Router`](https://docs.litellm.ai/docs/routing) with [`af.lm_client(...)`](../recipes/litellm-config.md).
+Pass the schema value to `lm_schema_call`. The result has the same pytree shape, with schema leaves replaced by parsed provider output.
 
 ```python
 import autoform as af
 
 
-text = af.Str() @ af.Doc("One-sentence answer.")
-score = af.Float(min=0, max=1) @ af.Doc("Confidence.")
-schema = {"text": text, "score": score}
+schema = {"text": af.Str(), "score": af.Float(min=0, max=1)}
 
 messages = [dict(role="user", content="Explain recursion.")]
 result = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
@@ -68,23 +135,7 @@ result = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
 print(result["text"], result["score"])
 ```
 
-With a router:
-
-```python
-from litellm import Router
-import autoform as af
-
-
-params = {"model": "gpt-5.2"}
-model_list = [dict(model_name="docs-model", litellm_params=params)]
-router = Router(model_list=model_list)
-
-with af.lm_client(router):
-    messages = [dict(role="user", content="Explain recursion.")]
-    result = af.lm_schema_call(messages, model="docs-model", schema=schema)
-```
-
-Under the hood, `lm_schema_call` sends a JSON Schema response format, parses the JSON response, and rebuilds the original pytree shape.
+For provider routing, retries, aliases, or fallback chains, use [`af.lm_client(...)`](../recipes/litellm-config.md).
 
 ## Schema Pullback
 
