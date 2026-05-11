@@ -187,13 +187,13 @@ branches, and bounded `while_loop` state.
 
 ```mermaid
 flowchart TD
-    question[/question/] --> state[(State)]
+    question["question"] --> state["state"]
     state --> condition{"continue?"}
-    condition -- yes --> decision{"tool?"}
-    decision -- search --> tool["search branch"]
+    condition -- "yes" --> decision{"tool?"}
+    decision -- "search" --> tool["search branch"]
     tool --> state
-    decision -- done --> result[/result/]
-    condition -- no --> result
+    decision -- "done" --> result["result"]
+    condition -- "no" --> result
 ```
 
 Because the agent is one IR, the same transforms still apply:
