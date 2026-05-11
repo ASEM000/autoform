@@ -2,6 +2,10 @@
 
 Build an agent as one traced function, then use [IR transforms](../concepts/transforms.md) around it. The agent below can ask for a local search observation, finish with `done`, and keep its loop state in a registered [pytree](../concepts/pytrees.md).
 
+```{admonition} Concept
+[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md) · [Schemas](../concepts/schemas.md) · [Primitives](../concepts/primitives.md) · [Custom Rules](../concepts/custom-rules.md)
+```
+
 ```{mermaid}
 flowchart TD
     Q[/question/] --> I[(State)]
@@ -145,7 +149,7 @@ print(answer)
 
 The provider decides which branch to run by returning a [`Decision` schema value](../concepts/schemas.md). [`switch`](../concepts/primitives.md) dispatches to the traced tool branch at execution time. [`while_loop`](../concepts/primitives.md) keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
 
-`wikipedia_search` is a [custom boundary](../concepts/custom-rules.md) around a real HTTP call. The registered batch and pullback rules tell `autoform` how that boundary behaves under the transforms used below.
+`@af.custom`, `set_batch`, and `set_pullback` are [custom rules](../concepts/custom-rules.md). Here they make `wikipedia_search` a boundary around a real HTTP call and tell `autoform` how that boundary behaves under the transforms used below.
 
 ## Transform the Agent
 

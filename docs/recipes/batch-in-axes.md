@@ -3,6 +3,10 @@
 [`batch`](../concepts/transforms.md) needs to know which inputs are batched and
 which inputs should be reused for every example. That is what `in_axes` describes.
 
+```{admonition} Concept
+[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md)
+```
+
 ## Broadcast One Input
 
 ```python

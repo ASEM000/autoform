@@ -3,6 +3,10 @@
 [`lm_schema_call`](../concepts/schemas.md) returns a structured value whose
 shape can be transformed like any other [pytree](../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
+```{admonition} Concept
+[Schemas](../concepts/schemas.md) · [Pytrees](../concepts/pytrees.md) · [Transforms](../concepts/transforms.md) · [Primitives](../concepts/primitives.md)
+```
+
 ## Route with `Enum`
 
 ```python

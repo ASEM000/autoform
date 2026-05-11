@@ -3,6 +3,10 @@
 [`sched`](../concepts/transforms.md) turns independent equations into async
 gather steps. The Python function can stay sequential.
 
+```{admonition} Concept
+[Trace, IR, Execute](../concepts/trace-ir-execute.md) · [Transforms](../concepts/transforms.md)
+```
+
 ```python
 import asyncio
 import time
