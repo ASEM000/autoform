@@ -3,6 +3,10 @@
 [`dce`](../concepts/transforms.md) removes equations that cannot affect the
 selected output.
 
+```{admonition} Concept
+[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md)
+```
+
 ```python
 import autoform as af
 

@@ -4,6 +4,10 @@ Use [`pullback`](../concepts/transforms.md) when feedback on an output should be
 feedback for the inputs that produced it. For prompt work, the input is often an
 instruction string.
 
+```{admonition} Concept
+[Trace, IR, Execute](../concepts/trace-ir-execute.md) · [Transforms](../concepts/transforms.md)
+```
+
 ```python
 import autoform as af
 

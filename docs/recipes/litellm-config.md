@@ -4,6 +4,10 @@
 calls [LiteLLM](https://docs.litellm.ai/) directly. Use `lm_client` for a
 configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) with retries, aliases, or provider fallback.
 
+```{admonition} Concept
+[Trace, IR, Execute](../concepts/trace-ir-execute.md)
+```
+
 ```python
 from litellm import Router
 import autoform as af

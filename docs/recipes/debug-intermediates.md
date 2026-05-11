@@ -3,6 +3,10 @@
 Use [`checkpoint`](../concepts/intercepts.md) for values that may need inspection
 or replace while running the same IR.
 
+```{admonition} Concept
+[Intercepts](../concepts/intercepts.md) · [Trace, IR, Execute](../concepts/trace-ir-execute.md)
+```
+
 ```python
 import autoform as af
 

@@ -4,6 +4,10 @@ Use [`custom`](../concepts/custom-rules.md) when a block of ordinary Python
 should appear as one primitive boundary in the [IR](../concepts/the-ir.md). Add transform rules for the
 [transforms](../concepts/transforms.md) required by the program.
 
+```{admonition} Concept
+[Custom Rules](../concepts/custom-rules.md) · [Transforms](../concepts/transforms.md) · [Primitives](../concepts/primitives.md)
+```
+
 ```python
 import autoform as af
 
