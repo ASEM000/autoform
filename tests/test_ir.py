@@ -20,13 +20,12 @@ import autoform as af
 
 
 @dataclass(frozen=True)
-class Label(af.Tag):
+class Label:
     name: str
 
 
 @dataclass(frozen=True)
-class CostTag(af.Tag):
-    pass
+class CostTag: ...
 
 
 class TestBuildIR:
@@ -64,8 +63,7 @@ class TestBuildIR:
         assert result == "dogs 2 2.5 False"
 
     def test_trace_unsupported_input_leaf_errors(self):
-        class Opaque:
-            pass
+        class Opaque: ...
 
         def program(x):
             return x
@@ -223,6 +221,9 @@ class TestTraceStatic:
 
 
 class TestTags:
+    def test_tag_base_is_not_public_api(self):
+        assert not hasattr(af, "Tag")
+
     def test_trace_snapshots_tags_per_equation(self):
         def program(x):
             head = af.concat(x, "!")
@@ -242,21 +243,17 @@ class TestTags:
             CostTag(),
         })
 
-    def test_tag_rejects_non_tags(self):
-        with pytest.raises(AssertionError, match="Expected Tag instances"):
-            with af.tag("draft"):
-                pass
+    def test_tag_accepts_plain_hashable_values(self):
+        with af.tag("draft", 1) as active:
+            assert active == ("draft", 1)
+            assert af.core.active_tags.get() == frozenset({"draft", 1})
 
-    def test_tag_base_is_not_instantiable(self):
-        with pytest.raises(AssertionError, match="Tag cannot be instantiated directly"):
-            af.Tag()
+        assert af.core.active_tags.get() == frozenset()
 
-    def test_tag_subclasses_must_be_hashable(self):
-        with pytest.raises(AssertionError, match="Tag subclasses must be hashable"):
-
-            class EqOnlyTag(af.Tag):
-                def __eq__(self, other):
-                    return isinstance(other, EqOnlyTag)
+    def test_tag_rejects_unhashable_values(self):
+        with pytest.raises(TypeError, match="Tags must be hashable"):
+            with af.tag(["draft"]):
+                ...
 
     def test_tag_unions_active_tags_and_restores_on_exit(self):
         assert af.core.active_tags.get() == frozenset()
