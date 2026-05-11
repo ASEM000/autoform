@@ -3,7 +3,7 @@
 Build an agent as one traced function, then use [IR transforms](../concepts/transforms.md) around it. The agent below can ask for a local search observation, finish with `done`, and keep its loop state in a registered [pytree](../concepts/pytrees.md).
 
 ```{admonition} Concept
-[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md) · [Schemas](../concepts/schemas.md) · [Primitives](../concepts/primitives.md) · [Custom Rules](../concepts/custom-rules.md)
+[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md) · [Schemas](../concepts/schemas.md) · [Primitives](../concepts/primitives.md)
 ```
 
 ```{mermaid}
@@ -56,11 +56,16 @@ decision_schema = Decision(
 )
 
 
-# custom marks this as one external tool boundary in the ir
-# the body still runs normally during execution
-@af.custom
+# primitive wrapper called by traced programs
+wikipedia_search_p = af.core.Prim("wikipedia_search")
+
+
 def wikipedia_search(query: str) -> str:
-    # ordinary python can live inside the boundary
+    return wikipedia_search_p.bind(query)
+
+
+# runtime implementation receives concrete python values
+def impl_wikipedia_search(query: str, /) -> str:
     params = {"action": "opensearch", "format": "json", "limit": 3, "search": query}
     url = "https://en.wikipedia.org/w/api.php?" + urlencode(params)
     request = Request(url, headers={"User-Agent": "autoform-docs/0.1"})
@@ -71,31 +76,44 @@ def wikipedia_search(query: str) -> str:
     return "\n".join(rows) or "No results."
 
 
+# tracing needs output shape without running the http call
+def abstract_wikipedia_search(query, /):
+    del query
+    return af.core.TypedAVal(str)
+
+
 # batch receives the batch size, input axes, and input values
-@wikipedia_search.set_batch
-def batch_wikipedia_search(in_tree, /, *, call):
+def batch_wikipedia_search(in_tree, /):
     batch_size, axes, values = in_tree
     del batch_size
-    (queries,) = values
-    (query_axis,) = axes
+    query_axis = axes
+    queries = values
 
-    # if query is broadcast, call the tool once and mark the output unbatched
+    # if query is broadcast, call the primitive once and mark output unbatched
     if not query_axis:
-        return call(queries), False
+        return wikipedia_search_p.bind(queries), False
 
-    # if query is batched, call the tool once per query and mark output batched
-    return [call(query) for query in queries], True
+    # if query is batched, call the primitive once per query and mark output batched
+    return [wikipedia_search_p.bind(query) for query in queries], True
 
 
-# pullback receives the primal output and feedback on that output
-@wikipedia_search.set_pullback
-def pullback_wikipedia_search(in_tree, /, *, call):
-    del call
-    (_, output), feedback = in_tree
+# pullback forward sweep records the query and output as residuals
+def pull_fwd_wikipedia_search(query: str, /):
+    output = wikipedia_search_p.bind(query)
+    return output, (query, output)
 
-    # return one cotangent because wikipedia_search has one input: query
-    hint = af.format("Improve the search query. Feedback: {}. Result: {}", feedback, output)
-    return (hint,)
+
+# pullback backward sweep turns output feedback into query feedback
+def pull_bwd_wikipedia_search(in_tree, /):
+    (query, output), feedback = in_tree
+    return af.format("Improve the Wikipedia search query. Query: {}. Feedback: {}. Result: {}", query, feedback, output)
+
+
+af.core.impl_rules.set(wikipedia_search_p, impl_wikipedia_search)
+af.core.abstract_rules.set(wikipedia_search_p, abstract_wikipedia_search)
+af.core.batch_rules.set(wikipedia_search_p, batch_wikipedia_search)
+af.core.pull_fwd_rules.set(wikipedia_search_p, pull_fwd_wikipedia_search)
+af.core.pull_bwd_rules.set(wikipedia_search_p, pull_bwd_wikipedia_search)
 
 
 def search_tool(query: str, history: str) -> str:
@@ -149,7 +167,7 @@ print(answer)
 
 The provider decides which branch to run by returning a [`Decision` schema value](../concepts/schemas.md). [`switch`](../concepts/primitives.md) dispatches to the traced tool branch at execution time. [`while_loop`](../concepts/primitives.md) keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
 
-`@af.custom`, `set_batch`, and `set_pullback` are [custom rules](../concepts/custom-rules.md). Here they make `wikipedia_search` a boundary around a real HTTP call and tell `autoform` how that boundary behaves under the transforms used below.
+`wikipedia_search` is a [primitive](../concepts/primitives.md) written with the same pattern as [Write a Primitive](writing-primitives.md). The HTTP call stays in the runtime implementation, while the abstract, batch, and pullback rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
 
 ## Transform the Agent
 
@@ -169,4 +187,4 @@ pb_agent = af.pullback(agent_ir)
 answer, (question_hint,) = pb_agent.call(("What is autoform?",), "too vague")
 ```
 
-For real tools, keep the branch signature stable: each branch here is `(args, history) -> history`. External APIs, retrieval systems, and calculators should sit behind traceable adapters or a custom boundary with rules for the intended transforms. See [Custom Rules](../concepts/custom-rules.md).
+For real tools, keep the branch signature stable: each branch here is `(args, history) -> history`.

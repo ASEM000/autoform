@@ -45,4 +45,4 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 Defining a primitive means defining its behavior under execution, tracing, batching, pushforward, pullback, and sometimes DCE. Most user code should not do that.
 
-Use [`@af.custom`](custom-rules.md) when a Python function needs a boundary with transform-specific behavior. That gives the control point without requiring a new primitive from scratch.
+Use [Write a Primitive](../recipes/writing-primitives.md) when an operation cannot run on traced values and must still appear as one IR equation.
