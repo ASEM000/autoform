@@ -6,12 +6,12 @@ Trace records the function using example arguments. Transform rewrites the recor
 
 ```{mermaid}
 flowchart TD
-    F[/Python function + example args/] --> T["Trace"]
-    T --> IR1[(IR)]
-    IR1 --> X["Transform"]
-    X --> IR2[(IR)]
-    IR2 --> E["Execute"]
-    E --> O[/output/]
+    func["Python function + example args"] --> trace["Trace"]
+    trace --> ir["IR"]
+    ir --> transform["Transform"]
+    transform --> transformed_ir["IR"]
+    transformed_ir --> execute["Execute"]
+    execute --> output["output"]
 ```
 
 That split is the core model. The function is ordinary Python; the trace is data; transforms rewrite that data; execution happens later.
@@ -124,18 +124,18 @@ This avoids the [function-coloring](https://journal.stuffwithstuff.com/2015/02/0
 
 ```{mermaid}
 flowchart TD
-    F[/Python function/] --> T["Trace"]
-    T --> IR[(IR)]
-    IR --> B["batch"]
-    IR --> P["pullback"]
-    IR --> S["sched"]
-    B --> TIR[(transformed IR)]
-    P --> TIR
-    S --> TIR
-    TIR --> C[".call(...)"]
-    TIR --> A[".acall(...)"]
-    C --> O[/output/]
-    A --> O
+    func["Python function"] --> trace["trace(func)(...)"]
+    trace --> ir["IR"]
+    ir --> batch["batch"]
+    ir --> pullback["pullback"]
+    ir --> sched["sched"]
+    batch --> transformed_ir["transformed IR"]
+    pullback --> transformed_ir
+    sched --> transformed_ir
+    transformed_ir --> call[".call(...)"]
+    transformed_ir --> acall[".acall(...)"]
+    call --> output["output"]
+    acall --> output
 ```
 
 ## Gotchas

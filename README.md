@@ -143,9 +143,9 @@ answer = asyncio.run(scheduled.acall("recursion"))
 
 ```mermaid
 flowchart TD
-    topic[/topic/] --> explain[["LM: explain"]]
-    topic --> example[["LM: example"]]
-    explain --> combine[["LM: combine"]]
+    topic["topic"] --> explain["LM: explain"]
+    topic --> example["LM: example"]
+    explain --> combine["LM: combine"]
     example --> combine
 ```
 

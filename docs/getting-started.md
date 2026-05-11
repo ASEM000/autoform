@@ -431,11 +431,11 @@ There is no `async def` in `compare`. The first two calls read only `topic`, so 
 
 ```{mermaid}
 flowchart TD
-    topic[/topic/] --> explain["LM: explain"]
+    topic["topic"] --> explain["LM: explain"]
     topic --> example["LM: example"]
     explain --> combine["LM: combine"]
     example --> combine
-    combine --> output[/answer/]
+    combine --> answer["answer"]
 ```
 
 Trace the function:
