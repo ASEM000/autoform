@@ -208,7 +208,7 @@ for the full version.
 
 ## Reference
 
-- [Getting Started](https://autoform.readthedocs.io/en/latest/tutorial/)
+- [Getting Started](https://autoform.readthedocs.io/en/latest/getting-started.html)
 - [Concepts](https://autoform.readthedocs.io/en/latest/concepts/)
 - [Recipes](https://autoform.readthedocs.io/en/latest/recipes/)
 - [API Reference](https://autoform.readthedocs.io/en/latest/api/)

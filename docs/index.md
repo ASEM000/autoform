@@ -6,8 +6,8 @@
 :caption: Documentation
 :hidden:
 
+getting-started
 why-autoform
-tutorial/index
 concepts/index
 recipes/index
 ```

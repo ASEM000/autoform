@@ -93,7 +93,7 @@ The rewritten version is not replaced by a special combined feature. {py:func}`p
 | Batched evaluation should compose with other transforms. | One latency-critical request cannot afford another layer. |
 | Debugging or concurrency experiments should not require rewrites. | The project cannot take on a trace/IR/execute model yet. |
 
-Next, read [Getting Started](tutorial/index.md), or go deeper on the model in [Trace, IR, Execute](concepts/trace-ir-execute.md).
+Next, read [Getting Started](getting-started.md), or go deeper on the model in [Trace, IR, Execute](concepts/trace-ir-execute.md).
 
 ```{warning}
 [API Reference](api/index.md) may change before a stable release.
