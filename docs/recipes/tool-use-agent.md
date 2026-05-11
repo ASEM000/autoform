@@ -44,11 +44,12 @@ class State:
 
 
 # build the schema as a value-shaped instance
-tool = af.Enum("search", "done") @ af.Doc("Tool to call next.")
-args = af.Str() @ af.Doc("Argument for the selected tool.")
-answer = af.Str() @ af.Doc("Current answer for the user.")
-status = af.Enum("continue", "done") @ af.Doc("Whether another step is needed.")
-decision_schema = Decision(tool=tool, args=args, answer=answer, status=status)
+decision_schema = Decision(
+    tool=af.Enum("search", "done") @ af.Doc("Tool to call next."),
+    args=af.Str() @ af.Doc("Argument for the selected tool."),
+    answer=af.Str() @ af.Doc("Current answer for the user."),
+    status=af.Enum("continue", "done") @ af.Doc("Whether another step is needed."),
+)
 
 
 # custom marks this as one external tool boundary in the ir
