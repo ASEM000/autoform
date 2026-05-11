@@ -6,11 +6,11 @@ Trace records the function using example arguments. Transform rewrites the recor
 
 ```{mermaid}
 flowchart TD
-    F([Python function + example args]) --> T["Trace"]
+    F[/Python function + example args/] --> T["Trace"]
     T --> IR1[(IR)]
     IR1 --> X["Transform"]
     X --> IR2[(IR)]
-    IR2 --> E["Execute with real inputs"]
+    IR2 --> E["Execute"]
     E --> O[/output/]
 ```
 
@@ -124,16 +124,16 @@ This avoids the [function-coloring](https://journal.stuffwithstuff.com/2015/02/0
 
 ```{mermaid}
 flowchart TD
-    F([Python func]) --> T["trace(func)(...)"]
+    F[/Python function/] --> T["Trace"]
     T --> IR[(IR)]
     IR --> B["batch"]
     IR --> P["pullback"]
     IR --> S["sched"]
-    B --> IR2[(transformed IR)]
-    P --> IR2
-    S --> IR2
-    IR2 --> C[".call(...)"]
-    IR2 --> A[".acall(...)"]
+    B --> TIR[(transformed IR)]
+    P --> TIR
+    S --> TIR
+    TIR --> C[".call(...)"]
+    TIR --> A[".acall(...)"]
     C --> O[/output/]
     A --> O
 ```

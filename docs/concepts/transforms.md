@@ -3,8 +3,9 @@
 An [IR](the-ir.md) transform is a function with this shape:
 
 ```{mermaid}
-flowchart LR
-    input[/"IR"/] --> transform["IR transform"] --> output[/"IR"/]
+flowchart TD
+    IR1[(IR)] --> X["IR transform"]
+    X --> IR2[(IR)]
 ```
 
 The output is another executable IR. That one property is what makes composition ordinary Python function composition.

@@ -8,13 +8,12 @@ Build an agent as one traced function, then use [IR transforms](../concepts/tran
 
 ```{mermaid}
 flowchart TD
-    Q[/question/] --> I[(State)]
-    I --> C{"continue?"}
-    C -- yes --> B["body_ir"]
-    B --> D{"tool?"}
-    D -- search --> S["search branch"]
-    S --> H["new history"]
-    H --> C
+    Q[/question/] --> S[(State)]
+    S --> C{"continue?"}
+    C -- yes --> Step["step"]
+    Step --> D{"tool?"}
+    D -- search --> Search["search branch"]
+    Search --> S
     D -- done --> R[/result/]
     C -- no --> R
 ```
