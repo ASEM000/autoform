@@ -56,6 +56,14 @@ html_theme_options = {
     "source_branch": "main",
     "source_directory": "docs/",
     "top_of_page_buttons": ["view", "edit"],
+    "footer_icons": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/ASEM000/autoform",
+            "html": "",
+            "class": "fa-brands fa-solid fa-github fa-2x",
+        },
+    ],
     "light_css_variables": {
         "color-brand-primary": "#0051ff",
         "color-brand-content": "#0051ff",
@@ -83,7 +91,12 @@ always_use_bars_union = True
 intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 
 # nbsphinx settings
-html_css_files = ["custom.css"]
+html_css_files = [
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css",
+    "custom.css",
+]
 nbsphinx_execute = "never"
 nbsphinx_allow_errors = True
 nbsphinx_codecell_lexer = "python3"
