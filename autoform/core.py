@@ -195,13 +195,6 @@ class Prim:
 # ==================================================================================================
 
 
-def assert_hashable_tag(value: Any, /) -> None:
-    try:
-        hash(value)
-    except TypeError:
-        raise TypeError(f"Tags must be hashable, got {value!r}") from None
-
-
 active_tags: ContextVar[frozenset[Hashable]] = ContextVar("active_tags", default=frozenset())
 
 
@@ -227,7 +220,10 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
     """
 
     for value in tags:
-        assert_hashable_tag(value)
+        try:
+            hash(value)
+        except TypeError as e:
+            raise TypeError(f"Tags must be hashable, got {value!r}") from e
     token = active_tags.set(active_tags.get() | frozenset(tags))
     try:
         yield tags
@@ -254,8 +250,6 @@ class IREqn:
         assert isinstance(prim, Prim)
         assert isinstance(params, dict) or params is None
         assert isinstance(tags, frozenset)
-        for value in tags:
-            assert_hashable_tag(value)
         self.prim = prim
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
