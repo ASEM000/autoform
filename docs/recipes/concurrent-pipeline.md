@@ -1,6 +1,6 @@
 # Run an LM Pipeline Concurrently
 
-[`sched`](../concepts/transforms.md) turns independent equations into async
+{py:func}`sched <autoform.sched>` turns independent equations into async
 gather steps. The Python function can stay sequential.
 
 ```{admonition} Concept
@@ -65,5 +65,5 @@ the final call waits for the combined text.
 
 Measured speed depends on provider latency, provider-side rate limits, and the
 active [LiteLLM client](litellm-config.md). The property that matters is the dependency graph: if two
-equations do not depend on each other, `sched(...).acall(...)` can run them in
+equations do not depend on each other, {py:func}`sched <autoform.sched>` with `.acall(...)` can run them in
 the same async level.

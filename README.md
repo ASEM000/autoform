@@ -106,7 +106,7 @@ once, then decide how to transform or run it.
 
 The pieces do different jobs:
 
-| Job | API | For |
+| Job | [API](https://autoform.readthedocs.io/en/latest/api/) | For |
 | --- | --- | --- |
 | Transform an IR | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Build another IR from an existing IR. |
 | Customize a boundary | `@af.custom` | Give a traceable Python function transform-specific rules. |
@@ -214,4 +214,4 @@ for the full version.
 - [API Reference](https://autoform.readthedocs.io/en/latest/api/)
 - [Glossary](https://autoform.readthedocs.io/en/latest/reference/glossary.html)
 
-> Early development: API may change before a stable release.
+> Early development: [API Reference](https://autoform.readthedocs.io/en/latest/api/) may change before a stable release.

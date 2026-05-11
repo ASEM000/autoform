@@ -4,21 +4,21 @@ Interceptors are the runtime side-channel for intermediate values. Use them to i
 
 The three public pieces are:
 
-- `checkpoint(value, key=..., collection=...)`: mark a value.
-- `collect(collection=...)`: capture marked values during execution.
-- `inject(collection=..., values=...)`: substitute marked values during execution.
+- {py:func}`checkpoint <autoform.checkpoint>`: mark a value.
+- {py:func}`collect <autoform.collect>`: capture marked values during execution.
+- {py:func}`inject <autoform.inject>`: substitute marked values during execution.
 
-## `checkpoint`
+## {py:func}`checkpoint <autoform.checkpoint>`
 
-`checkpoint` is transparent by default:
+{py:func}`checkpoint <autoform.checkpoint>` is transparent by default:
 
 ```python
 step = af.checkpoint(step, key="step", collection="debug")
 ```
 
-Without `collect` or `inject`, it returns `step`. With a context active, the same checkpoint becomes a hook.
+Without {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>`, it returns `step`. With a context active, the same checkpoint becomes a hook.
 
-## `collect` and `inject`
+## {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`
 
 ```python
 import autoform as af
@@ -44,22 +44,21 @@ with af.inject(collection="debug", values={"normalized": ["cached item"]}):
 assert result == "cached item!"
 ```
 
-Values are stored in lists because the same key may be encountered more than once. `inject` consumes values in encounter order.
+Values are stored in lists because the same key may be encountered more than once. {py:func}`inject <autoform.inject>` consumes values in encounter order.
 
 ## Trace-Time Printing
 
 `print` inside the traced function runs while tracing. It sees placeholders or trace-time constants, not the concrete values from every later execution.
 
-`collect` runs around `ir.call(...)` or `ir.acall(...)`. It sees the runtime values produced by the IR.
+{py:func}`collect <autoform.collect>` runs around `ir.call(...)` or `ir.acall(...)`. It sees the runtime values produced by the IR.
 
 ## Runtime Contexts
 
-`collect` and `inject` do not produce new IRs. They wrap execution:
+{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` do not produce new IRs. They wrap execution:
 
 ```python
 with af.collect(collection="debug") as captured:
     af.batch(ir).call(["alpha", "beta"])
 ```
 
-Transformed IR execution is still execution, so checkpoints work after [`batch`,
-`pullback`, or `sched`](transforms.md).
+Transformed IR execution is still execution, so checkpoints work after {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, or {py:func}`sched <autoform.sched>`.

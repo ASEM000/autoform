@@ -1,6 +1,6 @@
 # Debug Intermediate Values
 
-Use [`checkpoint`](../concepts/intercepts.md) for values that may need inspection
+Use {py:func}`checkpoint <autoform.checkpoint>` for values that may need inspection
 or replace while running the same IR.
 
 ```{admonition} Concept
@@ -49,6 +49,6 @@ with af.inject(collection="debug", values=replacements):
 print(result)
 ```
 
-[`collect` and `inject`](../concepts/intercepts.md) are runtime contexts. They do not change the original
+{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` are runtime contexts. They do not change the original
 function or the traced [IR](../concepts/the-ir.md). That makes them useful for inspecting a bad value,
 trying a corrected intermediate, and then going back to normal execution.

@@ -1,7 +1,7 @@
 # Configure LiteLLM Routing
 
 `autoform` uses the active LM client at execution time. By default that client
-calls [LiteLLM](https://docs.litellm.ai/) directly. Use `lm_client` for a
+calls [LiteLLM](https://docs.litellm.ai/) directly. Use {py:func}`lm_client <autoform.lm_client>` for a
 configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) with retries, aliases, or provider fallback.
 
 ```{admonition} Concept
@@ -43,5 +43,5 @@ print(answer)
 ```
 
 Keep provider-specific routing policy in [LiteLLM](https://docs.litellm.ai/docs/routing). Keep program structure in
-`autoform`: [trace](../concepts/trace-ir-execute.md) the Python function, transform the [IR](../concepts/the-ir.md), and choose the LM
+`autoform`: {py:func}`trace <autoform.trace>` the Python function, transform the [IR](../concepts/the-ir.md), and choose the LM
 client around execution.

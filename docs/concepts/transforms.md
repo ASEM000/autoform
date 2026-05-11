@@ -11,11 +11,11 @@ The output is another executable IR. That one property is what makes composition
 
 | Transform | Returned IR expects | Returned IR produces | Use when |
 | --- | --- | --- | --- |
-| `batch(ir)` | Batched leaves where `in_axes=True`; broadcast leaves where `in_axes=False`. | Batched outputs. | Run the same program over many examples. |
-| `pushforward(ir)` | Original inputs plus input tangents. | Original output plus output tangent. | Push a proposed input change forward. |
-| `pullback(ir)` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
-| `sched(ir)` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
-| `dce(ir)` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the needed outputs. |
+| {py:func}`batch <autoform.batch>` | Batched leaves where `in_axes=True`; broadcast leaves where `in_axes=False`. | Batched outputs. | Run the same program over many examples. |
+| {py:func}`pushforward <autoform.pushforward>` | Original inputs plus input tangents. | Original output plus output tangent. | Push a proposed input change forward. |
+| {py:func}`pullback <autoform.pullback>` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
+| {py:func}`sched <autoform.sched>` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
+| {py:func}`dce <autoform.dce>` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the needed outputs. |
 
 ## IR Transforms
 
@@ -27,7 +27,7 @@ The output is another executable IR. That one property is what makes composition
 batch(ir, /, *, in_axes=True) -> IR
 ```
 
-`batch` vectorizes an IR over one or more input leaves. `in_axes` is a bool [pytree](pytrees.md) matching the input structure: `True` means batched, `False` means broadcast.
+{py:func}`batch <autoform.batch>` vectorizes an IR over one or more input leaves. `in_axes` is a bool [pytree](pytrees.md) matching the input structure: `True` means batched, `False` means broadcast.
 
 ```python
 batched = af.batch(ir)
@@ -42,7 +42,7 @@ outputs = batched.call(["DNA", "gravity", "recursion"])
 pushforward(ir, /) -> IR
 ```
 
-`pushforward` builds a forward-mode-style IR. The transformed IR takes primals and tangents, then returns output primals and output tangents.
+{py:func}`pushforward <autoform.pushforward>` builds a forward-mode-style IR. The transformed IR takes primals and tangents, then returns output primals and output tangents.
 
 ```python
 pf = af.pushforward(ir)
@@ -57,7 +57,7 @@ output, tangent = pf.call(("topic",), ("make it concrete",))
 pullback(ir, /) -> IR
 ```
 
-`pullback` builds a reverse-mode-style IR. In `autoform`, cotangents are text feedback. The transformed IR takes the original inputs plus an output cotangent, then returns the output and input cotangents.
+{py:func}`pullback <autoform.pullback>` builds a reverse-mode-style IR. In `autoform`, cotangents are text feedback. The transformed IR takes the original inputs plus an output cotangent, then returns the output and input cotangents.
 
 ```python
 pb = af.pullback(ir)
@@ -72,7 +72,7 @@ output, input_feedback = pb.call(("topic",), "too abstract")
 sched(ir, /, *, cond=None) -> IR
 ```
 
-`sched` groups independent equations into parallel stages. The resulting IR can
+{py:func}`sched <autoform.sched>` groups independent equations into parallel stages. The resulting IR can
 still run with `.call(...)`, but `.acall(...)` is where concurrent stages become
 useful.
 
@@ -91,7 +91,7 @@ result = asyncio.run(scheduled.acall("topic"))
 dce(ir, /, *, out_used=None) -> IR
 ```
 
-`dce` removes equations that do not contribute to the selected output leaves.
+{py:func}`dce <autoform.dce>` removes equations that do not contribute to the selected output leaves.
 
 ```python
 trimmed = af.dce(ir)
@@ -111,7 +111,7 @@ transformed = af.batch(af.pullback(ir))
 outputs, (topic_hints,) = transformed.call((topics,), critiques)
 ```
 
-There is no special combined mode. `pullback(ir)` returns an IR; `batch(...)` consumes that IR.
+There is no special combined mode. {py:func}`pullback <autoform.pullback>` returns an IR; {py:func}`batch <autoform.batch>` consumes that IR.
 
 Order still matters:
 
@@ -122,15 +122,15 @@ Order still matters:
 
 ## Non-Transforms
 
-Some nearby public APIs are intentionally not `IR -> IR`:
+Some nearby [public APIs](../api/index.md) are intentionally not `IR -> IR`:
 
-- [`custom`](custom-rules.md) is a decorator on traceable user functions. It marks a function boundary and lets transforms consult custom rules at that boundary.
-- [`memoize`](../recipes/memoize.md) is a context manager. It caches primitive results within a `with` block.
-- [`lm_client`](../recipes/litellm-config.md) is a context manager. It changes provider routing during execution.
-- [`collect` and `inject`](intercepts.md) are context managers. They capture or replace checkpointed values during execution.
-- [`tag`](tags.md) and [`fold`](fold.md) are context managers. They alter trace-time annotation or trace-time evaluation.
+- {py:func}`custom <autoform.custom>` is a decorator on traceable user functions. It marks a function boundary and lets transforms consult custom rules at that boundary. See [Custom Rules](custom-rules.md).
+- {py:func}`memoize <autoform.memoize>` is a context manager. It caches primitive results within a `with` block. See [Cache Repeated Computations with `memoize`](../recipes/memoize.md).
+- {py:func}`lm_client <autoform.lm_client>` is a context manager. It changes provider routing during execution. See [Configure LiteLLM Routing](../recipes/litellm-config.md).
+- {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` are context managers. They capture or replace checkpointed values during execution. See [Intercepts](intercepts.md).
+- {py:func}`tag <autoform.tag>` and {py:func}`fold <autoform.fold>` are context managers. They alter trace-time annotation or trace-time evaluation. See [Tags](tags.md) and [Fold](fold.md).
 
-The IR transforms reshape the IR. `custom` changes rule lookup at a boundary. Contexts wrap trace-time or execute-time behavior. They are complementary axes.
+The IR transforms reshape the IR. {py:func}`custom <autoform.custom>` changes rule lookup at a boundary. Contexts wrap trace-time or execute-time behavior. They are complementary axes.
 
 ## Transform and Execution Axes
 

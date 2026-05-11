@@ -1,6 +1,6 @@
-# Optimize Prompts with `pullback` Feedback
+# Optimize Prompts with {py:func}`pullback <autoform.pullback>` Feedback
 
-Use [`pullback`](../concepts/transforms.md) when feedback on an output should become
+Use {py:func}`pullback <autoform.pullback>` when feedback on an output should become
 feedback for the inputs that produced it. For prompt work, the input is often an
 instruction string.
 
@@ -38,13 +38,13 @@ for step in range(3):
 ```
 
 The original function still has one job: make an LM call from an instruction and
-a topic. `pullback(ir)` makes a second IR whose input is the original inputs plus
+a topic. {py:func}`pullback <autoform.pullback>` makes a second IR whose input is the original inputs plus
 feedback on the output.
 
 This is not a special optimizer. It is a feedback channel. The update policy
 above is deliberately small: append the returned instruction hint to the next
 instruction. A production loop can score examples, keep the best instruction,
-or batch many `(topic, critique)` pairs with `batch(pullback(ir))`.
+or batch many `(topic, critique)` pairs with {py:func}`batch <autoform.batch>` and {py:func}`pullback <autoform.pullback>`.
 
 See [Transforms](../concepts/transforms.md) for the call shapes and
 [Primitives](../concepts/primitives.md) for how feedback moves through each

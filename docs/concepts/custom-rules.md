@@ -8,9 +8,9 @@ Use custom rules when a traceable function boundary needs transform-specific beh
 
 Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
 
-The wrapped function body must still be traceable. Use `@af.custom` for a boundary around traceable `autoform` code. Use [Write a Primitive](../recipes/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
+The wrapped function body must still be traceable. Use {py:func}`custom <autoform.custom>` for a boundary around traceable `autoform` code. Use [Write a Primitive](../recipes/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
 
-Reach for `@af.custom` when one of these applies:
+Reach for {py:func}`custom <autoform.custom>` when one of these applies:
 
 - a sub-function should be treated as an atomic boundary by a transform;
 - a domain-specific rule is more correct than the default decomposition;
@@ -18,7 +18,7 @@ Reach for `@af.custom` when one of these applies:
 
 ## Mental Model
 
-`custom` is a decorator on a traceable Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule.
+{py:func}`custom <autoform.custom>` is a decorator on a traceable Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule.
 
 ```python
 import autoform as af
@@ -31,7 +31,7 @@ def bracket(text: str) -> str:
 
 With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform to override.
 
-## `pushforward` Rule
+## {py:func}`pushforward <autoform.pushforward>` Rule
 
 ```python
 @bracket.set_pushforward
@@ -53,7 +53,7 @@ assert tangent == "bracket change: make it direct"
 The pushforward rule receives `(primals, tangents)` and returns
 `(primal_output, tangent_output)`.
 
-## `pullback` Rule
+## {py:func}`pullback <autoform.pullback>` Rule
 
 ```python
 @bracket.set_pullback
@@ -75,7 +75,7 @@ assert text_feedback == "too decorated via [hello] from hello"
 The pullback rule receives `((primals, output), feedback)` and returns
 feedback with the same shape as the original inputs.
 
-## `batch` Rule
+## {py:func}`batch <autoform.batch>` Rule
 
 ```python
 @bracket.set_batch
@@ -107,7 +107,7 @@ The wrapper exposes three sync/async pairs:
 
 The pullback hook overrides the backward sweep. The forward sweep still records the primal output and residuals needed by the backward rule.
 
-Sync and async registrations are independent. If only `set_batch` is registered, then `af.batch(ir).call(...)` uses that rule, while `await af.batch(ir).acall(...)` may use the default async behavior. Register both sides when both execution modes need the same custom semantics.
+Sync and async registrations are independent. If only `set_batch` is registered, then {py:func}`batch <autoform.batch>` uses that rule, while `await af.batch(ir).acall(...)` may use the default async behavior. Register both sides when both execution modes need the same custom semantics.
 
 ## Rule Correctness
 

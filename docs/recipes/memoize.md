@@ -1,6 +1,6 @@
-# Cache Repeated Computations with `memoize`
+# Cache Repeated Computations with {py:func}`memoize <autoform.memoize>`
 
-[`memoize`](../reference/glossary.md) is a runtime context that caches [primitive](../concepts/primitives.md)
+{py:func}`memoize <autoform.memoize>` is a runtime context that caches [primitive](../concepts/primitives.md)
 results inside the `with` block. Use it when the same primitive call is repeated
 with the same inputs.
 
@@ -29,12 +29,12 @@ with af.memoize():
 print(result)
 ```
 
-The two `af.format("<{}>", "alpha")` calls are the same primitive call, so the
+The two {py:func}`format <autoform.format>` calls are the same primitive call, so the
 second one reads the cached result.
 
 ## Deduplicate During Tracing
 
-`memoize` can also be used while tracing. In that case, identical primitive
+{py:func}`memoize <autoform.memoize>` can also be used while tracing. In that case, identical primitive
 calls become one recorded equation.
 
 ```python
@@ -52,7 +52,7 @@ ir = af.trace(duplicated)("seed")
 print(ir.call("alpha"))
 ```
 
-The repeated `concat` call is cached while the trace is being built. `checkpoint`
+The repeated {py:func}`concat <autoform.concat>` call is cached while the trace is being built. {py:func}`checkpoint <autoform.checkpoint>`
 is not memoized because repeated checkpoints are meant to remain visible to
-`collect` and `inject`. For other primitives, use `memoize` when the same inputs
+{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`. For other primitives, use {py:func}`memoize <autoform.memoize>` when the same inputs
 really should mean the same result.

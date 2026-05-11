@@ -160,9 +160,9 @@ answer = agent_ir.call("What is autoform?")
 print(answer)
 ```
 
-The provider decides which branch to run by returning a [`Decision` schema value](../concepts/schemas.md). [`switch`](../concepts/primitives.md) dispatches to the traced tool branch at execution time. [`while_loop`](../concepts/primitives.md) keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
+The provider decides which branch to run by returning a [`Decision` schema value](../concepts/schemas.md). {py:func}`switch <autoform.switch>` dispatches to the traced tool branch at execution time. {py:func}`while_loop <autoform.while_loop>` keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
 
-`wikipedia_search` is a [primitive](../concepts/primitives.md) written with the same pattern as [Write a Primitive](writing-primitives.md). The HTTP call stays in the runtime implementation, while the abstract, batch, and pullback rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
+`wikipedia_search` is a [primitive](../concepts/primitives.md) written with the same pattern as [Write a Primitive](writing-primitives.md). The HTTP call stays in the runtime implementation, while the abstract, {py:func}`batch <autoform.batch>`, and {py:func}`pullback <autoform.pullback>` rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
 
 ## Transform the Agent
 

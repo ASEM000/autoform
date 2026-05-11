@@ -2,7 +2,7 @@
 
 Tags attach metadata to IR equations while tracing. They do not change execution by themselves; they give later code a way to recognize equations that belong to a logical region.
 
-Pass any hashable value to `af.tag(...)`:
+Pass any hashable value to {py:func}`tag <autoform.tag>`:
 
 ```python
 import autoform as af
@@ -26,7 +26,7 @@ Nested tag blocks accumulate tags. Code outside the block does not receive the t
 
 ## Scheduling Tags
 
-`sched` accepts a `cond` callback that receives each IR equation. Tags give that callback a stable way to select only part of a traced program.
+{py:func}`sched <autoform.sched>` accepts a `cond` callback that receives each IR equation. Tags give that callback a stable way to select only part of a traced program.
 
 ```python
 scheduled = af.sched(ir, cond=lambda ir_eqn: draft in ir_eqn.tags)
@@ -60,7 +60,7 @@ assert tagged_prims == ["concat"]
 
 ## Hashable Values
 
-`af.tag(...)` asserts that every tag value is hashable because equation tags are stored in a `frozenset`. Strings, integers, tuples of hashable values, and other immutable identifiers work.
+{py:func}`tag <autoform.tag>` asserts that every tag value is hashable because equation tags are stored in a `frozenset`. Strings, integers, tuples of hashable values, and other immutable identifiers work.
 
 For structured tags, use a hashable object directly. A frozen dataclass is usually the most convenient payload:
 

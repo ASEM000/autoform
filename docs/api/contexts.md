@@ -1,6 +1,6 @@
 # Context Managers
 
-These APIs wrap trace-time or execution-time behavior without transforming an IR.
+These context managers wrap trace-time or execution-time behavior without transforming an IR.
 
 ```{eval-rst}
 .. autofunction:: autoform.fold

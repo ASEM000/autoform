@@ -1,13 +1,13 @@
 # Use Schema Patterns
 
-[`lm_schema_call`](../concepts/schemas.md) returns a structured value whose
+{py:func}`lm_schema_call <autoform.lm_schema_call>` returns a structured value whose
 shape can be transformed like any other [pytree](../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ```{admonition} Concept
 [Schemas](../concepts/schemas.md) · [Pytrees](../concepts/pytrees.md) · [Transforms](../concepts/transforms.md) · [Primitives](../concepts/primitives.md)
 ```
 
-## Route with `Enum`
+## Route with {py:class}`Enum <autoform.Enum>`
 
 ```python
 import optree
@@ -29,7 +29,7 @@ def choose_route(question: str) -> Route:
     return af.lm_schema_call([msg], model="gpt-5.2", schema=route_schema)
 ```
 
-Use `Enum` for finite decisions that should feed [`switch`](../concepts/primitives.md), status fields, or
+Use {py:class}`Enum <autoform.Enum>` for finite decisions that should feed {py:func}`switch <autoform.switch>`, status fields, or
 other control values.
 
 ## Use Nested Arguments
@@ -121,11 +121,11 @@ class MaybeAnswer:
 maybe_schema = MaybeAnswer(state=af.Enum("present", "absent"), text=af.Str())
 ```
 
-This keeps the output shape stable for [`batch`, `pullback`](../concepts/transforms.md), and [`switch`](../concepts/primitives.md).
+This keeps the output shape stable for {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`switch <autoform.switch>`.
 
 ## Send Field Feedback
 
-Structured outputs also work with `pullback`.
+Structured outputs also work with {py:func}`pullback <autoform.pullback>`.
 
 ```python
 import optree
@@ -160,5 +160,5 @@ carry its own critique, and the backward rule summarizes that critique for the
 inputs that produced the structured response.
 
 Malformed provider output raises a parsing error during execution. Keep schemas
-small and concrete: finite choices with `Enum`, bounded numbers with `Int` or
-`Float`, and field descriptions with `Doc`.
+small and concrete: finite choices with {py:class}`Enum <autoform.Enum>`, bounded numbers with {py:class}`Int <autoform.Int>` or
+{py:class}`Float <autoform.Float>`, and field descriptions with {py:class}`Doc <autoform.Doc>`.

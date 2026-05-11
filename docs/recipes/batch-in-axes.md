@@ -1,6 +1,6 @@
 # Vectorize Inputs with `in_axes`
 
-[`batch`](../concepts/transforms.md) needs to know which inputs are batched and
+{py:func}`batch <autoform.batch>` needs to know which inputs are batched and
 which inputs should be reused for every example. That is what `in_axes` describes.
 
 ```{admonition} Concept

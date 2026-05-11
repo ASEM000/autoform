@@ -7,7 +7,7 @@ Use them when the branch condition or loop state is part of the traced program.
 [Primitives](../concepts/primitives.md) · [The IR](../concepts/the-ir.md) · [Pytrees](../concepts/pytrees.md)
 ```
 
-## Route with `switch`
+## Route with {py:func}`switch <autoform.switch>`
 
 ```python
 import autoform as af
@@ -35,7 +35,7 @@ ir = af.trace(route)("brief", "recursion")
 print(ir.call("detailed", "recursion"))
 ```
 
-## Repeat with `while_loop`
+## Repeat with {py:func}`while_loop <autoform.while_loop>`
 
 ```python
 import optree
@@ -67,7 +67,7 @@ print(result)
 
 The loop state is a registered [pytree](../concepts/pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
-## Block Feedback with `stop_gradient`
+## Block Feedback with {py:func}`stop_gradient <autoform.stop_gradient>`
 
 ```python
 import autoform as af
@@ -89,7 +89,7 @@ print(editable_feedback)
 
 The forward value of `locked` is unchanged. Feedback for that input is blocked.
 
-## Force Ordering with `depends`
+## Force Ordering with {py:func}`depends <autoform.depends>`
 
 ```python
 import autoform as af
@@ -107,5 +107,5 @@ scheduled = af.sched(ir)
 print(scheduled.call("recursion"))
 ```
 
-Use `depends` when a value must be computed before another value even though
+Use {py:func}`depends <autoform.depends>` when a value must be computed before another value even though
 the second value does not consume it directly.

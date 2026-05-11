@@ -2,13 +2,13 @@
 
 Public type-level constants.
 
-## `PYTREE_NAMESPACE`
+```{eval-rst}
+.. py:data:: autoform.PYTREE_NAMESPACE
+   :type: str
 
-```python
-PYTREE_NAMESPACE: str = "OPTREE_AUTOFORM_NAMESPACE"
+   The Optree namespace reserved by ``autoform``.
 ```
 
-The [Optree](https://optree.readthedocs.io/) namespace reserved by `autoform`.
 Use it when registering project dataclasses as pytrees:
 
 ```python

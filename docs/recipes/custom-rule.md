@@ -1,6 +1,6 @@
-# Define a `custom` Rule
+# Define a {py:func}`custom <autoform.custom>` Rule
 
-Use [`custom`](../concepts/custom-rules.md) when a traceable helper function
+Use {py:func}`custom <autoform.custom>` when a traceable helper function
 should appear as one boundary in the [IR](../concepts/the-ir.md). Add transform rules for the
 [transforms](../concepts/transforms.md) required by the program.
 
@@ -93,4 +93,4 @@ output leaves are batched.
 Add only the rules the program needs. If a custom boundary should run under
 scheduled async execution, add the matching async rule. Runtime calls that need
 concrete Python values belong in [Write a Primitive](writing-primitives.md),
-not in `@af.custom` function bodies.
+not in function bodies decorated with {py:func}`custom <autoform.custom>`.

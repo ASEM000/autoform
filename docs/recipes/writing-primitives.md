@@ -48,10 +48,10 @@ The abstract rule runs at trace time. It must return the output shape and type w
 | --- | --- |
 | `impl_rules` | Sync execution for `.call(...)`. |
 | `abstract_rules` | Trace-time output shape and type. |
-| `batch_rules` | Behavior under `batch`. |
-| `push_rules` | Behavior under `pushforward`. |
-| `pull_fwd_rules` | Forward sweep used by `pullback`. |
-| `pull_bwd_rules` | Backward sweep used by `pullback`. |
+| `batch_rules` | Behavior under {py:func}`batch <autoform.batch>`. |
+| `push_rules` | Behavior under {py:func}`pushforward <autoform.pushforward>`. |
+| `pull_fwd_rules` | Forward sweep used by {py:func}`pullback <autoform.pullback>`. |
+| `pull_bwd_rules` | Backward sweep used by {py:func}`pullback <autoform.pullback>`. |
 
 Register only the behavior the primitive needs. Applying a transform that reaches a primitive without the matching rule raises an error from the rule registry.
 
@@ -114,4 +114,4 @@ async def aimpl_lookup(query: str, /) -> str:
 af.core.impl_rules.aset(lookup_p, aimpl_lookup)
 ```
 
-Async transform rules use the corresponding `aset(...)` registry method. For example, `af.core.batch_rules.aset(...)` registers async batch behavior.
+Async transform rules use the corresponding `aset(...)` registry method. For example, `af.core.batch_rules.aset(...)` registers async {py:func}`batch <autoform.batch>` behavior.

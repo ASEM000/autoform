@@ -7,7 +7,7 @@ That rule explains most tracing surprises.
 (static-and-dynamic-inputs)=
 ## Static and Dynamic Inputs
 
-The trace API is:
+The {py:func}`trace <autoform.trace>` API is:
 
 ```python
 af.trace(func, /, *, static: Tree[bool] = False)
@@ -48,7 +48,7 @@ ir = af.trace(bad)("short", "seed")
 
 The comparison would need a concrete value while tracing. A dynamic input only carries abstract type information.
 
-Use [`switch`](primitives.md) when the branch is a runtime decision:
+Use {py:func}`switch <autoform.switch>` when the branch is a runtime decision:
 
 ```python
 short = af.trace(lambda text: af.format("Short: {}", text))("seed")
@@ -76,7 +76,7 @@ def bad_repeat(n: int, text: str) -> str:
 
 Python needs `n` while tracing to decide how many equations to create.
 
-Use [`while_loop`](primitives.md) when the loop condition is runtime data:
+Use {py:func}`while_loop <autoform.while_loop>` when the loop condition is runtime data:
 
 ```python
 def cond(state: tuple[str, str]) -> bool:

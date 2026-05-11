@@ -1,6 +1,6 @@
-# Eliminate Dead Computations with `dce`
+# Eliminate Dead Computations with {py:func}`dce <autoform.dce>`
 
-[`dce`](../concepts/transforms.md) removes equations that cannot affect the
+{py:func}`dce <autoform.dce>` removes equations that cannot affect the
 selected output.
 
 ```{admonition} Concept
@@ -24,7 +24,7 @@ cleaned = af.dce(ir)
 print(cleaned.call("alpha"))
 ```
 
-`dce` walks backward from the output [pytree](../concepts/pytrees.md). The unused `format` call is not on
+{py:func}`dce <autoform.dce>` walks backward from the output [pytree](../concepts/pytrees.md). The unused {py:func}`format <autoform.format>` call is not on
 that path, so the cleaned IR can drop it.
 
 ## Keep Part of an Output
@@ -50,5 +50,5 @@ print(left_only.call("alpha"))
 The returned tree keeps the same shape. Output leaves removed by `out_used` are
 returned as `None`.
 
-Use `dce` after transforms or debugging edits when the IR contains work that no
+Use {py:func}`dce <autoform.dce>` after transforms or debugging edits when the IR contains work that no
 longer contributes to the needed value.

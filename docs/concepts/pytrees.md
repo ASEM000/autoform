@@ -8,13 +8,13 @@ That container/leaf view is called a pytree. `autoform` uses pytrees so transfor
 
 ## Registration
 
-Without pytree registration, a custom object is opaque. `batch` cannot know which fields are batched. `pullback` cannot route cotangents into the right fields.
+Without pytree registration, a custom object is opaque. {py:func}`batch <autoform.batch>` cannot know which fields are batched. {py:func}`pullback <autoform.pullback>` cannot route cotangents into the right fields.
 
 With registration, the object becomes part of the same tree machinery as tuples and dictionaries.
 
-## `PYTREE_NAMESPACE`
+## {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`
 
-`autoform` reserves `af.PYTREE_NAMESPACE`. Register project dataclasses in that namespace so `autoform` and project code agree on the same tree rules.
+`autoform` reserves {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`. Register project dataclasses in that namespace so `autoform` and project code agree on the same tree rules.
 
 ```python
 import optree
@@ -33,15 +33,15 @@ upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 assert upper == State(topic="DNA", draft="SHORT")
 ```
 
-That is the canonical pattern: pass `af.PYTREE_NAMESPACE` to [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html).
+That is the canonical pattern: pass {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` to [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ## Transform Behavior
 
 Once `State` is a pytree, an IR can accept and return it. Transforms see the leaves:
 
-- `batch` can vectorize over `State(topic=[...], draft=[...])`.
-- `pullback` can return field-shaped feedback such as `State(topic="be more specific", draft="too terse")`.
-- `while_loop` can carry structured state as long as the body input and output structures match.
+- {py:func}`batch <autoform.batch>` can vectorize over `State(topic=[...], draft=[...])`.
+- {py:func}`pullback <autoform.pullback>` can return field-shaped feedback such as `State(topic="be more specific", draft="too terse")`.
+- {py:func}`while_loop <autoform.while_loop>` can carry structured state as long as the body input and output structures match.
 
 ## Leaf Guidelines
 

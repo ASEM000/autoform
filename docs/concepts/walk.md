@@ -8,7 +8,7 @@ Use this when manual equation stepping is needed for debugging, visualization, o
 
 ## Manual Execution
 
-`ir.walk(...)` is the manual execution interface on the object returned by `af.trace(...)`. It exposes the same equation stream that `.call(...)` and `.acall(...)` execute.
+`ir.walk(...)` is the manual execution interface on the object returned by {py:func}`trace <autoform.trace>`. It exposes the same equation stream that `.call(...)` and `.acall(...)` execute.
 
 ## Use Cases
 

@@ -43,7 +43,7 @@ This is only a provider smoke test. It does not use tracing.
 | --- | --- |
 | `ModuleNotFoundError: autoform` | Install into the same environment that runs Python. |
 | Python version error | Use Python 3.12 or newer. |
-| Provider authentication error | Set the provider API key expected by LiteLLM, such as `OPENAI_API_KEY` for OpenAI. |
+| Provider authentication error | Set the provider key expected by LiteLLM, such as `OPENAI_API_KEY` for OpenAI. |
 | Provider model error | Use a model name supported by the configured provider or route through [`litellm.Router`](https://docs.litellm.ai/docs/routing). |
 
 ## Trace a Function
@@ -68,15 +68,15 @@ Trace it with an example argument:
 ir = af.trace(explain)("placeholder topic")
 ```
 
-The string `"placeholder topic"` is a shape/type witness. It tells `trace` that `topic` is a string. It is not sent to the model. See [Tracing Semantics](../concepts/tracing-semantics.md) for the static/dynamic input rules.
+The string `"placeholder topic"` is a shape/type witness. It tells {py:func}`trace <autoform.trace>` that `topic` is a string. It is not sent to the model. See [Tracing Semantics](../concepts/tracing-semantics.md) for the static/dynamic input rules.
 
-Tracing runs the function once with placeholder values. Calls to [`autoform` primitives](../concepts/primitives.md) are recorded as [IR equations](../concepts/the-ir.md). The `lm_call` is recorded, not executed.
+Tracing runs the function once with placeholder values. Calls to [`autoform` primitives](../concepts/primitives.md) are recorded as [IR equations](../concepts/the-ir.md). The {py:func}`lm_call <autoform.lm_call>` is recorded, not executed.
 
 The resulting IR contains:
 
 - one runtime input, `topic`;
-- one `format` equation that builds the prompt;
-- one `lm_call` equation that records a future provider call with role `user` and model `gpt-5.2`;
+- one {py:func}`format <autoform.format>` equation that builds the prompt;
+- one {py:func}`lm_call <autoform.lm_call>` equation that records a future provider call with role `user` and model `gpt-5.2`;
 - one string output.
 
 The result, `ir`, is the object every [transform](../concepts/transforms.md) consumes.
@@ -93,7 +93,7 @@ output = ir.call("quantum entanglement")
 print(output)
 ```
 
-This does hit the active LM provider. The runtime input replaces the placeholder string used during tracing, and the recorded `lm_call` equation executes.
+This does hit the active LM provider. The runtime input replaces the placeholder string used during tracing, and the recorded {py:func}`lm_call <autoform.lm_call>` equation executes.
 
 Calling the IR again calls the provider again:
 
@@ -114,7 +114,7 @@ import asyncio
 output = asyncio.run(ir.acall("quantum entanglement"))
 ```
 
-Use `.call(...)` from synchronous code. Use `.acall(...)` when the caller is already async, or when a transformed IR such as `sched(ir)` can overlap independent work.
+Use `.call(...)` from synchronous code. Use `.acall(...)` when the caller is already async, or when a transformed IR such as {py:func}`sched <autoform.sched>` can overlap independent work.
 
 ## Batch Inputs
 
@@ -127,7 +127,7 @@ The direct Python version is a loop:
 outputs = [ir.call(topic) for topic in ["DNA", "gravity", "recursion"]]
 ```
 
-That works, but the loop is not itself an IR. [`batch`](../concepts/transforms.md) returns an IR that accepts batched inputs:
+That works, but the loop is not itself an IR. {py:func}`batch <autoform.batch>` returns an IR that accepts batched inputs:
 
 ```python
 import autoform as af
@@ -148,9 +148,9 @@ for topic, output in zip(topics, outputs):
 The result is equivalent to the list comprehension, but the representation is different:
 
 - the list comprehension returns a Python list of results;
-- `af.batch(ir)` returns a transformed IR that can be transformed again.
+- {py:func}`batch <autoform.batch>` returns a transformed IR that can be transformed again.
 
-That second point is the reason to use `batch` in `autoform`. The batched form can be composed with `pullback`, `sched`, or other IR transforms.
+That second point is the reason to use {py:func}`batch <autoform.batch>` in `autoform`. The batched form can be composed with {py:func}`pullback <autoform.pullback>`, {py:func}`sched <autoform.sched>`, or other IR transforms.
 
 By default, every [input leaf](../concepts/pytrees.md) is batched. For functions with multiple inputs, `in_axes` controls which leaves are batched and which are broadcast:
 
@@ -163,7 +163,7 @@ That means: batch over the first positional input, reuse the second input for ev
 
 ## Send Feedback Backward
 
-[`pullback`](../concepts/transforms.md) sends feedback backward through an IR.
+{py:func}`pullback <autoform.pullback>` sends feedback backward through an IR.
 
 The situation is:
 
@@ -199,15 +199,15 @@ The result has the same structure:
 - `output` is the model output from the forward run;
 - `grad` is a one-item tuple containing text feedback for `topic`.
 
-For example, `grad` might suggest narrowing the topic, asking for less jargon, or adding an audience constraint. The exact text depends on the active model, because the backward pass through `lm_call` is itself an LM call.
+For example, `grad` might suggest narrowing the topic, asking for less jargon, or adding an audience constraint. The exact text depends on the active model, because the backward pass through {py:func}`lm_call <autoform.lm_call>` is itself an LM call.
 
 Pullback becomes more useful as the program grows. If the IR has several LM calls, the output feedback flows backward through every recorded step. Each [primitive rule](../concepts/primitives.md) decides how to translate feedback for its output into feedback for its inputs.
 
 Cotangent shapes must match output shapes. If the function returns a tuple, pass tuple-shaped feedback. If it returns a [schema](../concepts/schemas.md)-shaped object, pass feedback with the same [pytree](../concepts/pytrees.md) shape.
 
-## Compose `batch` and `pullback`
+## Compose {py:func}`batch <autoform.batch>` and {py:func}`pullback <autoform.pullback>`
 
-The next task combines [`batch`](../concepts/transforms.md) and [`pullback`](../concepts/transforms.md): run prompt-feedback gradients across many inputs.
+The next task combines {py:func}`batch <autoform.batch>` and {py:func}`pullback <autoform.pullback>`: run prompt-feedback gradients across many inputs.
 
 Without composition, the loop is manual:
 
@@ -231,7 +231,7 @@ That glue pairs every input with its critique, runs the backward pass, unpacks t
 composed = af.batch(af.pullback(ir))
 ```
 
-*`pullback` returned an IR. `batch` accepts an IR. So `batch(pullback(ir))` is just function composition, and no special combined mode was added for the composition.*
+*{py:func}`pullback <autoform.pullback>` returned an IR. {py:func}`batch <autoform.batch>` accepts an IR. So `batch(pullback(ir))` is just function composition, and no special combined mode was added for the composition.*
 
 Run it:
 
@@ -247,13 +247,13 @@ for topic, hint in zip(topics, topic_hints):
     print(topic, "->", hint)
 ```
 
-The call shape follows from `pullback`:
+The call shape follows from {py:func}`pullback <autoform.pullback>`:
 
 - the original input tree is one positional input, so batched topics are passed as `(topics,)`;
 - output feedback is batched as `critiques`;
 - input feedback has the same structure as the original input tree, so it returns `(topic_hints,)`.
 
-Both [transforms](../concepts/transforms.md) are `IR -> IR`. `pullback` does not know `batch` will be applied next. `batch` does not know the IR came from `pullback`. The type does the work.
+Both [transforms](../concepts/transforms.md) are `IR -> IR`. {py:func}`pullback <autoform.pullback>` does not know {py:func}`batch <autoform.batch>` will be applied next. {py:func}`batch <autoform.batch>` does not know the IR came from {py:func}`pullback <autoform.pullback>`. The type does the work.
 
 Order matters:
 
@@ -264,9 +264,9 @@ Every other IR transform composes the same way. `sched(batch(pullback(ir)))` is 
 
 ## Return Structured Results
 
-Plain `lm_call` returns text. That is fine for prose, but many LM programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
+Plain {py:func}`lm_call <autoform.lm_call>` returns text. That is fine for prose, but many LM programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
 
-Use [`lm_schema_call`](../concepts/schemas.md) when the LM output should have a known shape.
+Use {py:func}`lm_schema_call <autoform.lm_schema_call>` when the LM output should have a known shape.
 
 ```python
 import optree
@@ -281,7 +281,7 @@ class Summary:
     confidence: float
 ```
 
-The `namespace=af.PYTREE_NAMESPACE` argument uses [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html) to register `Summary` as an `autoform` [pytree](../concepts/pytrees.md). The schema is an instance of that class:
+The `namespace=af.PYTREE_NAMESPACE` argument uses [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html) to register `Summary` as an `autoform` [pytree](../concepts/pytrees.md). See {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` for the namespace constant. The schema is an instance of that class:
 
 ```python
 # build the schema directly as a value-shaped instance
@@ -305,7 +305,7 @@ Trace it:
 ir = af.trace(summarize)("placeholder topic")
 ```
 
-The schema is a static parameter of the recorded `lm_schema_call`. The returned fields are still part of the [IR](../concepts/the-ir.md) output tree, so transforms can walk them like ordinary Python structure.
+The schema is a static parameter of the recorded {py:func}`lm_schema_call <autoform.lm_schema_call>`. The returned fields are still part of the [IR](../concepts/the-ir.md) output tree, so transforms can walk them like ordinary Python structure.
 
 Execute it with a configured provider:
 
@@ -321,13 +321,13 @@ The returned value is a `Summary`, not a string blob.
 
 Schemas also work with transforms:
 
-- `batch(ir)` returns a batched `Summary` tree.
-- `pullback(ir)` accepts feedback with the same schema shape.
-- `sched(ir)` can schedule schema calls like any other primitive.
+- {py:func}`batch <autoform.batch>` returns a batched `Summary` tree.
+- {py:func}`pullback <autoform.pullback>` accepts feedback with the same schema shape.
+- {py:func}`sched <autoform.sched>` can schedule schema calls like any other primitive.
 
 Schemas are not tied to dataclasses. Any [pytree](../concepts/pytrees.md) shape works, and the schema can be built inline for one-off calls or transformed with `optree.tree_map` before execution. See [Schemas](../concepts/schemas.md) for those patterns.
 
-For `pullback`, feedback lands on fields:
+For {py:func}`pullback <autoform.pullback>`, feedback lands on fields:
 
 ```python
 # feedback has the same shape as the structured output
@@ -341,7 +341,7 @@ The field feedback is summarized into a prompt-feedback request for the input me
 
 Tracing produces an IR, but debugging often starts with a smaller question: what did the middle of the program produce?
 
-Put a [`checkpoint`](../concepts/intercepts.md) at the value to inspect:
+Put a {py:func}`checkpoint <autoform.checkpoint>` at the value to inspect:
 
 ```python
 import autoform as af
@@ -366,14 +366,14 @@ Trace once:
 ir = af.trace(explain_then_rewrite)("placeholder topic")
 ```
 
-`checkpoint` is transparent during ordinary execution. Without a context, this just runs both LM calls:
+{py:func}`checkpoint <autoform.checkpoint>` is transparent during ordinary execution. Without a context, this just runs both LM calls:
 
 ```python
 # no collection context means checkpoint is transparent
 result = ir.call("recursion")
 ```
 
-Wrap execution with [`collect`](../concepts/intercepts.md) to capture checkpointed values:
+Wrap execution with {py:func}`collect <autoform.collect>` to capture checkpointed values:
 
 ```python
 # collect captured intermediates during execution
@@ -385,7 +385,7 @@ print(captured["step1"])
 
 The captured value is a list because the same key can be reached more than once. In this function there is one `step1` value per run.
 
-Use [`inject`](../concepts/intercepts.md) to replace an intermediate and keep the rest of the IR unchanged:
+Use {py:func}`inject <autoform.inject>` to replace an intermediate and keep the rest of the IR unchanged:
 
 ```python
 # replace step1 only for this execution
@@ -395,14 +395,14 @@ with af.inject(collection="debug", values={"step1": ["Recursion is a function ca
 
 This execution still enters the IR at the same input and still runs the downstream rewrite call. The checkpointed `step1` value is replaced before the downstream prompt is built.
 
-That makes `collect` and `inject` useful for tight debugging loops:
+That makes {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` useful for tight debugging loops:
 
 - capture the intermediate value from a failing run;
 - edit or replace that value;
 - rerun the downstream part of the same IR;
 - keep the original Python function intact.
 
-`collect` and `inject` are [runtime context managers](../concepts/intercepts.md). They do not modify the IR object. The same `ir` can run normally, run under `collect`, or run under `inject` depending on the execution context around `ir.call(...)` or `ir.acall(...)`.
+{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` are [runtime context managers](../concepts/intercepts.md). They do not modify the IR object. The same `ir` can run normally, run under {py:func}`collect <autoform.collect>`, or run under {py:func}`inject <autoform.inject>` depending on the execution context around `ir.call(...)` or `ir.acall(...)`.
 
 For more detail, see [Intercepts](../concepts/intercepts.md).
 
@@ -457,7 +457,7 @@ sequential = ir.call("recursion")
 sequential_s = time.perf_counter() - start
 ```
 
-Schedule the IR with [`sched`](../concepts/transforms.md) and run it asynchronously:
+Schedule the IR with {py:func}`sched <autoform.sched>` and run it asynchronously:
 
 ```python
 # schedule independent equations and run asynchronously
@@ -486,9 +486,9 @@ scheduled = af.sched(ir)
 parallel = asyncio.run(scheduled.acall("recursion"))
 ```
 
-Execution mode is chosen at the call site: `.call(...)` for sync execution, `.acall(...)` for async execution. `sched` changes the IR that executes, so the original function stays sequential.
+Execution mode is chosen at the call site: `.call(...)` for sync execution, `.acall(...)` for async execution. {py:func}`sched <autoform.sched>` changes the IR that executes, so the original function stays sequential.
 
-`sched` is another `IR -> IR` transform, so it composes with the earlier transforms:
+{py:func}`sched <autoform.sched>` is another `IR -> IR` transform, so it composes with the earlier transforms:
 
 ```python
 # transforms still compose after scheduling
@@ -505,9 +505,9 @@ The core loop is now visible:
 - write an LM program as ordinary Python;
 - trace it into an IR;
 - execute the IR with real inputs;
-- transform the IR with `batch`, `pullback`, and `sched`;
-- inspect or replace intermediates with `collect` and `inject`;
-- return structured values with `lm_schema_call`.
+- transform the IR with {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>`;
+- inspect or replace intermediates with {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`;
+- return structured values with {py:func}`lm_schema_call <autoform.lm_schema_call>`.
 
 The main conceptual pages are useful when building larger programs:
 
@@ -515,11 +515,11 @@ The main conceptual pages are useful when building larger programs:
 | --- | --- |
 | Understand the trace/execution split | [Trace, IR, Execute](../concepts/trace-ir-execute.md) |
 | Understand the recorded operations | [Primitives](../concepts/primitives.md) |
-| Compose `batch`, `pullback`, and `sched` | [Transforms](../concepts/transforms.md) |
+| Compose {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>` | [Transforms](../concepts/transforms.md) |
 | Inspect or replace intermediate values | [Intercepts](../concepts/intercepts.md) |
 | Use structured LM outputs | [Schemas](../concepts/schemas.md) |
 | Build a Tool-Use Agent | [Build a Tool-Use Agent](../recipes/tool-use-agent.md) |
-| Read API names quickly | [Glossary](../reference/glossary.md) |
+| Read glossary terms quickly | [Glossary](../reference/glossary.md) |
 
 For exact call signatures, use the [API Reference](../api/index.md).
 
