@@ -345,10 +345,11 @@ class CustomFunc:
 
 
 def custom(func: Callable[..., Any], /) -> CustomFunc:
-    """Mark a Python function as a custom Autoform transform boundary.
+    """Mark a traceable Python function as a custom Autoform transform boundary.
 
-    ``custom`` is a decorator for functions that should keep their ordinary call
-    behavior while optionally overriding how Autoform transforms treat them.
+    ``custom`` is a decorator for traceable functions that should keep their
+    ordinary call behavior while optionally overriding how Autoform transforms
+    treat them.
     Without any registered rules, ``pushforward``, ``pullback``, and ``batch``
     produce the same results as transforming the function body directly.
 

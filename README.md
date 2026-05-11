@@ -109,7 +109,7 @@ The pieces do different jobs:
 | Job | API | For |
 | --- | --- | --- |
 | Transform an IR | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Build another IR from an existing IR. |
-| Customize a boundary | `@af.custom` | Give a Python function transform-specific rules. |
+| Customize a boundary | `@af.custom` | Give a traceable Python function transform-specific rules. |
 | Wrap tracing or execution | `memoize`, `lm_client`, `collect`, `inject`, `tag`, `fold` | Change behavior inside a `with` block. |
 | Choose execution mode | `.call(...)`, `.acall(...)` | Run the same IR synchronously or asynchronously. |
 

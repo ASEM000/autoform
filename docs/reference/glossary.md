@@ -9,7 +9,7 @@
 | `collect` | A context manager that captures checkpointed values during IR execution. |
 | Collection | A namespace used by checkpoints, `collect`, and `inject` to decide which values belong together. |
 | Cotangent | Feedback flowing backward through a pullback. In `autoform`, cotangents are usually text feedback. |
-| Custom rule | A rule registered on an `@af.custom` function boundary to override `pushforward`, `pullback`, or `batch` behavior. |
+| Custom rule | A rule registered on an `@af.custom` traceable function boundary to override `pushforward`, `pullback`, or `batch` behavior. |
 | `dce` | Dead-code elimination, an IR transform that removes equations not needed by selected outputs. |
 | `Doc` annotation | A schema description attached with `field @ af.Doc("...")`. |
 | Dynamic argument | An input leaf represented by a placeholder during tracing and provided at execution time. |

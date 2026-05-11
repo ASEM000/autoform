@@ -497,7 +497,7 @@ fast_batch = af.sched(af.batch(ir))
 fast_feedback = af.sched(af.batch(af.pullback(ir)))
 ```
 
-Custom primitives need matching async behavior when they should run under `acall`. When custom rules are added, define the async rule alongside the synchronous rule so scheduled async execution does the same work. See [Custom Rules](../concepts/custom-rules.md).
+Custom boundaries need matching async behavior when they should run under `acall`. When custom rules are added, define the async rule alongside the synchronous rule so scheduled async execution does the same work. See [Custom Rules](../concepts/custom-rules.md).
 
 ## Next Steps
 

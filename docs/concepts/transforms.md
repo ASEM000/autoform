@@ -124,7 +124,7 @@ Order still matters:
 
 Some nearby public APIs are intentionally not `IR -> IR`:
 
-- [`custom`](custom-rules.md) is a decorator on user functions. It marks a function boundary and lets transforms consult custom rules at that boundary.
+- [`custom`](custom-rules.md) is a decorator on traceable user functions. It marks a function boundary and lets transforms consult custom rules at that boundary.
 - [`memoize`](../recipes/memoize.md) is a context manager. It caches primitive results within a `with` block.
 - [`lm_client`](../recipes/litellm-config.md) is a context manager. It changes provider routing during execution.
 - [`collect` and `inject`](intercepts.md) are context managers. They capture or replace checkpointed values during execution.

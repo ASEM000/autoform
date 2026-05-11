@@ -3,10 +3,12 @@
 ```{admonition} Advanced
 :class: info
 
-Use custom rules when a function boundary needs transform-specific behavior. Most functions should rely on the default behavior, where transforms trace through the function body.
+Use custom rules when a traceable function boundary needs transform-specific behavior. Most functions should rely on the default behavior, where transforms trace through the function body.
 ```
 
 Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
+
+The wrapped function body must still be traceable. Use `@af.custom` for a boundary around traceable `autoform` code. Use [Write a Primitive](../recipes/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
 
 Reach for `@af.custom` when one of these applies:
 
@@ -16,7 +18,7 @@ Reach for `@af.custom` when one of these applies:
 
 ## Mental Model
 
-`custom` is a decorator on a Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule.
+`custom` is a decorator on a traceable Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule.
 
 ```python
 import autoform as af
@@ -109,4 +111,4 @@ Sync and async registrations are independent. If only `set_batch` is registered,
 
 ## Rule Correctness
 
-A custom rule is trusted. If the rule returns the wrong structure, wrong axes, or wrong cotangents, the transformed IR is wrong. Use custom rules for real boundaries, not as a general extension point for ordinary application code.
+A custom rule is trusted. If the rule returns the wrong structure, wrong axes, or wrong cotangents, the transformed IR is wrong. Use custom rules for traceable subprogram boundaries, not as a general extension point for ordinary application code.
