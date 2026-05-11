@@ -85,6 +85,14 @@ class TestCustomFunction:
 
         assert bracket("hello") == "[hello]"
 
+    def test_custom_body_must_be_traceable(self):
+        @af.custom
+        def bad(x):
+            return x.upper()
+
+        with pytest.raises(TypeError, match="@af\\.custom function '.*bad' must be traceable"):
+            af.trace(lambda x: bad(x))("seed")
+
     def test_undefined_pushforward_falls_back_to_body_ir(self):
         @af.custom
         def bracket(x):

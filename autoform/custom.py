@@ -53,6 +53,13 @@ from autoform.utils import Tree, batch_index, batch_spec, treelib
 __all__ = ["custom"]
 
 
+CUSTOM_TRACE_ERROR = (
+    "@af.custom function {name!r} must be traceable by autoform. "
+    "Use autoform primitives in the custom body. Put non-traceable Python in "
+    "a custom transform rule; opaque runtime callbacks need a separate boundary."
+)
+
+
 def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
     def to_ir_input(x, /):
         if is_irvar(x):
@@ -64,7 +71,10 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
 
     in_ir_tree = treelib.map(to_ir_input, in_ir_tree)
     with using_interpreter(TracingInterpreter()) as tracer:
-        out_trace_tree = func(*tracer.box(in_ir_tree))
+        try:
+            out_trace_tree = func(*tracer.box(in_ir_tree))
+        except Exception as e:
+            raise TypeError(CUSTOM_TRACE_ERROR.format(name=func.__qualname__)) from e
     out_ir_tree = tracer.unbox(out_trace_tree)
     return IR(tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
