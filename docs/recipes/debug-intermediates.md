@@ -29,7 +29,7 @@ def draft_answer(topic: str) -> str:
 ir = af.trace(draft_answer)("recursion")
 
 # collect stores checkpointed values during execution
-with af.collect("debug") as collected:
+with af.collect(collection="debug") as collected:
     result = ir.call("recursion")
 
 print(result)
@@ -43,7 +43,7 @@ To rerun from a known intermediate value, inject a replacement:
 # inject replaces the named checkpoint during execution
 replacements = {"draft": "Recursion is a function calling itself to solve a smaller case."}
 
-with af.inject("debug", replacements):
+with af.inject(collection="debug", values=replacements):
     result = ir.call("recursion")
 
 print(result)
