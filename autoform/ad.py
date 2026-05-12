@@ -39,7 +39,6 @@ from autoform.core import (
     IREqn,
     IRVar,
     Prim,
-    TypedAVal,
     abstract_rules,
     active_interpreter,
     batch_rules,
@@ -49,6 +48,7 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
+    typeof,
     using_interpreter,
 )
 from autoform.dce import dce, dce_rules, default_dce
@@ -77,11 +77,6 @@ class Zero:
 
 def is_zero(x) -> bool:
     return isinstance(x, Zero)
-
-
-def zero_aval(aval, /) -> Zero:
-    assert isinstance(aval, TypedAVal), f"Expected TypedAVal, got {aval!r}"
-    return Zero(aval.type)
 
 
 zero_registry: dict[type, Any] = {}
@@ -439,7 +434,7 @@ def transpose_walk(ir: IR, c_out: Tree, /):
         if not is_irvar(atom):
             return Zero(type(atom))
         if not (cs := c_env[atom]):
-            return zero_aval(atom.aval)
+            return Zero(typeof(atom.aval))
         return accumulate_cotangents(cs)
 
     treelib.map(write_c, ir.out_ir_tree, c_out)

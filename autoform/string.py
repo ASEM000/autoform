@@ -20,9 +20,10 @@ import functools as ft
 
 from autoform.ad import Zero, is_zero, materialize
 from autoform.core import (
+    BoolAVal,
     EvalType,
     Prim,
-    TypedAVal,
+    StrAVal,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -65,7 +66,7 @@ def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> st
 
 
 def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
-    return TypedAVal(str)
+    return StrAVal()
 
 
 def pushforward_format(
@@ -150,7 +151,7 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 def abstract_concat(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
-    return TypedAVal(str)
+    return StrAVal()
 
 
 def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
@@ -192,7 +193,7 @@ batch_rules.set(concat_p, batch_concat)
 batch_rules.aset(concat_p, asyncify(batch_concat))
 
 
-trace_add_rules[str] = concat
+trace_add_rules[StrAVal] = concat
 
 
 # ==================================================================================================
@@ -231,7 +232,7 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 def abstract_match(in_tree: Tree, /) -> EvalType:
     assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
-    return TypedAVal(bool)
+    return BoolAVal()
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -274,4 +275,4 @@ batch_rules.set(match_p, batch_match)
 batch_rules.aset(match_p, asyncify(batch_match))
 
 
-trace_eq_rules[str] = match
+trace_eq_rules[StrAVal] = match
