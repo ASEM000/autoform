@@ -45,6 +45,36 @@ That is the canonical pattern: use the same {py:data}`PYTREE_NAMESPACE <autoform
 when registering dataclasses with [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html)
 and when calling [Optree pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html).
 
+## Static Metadata Fields
+
+Not every dataclass field should be a transform leaf. Use
+`optree.dataclasses.field(pytree_node=False)` for static metadata that belongs
+to the object but should not be mapped, batched, or receive feedback.
+
+```python
+import optree
+import autoform as af
+
+
+@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+class F32Array:
+    values: tuple[float, ...]
+    shape: tuple[int, ...] = optree.dataclasses.field(pytree_node=False)
+    dtype: str = optree.dataclasses.field(default="float32", pytree_node=False)
+
+
+array = F32Array(values=(1.0, 2.0), shape=(2,))
+scaled = optree.tree_map(lambda x: x * 10, array, namespace=af.PYTREE_NAMESPACE)
+
+assert scaled == F32Array(values=(10.0, 20.0), shape=(2,))
+```
+
+`values` is a pytree child, so transforms and Optree utilities can walk it.
+`shape` and `dtype` are metadata, so they are stored in the tree structure and
+preserved when the object is rebuilt. This is useful for array shapes, dtypes,
+model names, backends, and other configuration that should remain fixed while
+the leaves change.
+
 ## Manual Flatten / Unflatten
 
 For non-dataclass classes, register the class with explicit flatten and
@@ -86,6 +116,9 @@ The flatten rule returns two things:
 - `children`: values that Optree and `autoform` should walk recursively;
 - `metadata`: hashable static data stored in the tree spec and passed back to
   the unflatten rule.
+
+`optree.dataclasses.field(pytree_node=False)` is the dataclass form of putting a
+field in `metadata` instead of `children`.
 
 The unflatten rule receives the metadata and transformed children, then rebuilds
 the object.
