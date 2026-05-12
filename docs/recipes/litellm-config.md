@@ -13,7 +13,7 @@ from litellm import Router
 import autoform as af
 
 
-model_list = [dict(model_name="docs-model", litellm_params=dict(model="gpt-5.2"))]
+model_list = [dict(model_name="docs-model", litellm_params=dict(model="gpt-5.5"))]
 router = Router(model_list=model_list, num_retries=2)
 
 

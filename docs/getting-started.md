@@ -29,7 +29,7 @@ import autoform as af
 
 # smoke test the provider before tracing
 messages = [dict(role="user", content="Say hello in five words.")]
-response = af.lm_call(messages, model="gpt-5.2")
+response = af.lm_call(messages, model="gpt-5.5")
 print(response)
 ```
 
@@ -54,7 +54,7 @@ def explain(topic: str) -> str:
     # use traceable primitives for values that should enter the ir
     prompt = af.format("Explain {} in one paragraph.", topic)
     msg = dict(role="user", content=prompt)
-    return af.lm_call([msg], model="gpt-5.2")
+    return af.lm_call([msg], model="gpt-5.5")
 ```
 
 Trace it with an example argument:
@@ -72,7 +72,7 @@ The resulting IR contains:
 
 - one runtime input, `topic`;
 - one {py:func}`format <autoform.format>` equation that builds the prompt;
-- one {py:func}`lm_call <autoform.lm_call>` equation that records a future provider call with role `user` and model `gpt-5.2`;
+- one {py:func}`lm_call <autoform.lm_call>` equation that records a future provider call with role `user` and model `gpt-5.5`;
 - one string output.
 
 The result, `ir`, is the object every [transform](concepts/transforms.md) consumes.
@@ -291,7 +291,7 @@ def summarize(topic: str) -> Summary:
     prompt = af.format("Summarize {} for a technical audience.", topic)
     msg = dict(role="user", content=prompt)
     # return a summary value, not a raw string
-    return af.lm_schema_call([msg], model="gpt-5.2", schema=summary_schema)
+    return af.lm_schema_call([msg], model="gpt-5.5", schema=summary_schema)
 ```
 
 Trace it:
@@ -346,13 +346,13 @@ import autoform as af
 def explain_then_rewrite(topic: str) -> str:
     draft_prompt = af.format("Draft a one-sentence explanation of {}.", topic)
     draft_msg = dict(role="user", content=draft_prompt)
-    step1 = af.lm_call([draft_msg], model="gpt-5.2")
+    step1 = af.lm_call([draft_msg], model="gpt-5.5")
     # mark the intermediate value for runtime inspection
     step1 = af.checkpoint(step1, key="step1", collection="debug")
 
     rewrite_prompt = af.format("Rewrite for a beginner: {}", step1)
     rewrite_msg = dict(role="user", content=rewrite_prompt)
-    return af.lm_call([rewrite_msg], model="gpt-5.2")
+    return af.lm_call([rewrite_msg], model="gpt-5.5")
 ```
 
 Trace once:
@@ -419,12 +419,12 @@ def compare(topic: str) -> str:
     explain_msg = dict(role="user", content=explain_prompt)
     example_msg = dict(role="user", content=example_prompt)
 
-    explanation = af.lm_call([explain_msg], model="gpt-5.2")
-    example = af.lm_call([example_msg], model="gpt-5.2")
+    explanation = af.lm_call([explain_msg], model="gpt-5.5")
+    example = af.lm_call([example_msg], model="gpt-5.5")
 
     combine_prompt = af.format("Combine these into a concise answer:\n{}\n{}", explanation, example)
     combine_msg = dict(role="user", content=combine_prompt)
-    return af.lm_call([combine_msg], model="gpt-5.2")
+    return af.lm_call([combine_msg], model="gpt-5.5")
 ```
 
 There is no `async def` in `compare`. The first two calls read only `topic`, so they are independent. The final call depends on both results.

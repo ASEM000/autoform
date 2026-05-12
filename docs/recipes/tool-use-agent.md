@@ -133,7 +133,7 @@ def step(state: State) -> State:
     system = "Use search when needed. Use done when the answer is ready."
     user = af.format("Question and history:\n{}", state.history)
     messages = [dict(role="system", content=system), dict(role="user", content=user)]
-    decision = af.lm_schema_call(messages, model="gpt-5.2", schema=decision_schema)
+    decision = af.lm_schema_call(messages, model="gpt-5.5", schema=decision_schema)
     history = af.switch(decision.tool, tool_branches, decision.args, state.history)
     return State(history=history, result=decision.answer, status=decision.status)
 

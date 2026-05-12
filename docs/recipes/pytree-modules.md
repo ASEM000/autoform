@@ -19,26 +19,32 @@ import optree
 import autoform as af
 
 
-MODEL = "gpt-5.2"
+MODEL = "gpt-5.5"
 
 
 @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
 class Explainer:
     instruction: str
     style: str
+    model: str = optree.dataclasses.field(pytree_node=False)
 
     def prompt(self, topic: str) -> str:
         return af.format("{}\nstyle: {}\ntopic: {}", self.instruction, self.style, topic)
 
     def __call__(self, topic: str) -> str:
         msg = dict(role="user", content=self.prompt(topic))
-        return af.lm_call([msg], model=MODEL)
+        return af.lm_call([msg], model=self.model)
 ```
 
 The methods can call traceable primitives such as {py:func}`format <autoform.format>`
 and {py:func}`lm_call <autoform.lm_call>`. The fields remain visible as pytree
 leaves because the class is registered under
 {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`.
+
+`model` is static metadata because it uses
+`optree.dataclasses.field(pytree_node=False)`. It travels with the module but
+does not become a transform leaf. `instruction` and `style` remain the
+transform-visible leaves.
 
 ## Trace the Module Call
 
@@ -47,7 +53,7 @@ def run(module: Explainer, topic: str) -> str:
     return module(topic)
 
 
-module = Explainer(instruction="Explain in one paragraph.", style="plain")
+module = Explainer(instruction="Explain in one paragraph.", style="plain", model=MODEL)
 ir = af.trace(run)(module, "recursion")
 
 print(ir.call(module, "memoization"))
@@ -67,14 +73,16 @@ batched = af.batch(ir)
 modules = Explainer(
     instruction=["Explain briefly.", "Give one concrete example."],
     style=["plain", "technical"],
+    model=MODEL,
 )
 topics = ["recursion", "memoization"]
 
 print(batched.call(modules, topics))
 ```
 
-Every module field is batched in this call. To reuse one module across many
-topics, broadcast the module and batch only the topic input:
+The transform-visible module fields are batched in this call. `model` remains
+static metadata. To reuse one module across many topics, broadcast the module
+and batch only the topic input:
 
 ```python
 batched_topics = af.batch(ir, in_axes=(False, True))
@@ -103,7 +111,7 @@ The feedback can drive an update policy:
 
 ```python
 new_instruction = module.instruction + "\nrevision guidance: " + module_feedback.instruction
-next_module = Explainer(instruction=new_instruction, style=module.style)
+next_module = Explainer(instruction=new_instruction, style=module.style, model=module.model)
 ```
 
 This is still ordinary Python. The transform only supplies module-shaped

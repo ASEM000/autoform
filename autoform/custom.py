@@ -490,11 +490,11 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model")
         >>> af.pushforward(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "ollama/llama3:8b"),
+        ...     ("recursion", "gpt-5.5"),
         ...     ("focus on the recursive step", ""),
         ... )
         >>> af.pullback(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "ollama/llama3:8b"),
+        ...     ("recursion", "gpt-5.5"),
         ...     "make the answer more concrete",
         ... )
     """

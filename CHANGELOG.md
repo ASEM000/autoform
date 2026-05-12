@@ -68,14 +68,14 @@
     import autoform as af
     from litellm import Router
 
-    litellm_params = dict(model="gpt-5.2", tpm=100_000, rpm=1_000)
-    model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
+    litellm_params = dict(model="gpt-5.5", tpm=100_000, rpm=1_000)
+    model_list = [dict(model_name="gpt-5.5", litellm_params=litellm_params)]
     client = Router(model_list=model_list, max_parallel_requests=10)
 
 
     def program(topic):
         prompt = af.format("Summarize {} in one sentence.", topic)
-        return af.lm_call([dict(role="user", content=prompt)], model="gpt-5.2")
+        return af.lm_call([dict(role="user", content=prompt)], model="gpt-5.5")
 
 
     ir = af.trace(program)("topic")
@@ -92,7 +92,7 @@
         "text": af.Str(),
     }
 
-    out = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
+    out = af.lm_schema_call(messages, model="gpt-5.5", schema=schema)
     ```
 
 ### Improvements
@@ -320,5 +320,5 @@
     ```python
     def explain(topic):
         msg = dict(role="user", content=af.format("Explain {}", topic))
-        return af.lm_call([msg], model="gpt-5.2")
+        return af.lm_call([msg], model="gpt-5.5")
     ```

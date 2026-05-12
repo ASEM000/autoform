@@ -46,7 +46,7 @@ schema = {"scores": score_schema}
 This is a fixed-size schema. The parsed result has the same list shape:
 
 ```python
-result = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
+result = af.lm_schema_call(messages, model="gpt-5.5", schema=schema)
 assert isinstance(result["scores"], list)
 assert len(result["scores"]) == 4
 ```
@@ -130,7 +130,7 @@ import autoform as af
 schema = {"text": af.Str(), "score": af.Float(min=0, max=1)}
 
 messages = [dict(role="user", content="Explain recursion.")]
-result = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
+result = af.lm_schema_call(messages, model="gpt-5.5", schema=schema)
 
 print(result["text"], result["score"])
 ```

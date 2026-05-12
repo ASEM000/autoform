@@ -61,7 +61,7 @@ Any registered pytree can carry the schema:
     >>> msgs = [dict(role="user", content="1 + 1?")]
     >>> output = af.lm_schema_call(  # doctest: +SKIP
     ...     msgs,
-    ...     model="openai/gpt-5.2",
+    ...     model="openai/gpt-5.5",
     ...     schema=schema,
     ... )
     >>> output  # doctest: +SKIP

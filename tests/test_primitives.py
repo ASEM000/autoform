@@ -251,7 +251,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.ir_eqns[0]
 
         assert eqn.prim.name == "lm_call"
@@ -263,7 +263,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.ir_eqns[0]
 
         assert eqn.params == {"roles": ["user"]}
@@ -290,7 +290,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
 
         with af.lm_client(ConfiguredRouter()):
             result = ir.call("hello", "m1")
@@ -301,7 +301,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         batched_ir = af.batch(ir, in_axes=(True, True))
 
         with af.lm_client(EchoRouter()):
@@ -313,7 +313,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         pb_ir = af.pullback(ir)
 
         with af.lm_client(EchoRouter()):

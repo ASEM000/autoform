@@ -26,7 +26,7 @@ route_schema = Route(tool=af.Enum("search", "done"), answer=af.Str())
 def choose_route(question: str) -> Route:
     prompt = af.format("Choose search or done for this question:\n{}", question)
     msg = dict(role="user", content=prompt)
-    return af.lm_schema_call([msg], model="gpt-5.2", schema=route_schema)
+    return af.lm_schema_call([msg], model="gpt-5.5", schema=route_schema)
 ```
 
 Use {py:class}`Enum <autoform.Enum>` for finite decisions that should feed {py:func}`switch <autoform.switch>`, status fields, or
@@ -57,7 +57,7 @@ decision_schema = SearchDecision(tool=af.Enum("search", "done"), args=SearchArgs
 def choose_search(question: str) -> SearchDecision:
     prompt = af.format("Choose the next tool call for:\n{}", question)
     msg = dict(role="user", content=prompt)
-    return af.lm_schema_call([msg], model="gpt-5.2", schema=decision_schema)
+    return af.lm_schema_call([msg], model="gpt-5.5", schema=decision_schema)
 ```
 
 Nested dataclasses keep related fields together and still register as one
@@ -95,7 +95,7 @@ For a one-off call, the schema can stay inline:
 messages = [dict(role="user", content="Classify this request.")]
 result = af.lm_schema_call(
     messages,
-    model="gpt-5.2",
+    model="gpt-5.5",
     schema={
         "kind": af.Enum("question", "request") @ af.Doc("Request type."),
         "reply": af.Str() @ af.Doc("Short reply."),
@@ -144,7 +144,7 @@ summary_schema = Summary(title=af.Str(max=80), score=af.Float(min=0, max=1))
 def summarize(topic: str) -> Summary:
     prompt = af.format("Summarize {}.", topic)
     msg = dict(role="user", content=prompt)
-    return af.lm_schema_call([msg], model="gpt-5.2", schema=summary_schema)
+    return af.lm_schema_call([msg], model="gpt-5.5", schema=summary_schema)
 
 
 ir = af.trace(summarize)("recursion")

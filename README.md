@@ -38,7 +38,7 @@ import autoform as af
 def explain(topic: str) -> str:
     prompt = af.format("Explain {} in one paragraph.", topic)
     msg = dict(role="user", content=prompt)
-    return af.lm_call([msg], model="gpt-5.2")
+    return af.lm_call([msg], model="gpt-5.5")
 
 
 # trace with a representative input; this records structure
@@ -128,12 +128,12 @@ def compare(topic: str) -> str:
     explain_msg = dict(role="user", content=explain_prompt)
     example_msg = dict(role="user", content=example_prompt)
 
-    explanation = af.lm_call([explain_msg], model="gpt-5.2")
-    example = af.lm_call([example_msg], model="gpt-5.2")
+    explanation = af.lm_call([explain_msg], model="gpt-5.5")
+    example = af.lm_call([example_msg], model="gpt-5.5")
 
     combine_prompt = af.format("Combine these:\n{}\n{}", explanation, example)
     combine_msg = dict(role="user", content=combine_prompt)
-    return af.lm_call([combine_msg], model="gpt-5.2")
+    return af.lm_call([combine_msg], model="gpt-5.5")
 
 
 ir = af.trace(compare)("placeholder topic")
@@ -160,12 +160,12 @@ There is no `async def` in `compare`. Use `.call(...)` for a sync run and
 def pipeline(topic: str) -> str:
     draft_prompt = af.format("Draft one sentence about {}.", topic)
     draft_msg = dict(role="user", content=draft_prompt)
-    draft = af.lm_call([draft_msg], model="gpt-5.2")
+    draft = af.lm_call([draft_msg], model="gpt-5.5")
     draft = af.checkpoint(draft, key="draft", collection="debug")
 
     final_prompt = af.format("Tighten this answer:\n{}", draft)
     final_msg = dict(role="user", content=final_prompt)
-    return af.lm_call([final_msg], model="gpt-5.2")
+    return af.lm_call([final_msg], model="gpt-5.5")
 
 
 ir = af.trace(pipeline)("placeholder topic")
