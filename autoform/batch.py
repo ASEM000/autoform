@@ -28,7 +28,7 @@ from autoform.core import (
     Prim,
     abstract_rules,
     active_interpreter,
-    aval_of,
+    avalof,
     batch_rules,
     impl_rules,
     is_irvar,
@@ -118,7 +118,7 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
         if is_irvar(atom):
             return IRVar.fresh(aval=atom.aval, source=atom)
         if has_batched:
-            return IRVar.fresh(aval=aval_of(atom))
+            return IRVar.fresh(aval=avalof(atom))
         return atom
 
     v_in_ir = treelib.map(make_in, ir.in_ir_tree, b_in)
@@ -251,7 +251,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
         if is_irvar(atom):
             return atom.aval
         if has_batched:
-            return aval_of(atom)
+            return avalof(atom)
         return atom
 
     return treelib.map(out_aval, ir.out_ir_tree)

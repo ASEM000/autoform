@@ -39,7 +39,7 @@ __all__ = [
     "aval_types",
     "aval_rules",
     "is_val",
-    "aval_of",
+    "avalof",
     # ir vals
     "IRVar",
     "is_irvar",
@@ -161,7 +161,7 @@ def typeof(x, /) -> type:
     return rule(x)
 
 
-def aval_of(x, /) -> AVal:
+def avalof(x, /) -> AVal:
     rule = aval_rules.get(type(x))
     if rule is None:
         raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
@@ -774,7 +774,7 @@ def trace[*A, R](
     def to_ir_var(x, /) -> IRVar:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
         assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(aval=aval_of(x))
+        return IRVar.fresh(aval=avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
