@@ -129,9 +129,11 @@ flowchart TD
     ir --> batch_step["batch"]
     ir --> pullback_step["pullback"]
     ir --> sched_step["sched"]
+    ir --> more_transforms["..."]
     batch_step --> transformed_ir["transformed IR"]
     pullback_step --> transformed_ir
     sched_step --> transformed_ir
+    more_transforms --> transformed_ir
     transformed_ir --> sync_exec["sync execution"]
     transformed_ir --> async_exec["async execution"]
     sync_exec --> output["output"]
