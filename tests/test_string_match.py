@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.core import AVal, TypedAVal, trace
+from autoform.core import AVal, BoolAVal, StrAVal, trace
 from autoform.string import abstract_match
 
 
@@ -112,9 +112,7 @@ class TestMatchTraced:
         def check(x):
             return x == 1
 
-        with pytest.raises(
-            TypeError, match=r"No trace rule for == on values of type TypedAVal\(int\)"
-        ):
+        with pytest.raises(TypeError, match=r"No trace rule for == on values of type IntAVal\(\)"):
             trace(check)(1)
 
 
@@ -254,23 +252,23 @@ class TestAbstractMatch:
 
         result = abstract_match(("yes", "yes"))
         assert isinstance(result, AVal)
-        assert result.type is bool
+        assert result == BoolAVal()
 
     def test_abstract_match_concrete_unequal(self):
 
         result = abstract_match(("yes", "no"))
         assert isinstance(result, AVal)
-        assert result.type is bool
+        assert result == BoolAVal()
 
     def test_abstract_match_with_var_returns_var(self):
 
-        result = abstract_match((TypedAVal(str), "yes"))
+        result = abstract_match((StrAVal(), "yes"))
         assert isinstance(result, AVal)
 
-        result = abstract_match(("yes", TypedAVal(str)))
+        result = abstract_match(("yes", StrAVal()))
         assert isinstance(result, AVal)
 
-        result = abstract_match((TypedAVal(str), TypedAVal(str)))
+        result = abstract_match((StrAVal(), StrAVal()))
         assert isinstance(result, AVal)
 
     def test_abstract_match_rejects_non_string_input(self):

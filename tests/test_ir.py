@@ -52,18 +52,17 @@ class TestBuildIR:
             return af.format("{}", x)
 
         cases = [
-            (1, 2, "2"),
-            (1.5, 2.5, "2.5"),
-            (True, False, "False"),
+            (1, 2, "2", af.core.IntAVal()),
+            (1.5, 2.5, "2.5", af.core.FloatAVal()),
+            (True, False, "False", af.core.BoolAVal()),
         ]
 
-        for traced, runtime, expected in cases:
+        for traced, runtime, expected, aval in cases:
             ir = af.trace(program)(traced)
             assert isinstance(ir.in_ir_tree, tuple)
             assert len(ir.in_ir_tree) == 1
             assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-            assert isinstance(ir.in_ir_tree[0].aval, af.core.TypedAVal)
-            assert ir.in_ir_tree[0].aval.type is type(traced)
+            assert ir.in_ir_tree[0].aval == aval
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -314,7 +313,7 @@ class TestTags:
 
         def abstract_probe(x):
             del x
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         def impl_probe(x):
             names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))

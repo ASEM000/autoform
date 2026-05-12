@@ -63,7 +63,7 @@ class TestPrimitive:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(x):
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         assert af.core.abstract_rules.get(p) is abstract_rule
 
@@ -106,15 +106,15 @@ class TestPrimitive:
 
 class TestIRVar:
     def test_ir_var_aval_returns_aval(self):
-        ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        ir_var = af.core.IRVar(aval=af.core.StrAVal())
 
         assert af.core.is_irvar(ir_var)
         assert isinstance(ir_var.aval, af.core.AVal)
-        assert ir_var.aval.type is str
+        assert ir_var.aval == af.core.StrAVal()
 
     def test_len_on_trace_box_has_informative_error(self):
         tracer = af.core.TraceInterpreter()
-        ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        ir_var = af.core.IRVar(aval=af.core.StrAVal())
         traced = tracer.box(ir_var)
 
         with pytest.raises(
@@ -224,9 +224,7 @@ class TestConcatPrimitive:
         def func(x):
             return x + 1
 
-        with pytest.raises(
-            TypeError, match=r"No trace rule for \+ on values of type TypedAVal\(int\)"
-        ):
+        with pytest.raises(TypeError, match=r"No trace rule for \+ on values of type IntAVal\(\)"):
             af.trace(func)(1)
 
     def test_concat_trace_rejects_non_string_input(self):
@@ -334,7 +332,7 @@ class TestBind:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         def func(x):
             return p.bind(x, multiplier=3)
@@ -354,7 +352,7 @@ class TestInterpreter:
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
             assert len(tracer.ir_eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
@@ -362,7 +360,7 @@ class TestInterpreter:
     def test_tracing_interpreter_creates_ir_eqns(self):
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
-            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
         assert len(tracer.ir_eqns) == 1
 
 
@@ -646,7 +644,7 @@ class TestCotangentHelpers:
 class TestLiteralZeroing:
     def test_pushforward_zeros_literal_input_tangent(self):
         lit = "constant"
-        var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        var = af.core.IRVar(aval=af.core.StrAVal())
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)
@@ -691,7 +689,7 @@ class TestLiteralZeroing:
 
     def test_pullback_zeros_literal_input_cotangent(self):
         lit = "constant_input"
-        var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        var = af.core.IRVar(aval=af.core.StrAVal())
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)
