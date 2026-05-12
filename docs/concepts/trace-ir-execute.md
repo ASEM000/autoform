@@ -124,18 +124,18 @@ This avoids the [function-coloring](https://journal.stuffwithstuff.com/2015/02/0
 
 ```{mermaid}
 flowchart TD
-    func["Python function"] --> trace["trace(func)(...)"]
-    trace --> ir["IR"]
-    ir --> batch["batch"]
-    ir --> pullback["pullback"]
-    ir --> sched["sched"]
-    batch --> transformed_ir["transformed IR"]
-    pullback --> transformed_ir
-    sched --> transformed_ir
-    transformed_ir --> call[".call(...)"]
-    transformed_ir --> acall[".acall(...)"]
-    call --> output["output"]
-    acall --> output
+    func["Python function"] --> trace_step["Trace"]
+    trace_step --> ir["IR"]
+    ir --> batch_step["batch"]
+    ir --> pullback_step["pullback"]
+    ir --> sched_step["sched"]
+    batch_step --> transformed_ir["transformed IR"]
+    pullback_step --> transformed_ir
+    sched_step --> transformed_ir
+    transformed_ir --> sync_exec["sync execution"]
+    transformed_ir --> async_exec["async execution"]
+    sync_exec --> output["output"]
+    async_exec --> output
 ```
 
 ## Gotchas
