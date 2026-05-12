@@ -33,8 +33,9 @@ __all__ = [
     "AVal",
     "TypedAVal",
     "Val",
-    "val_types",
+    "aval_rules",
     "is_val",
+    "aval_of",
     # ir vals
     "IRVar",
     "is_irvar",
@@ -88,14 +89,6 @@ __all__ = [
 # BASE TYPES
 # ==================================================================================================
 
-val_types: set[type] = {str, int, float, bool}
-
-type Val = str | int | float | bool
-
-
-def is_val(x) -> bool:
-    return isinstance(x, tuple(val_types))
-
 
 class AVal:
     __slots__ = []
@@ -117,6 +110,17 @@ class TypedAVal(AVal):
         return hash((type(self), self.type))
 
 
+aval_rules: dict[type, Callable[[Any], AVal]] = {}
+aval_rules[str] = lambda _: TypedAVal(str)
+aval_rules[int] = lambda _: TypedAVal(int)
+aval_rules[float] = lambda _: TypedAVal(float)
+aval_rules[bool] = lambda _: TypedAVal(bool)
+
+
+def is_val(x) -> bool:
+    return type(x) in aval_rules
+
+
 def is_aval(x) -> TypeGuard[AVal]:
     return isinstance(x, AVal)
 
@@ -126,6 +130,15 @@ type EvalType = AVal | Val
 
 def typeof(x, /) -> type:
     return x.type if is_aval(x) else type(x)
+
+
+def aval_of(x, /) -> AVal:
+    rule = aval_rules.get(type(x))
+    if rule is None:
+        raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
+    aval = rule(x)
+    assert is_aval(aval), f"aval rule for {type(x).__name__} returned {aval!r}"
+    return aval
 
 
 # ==================================================================================================
@@ -737,7 +750,7 @@ def trace[*A, R](
     def to_ir_var(x, /) -> IRVar:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
         assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(aval=TypedAVal(type(x)))
+        return IRVar.fresh(aval=aval_of(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:

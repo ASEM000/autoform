@@ -28,6 +28,24 @@ class Label:
 class CostTag: ...
 
 
+class Blob:
+    def __init__(self, size: int):
+        self.size = size
+
+
+class BlobAVal(af.core.AVal):
+    __slots__ = ["size"]
+
+    def __init__(self, size: int):
+        self.size = size
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.size == other.size
+
+    def __hash__(self):
+        return hash((type(self), self.size))
+
+
 class TestBuildIR:
     def test_trace_scalar_input_is_dynamic(self):
         def program(x):
@@ -70,6 +88,18 @@ class TestBuildIR:
 
         with pytest.raises(AssertionError, match="Unsupported input leaf type"):
             af.trace(program)(Opaque())
+
+    def test_trace_uses_registered_aval_rule(self):
+        def program(x):
+            return x
+
+        af.core.aval_rules[Blob] = lambda x: BlobAVal(x.size)
+        try:
+            ir = af.trace(program)(Blob(3))
+        finally:
+            del af.core.aval_rules[Blob]
+
+        assert ir.in_ir_tree[0].aval == BlobAVal(3)
 
     def test_trace_static_unhashable_input_errors(self):
         class Unhashable:
