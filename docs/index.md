@@ -3,8 +3,13 @@
 
 ```{toctree}
 :maxdepth: 2
-:caption: Getting Started
+:caption: Documentation
 :hidden:
+
+getting-started
+why-autoform
+concepts/index
+recipes/index
 ```
 
 ```{toctree}
@@ -12,5 +17,7 @@
 :caption: Reference
 :hidden:
 
-api
+api/index
+reference/changelog
+reference/glossary
 ```

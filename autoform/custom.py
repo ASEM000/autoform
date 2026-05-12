@@ -33,7 +33,7 @@ from autoform.core import (
     Prim,
     PullbackBwdRule,
     PushforwardRule,
-    TracingInterpreter,
+    TraceInterpreter,
     TypedAVal,
     abstract_rules,
     batch_rules,
@@ -63,7 +63,7 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
         return IRVar.fresh(aval=TypedAVal(type(x)))
 
     in_ir_tree = treelib.map(to_ir_input, in_ir_tree)
-    with using_interpreter(TracingInterpreter()) as tracer:
+    with using_interpreter(TraceInterpreter()) as tracer:
         out_trace_tree = func(*tracer.box(in_ir_tree))
     out_ir_tree = tracer.unbox(out_trace_tree)
     return IR(tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
@@ -345,10 +345,11 @@ class CustomFunc:
 
 
 def custom(func: Callable[..., Any], /) -> CustomFunc:
-    """Mark a Python function as a custom Autoform transform boundary.
+    """Mark a traceable Python function as a custom Autoform transform boundary.
 
-    ``custom`` is a decorator for functions that should keep their ordinary call
-    behavior while optionally overriding how Autoform transforms treat them.
+    ``custom`` is a decorator for traceable functions that should keep their
+    ordinary call behavior while optionally overriding how Autoform transforms
+    treat them.
     Without any registered rules, ``pushforward``, ``pullback``, and ``batch``
     produce the same results as transforming the function body directly.
 
@@ -489,11 +490,11 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model")
         >>> af.pushforward(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "ollama/llama3:8b"),
+        ...     ("recursion", "gpt-5.5"),
         ...     ("focus on the recursive step", ""),
         ... )
         >>> af.pullback(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "ollama/llama3:8b"),
+        ...     ("recursion", "gpt-5.5"),
         ...     "make the answer more concrete",
         ... )
     """

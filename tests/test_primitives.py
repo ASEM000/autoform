@@ -113,7 +113,7 @@ class TestIRVar:
         assert ir_var.aval.type is str
 
     def test_len_on_trace_box_has_informative_error(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
         traced = tracer.box(ir_var)
 
@@ -251,7 +251,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.ir_eqns[0]
 
         assert eqn.prim.name == "lm_call"
@@ -263,7 +263,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.ir_eqns[0]
 
         assert eqn.params == {"roles": ["user"]}
@@ -290,7 +290,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
 
         with af.lm_client(ConfiguredRouter()):
             result = ir.call("hello", "m1")
@@ -301,7 +301,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         batched_ir = af.batch(ir, in_axes=(True, True))
 
         with af.lm_client(EchoRouter()):
@@ -313,7 +313,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         pb_ir = af.pullback(ir)
 
         with af.lm_client(EchoRouter()):
@@ -351,7 +351,7 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_use_interpreter_context(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
             af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
@@ -360,7 +360,7 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_tracing_interpreter_creates_ir_eqns(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
             af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
         assert len(tracer.ir_eqns) == 1

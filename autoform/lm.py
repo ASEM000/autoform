@@ -84,7 +84,7 @@ def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
         >>> from litellm import Router  # doctest: +SKIP
         >>> client = Router(  # doctest: +SKIP
         ...     model_list=[
-        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-5.2")),
+        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-5.5")),
         ...     ],
         ...     max_parallel_requests=10,
         ... )
@@ -120,7 +120,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The model name or active client model alias to use (e.g., "gpt-5.2").
+        model: The model name or active client model alias to use (e.g., "gpt-5.5").
 
     Returns:
         The content of the model's response as a string.
@@ -133,7 +133,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     greeting = af.format("Hello, {}!", name)
         ...     sys = dict(role="system", content="translate the greeting to Korean")
         ...     usr = dict(role="user", content=greeting)
-        ...     greeting = af.lm_call([sys, usr], model="gpt-5.2")
+        ...     greeting = af.lm_call([sys, usr], model="gpt-5.5")
         ...     return greeting
         >>> ir = af.trace(program)("World") # doctest: +SKIP
         >>> result = ir.call("x0") # doctest: +SKIP
@@ -141,11 +141,11 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     Example with :func:`lm_client`:
         >>> import autoform as af
         >>> from litellm import Router  # doctest: +SKIP
-        >>> params_1024 = dict(model="gpt-5.2", max_tokens=1024)
-        >>> params_512 = dict(model="gpt-5.2", max_tokens=512)
+        >>> params_1024 = dict(model="gpt-5.5", max_tokens=1024)
+        >>> params_512 = dict(model="gpt-5.5", max_tokens=512)
         >>> model_list = [
-        ...     dict(model_name="gpt-5.2-1024", litellm_params=params_1024),
-        ...     dict(model_name="gpt-5.2-512", litellm_params=params_512),
+        ...     dict(model_name="gpt-5.5-1024", litellm_params=params_1024),
+        ...     dict(model_name="gpt-5.5-512", litellm_params=params_512),
         ... ]
         >>> router = Router(model_list=model_list)  # doctest: +SKIP
         >>> def program(text: str, model: str):
@@ -153,7 +153,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     answer = af.lm_call(msg, model=model)
         ...     return af.concat("Answer: ", answer)
         >>> ir = af.trace(program)("topic", "model")
-        >>> model_names = ["gpt-5.2-1024", "gpt-5.2-512"]
+        >>> model_names = ["gpt-5.5-1024", "gpt-5.5-512"]
         >>> with af.lm_client(router):  # doctest: +SKIP
         ...     result = af.batch(ir, in_axes=(False, True)).call("AI", model_names)
     """
@@ -352,7 +352,7 @@ def lm_schema_call(
         >>> msgs = [dict(role="user", content="1 + 1?")]
         >>> output = af.lm_schema_call(  # doctest: +SKIP
         ...     msgs,
-        ...     model="openai/gpt-5.2",
+        ...     model="openai/gpt-5.5",
         ...     schema=schema,
         ... )
         >>> output  # doctest: +SKIP

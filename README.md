@@ -6,13 +6,14 @@
 
 Composable function transformations for LM programs.
 
-*Think [JAX](https://github.com/jax-ml/jax), but for LM programs.*
+*JAX-like, but for LM programs: trace a Python function into an IR, then apply
+program transforms around it.*
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
 
-[Quickstart](#quickstart) - [Transforms](#transforms) - [Concurrency](#concurrency) - [Debugging](#debugging) - [Agent](#agent) - [Docs](https://autoform.readthedocs.io)
+[Quickstart](#quickstart) - [Composition](#composition) - [Concurrency](#concurrency) - [Reference](#reference) - [GitHub](https://github.com/ASEM000/autoform) - [Documentation](https://autoform.readthedocs.io)
 
 </div>
 
@@ -20,7 +21,16 @@ Composable function transformations for LM programs.
 pip install git+https://github.com/ASEM000/autoform.git
 ```
 
+Set provider credentials for the active LM client. For OpenAI through [LiteLLM](https://docs.litellm.ai/):
+
+```bash
+export OPENAI_API_KEY=...
+```
+
 ## Quickstart
+
+The quickstart writes one function, traces it once, then reuses the same IR in a few ways.
+
 ```python
 import autoform as af
 
@@ -28,216 +38,180 @@ import autoform as af
 def explain(topic: str) -> str:
     prompt = af.format("Explain {} in one paragraph.", topic)
     msg = dict(role="user", content=prompt)
-    return af.lm_call([msg], model="gpt-5.2")
+    return af.lm_call([msg], model="gpt-5.5")
 
 
-ir = af.trace(explain)("...")  # capture structure, no execution
+# trace with a representative input; this records structure
+ir = af.trace(explain)("placeholder topic")
+
+# execute the same ir with real input
+answer = ir.call("recursion")
+print(answer)
 ```
 
-Now transform it:
+Expected result: one paragraph about recursion.
+
+Batch the same program without rewriting `explain`:
+
 ```python
-# execute
-output = ir.call("quantum entanglement")
+# batch vectorizes the original ir over the input leaf
+topics = ["recursion", "gravity", "memoization"]
+answers = af.batch(ir).call(topics)
 
-# batch: n inputs
-outputs = af.batch(ir).call(["DNA", "gravity", "recursion"])
-
-# pushforward: propagate input perturbations forward
-output, tangent = af.pushforward(ir).call(("quantum entanglement", "add more examples"))
-
-# pullback: propagate output feedback backward
-output, grad = af.pullback(ir).call(("quantum entanglement", "too technical"))
-
-# compose: batched differentiation
-topics = ["DNA", "gravity", "recursion"]
-critiques = ["too technical", "too brief", "too abstract"]
-outputs, hints = af.batch(af.pullback(ir)).call((topics, critiques))
+assert len(answers) == len(topics)
 ```
 
-The last line is the point: `batch(pullback(ir))`, transformations compose.
+The result is one answer per topic.
 
-## Transforms
+Send output feedback backward to the original input:
 
-<div align="center">
+```python
+# pullback returns the output and feedback for the original inputs
+pb_ir = af.pullback(ir)
+answer, (topic_hint,) = pb_ir.call(("recursion",), "too abstract")
 
-| Transform | What it does |
-|-----------|--------------|
-| `batch` | Vectorize over inputs |
-| `pushforward` | Forward-mode-like transform |
-| `pullback` | Reverse-mode-like transform |
-| `custom` | Optional custom transform rules for a function boundary |
-| `sched` | Auto-concurrent execution |
+print(topic_hint)
+```
 
-</div>
+Expected result: text feedback for the input topic.
+
+Compose both:
+
+```python
+# one pullback per topic, batched by the transform
+topics = ["recursion", "gravity", "memoization"]
+critiques = ["too abstract", "too terse", "needs an example"]
+
+composed = af.batch(af.pullback(ir))
+answers, (topic_hints,) = composed.call((topics,), critiques)
+
+assert len(topic_hints) == len(topics)
+```
+
+That last line is the core design: `pullback(ir)` returns an IR, and `batch`
+accepts an IR.
+
+## Why
+
+An LM program written as ordinary Python tends to grow a second implementation
+for each new execution concern: batching, feedback, concurrency, debugging, or
+provider routing.
+
+`autoform` keeps those concerns outside the function. It records the function
+once as an IR, then applies transforms and execution contexts around that
+recorded program. The quickstart shows the split: write normal Python, trace it
+once, then decide how to transform or run it.
+
+## Composition
+
+The pieces do different jobs:
+
+| Job | [API](https://autoform.readthedocs.io/en/latest/api/) | For |
+| --- | --- | --- |
+| Transform an IR | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Build another IR from an existing IR. |
+| Customize a boundary | `@af.custom` | Give a traceable Python function transform-specific rules. |
+| Wrap tracing or execution | `memoize`, `lm_client`, `collect`, `inject`, `tag`, `fold` | Change behavior inside a `with` block. |
+| Choose execution mode | `.call(...)`, `.acall(...)` | Run the same IR synchronously or asynchronously. |
 
 ## Concurrency
 
-`sched` analyzes the IR's dependency graph, groups independent equations into parallel stages, and `acall` runs each stage concurrently.
-
-```mermaid
-flowchart LR
-    subgraph before["sequential"]
-        direction TB
-        A1[format] --> B1[LLM explain]
-        A2[format] --> B2[LLM facts]
-        B1 --> C1[format]
-        B2 --> C1
-        C1 --> D1[LLM synthesize]
-    end
-
-    before -- "sched" --> after
-
-    subgraph after["scheduled"]
-        direction TB
-        A3[format] & A4[format]
-        subgraph "gather (concurrent)"
-            B3[LLM explain] & B4[LLM facts]
-        end
-        A3 --> B3
-        A4 --> B4
-        B3 & B4 --> C2[format]
-        C2 --> D2[LLM synthesize]
-    end
-```
+Write the function sequentially. Schedule the IR afterward.
 
 ```python
-scheduled = af.sched(ir)
-result = await scheduled.acall("DNA")
-```
-
-## Debugging
-
-Checkpoint intermediate values. Substitute on re-execution.
-```python
-def pipeline(x: str) -> str:
-    msg1 = dict(role="user", content=x)
-    step1 = af.lm_call([msg1], model="gpt-5.2")
-    step1 = af.checkpoint(step1, key="step1", collection="debug")
-
-    msg2 = dict(role="user", content=step1)
-    step2 = af.lm_call([msg2], model="gpt-5.2")
-    return step2
-
-
-ir = af.trace(pipeline)("...")
-
-# capture
-with af.collect(collection="debug") as captured:
-    result = ir.call("input")
-
-# substitute step1 value
-with af.inject(collection="debug", values=dict(step1=["modified"])):
-    result = ir.call("input")
-```
-
-## Agent
-
-Trace a tool-use agent once, then differentiate, batch, or schedule it with no code changes. Because the agent is a pure traced function, `pullback` propagates natural-language feedback backward through every LLM call, and `batch` vectorizes over inputs. Compose them: `batch(pullback(ir))` gives batched prompt optimization of the full agent graph.
-
-```mermaid
-flowchart TD
-    Q([question]) --> cond{cond}
-    cond -- continue --> LLM
-    cond -- done --> result([result])
-
-    subgraph body
-        LLM -- Decision --> SW{switch tool}
-        subgraph "traced branches"
-            SW --> search[search] & calc[calc] & dn[done]
-        end
-        search & calc & dn --> nh(new_history)
-    end
-
-    nh -- State --> cond
-```
-
-```python
-from typing import Literal
-
-import optree  # tree manipulation (https://optree.readthedocs.io/en/latest/)
+import asyncio
 import autoform as af
 
 
-treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
+def compare(topic: str) -> str:
+    explain_prompt = af.format("Explain {} in one sentence.", topic)
+    example_prompt = af.format("Give one concrete example of {}.", topic)
+    explain_msg = dict(role="user", content=explain_prompt)
+    example_msg = dict(role="user", content=example_prompt)
+
+    explanation = af.lm_call([explain_msg], model="gpt-5.5")
+    example = af.lm_call([example_msg], model="gpt-5.5")
+
+    combine_prompt = af.format("Combine these:\n{}\n{}", explanation, example)
+    combine_msg = dict(role="user", content=combine_prompt)
+    return af.lm_call([combine_msg], model="gpt-5.5")
 
 
-@treelib.dataclasses.dataclass
-class Decision:
-    tool: str
-    args: str
-    answer: str
-    status: Literal["continue", "done"]
-
-
-@treelib.dataclasses.dataclass
-class State:
-    history: str
-    result: str
-    status: Literal["continue", "done"]
-
-
-# - Str, Enum are used to define the schema of the LLM's decision output
-# - Doc is used to guide the LLM's output with natural language descriptions
-#   of each field.
-decision_schema = Decision(
-    tool=af.Enum("search", "calc", "done") @ af.Doc("Tool to call next."),
-    args=af.Str() @ af.Doc("Tool arguments."),
-    answer=af.Str() @ af.Doc("Current answer."),
-    status=af.Enum("continue", "done") @ af.Doc("Whether to continue."),
-)
-
-
-def search(query: str, history: str) -> str: ...
-
-
-def calc(expression: str, history: str) -> str: ...
-
-
-def done(answer: str, history: str) -> str: ...
-
-
-# each tool branch is traced independently; switch dispatches at runtime.
-tool_branches = dict(
-    search=af.trace(search)("...", "..."),  # (args, history) -> new_history
-    calc=af.trace(calc)("...", "..."),
-    done=af.trace(done)("...", "..."),
-)
-
-
-def cond(state: State):
-    # continue if status is "continue", else stop
-    # used by the while loop to determine when to stop iterating
-    return state.status == "continue"
-
-
-def body(state: State):
-    messages = [
-        dict(role="system", content="You are a tool-use agent."),
-        dict(role="user", content=state.history),
-    ]
-    d = af.lm_schema_call(messages, model="gpt-5.2", schema=decision_schema)
-    new_history = af.switch(d.tool, tool_branches, d.args, state.history)
-    return State(history=new_history, result=d.answer, status=d.status)
-
-
-example_state = State(history="...", result="", status="continue")
-cond_ir = af.trace(cond)(example_state)
-body_ir = af.trace(body)(example_state)
-
-
-def agent(question: str):
-    init = State(history=question, result="", status="continue")
-    return af.while_loop(cond_ir, body_ir, init, max_iters=5).result
-
-
-agent_ir = af.trace(agent)("...")
-
-# pullback: propagate text feedback backward through every LLM call
-# batch: vectorize over multiple questions
-# compose them: batched prompt optimization of the full agent
-af.batch(af.pullback(agent_ir))
+ir = af.trace(compare)("placeholder topic")
+scheduled = af.sched(ir)
+answer = asyncio.run(scheduled.acall("recursion"))
 ```
 
----
+```mermaid
+flowchart TD
+    topic["topic"] --> explain["LM: explain"]
+    topic --> example["LM: example"]
+    explain --> combine["LM: combine"]
+    example --> combine
+```
 
-> ⚠️ **Early development**: API may change.
+There is no `async def` in `compare`. Use `.call(...)` for a sync run and
+`.acall(...)` for an async run.
+
+## Debugging
+
+`checkpoint` labels an intermediate. `collect` and `inject` wrap execution.
+
+```python
+def pipeline(topic: str) -> str:
+    draft_prompt = af.format("Draft one sentence about {}.", topic)
+    draft_msg = dict(role="user", content=draft_prompt)
+    draft = af.lm_call([draft_msg], model="gpt-5.5")
+    draft = af.checkpoint(draft, key="draft", collection="debug")
+
+    final_prompt = af.format("Tighten this answer:\n{}", draft)
+    final_msg = dict(role="user", content=final_prompt)
+    return af.lm_call([final_msg], model="gpt-5.5")
+
+
+ir = af.trace(pipeline)("placeholder topic")
+
+with af.collect(collection="debug") as captured:
+    result = ir.call("recursion")
+
+with af.inject(collection="debug", values={"draft": ["Recursion calls itself."]}):
+    result = ir.call("recursion")
+```
+
+The original function and IR stay the same. The context around execution changes
+what happens at checkpointed values.
+
+## Agents
+
+Tool-use agents are just traced programs with structured outputs, `switch`
+branches, and bounded `while_loop` state.
+
+```mermaid
+flowchart TD
+    question["question"] --> state["state"]
+    state --> condition{"continue?"}
+    condition -- "yes" --> decision{"tool?"}
+    decision -- "search" --> tool["search branch"]
+    tool --> state
+    decision -- "done" --> result["result"]
+    condition -- "no" --> result
+```
+
+Because the agent is one IR, the same transforms still apply:
+
+```python
+agent_ir = af.trace(agent)("question")
+batched_feedback = af.batch(af.pullback(agent_ir))
+```
+
+See the [Tool-Use Agent recipe](https://autoform.readthedocs.io/en/latest/recipes/tool-use-agent.html)
+for the full version.
+
+## Reference
+
+- [Getting Started](https://autoform.readthedocs.io/en/latest/getting-started.html)
+- [Concepts](https://autoform.readthedocs.io/en/latest/concepts/)
+- [Recipes](https://autoform.readthedocs.io/en/latest/recipes/)
+- [API Reference](https://autoform.readthedocs.io/en/latest/api/)
+- [Glossary](https://autoform.readthedocs.io/en/latest/reference/glossary.html)
+
+> Early development: [API Reference](https://autoform.readthedocs.io/en/latest/api/) may change before a stable release.
