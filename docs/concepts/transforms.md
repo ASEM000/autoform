@@ -29,6 +29,7 @@ batch(ir, /, *, in_axes=True) -> IR
 ```
 
 {py:func}`batch <autoform.batch>` vectorizes an IR over one or more input leaves. `in_axes` is a bool [pytree](pytrees.md) matching the input structure: `True` means batched, `False` means broadcast.
+Higher-order primitives can have their own batch rules too, including {py:func}`while_loop <autoform.while_loop>`.[^batched-while-loop]
 
 ```python
 batched = af.batch(ir)
@@ -147,3 +148,5 @@ async_result = asyncio.run(transformed.acall((topics,), critiques))
 ```
 
 The original function was not written as `async def`. Async execution is chosen when running the transformed IR. See [Trace, IR, Execute](trace-ir-execute.md) for the execution split.
+
+[^batched-while-loop]: The batched {py:func}`while_loop <autoform.while_loop>` implementation keeps an independent state for each batch item. Each iteration checks the condition for live items, runs the body only for items still active, and transposes between a batched pytree and per-item states internally. This lets different batch items exit on different iterations while the whole loop remains bounded by `max_iters`.

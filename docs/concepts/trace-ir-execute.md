@@ -120,7 +120,7 @@ Execution mode is chosen at the IR boundary:
 
 The choice is made where the IR runs, not where the function is defined.
 Use `.call(...)` for sync execution and `.acall(...)` for async execution.
-This avoids the [function-coloring](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/) split: the original Python function stays ordinary, while `.call(...)` and `.acall(...)` choose execution at the IR boundary.
+This avoids the function-coloring split:[^function-coloring] the original Python function stays ordinary, while `.call(...)` and `.acall(...)` choose execution at the IR boundary.
 
 ```{mermaid}
 flowchart TD
@@ -147,3 +147,5 @@ flowchart TD
 - Mutating closure state: pass state through the function inputs and outputs instead, preferably as registered [pytrees](pytrees.md) for structured state.
 
 Next, read [The IR](the-ir.md) for the IR structure in more detail.
+
+[^function-coloring]: See Bob Nystrom, ["What Color Is Your Function?"](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/).

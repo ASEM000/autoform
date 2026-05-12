@@ -20,7 +20,7 @@ pip install git+https://github.com/ASEM000/autoform.git
 export OPENAI_API_KEY="..."
 ```
 
-Any [LiteLLM-supported provider](https://docs.litellm.ai/docs/providers) works if the provider credentials and model name are configured for that provider.
+Any [LiteLLM-supported provider](https://docs.litellm.ai/docs/providers) works if the provider credentials and model name are configured for that provider.[^litellm-model-names]
 
 Run one direct LM call before starting with [tracing](concepts/trace-ir-execute.md):
 
@@ -505,6 +505,8 @@ The core loop is now visible:
 - transform the IR with {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>`;
 - inspect or replace intermediates with {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`;
 - return structured values with {py:func}`lm_schema_call <autoform.lm_schema_call>`.
+
+[^litellm-model-names]: Use the model name expected by LiteLLM, not necessarily the provider's direct API model string. For example, an OpenRouter model uses an `openrouter/...` prefix when called through LiteLLM.
 
 The main conceptual pages are useful when building larger programs:
 

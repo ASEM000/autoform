@@ -121,7 +121,7 @@ The same shape-preserving rule is what makes schemas compose with `autoform` tra
 
 ## Schema Calls
 
-Pass the schema value to {py:func}`lm_schema_call <autoform.lm_schema_call>`. The result has the same pytree shape, with schema leaves replaced by parsed provider output.
+Pass the schema value to {py:func}`lm_schema_call <autoform.lm_schema_call>`. The result has the same pytree shape, with schema leaves replaced by parsed provider output.[^schema-provider-support]
 
 ```python
 import autoform as af
@@ -142,3 +142,5 @@ For provider routing, retries, aliases, or fallback chains, use {py:func}`lm_cli
 When a schema call is used inside {py:func}`pullback <autoform.pullback>`, feedback is still text. The output cotangent should match the schema shape, with text feedback at leaves. For example, feedback might be `{"text": "too terse", "score": "overconfident"}`.
 
 If the provider returns malformed structured output, {py:func}`lm_schema_call <autoform.lm_schema_call>` raises while parsing the response.
+
+[^schema-provider-support]: {py:func}`lm_schema_call <autoform.lm_schema_call>` sends a JSON Schema response format through the active LiteLLM client. Provider and model support for strict structured output can differ, so use a model route that supports the requested response format when schemas are required.
