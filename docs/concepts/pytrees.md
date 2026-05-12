@@ -33,7 +33,7 @@ upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 assert upper == State(topic="DNA", draft="SHORT")
 ```
 
-That is the canonical pattern: pass {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` to [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html).
+That is the canonical pattern: use the same {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` when registering dataclasses with [Optree's dataclass decorator](https://optree.readthedocs.io/en/latest/dataclasses.html) and when calling [Optree pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html).
 
 ## Transform Behavior
 
