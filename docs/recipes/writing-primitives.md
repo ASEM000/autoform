@@ -27,7 +27,7 @@ def impl_lookup(query: str, /) -> str:
 
 def abstract_lookup(query, /):
     del query
-    return af.core.TypedAVal(str)
+    return af.core.StrAVal()
 
 
 af.core.impl_rules.set(lookup_p, impl_lookup)
@@ -40,14 +40,30 @@ assert ir.call("recursion") == "result for recursion"
 
 The wrapper `lookup(...)` is what traced programs call. During tracing, `lookup_p.bind(...)` records one equation. During execution, `impl_lookup(...)` receives the concrete runtime value.
 
-The abstract rule runs at trace time. It must return the output shape and type without calling the runtime implementation.
+The abstract rule runs at trace time. It must return the output shape and abstract value without calling the runtime implementation. Built-in scalar outputs use explicit avals such as `af.core.StrAVal()`, `af.core.IntAVal()`, `af.core.FloatAVal()`, and `af.core.BoolAVal()`.
+
+For new runtime value types, define an `af.core.AVal` subclass that carries the abstract metadata you need, then register the conversion rules:
+
+```python
+class SearchResultAVal(af.core.AVal):
+    __slots__ = ["fields"]
+
+    def __init__(self, fields: tuple[str, ...]):
+        self.fields = fields
+
+
+af.core.aval_rules[SearchResult] = lambda value: SearchResultAVal(tuple(value.fields))
+af.core.aval_types[SearchResultAVal] = lambda aval: SearchResult
+```
+
+`aval_rules` maps concrete trace inputs to abstract values. `aval_types` powers `af.core.typeof(...)` checks inside primitive rules. The `aval_types` rule is callable so richer avals can inspect their own metadata.
 
 ## Rules by Phase
 
 | Registry | Purpose |
 | --- | --- |
 | `impl_rules` | Sync execution for `.call(...)`. |
-| `abstract_rules` | Trace-time output shape and type. |
+| `abstract_rules` | Trace-time output shape and abstract value. |
 | `batch_rules` | Behavior under {py:func}`batch <autoform.batch>`. |
 | `push_rules` | Behavior under {py:func}`pushforward <autoform.pushforward>`. |
 | `pull_fwd_rules` | Forward sweep used by {py:func}`pullback <autoform.pullback>`. |
