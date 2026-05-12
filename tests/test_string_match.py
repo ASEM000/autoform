@@ -170,7 +170,7 @@ class TestMatchPushforward:
 
         assert out_primal is True
         assert af.ad.is_zero(out_tangent)
-        assert out_tangent.type is bool
+        assert out_tangent.aval == BoolAVal()
 
     def test_pushforward_match_false_case(self):
         def check(x):
@@ -183,7 +183,7 @@ class TestMatchPushforward:
 
         assert out_primal is False
         assert af.ad.is_zero(out_tangent)
-        assert out_tangent.type is bool
+        assert out_tangent.aval == BoolAVal()
 
 
 class TestMatchPullback:
@@ -198,7 +198,7 @@ class TestMatchPullback:
 
         assert out_primal is True
         assert af.ad.is_zero(in_cotangent[0])
-        assert in_cotangent[0].type is str
+        assert in_cotangent[0].aval == StrAVal()
 
     def test_pullback_match_false_case(self):
         def check(x):
@@ -211,7 +211,7 @@ class TestMatchPullback:
 
         assert out_primal is False
         assert af.ad.is_zero(in_cotangent[0])
-        assert in_cotangent[0].type is str
+        assert in_cotangent[0].aval == StrAVal()
 
 
 class TestMatchComposition:

@@ -58,8 +58,8 @@ def pullback_bwd_greet(residuals, out_cotangent):
             return (
                 out_cotangent,
                 {
-                    "greeting": af.ad.Zero(type(greeting)),
-                    "punctuation": af.ad.Zero(type(punct)),
+                    "greeting": af.ad.zeroof(greeting),
+                    "punctuation": af.ad.zeroof(punct),
                 },
             )
 

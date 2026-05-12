@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.ad import Zero, is_zero, materialize
+from autoform.ad import Zero, is_zero, materialize, zeroof
 from autoform.core import (
     BoolAVal,
     EvalType,
@@ -238,7 +238,7 @@ def abstract_match(in_tree: Tree, /) -> EvalType:
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, Zero(bool)
+    return out_primal, Zero(BoolAVal())
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -250,7 +250,7 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return treelib.map(lambda r: r if is_zero(r) else Zero(type(r)), residuals)
+    return treelib.map(lambda r: r if is_zero(r) else zeroof(r), residuals)
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:

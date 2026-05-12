@@ -319,7 +319,7 @@ class TestLMPrimitive:
 
         assert out == "m1|hello"
         assert isinstance(cotangent[0], str)
-        assert cotangent[1] == af.ad.Zero(str)
+        assert cotangent[1] == af.ad.Zero(af.core.StrAVal())
 
 
 class TestBind:
@@ -603,26 +603,49 @@ class TestTransformWrapperAvals:
 
 class TestCotangentHelpers:
     def test_zero_str(self):
-        z = af.ad.Zero(str)
+        z = af.ad.Zero(af.core.StrAVal())
         assert af.ad.is_zero(z)
-        assert z.type is str
+        assert z.aval == af.core.StrAVal()
         assert af.ad.materialize(z) == ""
 
+    def test_zero_requires_aval(self):
+        with pytest.raises(AssertionError, match="Expected AVal"):
+            af.ad.Zero(str)
+
     def test_zero_non_differentiable_type(self):
-        z = af.ad.Zero(bool)
+        z = af.ad.Zero(af.core.BoolAVal())
         assert af.ad.is_zero(z)
-        assert z.type is bool
+        assert z.aval == af.core.BoolAVal()
         with pytest.raises(TypeError):
             af.ad.materialize(z)
 
     def test_zero_equality(self):
-        assert af.ad.Zero(str) == af.ad.Zero(str)
-        assert af.ad.Zero(str) != af.ad.Zero(bool)
+        assert af.ad.Zero(af.core.StrAVal()) == af.ad.Zero(af.core.StrAVal())
+        assert af.ad.Zero(af.core.StrAVal()) != af.ad.Zero(af.core.BoolAVal())
 
-    def test_zero_helper_is_idempotent(self):
-        z = af.ad.Zero(str)
-        assert af.ad.zero(z) is z
-        assert af.ad.materialize(af.ad.zero(z)) == ""
+    def test_zeroof_is_idempotent(self):
+        z = af.ad.Zero(af.core.StrAVal())
+        assert af.ad.zeroof(z) is z
+        assert af.ad.materialize(af.ad.zeroof(z)) == ""
+
+    def test_zero_materializes_with_registered_aval_rule(self):
+        class BlobAVal(af.core.AVal):
+            __slots__ = ["size"]
+
+            def __init__(self, size):
+                self.size = size
+
+            def __eq__(self, other):
+                return type(self) is type(other) and self.size == other.size
+
+            def __hash__(self):
+                return hash((type(self), self.size))
+
+        af.ad.zero_rules[BlobAVal] = lambda aval: ("zero", aval.size)
+        try:
+            assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
+        finally:
+            del af.ad.zero_rules[BlobAVal]
 
     def test_accumulate_cotangents_single(self):
         result = af.ad.accumulate_cotangents(["hello"])
@@ -633,12 +656,35 @@ class TestCotangentHelpers:
         assert result == "abc"
 
     def test_accumulate_cotangents_all_zeros(self):
-        result = af.ad.accumulate_cotangents([af.ad.Zero(str), af.ad.Zero(str)])
+        result = af.ad.accumulate_cotangents([
+            af.ad.Zero(af.core.StrAVal()),
+            af.ad.Zero(af.core.StrAVal()),
+        ])
         assert af.ad.is_zero(result)
 
     def test_accumulate_cotangents_unseted_type_uses_sum(self):
         result = af.ad.accumulate_cotangents([1, 2, 3])
         assert result == 6
+
+    def test_accumulate_cotangents_uses_registered_aval_rule(self):
+        class Blob:
+            __slots__ = ["text"]
+
+            def __init__(self, text):
+                self.text = text
+
+        class BlobAVal(af.core.AVal):
+            __slots__ = []
+
+        af.core.aval_rules[Blob] = lambda _: BlobAVal()
+        af.ad.cotangent_accumulators[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
+        try:
+            result = af.ad.accumulate_cotangents([Blob("a"), Blob("b")])
+            assert isinstance(result, Blob)
+            assert result.text == "a|b"
+        finally:
+            del af.core.aval_rules[Blob]
+            del af.ad.cotangent_accumulators[BlobAVal]
 
 
 class TestLiteralZeroing:
@@ -655,7 +701,7 @@ class TestLiteralZeroing:
         t_lit, t_var = tangent_in
 
         assert af.ad.is_zero(t_lit)
-        assert t_lit.type is str
+        assert t_lit.aval == af.core.StrAVal()
         assert isinstance(t_var, af.core.IRVar)
 
     def test_pushforward_zeros_literal_output_tangent(self):

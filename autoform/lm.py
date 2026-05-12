@@ -26,7 +26,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import acompletion, completion
 
-from autoform.ad import Zero, is_zero, materialize
+from autoform.ad import is_zero, materialize, zeroof
 from autoform.core import (
     BoolAVal,
     EvalType,
@@ -244,7 +244,7 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    return grads, Zero(str)
+    return grads, zeroof(model)
 
 
 async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
@@ -257,10 +257,7 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
-    return (
-        await asyncio.gather(*[grad(c) for c in contents]),
-        Zero(str),
-    )
+    return (await asyncio.gather(*[grad(c) for c in contents]), zeroof(model))
 
 
 def batch_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
@@ -551,7 +548,7 @@ def pullback_bwd_lm_schema_call(
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    return grads, Zero(str)
+    return grads, zeroof(model)
 
 
 async def apull_bwd_lm_schema_call(
@@ -570,7 +567,7 @@ async def apull_bwd_lm_schema_call(
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
-    return (await asyncio.gather(*[grad(c) for c in contents]), Zero(str))
+    return (await asyncio.gather(*[grad(c) for c in contents]), zeroof(model))
 
 
 def batch_lm_schema_call(

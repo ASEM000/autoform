@@ -21,7 +21,7 @@ import functools as ft
 from collections import defaultdict, deque
 from collections.abc import Callable
 
-from autoform.ad import Zero, is_zero, pullback, pushforward
+from autoform.ad import is_zero, pullback, pushforward, zeroof
 from autoform.analysis import ir_eqn_graph
 from autoform.batch import batch
 from autoform.core import (
@@ -287,7 +287,7 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> tuple[Tree, DependsType[T
 
 def pull_bwd_depends(in_tree: tuple[DependsType[Tree], Tree], /) -> DependsType[Tree]:
     (_, deps), out_cotangent = in_tree
-    return out_cotangent, treelib.map(lambda d: d if is_zero(d) else Zero(type(d)), deps)
+    return out_cotangent, treelib.map(lambda d: d if is_zero(d) else zeroof(d), deps)
 
 
 def batch_depends(
