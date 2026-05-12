@@ -4,16 +4,14 @@
 
 ### Breaking Changes
 
-  - Removed `af.Struct`, `af.lm_struct_call`, and the Struct-specific type-tree helpers. Use Optree-registered pytrees under `af.PYTREE_NAMESPACE` for object structure, and use `af.lm_schema_call(..., schema=...)` for structured LM outputs.
+  - Removed `af.Struct`, `af.lm_struct_call`, and the Struct-specific type-tree helpers. Use Optree-registered pytrees under {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` for object structure, and use {py:func}`lm_schema_call <autoform.lm_schema_call>` with `schema=...` for structured LM outputs.
 
     ```python
     import optree
     import autoform as af
 
-    treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
-
-    @treelib.dataclasses.dataclass
+    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
     class Answer:
         reasoning: str
         answer: float
@@ -27,7 +25,7 @@
 
   - Removed the old `split` / `splitpoint` and primitive-local intercept/effect APIs from the public surface.
 
-  - Public tracing and IR execution boundaries are now positional-only. `trace`, `IR.call`, `IR.acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`. Use the methods on traced IR objects rather than removed top-level `af.call(...)` / `af.acall(...)` helpers.
+  - Public tracing and IR execution boundaries are now positional-only. {py:func}`trace <autoform.trace>`, `IR.call`, `IR.acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`. Use the methods on traced IR objects rather than removed top-level `af.call(...)` / `af.acall(...)` helpers.
 
     ```python
     def label(item, punctuation):
@@ -39,9 +37,9 @@
     # "item: beta?"
     ```
 
-  - `lm_call(...)` and `lm_schema_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
+  - {py:func}`lm_call <autoform.lm_call>` and {py:func}`lm_schema_call <autoform.lm_schema_call>` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
 
-  - Removed `af.Tag`. Pass any hashable value directly to `af.tag(...)` instead of subclassing `af.Tag`.
+  - Removed `af.Tag`. Pass any hashable value directly to {py:func}`tag <autoform.tag>` instead of subclassing `af.Tag`.
 
     ```python
     with af.tag("draft"):
@@ -50,7 +48,7 @@
 
 ### New Features
 
-  - `trace(..., static=...)` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
+  - {py:func}`trace <autoform.trace>` with `static=...` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
 
     ```python
     def label(is_error, value):
@@ -64,7 +62,7 @@
     # "error: timeout"
     ```
 
-  - `lm_client` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
+  - {py:func}`lm_client <autoform.lm_client>` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
 
     ```python
     import autoform as af
@@ -85,7 +83,7 @@
         result = ir.call("release notes")
     ```
 
-  - Added `lm_schema_call(...)` and schema nodes (`Str`, `Int`, `Float`, `Bool`, `Enum`, `Doc`) for structured LM outputs. Schemas are ordinary pytrees and can be dictionaries, lists, tuples, or custom Optree-registered objects.
+  - Added {py:func}`lm_schema_call <autoform.lm_schema_call>` and schema nodes ({py:class}`Str <autoform.Str>`, {py:class}`Int <autoform.Int>`, {py:class}`Float <autoform.Float>`, {py:class}`Bool <autoform.Bool>`, {py:class}`Enum <autoform.Enum>`, {py:class}`Doc <autoform.Doc>`) for structured LM outputs. Schemas are ordinary pytrees and can be dictionaries, lists, tuples, or custom Optree-registered objects.
 
     ```python
     schema = {
@@ -99,9 +97,9 @@
 
 ### Improvements
 
-  - `trace` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
+  - {py:func}`trace <autoform.trace>` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
 
-  - `concat` and `match` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
+  - {py:func}`concat <autoform.concat>` and {py:func}`match <autoform.match>` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
 
     ```python
     def bad(x, y, z):
@@ -111,7 +109,7 @@
     af.trace(bad)("a", "b", 1)  # AssertionError during tracing
     ```
 
-  - `batch` now preserves its batch axis at the HOP boundary. if an inner batch rule returns a scalar leaf, the HOP broadcasts it back into the common batch container instead of dropping the axis on that output.
+  - {py:func}`batch <autoform.batch>` now preserves its batch axis at the HOP boundary. if an inner batch rule returns a scalar leaf, the HOP broadcasts it back into the common batch container instead of dropping the axis on that output.
 
     ```python
     def program(x, y):
@@ -125,9 +123,17 @@
     # (["x=a", "x=b"], ["y=constant", "y=constant"])
     ```
 
-  - `collect` and `inject` documentation now distinguishes execution-time checkpoint collection/substitution from trace-time specialization. `collect` is documented as execution-only; `inject` is documented as runtime checkpoint substitution around `ir.call(...)` and trace-time checkpoint specialization when used inside the function being traced.
+  - {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` documentation now distinguishes execution-time checkpoint collection/substitution from trace-time specialization. {py:func}`collect <autoform.collect>` is documented as execution-only; {py:func}`inject <autoform.inject>` is documented as runtime checkpoint substitution around `ir.call(...)` and trace-time checkpoint specialization when used inside the function being traced.
 
-  - `autoform.analysis.ir_tree_used_ir_vars` is now part of the module's documented export surface because `dce` depends on it for partial-output liveness.
+  - `autoform.analysis.ir_tree_used_ir_vars` is now part of the module's documented export surface because {py:func}`dce <autoform.dce>` depends on it for partial-output liveness.
+
+### Documentation
+
+  - Added a published [Changelog](docs/reference/changelog.md) page under Reference.
+
+  - Reworked [Getting Started](docs/getting-started.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
+
+  - Normalized Mermaid diagrams across the README and docs, and added a GitHub footer link to the Furo docs theme.
 
 ## v0.2.0 (February 7, 2026)
 

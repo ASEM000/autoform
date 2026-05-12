@@ -18,5 +18,6 @@ recipes/index
 :hidden:
 
 api/index
+reference/changelog
 reference/glossary
 ```
