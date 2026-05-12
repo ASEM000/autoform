@@ -31,8 +31,12 @@ from autoform.utils import Tree, lru_cache, treelib
 __all__ = [
     # base types
     "AVal",
-    "TypedAVal",
+    "StrAVal",
+    "IntAVal",
+    "FloatAVal",
+    "BoolAVal",
     "Val",
+    "aval_types",
     "aval_rules",
     "is_val",
     "aval_of",
@@ -94,27 +98,48 @@ class AVal:
     __slots__ = []
 
 
-class TypedAVal(AVal):
-    __slots__ = ["type"]
-
-    def __init__(self, type: type):
-        self.type = type
+class ScalarAVal(AVal):
+    __slots__ = []
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.type.__name__})"
+        return f"{type(self).__name__}()"
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, TypedAVal) and self.type is other.type
+        return type(self) is type(other)
 
     def __hash__(self) -> int:
-        return hash((type(self), self.type))
+        return hash(type(self))
 
+
+class StrAVal(ScalarAVal):
+    __slots__ = []
+
+
+class IntAVal(ScalarAVal):
+    __slots__ = []
+
+
+class FloatAVal(ScalarAVal):
+    __slots__ = []
+
+
+class BoolAVal(ScalarAVal):
+    __slots__ = []
+
+
+type Val = str | int | float | bool
+
+aval_types: dict[type[AVal], Callable[[AVal], type]] = {}
+aval_types[StrAVal] = lambda _: str
+aval_types[IntAVal] = lambda _: int
+aval_types[FloatAVal] = lambda _: float
+aval_types[BoolAVal] = lambda _: bool
 
 aval_rules: dict[type, Callable[[Any], AVal]] = {}
-aval_rules[str] = lambda _: TypedAVal(str)
-aval_rules[int] = lambda _: TypedAVal(int)
-aval_rules[float] = lambda _: TypedAVal(float)
-aval_rules[bool] = lambda _: TypedAVal(bool)
+aval_rules[str] = lambda _: StrAVal()
+aval_rules[int] = lambda _: IntAVal()
+aval_rules[float] = lambda _: FloatAVal()
+aval_rules[bool] = lambda _: BoolAVal()
 
 
 def is_val(x) -> bool:
@@ -129,7 +154,11 @@ type EvalType = AVal | Val
 
 
 def typeof(x, /) -> type:
-    return x.type if is_aval(x) else type(x)
+    if not is_aval(x):
+        return type(x)
+    if (rule := aval_types.get(type(x))) is None:
+        raise TypeError(f"Cannot infer Python type for abstract value {x!r}")
+    return rule(x)
 
 
 def aval_of(x, /) -> AVal:
@@ -167,8 +196,7 @@ class IRVar:
 
     def __repr__(self) -> str:
         source = f", source={self.source!r}" if self.source else ""
-        aval = self.aval.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
-        return f"{type(self).__name__}[{aval}](id={self.id}{source})"
+        return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
@@ -367,11 +395,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     def format_ir_val(ir_val) -> str:
         if is_irvar(ir_val):
             var_type = type(ir_val).__name__
-            aval_info = (
-                ir_val.aval.type.__name__
-                if isinstance(ir_val.aval, TypedAVal)
-                else repr(ir_val.aval)
-            )
+            aval_info = repr(ir_val.aval)
             type_info = f"[{aval_info}]"
             return f"%{ir_val.id}:{var_type}{type_info}"
         val = ir_val
@@ -543,8 +567,8 @@ TRACE_MISSING_RULE_ERROR = "No trace rule for {desc} on values of type {aval!r}.
 type TraceRule = Callable[[Any, Any], Any]
 
 
-trace_eq_rules: dict[type, TraceRule] = {}
-trace_add_rules: dict[type, TraceRule] = {}
+trace_eq_rules: dict[type[AVal], TraceRule] = {}
+trace_add_rules: dict[type[AVal], TraceRule] = {}
 
 
 class TraceBox:
@@ -567,17 +591,17 @@ class TraceBox:
         return object.__hash__(self)
 
     def __eq__(self, other) -> Any:
-        if isinstance(self.aval, TypedAVal) and (rule := trace_eq_rules.get(self.aval.type)):
+        if rule := trace_eq_rules.get(type(self.aval)):
             return rule(self, other)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="==", aval=self.aval))
 
     def __add__(self, other) -> Any:
-        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+        if rule := trace_add_rules.get(type(self.aval)):
             return rule(self, other)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
 
     def __radd__(self, other) -> Any:
-        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+        if rule := trace_add_rules.get(type(self.aval)):
             return rule(other, self)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
 
