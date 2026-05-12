@@ -7,6 +7,7 @@ These are task-shaped examples that build on [Getting Started](../getting-starte
 
 prompt-optimization
 batch-in-axes
+pytree-modules
 concurrent-pipeline
 debug-intermediates
 memoize
