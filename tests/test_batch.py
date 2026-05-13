@@ -18,6 +18,7 @@ import optree
 import pytest
 
 import autoform as af
+from autoform.batch import BatchAVal
 from autoform.utils import batch_spec, batch_transpose
 
 treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
@@ -183,8 +184,8 @@ class TestBatchIRStructure:
 
         batched_ir = af.batch(ir)
 
-        assert batched_ir.in_ir_tree[0].aval is aval
-        assert batched_ir.out_ir_tree[0].aval is aval
+        assert batched_ir.in_ir_tree[0].aval == BatchAVal(aval)
+        assert batched_ir.out_ir_tree[0].aval == BatchAVal(aval)
 
     def test_batch_wrapper_preserves_broadcast_aval(self):
         class TaggedAVal(af.core.AVal):
@@ -210,7 +211,7 @@ class TestBatchIRStructure:
         batched_ir = af.batch(ir)
 
         assert isinstance(batched_ir.out_ir_tree, af.core.IRVar)
-        assert batched_ir.out_ir_tree.aval == af.core.StrAVal()
+        assert batched_ir.out_ir_tree.aval == BatchAVal(af.core.StrAVal())
         assert batched_ir.call(["a", "b"]) == ["c", "c"]
 
     def test_batch_broadcast_constant_output_stays_literal(self):
@@ -232,6 +233,8 @@ class TestNestedBatch:
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
         double_batched_ir = af.batch(batched_ir)
+        assert double_batched_ir.in_ir_tree[0].aval == BatchAVal(BatchAVal(af.core.StrAVal()))
+        assert double_batched_ir.out_ir_tree.aval == BatchAVal(BatchAVal(af.core.StrAVal()))
         result = double_batched_ir.call([["a", "b"], ["c", "d", "e"]])
         assert result == [["a!", "b!"], ["c!", "d!", "e!"]]
 
