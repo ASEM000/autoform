@@ -439,6 +439,17 @@ def transpose_walk(ir: IR, c_out: Tree, /):
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
     def write_c(atom, value: Any):
+        # NOTE(asem): cotangent contributions are collected by appending them to the
+        # same IRVar entry in `c_env`. accumulation happens when that IRVar is read.
+        # for example:
+        # >>> def f(x): return x + x
+        # >>> ir = af.trace(f)("...")
+        # >>> out, (dx,) = af.pullback(ir).call(("...",), "df")
+        # the trace contains `concat(x, x)`. during transpose, the concat pullback
+        # returns one cotangent for each concat input. since both inputs are the same
+        # IRVar `x`, `c_env[x]` receives two cotangents: ["df", "df"].
+        # `read_c(x)` then calls `accumulate_cotangents`, which combines them using
+        # the registered `StrAVal` accumulator.
         is_irvar(atom) and c_env[atom].append(value)
 
     def read_c(atom) -> Any:
