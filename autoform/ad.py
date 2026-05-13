@@ -20,7 +20,7 @@ import asyncio
 import functools as ft
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeGuard
 
 __all__ = [
     "Zero",
@@ -63,10 +63,10 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_c
 # ==================================================================================================
 
 
-class Zero:
+class Zero[T: AVal]:
     __slots__ = ["aval"]
 
-    def __init__(self, aval: AVal, /):
+    def __init__(self, aval: T, /):
         assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
         self.aval = aval
 
@@ -80,7 +80,7 @@ class Zero:
         return hash((type(self), self.aval))
 
 
-def is_zero(x) -> bool:
+def is_zero(x) -> TypeGuard[Zero]:
     return isinstance(x, Zero)
 
 
@@ -88,7 +88,7 @@ zero_rules: dict[type[AVal], Callable[[AVal], Any]] = {}
 zero_rules[StrAVal] = lambda _: ""
 
 
-def zeroof(v, /):
+def zeroof(v, /) -> Zero:
     return v if is_zero(v) else Zero(avalof(v))
 
 
