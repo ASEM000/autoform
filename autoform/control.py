@@ -25,6 +25,7 @@ from autoform.core import (
     IR,
     IREqn,
     Prim,
+    StrAVal,
     abstract_rules,
     batch_rules,
     impl_rules,
@@ -33,7 +34,6 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    typeof,
 )
 from autoform.dce import dce, dce_rules, default_dce
 from autoform.utils import (
@@ -178,7 +178,7 @@ async def aimpl_switch(in_tree, /, *, branches: dict[str, IR]):
 
 def abstract_switch(in_tree, /, *, branches: dict[str, IR]) -> Tree:
     key, _ = in_tree
-    assert typeof(key) is str, f"`switch` expects a string key, got {key!r}"
+    assert type(key) in (str, StrAVal), f"`switch` expects string key: {key!r}"
     key0 = next(iter(branches))
     branch0 = branches[key0]
     return treelib.map(ir_aval, branch0.out_ir_tree)

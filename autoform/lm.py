@@ -41,7 +41,6 @@ from autoform.core import (
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
-    typeof,
 )
 from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, make_json_schema_and_parser
 from autoform.utils import (
@@ -194,8 +193,8 @@ async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
 
 def abstract_lm_call(in_tree: Tree, /, *, roles: list[str]) -> EvalType:
     contents, model = in_tree
-    assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
-    assert typeof(model) is str, f"`lm_call` expects a string model, got {model!r}"
+    assert all(type(x) in (str, StrAVal) for x in contents), f"Expected strings: {contents!r}"
+    assert type(model) in (str, StrAVal), f"Expected string model: {model!r}"
     return StrAVal()
 
 
@@ -447,8 +446,8 @@ def abstract_lm_schema_call(
     schema: Any,
 ) -> Tree:
     contents, model = in_tree
-    assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
-    assert typeof(model) is str, f"Expected string model, got {model!r}"
+    assert all(type(x) in (str, StrAVal) for x in contents), f"Expected strings: {contents!r}"
+    assert type(model) in (str, StrAVal), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
 
 

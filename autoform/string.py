@@ -32,7 +32,6 @@ from autoform.core import (
     push_rules,
     trace_add_rules,
     trace_eq_rules,
-    typeof,
 )
 from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
 
@@ -150,7 +149,7 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 
 def abstract_concat(in_tree: Tree, /) -> EvalType:
-    assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
+    assert all(type(x) in (str, StrAVal) for x in in_tree), f"`concat` expects strings: {in_tree!r}"
     return StrAVal()
 
 
@@ -231,7 +230,7 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 
 def abstract_match(in_tree: Tree, /) -> EvalType:
-    assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
+    assert all(type(x) in (str, StrAVal) for x in in_tree), f"`match` expects strings: {in_tree!r}"
     return BoolAVal()
 
 

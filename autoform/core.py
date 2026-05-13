@@ -37,7 +37,6 @@ __all__ = [
     "BoolAVal",
     "Val",
     "trace_types",
-    "aval_types",
     "aval_rules",
     "is_traceable",
     "avalof",
@@ -136,12 +135,6 @@ type Val = str | int | float | bool
 
 trace_types: set[type] = {str, int, float, bool}
 
-aval_types: dict[type[AVal], Callable[[AVal], type]] = {}
-aval_types[StrAVal] = lambda _: str
-aval_types[IntAVal] = lambda _: int
-aval_types[FloatAVal] = lambda _: float
-aval_types[BoolAVal] = lambda _: bool
-
 aval_rules: dict[type, Callable[[Any], AVal]] = {}
 aval_rules[str] = lambda _: StrAVal()
 aval_rules[int] = lambda _: IntAVal()
@@ -158,14 +151,6 @@ def is_aval(x) -> TypeGuard[AVal]:
 
 
 type EvalType = AVal | Val
-
-
-def typeof(x, /) -> type:
-    if not is_aval(x):
-        return type(x)
-    if (rule := aval_types.get(type(x))) is None:
-        raise TypeError(f"Cannot infer Python type for abstract value {x!r}")
-    return rule(x)
 
 
 def avalof(x, /) -> AVal:
