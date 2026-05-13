@@ -20,28 +20,34 @@ import asyncio
 import functools as ft
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeGuard
 
 __all__ = [
     "Zero",
     "is_zero",
-    "zero_registry",
+    "zero_rules",
+    "zeroof",
     "materialize",
-    "accumulate_cotangents",
-    "cotangent_accumulators",
+    "cot_acc",
+    "cot_acc_rules",
     "pushforward",
     "pullback",
 ]
 
 from autoform.core import (
     IR,
+    AVal,
     BoxedInterpreter,
+    FloatAVal,
+    IntAVal,
     IREqn,
     IRVar,
     Prim,
-    TypedAVal,
+    StrAVal,
     abstract_rules,
     active_interpreter,
+    aval_rules,
+    avalof,
     batch_rules,
     impl_rules,
     ir_aval,
@@ -59,34 +65,34 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_c
 # ==================================================================================================
 
 
-class Zero:
-    __slots__ = ["type"]
+class Zero[T: AVal]:
+    __slots__ = ["aval"]
 
-    def __init__(self, type: type, /):
-        self.type = type
+    def __init__(self, aval: T, /):
+        assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
+        self.aval = aval
 
     def __repr__(self):
-        return f"Zero({self.type.__name__})"
+        return f"Zero({self.aval!r})"
 
     def __eq__(self, other):
-        return isinstance(other, Zero) and self.type == other.type
+        return isinstance(other, Zero) and self.aval == other.aval
 
     def __hash__(self):
-        return hash(("Zero", self.type))
+        return hash((type(self), self.aval))
 
 
-def is_zero(x) -> bool:
+def is_zero(x) -> TypeGuard[Zero]:
     return isinstance(x, Zero)
 
 
-def zero_aval(aval, /) -> Zero:
-    assert isinstance(aval, TypedAVal), f"Expected TypedAVal, got {aval!r}"
-    return Zero(aval.type)
+zero_rules: dict[type[AVal], Callable[[AVal], Any]] = {}
+zero_rules[StrAVal] = lambda _: ""
+aval_rules[Zero] = lambda z: z.aval
 
 
-zero_registry: dict[type, Any] = {}
-zero_registry[str] = ""
-zero = lambda v: v if is_zero(v) else Zero(type(v))
+def zeroof(v, /) -> Zero:
+    return v if is_zero(v) else Zero(avalof(v))
 
 
 def materialize(x: Tree, /) -> Tree:
@@ -94,16 +100,16 @@ def materialize(x: Tree, /) -> Tree:
 
     Raises:
         TypeError: If a ``Zero`` has a type with no registered concrete
-            zero (e.g. ``Zero(bool)``). This indicates an invalid gradient
+            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
             path through a non-differentiable type.
     """
 
     def map_func(x):
         if not is_zero(x):
             return x
-        if x.type not in zero_registry:
-            raise TypeError(f"Cannot materialize Zero({x.type.__name__})")
-        return zero_registry[x.type]
+        if (rule := zero_rules.get(type(x.aval))) is None:
+            raise TypeError(f"Cannot materialize {x!r}")
+        return rule(x.aval)
 
     return treelib.map(map_func, x, is_leaf=is_zero)
 
@@ -147,7 +153,7 @@ class PushforwardInterpreter(BoxedInterpreter[PushforwardBox]):
             return v.primal if isinstance(v, PushforwardBox) and v.owner is self else v
 
         def tangent(v):
-            return v.tangent if isinstance(v, PushforwardBox) and v.owner is self else zero(v)
+            return v.tangent if isinstance(v, PushforwardBox) and v.owner is self else zeroof(v)
 
         return treelib.map(primal, values), treelib.map(tangent, values)
 
@@ -195,7 +201,7 @@ def pushforward(ir: IR, /) -> IR:
         return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else atom
 
     def make_t(atom):
-        return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else Zero(type(atom))
+        return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else zeroof(atom)
 
     p_in_ir = treelib.map(make_p, ir.in_ir_tree)
     t_in_ir = treelib.map(make_t, ir.in_ir_tree)
@@ -216,7 +222,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tree]:
                 return ir_eqn.bind(boxed_in, **ir_eqn.params)
             with using_interpreter(pusher.parent):
                 p_out = ir_eqn.bind(p_in, **ir_eqn.params)
-            return pusher.box((p_out, treelib.map(zero, p_out)))
+            return pusher.box((p_out, treelib.map(zeroof, p_out)))
 
         ir_eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
         while ir_eqn:
@@ -233,7 +239,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: IR) -> tuple[Tree, Tre
                 return await ir_eqn.abind(boxed_in, **ir_eqn.params)
             with using_interpreter(pusher.parent):
                 p_out = await ir_eqn.abind(p_in, **ir_eqn.params)
-            return pusher.box((p_out, treelib.map(zero, p_out)))
+            return pusher.box((p_out, treelib.map(zeroof, p_out)))
 
         ir_eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
         while ir_eqn:
@@ -368,21 +374,54 @@ dce_rules[pushforward_call_p] = dce_pushforward_call
 pullback_call_p = Prim("pullback_call")
 
 
-cotangent_accumulators: dict[type, Callable[[list], Any]] = {}
-cotangent_accumulators[str] = lambda cs: "".join(cs)
+cot_acc_rules: dict[type[AVal], Callable[[list[Any], AVal], Any]] = {}
+cot_acc_rules[StrAVal] = lambda cs, _: "".join(cs)
+cot_acc_rules[IntAVal] = lambda cs, _: sum(cs)
+cot_acc_rules[FloatAVal] = lambda cs, _: sum(cs)
 
 
-def accumulate_cotangents(cotangents: list[Any]) -> Any:
-    non_zero = [c for c in cotangents if not is_zero(c)]
+def cot_acc(cots: list[Any | Zero]) -> Any:
+    assert cots
+    non_zero = [c for c in cots if not is_zero(c)]
     if not non_zero:
-        return cotangents[0]  # all zeros — return first (preserves type)
+        # NOTE(asem): all output paths into the same input are zero.
+        # >>> def f(x):
+        # ...     return (x, x)
+        # >>> ir = af.trace(f)("...")
+        # >>> z = af.ad.Zero(af.core.StrAVal())
+        # >>> af.pullback(ir).call(("a",), (z, z))
+        # (('a', 'a'), (Zero(StrAVal()),))
+        first_zero, *rest_zero = cots
+        assert all(avalof(c) == avalof(first_zero) for c in rest_zero)
+        return first_zero
     if len(non_zero) == 1:
+        # NOTE(asem): exactly one output path into the same input is live.
+        # >>> def f(x):
+        # ...     return (x, x)
+        # >>> ir = af.trace(f)("...")
+        # >>> z = af.ad.Zero(af.core.StrAVal())
+        # >>> af.pullback(ir).call(("a",), ("df", z))
+        # (('a', 'a'), ('df',))
         return non_zero[0]
     first, *_ = non_zero
-    for typ in cotangent_accumulators:
-        if isinstance(first, typ):
-            return cotangent_accumulators[typ](non_zero)
-    return sum(non_zero[1:], non_zero[0])
+    if not treelib.is_leaf(first):
+        # NOTE(asem): non-leaf cotangents accumulate matching leaves.
+        # >>> def f(x):
+        # ...     return (x, x)
+        # >>> ir = af.batch(af.trace(f)("..."))
+        # >>> af.pullback(ir).call((["a", "b"],), (["G0", "G1"], ["H0", "H1"]))
+        # ((['a', 'b'], ['a', 'b']), (['G0H0', 'G1H1'],))
+        return treelib.map(lambda *cs: cot_acc(list(cs)), *non_zero)
+    # NOTE(asem): leaf cotangents use the accumulator registered for their aval.
+    # >>> def f(x):
+    # ...     return x + x
+    # >>> ir = af.trace(f)("...")
+    # >>> af.pullback(ir).call(("a",), "df")
+    # ('aa', ('dfdf',))
+    aval = avalof(first)
+    if (rule := cot_acc_rules.get(type(aval))) is None:
+        raise TypeError(f"No cotangent accumulator registered for {aval!r}")
+    return rule(non_zero, aval)
 
 
 class PullbackFwdBox:
@@ -430,17 +469,30 @@ class PullbackBwdBox:
 
 
 def transpose_walk(ir: IR, c_out: Tree, /):
+    # NOTE(asem): walk the IR in reverse accumulating cotangents in an environment.
+    # used for pullback backward pass.
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
     def write_c(atom, value: Any):
+        # NOTE(asem): cotangent contributions are collected by appending them to the
+        # same IRVar entry in `c_env`. accumulation happens when that IRVar is read.
+        # for example:
+        # >>> def f(x): return x + x
+        # >>> ir = af.trace(f)("...")
+        # >>> out, (dx,) = af.pullback(ir).call(("...",), "df")
+        # the trace contains `concat(x, x)`. during transpose, the concat pullback
+        # returns one cotangent for each concat input. since both inputs are the same
+        # IRVar `x`, `c_env[x]` receives two cotangents: ["df", "df"].
+        # `read_c(x)` then calls `cot_acc`, which combines them using
+        # the registered `StrAVal` accumulator.
         is_irvar(atom) and c_env[atom].append(value)
 
     def read_c(atom) -> Any:
         if not is_irvar(atom):
-            return Zero(type(atom))
+            return zeroof(atom)
         if not (cs := c_env[atom]):
-            return zero_aval(atom.aval)
-        return accumulate_cotangents(cs)
+            return zeroof(atom)
+        return cot_acc(cs)
 
     treelib.map(write_c, ir.out_ir_tree, c_out)
     for ir_eqn in reversed(ir.ir_eqns):
@@ -511,7 +563,7 @@ def pullback(ir: IR, /) -> IR:
         return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else atom
 
     def make_c(atom):
-        return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else Zero(type(atom))
+        return IRVar.fresh(aval=ir_aval(atom), source=atom) if is_irvar(atom) else zeroof(atom)
 
     p_in_ir = treelib.map(make_p, ir.in_ir_tree)
     c_out_ir = treelib.map(make_c, ir.out_ir_tree)

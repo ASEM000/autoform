@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 
-from autoform.ad import Zero, is_zero, pullback, pushforward
+from autoform.ad import is_zero, pullback, pushforward, zeroof
 from autoform.batch import batch
 from autoform.core import (
     IR,
@@ -70,7 +70,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         >>> pb_ir = af.pullback(ir)
         >>> _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
         >>> cotangent_x
-        Zero(str)
+        Zero(StrAVal())
         >>> cotangent_y
         'grad'
     """
@@ -87,7 +87,7 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> tuple[Tree, Tree]:
     primal, tangent = in_tree
-    zero_t = treelib.map(lambda p: Zero(type(p)) if not is_zero(p) else p, primal)
+    zero_t = treelib.map(lambda p: p if is_zero(p) else zeroof(p), primal)
     return primal, zero_t
 
 
@@ -99,7 +99,7 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> tuple[Tree, Tree]:
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return treelib.map(lambda r: Zero(type(r)) if not is_zero(r) else r, residuals)
+    return treelib.map(lambda r: r if is_zero(r) else zeroof(r), residuals)
 
 
 def batch_stop_gradient(in_tree: Tree, /) -> tuple[Tree, Tree]:
@@ -217,7 +217,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = residuals
     pb_ir = pullback(branches[key])
     _, c_operands = pb_ir.call(operands, out_cotangent)
-    return (Zero(str), c_operands)
+    return (zeroof(key), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
@@ -225,7 +225,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: dict[str, IR]):
     key, operands = residuals
     pb_ir = pullback(branches[key])
     _, c_operands = await pb_ir.acall(operands, out_cotangent)
-    return (Zero(str), c_operands)
+    return (zeroof(key), c_operands)
 
 
 def batch_switch(in_tree, /, *, branches: dict[str, IR]) -> tuple[Tree, bool]:

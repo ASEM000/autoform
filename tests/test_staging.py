@@ -214,7 +214,7 @@ class TestFold:
 
         def abstract_async_probe(in_tree):
             del in_tree
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         af.core.abstract_rules.set(async_probe_p, abstract_async_probe)
 

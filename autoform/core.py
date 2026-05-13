@@ -31,10 +31,16 @@ from autoform.utils import Tree, lru_cache, treelib
 __all__ = [
     # base types
     "AVal",
-    "TypedAVal",
+    "StrAVal",
+    "IntAVal",
+    "FloatAVal",
+    "BoolAVal",
     "Val",
     "val_types",
+    "aval_types",
+    "aval_rules",
     "is_val",
+    "avalof",
     # ir vals
     "IRVar",
     "is_irvar",
@@ -88,33 +94,59 @@ __all__ = [
 # BASE TYPES
 # ==================================================================================================
 
-val_types: set[type] = {str, int, float, bool}
-
-type Val = str | int | float | bool
-
-
-def is_val(x) -> bool:
-    return isinstance(x, tuple(val_types))
-
 
 class AVal:
     __slots__ = []
 
 
-class TypedAVal(AVal):
-    __slots__ = ["type"]
-
-    def __init__(self, type: type):
-        self.type = type
+class ScalarAVal(AVal):
+    __slots__ = []
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.type.__name__})"
+        return f"{type(self).__name__}()"
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, TypedAVal) and self.type is other.type
+        return type(self) is type(other)
 
     def __hash__(self) -> int:
-        return hash((type(self), self.type))
+        return hash(type(self))
+
+
+class StrAVal(ScalarAVal):
+    __slots__ = []
+
+
+class IntAVal(ScalarAVal):
+    __slots__ = []
+
+
+class FloatAVal(ScalarAVal):
+    __slots__ = []
+
+
+class BoolAVal(ScalarAVal):
+    __slots__ = []
+
+
+type Val = str | int | float | bool
+
+val_types: set[type] = {str, int, float, bool}
+
+aval_types: dict[type[AVal], Callable[[AVal], type]] = {}
+aval_types[StrAVal] = lambda _: str
+aval_types[IntAVal] = lambda _: int
+aval_types[FloatAVal] = lambda _: float
+aval_types[BoolAVal] = lambda _: bool
+
+aval_rules: dict[type, Callable[[Any], AVal]] = {}
+aval_rules[str] = lambda _: StrAVal()
+aval_rules[int] = lambda _: IntAVal()
+aval_rules[float] = lambda _: FloatAVal()
+aval_rules[bool] = lambda _: BoolAVal()
+
+
+def is_val(x) -> TypeGuard[Val]:
+    return type(x) in val_types
 
 
 def is_aval(x) -> TypeGuard[AVal]:
@@ -125,7 +157,20 @@ type EvalType = AVal | Val
 
 
 def typeof(x, /) -> type:
-    return x.type if is_aval(x) else type(x)
+    if not is_aval(x):
+        return type(x)
+    if (rule := aval_types.get(type(x))) is None:
+        raise TypeError(f"Cannot infer Python type for abstract value {x!r}")
+    return rule(x)
+
+
+def avalof(x, /) -> AVal:
+    rule = aval_rules.get(type(x))
+    if rule is None:
+        raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
+    aval = rule(x)
+    assert is_aval(aval), f"aval rule for {type(x).__name__} returned {aval!r}"
+    return aval
 
 
 # ==================================================================================================
@@ -154,8 +199,7 @@ class IRVar:
 
     def __repr__(self) -> str:
         source = f", source={self.source!r}" if self.source else ""
-        aval = self.aval.type.__name__ if isinstance(self.aval, TypedAVal) else repr(self.aval)
-        return f"{type(self).__name__}[{aval}](id={self.id}{source})"
+        return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
@@ -165,6 +209,8 @@ def is_irvar(x) -> TypeGuard[IRVar]:
 def ir_aval(x, /):
     return x.aval if is_irvar(x) else x
 
+
+aval_rules[IRVar] = lambda ir_var: ir_var.aval
 
 # ==================================================================================================
 # PRIMITIVE
@@ -354,11 +400,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     def format_ir_val(ir_val) -> str:
         if is_irvar(ir_val):
             var_type = type(ir_val).__name__
-            aval_info = (
-                ir_val.aval.type.__name__
-                if isinstance(ir_val.aval, TypedAVal)
-                else repr(ir_val.aval)
-            )
+            aval_info = repr(ir_val.aval)
             type_info = f"[{aval_info}]"
             return f"%{ir_val.id}:{var_type}{type_info}"
         val = ir_val
@@ -530,8 +572,8 @@ TRACE_MISSING_RULE_ERROR = "No trace rule for {desc} on values of type {aval!r}.
 type TraceRule = Callable[[Any, Any], Any]
 
 
-trace_eq_rules: dict[type, TraceRule] = {}
-trace_add_rules: dict[type, TraceRule] = {}
+trace_eq_rules: dict[type[AVal], TraceRule] = {}
+trace_add_rules: dict[type[AVal], TraceRule] = {}
 
 
 class TraceBox:
@@ -554,17 +596,17 @@ class TraceBox:
         return object.__hash__(self)
 
     def __eq__(self, other) -> Any:
-        if isinstance(self.aval, TypedAVal) and (rule := trace_eq_rules.get(self.aval.type)):
+        if rule := trace_eq_rules.get(type(self.aval)):
             return rule(self, other)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="==", aval=self.aval))
 
     def __add__(self, other) -> Any:
-        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+        if rule := trace_add_rules.get(type(self.aval)):
             return rule(self, other)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
 
     def __radd__(self, other) -> Any:
-        if isinstance(self.aval, TypedAVal) and (rule := trace_add_rules.get(self.aval.type)):
+        if rule := trace_add_rules.get(type(self.aval)):
             return rule(other, self)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
 
@@ -737,7 +779,7 @@ def trace[*A, R](
     def to_ir_var(x, /) -> IRVar:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
         assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(aval=TypedAVal(type(x)))
+        return IRVar.fresh(aval=avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
@@ -762,6 +804,10 @@ type GenStep = tuple[IREqn | None, Tree]
 @ft.partial(lru_cache, maxsize=256)
 def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
     """Walk an IR one equation at a time."""
+    # NOTE(asem): the key idea here is to hide the environment management
+    # from the user.
+    # TODO(asem): if user is using bind/abind, walk itself can be traced into another IR. maybe
+    # add it to walk docs to clarify this point.
 
     def func(*args: *A) -> Generator[GenStep, Tree, None]:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"

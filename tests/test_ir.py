@@ -28,24 +28,41 @@ class Label:
 class CostTag: ...
 
 
+class Blob:
+    def __init__(self, size: int):
+        self.size = size
+
+
+class BlobAVal(af.core.AVal):
+    __slots__ = ["size"]
+
+    def __init__(self, size: int):
+        self.size = size
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.size == other.size
+
+    def __hash__(self):
+        return hash((type(self), self.size))
+
+
 class TestBuildIR:
     def test_trace_scalar_input_is_dynamic(self):
         def program(x):
             return af.format("{}", x)
 
         cases = [
-            (1, 2, "2"),
-            (1.5, 2.5, "2.5"),
-            (True, False, "False"),
+            (1, 2, "2", af.core.IntAVal()),
+            (1.5, 2.5, "2.5", af.core.FloatAVal()),
+            (True, False, "False", af.core.BoolAVal()),
         ]
 
-        for traced, runtime, expected in cases:
+        for traced, runtime, expected, aval in cases:
             ir = af.trace(program)(traced)
             assert isinstance(ir.in_ir_tree, tuple)
             assert len(ir.in_ir_tree) == 1
             assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-            assert isinstance(ir.in_ir_tree[0].aval, af.core.TypedAVal)
-            assert ir.in_ir_tree[0].aval.type is type(traced)
+            assert ir.in_ir_tree[0].aval == aval
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -70,6 +87,25 @@ class TestBuildIR:
 
         with pytest.raises(AssertionError, match="Unsupported input leaf type"):
             af.trace(program)(Opaque())
+
+    def test_trace_uses_registered_aval_rule(self):
+        def program(x):
+            return x
+
+        af.core.aval_rules[Blob] = lambda x: BlobAVal(x.size)
+        af.core.val_types.add(Blob)
+        try:
+            ir = af.trace(program)(Blob(3))
+        finally:
+            del af.core.aval_rules[Blob]
+            af.core.val_types.remove(Blob)
+
+        assert ir.in_ir_tree[0].aval == BlobAVal(3)
+
+    def test_irvar_has_aval_but_is_not_val(self):
+        var = af.core.IRVar(aval=af.core.StrAVal())
+        assert af.core.avalof(var) == af.core.StrAVal()
+        assert not af.core.is_val(var)
 
     def test_trace_static_unhashable_input_errors(self):
         class Unhashable:
@@ -284,7 +320,7 @@ class TestTags:
 
         def abstract_probe(x):
             del x
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         def impl_probe(x):
             names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))

@@ -22,15 +22,17 @@ import functools as ft
 from autoform.ad import pullback, pushforward
 from autoform.core import (
     IR,
+    AVal,
     BoxedInterpreter,
     IREqn,
     IRVar,
     Prim,
-    TypedAVal,
     abstract_rules,
     active_interpreter,
+    avalof,
     batch_rules,
     impl_rules,
+    is_aval,
     is_irvar,
     pull_bwd_rules,
     pull_fwd_rules,
@@ -43,6 +45,26 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, treel
 # ==================================================================================================
 # BATCH
 # ==================================================================================================
+
+
+class BatchAVal(AVal):
+    # NOTE(asem): unlike atomic AVals(e.g StrAVal), no aval_type rule can be registered
+    # as containers are later introduced at the call site. unlike jax the atomic unit is not
+    # the array object but any thing really.
+    def __init__(self, base: AVal):
+        # TODO(asem): maybe exapand with useful metadata here
+
+        assert is_aval(base), f"Expected AVal, got {base!r}"
+        self.base = base
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.base!r})"
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, BatchAVal) and self.base == other.base
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.base))
 
 
 def is_axis_spec(v) -> bool:
@@ -108,17 +130,19 @@ def batch(ir: IR, /, *, in_axes: Tree[bool] = True) -> IR:
     b_in = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
     has_batched = any(treelib.leaves(b_in, is_leaf=is_axis_spec))
 
+    def maybe_batched(aval, is_batched: bool):
+        return BatchAVal(aval) if is_batched else aval
+
     def make_in(atom, is_batched: bool):
         if not is_irvar(atom):
             return atom
-        del is_batched
-        return IRVar.fresh(aval=atom.aval, source=atom)
+        return IRVar.fresh(aval=maybe_batched(atom.aval, is_batched), source=atom)
 
     def make_out(atom):
         if is_irvar(atom):
-            return IRVar.fresh(aval=atom.aval, source=atom)
+            return IRVar.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
-            return IRVar.fresh(aval=TypedAVal(type(atom)))
+            return IRVar.fresh(aval=maybe_batched(avalof(atom), True))
         return atom
 
     v_in_ir = treelib.map(make_in, ir.in_ir_tree, b_in)
@@ -247,11 +271,14 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: IR, in_axes: Tree) -> Tree:
     b_in = treelib.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
     has_batched = any(treelib.leaves(b_in, is_leaf=is_axis_spec))
 
+    def maybe_batched(aval, is_batched: bool):
+        return BatchAVal(aval) if is_batched else aval
+
     def out_aval(atom):
         if is_irvar(atom):
-            return atom.aval
+            return maybe_batched(atom.aval, has_batched)
         if has_batched:
-            return TypedAVal(type(atom))
+            return maybe_batched(avalof(atom), True)
         return atom
 
     return treelib.map(out_aval, ir.out_ir_tree)

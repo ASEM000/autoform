@@ -34,8 +34,8 @@ from autoform.core import (
     PullbackBwdRule,
     PushforwardRule,
     TraceInterpreter,
-    TypedAVal,
     abstract_rules,
+    avalof,
     batch_rules,
     impl_rules,
     ir_aval,
@@ -60,7 +60,7 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
         if is_aval(x):
             return IRVar.fresh(aval=x)
         assert is_val(x), f"Unsupported input leaf type for custom function: {type(x).__name__}"
-        return IRVar.fresh(aval=TypedAVal(type(x)))
+        return IRVar.fresh(aval=avalof(x))
 
     in_ir_tree = treelib.map(to_ir_input, in_ir_tree)
     with using_interpreter(TraceInterpreter()) as tracer:

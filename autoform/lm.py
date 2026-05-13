@@ -26,12 +26,16 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import acompletion, completion
 
-from autoform.ad import Zero, is_zero, materialize
+from autoform.ad import is_zero, materialize, zeroof
 from autoform.core import (
+    BoolAVal,
     EvalType,
+    FloatAVal,
+    IntAVal,
     Prim,
-    TypedAVal,
+    StrAVal,
     abstract_rules,
+    aval_rules,
     batch_rules,
     impl_rules,
     pull_bwd_rules,
@@ -192,7 +196,7 @@ def abstract_lm_call(in_tree: Tree, /, *, roles: list[str]) -> EvalType:
     contents, model = in_tree
     assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
     assert typeof(model) is str, f"`lm_call` expects a string model, got {model!r}"
-    return TypedAVal(str)
+    return StrAVal()
 
 
 def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
@@ -240,7 +244,7 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    return grads, Zero(str)
+    return grads, zeroof(model)
 
 
 async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
@@ -253,10 +257,7 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
-    return (
-        await asyncio.gather(*[grad(c) for c in contents]),
-        Zero(str),
-    )
+    return (await asyncio.gather(*[grad(c) for c in contents]), zeroof(model))
 
 
 def batch_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
@@ -416,11 +417,11 @@ async def aimpl_lm_schema_call(
 
 
 schema_abstract_rules = {}
-schema_abstract_rules[Str] = lambda _: TypedAVal(str)
-schema_abstract_rules[Int] = lambda _: TypedAVal(int)
-schema_abstract_rules[Float] = lambda _: TypedAVal(float)
-schema_abstract_rules[Bool] = lambda _: TypedAVal(bool)
-schema_abstract_rules[Enum] = lambda s: TypedAVal(type(s.values[0]))
+schema_abstract_rules[Str] = lambda _: StrAVal()
+schema_abstract_rules[Int] = lambda _: IntAVal()
+schema_abstract_rules[Float] = lambda _: FloatAVal()
+schema_abstract_rules[Bool] = lambda _: BoolAVal()
+schema_abstract_rules[Enum] = lambda s: aval_rules[type(s.values[0])](s.values[0])
 schema_abstract_rules[Docd] = lambda s: schema_abstract_tree(s.value)
 
 
@@ -547,7 +548,7 @@ def pullback_bwd_lm_schema_call(
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    return grads, Zero(str)
+    return grads, zeroof(model)
 
 
 async def apull_bwd_lm_schema_call(
@@ -566,7 +567,7 @@ async def apull_bwd_lm_schema_call(
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
-    return (await asyncio.gather(*[grad(c) for c in contents]), Zero(str))
+    return (await asyncio.gather(*[grad(c) for c in contents]), zeroof(model))
 
 
 def batch_lm_schema_call(
