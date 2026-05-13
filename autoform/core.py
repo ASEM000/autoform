@@ -801,6 +801,10 @@ type GenStep = tuple[IREqn | None, Tree]
 @ft.partial(lru_cache, maxsize=256)
 def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
     """Walk an IR one equation at a time."""
+    # NOTE(asem): the key idea here is to hide the environment management
+    # from the user.
+    # TODO(asem): if user is using bind/abind, walk itself can be traced into another IR. maybe
+    # add it to walk docs to clarify this point.
 
     def func(*args: *A) -> Generator[GenStep, Tree, None]:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
