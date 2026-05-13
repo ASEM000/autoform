@@ -36,6 +36,7 @@ __all__ = [
     "FloatAVal",
     "BoolAVal",
     "Val",
+    "val_types",
     "aval_types",
     "aval_rules",
     "is_val",
@@ -129,6 +130,8 @@ class BoolAVal(ScalarAVal):
 
 type Val = str | int | float | bool
 
+val_types: set[type] = {str, int, float, bool}
+
 aval_types: dict[type[AVal], Callable[[AVal], type]] = {}
 aval_types[StrAVal] = lambda _: str
 aval_types[IntAVal] = lambda _: int
@@ -142,8 +145,8 @@ aval_rules[float] = lambda _: FloatAVal()
 aval_rules[bool] = lambda _: BoolAVal()
 
 
-def is_val(x) -> bool:
-    return type(x) in aval_rules
+def is_val(x) -> TypeGuard[Val]:
+    return type(x) in val_types
 
 
 def is_aval(x) -> TypeGuard[AVal]:
@@ -162,8 +165,6 @@ def typeof(x, /) -> type:
 
 
 def avalof(x, /) -> AVal:
-    if is_irvar(x):
-        return x.aval
     rule = aval_rules.get(type(x))
     if rule is None:
         raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
@@ -208,6 +209,8 @@ def is_irvar(x) -> TypeGuard[IRVar]:
 def ir_aval(x, /):
     return x.aval if is_irvar(x) else x
 
+
+aval_rules[IRVar] = lambda ir_var: ir_var.aval
 
 # ==================================================================================================
 # PRIMITIVE

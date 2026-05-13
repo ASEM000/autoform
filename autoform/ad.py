@@ -44,6 +44,7 @@ from autoform.core import (
     StrAVal,
     abstract_rules,
     active_interpreter,
+    aval_rules,
     avalof,
     batch_rules,
     impl_rules,
@@ -86,6 +87,7 @@ def is_zero(x) -> TypeGuard[Zero]:
 
 zero_rules: dict[type[AVal], Callable[[AVal], Any]] = {}
 zero_rules[StrAVal] = lambda _: ""
+aval_rules[Zero] = lambda z: z.aval
 
 
 def zeroof(v, /) -> Zero:

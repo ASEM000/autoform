@@ -628,6 +628,11 @@ class TestCotangentHelpers:
         assert af.ad.zeroof(z) is z
         assert af.ad.materialize(af.ad.zeroof(z)) == ""
 
+    def test_zero_has_aval_but_is_not_val(self):
+        z = af.ad.Zero(af.core.StrAVal())
+        assert af.core.avalof(z) == af.core.StrAVal()
+        assert not af.core.is_val(z)
+
     def test_zero_materializes_with_registered_aval_rule(self):
         class BlobAVal(af.core.AVal):
             __slots__ = ["size"]
@@ -677,6 +682,7 @@ class TestCotangentHelpers:
             __slots__ = []
 
         af.core.aval_rules[Blob] = lambda _: BlobAVal()
+        af.core.val_types.add(Blob)
         af.ad.cotangent_accumulators[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
         try:
             result = af.ad.accumulate_cotangents([Blob("a"), Blob("b")])
@@ -684,6 +690,7 @@ class TestCotangentHelpers:
             assert result.text == "a|b"
         finally:
             del af.core.aval_rules[Blob]
+            af.core.val_types.remove(Blob)
             del af.ad.cotangent_accumulators[BlobAVal]
 
 
