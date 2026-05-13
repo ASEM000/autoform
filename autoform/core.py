@@ -162,6 +162,8 @@ def typeof(x, /) -> type:
 
 
 def avalof(x, /) -> AVal:
+    if is_irvar(x):
+        return x.aval
     rule = aval_rules.get(type(x))
     if rule is None:
         raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
