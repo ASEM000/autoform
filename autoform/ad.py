@@ -381,6 +381,7 @@ cot_acc_rules[FloatAVal] = lambda cs, _: sum(cs)
 
 
 def cot_acc(cots: list[Any | Zero]) -> Any:
+    assert cots
     non_zero = [c for c in cots if not is_zero(c)]
     if not non_zero:
         # NOTE(asem): all output paths into the same input are zero.
