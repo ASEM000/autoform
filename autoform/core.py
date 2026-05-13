@@ -36,10 +36,10 @@ __all__ = [
     "FloatAVal",
     "BoolAVal",
     "Val",
-    "val_types",
+    "trace_types",
     "aval_types",
     "aval_rules",
-    "is_val",
+    "is_traceable",
     "avalof",
     # ir vals
     "IRVar",
@@ -130,7 +130,7 @@ class BoolAVal(ScalarAVal):
 
 type Val = str | int | float | bool
 
-val_types: set[type] = {str, int, float, bool}
+trace_types: set[type] = {str, int, float, bool}
 
 aval_types: dict[type[AVal], Callable[[AVal], type]] = {}
 aval_types[StrAVal] = lambda _: str
@@ -145,8 +145,8 @@ aval_rules[float] = lambda _: FloatAVal()
 aval_rules[bool] = lambda _: BoolAVal()
 
 
-def is_val(x) -> TypeGuard[Val]:
-    return type(x) in val_types
+def is_traceable(x) -> TypeGuard[Val]:
+    return type(x) in trace_types
 
 
 def is_aval(x) -> TypeGuard[AVal]:
@@ -778,14 +778,14 @@ def trace[*A, R](
 
     def to_ir_var(x, /) -> IRVar:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
-        assert is_val(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
+        assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
         return IRVar.fresh(aval=avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
         arg_tree = args
         in_static_tree = treelib.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
-        in_ir_tree = treelib.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_val)
+        in_ir_tree = treelib.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
         with using_interpreter(TraceInterpreter()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
         out_ir_tree = tracer.unbox(out_trace_tree)

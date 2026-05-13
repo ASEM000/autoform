@@ -41,7 +41,7 @@ from autoform.core import (
     ir_aval,
     is_aval,
     is_irvar,
-    is_val,
+    is_traceable,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -59,7 +59,7 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> IR:
             return x
         if is_aval(x):
             return IRVar.fresh(aval=x)
-        assert is_val(x), f"Unsupported input leaf type for custom function: {type(x).__name__}"
+        assert is_traceable(x), f"Unsupported input type for custom function: {type(x).__name__}"
         return IRVar.fresh(aval=avalof(x))
 
     in_ir_tree = treelib.map(to_ir_input, in_ir_tree)
