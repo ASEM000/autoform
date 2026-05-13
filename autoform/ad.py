@@ -434,6 +434,8 @@ class PullbackBwdBox:
 
 
 def transpose_walk(ir: IR, c_out: Tree, /):
+    # NOTE(asem): walk the IR in reverse accumulating cotangents in an environment.
+    # used for pullback backward pass.
     c_env: defaultdict[IRVar, list[Any]] = defaultdict(list)
 
     def write_c(atom, value: Any):
@@ -443,7 +445,7 @@ def transpose_walk(ir: IR, c_out: Tree, /):
         if not is_irvar(atom):
             return zeroof(atom)
         if not (cs := c_env[atom]):
-            return Zero(atom.aval)
+            return zeroof(atom)
         return accumulate_cotangents(cs)
 
     treelib.map(write_c, ir.out_ir_tree, c_out)
