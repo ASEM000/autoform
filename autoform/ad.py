@@ -28,8 +28,8 @@ __all__ = [
     "zero_rules",
     "zeroof",
     "materialize",
-    "accumulate_cotangents",
-    "cotangent_accumulators",
+    "cot_acc",
+    "cot_acc_rules",
     "pushforward",
     "pullback",
 ]
@@ -38,6 +38,8 @@ from autoform.core import (
     IR,
     AVal,
     BoxedInterpreter,
+    FloatAVal,
+    IntAVal,
     IREqn,
     IRVar,
     Prim,
@@ -50,7 +52,6 @@ from autoform.core import (
     impl_rules,
     ir_aval,
     is_irvar,
-    is_val,
     pull_bwd_rules,
     pull_fwd_rules,
     push_rules,
@@ -373,22 +374,53 @@ dce_rules[pushforward_call_p] = dce_pushforward_call
 pullback_call_p = Prim("pullback_call")
 
 
-cotangent_accumulators: dict[type[AVal], Callable[[list[Any], AVal], Any]] = {}
-cotangent_accumulators[StrAVal] = lambda cs, _: "".join(cs)
+cot_acc_rules: dict[type[AVal], Callable[[list[Any], AVal], Any]] = {}
+cot_acc_rules[StrAVal] = lambda cs, _: "".join(cs)
+cot_acc_rules[IntAVal] = lambda cs, _: sum(cs)
+cot_acc_rules[FloatAVal] = lambda cs, _: sum(cs)
 
 
-def accumulate_cotangents(cotangents: list[Any]) -> Any:
-    non_zero = [c for c in cotangents if not is_zero(c)]
+def cot_acc(cots: list[Any | Zero]) -> Any:
+    non_zero = [c for c in cots if not is_zero(c)]
     if not non_zero:
-        return cotangents[0]  # all zeros — return first (preserves type)
+        # NOTE(asem): all output paths into the same input are zero.
+        # >>> def f(x):
+        # ...     return (x, x)
+        # >>> ir = af.trace(f)("...")
+        # >>> z = af.ad.Zero(af.core.StrAVal())
+        # >>> af.pullback(ir).call(("a",), (z, z))
+        # (('a', 'a'), (Zero(StrAVal()),))
+        first_zero, *rest_zero = cots
+        assert all(avalof(c) == avalof(first_zero) for c in rest_zero)
+        return first_zero
     if len(non_zero) == 1:
+        # NOTE(asem): exactly one output path into the same input is live.
+        # >>> def f(x):
+        # ...     return (x, x)
+        # >>> ir = af.trace(f)("...")
+        # >>> z = af.ad.Zero(af.core.StrAVal())
+        # >>> af.pullback(ir).call(("a",), ("df", z))
+        # (('a', 'a'), ('df',))
         return non_zero[0]
     first, *_ = non_zero
-    if is_val(first):
-        aval = avalof(first)
-        if rule := cotangent_accumulators.get(type(aval)):
-            return rule(non_zero, aval)
-    return sum(non_zero[1:], non_zero[0])
+    if not treelib.is_leaf(first):
+        # NOTE(asem): non-leaf cotangents accumulate matching leaves.
+        # >>> def f(x):
+        # ...     return (x, x)
+        # >>> ir = af.batch(af.trace(f)("..."))
+        # >>> af.pullback(ir).call((["a", "b"],), (["G0", "G1"], ["H0", "H1"]))
+        # ((['a', 'b'], ['a', 'b']), (['G0H0', 'G1H1'],))
+        return treelib.map(lambda *cs: cot_acc(list(cs)), *non_zero)
+    # NOTE(asem): leaf cotangents use the accumulator registered for their aval.
+    # >>> def f(x):
+    # ...     return x + x
+    # >>> ir = af.trace(f)("...")
+    # >>> af.pullback(ir).call(("a",), "df")
+    # ('aa', ('dfdf',))
+    aval = avalof(first)
+    if (rule := cot_acc_rules.get(type(aval))) is None:
+        raise TypeError(f"No cotangent accumulator registered for {aval!r}")
+    return rule(non_zero, aval)
 
 
 class PullbackFwdBox:
@@ -450,7 +482,7 @@ def transpose_walk(ir: IR, c_out: Tree, /):
         # the trace contains `concat(x, x)`. during transpose, the concat pullback
         # returns one cotangent for each concat input. since both inputs are the same
         # IRVar `x`, `c_env[x]` receives two cotangents: ["df", "df"].
-        # `read_c(x)` then calls `accumulate_cotangents`, which combines them using
+        # `read_c(x)` then calls `cot_acc`, which combines them using
         # the registered `StrAVal` accumulator.
         is_irvar(atom) and c_env[atom].append(value)
 
@@ -459,7 +491,7 @@ def transpose_walk(ir: IR, c_out: Tree, /):
             return zeroof(atom)
         if not (cs := c_env[atom]):
             return zeroof(atom)
-        return accumulate_cotangents(cs)
+        return cot_acc(cs)
 
     treelib.map(write_c, ir.out_ir_tree, c_out)
     for ir_eqn in reversed(ir.ir_eqns):

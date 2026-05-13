@@ -652,26 +652,57 @@ class TestCotangentHelpers:
         finally:
             del af.ad.zero_rules[BlobAVal]
 
-    def test_accumulate_cotangents_single(self):
-        result = af.ad.accumulate_cotangents(["hello"])
+    def test_cot_acc_single(self):
+        result = af.ad.cot_acc(["hello"])
         assert result == "hello"
 
-    def test_accumulate_cotangents_strings(self):
-        result = af.ad.accumulate_cotangents(["a", "b", "c"])
+    def test_cot_acc_strings(self):
+        result = af.ad.cot_acc(["a", "b", "c"])
         assert result == "abc"
 
-    def test_accumulate_cotangents_all_zeros(self):
-        result = af.ad.accumulate_cotangents([
+    def test_cot_acc_lists_elementwise(self):
+        result = af.ad.cot_acc([["a", "b"], ["c", "d"]])
+        assert result == ["ac", "bd"]
+
+    def test_cot_acc_nested_containers_elementwise(self):
+        result = af.ad.cot_acc([
+            {"x": [1, af.ad.Zero(af.core.StrAVal())], "y": "a"},
+            {"x": [2, "b"], "y": "c"},
+        ])
+        assert result == {"x": [3, "b"], "y": "ac"}
+
+    def test_cot_acc_all_zeros(self):
+        result = af.ad.cot_acc([
             af.ad.Zero(af.core.StrAVal()),
             af.ad.Zero(af.core.StrAVal()),
         ])
         assert af.ad.is_zero(result)
 
-    def test_accumulate_cotangents_unseted_type_uses_sum(self):
-        result = af.ad.accumulate_cotangents([1, 2, 3])
+    def test_cot_acc_all_zeros_must_match_aval(self):
+        with pytest.raises(AssertionError):
+            af.ad.cot_acc([
+                af.ad.Zero(af.core.StrAVal()),
+                af.ad.Zero(af.core.IntAVal()),
+            ])
+
+    def test_cot_acc_ints_use_registered_rule(self):
+        result = af.ad.cot_acc([1, 2, 3])
         assert result == 6
 
-    def test_accumulate_cotangents_uses_registered_aval_rule(self):
+    def test_cot_acc_registered_val_without_rule_raises(self):
+        with pytest.raises(
+            TypeError, match=r"No cotangent accumulator registered for BoolAVal\(\)"
+        ):
+            af.ad.cot_acc([True, False])
+
+    def test_cot_acc_unregistered_leaf_raises(self):
+        class Blob:
+            pass
+
+        with pytest.raises(TypeError, match="Unsupported input leaf type"):
+            af.ad.cot_acc([Blob(), Blob()])
+
+    def test_cot_acc_uses_registered_aval_rule(self):
         class Blob:
             __slots__ = ["text"]
 
@@ -682,16 +713,14 @@ class TestCotangentHelpers:
             __slots__ = []
 
         af.core.aval_rules[Blob] = lambda _: BlobAVal()
-        af.core.val_types.add(Blob)
-        af.ad.cotangent_accumulators[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
+        af.ad.cot_acc_rules[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
         try:
-            result = af.ad.accumulate_cotangents([Blob("a"), Blob("b")])
+            result = af.ad.cot_acc([Blob("a"), Blob("b")])
             assert isinstance(result, Blob)
             assert result.text == "a|b"
         finally:
             del af.core.aval_rules[Blob]
-            af.core.val_types.remove(Blob)
-            del af.ad.cotangent_accumulators[BlobAVal]
+            del af.ad.cot_acc_rules[BlobAVal]
 
 
 class TestLiteralZeroing:
