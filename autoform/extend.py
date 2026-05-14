@@ -19,40 +19,31 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from autoform.ad import (
-    Zero,
-    cot_acc_rules,
-    is_zero,
-    materialize,
-    zero_rules,
-    zeroof,
-)
-from autoform.core import (
-    AVal,
-    BoolAVal,
-    EvalType,
-    FloatAVal,
-    IntAVal,
-    Prim,
-    StrAVal,
-    TraceRule,
-    abstract_rules,
-    aval_rules,
-    avalof,
-    batch_rules,
-    impl_rules,
-    pull_bwd_rules,
-    pull_fwd_rules,
-    push_rules,
-    trace_add_rules,
-    trace_eq_rules,
-    trace_matmul_rules,
-    trace_mul_rules,
-    trace_sub_rules,
-    trace_truediv_rules,
-    trace_types,
-)
-from autoform.utils import Tree, batch_index, batch_spec
+import autoform.ad as ad
+import autoform.core as core
+import autoform.utils as utils
+
+AVal = core.AVal
+StrAVal = core.StrAVal
+IntAVal = core.IntAVal
+FloatAVal = core.FloatAVal
+BoolAVal = core.BoolAVal
+Prim = core.Prim
+Zero = ad.Zero
+
+impl_rules = core.impl_rules
+abstract_rules = core.abstract_rules
+push_rules = core.push_rules
+pull_fwd_rules = core.pull_fwd_rules
+pull_bwd_rules = core.pull_bwd_rules
+batch_rules = core.batch_rules
+
+avalof = core.avalof
+zeroof = ad.zeroof
+materialize = ad.materialize
+is_zero = ad.is_zero
+batch_index = utils.batch_index
+batch_spec = utils.batch_spec
 
 __all__ = [
     "AVal",
@@ -60,10 +51,7 @@ __all__ = [
     "IntAVal",
     "FloatAVal",
     "BoolAVal",
-    "EvalType",
     "Prim",
-    "TraceRule",
-    "Tree",
     "Zero",
     "register_trace_type",
     "register_zero",
@@ -121,8 +109,8 @@ def register_trace_type(type: type, aval_rule: AValRule, /) -> AValRule:
         ... def token_aval(value):
         ...     return TokenAVal()
     """
-    trace_types.add(type)
-    aval_rules[type] = aval_rule
+    core.trace_types.add(type)
+    core.aval_rules[type] = aval_rule
     return aval_rule
 
 
@@ -152,7 +140,7 @@ def register_zero(aval_type: type[AVal], rule: ZeroRule, /) -> ZeroRule:
         ... def zero_token(aval):
         ...     return ""
     """
-    zero_rules[aval_type] = rule
+    ad.zero_rules[aval_type] = rule
     return rule
 
 
@@ -181,11 +169,11 @@ def register_cotangent_accumulator(aval_type: type[AVal], rule: CotAccRule, /) -
         ... def add_scores(cotangents, aval):
         ...     return sum(cotangents)
     """
-    cot_acc_rules[aval_type] = rule
+    ad.cot_acc_rules[aval_type] = rule
     return rule
 
 
-def register_add(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
+def register_add(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
     """Register tracing dispatch for ``+`` on traced values with this aval.
 
     This treats ``+`` as staged syntax while tracing. The rule is called during
@@ -200,11 +188,11 @@ def register_add(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
     Returns:
         The registered rule.
     """
-    trace_add_rules[aval_type] = rule
+    core.trace_add_rules[aval_type] = rule
     return rule
 
 
-def register_sub(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
+def register_sub(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
     """Register tracing dispatch for ``-`` on traced values with this aval.
 
     This treats ``-`` as staged syntax while tracing. The rule should normally
@@ -218,11 +206,11 @@ def register_sub(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
     Returns:
         The registered rule.
     """
-    trace_sub_rules[aval_type] = rule
+    core.trace_sub_rules[aval_type] = rule
     return rule
 
 
-def register_mul(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
+def register_mul(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
     """Register tracing dispatch for ``*`` on traced values with this aval.
 
     This treats ``*`` as staged syntax while tracing, instead of evaluating the
@@ -236,11 +224,11 @@ def register_mul(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
     Returns:
         The registered rule.
     """
-    trace_mul_rules[aval_type] = rule
+    core.trace_mul_rules[aval_type] = rule
     return rule
 
 
-def register_div(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
+def register_div(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
     """Register tracing dispatch for ``/`` on traced values with this aval.
 
     This treats true division as staged syntax while tracing.
@@ -253,11 +241,11 @@ def register_div(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
     Returns:
         The registered rule, so the helper can be used as a decorator.
     """
-    trace_truediv_rules[aval_type] = rule
+    core.trace_truediv_rules[aval_type] = rule
     return rule
 
 
-def register_matmul(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
+def register_matmul(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
     """Register tracing dispatch for ``@`` on traced values with this aval.
 
     This treats matrix multiplication as staged syntax while tracing. It is
@@ -272,11 +260,11 @@ def register_matmul(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
     Returns:
         The registered rule, so the helper can be used as a decorator.
     """
-    trace_matmul_rules[aval_type] = rule
+    core.trace_matmul_rules[aval_type] = rule
     return rule
 
 
-def register_eq(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
+def register_eq(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
     """Register tracing dispatch for ``==`` on traced values with this aval.
 
     Python equality on a traced value cannot be evaluated concretely during
@@ -289,5 +277,5 @@ def register_eq(aval_type: type[AVal], rule: TraceRule, /) -> TraceRule:
     Returns:
         The registered rule, so the helper can be used as a decorator.
     """
-    trace_eq_rules[aval_type] = rule
+    core.trace_eq_rules[aval_type] = rule
     return rule
