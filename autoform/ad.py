@@ -66,6 +66,19 @@ from autoform.utils import Tree, batch_index, batch_spec, batch_transpose, lru_c
 
 
 class Zero[T: AVal]:
+    """Symbolic zero cotangent for an abstract value.
+
+    ``Zero`` keeps reverse-mode and pushforward rules from materializing a
+    concrete zero until one is actually needed. Use :func:`materialize` to
+    replace symbolic zeros with concrete values.
+
+    Example:
+        >>> import autoform.extend as afe
+        >>> z = afe.Zero(afe.StrAVal())
+        >>> afe.materialize(z)
+        ''
+    """
+
     __slots__ = ["aval"]
 
     def __init__(self, aval: T, /):
@@ -82,7 +95,12 @@ class Zero[T: AVal]:
         return hash((type(self), self.aval))
 
 
-def is_zero(x) -> TypeGuard[Zero]:
+def is_zero(x, /) -> TypeGuard[Zero]:
+    """Return whether the input is a symbolic zero cotangent.
+
+    This is intended for rule implementations that need to preserve symbolic
+    zeros instead of treating them as ordinary values.
+    """
     return isinstance(x, Zero)
 
 
@@ -92,11 +110,31 @@ aval_rules[Zero] = lambda z: z.aval
 
 
 def zeroof(v, /) -> Zero:
+    """Return a symbolic zero with the same aval as ``v``.
+
+    If ``v`` is already a symbolic zero, it is returned unchanged.
+
+    Args:
+        v: Concrete value, IR value, or symbolic zero.
+
+    Returns:
+        A ``Zero`` carrying ``avalof(v)``.
+    """
     return v if is_zero(v) else Zero(avalof(v))
 
 
 def materialize(x: Tree, /) -> Tree:
     """Replace each Zero leaf in a pytree with its concrete zero value.
+
+    ``materialize`` is useful inside transform rules before calling primitives
+    that expect real runtime values instead of symbolic zeros.
+
+    Args:
+        x: Pytree that may contain ``Zero`` leaves.
+
+    Returns:
+        A pytree with the same structure as ``x`` where each symbolic zero has
+        been replaced by its registered concrete zero value.
 
     Raises:
         TypeError: If a ``Zero`` has a type with no registered concrete
