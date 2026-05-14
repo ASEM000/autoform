@@ -12,6 +12,23 @@
 .. autoclass:: autoform.extend.Zero
 ```
 
+## IR
+
+```{eval-rst}
+.. autoclass:: autoform.extend.IR
+.. autoclass:: autoform.extend.IREqn
+.. autoclass:: autoform.extend.IRVar
+```
+
+## Interpreters
+
+```{eval-rst}
+.. autoclass:: autoform.extend.Interpreter
+.. autofunction:: autoform.extend.using_interpreter
+.. autodata:: autoform.extend.active_interpreter
+.. autodata:: autoform.extend.active_tags
+```
+
 ## Registration
 
 ```{eval-rst}
@@ -35,4 +52,6 @@
 .. autofunction:: autoform.extend.is_zero
 .. autofunction:: autoform.extend.batch_index
 .. autofunction:: autoform.extend.batch_spec
+.. autofunction:: autoform.extend.is_irvar
+.. autofunction:: autoform.extend.ir_aval
 ```
