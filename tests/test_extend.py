@@ -59,19 +59,18 @@ def test_scalar_aval_reexports():
 
 
 def test_register_zero_and_cotangent_accumulator():
-    afe.register_trace_type(Box, lambda _: BoxAVal())
-    zero_rule = lambda _: Box(0)
-    cot_acc_rule = lambda cotangents, _: Box(sum(c.value for c in cotangents))
+    afe.register_trace_type(Box, lambda value: BoxAVal())
+    zero_rule = lambda aval: Box(0)
+    cot_acc_rule = lambda cotangents, aval: Box(sum(c.value for c in cotangents))
     assert afe.register_zero(BoxAVal, zero_rule) is zero_rule
     assert afe.register_cotangent_accumulator(BoxAVal, cot_acc_rule) is cot_acc_rule
     try:
         assert afe.materialize(afe.Zero(BoxAVal())) == Box(0)
         assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
     finally:
-        afe.trace_types.remove(Box)
-        del afe.aval_rules[Box]
-        del afe.zero_rules[BoxAVal]
-        del afe.cot_acc_rules[BoxAVal]
+        af.core.trace_types.remove(Box)
+        del af.core.aval_rules[Box]
+        del af.ad.zero_rules[BoxAVal]
 
 
 def test_register_add_with_primitive_rules():
