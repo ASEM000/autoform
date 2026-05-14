@@ -21,7 +21,10 @@ answer_schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
 Use {py:class}`Doc <autoform.Doc>` with the `@` operator to attach descriptions:
 
 ```python
-schema = {"kind": af.Enum("summary", "definition") @ af.Doc("Kind."), "text": af.Str() @ af.Doc("Text.")}
+schema = {
+    "kind": af.Enum("summary", "definition") @ af.Doc("Kind."),
+    "text": af.Str() @ af.Doc("Text."),
+}
 ```
 
 The descriptions become JSON Schema descriptions in the provider request.

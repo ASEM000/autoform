@@ -281,7 +281,11 @@ The `namespace=af.PYTREE_NAMESPACE` argument uses [Optree's dataclass integratio
 
 ```python
 # build the schema directly as a value-shaped instance
-summary_schema = Summary(title=af.Str(max=80), kind=af.Enum("definition", "analogy", "warning"), confidence=af.Float(min=0, max=1))
+summary_schema = Summary(
+    title=af.Str(max=80),
+    kind=af.Enum("definition", "analogy", "warning"),
+    confidence=af.Float(min=0, max=1),
+)
 ```
 
 Now write the function normally:
