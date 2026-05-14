@@ -99,6 +99,20 @@ __all__ = [
 
 
 class AVal:
+    """Base class for abstract values used by traced programs.
+
+    Abstract values carry trace-time information about runtime values. Extension
+    domains subclass ``AVal`` to describe the information primitive abstract
+    rules need, such as shape, dtype, schema, or other static metadata.
+
+    Example:
+        >>> import autoform.extend as afe
+        >>> class ArrayAVal(afe.AVal):
+        ...     def __init__(self, shape, dtype):
+        ...         self.shape = shape
+        ...         self.dtype = dtype
+    """
+
     __slots__ = []
 
 
@@ -116,18 +130,58 @@ class ScalarAVal(AVal):
 
 
 class StrAVal(ScalarAVal):
+    """Abstract value for ``str`` leaves.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.trace(lambda x: x)("x")
+        >>> (x,) = ir.in_ir_tree
+        >>> x.aval
+        StrAVal()
+    """
+
     __slots__ = []
 
 
 class IntAVal(ScalarAVal):
+    """Abstract value for ``int`` leaves.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.trace(lambda x: x)(1)
+        >>> (x,) = ir.in_ir_tree
+        >>> x.aval
+        IntAVal()
+    """
+
     __slots__ = []
 
 
 class FloatAVal(ScalarAVal):
+    """Abstract value for ``float`` leaves.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.trace(lambda x: x)(1.0)
+        >>> (x,) = ir.in_ir_tree
+        >>> x.aval
+        FloatAVal()
+    """
+
     __slots__ = []
 
 
 class BoolAVal(ScalarAVal):
+    """Abstract value for ``bool`` leaves.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.trace(lambda x: x)(True)
+        >>> (x,) = ir.in_ir_tree
+        >>> x.aval
+        BoolAVal()
+    """
+
     __slots__ = []
 
 
@@ -154,6 +208,22 @@ type EvalType = AVal | Val
 
 
 def avalof(x, /) -> AVal:
+    """Return the abstract value for a traceable leaf.
+
+    ``avalof`` applies the registered aval rule for ``type(x)``. It is the
+    concrete-to-abstract direction used by :func:`autoform.trace`, zeros, and
+    extension code that needs to inspect a value domain.
+
+    Args:
+        x: Concrete value, symbolic zero, or IR value with a registered aval
+            rule.
+
+    Returns:
+        The abstract value for ``x``.
+
+    Raises:
+        TypeError: If no aval rule is registered for ``type(x)``.
+    """
     rule = aval_rules.get(type(x))
     if rule is None:
         raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
@@ -207,8 +277,19 @@ aval_rules[IRVar] = lambda ir_var: ir_var.aval
 
 
 class Prim:
-    # NOTE(asem): primitive is a key used for matching against rules
-    # defined in ``InterpreterRuleMapping``
+    """Primitive operation key used by interpreter rule registries.
+
+    A primitive has no behavior by itself. Runtime, abstract, batching, and AD
+    behavior are attached by registering rules keyed by the ``Prim`` instance.
+
+    Args:
+        name: The name of the primitive.
+
+    Example:
+        >>> import autoform.extend as afe
+        >>> add = afe.Prim("add")
+    """
+
     __slots__ = ["name"]
 
     def __init__(self, name: str):
