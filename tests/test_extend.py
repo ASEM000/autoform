@@ -39,14 +39,14 @@ class BoxAVal(afe.AVal):
 
 
 def test_register_trace_type():
-    aval_rule = lambda _: BoxAVal()
+    aval_rule = lambda value: BoxAVal()
     assert afe.register_trace_type(Box, aval_rule) is aval_rule
     try:
         ir = af.trace(lambda x: x)(Box(1))
         assert afe.avalof(Box(1)) == BoxAVal()
     finally:
-        afe.trace_types.remove(Box)
-        del afe.aval_rules[Box]
+        af.core.trace_types.remove(Box)
+        del af.core.aval_rules[Box]
 
     assert ir.in_ir_tree[0].aval == BoxAVal()
 
@@ -71,6 +71,7 @@ def test_register_zero_and_cotangent_accumulator():
         af.core.trace_types.remove(Box)
         del af.core.aval_rules[Box]
         del af.ad.zero_rules[BoxAVal]
+        del af.ad.cot_acc_rules[BoxAVal]
 
 
 def test_register_add_with_primitive_rules():
@@ -87,7 +88,7 @@ def test_register_add_with_primitive_rules():
         del in_tree
         return BoxAVal()
 
-    afe.register_trace_type(Box, lambda _: BoxAVal())
+    afe.register_trace_type(Box, lambda value: BoxAVal())
     afe.register_add(BoxAVal, box_add)
     afe.impl_rules.set(box_add_p, impl_add)
     afe.abstract_rules.set(box_add_p, abstract_add)
@@ -95,9 +96,9 @@ def test_register_add_with_primitive_rules():
         ir = af.trace(lambda x, y: x + y)(Box(1), Box(2))
         assert ir.call(Box(3), Box(4)) == Box(7)
     finally:
-        afe.trace_types.remove(Box)
-        del afe.aval_rules[Box]
-        del afe.trace_add_rules[BoxAVal]
+        af.core.trace_types.remove(Box)
+        del af.core.aval_rules[Box]
+        del af.core.trace_add_rules[BoxAVal]
 
 
 def test_operator_registration_helpers():
@@ -105,12 +106,12 @@ def test_operator_registration_helpers():
         return x, y
 
     cases = [
-        (afe.register_add, afe.trace_add_rules),
-        (afe.register_sub, afe.trace_sub_rules),
-        (afe.register_mul, afe.trace_mul_rules),
-        (afe.register_div, afe.trace_truediv_rules),
-        (afe.register_matmul, afe.trace_matmul_rules),
-        (afe.register_eq, afe.trace_eq_rules),
+        (afe.register_add, af.core.trace_add_rules),
+        (afe.register_sub, af.core.trace_sub_rules),
+        (afe.register_mul, af.core.trace_mul_rules),
+        (afe.register_div, af.core.trace_truediv_rules),
+        (afe.register_matmul, af.core.trace_matmul_rules),
+        (afe.register_eq, af.core.trace_eq_rules),
     ]
 
     try:
@@ -118,17 +119,17 @@ def test_operator_registration_helpers():
             assert register(BoxAVal, rule) is rule
             assert registry[BoxAVal] is rule
     finally:
-        for _, registry in cases:
-            registry.pop(BoxAVal, None)
+        for case in cases:
+            case[1].pop(BoxAVal, None)
 
 
 def test_registration_helpers_work_as_decorators():
     @ft.partial(afe.register_trace_type, Box)
-    def aval_rule(_):
+    def aval_rule(value):
         return BoxAVal()
 
     @ft.partial(afe.register_zero, BoxAVal)
-    def zero_rule(_):
+    def zero_rule(aval):
         return Box(0)
 
     @ft.partial(afe.register_add, BoxAVal)
@@ -136,11 +137,11 @@ def test_registration_helpers_work_as_decorators():
         return x, y
 
     try:
-        assert afe.aval_rules[Box] is aval_rule
-        assert afe.zero_rules[BoxAVal] is zero_rule
-        assert afe.trace_add_rules[BoxAVal] is add_rule
+        assert af.core.aval_rules[Box] is aval_rule
+        assert af.ad.zero_rules[BoxAVal] is zero_rule
+        assert af.core.trace_add_rules[BoxAVal] is add_rule
     finally:
-        afe.trace_types.remove(Box)
-        del afe.aval_rules[Box]
-        del afe.zero_rules[BoxAVal]
-        del afe.trace_add_rules[BoxAVal]
+        af.core.trace_types.remove(Box)
+        del af.core.aval_rules[Box]
+        del af.ad.zero_rules[BoxAVal]
+        del af.core.trace_add_rules[BoxAVal]

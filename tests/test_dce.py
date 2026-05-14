@@ -58,7 +58,7 @@ class TestDCE:
 
         for i in range(len(dce.ir_eqns) - 1):
             curr_out = dce.ir_eqns[i].out_ir_tree
-            next_in_leaves = af.utils.treelib.leaves(dce.ir_eqns[i + 1].in_ir_tree)
+            next_in_leaves = af.utils.tree.leaves(dce.ir_eqns[i + 1].in_ir_tree)
             assert curr_out in next_in_leaves
 
     def test_errors_on_dangling_used_output_irvar(self):

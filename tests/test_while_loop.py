@@ -19,7 +19,7 @@ import autoform as af
 from autoform.core import trace
 from tests.conftest import TEST_MODEL, requires_llm
 
-treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
+tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
 
 class TestWhileLoopImpl:
@@ -968,7 +968,7 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_lm_schema_call_with_pytree(self):
-        @treelib.dataclasses.dataclass
+        @tree.dataclasses.dataclass
         class Sentiment:
             positive: bool
             confidence: float
@@ -1040,7 +1040,7 @@ class TestWhileLoopWithLLM:
 
     @requires_llm
     def test_refine_then_update(self):
-        @treelib.dataclasses.dataclass
+        @tree.dataclasses.dataclass
         class QualityCheck:
             needs_improvement: bool
             reason: str
