@@ -134,48 +134,48 @@ receives real NumPy arrays.
 ## Add Operators
 
 ```python
-array_add = register_binary(
-    "array_add",
+a_add = register_binary(
+    "a_add",
     lambda x, y: x + y,
-    lambda x, y, tx, ty: array_add(tx, ty),
+    lambda x, y, tx, ty: a_add(tx, ty),
     lambda x, y, g: (g, g),
 )
-array_sub = register_binary(
-    "array_sub",
+a_sub = register_binary(
+    "a_sub",
     lambda x, y: x - y,
-    lambda x, y, tx, ty: array_sub(tx, ty),
+    lambda x, y, tx, ty: a_sub(tx, ty),
     lambda x, y, g: (g, -g),
 )
-array_mul = register_binary(
-    "array_mul",
+a_mul = register_binary(
+    "a_mul",
     lambda x, y: x * y,
-    lambda x, y, tx, ty: array_add(array_mul(tx, y), array_mul(x, ty)),
-    lambda x, y, g: (array_mul(g, y), array_mul(g, x)),
+    lambda x, y, tx, ty: a_add(a_mul(tx, y), a_mul(x, ty)),
+    lambda x, y, g: (a_mul(g, y), a_mul(g, x)),
 )
-array_div = register_binary(
-    "array_div",
+a_div = register_binary(
+    "a_div",
     lambda x, y: x / y,
-    lambda x, y, tx, ty: array_div(
-        array_sub(array_mul(tx, y), array_mul(x, ty)), array_mul(y, y)
+    lambda x, y, tx, ty: a_div(
+        a_sub(a_mul(tx, y), a_mul(x, ty)), a_mul(y, y)
     ),
-    lambda x, y, g: (array_div(g, y), -array_div(array_mul(g, x), array_mul(y, y))),
+    lambda x, y, g: (a_div(g, y), -a_div(a_mul(g, x), a_mul(y, y))),
 )
-array_matmul = register_binary(
-    "array_matmul",
+a_matmul = register_binary(
+    "a_matmul",
     lambda x, y: x @ y,
-    lambda x, y, tx, ty: array_add(array_matmul(tx, y), array_matmul(x, ty)),
-    lambda x, y, g: (array_matmul(g, y.T), array_matmul(x.T, g)),
+    lambda x, y, tx, ty: a_add(a_matmul(tx, y), a_matmul(x, ty)),
+    lambda x, y, g: (a_matmul(g, y.T), a_matmul(x.T, g)),
 )
 
-afe.register_add(ArrayAVal, array_add)
-afe.register_sub(ArrayAVal, array_sub)
-afe.register_mul(ArrayAVal, array_mul)
-afe.register_div(ArrayAVal, array_div)
-afe.register_matmul(ArrayAVal, array_matmul)
+afe.register_add(ArrayAVal, a_add)
+afe.register_sub(ArrayAVal, a_sub)
+afe.register_mul(ArrayAVal, a_mul)
+afe.register_div(ArrayAVal, a_div)
+afe.register_matmul(ArrayAVal, a_matmul)
 ```
 
 The last five registrations connect traced Python syntax to the primitives. For
-example, `x + y` stages `array_add` when `x` has `ArrayAVal`.
+example, `x + y` stages `a_add` when `x` has `ArrayAVal`.
 
 ## Use the Extension
 
