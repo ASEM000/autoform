@@ -18,10 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 from collections.abc import Awaitable, Callable
-from typing import (
-    Any,
-    cast,
-)
+from typing import Any, cast
 
 import optree.pytree
 from optree import PyTreeSpec
@@ -65,6 +62,25 @@ def index(node: Tree, b: int, /) -> Tree:
 
 
 def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
+    """Extract one batch item from a tree.
+
+    Batched leaves are indexed at ``b``. Non-batched leaves are broadcast by
+    returning the original leaf unchanged.
+
+    Args:
+        in_tree: Tree containing batched and non-batched leaves.
+        in_batched: Tree of booleans with the same outer structure as
+            ``in_tree``. ``True`` marks a batched leaf.
+        b: Batch index to extract.
+
+    Returns:
+        A tree with the same structure as ``in_batched`` containing one batch
+        item.
+
+    Example:
+        >>> batch_index(([1, 2], "x"), (True, False), 0)
+        (1, 'x')
+    """
     # Extract item at index b from batched leaves, broadcast non-batched.
     # Inverse of transpose_batch: extracts a single item from each batched leaf
     # while keeping non-batched leaves unchanged.
@@ -92,6 +108,23 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
 
 
 def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
+    """Return the common output container spec for batched leaves.
+
+    Batch rules use this to decide whether an operation has any batched inputs
+    and how per-example results should be repacked. If no input leaf is batched,
+    ``None`` is returned.
+
+    Args:
+        in_tree: Tree containing batched and non-batched leaves.
+        in_batched: Tree of booleans with the same outer structure as
+            ``in_tree``. ``True`` marks a batched leaf.
+
+    Returns:
+        The common pytree spec of all batched leaves, or ``None`` if there are no batched leaves.
+
+    Raises:
+        AssertionError: If batched leaves do not share the same container structure.
+    """
     # NOTE(asem): return the common container pytreespec of batched leaves.
     # returns None if no leaves are batched.
     # >>> in_tree = ("a", "b", "c")
