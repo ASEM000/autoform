@@ -93,19 +93,19 @@ class TestBuildIR:
             return x
 
         af.core.aval_rules[Blob] = lambda x: BlobAVal(x.size)
-        af.core.val_types.add(Blob)
+        af.core.trace_types.add(Blob)
         try:
             ir = af.trace(program)(Blob(3))
         finally:
             del af.core.aval_rules[Blob]
-            af.core.val_types.remove(Blob)
+            af.core.trace_types.remove(Blob)
 
         assert ir.in_ir_tree[0].aval == BlobAVal(3)
 
-    def test_irvar_has_aval_but_is_not_val(self):
+    def test_irvar_has_aval_but_is_not_traceable(self):
         var = af.core.IRVar(aval=af.core.StrAVal())
         assert af.core.avalof(var) == af.core.StrAVal()
-        assert not af.core.is_val(var)
+        assert not af.core.is_traceable(var)
 
     def test_trace_static_unhashable_input_errors(self):
         class Unhashable:
