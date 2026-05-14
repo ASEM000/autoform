@@ -210,14 +210,14 @@ class TestConcatPrimitive:
         def func(x):
             return x + 1
 
-        with pytest.raises(AssertionError, match="`concat` expects strings"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a")
 
     def test_traced_string_radd_unsupported_operand_raises_concat_error(self):
         def func(x):
             return 1 + x
 
-        with pytest.raises(AssertionError, match="`concat` expects strings"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a")
 
     def test_traced_non_string_add_raises_rule_error(self):
@@ -231,7 +231,7 @@ class TestConcatPrimitive:
         def func(x, y, z):
             return af.concat(x, y, z)
 
-        with pytest.raises(AssertionError, match="`concat` expects strings"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a", "b", 1)
 
     @pytest.mark.asyncio(loop_scope="function")
