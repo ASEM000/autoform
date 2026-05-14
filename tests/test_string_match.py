@@ -98,14 +98,14 @@ class TestMatchTraced:
         def check(a, b):
             return af.match(a, b)
 
-        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             trace(check)("yes", 1)
 
     def test_traced_string_eq_unsupported_operand_raises_match_error(self):
         def check(x):
             return x == 1
 
-        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             trace(check)("yes")
 
     def test_traced_non_string_eq_raises_rule_error(self):
@@ -272,5 +272,5 @@ class TestAbstractMatch:
         assert isinstance(result, AVal)
 
     def test_abstract_match_rejects_non_string_input(self):
-        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             abstract_match(("yes", 1))

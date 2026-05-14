@@ -191,7 +191,7 @@ class TestIRMatch:
             ):
                 assert prim == af.string.concat_p
                 assert prim.name == "concat"
-                assert len(af.utils.treelib.leaves(in_tree)) == 2
+                assert len(af.utils.tree.leaves(in_tree)) == 2
             case _:
                 assert False, "Pattern should match single equation"
 

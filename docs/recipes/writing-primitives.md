@@ -3,7 +3,7 @@
 ```{admonition} Advanced
 :class: info
 
-`autoform` is also a low-level extensible framework. Most code should stay on the public primitives and transforms, but primitive authoring is available when an operation needs to become part of the IR system itself. This recipe uses `autoform.core` internals.
+`autoform` is also a low-level extensible framework. Most code should stay on the public primitives and transforms, but primitive authoring is available when an operation needs to become part of the IR system itself. This recipe uses `autoform.extend`.
 ```
 
 A primitive is the right boundary for runtime work that needs concrete values: HTTP calls, retrieval systems, databases, calculators, or libraries that cannot run on traced placeholders. The function wrapper stays small; the behavior lives in registered rules.
@@ -12,9 +12,10 @@ A primitive is the right boundary for runtime work that needs concrete values: H
 
 ```python
 import autoform as af
+import autoform.extend as afe
 
 
-lookup_p = af.core.Prim("lookup")
+lookup_p = afe.Prim("lookup")
 
 
 def lookup(query: str) -> str:
@@ -27,11 +28,11 @@ def impl_lookup(query: str, /) -> str:
 
 def abstract_lookup(query, /):
     del query
-    return af.core.StrAVal()
+    return afe.StrAVal()
 
 
-af.core.impl_rules.set(lookup_p, impl_lookup)
-af.core.abstract_rules.set(lookup_p, abstract_lookup)
+afe.impl_rules.set(lookup_p, impl_lookup)
+afe.abstract_rules.set(lookup_p, abstract_lookup)
 
 
 ir = af.trace(lookup)("seed")
@@ -40,23 +41,25 @@ assert ir.call("recursion") == "result for recursion"
 
 The wrapper `lookup(...)` is what traced programs call. During tracing, `lookup_p.bind(...)` records one equation. During execution, `impl_lookup(...)` receives the concrete runtime value.
 
-The abstract rule runs at trace time. It must return the output shape and abstract value without calling the runtime implementation. Built-in scalar outputs use explicit avals such as `af.core.StrAVal()`, `af.core.IntAVal()`, `af.core.FloatAVal()`, and `af.core.BoolAVal()`.
+The abstract rule runs at trace time. It must return the output shape and abstract value without calling the runtime implementation. Built-in scalar outputs use explicit avals such as `afe.StrAVal()`, `afe.IntAVal()`, `afe.FloatAVal()`, and `afe.BoolAVal()`.
 
-For new runtime value types, define an `af.core.AVal` subclass that carries the abstract metadata you need, then register the conversion rules:
+For new runtime value types, define an `afe.AVal` subclass that carries the abstract metadata you need, then register the trace type:
 
 ```python
-class SearchResultAVal(af.core.AVal):
+class SearchResultAVal(afe.AVal):
     __slots__ = ["fields"]
 
     def __init__(self, fields: tuple[str, ...]):
         self.fields = fields
 
 
-af.core.aval_rules[SearchResult] = lambda value: SearchResultAVal(tuple(value.fields))
-af.core.aval_types[SearchResultAVal] = lambda aval: SearchResult
+afe.register_trace_type(
+    SearchResult,
+    lambda value: SearchResultAVal(tuple(value.fields)),
+)
 ```
 
-`aval_rules` maps concrete trace inputs to abstract values. `aval_types` powers `af.core.typeof(...)` checks inside primitive rules. The `aval_types` rule is callable so richer avals can inspect their own metadata.
+This allows values of the Python type to enter `af.trace` and teaches `avalof(...)` how to infer their abstract value.
 
 ## Rules by Phase
 
@@ -86,7 +89,7 @@ def batch_lookup(in_tree, /):
     return [lookup_p.bind(query) for query in queries], True
 
 
-af.core.batch_rules.set(lookup_p, batch_lookup)
+afe.batch_rules.set(lookup_p, batch_lookup)
 
 
 assert af.batch(ir).call(["a", "b"]) == ["result for a", "result for b"]
@@ -107,13 +110,15 @@ def pull_bwd_lookup(in_tree, /):
     return af.format("Improve query '{}'. Feedback: {}. Result: {}", query, feedback, output)
 
 
-af.core.pull_fwd_rules.set(lookup_p, pull_fwd_lookup)
-af.core.pull_bwd_rules.set(lookup_p, pull_bwd_lookup)
+afe.pull_fwd_rules.set(lookup_p, pull_fwd_lookup)
+afe.pull_bwd_rules.set(lookup_p, pull_bwd_lookup)
 
 
 output, (query_feedback,) = af.pullback(ir).call(("recursion",), "too broad")
 assert output == "result for recursion"
-assert query_feedback == "Improve query 'recursion'. Feedback: too broad. Result: result for recursion"
+assert (
+    query_feedback == "Improve query 'recursion'. Feedback: too broad. Result: result for recursion"
+)
 ```
 
 The forward sweep returns the normal output plus residuals. The backward sweep receives those residuals and the output feedback, then returns feedback with the same shape as the primitive input.
@@ -127,7 +132,7 @@ async def aimpl_lookup(query: str, /) -> str:
     return impl_lookup(query)
 
 
-af.core.impl_rules.aset(lookup_p, aimpl_lookup)
+afe.impl_rules.aset(lookup_p, aimpl_lookup)
 ```
 
-Async transform rules use the corresponding `aset(...)` registry method. For example, `af.core.batch_rules.aset(...)` registers async {py:func}`batch <autoform.batch>` behavior.
+Async transform rules use the corresponding `aset(...)` registry method. For example, `afe.batch_rules.aset(...)` registers async {py:func}`batch <autoform.batch>` behavior.

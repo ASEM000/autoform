@@ -63,7 +63,7 @@ Read it as data flow:
 - the second equation records the {py:func}`concat <autoform.concat>` primitive;
 - `output` is the returned value.
 
-For an LM program, the same mechanism records {py:func}`lm_call <autoform.lm_call>` as an equation instead of calling the provider during tracing.
+For a text-space program, the same mechanism records {py:func}`lm_call <autoform.lm_call>` as an equation instead of calling the provider during tracing.
 
 ## Execute
 

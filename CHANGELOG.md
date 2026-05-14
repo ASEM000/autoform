@@ -133,6 +133,8 @@
 
   - Reworked [Getting Started](docs/getting-started.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
 
+  - Added an [array extension recipe](docs/recipes/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
+
   - Normalized Mermaid diagrams across the README and docs, and added a GitHub footer link to the Furo docs theme.
 
 ## v0.2.0 (February 7, 2026)

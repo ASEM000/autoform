@@ -18,4 +18,5 @@ litellm-config
 schema-patterns
 writing-primitives
 tool-use-agent
+array-extension
 ```

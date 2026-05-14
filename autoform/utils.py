@@ -18,10 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 from collections.abc import Awaitable, Callable
-from typing import (
-    Any,
-    cast,
-)
+from typing import Any, cast
 
 import optree.pytree
 from optree import PyTreeSpec
@@ -44,7 +41,7 @@ def asyncify[**P, R](func: Callable[P, R], /) -> Callable[P, Awaitable[R]]:
 # ==================================================================================================
 
 PYTREE_NAMESPACE = "OPTREE_AUTOFORM_NAMESPACE"
-treelib = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
+tree = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
 type Tree[T] = Any
 
 
@@ -55,7 +52,7 @@ def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R
 def index(node: Tree, b: int, /) -> Tree:
     # NOTE(asem): index a struct without indexing support
     # useful to deal with arbitrary pytrees
-    children = treelib.leaves(node, is_leaf=lambda x: id(x) != id(node), none_is_leaf=True)
+    children = tree.leaves(node, is_leaf=lambda x: id(x) != id(node), none_is_leaf=True)
     return children[b]
 
 
@@ -65,6 +62,25 @@ def index(node: Tree, b: int, /) -> Tree:
 
 
 def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
+    """Extract one batch item from a tree.
+
+    Batched leaves are indexed at ``b``. Non-batched leaves are broadcast by
+    returning the original leaf unchanged.
+
+    Args:
+        in_tree: Tree containing batched and non-batched leaves.
+        in_batched: Tree of booleans with the same outer structure as
+            ``in_tree``. ``True`` marks a batched leaf.
+        b: Batch index to extract.
+
+    Returns:
+        A tree with the same structure as ``in_batched`` containing one batch
+        item.
+
+    Example:
+        >>> batch_index(([1, 2], "x"), (True, False), 0)
+        (1, 'x')
+    """
     # Extract item at index b from batched leaves, broadcast non-batched.
     # Inverse of transpose_batch: extracts a single item from each batched leaf
     # while keeping non-batched leaves unchanged.
@@ -77,13 +93,13 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # >>> in_tree, in_batched = [[1, 2, 3], "constant"], [True, False]
     # >>> batch_index(in_tree, in_batched, 0)
     # [1, 'constant']
-    spec = treelib.structure(in_batched)
+    spec = tree.structure(in_batched)
     # NOTE(asem): flatten in_tree to match in_batched structure
-    # >>> spec = treelib.structure([1, 2, 3])
+    # >>> spec = tree.structure([1, 2, 3])
     # >>> spec.flatten_up_to([1, [2, 3]])
     # [[1, 2, 3]]
     flat_in_tree = spec.flatten_up_to(in_tree)
-    flat_in_batched = treelib.leaves(in_batched)
+    flat_in_batched = tree.leaves(in_batched)
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
     zipped = zip(flat_in_tree, flat_in_batched, strict=True)
@@ -92,6 +108,23 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
 
 
 def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
+    """Return the common output container spec for batched leaves.
+
+    Batch rules use this to decide whether an operation has any batched inputs
+    and how per-example results should be repacked. If no input leaf is batched,
+    ``None`` is returned.
+
+    Args:
+        in_tree: Tree containing batched and non-batched leaves.
+        in_batched: Tree of booleans with the same outer structure as
+            ``in_tree``. ``True`` marks a batched leaf.
+
+    Returns:
+        The common pytree spec of all batched leaves, or ``None`` if there are no batched leaves.
+
+    Raises:
+        AssertionError: If batched leaves do not share the same container structure.
+    """
     # NOTE(asem): return the common container pytreespec of batched leaves.
     # returns None if no leaves are batched.
     # >>> in_tree = ("a", "b", "c")
@@ -104,12 +137,12 @@ def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
     # will be wrapped in the same container type. otherwise, we have to pick one container type
     # arbitrarily which can lead to confusing behavior.
     is_axis_spec = lambda x: isinstance(x, bool)
-    spec = treelib.structure(in_batched, is_leaf=is_axis_spec)
-    batched_leaves = treelib.leaves(in_batched, is_leaf=is_axis_spec)
+    spec = tree.structure(in_batched, is_leaf=is_axis_spec)
+    batched_leaves = tree.leaves(in_batched, is_leaf=is_axis_spec)
     tree_leaves = spec.flatten_up_to(in_tree)
     specs = []
     for v, b in zip(tree_leaves, batched_leaves, strict=True):
-        b and specs.append(treelib.structure(v, is_leaf=lambda x: x is not v))
+        b and specs.append(tree.structure(v, is_leaf=lambda x: x is not v))
     if not specs:
         return None
     s0, *rest = specs
@@ -135,16 +168,16 @@ def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -
     # leaf_batches = [[1, 3, 5], [2, 4, 6]]
     # result = Point(x=[1, 3, 5], y=[2, 4, 6])
     assert batch_size, f"{batch_size=} must be > 0"
-    inner_spec = treelib.structure(in_batched, is_leaf=lambda x: isinstance(x, bool))
-    outer_spec = treelib.structure(in_tree, is_leaf=lambda x: x is not in_tree)
-    first_level_leaves = treelib.leaves(in_tree, is_leaf=lambda x: x is not in_tree)
+    inner_spec = tree.structure(in_batched, is_leaf=lambda x: isinstance(x, bool))
+    outer_spec = tree.structure(in_tree, is_leaf=lambda x: x is not in_tree)
+    first_level_leaves = tree.leaves(in_tree, is_leaf=lambda x: x is not in_tree)
 
     # NOTE(asem): flatten_up_to (not leaves) because we want to stop at the boundary
     # defined by inner_spec. if leaves are containers (e.g., lists), regular leaves()
     # would descend into them. flatten_up_to respects the spec and stops at each leaf slot.
     # >>> item = Batch(items=[1, 2, 3], mask=[True, False])
     # >>> inner_spec = Batch(items=*, mask=*)
-    # >>> treelib.leaves(item) -> [1, 2, 3, True, False]
+    # >>> tree.leaves(item) -> [1, 2, 3, True, False]
     # >>> inner_spec.flatten_up_to(item) -> [[1, 2, 3], [True, False]]
     leaves_bi = [inner_spec.flatten_up_to(item) for item in first_level_leaves]
 
@@ -155,9 +188,9 @@ def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -
     # >>> transpose(leaves_bi) with is_leaf stops at [1,2]
     ids = {id(leaf) for row in leaves_bi for leaf in row}
 
-    leaves_ib = treelib.transpose(
-        treelib.structure([object()] * batch_size),
-        treelib.structure([object()] * inner_spec.num_leaves),
+    leaves_ib = tree.transpose(
+        tree.structure([object()] * batch_size),
+        tree.structure([object()] * inner_spec.num_leaves),
         leaves_bi,
         is_leaf=lambda x: id(x) in ids,
     )

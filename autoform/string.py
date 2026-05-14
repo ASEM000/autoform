@@ -18,29 +18,18 @@ from __future__ import annotations
 
 import functools as ft
 
-from autoform.ad import Zero, is_zero, materialize, zeroof
-from autoform.core import (
-    BoolAVal,
-    EvalType,
-    Prim,
-    StrAVal,
-    abstract_rules,
-    batch_rules,
-    impl_rules,
-    pull_bwd_rules,
-    pull_fwd_rules,
-    push_rules,
-    trace_add_rules,
-    trace_eq_rules,
-    typeof,
-)
-from autoform.utils import Tree, asyncify, batch_index, batch_spec, treelib
+import autoform.ad as ad
+import autoform.core as core
+import autoform.utils as utils
+
+type Tree[T] = utils.Tree[T]
+type TreePair = tuple[Tree, Tree]
 
 # ==================================================================================================
 # FORMAT
 # ==================================================================================================
 
-format_p = Prim("format")
+format_p = core.Prim("format")
 
 
 def format(template: str, *args, **kwargs) -> str:
@@ -65,23 +54,19 @@ def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> st
     return template.format(*args, **kwargs)
 
 
-def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> EvalType:
-    return StrAVal()
+def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> core.EvalType:
+    return core.StrAVal()
 
 
-def pushforward_format(
-    in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
-) -> tuple[Tree, Tree]:
+def pushforward_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
     primals, tangents = in_tree
     p_out = format_p.bind(primals, template=template, keys=keys)
-    tangents = materialize(tangents)
+    tangents = ad.materialize(tangents)
     t_out = format_p.bind(tangents, template=template, keys=keys)
     return p_out, t_out
 
 
-def pullback_fwd_format(
-    in_tree: Tree, /, *, template: str, keys: tuple[str, ...]
-) -> tuple[Tree, Tree]:
+def pullback_fwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
     args, kwargs_values = in_tree
     out = format_p.bind(in_tree, template=template, keys=keys)
     residuals = (len(args), len(kwargs_values))
@@ -96,35 +81,35 @@ def pullback_bwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...
     return (args_cotangent, kwargs_cotangent)
 
 
-def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> tuple[Tree, Tree]:
+def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         return format_p.bind(in_values, template=template, keys=keys), False
 
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     bind = ft.partial(format_p.bind, template=template, keys=keys)
     result = [bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
-impl_rules.set(format_p, impl_format)
-impl_rules.aset(format_p, asyncify(impl_format))
-abstract_rules.set(format_p, abstract_format)
-push_rules.set(format_p, pushforward_format)
-push_rules.aset(format_p, asyncify(pushforward_format))
-pull_fwd_rules.set(format_p, pullback_fwd_format)
-pull_fwd_rules.aset(format_p, asyncify(pullback_fwd_format))
-pull_bwd_rules.set(format_p, pullback_bwd_format)
-pull_bwd_rules.aset(format_p, asyncify(pullback_bwd_format))
-batch_rules.set(format_p, batch_format)
-batch_rules.aset(format_p, asyncify(batch_format))
+core.impl_rules.set(format_p, impl_format)
+core.impl_rules.aset(format_p, utils.asyncify(impl_format))
+core.abstract_rules.set(format_p, abstract_format)
+core.push_rules.set(format_p, pushforward_format)
+core.push_rules.aset(format_p, utils.asyncify(pushforward_format))
+core.pull_fwd_rules.set(format_p, pullback_fwd_format)
+core.pull_fwd_rules.aset(format_p, utils.asyncify(pullback_fwd_format))
+core.pull_bwd_rules.set(format_p, pullback_bwd_format)
+core.pull_bwd_rules.aset(format_p, utils.asyncify(pullback_bwd_format))
+core.batch_rules.set(format_p, batch_format)
+core.batch_rules.aset(format_p, utils.asyncify(batch_format))
 
 # ==================================================================================================
 # CONCAT
 # ==================================================================================================
 
-concat_p = Prim("concat")
+concat_p = core.Prim("concat")
 
 
 def concat(*args) -> str:
@@ -149,18 +134,18 @@ def impl_concat(in_tree: Tree, /) -> str:
     return "".join(in_tree)
 
 
-def abstract_concat(in_tree: Tree, /) -> EvalType:
-    assert all(typeof(x) is str for x in in_tree), f"`concat` expects string inputs, {in_tree!r}"
-    return StrAVal()
+def abstract_concat(in_tree: Tree, /) -> core.EvalType:
+    assert all(type(x) in (str, core.StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
+    return core.StrAVal()
 
 
-def pushforward_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
+def pushforward_concat(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = materialize(tangents)
+    tangents = ad.materialize(tangents)
     return concat_p.bind(primals), concat_p.bind(tangents)
 
 
-def pullback_fwd_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
+def pullback_fwd_concat(in_tree: Tree, /) -> TreePair:
     out = concat_p.bind(in_tree)
     return out, len(in_tree)
 
@@ -171,36 +156,36 @@ def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
     return tuple([out_cotangent] * n)
 
 
-def batch_concat(in_tree: Tree, /) -> tuple[Tree, Tree]:
+def batch_concat(in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, in_values = in_tree
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         return concat_p.bind(in_values), False
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     result = [concat_p.bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
-impl_rules.set(concat_p, impl_concat)
-impl_rules.aset(concat_p, asyncify(impl_concat))
-abstract_rules.set(concat_p, abstract_concat)
-push_rules.set(concat_p, pushforward_concat)
-push_rules.aset(concat_p, asyncify(pushforward_concat))
-pull_fwd_rules.set(concat_p, pullback_fwd_concat)
-pull_fwd_rules.aset(concat_p, asyncify(pullback_fwd_concat))
-pull_bwd_rules.set(concat_p, pullback_bwd_concat)
-pull_bwd_rules.aset(concat_p, asyncify(pullback_bwd_concat))
-batch_rules.set(concat_p, batch_concat)
-batch_rules.aset(concat_p, asyncify(batch_concat))
+core.impl_rules.set(concat_p, impl_concat)
+core.impl_rules.aset(concat_p, utils.asyncify(impl_concat))
+core.abstract_rules.set(concat_p, abstract_concat)
+core.push_rules.set(concat_p, pushforward_concat)
+core.push_rules.aset(concat_p, utils.asyncify(pushforward_concat))
+core.pull_fwd_rules.set(concat_p, pullback_fwd_concat)
+core.pull_fwd_rules.aset(concat_p, utils.asyncify(pullback_fwd_concat))
+core.pull_bwd_rules.set(concat_p, pullback_bwd_concat)
+core.pull_bwd_rules.aset(concat_p, utils.asyncify(pullback_bwd_concat))
+core.batch_rules.set(concat_p, batch_concat)
+core.batch_rules.aset(concat_p, utils.asyncify(batch_concat))
 
 
-trace_add_rules[StrAVal] = concat
+core.trace_add_rules[core.StrAVal] = concat
 
 
 # ==================================================================================================
 # MATCH
 # ==================================================================================================
 
-match_p = Prim("match")
+match_p = core.Prim("match")
 
 
 def match(a: str, b: str, /) -> bool:
@@ -230,15 +215,15 @@ def impl_match(in_tree: Tree, /) -> bool:
     return a == b
 
 
-def abstract_match(in_tree: Tree, /) -> EvalType:
-    assert all(typeof(x) is str for x in in_tree), f"`match` expects string inputs, got {in_tree!r}"
-    return BoolAVal()
+def abstract_match(in_tree: Tree, /) -> core.EvalType:
+    assert all(type(x) in (str, core.StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
+    return core.BoolAVal()
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, Zero(BoolAVal())
+    return out_primal, ad.Zero(core.BoolAVal())
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -250,29 +235,29 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return treelib.map(lambda r: r if is_zero(r) else zeroof(r), residuals)
+    return utils.tree.map(lambda r: r if ad.is_zero(r) else ad.zeroof(r), residuals)
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         return match_p.bind(in_values), False
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     result = [match_p.bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
-impl_rules.set(match_p, impl_match)
-impl_rules.aset(match_p, asyncify(impl_match))
-abstract_rules.set(match_p, abstract_match)
-push_rules.set(match_p, pushforward_match)
-push_rules.aset(match_p, asyncify(pushforward_match))
-pull_fwd_rules.set(match_p, pullback_fwd_match)
-pull_fwd_rules.aset(match_p, asyncify(pullback_fwd_match))
-pull_bwd_rules.set(match_p, pullback_bwd_match)
-pull_bwd_rules.aset(match_p, asyncify(pullback_bwd_match))
-batch_rules.set(match_p, batch_match)
-batch_rules.aset(match_p, asyncify(batch_match))
+core.impl_rules.set(match_p, impl_match)
+core.impl_rules.aset(match_p, utils.asyncify(impl_match))
+core.abstract_rules.set(match_p, abstract_match)
+core.push_rules.set(match_p, pushforward_match)
+core.push_rules.aset(match_p, utils.asyncify(pushforward_match))
+core.pull_fwd_rules.set(match_p, pullback_fwd_match)
+core.pull_fwd_rules.aset(match_p, utils.asyncify(pullback_fwd_match))
+core.pull_bwd_rules.set(match_p, pullback_bwd_match)
+core.pull_bwd_rules.aset(match_p, utils.asyncify(pullback_bwd_match))
+core.batch_rules.set(match_p, batch_match)
+core.batch_rules.aset(match_p, utils.asyncify(batch_match))
 
 
-trace_eq_rules[StrAVal] = match
+core.trace_eq_rules[core.StrAVal] = match

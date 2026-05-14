@@ -210,14 +210,14 @@ class TestConcatPrimitive:
         def func(x):
             return x + 1
 
-        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a")
 
     def test_traced_string_radd_unsupported_operand_raises_concat_error(self):
         def func(x):
             return 1 + x
 
-        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a")
 
     def test_traced_non_string_add_raises_rule_error(self):
@@ -231,7 +231,7 @@ class TestConcatPrimitive:
         def func(x, y, z):
             return af.concat(x, y, z)
 
-        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a", "b", 1)
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -628,10 +628,10 @@ class TestCotangentHelpers:
         assert af.ad.zeroof(z) is z
         assert af.ad.materialize(af.ad.zeroof(z)) == ""
 
-    def test_zero_has_aval_but_is_not_val(self):
+    def test_zero_has_aval_but_is_not_traceable(self):
         z = af.ad.Zero(af.core.StrAVal())
         assert af.core.avalof(z) == af.core.StrAVal()
-        assert not af.core.is_val(z)
+        assert not af.core.is_traceable(z)
 
     def test_zero_materializes_with_registered_aval_rule(self):
         class BlobAVal(af.core.AVal):

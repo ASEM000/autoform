@@ -21,37 +21,37 @@ import functools as ft
 from collections import defaultdict, deque
 from collections.abc import Callable
 
-from autoform.ad import is_zero, pullback, pushforward, zeroof
-from autoform.analysis import ir_eqn_graph
-from autoform.batch import batch
-from autoform.core import (
-    IR,
-    IREqn,
-    Prim,
-    abstract_rules,
-    batch_rules,
-    impl_rules,
-    ir_aval,
-    pull_bwd_rules,
-    pull_fwd_rules,
-    push_rules,
-)
-from autoform.dce import dce, dce_rules, default_dce
-from autoform.utils import Tree, asyncify, batch_spec, lru_cache, treelib
+import autoform.ad as ad
+import autoform.analysis as analysis
+import autoform.batch as batch
+import autoform.core as core
+import autoform.dce as dce
+import autoform.utils as utils
+
+type Tree[T] = utils.Tree[T]
+type TreePair = tuple[Tree, Tree]
+type TreeList = list[Tree]
+type BatchedTreeList = list[Tree[bool]]
+type IRList = list[core.IR]
+type GatherPair = tuple[TreeList, TreeList]
+type GatherResidual = tuple[TreeList, IRList]
+type GatherFwdResult = tuple[TreeList, GatherResidual]
+type BatchGatherInput = tuple[int, list[bool], TreeList]
+type BatchGatherOutput = tuple[TreeList, BatchedTreeList]
 
 # ==================================================================================================
 # GATHER
 # ==================================================================================================
 
-gather_p = Prim("gather")
+gather_p = core.Prim("gather")
 
 
-def impl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
+def impl_gather(in_tree: TreeList, /, *, irs: IRList) -> TreeList:
     assert len(in_tree) == len(irs)
     return [ir.call(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
 
 
-async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
+async def aimpl_gather(in_tree: TreeList, /, *, irs: IRList) -> TreeList:
     assert len(in_tree) == len(irs)
 
     if len(irs) == 1:
@@ -65,127 +65,115 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
     return await asyncio.gather(*[run(pair) for pair in zip(irs, in_tree, strict=True)])
 
 
-def abstract_gather(in_tree: list[Tree], /, *, irs: list[IR]) -> list[Tree]:
-    return [treelib.map(ir_aval, ir.out_ir_tree) for ir in irs]
+def abstract_gather(in_tree: TreeList, /, *, irs: IRList) -> TreeList:
+    return [utils.tree.map(core.ir_aval, ir.out_ir_tree) for ir in irs]
 
 
-def push_gather(
-    in_tree: tuple[list[Tree], list[Tree]], /, *, irs: list[IR]
-) -> tuple[list[Tree], list[Tree]]:
+def push_gather(in_tree: GatherPair, /, *, irs: IRList) -> GatherPair:
     primals, tangents = in_tree
-    pf_irs = [pushforward(ir) for ir in irs]
+    pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
     results = gather_p.bind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
 
-async def apush_gather(
-    in_tree: tuple[list[Tree], list[Tree]], /, *, irs: list[IR]
-) -> tuple[list[Tree], list[Tree]]:
+async def apush_gather(in_tree: GatherPair, /, *, irs: IRList) -> GatherPair:
     primals, tangents = in_tree
-    pf_irs = [pushforward(ir) for ir in irs]
+    pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
     results = await gather_p.abind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
 
-def pull_fwd_gather(
-    in_tree: list[Tree], /, *, irs: list[IR]
-) -> tuple[list[Tree], tuple[list[Tree], list[IR]]]:
+def pull_fwd_gather(in_tree: TreeList, /, *, irs: IRList) -> GatherFwdResult:
     results = gather_p.bind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
 
-async def apull_fwd_gather(
-    in_tree: list[Tree], /, *, irs: list[IR]
-) -> tuple[list[Tree], tuple[list[Tree], list[IR]]]:
+async def apull_fwd_gather(in_tree: TreeList, /, *, irs: IRList) -> GatherFwdResult:
     results = await gather_p.abind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
 
-def pull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
+def pull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> TreeList:
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
-    pb_irs = [pullback(ir) for ir in irs]
+    pb_irs = [ad.pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
     results = gather_p.bind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
-async def apull_bwd_gather(in_tree: Tree, /, *, irs: list[IR]) -> list[Tree]:
+async def apull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> TreeList:
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
-    pb_irs = [pullback(ir) for ir in irs]
+    pb_irs = [ad.pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
     results = await gather_p.abind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
-def batch_gather(
-    in_tree: tuple[int, list[bool], list[Tree]], /, *, irs: list[IR]
-) -> tuple[list[Tree], list[Tree[bool]]]:
+def batch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGatherOutput:
     batch_size, in_batched, inputs = in_tree
 
-    results: list[Tree] = []
-    out_batched: list[Tree[bool]] = []
+    results: TreeList = []
+    out_batched: BatchedTreeList = []
 
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
-        if batch_spec(inp, inp_batched) is None:
+        if utils.batch_spec(inp, inp_batched) is None:
             results.append(ir.call(*inp))
-            out_batched.append(treelib.map(lambda _: False, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: False, ir.out_ir_tree))
         else:
-            batched_ir = batch(ir, in_axes=inp_batched)
+            batched_ir = batch.batch(ir, in_axes=inp_batched)
             results.append(batched_ir.call(*inp))
-            out_batched.append(treelib.map(lambda _: True, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: True, ir.out_ir_tree))
 
     return results, out_batched
 
 
-async def abatch_gather(
-    in_tree: tuple[int, list[bool], list[Tree]], /, *, irs: list[IR]
-) -> tuple[list[Tree], list[Tree[bool]]]:
+async def abatch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGatherOutput:
     batch_size, in_batched, inputs = in_tree
 
-    results: list[Tree] = []
-    out_batched: list[Tree[bool]] = []
+    results: TreeList = []
+    out_batched: BatchedTreeList = []
 
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
-        if batch_spec(inp, inp_batched) is None:
+        if utils.batch_spec(inp, inp_batched) is None:
             results.append(await ir.acall(*inp))
-            out_batched.append(treelib.map(lambda _: False, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: False, ir.out_ir_tree))
         else:
-            batched_ir = batch(ir, in_axes=inp_batched)
+            batched_ir = batch.batch(ir, in_axes=inp_batched)
             results.append(await batched_ir.acall(*inp))
-            out_batched.append(treelib.map(lambda _: True, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: True, ir.out_ir_tree))
 
     return results, out_batched
 
 
-impl_rules.set(gather_p, impl_gather)
-impl_rules.aset(gather_p, aimpl_gather)
-abstract_rules.set(gather_p, abstract_gather)
-push_rules.set(gather_p, push_gather)
-push_rules.aset(gather_p, apush_gather)
-pull_fwd_rules.set(gather_p, pull_fwd_gather)
-pull_fwd_rules.aset(gather_p, apull_fwd_gather)
-pull_bwd_rules.set(gather_p, pull_bwd_gather)
-pull_bwd_rules.aset(gather_p, apull_bwd_gather)
-batch_rules.set(gather_p, batch_gather)
-batch_rules.aset(gather_p, abatch_gather)
+core.impl_rules.set(gather_p, impl_gather)
+core.impl_rules.aset(gather_p, aimpl_gather)
+core.abstract_rules.set(gather_p, abstract_gather)
+core.push_rules.set(gather_p, push_gather)
+core.push_rules.aset(gather_p, apush_gather)
+core.pull_fwd_rules.set(gather_p, pull_fwd_gather)
+core.pull_fwd_rules.aset(gather_p, apull_fwd_gather)
+core.pull_bwd_rules.set(gather_p, pull_bwd_gather)
+core.pull_bwd_rules.aset(gather_p, apull_bwd_gather)
+core.batch_rules.set(gather_p, batch_gather)
+core.batch_rules.aset(gather_p, abatch_gather)
 
 
-def dce_gather(ir_eqn: IREqn, out_used: list[bool], /) -> tuple[IREqn, list[bool]]:
+def dce_gather(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     irs = ir_eqn.params["irs"]
-    new_irs = [dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
+    new_irs = [dce.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
     new_eqn = ir_eqn.using(irs=new_irs)
-    return default_dce(new_eqn, out_used)
+    return dce.default_dce(new_eqn, out_used)
 
 
-dce_rules[gather_p] = dce_gather
+dce.dce_rules[gather_p] = dce_gather
 
 
 # ==================================================================================================
@@ -193,8 +181,8 @@ dce_rules[gather_p] = dce_gather
 # ==================================================================================================
 
 
-@ft.lru_cache(maxsize=256)
-def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
+@ft.partial(utils.lru_cache, maxsize=256)
+def toposort_levels(ir: core.IR, /) -> list[list[core.IREqn]]:
     """Group IR equations into dependency levels."""
 
     # NOTE(asem): equations form a dag where edges are defined by shared irvars.
@@ -209,7 +197,7 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
     # 3. topological sort into levels using kahn's algorithm
 
     # NOTE(asem): step 1/2: build adjacency list (parent -> children) from ir_var flow
-    adjacency_list = ir_eqn_graph(ir)
+    adjacency_list = analysis.ir_eqn_graph(ir)
     in_degree = defaultdict(lambda: 0)
     for children in adjacency_list.values():
         for child in children:
@@ -236,9 +224,13 @@ def toposort_levels(ir: IR, /) -> list[list[IREqn]]:
 # DEPENDS
 # ==================================================================================================
 
-depends_p = Prim("depends")
+depends_p = core.Prim("depends")
 
 type DependsType[T] = tuple[T, tuple[Tree, ...]]
+type DependsPair = tuple[DependsType[Tree], DependsType[Tree]]
+type DependsFwdResult = tuple[Tree, DependsType[Tree]]
+type DependsBwdInput = tuple[DependsType[Tree], Tree]
+type BatchDependsInput = tuple[int, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
 
 
 def depends[T](value: T, /, *deps) -> T:
@@ -273,49 +265,49 @@ def abstract_depends(in_tree: DependsType[Tree], /) -> Tree:
     return value
 
 
-def push_depends(in_tree: tuple[DependsType[Tree], DependsType[Tree]], /) -> tuple[Tree, Tree]:
+def push_depends(in_tree: DependsPair, /) -> TreePair:
     (primal_value, primal_deps), (tangent_value, tangent_deps) = in_tree
     p_out = depends_p.bind((primal_value, primal_deps))
     t_out = depends_p.bind((tangent_value, tangent_deps))
     return p_out, t_out
 
 
-def pull_fwd_depends(in_tree: DependsType[Tree], /) -> tuple[Tree, DependsType[Tree]]:
+def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
     value, deps = in_tree
     return depends_p.bind((value, deps)), in_tree
 
 
-def pull_bwd_depends(in_tree: tuple[DependsType[Tree], Tree], /) -> DependsType[Tree]:
+def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
     (_, deps), out_cotangent = in_tree
-    return out_cotangent, treelib.map(lambda d: d if is_zero(d) else zeroof(d), deps)
+    return out_cotangent, utils.tree.map(lambda d: d if ad.is_zero(d) else ad.zeroof(d), deps)
 
 
-def batch_depends(
-    in_tree: tuple[int, tuple[bool, tuple[bool, ...]], DependsType[Tree]], /
-) -> tuple[Tree, bool]:
+def batch_depends(in_tree: BatchDependsInput, /) -> core.BatchRuleResult:
     _, (value_batched, _), (value, deps) = in_tree
     return depends_p.bind((value, deps)), value_batched
 
 
-impl_rules.set(depends_p, impl_depends)
-impl_rules.aset(depends_p, asyncify(impl_depends))
-abstract_rules.set(depends_p, abstract_depends)
-push_rules.set(depends_p, push_depends)
-push_rules.aset(depends_p, asyncify(push_depends))
-pull_fwd_rules.set(depends_p, pull_fwd_depends)
-pull_fwd_rules.aset(depends_p, asyncify(pull_fwd_depends))
-pull_bwd_rules.set(depends_p, pull_bwd_depends)
-pull_bwd_rules.aset(depends_p, asyncify(pull_bwd_depends))
-batch_rules.set(depends_p, batch_depends)
-batch_rules.aset(depends_p, asyncify(batch_depends))
+core.impl_rules.set(depends_p, impl_depends)
+core.impl_rules.aset(depends_p, utils.asyncify(impl_depends))
+core.abstract_rules.set(depends_p, abstract_depends)
+core.push_rules.set(depends_p, push_depends)
+core.push_rules.aset(depends_p, utils.asyncify(push_depends))
+core.pull_fwd_rules.set(depends_p, pull_fwd_depends)
+core.pull_fwd_rules.aset(depends_p, utils.asyncify(pull_fwd_depends))
+core.pull_bwd_rules.set(depends_p, pull_bwd_depends)
+core.pull_bwd_rules.aset(depends_p, utils.asyncify(pull_bwd_depends))
+core.batch_rules.set(depends_p, batch_depends)
+core.batch_rules.aset(depends_p, utils.asyncify(batch_depends))
 
 # ==================================================================================================
 # SCHED
 # ==================================================================================================
 
 
-@ft.partial(lru_cache, maxsize=256)
-def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = None) -> IR[*A, R]:
+@ft.partial(utils.lru_cache, maxsize=256)
+def sched[*A, R](
+    ir: core.IR[*A, R], /, *, cond: Callable[[core.IREqn], bool] | None = None
+) -> core.IR[*A, R]:
     """Schedule independent operations for parallel execution.
 
     Args:
@@ -347,24 +339,24 @@ def sched[*A, R](ir: IR[*A, R], /, *, cond: Callable[[IREqn], bool] | None = Non
         >>> # async execution (concurrent via asyncio.gather)
         >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
-    levels: list[list[IREqn]] = toposort_levels(ir)
-    out_ir_eqns: list[IREqn] = []
+    levels: list[list[core.IREqn]] = toposort_levels(ir)
+    out_ir_eqns: list[core.IREqn] = []
     cond = (lambda _: True) if cond is None else cond
 
     def recurse(leaf):
-        return sched(leaf, cond=cond) if isinstance(leaf, IR) else leaf
+        return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
 
-    def make_gather(ir_eqns: list[IREqn]) -> IREqn:
-        irs = [IR([ir_eqn], (ir_eqn.in_ir_tree,), ir_eqn.out_ir_tree) for ir_eqn in ir_eqns]
+    def make_gather(ir_eqns: list[core.IREqn]) -> core.IREqn:
+        irs = [core.IR([ir_eqn], (ir_eqn.in_ir_tree,), ir_eqn.out_ir_tree) for ir_eqn in ir_eqns]
         in_ir_tree = [(ir_eqn.in_ir_tree,) for ir_eqn in ir_eqns]
         out_ir_tree = [ir_eqn.out_ir_tree for ir_eqn in ir_eqns]
-        return IREqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
+        return core.IREqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
 
     for level in levels:
-        ir_eqns = [ir_eqn.using(**treelib.map(recurse, ir_eqn.params)) for ir_eqn in level]
+        ir_eqns = [ir_eqn.using(**utils.tree.map(recurse, ir_eqn.params)) for ir_eqn in level]
         seq_ir_eqns = [ir_eqn for ir_eqn in ir_eqns if not cond(ir_eqn)]
         par_ir_eqns = [ir_eqn for ir_eqn in ir_eqns if cond(ir_eqn)]
         out_ir_eqns.extend([make_gather(par_ir_eqns)] if len(par_ir_eqns) > 1 else par_ir_eqns)
         out_ir_eqns.extend(seq_ir_eqns)
 
-    return IR(out_ir_eqns, ir.in_ir_tree, ir.out_ir_tree)
+    return core.IR(out_ir_eqns, ir.in_ir_tree, ir.out_ir_tree)

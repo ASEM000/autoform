@@ -51,7 +51,9 @@ class SearchDecision:
     args: SearchArgs
 
 
-decision_schema = SearchDecision(tool=af.Enum("search", "done"), args=SearchArgs(query=af.Str(), limit=af.Int(min=1, max=5)))
+decision_schema = SearchDecision(
+    tool=af.Enum("search", "done"), args=SearchArgs(query=af.Str(), limit=af.Int(min=1, max=5))
+)
 
 
 def choose_search(question: str) -> SearchDecision:

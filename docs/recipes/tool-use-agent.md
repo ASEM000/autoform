@@ -27,6 +27,7 @@ from urllib.parse import urlencode
 
 import httpx
 import autoform as af
+import autoform.extend as afe
 
 
 # decision is the structured output returned by the lm
@@ -47,14 +48,15 @@ class State:
 
 # build the schema as a value-shaped instance
 decision_schema = Decision(
-    tool=af.Enum("search", "done") @ af.Doc("Use search if history has no search line. Use done if history already has search."),
+    tool=af.Enum("search", "done")
+    @ af.Doc("Use search if history has no search line. Use done if history already has search."),
     args=af.Str() @ af.Doc("Search query when tool is search. Empty when tool is done."),
     answer=af.Str() @ af.Doc("Final answer when tool is done. Empty when tool is search."),
 )
 
 
 # primitive wrapper called by traced programs
-wikipedia_search_p = af.core.Prim("wikipedia_search")
+wikipedia_search_p = afe.Prim("wikipedia_search")
 
 
 def wikipedia_search(query: str) -> str:
@@ -62,13 +64,26 @@ def wikipedia_search(query: str) -> str:
 
 
 def wikipedia_url(query: str) -> str:
-    params = {"action": "query", "format": "json", "generator": "search", "gsrsearch": query, "gsrlimit": 3, "prop": "extracts", "exintro": 1, "explaintext": 1, "exsentences": 2}
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "search",
+        "gsrsearch": query,
+        "gsrlimit": 3,
+        "prop": "extracts",
+        "exintro": 1,
+        "explaintext": 1,
+        "exsentences": 2,
+    }
     return "https://en.wikipedia.org/w/api.php?" + urlencode(params)
 
 
 def format_wikipedia_response(payload) -> str:
     pages = payload.get("query", {}).get("pages", {})
-    rows = [f"{page.get('title', 'Untitled')}: {page.get('extract', 'No extract.')}" for page in sorted(pages.values(), key=lambda page: page.get("index", 0))]
+    rows = [
+        f"{page.get('title', 'Untitled')}: {page.get('extract', 'No extract.')}"
+        for page in sorted(pages.values(), key=lambda page: page.get("index", 0))
+    ]
     return "\n".join(rows) or "No results."
 
 
@@ -83,7 +98,7 @@ async def aimpl_wikipedia_search(query: str, /) -> str:
 # tracing needs output shape without running the http call
 def abstract_wikipedia_search(query, /):
     del query
-    return af.core.StrAVal()
+    return afe.StrAVal()
 
 
 # async batch receives the batch size, input axes, and input values
@@ -109,14 +124,19 @@ async def apull_fwd_wikipedia_search(query: str, /):
 # async pullback backward sweep turns output feedback into query feedback
 async def apull_bwd_wikipedia_search(in_tree, /):
     (query, output), feedback = in_tree
-    return af.format("Improve the Wikipedia search query. Query: {}. Feedback: {}. Result: {}", query, feedback, output)
+    return af.format(
+        "Improve the Wikipedia search query. Query: {}. Feedback: {}. Result: {}",
+        query,
+        feedback,
+        output,
+    )
 
 
-af.core.impl_rules.aset(wikipedia_search_p, aimpl_wikipedia_search)
-af.core.abstract_rules.set(wikipedia_search_p, abstract_wikipedia_search)
-af.core.batch_rules.aset(wikipedia_search_p, abatch_wikipedia_search)
-af.core.pull_fwd_rules.aset(wikipedia_search_p, apull_fwd_wikipedia_search)
-af.core.pull_bwd_rules.aset(wikipedia_search_p, apull_bwd_wikipedia_search)
+afe.impl_rules.aset(wikipedia_search_p, aimpl_wikipedia_search)
+afe.abstract_rules.set(wikipedia_search_p, abstract_wikipedia_search)
+afe.batch_rules.aset(wikipedia_search_p, abatch_wikipedia_search)
+afe.pull_fwd_rules.aset(wikipedia_search_p, apull_fwd_wikipedia_search)
+afe.pull_bwd_rules.aset(wikipedia_search_p, apull_bwd_wikipedia_search)
 
 
 def search_tool(query: str, _answer: str, history: str) -> str:
@@ -197,10 +217,10 @@ For real tools, keep the branch signature stable: each branch here is `(query, a
 The async and sync registries are independent. To support `.call(...)` for the
 same primitive, add sync counterparts with the same input and output shapes:
 
-- `af.core.impl_rules.set(wikipedia_search_p, impl_wikipedia_search)`;
-- `af.core.batch_rules.set(wikipedia_search_p, batch_wikipedia_search)`;
-- `af.core.pull_fwd_rules.set(wikipedia_search_p, pull_fwd_wikipedia_search)`;
-- `af.core.pull_bwd_rules.set(wikipedia_search_p, pull_bwd_wikipedia_search)`.
+- `afe.impl_rules.set(wikipedia_search_p, impl_wikipedia_search)`;
+- `afe.batch_rules.set(wikipedia_search_p, batch_wikipedia_search)`;
+- `afe.pull_fwd_rules.set(wikipedia_search_p, pull_fwd_wikipedia_search)`;
+- `afe.pull_bwd_rules.set(wikipedia_search_p, pull_bwd_wikipedia_search)`.
 
 The sync HTTP implementation can use `httpx.get(...)` or `httpx.Client`. The
 async implementation above uses `httpx.AsyncClient` so `.acall(...)` can overlap
