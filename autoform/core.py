@@ -242,6 +242,17 @@ def avalof(x, /) -> AVal:
 # NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
 # Concrete literals are kept as plain Python values in IR trees.
 class IRVar:
+    """Symbolic variable stored in IR trees.
+
+    ``IRVar`` leaves stand for runtime values inside traced programs. Each
+    variable carries an :class:`AVal` describing its abstract value, and an
+    optional source variable used by transforms that create rewritten IR.
+
+    Args:
+        aval: Abstract value for the runtime value represented by this variable.
+        source: Optional original variable this one was derived from.
+    """
+
     __slots__ = ["id", "source", "aval"]
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
@@ -264,10 +275,19 @@ class IRVar:
 
 
 def is_irvar(x) -> TypeGuard[IRVar]:
+    """Return ``True`` if input is an :class:`IRVar`."""
+
     return isinstance(x, IRVar)
 
 
 def ir_aval(x, /):
+    """Return the aval for an IR variable, otherwise return input unchanged.
+
+    This is useful when constructing new IR trees from existing ones: concrete
+    literals stay concrete, while symbolic variables are replaced by the
+    abstract values needed to create fresh variables or abstract outputs.
+    """
+
     return x.aval if is_irvar(x) else x
 
 
@@ -355,6 +375,20 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
 
 
 class IREqn:
+    """One primitive application inside an :class:`IR`.
+
+    An equation records the primitive to execute, the IR-shaped input and output
+    trees, static primitive parameters, and the tags active when the equation
+    was traced. Calling :meth:`bind` executes the primitive under those tags.
+
+    Args:
+        prim: Primitive represented by this equation.
+        in_ir_tree: Input tree containing IR variables and concrete literals.
+        out_ir_tree: Output tree containing IR variables and concrete literals.
+        params: Static parameters passed to the primitive rule.
+        tags: Tags associated with this equation.
+    """
+
     __slots__ = ["prim", "in_ir_tree", "out_ir_tree", "params", "tags"]
 
     def __init__(
@@ -387,6 +421,19 @@ class IREqn:
 
 
 class IR[*A, R]:
+    """A traced AutoForm program.
+
+    An ``IR`` contains the ordered equations produced by tracing, plus the input
+    and output IR trees that describe how runtime arguments and results are
+    structured. Extension transforms may construct new ``IR`` values when they
+    rewrite or wrap a program.
+
+    Args:
+        ir_eqns: Ordered primitive equations.
+        in_ir_tree: Tree describing the runtime input structure.
+        out_ir_tree: Tree describing the runtime output structure.
+    """
+
     __slots__ = ["ir_eqns", "in_ir_tree", "out_ir_tree"]
 
     def __init__(self, ir_eqns: list[IREqn], in_ir_tree: Tree, out_ir_tree: Tree):
@@ -531,6 +578,13 @@ class BaseInterpreter(ABC):
 
 
 class Interpreter(BaseInterpreter):
+    """Base class for runtime primitive interpreters.
+
+    Subclass ``Interpreter`` to build an execution-time extension context. A
+    custom interpreter usually stores the current :data:`active_interpreter` as
+    its parent, overrides ``interpret`` and ``ainterpret`` to handle new primitives.
+    """
+
     __slots__ = []
 
 
@@ -550,6 +604,8 @@ class BoxedInterpreter[T](BaseInterpreter):
 
 @contextmanager
 def using_interpreter[T: BaseInterpreter](interpreter: T) -> Generator[T, None, None]:
+    """Run primitive dispatch through an interpreter inside the context."""
+
     token = active_interpreter.set(interpreter)
     try:
         yield interpreter
@@ -853,7 +909,10 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
 
 
 def trace[*A, R](
-    func: Callable[[*A], R], /, *, static: Tree[bool] = False
+    func: Callable[[*A], R],
+    /,
+    *,
+    static: Tree[bool] = False,
 ) -> Callable[[*A], IR[*A, R]]:
     """Build an IR by tracing a function's execution.
 
