@@ -130,7 +130,7 @@ methods are ordinary Python behavior.
 
 This makes an object a transform-visible container: fields hold the values that
 transforms can walk, while methods provide the callable surface that builds the
-LM program.
+text-space program.
 
 ```python
 import optree

@@ -1,6 +1,6 @@
 # Why `autoform`
 
-An LM program written in ordinary Python often hardens around the first way it runs. Later requirements tend to ask for the same logic in new shapes:
+A text-space program written in ordinary Python often hardens around the first way it runs. Later requirements tend to ask for the same logic in new shapes:
 
 - Evaluate on 100 inputs: write a batched loop.
 - Route prompt-tuning feedback through every LM call: thread critiques backward by hand.

@@ -260,7 +260,7 @@ Every other IR transform composes the same way. `sched(batch(pullback(ir)))` is 
 
 ## Return Structured Results
 
-Plain {py:func}`lm_call <autoform.lm_call>` returns text. That is fine for prose, but many LM programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
+Plain {py:func}`lm_call <autoform.lm_call>` returns text. That is fine for prose, but many text-space programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
 
 Use {py:func}`lm_schema_call <autoform.lm_schema_call>` when the LM output should have a known shape.
 
@@ -503,7 +503,7 @@ Custom boundaries need matching async behavior when they should run under `acall
 
 The core loop is now visible:
 
-- write an LM program as ordinary Python;
+- write a text-space program as ordinary Python;
 - trace it into an IR;
 - execute the IR with real inputs;
 - transform the IR with {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>`;

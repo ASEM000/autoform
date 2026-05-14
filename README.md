@@ -4,9 +4,9 @@
 
 **Trace once. Transform freely.**
 
-Composable function transformations for LM programs.
+Composable function transformations for text-space programs[^spaces].
 
-*JAX-like, but for LM programs: trace a Python function into an IR, then apply
+*JAX-like, but for text-space programs: trace a Python function into an IR, then apply
 program transforms around it.*
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -16,6 +16,13 @@ program transforms around it.*
 [Quickstart](#quickstart) - [Composition](#composition) - [Concurrency](#concurrency) - [Reference](#reference) - [GitHub](https://github.com/ASEM000/autoform) - [Documentation](https://autoform.readthedocs.io)
 
 </div>
+
+[^spaces]: A text-space program is a traced program whose active values and
+    feedback live in text-like leaves such as strings and structured LM outputs.
+    The same machinery can be extended to other spaces by registering traceable
+    values, avals, zeros, cotangent accumulators, and operator dispatch. See the
+    [array extension recipe](https://autoform.readthedocs.io/en/latest/recipes/array-extension.html)
+    for a concrete NumPy-backed example.
 
 ```bash
 pip install git+https://github.com/ASEM000/autoform.git
@@ -93,7 +100,7 @@ accepts an IR.
 
 ## Why
 
-An LM program written as ordinary Python tends to grow a second implementation
+A text-space program written as ordinary Python tends to grow a second implementation
 for each new execution concern: batching, feedback, concurrency, debugging, or
 provider routing.
 

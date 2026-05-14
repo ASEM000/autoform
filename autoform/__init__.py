@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Autoform: Composable function transformations for LLM programs."""
+"""Autoform: Composable function transformations for text-space programs."""
 
 import autoform.ad as ad
 import autoform.batch as batch
