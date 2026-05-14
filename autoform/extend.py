@@ -30,6 +30,10 @@ FloatAVal = core.FloatAVal
 BoolAVal = core.BoolAVal
 Prim = core.Prim
 Zero = ad.Zero
+Interpreter = core.Interpreter
+IR = core.IR
+IREqn = core.IREqn
+IRVar = core.IRVar
 
 impl_rules = core.impl_rules
 abstract_rules = core.abstract_rules
@@ -44,6 +48,11 @@ materialize = ad.materialize
 is_zero = ad.is_zero
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
+using_interpreter = core.using_interpreter
+active_interpreter = core.active_interpreter
+active_tags = core.active_tags
+is_irvar = core.is_irvar
+ir_aval = core.ir_aval
 
 __all__ = [
     "AVal",
@@ -53,6 +62,10 @@ __all__ = [
     "BoolAVal",
     "Prim",
     "Zero",
+    "Interpreter",
+    "IR",
+    "IREqn",
+    "IRVar",
     "register_trace_type",
     "register_zero",
     "register_cotangent_accumulator",
@@ -74,6 +87,11 @@ __all__ = [
     "is_zero",
     "batch_index",
     "batch_spec",
+    "using_interpreter",
+    "active_interpreter",
+    "active_tags",
+    "is_irvar",
+    "ir_aval",
 ]
 
 type AValRule = Callable[[Any], AVal]
