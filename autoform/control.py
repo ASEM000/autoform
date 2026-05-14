@@ -364,8 +364,15 @@ async def aimpl_while_loop(
     return out
 
 
-def abstract_while_loop(in_tree: Tree, /, *, _1: core.IR, body_ir: core.IR, _2: int) -> Tree:
-    del _1, _2
+def abstract_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: core.IR,
+    body_ir: core.IR,
+    max_iters: int,
+) -> Tree:
+    del in_tree, cond_ir, max_iters
     return utils.tree.map(core.ir_aval, body_ir.out_ir_tree)
 
 
