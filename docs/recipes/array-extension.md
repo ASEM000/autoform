@@ -7,9 +7,15 @@ This recipe uses `autoform.extend`, the low-level extension API. Use it when a
 runtime value type should become part of the traced IR system.
 ```
 
-Arrays are not built into `autoform`. This recipe uses NumPy as the concrete
-runtime, but the same extension pattern applies to any value space that can
-define trace-time avals, zeros, cotangent accumulation, and primitive rules.
+`autoform` starts with text-space programs, but the extension API lets other
+feedback spaces participate in the same IR machinery. A richer extension can
+also define boundaries where spaces meet, for example turning textual feedback
+into numerical cotangents, or summarizing numerical signals back into text-space
+feedback.
+
+Arrays are not built in. This recipe uses NumPy as the concrete runtime, but the
+same extension pattern applies to any value space that can define trace-time
+avals, zeros, cotangent accumulation, and primitive rules.
 
 ```{admonition} Concept
 [Primitives](../concepts/primitives.md) · [Transforms](../concepts/transforms.md) ·
