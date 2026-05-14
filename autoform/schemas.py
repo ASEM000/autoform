@@ -79,7 +79,9 @@ from typing import Any, NoReturn, TypeGuard
 
 from optree import GetAttrEntry, PyTreeAccessor, PyTreeSpec
 
-from autoform.utils import Tree, treelib
+import autoform.utils as utils
+
+type Tree[T] = utils.Tree[T]
 
 __all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "make_json_schema_and_parser"]
 
@@ -320,7 +322,7 @@ class Doc:
         return f"Doc({self.text!r})"
 
 
-treelib.register_node(
+utils.tree.register_node(
     Docd,
     lambda node: ((node.value,), node.text, ("value",)),
     lambda text, children: Docd(children[0], text),
@@ -376,15 +378,15 @@ schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": li
 schema_rules[Docd] = lambda s: schema_build(s.value) | {"description": s.text}
 
 
-def schema_build(tree: Any) -> JsonSchema:
-    if rule := schema_rules.get(type(tree)):
-        return rule(tree)
-    if treelib.is_leaf(tree):
-        raise TypeError(f"{SCHEMA_MSG}, got {tree!r}")
+def schema_build(schema_node: Any) -> JsonSchema:
+    if rule := schema_rules.get(type(schema_node)):
+        return rule(schema_node)
+    if utils.tree.is_leaf(schema_node):
+        raise TypeError(f"{SCHEMA_MSG}, got {schema_node!r}")
 
-    children, spec = treelib.flatten(
-        tree,
-        is_leaf=lambda node: id(node) != id(tree),
+    children, spec = utils.tree.flatten(
+        schema_node,
+        is_leaf=lambda node: id(node) != id(schema_node),
         none_is_leaf=True,
     )
     properties = OrderedDict()
@@ -490,16 +492,16 @@ def tree_parse[T: Tree[Spec | Docd[Spec]]](
     # dicts.
     if rule := valid_rules.get(type(schema_tree)):
         return rule(schema_tree, value_tree, schema_acc, value_acc)
-    if treelib.is_leaf(schema_tree):
+    if utils.tree.is_leaf(schema_tree):
         raise TypeError(f"{schema_acc.codify('$')}: {SCHEMA_MSG}, got {schema_tree!r}")
 
-    flat_schema, spec_schema = treelib.flatten(
+    flat_schema, spec_schema = utils.tree.flatten(
         schema_tree,
         is_leaf=lambda node: id(node) != id(schema_tree),
         none_is_leaf=True,
     )
 
-    flat_value, spec_value = treelib.flatten(
+    flat_value, spec_value = utils.tree.flatten(
         value_tree,
         is_leaf=lambda node: id(node) != id(value_tree),
         none_is_leaf=True,
@@ -553,7 +555,7 @@ def parser_from_flat_and_spec[T](flattened_schema: FlattenedSchema) -> Parser[T]
 
 
 def make_json_schema_and_parser[T](schema: T) -> tuple[JsonSchema, Parser[T]]:
-    leaves, treespec = treelib.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
+    leaves, treespec = utils.tree.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
     flat_and_spec = (tuple(leaves), treespec)
     json_schema = schema_from_flat_and_spec(flat_and_spec)
     parser = parser_from_flat_and_spec(flat_and_spec)
