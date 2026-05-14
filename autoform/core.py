@@ -26,7 +26,9 @@ from operator import setitem
 from threading import RLock
 from typing import Any, ClassVar, NoReturn, Protocol, Self, TypeGuard, cast
 
-from autoform.utils import Tree, lru_cache, treelib
+import autoform.utils as utils
+
+type Tree[T] = utils.Tree[T]
 
 __all__ = [
     # base types
@@ -489,8 +491,8 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
                 val_repr = val_repr[:27] + "..."
             return f"{val_repr}:Lit"
 
-    def format_tree(tree: Tree) -> str:
-        leaves = treelib.leaves(tree)
+    def format_tree(ir_tree: Tree) -> str:
+        leaves = utils.tree.leaves(ir_tree)
         return ", ".join(format_ir_val(leaf) for leaf in leaves) if leaves else "()"
 
     in_sig = format_tree(ir.in_ir_tree)
@@ -761,8 +763,8 @@ class TraceBox:
         raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="string coercion"))
 
 
-def assert_foldable(prim: Prim, tree: Tree) -> None:
-    traced_values = [x for x in treelib.leaves(tree) if isinstance(x, TraceBox)]
+def assert_foldable(prim: Prim, value: Tree) -> None:
+    traced_values = [x for x in utils.tree.leaves(value) if isinstance(x, TraceBox)]
     assert not traced_values, (
         f"Cannot evaluate {prim.name} in af.fold() because it depends on traced values "
         f"{traced_values!r}. Mark the dependencies static or move this computation outside af.fold()."
@@ -776,7 +778,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
         self.ir_eqns: list[IREqn] = []
 
     def box(self, value, /) -> Tree:
-        return treelib.map(lambda v: TraceBox(owner=self, ir_var=v) if is_irvar(v) else v, value)
+        return utils.tree.map(lambda v: TraceBox(owner=self, ir_var=v) if is_irvar(v) else v, value)
 
     def unbox(self, value: Tree, /) -> Tree:
         def func(value, /):
@@ -795,7 +797,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             # >>> ir2 = af.trace(second_func)("input")
             return value.ir_var
 
-        return treelib.map(func, value)
+        return utils.tree.map(func, value)
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         if fold_flag.get():
@@ -833,10 +835,10 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
 
         in_ir_tree = self.unbox(in_tree)
         params = self.unbox(params)
-        params = treelib.map_with_path(to_concrete, params)
+        params = utils.tree.map_with_path(to_concrete, params)
 
-        in_ir_tree = treelib.map(to_in_ir_atom, in_ir_tree)
-        in_aval_tree = treelib.map(ir_aval, in_ir_tree)
+        in_ir_tree = utils.tree.map(to_in_ir_atom, in_ir_tree)
+        in_aval_tree = utils.tree.map(ir_aval, in_ir_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x):
@@ -845,7 +847,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             # this is basically delegated to the user to handle
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
-        out_ir_tree = treelib.map(to_out_ir_atom, out_aval_tree)
+        out_ir_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
         self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
         return self.box(out_ir_tree)
 
@@ -898,8 +900,8 @@ def trace[*A, R](
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
         arg_tree = args
-        in_static_tree = treelib.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
-        in_ir_tree = treelib.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
+        in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
+        in_ir_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
         with using_interpreter(TraceInterpreter()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
         out_ir_tree = tracer.unbox(out_trace_tree)
@@ -915,7 +917,7 @@ def trace[*A, R](
 type GenStep = tuple[IREqn | None, Tree]
 
 
-@ft.partial(lru_cache, maxsize=256)
+@ft.partial(utils.lru_cache, maxsize=256)
 def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
     """Walk an IR one equation at a time."""
     # NOTE(asem): the key idea here is to hide the environment management
@@ -939,15 +941,15 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
         def write(ir_val, value: Any):
             is_irvar(ir_val) and setitem(env, ir_val, value)
 
-        treelib.map(check_input, ir.in_ir_tree, args)
-        treelib.map(write, ir.in_ir_tree, args)
+        utils.tree.map(check_input, ir.in_ir_tree, args)
+        utils.tree.map(write, ir.in_ir_tree, args)
 
         for ir_eqn in ir.ir_eqns:
-            in_values = treelib.map(read, ir_eqn.in_ir_tree)
+            in_values = utils.tree.map(read, ir_eqn.in_ir_tree)
             out_values = yield ir_eqn, in_values
-            treelib.map(write, ir_eqn.out_ir_tree, out_values)
+            utils.tree.map(write, ir_eqn.out_ir_tree, out_values)
 
-        yield None, treelib.map(read, ir.out_ir_tree)
+        yield None, utils.tree.map(read, ir.out_ir_tree)
 
     return func
 
@@ -957,7 +959,7 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
 # ==================================================================================================
 
 
-@ft.partial(lru_cache, maxsize=256)
+@ft.partial(utils.lru_cache, maxsize=256)
 def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
@@ -970,7 +972,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     return func
 
 
-@ft.partial(lru_cache, maxsize=256)
+@ft.partial(utils.lru_cache, maxsize=256)
 def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
@@ -992,19 +994,21 @@ class InterpreterRule[R](Protocol):
     def __call__(self, in_tree: Tree, /, **params: Any) -> R: ...
 
 
+type TreePair = tuple[Tree, Tree]
+type BatchRuleResult = tuple[Tree, Tree[bool] | bool]
 type AsyncInterpreterRule[R] = InterpreterRule[Awaitable[R]]
 type ImplRule = InterpreterRule[Tree]
 type AImplRule = AsyncInterpreterRule[Tree]
 type AbstractRule = InterpreterRule[Tree[EvalType]]
 type AAbstractRule = AsyncInterpreterRule[Tree[EvalType]]
-type PushforwardRule = InterpreterRule[tuple[Tree, Tree]]
-type APushforwardRule = AsyncInterpreterRule[tuple[Tree, Tree]]
-type PullbackFwdRule = InterpreterRule[tuple[Tree, Tree]]
-type APullbackFwdRule = AsyncInterpreterRule[tuple[Tree, Tree]]
+type PushforwardRule = InterpreterRule[TreePair]
+type APushforwardRule = AsyncInterpreterRule[TreePair]
+type PullbackFwdRule = InterpreterRule[TreePair]
+type APullbackFwdRule = AsyncInterpreterRule[TreePair]
 type PullbackBwdRule = InterpreterRule[Tree]
 type APullbackBwdRule = AsyncInterpreterRule[Tree]
-type BatchRule = InterpreterRule[tuple[Tree, Tree[bool] | bool]]
-type ABatchRule = AsyncInterpreterRule[tuple[Tree, Tree[bool] | bool]]
+type BatchRule = InterpreterRule[BatchRuleResult]
+type ABatchRule = AsyncInterpreterRule[BatchRuleResult]
 
 
 class InterpreterRuleMapping[Rule: InterpreterRule[Any], ARule: AsyncInterpreterRule[Any]]:
