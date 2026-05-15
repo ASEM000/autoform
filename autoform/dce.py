@@ -77,15 +77,8 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_ir_tree)
         user_out_used = out_used
 
-    live_ir_vars = analysis.ir_liveness(ir, out_used=user_out_used)
-
-    if live_ir_vars:
-        *_, (_, last_after) = live_ir_vars
-        active_ir_vars: set[core.IRVar] = set(last_after)
-    elif out_used is None:
-        active_ir_vars = set(analysis.ir_tree_ir_vars(ir.out_ir_tree))
-    else:
-        active_ir_vars = analysis.ir_tree_used_ir_vars(ir.out_ir_tree, user_out_used)
+    live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
+    active_ir_vars: set[core.IRVar] = set(live_boundaries[-1])
     active_ir_eqns: deque[core.IREqn] = deque()
 
     def is_active_node(node) -> bool:
@@ -102,20 +95,18 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
 
         if is_non_dce:
             active_ir_eqns.appendleft(new_ir_eqn)
-            active_ir_vars |= set(
-                x for x in utils.tree.leaves(ir_eqn.in_ir_tree) if core.is_irvar(x)
-            )
+            active_ir_vars |= set(analysis.ir_var_leaves(ir_eqn.in_ir_tree))
 
         elif utils.tree.any(in_used):
             active_ir_eqns.appendleft(new_ir_eqn)
-            active_ir_vars |= analysis.ir_tree_used_ir_vars(ir_eqn.in_ir_tree, in_used)
+            active_ir_vars |= set(analysis.ir_var_leaves(utils.mask(ir_eqn.in_ir_tree, in_used)))
 
     # NOTE(asem): output sanitization step
     # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
     # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
-    in_vars = set(analysis.ir_tree_ir_vars(ir.in_ir_tree))
+    in_vars = set(analysis.ir_var_leaves(ir.in_ir_tree))
     defined_vars: set[core.IRVar] = set(in_vars)
     for kept in active_ir_eqns:
         for atom in utils.tree.leaves(kept.out_ir_tree):
