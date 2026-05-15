@@ -33,7 +33,7 @@ class TestIrVarLeaves:
         (payload,) = ir.in_ir_tree
         head, pair = payload
 
-        assert ir_var_leaves(ir.in_ir_tree) == (head, pair[0], pair[1])
+        assert ir_var_leaves(ir.in_ir_tree) == [head, pair[0], pair[1]]
 
     def test_filters_static_input_literals(self):
         def program(prefix, name):
@@ -41,7 +41,7 @@ class TestIrVarLeaves:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert ir_var_leaves(ir.in_ir_tree) == (ir.in_ir_tree[1],)
+        assert ir_var_leaves(ir.in_ir_tree) == [ir.in_ir_tree[1]]
 
     def test_returns_output_ir_vars_in_leaf_order(self):
         def program(x):
@@ -52,7 +52,7 @@ class TestIrVarLeaves:
         ir = af.trace(program)("seed")
         left_tree, right_tree = ir.out_ir_tree
 
-        assert ir_var_leaves(ir.out_ir_tree) == (left_tree["left"], right_tree[0])
+        assert ir_var_leaves(ir.out_ir_tree) == [left_tree["left"], right_tree[0]]
 
     def test_filters_literal_outputs(self):
         def program(x):
@@ -60,7 +60,7 @@ class TestIrVarLeaves:
 
         ir = af.trace(program)("seed")
 
-        assert ir_var_leaves(ir.out_ir_tree) == (ir.out_ir_tree[1]["value"],)
+        assert ir_var_leaves(ir.out_ir_tree) == [ir.out_ir_tree[1]["value"]]
 
 
 class TestIrVarProducers:
