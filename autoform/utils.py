@@ -56,6 +56,14 @@ def index(node: Tree, b: int, /) -> Tree:
     return children[b]
 
 
+def mask(in_tree: Tree, use: Tree[bool], replace: Any = None) -> Tree:
+    def func(node: Tree, use_node: bool):
+        assert isinstance(use_node, bool)
+        return node if use_node else replace
+
+    return tree.map(func, in_tree, use)
+
+
 # ==================================================================================================
 # BATCH UTILITIES
 # ==================================================================================================

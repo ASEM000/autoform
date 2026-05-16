@@ -125,8 +125,6 @@
 
   - {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` documentation now distinguishes execution-time checkpoint collection/substitution from trace-time specialization. {py:func}`collect <autoform.collect>` is documented as execution-only; {py:func}`inject <autoform.inject>` is documented as runtime checkpoint substitution around `ir.call(...)` and trace-time checkpoint specialization when used inside the function being traced.
 
-  - `autoform.analysis.ir_tree_used_ir_vars` is now part of the module's documented export surface because {py:func}`dce <autoform.dce>` depends on it for partial-output liveness.
-
 ### Documentation
 
   - Added a published [Changelog](docs/reference/changelog.md) page under Reference.
