@@ -61,7 +61,7 @@ def ir_eqn_graph(ir: core.IR, /) -> dict[core.IREqn, list[core.IREqn]]:
     return adjacency_list
 
 
-def ir_liveness(ir: core.IR, /, *, out_used: UsedTree = None) -> Liveness:
+def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness:
     """Return live IRVars at each IR boundary."""
 
     # NOTE(asem): liveness is a backward dataflow analysis that computes IRVars live
