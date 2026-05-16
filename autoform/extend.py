@@ -20,8 +20,20 @@ from collections.abc import Callable
 from typing import Any
 
 import autoform.ad as ad
+import autoform.batch as batch
+import autoform.checkpoint as checkpoint
+import autoform.control as control
 import autoform.core as core
+import autoform.dce as dce
+import autoform.lm as lm
+import autoform.memoize as memoize
+import autoform.scheduling as scheduling
+import autoform.string as string
 import autoform.utils as utils
+
+# ==================================================================================================
+# TYPES
+# ==================================================================================================
 
 AVal = core.AVal
 StrAVal = core.StrAVal
@@ -35,6 +47,10 @@ IR = core.IR
 IREqn = core.IREqn
 IRVar = core.IRVar
 
+# ==================================================================================================
+# RULE REGISTRIES
+# ==================================================================================================
+
 impl_rules = core.impl_rules
 abstract_rules = core.abstract_rules
 push_rules = core.push_rules
@@ -42,17 +58,42 @@ pull_fwd_rules = core.pull_fwd_rules
 pull_bwd_rules = core.pull_bwd_rules
 batch_rules = core.batch_rules
 
+# ==================================================================================================
+# HELPERS
+# ==================================================================================================
+
 avalof = core.avalof
 zeroof = ad.zeroof
 materialize = ad.materialize
 is_zero = ad.is_zero
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
+batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
 is_irvar = core.is_irvar
 ir_aval = core.ir_aval
+active_client = lm.active_client
+
+# ==================================================================================================
+# PRIMITIVE KEYS
+# ==================================================================================================
+
+format_p = string.format_p
+concat_p = string.concat_p
+match_p = string.match_p
+lm_call_p = lm.lm_call_p
+lm_schema_call_p = lm.lm_schema_call_p
+checkpoint_p = checkpoint.checkpoint_p
+stop_gradient_p = control.stop_gradient_p
+switch_p = control.switch_p
+while_loop_p = control.while_loop_p
+gather_p = scheduling.gather_p
+depends_p = scheduling.depends_p
+batch_call_p = batch.batch_call_p
+pushforward_call_p = ad.pushforward_call_p
+pullback_call_p = ad.pullback_call_p
 
 __all__ = [
     "AVal",
@@ -69,6 +110,8 @@ __all__ = [
     "register_trace_type",
     "register_zero",
     "register_cotangent_accumulator",
+    "register_non_dce",
+    "register_non_memoizable",
     "register_add",
     "register_sub",
     "register_mul",
@@ -87,19 +130,39 @@ __all__ = [
     "is_zero",
     "batch_index",
     "batch_spec",
+    "batch_transpose",
     "using_interpreter",
     "active_interpreter",
     "active_tags",
     "is_irvar",
     "ir_aval",
+    "active_client",
+    "format_p",
+    "concat_p",
+    "match_p",
+    "lm_call_p",
+    "lm_schema_call_p",
+    "checkpoint_p",
+    "stop_gradient_p",
+    "switch_p",
+    "while_loop_p",
+    "gather_p",
+    "depends_p",
+    "batch_call_p",
+    "pushforward_call_p",
+    "pullback_call_p",
 ]
 
 type AValRule = Callable[[Any], AVal]
 type ZeroRule = Callable[[AVal], Any]
 type CotAccRule = Callable[[list[Any], AVal], Any]
 
+# ==================================================================================================
+# REGISTRATION
+# ==================================================================================================
 
-def register_trace_type(type: type, aval_rule: AValRule, /) -> AValRule:
+
+def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
     """Register a Python type as a traceable input type.
 
     :func:`autoform.trace` treats registered Python types as dynamic leaves. During
@@ -132,7 +195,7 @@ def register_trace_type(type: type, aval_rule: AValRule, /) -> AValRule:
     return aval_rule
 
 
-def register_zero(aval_type: type[AVal], rule: ZeroRule, /) -> ZeroRule:
+def register_zero[T: ZeroRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register the concrete zero value for an abstract value type.
 
     Reverse-mode transforms use :class:`Zero` to represent a missing or blocked
@@ -162,7 +225,7 @@ def register_zero(aval_type: type[AVal], rule: ZeroRule, /) -> ZeroRule:
     return rule
 
 
-def register_cotangent_accumulator(aval_type: type[AVal], rule: CotAccRule, /) -> CotAccRule:
+def register_cotangent_accumulator[T: CotAccRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register how to combine cotangents for an abstract value type.
 
     :func:`autoform.pullback` can produce multiple cotangent contributions for the same input.
@@ -191,7 +254,48 @@ def register_cotangent_accumulator(aval_type: type[AVal], rule: CotAccRule, /) -
     return rule
 
 
-def register_add(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
+def register_non_dce[T: Prim](prim: T, /) -> T:
+    """Register a primitive as preserved during dead-code elimination.
+
+    Marks an extension primitive as semantically relevant even when its output is unused,
+    such as a scoring, logging, or collection boundary.
+
+    Args:
+        prim: Primitive preserved by :func:`autoform.dce`.
+
+    Returns:
+        The registered primitive.
+    """
+    rules = dce.non_dce_primitives
+    assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
+    rules.add(prim)
+    return prim
+
+
+def register_non_memoizable[T: Prim](prim: T, /) -> T:
+    """Register a primitive as excluded from :func:`autoform.memoize`.
+
+    Marks an extension primitive as requiring repeated execution, such as stochastic sampling,
+    scoring, logging, or calls that observe runtime state.
+
+    Args:
+        prim: Primitive excluded from memoization.
+
+    Returns:
+        The registered primitive.
+    """
+    rules = memoize.non_memoizable_primitives
+    assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
+    rules.add(prim)
+    return prim
+
+
+# ==================================================================================================
+# OPERATOR REGISTRATION
+# ==================================================================================================
+
+
+def register_add[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``+`` on traced values with this aval.
 
     This treats ``+`` as staged syntax while tracing. The rule is called during
@@ -206,11 +310,13 @@ def register_add(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRu
     Returns:
         The registered rule.
     """
-    core.trace_add_rules[aval_type] = rule
+    rules = core.trace_add_rules
+    assert aval_type not in rules, f"Addition for {aval_type} is already registered."
+    rules[aval_type] = rule
     return rule
 
 
-def register_sub(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
+def register_sub[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``-`` on traced values with this aval.
 
     This treats ``-`` as staged syntax while tracing. The rule should normally
@@ -224,11 +330,13 @@ def register_sub(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRu
     Returns:
         The registered rule.
     """
-    core.trace_sub_rules[aval_type] = rule
+    rules = core.trace_sub_rules
+    assert aval_type not in rules, f"Subtraction for {aval_type} is already registered."
+    rules[aval_type] = rule
     return rule
 
 
-def register_mul(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
+def register_mul[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``*`` on traced values with this aval.
 
     This treats ``*`` as staged syntax while tracing, instead of evaluating the
@@ -242,11 +350,13 @@ def register_mul(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRu
     Returns:
         The registered rule.
     """
-    core.trace_mul_rules[aval_type] = rule
+    rules = core.trace_mul_rules
+    assert aval_type not in rules, f"Multiplication for {aval_type} is already registered."
+    rules[aval_type] = rule
     return rule
 
 
-def register_div(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
+def register_div[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``/`` on traced values with this aval.
 
     This treats true division as staged syntax while tracing.
@@ -259,11 +369,13 @@ def register_div(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRu
     Returns:
         The registered rule, so the helper can be used as a decorator.
     """
-    core.trace_truediv_rules[aval_type] = rule
+    rules = core.trace_truediv_rules
+    assert aval_type not in rules, f"True division for {aval_type} is already registered."
+    rules[aval_type] = rule
     return rule
 
 
-def register_matmul(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
+def register_matmul[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``@`` on traced values with this aval.
 
     This treats matrix multiplication as staged syntax while tracing. It is
@@ -278,11 +390,13 @@ def register_matmul(aval_type: type[AVal], rule: core.TraceRule, /) -> core.Trac
     Returns:
         The registered rule, so the helper can be used as a decorator.
     """
-    core.trace_matmul_rules[aval_type] = rule
+    rules = core.trace_matmul_rules
+    assert aval_type not in rules, f"Matrix multiplication for {aval_type} is already registered."
+    rules[aval_type] = rule
     return rule
 
 
-def register_eq(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRule:
+def register_eq[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``==`` on traced values with this aval.
 
     Python equality on a traced value cannot be evaluated concretely during
@@ -295,5 +409,7 @@ def register_eq(aval_type: type[AVal], rule: core.TraceRule, /) -> core.TraceRul
     Returns:
         The registered rule, so the helper can be used as a decorator.
     """
-    core.trace_eq_rules[aval_type] = rule
+    rules = core.trace_eq_rules
+    assert aval_type not in rules, f"Equality for {aval_type} is already registered."
+    rules[aval_type] = rule
     return rule
