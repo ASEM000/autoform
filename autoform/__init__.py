@@ -14,6 +14,10 @@
 
 """Autoform: Composable function transformations for text-space programs."""
 
+# ==================================================================================================
+# IMPORTS
+# ==================================================================================================
+
 import autoform.ad as ad
 import autoform.batch as batch
 import autoform.checkpoint as checkpoint
@@ -21,6 +25,7 @@ import autoform.control as control
 import autoform.core as core
 import autoform.custom as custom
 import autoform.dce as dce
+import autoform.extend as extend
 import autoform.lm as lm
 import autoform.memoize as memoize
 import autoform.scheduling as scheduling
@@ -28,9 +33,17 @@ import autoform.schemas as schemas
 import autoform.string as string
 import autoform.utils as utils
 
+# ==================================================================================================
+# CORE
+# ==================================================================================================
+
 trace = core.trace
 fold = core.fold
 tag = core.tag
+
+# ==================================================================================================
+# TRANSFORMS
+# ==================================================================================================
 
 pushforward = ad.pushforward
 pullback = ad.pullback
@@ -43,6 +56,10 @@ dce = dce.dce
 sched = scheduling.sched
 memoize = memoize.memoize
 
+# ==================================================================================================
+# PRIMITIVES
+# ==================================================================================================
+
 format = string.format
 concat = string.concat
 match = string.match
@@ -54,6 +71,10 @@ switch = control.switch
 while_loop = control.while_loop
 depends = scheduling.depends
 
+# ==================================================================================================
+# SCHEMAS
+# ==================================================================================================
+
 Bool = schemas.Bool
 Doc = schemas.Doc
 Enum = schemas.Enum
@@ -61,7 +82,15 @@ Float = schemas.Float
 Int = schemas.Int
 Str = schemas.Str
 
+# ==================================================================================================
+# TYPES
+# ==================================================================================================
+
 PYTREE_NAMESPACE = utils.PYTREE_NAMESPACE
+
+# ==================================================================================================
+# EXPORTS
+# ==================================================================================================
 
 __all__ = [
     # core
@@ -100,4 +129,6 @@ __all__ = [
     "Str",
     # types
     "PYTREE_NAMESPACE",
+    # modules
+    "extend",
 ]
