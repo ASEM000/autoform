@@ -86,7 +86,7 @@ class RecordingInterpreter(afe.Interpreter):
         self.records.append(
             CallRecord(
                 prim_name=prim.name,
-                tags=frozenset(afe.active_tags.get()),
+                tags=afe.active_tags.get(),
                 output=output,
             )
         )
@@ -97,7 +97,7 @@ class RecordingInterpreter(afe.Interpreter):
         self.records.append(
             CallRecord(
                 prim_name=prim.name,
-                tags=frozenset(afe.active_tags.get()),
+                tags=afe.active_tags.get(),
                 output=output,
             )
         )
