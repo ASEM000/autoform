@@ -5,7 +5,7 @@ feedback for the inputs that produced it. For prompt work, the input is often an
 instruction string.
 
 ```{admonition} Concept
-[Trace, IR, Execute](../concepts/trace-ir-execute.md) · [Transforms](../concepts/transforms.md)
+[Trace, IR, Execute](../../concepts/trace-ir-execute.md) · [Transforms](../../concepts/transforms.md)
 ```
 
 ```python
@@ -46,6 +46,6 @@ above is deliberately small: append the returned instruction hint to the next
 instruction. A production loop can score examples, keep the best instruction,
 or batch many `(topic, critique)` pairs with {py:func}`batch <autoform.batch>` and {py:func}`pullback <autoform.pullback>`.
 
-See [Transforms](../concepts/transforms.md) for the call shapes and
-[Primitives](../concepts/primitives.md) for how feedback moves through each
+See [Transforms](../../concepts/transforms.md) for the call shapes and
+[Primitives](../../concepts/primitives.md) for how feedback moves through each
 recorded operation.

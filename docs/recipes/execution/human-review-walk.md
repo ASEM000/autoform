@@ -10,8 +10,8 @@ runner pauses after those equations, asks for feedback, then continues execution
 with the accepted or edited output.
 
 ```{admonition} Concept
-[Walk](../concepts/walk.md) · [Tags](../concepts/tags.md) ·
-[Trace, IR, Execute](../concepts/trace-ir-execute.md)
+[Walk](../../concepts/walk.md) · [Tags](../../concepts/tags.md) ·
+[Trace, IR, Execute](../../concepts/trace-ir-execute.md)
 ```
 
 ## Mark the Review Point

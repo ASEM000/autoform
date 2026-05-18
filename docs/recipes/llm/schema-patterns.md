@@ -1,10 +1,10 @@
 # Use Schema Patterns
 
 {py:func}`lm_schema_call <autoform.lm_schema_call>` returns a structured value whose
-shape can be transformed like any other [pytree](../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
+shape can be transformed like any other [pytree](../../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ```{admonition} Concept
-[Schemas](../concepts/schemas.md) · [Pytrees](../concepts/pytrees.md) · [Transforms](../concepts/transforms.md) · [Primitives](../concepts/primitives.md)
+[Schemas](../../concepts/schemas.md) · [Pytrees](../../concepts/pytrees.md) · [Transforms](../../concepts/transforms.md) · [Primitives](../../concepts/primitives.md)
 ```
 
 ## Route with {py:class}`Enum <autoform.Enum>`
@@ -67,7 +67,7 @@ pytree-shaped schema.
 
 ## Build Schema Variants
 
-Schemas are [pytrees](../concepts/pytrees.md), so regular pytree utilities can derive call-specific variants before a call.
+Schemas are [pytrees](../../concepts/pytrees.md), so regular pytree utilities can derive call-specific variants before a call.
 
 ```python
 import optree

@@ -4,7 +4,7 @@
 gather steps. The Python function can stay sequential.
 
 ```{admonition} Concept
-[Trace, IR, Execute](../concepts/trace-ir-execute.md) · [Transforms](../concepts/transforms.md)
+[Trace, IR, Execute](../../concepts/trace-ir-execute.md) · [Transforms](../../concepts/transforms.md)
 ```
 
 ```python
@@ -65,6 +65,6 @@ Only the first two LM calls can overlap. The combine call waits for both, and
 the final call waits for the combined text.
 
 Measured speed depends on provider latency, provider-side rate limits, and the
-active [LiteLLM client](litellm-config.md). The property that matters is the dependency graph: if two
+active [LiteLLM client](../llm/litellm-config.md). The property that matters is the dependency graph: if two
 equations do not depend on each other, {py:func}`sched <autoform.sched>` with `.acall(...)` can run them in
 the same async level.

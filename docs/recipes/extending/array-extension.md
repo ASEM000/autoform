@@ -18,8 +18,8 @@ same extension pattern applies to any value space that can define trace-time
 avals, zeros, cotangent accumulation, and primitive rules.
 
 ```{admonition} Concept
-[Primitives](../concepts/primitives.md) · [Transforms](../concepts/transforms.md) ·
-[Pytrees](../concepts/pytrees.md)
+[Primitives](../../concepts/primitives.md) · [Transforms](../../concepts/transforms.md) ·
+[Pytrees](../../concepts/pytrees.md)
 ```
 
 This example keeps arrays as atomic leaves. The {py:func}`batch <autoform.batch>`

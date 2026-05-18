@@ -8,7 +8,7 @@ Use custom rules when a traceable function boundary needs transform-specific beh
 
 Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
 
-The wrapped function body must still be traceable. Use {py:func}`custom <autoform.custom>` for a boundary around traceable `autoform` code. Use [Write a Primitive](../recipes/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
+The wrapped function body must still be traceable. Use {py:func}`custom <autoform.custom>` for a boundary around traceable `autoform` code. Use [Write a Primitive](../recipes/extending/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
 
 Reach for {py:func}`custom <autoform.custom>` when one of these applies:
 

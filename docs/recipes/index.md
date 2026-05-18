@@ -5,20 +5,8 @@ These are task-shaped examples that build on [Getting Started](../getting-starte
 ```{toctree}
 :maxdepth: 2
 
-prompt-optimization
-batch-in-axes
-pytree-modules
-concurrent-pipeline
-debug-intermediates
-human-review-walk
-memoize
-custom-rule
-control-flow
-dce
-litellm-config
-schema-patterns
-static-context
-writing-primitives
-tool-use-agent
-array-extension
+core/index
+llm/index
+execution/index
+extending/index
 ```

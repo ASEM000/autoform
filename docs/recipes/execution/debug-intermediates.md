@@ -4,7 +4,7 @@ Use {py:func}`checkpoint <autoform.checkpoint>` for values that may need inspect
 or replace while running the same IR.
 
 ```{admonition} Concept
-[Intercepts](../concepts/intercepts.md) · [Trace, IR, Execute](../concepts/trace-ir-execute.md)
+[Intercepts](../../concepts/intercepts.md) · [Trace, IR, Execute](../../concepts/trace-ir-execute.md)
 ```
 
 ```python
@@ -50,5 +50,5 @@ print(result)
 ```
 
 {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` are runtime contexts. They do not change the original
-function or the traced [IR](../concepts/the-ir.md). That makes them useful for inspecting a bad value,
+function or the traced [IR](../../concepts/the-ir.md). That makes them useful for inspecting a bad value,
 trying a corrected intermediate, and then going back to normal execution.

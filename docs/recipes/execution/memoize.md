@@ -1,11 +1,11 @@
 # Cache Repeated Computations with {py:func}`memoize <autoform.memoize>`
 
-{py:func}`memoize <autoform.memoize>` is a runtime context that caches [primitive](../concepts/primitives.md)
+{py:func}`memoize <autoform.memoize>` is a runtime context that caches [primitive](../../concepts/primitives.md)
 results inside the `with` block. Use it when the same primitive call is repeated
 with the same inputs.
 
 ```{admonition} Concept
-[Trace, IR, Execute](../concepts/trace-ir-execute.md) · [Primitives](../concepts/primitives.md)
+[Trace, IR, Execute](../../concepts/trace-ir-execute.md) · [Primitives](../../concepts/primitives.md)
 ```
 
 ## Cache During Execution

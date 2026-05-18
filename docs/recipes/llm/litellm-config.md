@@ -5,7 +5,7 @@ calls [LiteLLM](https://docs.litellm.ai/) directly. Use {py:func}`lm_client <aut
 configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) with retries, aliases, or provider fallback.
 
 ```{admonition} Concept
-[Trace, IR, Execute](../concepts/trace-ir-execute.md)
+[Trace, IR, Execute](../../concepts/trace-ir-execute.md)
 ```
 
 ```python
@@ -43,5 +43,5 @@ print(answer)
 ```
 
 Keep provider-specific routing policy in [LiteLLM](https://docs.litellm.ai/docs/routing). Keep program structure in
-`autoform`: {py:func}`trace <autoform.trace>` the Python function, transform the [IR](../concepts/the-ir.md), and choose the LM
+`autoform`: {py:func}`trace <autoform.trace>` the Python function, transform the [IR](../../concepts/the-ir.md), and choose the LM
 client around execution.

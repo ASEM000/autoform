@@ -155,7 +155,7 @@ Use the explicit-input form when {py:func}`batch <autoform.batch>`,
 {py:func}`pullback <autoform.pullback>`, or {py:func}`pushforward <autoform.pushforward>`
 should act on the module fields.
 
-The [object-oriented module recipe](../recipes/pytree-modules.md) applies the
+The [object-oriented module recipe](../recipes/core/pytree-modules.md) applies the
 same dataclass pattern to method-bearing module objects.
 
 ## Transform Behavior

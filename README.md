@@ -21,7 +21,7 @@ program transforms around it.*
     feedback live in text-like leaves such as strings and structured LM outputs.
     The same machinery can be extended to other spaces by registering traceable
     values, avals, zeros, cotangent accumulators, and operator dispatch. See the
-    [array extension recipe](https://autoform.readthedocs.io/en/latest/recipes/array-extension.html)
+    [array extension recipe](https://autoform.readthedocs.io/en/latest/recipes/extending/array-extension.html)
     for a concrete NumPy-backed example.
 
 ```bash
@@ -210,7 +210,7 @@ agent_ir = af.trace(agent)("question")
 batched_feedback = af.batch(af.pullback(agent_ir))
 ```
 
-See the [Tool-Use Agent recipe](https://autoform.readthedocs.io/en/latest/recipes/tool-use-agent.html)
+See the [Tool-Use Agent recipe](https://autoform.readthedocs.io/en/latest/recipes/llm/tool-use-agent.html)
 for the full version.
 
 ## Reference

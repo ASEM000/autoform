@@ -4,7 +4,7 @@
 which inputs should be reused for every example. That is what `in_axes` describes.
 
 ```{admonition} Concept
-[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md)
+[Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md)
 ```
 
 ## Broadcast One Input
@@ -29,7 +29,7 @@ print(result)
 
 ## Batch a Nested Input
 
-`in_axes` can match a nested [pytree](../concepts/pytrees.md).
+`in_axes` can match a nested [pytree](../../concepts/pytrees.md).
 
 ```python
 import autoform as af

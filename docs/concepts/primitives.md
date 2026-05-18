@@ -45,4 +45,4 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 Defining a primitive means defining its behavior under execution, tracing, batching, pushforward, pullback, and sometimes DCE. Most user code should not do that.
 
-Use [Write a Primitive](../recipes/writing-primitives.md) when an operation cannot run on traced values and must still appear as one IR equation.
+Use [Write a Primitive](../recipes/extending/writing-primitives.md) when an operation cannot run on traced values and must still appear as one IR equation.
