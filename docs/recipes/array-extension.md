@@ -49,9 +49,7 @@ class ArrayAVal(afe.AVal):
 
     def __eq__(self, other):
         return (
-            isinstance(other, ArrayAVal)
-            and self.shape == other.shape
-            and self.dtype == other.dtype
+            isinstance(other, ArrayAVal) and self.shape == other.shape and self.dtype == other.dtype
         )
 
     def __hash__(self):
@@ -161,9 +159,7 @@ a_mul = register_binary(
 a_div = register_binary(
     "a_div",
     lambda x, y: x / y,
-    lambda x, y, tx, ty: a_div(
-        a_sub(a_mul(tx, y), a_mul(x, ty)), a_mul(y, y)
-    ),
+    lambda x, y, tx, ty: a_div(a_sub(a_mul(tx, y), a_mul(x, ty)), a_mul(y, y)),
     lambda x, y, g: (a_div(g, y), -a_div(a_mul(g, x), a_mul(y, y))),
 )
 a_matmul = register_binary(
