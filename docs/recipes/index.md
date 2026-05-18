@@ -10,6 +10,7 @@ batch-in-axes
 pytree-modules
 concurrent-pipeline
 debug-intermediates
+human-review-walk
 memoize
 custom-rule
 control-flow
