@@ -48,11 +48,7 @@ class ArrayAVal(afe.AVal):
         return f"ArrayAVal(shape={self.shape!r}, dtype={self.dtype!r})"
 
     def __eq__(self, other):
-        return (
-            isinstance(other, ArrayAVal)
-            and self.shape == other.shape
-            and self.dtype == other.dtype
-        )
+        return type(self) is type(other) and self.shape == other.shape and self.dtype == other.dtype
 
     def __hash__(self):
         return hash((type(self), self.shape, self.dtype.str))
@@ -150,8 +146,14 @@ a_sub = register_binary(
     "a_sub",
     lambda x, y: x - y,
     lambda x, y, tx, ty: a_sub(tx, ty),
-    lambda x, y, g: (g, -g),
+    lambda x, y, g: (g, a_neg(g)),
 )
+
+
+def a_neg(x):
+    return a_sub(x, a_add(x, x))
+
+
 a_mul = register_binary(
     "a_mul",
     lambda x, y: x * y,
@@ -161,10 +163,8 @@ a_mul = register_binary(
 a_div = register_binary(
     "a_div",
     lambda x, y: x / y,
-    lambda x, y, tx, ty: a_div(
-        a_sub(a_mul(tx, y), a_mul(x, ty)), a_mul(y, y)
-    ),
-    lambda x, y, g: (a_div(g, y), -a_div(a_mul(g, x), a_mul(y, y))),
+    lambda x, y, tx, ty: a_div(a_sub(a_mul(tx, y), a_mul(x, ty)), a_mul(y, y)),
+    lambda x, y, g: (a_div(g, y), a_neg(a_div(a_mul(g, x), a_mul(y, y)))),
 )
 a_matmul = register_binary(
     "a_matmul",
