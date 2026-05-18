@@ -16,6 +16,7 @@ control-flow
 dce
 litellm-config
 schema-patterns
+static-context
 writing-primitives
 tool-use-agent
 array-extension
