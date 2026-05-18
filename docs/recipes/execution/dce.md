@@ -4,7 +4,7 @@
 selected output.
 
 ```{admonition} Concept
-[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md)
+[Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md)
 ```
 
 ```python
@@ -24,7 +24,7 @@ cleaned = af.dce(ir)
 print(cleaned.call("alpha"))
 ```
 
-{py:func}`dce <autoform.dce>` walks backward from the output [pytree](../concepts/pytrees.md). The unused {py:func}`format <autoform.format>` call is not on
+{py:func}`dce <autoform.dce>` walks backward from the output [pytree](../../concepts/pytrees.md). The unused {py:func}`format <autoform.format>` call is not on
 that path, so the cleaned IR can drop it.
 
 ## Keep Part of an Output

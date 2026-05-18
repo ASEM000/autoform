@@ -1,11 +1,11 @@
 # Define a {py:func}`custom <autoform.custom>` Rule
 
 Use {py:func}`custom <autoform.custom>` when a traceable helper function
-should appear as one boundary in the [IR](../concepts/the-ir.md). Add transform rules for the
-[transforms](../concepts/transforms.md) required by the program.
+should appear as one boundary in the [IR](../../concepts/the-ir.md). Add transform rules for the
+[transforms](../../concepts/transforms.md) required by the program.
 
 ```{admonition} Concept
-[Custom Rules](../concepts/custom-rules.md) · [Transforms](../concepts/transforms.md) · [Primitives](../concepts/primitives.md)
+[Custom Rules](../../concepts/custom-rules.md) · [Transforms](../../concepts/transforms.md) · [Primitives](../../concepts/primitives.md)
 ```
 
 ```python
@@ -87,7 +87,7 @@ Each rule receives one `in_tree` argument:
 | `set_pullback` | `((primals, output), feedback)` | input-shaped feedback |
 | `set_batch` | `(batch_size, axes, values)` | `(output, output_axes)` |
 
-For batch, `output_axes` has the same [pytree](../concepts/pytrees.md) shape as the output and marks which
+For batch, `output_axes` has the same [pytree](../../concepts/pytrees.md) shape as the output and marks which
 output leaves are batched.
 
 Add only the rules the program needs. If a custom boundary should run under

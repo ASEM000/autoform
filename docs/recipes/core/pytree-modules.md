@@ -9,7 +9,7 @@ This recipe uses live provider calls. It requires `OPENAI_API_KEY`. Change the
 `MODEL` constant to use a different LiteLLM model.
 
 ```{admonition} Concept
-[Pytrees](../concepts/pytrees.md) · [Trace, IR, Execute](../concepts/trace-ir-execute.md) · [Transforms](../concepts/transforms.md)
+[Pytrees](../../concepts/pytrees.md) · [Trace, IR, Execute](../../concepts/trace-ir-execute.md) · [Transforms](../../concepts/transforms.md)
 ```
 
 ## Define the Module
@@ -122,4 +122,4 @@ feedback; the update rule decides how to use it.
 Module methods should contain traceable `autoform` work when they are meant to
 be transformed. External runtime work that needs concrete Python values, such as
 HTTP calls, databases, or retrieval systems, belongs behind a primitive. See
-[Write a Primitive](writing-primitives.md) for that boundary.
+[Write a Primitive](../extending/writing-primitives.md) for that boundary.

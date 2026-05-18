@@ -138,7 +138,7 @@ result = af.lm_schema_call(messages, model="gpt-5.5", schema=schema)
 print(result["text"], result["score"])
 ```
 
-For provider routing, retries, aliases, or fallback chains, use {py:func}`lm_client <autoform.lm_client>`. See [Configure LiteLLM Routing](../recipes/litellm-config.md).
+For provider routing, retries, aliases, or fallback chains, use {py:func}`lm_client <autoform.lm_client>`. See [Configure LiteLLM Routing](../recipes/llm/litellm-config.md).
 
 ## Schema Pullback
 

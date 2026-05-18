@@ -127,8 +127,8 @@ Order still matters:
 Some nearby [public APIs](../api/index.md) are intentionally not `IR -> IR`:
 
 - {py:func}`custom <autoform.custom>` is a decorator on traceable user functions. It marks a function boundary and lets transforms consult custom rules at that boundary. See [Custom Rules](custom-rules.md).
-- {py:func}`memoize <autoform.memoize>` is a context manager. It caches primitive results within a `with` block. See [Cache Repeated Computations with `memoize`](../recipes/memoize.md).
-- {py:func}`lm_client <autoform.lm_client>` is a context manager. It changes provider routing during execution. See [Configure LiteLLM Routing](../recipes/litellm-config.md).
+- {py:func}`memoize <autoform.memoize>` is a context manager. It caches primitive results within a `with` block. See [Cache Repeated Computations with `memoize`](../recipes/execution/memoize.md).
+- {py:func}`lm_client <autoform.lm_client>` is a context manager. It changes provider routing during execution. See [Configure LiteLLM Routing](../recipes/llm/litellm-config.md).
 - {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` are context managers. They capture or replace checkpointed values during execution. See [Intercepts](intercepts.md).
 - {py:func}`tag <autoform.tag>` and {py:func}`fold <autoform.fold>` are context managers. They alter trace-time annotation or trace-time evaluation. See [Tags](tags.md) and [Fold](fold.md).
 

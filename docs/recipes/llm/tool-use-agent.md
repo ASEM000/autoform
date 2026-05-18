@@ -1,9 +1,9 @@
 # Build a Tool-Use Agent
 
-Build an agent as one traced function, then use [IR transforms](../concepts/transforms.md) around it. The agent below can ask for a search observation, finish with `done`, keep its loop state in a registered [pytree](../concepts/pytrees.md), and run tool calls through async primitive rules.
+Build an agent as one traced function, then use [IR transforms](../../concepts/transforms.md) around it. The agent below can ask for a search observation, finish with `done`, keep its loop state in a registered [pytree](../../concepts/pytrees.md), and run tool calls through async primitive rules.
 
 ```{admonition} Concept
-[Transforms](../concepts/transforms.md) · [Pytrees](../concepts/pytrees.md) · [Schemas](../concepts/schemas.md) · [Primitives](../concepts/primitives.md)
+[Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md) · [Schemas](../../concepts/schemas.md) · [Primitives](../../concepts/primitives.md)
 ```
 
 ```{mermaid}
@@ -188,9 +188,9 @@ answer = asyncio.run(agent_ir.acall("What is recursion?"))
 print(answer)
 ```
 
-The provider decides which branch to run by returning a [`Decision` schema value](../concepts/schemas.md). {py:func}`switch <autoform.switch>` dispatches to the traced tool branch at execution time, and the selected branch appends to the history. {py:func}`while_loop <autoform.while_loop>` keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
+The provider decides which branch to run by returning a [`Decision` schema value](../../concepts/schemas.md). {py:func}`switch <autoform.switch>` dispatches to the traced tool branch at execution time, and the selected branch appends to the history. {py:func}`while_loop <autoform.while_loop>` keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
 
-`wikipedia_search` is a [primitive](../concepts/primitives.md) written with the same pattern as [Write a Primitive](writing-primitives.md). The HTTP call stays in the async runtime implementation, while the abstract, {py:func}`batch <autoform.batch>`, and {py:func}`pullback <autoform.pullback>` rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
+`wikipedia_search` is a [primitive](../../concepts/primitives.md) written with the same pattern as [Write a Primitive](../extending/writing-primitives.md). The HTTP call stays in the async runtime implementation, while the abstract, {py:func}`batch <autoform.batch>`, and {py:func}`pullback <autoform.pullback>` rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
 
 ## Transform the Agent
 

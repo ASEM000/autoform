@@ -474,7 +474,7 @@ print(f"scheduled:  {parallel_s:.2f}s")
 
 The scheduled form groups independent [equations](concepts/the-ir.md) into `gather` steps. With `scheduled.acall(...)`, those groups use `asyncio.gather`, so the two first LM calls can overlap. The final LM call still waits for both inputs.
 
-The measured speedup depends on provider latency, provider-side rate limits, and the active [LiteLLM client](recipes/litellm-config.md). The invariant is the dependency structure: independent equations can share a scheduling level; dependent equations cannot.
+The measured speedup depends on provider latency, provider-side rate limits, and the active [LiteLLM client](recipes/llm/litellm-config.md). The invariant is the dependency structure: independent equations can share a scheduling level; dependent equations cannot.
 
 Compare the two pieces of code:
 
@@ -521,7 +521,7 @@ The main conceptual pages are useful when building larger programs:
 | Compose {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>` | [Transforms](concepts/transforms.md) |
 | Inspect or replace intermediate values | [Intercepts](concepts/intercepts.md) |
 | Use structured LM outputs | [Schemas](concepts/schemas.md) |
-| Build a Tool-Use Agent | [Build a Tool-Use Agent](recipes/tool-use-agent.md) |
+| Build a Tool-Use Agent | [Build a Tool-Use Agent](recipes/llm/tool-use-agent.md) |
 | Read glossary terms quickly | [Glossary](reference/glossary.md) |
 
 For exact call signatures, use the [API Reference](api/index.md).

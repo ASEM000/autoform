@@ -6,7 +6,7 @@ a domain-specific rewriter: the domain is fixed at trace time, and each draft
 is supplied at execution time.
 
 ```{admonition} Concept
-[Fold](../concepts/fold.md) · [Tracing Semantics](../concepts/tracing-semantics.md) · [Schemas](../concepts/schemas.md)
+[Fold](../../concepts/fold.md) · [Tracing Semantics](../../concepts/tracing-semantics.md) · [Schemas](../../concepts/schemas.md)
 ```
 
 ## Trace-Time and Runtime
