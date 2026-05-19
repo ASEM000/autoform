@@ -98,7 +98,7 @@ import autoform as af
 def ordered(topic: str) -> str:
     audit = af.format("audit {}", topic)
     answer = af.format("answer {}", topic)
-    # return answer, but make it depend on audit
+    # return answer through a barrier that also waits for audit
     return af.depends(answer, audit)
 
 
@@ -107,5 +107,7 @@ scheduled = af.sched(ir)
 print(scheduled.call("recursion"))
 ```
 
-Use {py:func}`depends <autoform.depends>` when a value must be computed before another value even though
-the second value does not consume it directly.
+Use {py:func}`depends <autoform.depends>` when a result should not become available until another traced
+value has also been evaluated, even though the returned value does not consume it directly. It does not
+force the computation that produces the returned value to start after the dependencies; a scheduler may still
+run independent producers concurrently and place the `depends` barrier after them.
