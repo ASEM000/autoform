@@ -238,7 +238,7 @@ def depends[T](value: T, /, *deps) -> T:
 
     This primitive inserts an ordering barrier without changing the forward
     value. The equations that produce `value` and `deps` may still run in the
-    same scheduling level; the barrier's output is available only after both
+    same scheduling level; the barrier's output is available only after
     `value` and all `deps` have been evaluated.
 
     Args:

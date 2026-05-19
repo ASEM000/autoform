@@ -109,5 +109,5 @@ print(scheduled.call("recursion"))
 
 Use {py:func}`depends <autoform.depends>` when a result should not become available until another traced
 value has also been evaluated, even though the returned value does not consume it directly. It does not
-force the computation that produces the returned value to start after the dependency; a scheduler may still
+force the computation that produces the returned value to start after the dependencies; a scheduler may still
 run independent producers concurrently and place the `depends` barrier after them.
