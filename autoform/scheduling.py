@@ -236,21 +236,22 @@ type BatchDependsInput = tuple[int, tuple[bool, tuple[bool, ...]], DependsType[T
 def depends[T](value: T, /, *deps) -> T:
     """Annotate that `value` depends on the evaluation of `deps`.
 
-    This primitive is used to enforce execution order without affecting
-    the actual data flow. It ensures that all `deps` are evaluated before
-    `value` is returned.
+    This primitive inserts an ordering barrier without changing the forward
+    value. The equations that produce `value` and `deps` may still run in the
+    same scheduling level; the barrier's output is available only after both
+    `value` and all `deps` have been evaluated.
 
     Args:
         value: The main value to return.
         *deps: Values that `value` depends on.
     Returns:
-        The original `value`, after ensuring all `deps` are evaluated.
+        The original `value`, through a barrier that also depends on `deps`.
     Example:
         >>> import autoform as af
         >>> def program(x):
         ...     a = af.format("First: {}", x)
         ...     b = af.format("Second: {}", x)
-        ...     return af.depends(b, a)  # ensure 'a' is evaluated before returning 'b'
+        ...     return af.depends(b, a)  # return b after a has also run
     """
     return depends_p.bind((value, deps))
 
