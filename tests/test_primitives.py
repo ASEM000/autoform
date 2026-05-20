@@ -63,7 +63,7 @@ class TestPrimitive:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(x):
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         assert af.core.abstract_rules.get(p) is abstract_rule
 
@@ -106,11 +106,23 @@ class TestPrimitive:
 
 class TestIRVar:
     def test_ir_var_aval_returns_aval(self):
-        ir_var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        ir_var = af.core.IRVar(aval=af.core.StrAVal())
 
         assert af.core.is_irvar(ir_var)
         assert isinstance(ir_var.aval, af.core.AVal)
-        assert ir_var.aval.type is str
+        assert ir_var.aval == af.core.StrAVal()
+
+    def test_len_on_trace_box_has_informative_error(self):
+        tracer = af.core.TraceInterpreter()
+        ir_var = af.core.IRVar(aval=af.core.StrAVal())
+        traced = tracer.box(ir_var)
+
+        with pytest.raises(
+            TypeError,
+            match=r"Cannot use length on a traced value\..*"
+            r"Python length needs a concrete runtime value",
+        ):
+            len(traced)
 
     def test_plain_literal_is_not_irvar(self):
         assert not af.core.is_irvar("hello")
@@ -164,11 +176,62 @@ class TestConcatPrimitive:
         assert len(ir.ir_eqns) == 1
         assert ir.ir_eqns[0].prim.name == "concat"
 
+    def test_traced_string_add_lowers_to_concat(self):
+        def func(x):
+            return x + "!"
+
+        ir = af.trace(func)("a")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("hello") == "hello!"
+
+    def test_traced_string_radd_lowers_to_concat(self):
+        def func(x):
+            return "Hello, " + x
+
+        ir = af.trace(func)("a")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("world") == "Hello, world"
+
+    def test_traced_string_add_both_args_lowers_to_concat(self):
+        def func(a, b):
+            return a + b
+
+        ir = af.trace(func)("a", "b")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert ir.call("left", "right") == "leftright"
+
+    def test_traced_string_add_unsupported_operand_raises_concat_error(self):
+        def func(x):
+            return x + 1
+
+        with pytest.raises(AssertionError, match="Expected strings"):
+            af.trace(func)("a")
+
+    def test_traced_string_radd_unsupported_operand_raises_concat_error(self):
+        def func(x):
+            return 1 + x
+
+        with pytest.raises(AssertionError, match="Expected strings"):
+            af.trace(func)("a")
+
+    def test_traced_non_string_add_raises_rule_error(self):
+        def func(x):
+            return x + 1
+
+        with pytest.raises(TypeError, match=r"No trace rule for \+ on values of type IntAVal\(\)"):
+            af.trace(func)(1)
+
     def test_concat_trace_rejects_non_string_input(self):
         def func(x, y, z):
             return af.concat(x, y, z)
 
-        with pytest.raises(AssertionError, match="`concat` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a", "b", 1)
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -186,7 +249,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.ir_eqns[0]
 
         assert eqn.prim.name == "lm_call"
@@ -198,7 +261,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.ir_eqns[0]
 
         assert eqn.params == {"roles": ["user"]}
@@ -225,7 +288,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
 
         with af.lm_client(ConfiguredRouter()):
             result = ir.call("hello", "m1")
@@ -236,7 +299,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         batched_ir = af.batch(ir, in_axes=(True, True))
 
         with af.lm_client(EchoRouter()):
@@ -248,7 +311,7 @@ class TestLMPrimitive:
         def program(prompt: str, model: str):
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
-        ir = af.trace(program)("test", "gpt-5.2")
+        ir = af.trace(program)("test", "gpt-5.5")
         pb_ir = af.pullback(ir)
 
         with af.lm_client(EchoRouter()):
@@ -256,7 +319,7 @@ class TestLMPrimitive:
 
         assert out == "m1|hello"
         assert isinstance(cotangent[0], str)
-        assert cotangent[1] == af.ad.Zero(str)
+        assert cotangent[1] == af.ad.Zero(af.core.StrAVal())
 
 
 class TestBind:
@@ -269,7 +332,7 @@ class TestBind:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         def func(x):
             return p.bind(x, multiplier=3)
@@ -286,18 +349,18 @@ class TestInterpreter:
         assert result == "ab"
 
     def test_use_interpreter_context(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
             assert len(tracer.ir_eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
 
     def test_tracing_interpreter_creates_ir_eqns(self):
-        tracer = af.core.TracingInterpreter()
+        tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
-            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.TypedAVal(str)))
+            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
         assert len(tracer.ir_eqns) == 1
 
 
@@ -540,48 +603,130 @@ class TestTransformWrapperAvals:
 
 class TestCotangentHelpers:
     def test_zero_str(self):
-        z = af.ad.Zero(str)
+        z = af.ad.Zero(af.core.StrAVal())
         assert af.ad.is_zero(z)
-        assert z.type is str
+        assert z.aval == af.core.StrAVal()
         assert af.ad.materialize(z) == ""
 
+    def test_zero_requires_aval(self):
+        with pytest.raises(AssertionError, match="Expected AVal"):
+            af.ad.Zero(str)
+
     def test_zero_non_differentiable_type(self):
-        z = af.ad.Zero(bool)
+        z = af.ad.Zero(af.core.BoolAVal())
         assert af.ad.is_zero(z)
-        assert z.type is bool
+        assert z.aval == af.core.BoolAVal()
         with pytest.raises(TypeError):
             af.ad.materialize(z)
 
     def test_zero_equality(self):
-        assert af.ad.Zero(str) == af.ad.Zero(str)
-        assert af.ad.Zero(str) != af.ad.Zero(bool)
+        assert af.ad.Zero(af.core.StrAVal()) == af.ad.Zero(af.core.StrAVal())
+        assert af.ad.Zero(af.core.StrAVal()) != af.ad.Zero(af.core.BoolAVal())
 
-    def test_zero_helper_is_idempotent(self):
-        z = af.ad.Zero(str)
-        assert af.ad.zero(z) is z
-        assert af.ad.materialize(af.ad.zero(z)) == ""
+    def test_zeroof_is_idempotent(self):
+        z = af.ad.Zero(af.core.StrAVal())
+        assert af.ad.zeroof(z) is z
+        assert af.ad.materialize(af.ad.zeroof(z)) == ""
 
-    def test_accumulate_cotangents_single(self):
-        result = af.ad.accumulate_cotangents(["hello"])
+    def test_zero_has_aval_but_is_not_traceable(self):
+        z = af.ad.Zero(af.core.StrAVal())
+        assert af.core.avalof(z) == af.core.StrAVal()
+        assert not af.core.is_traceable(z)
+
+    def test_zero_materializes_with_registered_aval_rule(self):
+        class BlobAVal(af.core.AVal):
+            __slots__ = ["size"]
+
+            def __init__(self, size):
+                self.size = size
+
+            def __eq__(self, other):
+                return type(self) is type(other) and self.size == other.size
+
+            def __hash__(self):
+                return hash((type(self), self.size))
+
+        af.ad.zero_rules[BlobAVal] = lambda aval: ("zero", aval.size)
+        try:
+            assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
+        finally:
+            del af.ad.zero_rules[BlobAVal]
+
+    def test_cot_acc_single(self):
+        result = af.ad.cot_acc(["hello"])
         assert result == "hello"
 
-    def test_accumulate_cotangents_strings(self):
-        result = af.ad.accumulate_cotangents(["a", "b", "c"])
+    def test_cot_acc_strings(self):
+        result = af.ad.cot_acc(["a", "b", "c"])
         assert result == "abc"
 
-    def test_accumulate_cotangents_all_zeros(self):
-        result = af.ad.accumulate_cotangents([af.ad.Zero(str), af.ad.Zero(str)])
+    def test_cot_acc_lists_elementwise(self):
+        result = af.ad.cot_acc([["a", "b"], ["c", "d"]])
+        assert result == ["ac", "bd"]
+
+    def test_cot_acc_nested_containers_elementwise(self):
+        result = af.ad.cot_acc([
+            {"x": [1, af.ad.Zero(af.core.StrAVal())], "y": "a"},
+            {"x": [2, "b"], "y": "c"},
+        ])
+        assert result == {"x": [3, "b"], "y": "ac"}
+
+    def test_cot_acc_all_zeros(self):
+        result = af.ad.cot_acc([
+            af.ad.Zero(af.core.StrAVal()),
+            af.ad.Zero(af.core.StrAVal()),
+        ])
         assert af.ad.is_zero(result)
 
-    def test_accumulate_cotangents_unseted_type_uses_sum(self):
-        result = af.ad.accumulate_cotangents([1, 2, 3])
+    def test_cot_acc_all_zeros_must_match_aval(self):
+        with pytest.raises(AssertionError):
+            af.ad.cot_acc([
+                af.ad.Zero(af.core.StrAVal()),
+                af.ad.Zero(af.core.IntAVal()),
+            ])
+
+    def test_cot_acc_ints_use_registered_rule(self):
+        result = af.ad.cot_acc([1, 2, 3])
         assert result == 6
+
+    def test_cot_acc_registered_val_without_rule_raises(self):
+        with pytest.raises(
+            TypeError, match=r"No cotangent accumulator registered for BoolAVal\(\)"
+        ):
+            af.ad.cot_acc([True, False])
+
+    def test_cot_acc_unregistered_leaf_raises(self):
+        class Blob:
+            pass
+
+        with pytest.raises(TypeError, match="Unsupported input leaf type"):
+            af.ad.cot_acc([Blob(), Blob()])
+
+    def test_cot_acc_uses_registered_aval_rule(self):
+        class Blob:
+            __slots__ = ["text"]
+
+            def __init__(self, text):
+                self.text = text
+
+        class BlobAVal(af.core.AVal):
+            __slots__ = []
+
+        af.core.aval_rules[Blob] = lambda _: BlobAVal()
+        af.ad.cot_acc_rules[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
+        try:
+            result = af.ad.cot_acc([Blob("a"), Blob("b")])
+            assert isinstance(result, Blob)
+            assert result.text == "a|b"
+        finally:
+            del af.core.aval_rules[Blob]
+            del af.ad.cot_acc_rules[BlobAVal]
 
 
 class TestLiteralZeroing:
     def test_pushforward_zeros_literal_input_tangent(self):
         lit = "constant"
-        var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        var = af.core.IRVar(aval=af.core.StrAVal())
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)
@@ -592,7 +737,7 @@ class TestLiteralZeroing:
         t_lit, t_var = tangent_in
 
         assert af.ad.is_zero(t_lit)
-        assert t_lit.type is str
+        assert t_lit.aval == af.core.StrAVal()
         assert isinstance(t_var, af.core.IRVar)
 
     def test_pushforward_zeros_literal_output_tangent(self):
@@ -626,7 +771,7 @@ class TestLiteralZeroing:
 
     def test_pullback_zeros_literal_input_cotangent(self):
         lit = "constant_input"
-        var = af.core.IRVar(aval=af.core.TypedAVal(str))
+        var = af.core.IRVar(aval=af.core.StrAVal())
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)

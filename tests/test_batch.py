@@ -18,9 +18,10 @@ import optree
 import pytest
 
 import autoform as af
+from autoform.batch import BatchAVal
 from autoform.utils import batch_spec, batch_transpose
 
-treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
+tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
 
 class TestBatchBasic:
@@ -183,8 +184,8 @@ class TestBatchIRStructure:
 
         batched_ir = af.batch(ir)
 
-        assert batched_ir.in_ir_tree[0].aval is aval
-        assert batched_ir.out_ir_tree[0].aval is aval
+        assert batched_ir.in_ir_tree[0].aval == BatchAVal(aval)
+        assert batched_ir.out_ir_tree[0].aval == BatchAVal(aval)
 
     def test_batch_wrapper_preserves_broadcast_aval(self):
         class TaggedAVal(af.core.AVal):
@@ -210,8 +211,7 @@ class TestBatchIRStructure:
         batched_ir = af.batch(ir)
 
         assert isinstance(batched_ir.out_ir_tree, af.core.IRVar)
-        assert isinstance(batched_ir.out_ir_tree.aval, af.core.TypedAVal)
-        assert batched_ir.out_ir_tree.aval.type is str
+        assert batched_ir.out_ir_tree.aval == BatchAVal(af.core.StrAVal())
         assert batched_ir.call(["a", "b"]) == ["c", "c"]
 
     def test_batch_broadcast_constant_output_stays_literal(self):
@@ -233,6 +233,8 @@ class TestNestedBatch:
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
         double_batched_ir = af.batch(batched_ir)
+        assert double_batched_ir.in_ir_tree[0].aval == BatchAVal(BatchAVal(af.core.StrAVal()))
+        assert double_batched_ir.out_ir_tree.aval == BatchAVal(BatchAVal(af.core.StrAVal()))
         result = double_batched_ir.call([["a", "b"], ["c", "d", "e"]])
         assert result == [["a!", "b!"], ["c!", "d!", "e!"]]
 
@@ -347,7 +349,7 @@ class TestBatchMultipleOutputs:
 
         @ft.partial(af.core.abstract_rules.set, split_p)
         def abstract_split(x):
-            return af.core.TypedAVal(str), af.core.TypedAVal(str)
+            return af.core.StrAVal(), af.core.StrAVal()
 
         @ft.partial(af.core.impl_rules.set, split_p)
         def impl_split(x):
@@ -374,7 +376,7 @@ class TestBatchMultipleOutputs:
 
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_nested(x):
-            return (af.core.TypedAVal(str), af.core.TypedAVal(str)), af.core.TypedAVal(str)
+            return (af.core.StrAVal(), af.core.StrAVal()), af.core.StrAVal()
 
         @ft.partial(af.core.impl_rules.set, nested_p)
         def impl_nested(x):
@@ -443,7 +445,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, single_p)
         def abstract_rule(x):
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         @ft.partial(af.core.batch_rules.set, single_p)
         def batch_rule(in_tree):
@@ -467,7 +469,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
+            return (af.core.StrAVal(), af.core.StrAVal())
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def bad_batch_rule(in_tree):
@@ -492,7 +494,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, tuple_p)
         def abstract_rule(x):
-            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
+            return (af.core.StrAVal(), af.core.StrAVal())
 
         @ft.partial(af.core.batch_rules.set, tuple_p)
         def correct_batch_rule(in_tree):
@@ -518,8 +520,8 @@ class TestBatchRuleOutBatchedValidation:
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
             return {
-                "first": af.core.TypedAVal(str),
-                "second": (af.core.TypedAVal(str), af.core.TypedAVal(str)),
+                "first": af.core.StrAVal(),
+                "second": (af.core.StrAVal(), af.core.StrAVal()),
             }
 
         @ft.partial(af.core.batch_rules.set, nested_p)
@@ -546,8 +548,8 @@ class TestBatchRuleOutBatchedValidation:
         @ft.partial(af.core.abstract_rules.set, nested_p)
         def abstract_rule(x):
             return {
-                "first": af.core.TypedAVal(str),
-                "second": (af.core.TypedAVal(str), af.core.TypedAVal(str)),
+                "first": af.core.StrAVal(),
+                "second": (af.core.StrAVal(), af.core.StrAVal()),
             }
 
         @ft.partial(af.core.batch_rules.set, nested_p)
@@ -573,7 +575,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
+            return (af.core.StrAVal(), af.core.StrAVal())
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):
@@ -598,7 +600,7 @@ class TestBatchRuleOutBatchedValidation:
 
         @ft.partial(af.core.abstract_rules.set, mixed_p)
         def abstract_rule(x):
-            return (af.core.TypedAVal(str), af.core.TypedAVal(str))
+            return (af.core.StrAVal(), af.core.StrAVal())
 
         @ft.partial(af.core.batch_rules.set, mixed_p)
         def batch_rule(in_tree):
@@ -635,7 +637,7 @@ class TestTransposeBatch:
         assert out == {"a": [1, 3], "b": [2, 4]}
 
     def test_struct_structure(self):
-        @treelib.dataclasses.dataclass
+        @tree.dataclasses.dataclass
         class Point:
             x: int
             y: int
@@ -683,7 +685,7 @@ class TestBatchSpec:
         assert out == ("x", "y", "z")
 
     def test_struct_container(self):
-        @treelib.dataclasses.dataclass
+        @tree.dataclasses.dataclass
         class Point:
             x: int
             y: int

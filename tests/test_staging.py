@@ -12,11 +12,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 from types import SimpleNamespace
 
 import pytest
 
 import autoform as af
+
+
+class TestTraceValuePythonOps:
+    @pytest.mark.parametrize(
+        ("description", "program"),
+        [
+            ("truthiness", lambda x: "yes" if x else "no"),
+            ("string coercion", lambda x: str(x)),
+            ("string formatting", lambda x: f"{x}"),
+            ("iteration", lambda x: list(x)),
+            ("integer-index coercion", lambda x: range(x)),
+            ("integer coercion", lambda x: int(x)),
+            ("float coercion", lambda x: float(x)),
+            ("bytes coercion", lambda x: bytes(x)),
+            ("indexing", lambda x: x[0]),
+            ("membership testing", lambda x: "a" in x),
+        ],
+    )
+    def test_host_python_operations_on_traced_values_error(self, description, program):
+        with pytest.raises(
+            TypeError,
+            match=rf"Cannot use {re.escape(description)} on a traced value\.",
+        ):
+            af.trace(program)("seed")
+
+    def test_len_on_traced_value_has_informative_error(self):
+        def program(x):
+            return len(x)
+
+        with pytest.raises(
+            TypeError,
+            match=r"Cannot use length on a traced value\..*"
+            r"Python length needs a concrete runtime value.*"
+            r"af\.trace\(\.\.\., static=\.\.\.\)",
+        ):
+            af.trace(program)("seed")
 
 
 class CountingInterpreter(af.core.Interpreter):
@@ -177,14 +214,14 @@ class TestFold:
 
         def abstract_async_probe(in_tree):
             del in_tree
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         af.core.abstract_rules.set(async_probe_p, abstract_async_probe)
 
-        with af.core.using_interpreter(af.core.TracingInterpreter()) as tracer:
+        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
             result = await async_probe_p.abind("literal")
 
-        assert isinstance(result, af.core.IRVar)
+        assert isinstance(result, af.core.TraceBox)
         assert [eqn.prim.name for eqn in tracer.ir_eqns] == ["async_dynamic_fold_probe"]
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -196,7 +233,7 @@ class TestFold:
 
         af.core.impl_rules.aset(async_probe_p, aimpl_async_probe)
 
-        with af.core.using_interpreter(af.core.TracingInterpreter()) as tracer:
+        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
             with af.fold():
                 result = await async_probe_p.abind("literal")
 

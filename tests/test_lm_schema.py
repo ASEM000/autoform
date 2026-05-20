@@ -133,9 +133,12 @@ def test_lm_schema_call_traces_schema_as_static_param():
         )
         return af.format("{}", result["text"])
 
-    ir = af.trace(program)("test", "gpt-5.2")
+    ir = af.trace(program)("test", "gpt-5.5")
     assert [eqn.prim.name for eqn in ir.ir_eqns] == ["lm_schema_call", "format"]
-    assert make_json_schema_and_parser(ir.ir_eqns[0].params["schema"])[0] == make_json_schema_and_parser(answer)[0]
+    assert (
+        make_json_schema_and_parser(ir.ir_eqns[0].params["schema"])[0]
+        == make_json_schema_and_parser(answer)[0]
+    )
     assert "model" not in ir.ir_eqns[0].params
     assert isinstance(ir.ir_eqns[0].in_ir_tree[1], af.core.IRVar)
     assert isinstance(ir.ir_eqns[0].out_ir_tree["text"], af.core.IRVar)
@@ -158,7 +161,7 @@ def test_batch_lm_schema_call_supports_variable_models():
             schema=answer,
         )
 
-    ir = af.trace(program)("test", "gpt-5.2")
+    ir = af.trace(program)("test", "gpt-5.5")
     batched_ir = af.batch(ir, in_axes=(True, True))
 
     with af.lm_client(SchemaRouter()):

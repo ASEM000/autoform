@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.core import AVal, TypedAVal, trace
+from autoform.core import AVal, BoolAVal, StrAVal, trace
 from autoform.string import abstract_match
 
 
@@ -45,6 +45,39 @@ class TestMatchTraced:
         assert ir.call("yes") is True
         assert ir.call("no") is False
 
+    def test_traced_string_eq_lowers_to_match(self):
+        def check(x):
+            return x == "yes"
+
+        ir = trace(check)("dummy")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert ir.call("yes") is True
+        assert ir.call("no") is False
+
+    def test_traced_reverse_string_eq_lowers_to_match(self):
+        def check(x):
+            return "yes" == x
+
+        ir = trace(check)("dummy")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert ir.call("yes") is True
+        assert ir.call("no") is False
+
+    def test_traced_string_eq_both_args_lowers_to_match(self):
+        def check(a, b):
+            return a == b
+
+        ir = trace(check)("a", "b")
+
+        assert len(ir.ir_eqns) == 1
+        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert ir.call("same", "same") is True
+        assert ir.call("same", "other") is False
+
     def test_traced_match_both_args(self):
         def check(a, b):
             return af.match(a, b)
@@ -65,8 +98,22 @@ class TestMatchTraced:
         def check(a, b):
             return af.match(a, b)
 
-        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             trace(check)("yes", 1)
+
+    def test_traced_string_eq_unsupported_operand_raises_match_error(self):
+        def check(x):
+            return x == 1
+
+        with pytest.raises(AssertionError, match="Expected strings"):
+            trace(check)("yes")
+
+    def test_traced_non_string_eq_raises_rule_error(self):
+        def check(x):
+            return x == 1
+
+        with pytest.raises(TypeError, match=r"No trace rule for == on values of type IntAVal\(\)"):
+            trace(check)(1)
 
 
 class TestMatchBatch:
@@ -123,7 +170,7 @@ class TestMatchPushforward:
 
         assert out_primal is True
         assert af.ad.is_zero(out_tangent)
-        assert out_tangent.type is bool
+        assert out_tangent.aval == BoolAVal()
 
     def test_pushforward_match_false_case(self):
         def check(x):
@@ -136,7 +183,7 @@ class TestMatchPushforward:
 
         assert out_primal is False
         assert af.ad.is_zero(out_tangent)
-        assert out_tangent.type is bool
+        assert out_tangent.aval == BoolAVal()
 
 
 class TestMatchPullback:
@@ -151,7 +198,7 @@ class TestMatchPullback:
 
         assert out_primal is True
         assert af.ad.is_zero(in_cotangent[0])
-        assert in_cotangent[0].type is str
+        assert in_cotangent[0].aval == StrAVal()
 
     def test_pullback_match_false_case(self):
         def check(x):
@@ -164,7 +211,7 @@ class TestMatchPullback:
 
         assert out_primal is False
         assert af.ad.is_zero(in_cotangent[0])
-        assert in_cotangent[0].type is str
+        assert in_cotangent[0].aval == StrAVal()
 
 
 class TestMatchComposition:
@@ -205,25 +252,25 @@ class TestAbstractMatch:
 
         result = abstract_match(("yes", "yes"))
         assert isinstance(result, AVal)
-        assert result.type is bool
+        assert result == BoolAVal()
 
     def test_abstract_match_concrete_unequal(self):
 
         result = abstract_match(("yes", "no"))
         assert isinstance(result, AVal)
-        assert result.type is bool
+        assert result == BoolAVal()
 
     def test_abstract_match_with_var_returns_var(self):
 
-        result = abstract_match((TypedAVal(str), "yes"))
+        result = abstract_match((StrAVal(), "yes"))
         assert isinstance(result, AVal)
 
-        result = abstract_match(("yes", TypedAVal(str)))
+        result = abstract_match(("yes", StrAVal()))
         assert isinstance(result, AVal)
 
-        result = abstract_match((TypedAVal(str), TypedAVal(str)))
+        result = abstract_match((StrAVal(), StrAVal()))
         assert isinstance(result, AVal)
 
     def test_abstract_match_rejects_non_string_input(self):
-        with pytest.raises(AssertionError, match="`match` expects string inputs"):
+        with pytest.raises(AssertionError, match="Expected strings"):
             abstract_match(("yes", 1))

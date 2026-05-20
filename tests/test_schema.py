@@ -18,7 +18,7 @@ import pytest
 import autoform as af
 import autoform.schemas as schemas
 from autoform.schemas import make_json_schema_and_parser
-from autoform.utils import treelib
+from autoform.utils import tree
 
 
 def test_schema_dsl_builds_described_schema():
@@ -77,7 +77,9 @@ def test_schema_dsl_builds_tree():
 
 
 def test_schema_dsl_builds_string_constraints():
-    json_schema, parse = make_json_schema_and_parser({"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")})
+    json_schema, parse = make_json_schema_and_parser({
+        "name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")
+    })
 
     assert json_schema == {
         "type": "object",
@@ -140,7 +142,7 @@ def test_schema_dsl_builds_custom_pytree_value():
                 type(self) is type(other) and self.text == other.text and self.score == other.score
             )
 
-    treelib.register_node(
+    tree.register_node(
         Answer,
         lambda answer: ((answer.text, answer.score), None, ("text", "score")),
         lambda _, children: Answer(*children),

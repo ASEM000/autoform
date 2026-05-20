@@ -20,13 +20,30 @@ import autoform as af
 
 
 @dataclass(frozen=True)
-class Label(af.Tag):
+class Label:
     name: str
 
 
 @dataclass(frozen=True)
-class CostTag(af.Tag):
-    pass
+class CostTag: ...
+
+
+class Blob:
+    def __init__(self, size: int):
+        self.size = size
+
+
+class BlobAVal(af.core.AVal):
+    __slots__ = ["size"]
+
+    def __init__(self, size: int):
+        self.size = size
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.size == other.size
+
+    def __hash__(self):
+        return hash((type(self), self.size))
 
 
 class TestBuildIR:
@@ -35,18 +52,17 @@ class TestBuildIR:
             return af.format("{}", x)
 
         cases = [
-            (1, 2, "2"),
-            (1.5, 2.5, "2.5"),
-            (True, False, "False"),
+            (1, 2, "2", af.core.IntAVal()),
+            (1.5, 2.5, "2.5", af.core.FloatAVal()),
+            (True, False, "False", af.core.BoolAVal()),
         ]
 
-        for traced, runtime, expected in cases:
+        for traced, runtime, expected, aval in cases:
             ir = af.trace(program)(traced)
             assert isinstance(ir.in_ir_tree, tuple)
             assert len(ir.in_ir_tree) == 1
             assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-            assert isinstance(ir.in_ir_tree[0].aval, af.core.TypedAVal)
-            assert ir.in_ir_tree[0].aval.type is type(traced)
+            assert ir.in_ir_tree[0].aval == aval
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -64,14 +80,32 @@ class TestBuildIR:
         assert result == "dogs 2 2.5 False"
 
     def test_trace_unsupported_input_leaf_errors(self):
-        class Opaque:
-            pass
+        class Opaque: ...
 
         def program(x):
             return x
 
         with pytest.raises(AssertionError, match="Unsupported input leaf type"):
             af.trace(program)(Opaque())
+
+    def test_trace_uses_registered_aval_rule(self):
+        def program(x):
+            return x
+
+        af.core.aval_rules[Blob] = lambda x: BlobAVal(x.size)
+        af.core.trace_types.add(Blob)
+        try:
+            ir = af.trace(program)(Blob(3))
+        finally:
+            del af.core.aval_rules[Blob]
+            af.core.trace_types.remove(Blob)
+
+        assert ir.in_ir_tree[0].aval == BlobAVal(3)
+
+    def test_irvar_has_aval_but_is_not_traceable(self):
+        var = af.core.IRVar(aval=af.core.StrAVal())
+        assert af.core.avalof(var) == af.core.StrAVal()
+        assert not af.core.is_traceable(var)
 
     def test_trace_static_unhashable_input_errors(self):
         class Unhashable:
@@ -223,6 +257,9 @@ class TestTraceStatic:
 
 
 class TestTags:
+    def test_tag_base_is_not_public_api(self):
+        assert not hasattr(af, "Tag")
+
     def test_trace_snapshots_tags_per_equation(self):
         def program(x):
             head = af.concat(x, "!")
@@ -242,21 +279,17 @@ class TestTags:
             CostTag(),
         })
 
-    def test_tag_rejects_non_tags(self):
-        with pytest.raises(AssertionError, match="Expected Tag instances"):
-            with af.tag("draft"):
-                pass
+    def test_tag_accepts_plain_hashable_values(self):
+        with af.tag("draft", 1) as active:
+            assert active == ("draft", 1)
+            assert af.core.active_tags.get() == frozenset({"draft", 1})
 
-    def test_tag_base_is_not_instantiable(self):
-        with pytest.raises(AssertionError, match="Tag cannot be instantiated directly"):
-            af.Tag()
+        assert af.core.active_tags.get() == frozenset()
 
-    def test_tag_subclasses_must_be_hashable(self):
-        with pytest.raises(AssertionError, match="Tag subclasses must be hashable"):
-
-            class EqOnlyTag(af.Tag):
-                def __eq__(self, other):
-                    return isinstance(other, EqOnlyTag)
+    def test_tag_rejects_unhashable_values(self):
+        with pytest.raises(TypeError, match="Tags must be hashable"):
+            with af.tag(["draft"]):
+                ...
 
     def test_tag_unions_active_tags_and_restores_on_exit(self):
         assert af.core.active_tags.get() == frozenset()
@@ -287,7 +320,7 @@ class TestTags:
 
         def abstract_probe(x):
             del x
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         def impl_probe(x):
             names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))

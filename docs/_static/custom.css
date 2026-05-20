@@ -18,7 +18,7 @@ pre {
     word-wrap: break-word;
 }
 
-/* Wrap long API signatures */
+/* Wrap long signatures */
 dl.py dt {
     white-space: normal;
     word-wrap: break-word;

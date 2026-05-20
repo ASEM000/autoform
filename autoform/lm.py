@@ -26,27 +26,15 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import acompletion, completion
 
-from autoform.ad import Zero, is_zero, materialize
-from autoform.core import (
-    EvalType,
-    Prim,
-    TypedAVal,
-    abstract_rules,
-    batch_rules,
-    impl_rules,
-    pull_bwd_rules,
-    pull_fwd_rules,
-    push_rules,
-    typeof,
-)
-from autoform.schemas import Bool, Docd, Enum, Float, Int, Str, make_json_schema_and_parser
-from autoform.utils import (
-    Tree,
-    batch_index,
-    batch_spec,
-    batch_transpose,
-    treelib,
-)
+import autoform.ad as ad
+import autoform.core as core
+import autoform.schemas as schemas
+import autoform.utils as utils
+
+type Tree[T] = utils.Tree[T]
+type TreePair = tuple[Tree, Tree]
+type Messages = list[dict[str, str]]
+type Roles = list[str]
 
 
 @runtime_checkable
@@ -84,7 +72,7 @@ def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
         >>> from litellm import Router  # doctest: +SKIP
         >>> client = Router(  # doctest: +SKIP
         ...     model_list=[
-        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-5.2")),
+        ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-5.5")),
         ...     ],
         ...     max_parallel_requests=10,
         ... )
@@ -103,7 +91,7 @@ def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
 # LM CALL
 # ==================================================================================================
 
-lm_call_p = Prim("lm_call")
+lm_call_p = core.Prim("lm_call")
 
 # TODO(asem): take a look into this
 GRAD_PROMPT = """Given this LLM interaction:
@@ -115,12 +103,12 @@ FEEDBACK ON OUTPUT: {out_cotangent}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
 
 
-def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
+def lm_call(messages: Messages, /, *, model: str) -> str:
     """Calls a language model with the given messages and model name using LiteLLM.
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The model name or active client model alias to use (e.g., "gpt-5.2").
+        model: The model name or active client model alias to use (e.g., "gpt-5.5").
 
     Returns:
         The content of the model's response as a string.
@@ -133,7 +121,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     greeting = af.format("Hello, {}!", name)
         ...     sys = dict(role="system", content="translate the greeting to Korean")
         ...     usr = dict(role="user", content=greeting)
-        ...     greeting = af.lm_call([sys, usr], model="gpt-5.2")
+        ...     greeting = af.lm_call([sys, usr], model="gpt-5.5")
         ...     return greeting
         >>> ir = af.trace(program)("World") # doctest: +SKIP
         >>> result = ir.call("x0") # doctest: +SKIP
@@ -141,11 +129,11 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     Example with :func:`lm_client`:
         >>> import autoform as af
         >>> from litellm import Router  # doctest: +SKIP
-        >>> params_1024 = dict(model="gpt-5.2", max_tokens=1024)
-        >>> params_512 = dict(model="gpt-5.2", max_tokens=512)
+        >>> params_1024 = dict(model="gpt-5.5", max_tokens=1024)
+        >>> params_512 = dict(model="gpt-5.5", max_tokens=512)
         >>> model_list = [
-        ...     dict(model_name="gpt-5.2-1024", litellm_params=params_1024),
-        ...     dict(model_name="gpt-5.2-512", litellm_params=params_512),
+        ...     dict(model_name="gpt-5.5-1024", litellm_params=params_1024),
+        ...     dict(model_name="gpt-5.5-512", litellm_params=params_512),
         ... ]
         >>> router = Router(model_list=model_list)  # doctest: +SKIP
         >>> def program(text: str, model: str):
@@ -153,7 +141,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
         ...     answer = af.lm_call(msg, model=model)
         ...     return af.concat("Answer: ", answer)
         >>> ir = af.trace(program)("topic", "model")
-        >>> model_names = ["gpt-5.2-1024", "gpt-5.2-512"]
+        >>> model_names = ["gpt-5.5-1024", "gpt-5.5-512"]
         >>> with af.lm_client(router):  # doctest: +SKIP
         ...     result = af.batch(ir, in_axes=(False, True)).call("AI", model_names)
     """
@@ -168,7 +156,7 @@ def lm_call(messages: list[dict[str, str]], /, *, model: str) -> str:
     return lm_call_p.bind((contents, model), roles=roles)
 
 
-def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
+def impl_lm_call(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     response = active_client.get().completion(
@@ -178,7 +166,7 @@ def impl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
     return response.choices[0].message.content
 
 
-async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
+async def aimpl_lm_call(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     response = await active_client.get().acompletion(
@@ -188,64 +176,64 @@ async def aimpl_lm_call(in_tree: Tree, /, *, roles: list[str]) -> str:
     return response.choices[0].message.content
 
 
-def abstract_lm_call(in_tree: Tree, /, *, roles: list[str]) -> EvalType:
+def abstract_lm_call(in_tree: Tree, /, *, roles: Roles) -> core.EvalType:
     contents, model = in_tree
-    assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
-    assert typeof(model) is str, f"`lm_call` expects a string model, got {model!r}"
-    return TypedAVal(str)
+    assert all(type(x) in (str, core.StrAVal) for x in contents), f"Expected strings: {contents!r}"
+    assert type(model) in (str, core.StrAVal), f"Expected string model: {model!r}"
+    return core.StrAVal()
 
 
-def pushforward_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
+def pushforward_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
     p_resp = lm_call_p.bind(p_tree, roles=roles)
-    t_tree = (materialize(tangent_contents), primal_model)
+    t_tree = (ad.materialize(tangent_contents), primal_model)
     t_resp = lm_call_p.bind(t_tree, roles=roles)
     return p_resp, t_resp
 
 
-async def apush_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
+async def apush_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     abind = ft.partial(lm_call_p.abind, roles=roles)
     p_tree = (primal_contents, primal_model)
-    t_tree = (materialize(tangent_contents), primal_model)
+    t_tree = (ad.materialize(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     contents, model = in_tree
     out = lm_call_p.bind((contents, model), roles=roles)
     residuals = (contents, model, out)
     return out, residuals
 
 
-async def apull_fwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
+async def apull_fwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     contents, model = in_tree
     out = await lm_call_p.abind((contents, model), roles=roles)
     residuals = (contents, model, out)
     return out, residuals
 
 
-def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
+def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = materialize(out_cotangent)
+    out_cotangent = ad.materialize(out_cotangent)
     contents, model, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    return grads, Zero(str)
+    return grads, ad.zeroof(model)
 
 
-async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
+async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = materialize(out_cotangent)
+    out_cotangent = ad.materialize(out_cotangent)
     contents, model, out = residuals
 
     async def grad(c):
@@ -253,54 +241,51 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: list[str]) -> Tree:
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
-    return (
-        await asyncio.gather(*[grad(c) for c in contents]),
-        Zero(str),
-    )
+    return (await asyncio.gather(*[grad(c) for c in contents]), ad.zeroof(model))
 
 
-def batch_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
+def batch_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         return lm_call_p.bind(in_values, roles=roles), False
 
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     results = [lm_call_p.bind(unbatch(b), roles=roles) for b in range(batch_size)]
     out_tree = spec.unflatten(results)
     return out_tree, True
 
 
-async def abatch_lm_call(in_tree: Tree, /, *, roles: list[str]) -> tuple[Tree, Tree]:
+async def abatch_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if (spec := batch_spec(in_values, in_batched)) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         return await lm_call_p.abind(in_values, roles=roles), False
 
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     abind = ft.partial(lm_call_p.abind, roles=roles)
     results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
     out_tree = spec.unflatten(results)
     return out_tree, True
 
 
-impl_rules.set(lm_call_p, impl_lm_call)
-impl_rules.aset(lm_call_p, aimpl_lm_call)
-abstract_rules.set(lm_call_p, abstract_lm_call)
-push_rules.set(lm_call_p, pushforward_lm_call)
-push_rules.aset(lm_call_p, apush_lm_call)
-pull_fwd_rules.set(lm_call_p, pullback_fwd_lm_call)
-pull_fwd_rules.aset(lm_call_p, apull_fwd_lm_call)
-pull_bwd_rules.set(lm_call_p, pullback_bwd_lm_call)
-pull_bwd_rules.aset(lm_call_p, apull_bwd_lm_call)
-batch_rules.set(lm_call_p, batch_lm_call)
-batch_rules.aset(lm_call_p, abatch_lm_call)
+core.impl_rules.set(lm_call_p, impl_lm_call)
+core.impl_rules.aset(lm_call_p, aimpl_lm_call)
+core.abstract_rules.set(lm_call_p, abstract_lm_call)
+core.push_rules.set(lm_call_p, pushforward_lm_call)
+core.push_rules.aset(lm_call_p, apush_lm_call)
+core.pull_fwd_rules.set(lm_call_p, pullback_fwd_lm_call)
+core.pull_fwd_rules.aset(lm_call_p, apull_fwd_lm_call)
+core.pull_bwd_rules.set(lm_call_p, pullback_bwd_lm_call)
+core.pull_bwd_rules.aset(lm_call_p, apull_bwd_lm_call)
+core.batch_rules.set(lm_call_p, batch_lm_call)
+core.batch_rules.aset(lm_call_p, abatch_lm_call)
 
 # ==================================================================================================
 # LM SCHEMA CALL
 # ==================================================================================================
 
-lm_schema_call_p = Prim("lm_schema_call")
+lm_schema_call_p = core.Prim("lm_schema_call")
 
 
 SCHEMA_GRAD_PROMPT = """Given this LLM interaction:
@@ -318,13 +303,7 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 """
 
 
-def lm_schema_call(
-    messages: list[dict[str, str]],
-    /,
-    *,
-    model: str,
-    schema: Any,
-) -> Any:
+def lm_schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
     """Calls a language model with an autoform schema response format.
 
     The schema tree is built from nodes such as :class:`autoform.Int`,
@@ -352,7 +331,7 @@ def lm_schema_call(
         >>> msgs = [dict(role="user", content="1 + 1?")]
         >>> output = af.lm_schema_call(  # doctest: +SKIP
         ...     msgs,
-        ...     model="openai/gpt-5.2",
+        ...     model="openai/gpt-5.5",
         ...     schema=schema,
         ... )
         >>> output  # doctest: +SKIP
@@ -379,15 +358,9 @@ def schema_response_format(json_schema: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def impl_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> Any:
+def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
-    json_schema, parse = make_json_schema_and_parser(schema)
+    json_schema, parse = schemas.make_json_schema_and_parser(schema)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = active_client.get().completion(
         messages=messages,
@@ -397,15 +370,9 @@ def impl_lm_schema_call(
     return parse(json.loads(resp.choices[0].message.content))
 
 
-async def aimpl_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> Any:
+async def aimpl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
-    json_schema, parse = make_json_schema_and_parser(schema)
+    json_schema, parse = schemas.make_json_schema_and_parser(schema)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = await active_client.get().acompletion(
         messages=messages,
@@ -416,12 +383,12 @@ async def aimpl_lm_schema_call(
 
 
 schema_abstract_rules = {}
-schema_abstract_rules[Str] = lambda _: TypedAVal(str)
-schema_abstract_rules[Int] = lambda _: TypedAVal(int)
-schema_abstract_rules[Float] = lambda _: TypedAVal(float)
-schema_abstract_rules[Bool] = lambda _: TypedAVal(bool)
-schema_abstract_rules[Enum] = lambda s: TypedAVal(type(s.values[0]))
-schema_abstract_rules[Docd] = lambda s: schema_abstract_tree(s.value)
+schema_abstract_rules[schemas.Str] = lambda _: core.StrAVal()
+schema_abstract_rules[schemas.Int] = lambda _: core.IntAVal()
+schema_abstract_rules[schemas.Float] = lambda _: core.FloatAVal()
+schema_abstract_rules[schemas.Bool] = lambda _: core.BoolAVal()
+schema_abstract_rules[schemas.Enum] = lambda s: core.aval_rules[type(s.values[0])](s.values[0])
+schema_abstract_rules[schemas.Docd] = lambda s: schema_abstract_tree(s.value)
 
 
 def is_schema_abstract_leaf(x: Any) -> bool:
@@ -435,76 +402,46 @@ def schema_abstract_node(x: Any) -> Any:
 
 
 def schema_abstract_tree(schema: Any) -> Tree:
-    return treelib.map(schema_abstract_node, schema, is_leaf=is_schema_abstract_leaf)
+    return utils.tree.map(schema_abstract_node, schema, is_leaf=is_schema_abstract_leaf)
 
 
-def abstract_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> Tree:
+def abstract_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     contents, model = in_tree
-    assert all(typeof(x) is str for x in contents), f"Expected string messages, got {contents!r}"
-    assert typeof(model) is str, f"Expected string model, got {model!r}"
+    assert all(type(x) in (str, core.StrAVal) for x in contents), f"Expected strings: {contents!r}"
+    assert type(model) in (str, core.StrAVal), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
 
 
-def pushforward_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> tuple[Tree, Tree]:
+def pushforward_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
-    t_tree = (materialize(tangent_contents), primal_model)
+    t_tree = (ad.materialize(tangent_contents), primal_model)
     p_resp = lm_schema_call_p.bind(p_tree, roles=roles, schema=schema)
     t_resp = lm_schema_call_p.bind(t_tree, roles=roles, schema=schema)
     return p_resp, t_resp
 
 
-async def apush_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> tuple[Tree, Tree]:
+async def apush_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     abind = ft.partial(lm_schema_call_p.abind, roles=roles, schema=schema)
     p_tree = (primal_contents, primal_model)
-    t_tree = (materialize(tangent_contents), primal_model)
+    t_tree = (ad.materialize(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> tuple[Tree, Tree]:
+def pullback_fwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     contents, model = in_tree
     out = lm_schema_call_p.bind(in_tree, roles=roles, schema=schema)
     residuals = (contents, model, out)
     return out, residuals
 
 
-async def apull_fwd_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> tuple[Tree, Tree]:
+async def apull_fwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     contents, model = in_tree
     out = await lm_schema_call_p.abind(in_tree, roles=roles, schema=schema)
     residuals = (contents, model, out)
@@ -514,13 +451,13 @@ async def apull_fwd_lm_schema_call(
 def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
 
     def validate_schema_feedback(path: str, feedback: Any) -> str:
-        if is_zero(feedback):
+        if ad.is_zero(feedback):
             return "No feedback"
         if type(feedback) is str:
             return feedback
         raise TypeError(f"{path}: schema output cotangent leaves must be text, got {feedback!r}")
 
-    out_leaves, out_spec = treelib.flatten(out)
+    out_leaves, out_spec = utils.tree.flatten(out)
     cotangents = out_spec.flatten_up_to(cotangent)
     lines = ["Fields:"]
 
@@ -532,13 +469,7 @@ def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
     return "\n".join(lines).expandtabs(2)
 
 
-def pullback_bwd_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> Tree:
+def pullback_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     residuals, out_cotangent = in_tree
     contents, model, out = residuals
     feedback = build_cotangent_schema_summary(out, out_cotangent)
@@ -547,16 +478,10 @@ def pullback_bwd_lm_schema_call(
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    return grads, Zero(str)
+    return grads, ad.zeroof(model)
 
 
-async def apull_bwd_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> Tree:
+async def apull_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     residuals, out_cotangent = in_tree
     contents, model, out = residuals
     feedback = build_cotangent_schema_summary(out, out_cotangent)
@@ -566,61 +491,49 @@ async def apull_bwd_lm_schema_call(
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
-    return (await asyncio.gather(*[grad(c) for c in contents]), Zero(str))
+    return (await asyncio.gather(*[grad(c) for c in contents]), ad.zeroof(model))
 
 
-def batch_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Any,
-) -> tuple[Tree, Tree]:
+def batch_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if batch_spec(in_values, in_batched) is None:
+    if utils.batch_spec(in_values, in_batched) is None:
         result = lm_schema_call_p.bind(in_values, roles=roles, schema=schema)
-        out_batched = treelib.map(lambda _: False, result)
+        out_batched = utils.tree.map(lambda _: False, result)
         return result, out_batched
 
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     bind = ft.partial(lm_schema_call_p.bind, roles=roles, schema=schema)
     results = [bind(unbatch(b)) for b in range(batch_size)]
-    out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = batch_transpose(batch_size, out_batched, results)
+    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_ib = utils.batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
 
 
-async def abatch_lm_schema_call(
-    in_tree: Tree,
-    /,
-    *,
-    roles: list[str],
-    schema: Tree,
-) -> tuple[Tree, Tree]:
+async def abatch_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if batch_spec(in_values, in_batched) is None:
+    if utils.batch_spec(in_values, in_batched) is None:
         result = await lm_schema_call_p.abind(in_values, roles=roles, schema=schema)
-        out_batched = treelib.map(lambda _: False, result)
+        out_batched = utils.tree.map(lambda _: False, result)
         return result, out_batched
 
-    unbatch = ft.partial(batch_index, in_values, in_batched)
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
     abind = ft.partial(lm_schema_call_p.abind, roles=roles, schema=schema)
     results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
-    out_batched = treelib.map(lambda _: True, results[0])
-    out_ib = batch_transpose(batch_size, out_batched, list(results))
+    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_ib = utils.batch_transpose(batch_size, out_batched, list(results))
     return out_ib, out_batched
 
 
-impl_rules.set(lm_schema_call_p, impl_lm_schema_call)
-impl_rules.aset(lm_schema_call_p, aimpl_lm_schema_call)
-abstract_rules.set(lm_schema_call_p, abstract_lm_schema_call)
-push_rules.set(lm_schema_call_p, pushforward_lm_schema_call)
-push_rules.aset(lm_schema_call_p, apush_lm_schema_call)
-pull_fwd_rules.set(lm_schema_call_p, pullback_fwd_lm_schema_call)
-pull_fwd_rules.aset(lm_schema_call_p, apull_fwd_lm_schema_call)
-pull_bwd_rules.set(lm_schema_call_p, pullback_bwd_lm_schema_call)
-pull_bwd_rules.aset(lm_schema_call_p, apull_bwd_lm_schema_call)
-batch_rules.set(lm_schema_call_p, batch_lm_schema_call)
-batch_rules.aset(lm_schema_call_p, abatch_lm_schema_call)
+core.impl_rules.set(lm_schema_call_p, impl_lm_schema_call)
+core.impl_rules.aset(lm_schema_call_p, aimpl_lm_schema_call)
+core.abstract_rules.set(lm_schema_call_p, abstract_lm_schema_call)
+core.push_rules.set(lm_schema_call_p, pushforward_lm_schema_call)
+core.push_rules.aset(lm_schema_call_p, apush_lm_schema_call)
+core.pull_fwd_rules.set(lm_schema_call_p, pullback_fwd_lm_schema_call)
+core.pull_fwd_rules.aset(lm_schema_call_p, apull_fwd_lm_schema_call)
+core.pull_bwd_rules.set(lm_schema_call_p, pullback_bwd_lm_schema_call)
+core.pull_bwd_rules.aset(lm_schema_call_p, apull_bwd_lm_schema_call)
+core.batch_rules.set(lm_schema_call_p, batch_lm_schema_call)
+core.batch_rules.aset(lm_schema_call_p, abatch_lm_schema_call)

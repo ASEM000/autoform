@@ -21,39 +21,35 @@ from contextlib import contextmanager
 
 from optree import PyTreeSpec
 
-from autoform.checkpoint import checkpoint_p
-from autoform.core import (
-    Interpreter,
-    Prim,
-    active_interpreter,
-    using_interpreter,
-)
-from autoform.utils import Tree, treelib
+import autoform.checkpoint as checkpoint
+import autoform.core as core
+import autoform.utils as utils
 
-type CacheKey = tuple[Prim, tuple[Tree, ...], PyTreeSpec]
-non_memoizable_primitives: set[Prim] = {checkpoint_p}
+type Tree[T] = utils.Tree[T]
+type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
+non_memoizable_primitives: set[core.Prim] = {checkpoint.checkpoint_p}
 
 
-def make_key(prim: Prim, in_tree: Tree, /, **params) -> CacheKey:
-    flat, struct = treelib.flatten((in_tree, params))
+def make_key(prim: core.Prim, in_tree: Tree, /, **params) -> CacheKey:
+    flat, struct = utils.tree.flatten((in_tree, params))
     return (prim, tuple(flat), struct)
 
 
-class MemoizingInterpreter(Interpreter):
+class MemoizingInterpreter(core.Interpreter):
     __slots__ = ["parent", "cache"]
 
     def __init__(self):
-        self.parent = active_interpreter.get()
+        self.parent = core.active_interpreter.get()
         self.cache: dict[CacheKey, Tree] = {}
 
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+    def interpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         if prim in non_memoizable_primitives:
             return self.parent.interpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = self.parent.interpret(prim, in_tree, **params)
         return self.cache[key]
 
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+    async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         if prim in non_memoizable_primitives:
             return await self.parent.ainterpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
@@ -91,5 +87,5 @@ def memoize() -> Generator[None, None, None]:
         >>> len(ir.ir_eqns)
         1
     """
-    with using_interpreter(MemoizingInterpreter()):
+    with core.using_interpreter(MemoizingInterpreter()):
         yield

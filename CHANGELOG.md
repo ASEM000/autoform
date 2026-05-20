@@ -4,18 +4,18 @@
 
 ### Breaking Changes
 
-  - Removed `af.Struct`, `af.lm_struct_call`, and the Struct-specific type-tree helpers. Use Optree-registered pytrees under `af.PYTREE_NAMESPACE` for object structure, and use `af.lm_schema_call(..., schema=...)` for structured LM outputs.
+  - Removed `af.Struct`, `af.lm_struct_call`, and the Struct-specific type-tree helpers. Use Optree-registered pytrees under {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` for object structure, and use {py:func}`lm_schema_call <autoform.lm_schema_call>` with `schema=...` for structured LM outputs.
 
     ```python
     import optree
     import autoform as af
 
-    treelib = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
-    @treelib.dataclasses.dataclass
+    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
     class Answer:
         reasoning: str
         answer: float
+
 
     schema = Answer(
         reasoning=af.Str() @ af.Doc("Reasoning behind the answer."),
@@ -23,24 +23,32 @@
     )
     ```
 
-  - Public tracing and IR execution boundaries are now positional-only. `trace`, `call`, `acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`.
+  - Removed the old `split` / `splitpoint` and primitive-local intercept/effect APIs from the public surface.
+
+  - Public tracing and IR execution boundaries are now positional-only. {py:func}`trace <autoform.trace>`, `IR.call`, `IR.acall`, and related APIs reject keyword arguments so input normalization stays consistent across transforms like `static` and `in_axes`. Use the methods on traced IR objects rather than removed top-level `af.call(...)` / `af.acall(...)` helpers.
 
     ```python
-    def greet(name, punctuation):
-        return af.format("Hello, {}{}", name, punctuation)
+    def label(item, punctuation):
+        return af.format("item: {}{}", item, punctuation)
 
 
-    ir = af.trace(greet)("world", "!")
-    af.call(ir)("Alice", "?")
+    ir = af.trace(label)("alpha", "!")
+    ir.call("beta", "?")
+    # "item: beta?"
     ```
 
-  - The primitive-local observational runtime has been renamed from effect terminology to intercept terminology. Update `Effect` -> `Intercept`, `EffectInterpreter` -> `InterceptorInterpreter`, `using_effect` -> `using_intercept`, `active_effect` -> `active_intercept`, `IREqn.effect` -> `IREqn.intercept`, `effect_p` -> `intercept_p`, `autoform.effects` -> `autoform.intercepts`, and `dce(..., keep_effects=...)` -> `dce(..., keep_intercepts=...)`. The callback passed to `InterceptorInterpreter` is now described as an interceptor rather than a handler.
+  - {py:func}`lm_call <autoform.lm_call>` and {py:func}`lm_schema_call <autoform.lm_schema_call>` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
 
-  - `lm_call(...)` and `lm_schema_call(...)` now keep only `model=` as the LM-control input. Provider-specific controls such as `temperature`, `max_tokens`, retries, fallbacks, and rate limits should be configured on the active client, for example with a `litellm.Router` model alias and `litellm_params`.
+  - Removed `af.Tag`. Pass any hashable value directly to {py:func}`tag <autoform.tag>` instead of subclassing `af.Tag`.
+
+    ```python
+    with af.tag("draft"):
+        ir = af.trace(program)("seed")
+    ```
 
 ### New Features
 
-  - `trace(..., static=...)` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
+  - {py:func}`trace <autoform.trace>` with `static=...` now accepts a bool pytree over the positional input structure. Static leaves are fixed at trace time, which lets ordinary Python control flow specialize to one path.
 
     ```python
     def label(is_error, value):
@@ -50,24 +58,32 @@
 
 
     ir = af.trace(label, static=(True, False))(True, "disk full")
-    af.call(ir)(True, "timeout")
+    ir.call(True, "timeout")
     # "error: timeout"
     ```
 
-  - `lm_client` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
+  - {py:func}`lm_client <autoform.lm_client>` context manager to set the active LM client (for example a configured `litellm.Router`). Enables concurrency limits, retries, fallbacks, and rate limiting. Check [LiteLLM docs](https://docs.litellm.ai/docs/routing) for reference.
 
     ```python
     import autoform as af
     from litellm import Router
 
-    litellm_params = dict(model="gpt-5.2", tpm=100_000, rpm=1_000)
-    model_list = [dict(model_name="gpt-5.2", litellm_params=litellm_params)]
+    litellm_params = dict(model="gpt-5.5", tpm=100_000, rpm=1_000)
+    model_list = [dict(model_name="gpt-5.5", litellm_params=litellm_params)]
     client = Router(model_list=model_list, max_parallel_requests=10)
+
+
+    def program(topic):
+        prompt = af.format("Summarize {} in one sentence.", topic)
+        return af.lm_call([dict(role="user", content=prompt)], model="gpt-5.5")
+
+
+    ir = af.trace(program)("topic")
     with af.lm_client(client):
-        result = af.call(ir)(inputs)
+        result = ir.call("release notes")
     ```
 
-  - Added `lm_schema_call(...)` and schema nodes (`Str`, `Int`, `Float`, `Bool`, `Enum`, `Doc`) for structured LM outputs. Schemas are ordinary pytrees and can be dictionaries, lists, tuples, or custom Optree-registered objects.
+  - Added {py:func}`lm_schema_call <autoform.lm_schema_call>` and schema nodes ({py:class}`Str <autoform.Str>`, {py:class}`Int <autoform.Int>`, {py:class}`Float <autoform.Float>`, {py:class}`Bool <autoform.Bool>`, {py:class}`Enum <autoform.Enum>`, {py:class}`Doc <autoform.Doc>`) for structured LM outputs. Schemas are ordinary pytrees and can be dictionaries, lists, tuples, or custom Optree-registered objects.
 
     ```python
     schema = {
@@ -76,29 +92,14 @@
         "text": af.Str(),
     }
 
-    out = af.lm_schema_call(messages, model="gpt-5.2", schema=schema)
+    out = af.lm_schema_call(messages, model="gpt-5.5", schema=schema)
     ```
-
-  - Added inference primitives `factor` and `weight`.
-
-    ```python
-    def program(x):
-        y = af.concat(x, "!")
-        af.factor(y, judge=lambda s: float(len(s)))
-        return y
-
-
-    ir = af.trace(program)("x")
-    out, total = af.call(af.weight(ir))("ab")
-    # ("ab!", 3.0)
-    ```
-
 
 ### Improvements
 
-  - `trace` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
+  - {py:func}`trace <autoform.trace>` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
 
-  - `concat` and `match` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
+  - {py:func}`concat <autoform.concat>` and {py:func}`match <autoform.match>` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
 
     ```python
     def bad(x, y, z):
@@ -108,9 +109,7 @@
     af.trace(bad)("a", "b", 1)  # AssertionError during tracing
     ```
 
-  - `split` now returns the value marked by `splitpoint`, even when unrelated equations appear before the splitpoint. previously `lhs` could incorrectly return the output of the last preceding equation instead of the marked value.
-
-  - `batch` now preserves its batch axis at the HOP boundary. if an inner batch rule returns a scalar leaf, the HOP broadcasts it back into the common batch container instead of dropping the axis on that output.
+  - {py:func}`batch <autoform.batch>` now preserves its batch axis at the HOP boundary. if an inner batch rule returns a scalar leaf, the HOP broadcasts it back into the common batch container instead of dropping the axis on that output.
 
     ```python
     def program(x, y):
@@ -120,9 +119,21 @@
     ir = af.trace(program)("...", "...")
     batched = af.batch(ir, in_axes=(True, False))
 
-    af.call(batched)(["a", "b"], "constant")
+    batched.call(["a", "b"], "constant")
     # (["x=a", "x=b"], ["y=constant", "y=constant"])
     ```
+
+  - {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` documentation now distinguishes execution-time checkpoint collection/substitution from trace-time specialization. {py:func}`collect <autoform.collect>` is documented as execution-only; {py:func}`inject <autoform.inject>` is documented as runtime checkpoint substitution around `ir.call(...)` and trace-time checkpoint specialization when used inside the function being traced.
+
+### Documentation
+
+  - Added a published [Changelog](docs/reference/changelog.md) page under Reference.
+
+  - Reworked [Getting Started](docs/getting-started.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
+
+  - Added an [array extension recipe](docs/recipes/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
+
+  - Normalized Mermaid diagrams across the README and docs, and added a GitHub footer link to the Furo docs theme.
 
 ## v0.2.0 (February 7, 2026)
 
@@ -309,5 +320,5 @@
     ```python
     def explain(topic):
         msg = dict(role="user", content=af.format("Explain {}", topic))
-        return af.lm_call([msg], model="gpt-5.2")
+        return af.lm_call([msg], model="gpt-5.5")
     ```

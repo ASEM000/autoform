@@ -50,7 +50,7 @@ class TestInternalGatherViaSched:
 
         @ft.partial(af.core.abstract_rules.set, error_p)
         def abstract_error(x):
-            return af.core.TypedAVal(str)
+            return af.core.StrAVal()
 
         @ft.partial(af.core.impl_rules.set, error_p)
         def impl_error(x):
@@ -201,7 +201,7 @@ class TestGatherWithDCE:
         gather_eqn = [e for e in dce_ir.ir_eqns if e.prim.name == "gather"][0]
         inner_dead = gather_eqn.params["irs"][1]
         assert len(inner_dead.ir_eqns) == 0
-        leaves = af.utils.treelib.leaves(inner_dead.out_ir_tree)
+        leaves = af.utils.tree.leaves(inner_dead.out_ir_tree)
         assert all(x is None for x in leaves)
 
 
@@ -682,7 +682,7 @@ class TestDepends:
         depends_eqns = [e for e in ir.ir_eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
-        in_leaves = af.utils.treelib.leaves(depends_eqns[0].in_ir_tree)
+        in_leaves = af.utils.tree.leaves(depends_eqns[0].in_ir_tree)
         assert len(in_leaves) >= 2
 
 

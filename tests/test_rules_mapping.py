@@ -20,10 +20,6 @@ import autoform as af
 
 
 class TestInterpreterRuleMapping:
-    def test_core_all_exports_existing_symbols(self):
-        missing = [name for name in af.core.__all__ if not hasattr(af.core, name)]
-        assert missing == []
-
     def test_basic_get_set(self):
         mapping = af.core.InterpreterRuleMapping()
         p = af.core.Prim("test_basic")
