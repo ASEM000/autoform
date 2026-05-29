@@ -71,6 +71,7 @@ batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
+serial_fanout = scheduling.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
 is_irvar = core.is_irvar
@@ -135,6 +136,7 @@ __all__ = [
     "batch_spec",
     "batch_transpose",
     "using_interpreter",
+    "serial_fanout",
     "active_interpreter",
     "active_tags",
     "is_irvar",
