@@ -24,6 +24,7 @@ from typing import Any
 
 import autoform.core as core
 import autoform.dce as dce
+import autoform.scheduling as scheduling
 import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -235,7 +236,8 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Yields:
         A dict that maps keys to lists of collected values.
     """
-    with core.using_interpreter(CollectingInterpreter(collection=collection)) as interpreter:
+    interpreter = CollectingInterpreter(collection=collection)
+    with scheduling.serial_fanout(), core.using_interpreter(interpreter):
         yield interpreter.collected
 
 
@@ -297,5 +299,6 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
-    with core.using_interpreter(InjectingInterpreter(collection=collection, values=values)):
+    interpreter = InjectingInterpreter(collection=collection, values=values)
+    with scheduling.serial_fanout(), core.using_interpreter(interpreter):
         yield

@@ -24,6 +24,7 @@ import autoform.ad as ad
 import autoform.core as core
 import autoform.dce as dce
 import autoform.memoize as memoize
+import autoform.scheduling as scheduling
 import autoform.utils as utils
 
 factor_p = core.Prim("factor")
@@ -211,10 +212,9 @@ def batch_weighted_call(in_tree, /, *, ir: core.IR):
     if utils.batch_spec(in_values, in_batched) is None:
         return weighted_call_p.bind(in_values, ir=ir), False
 
-    out_bi = [
-        weighted_call_p.bind(utils.batch_index(in_values, in_batched, b), ir=ir)
-        for b in range(batch_size)
-    ]
+    weighted_ir = weighted(ir)
+    inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
+    out_bi = scheduling.gather_p.bind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -226,10 +226,9 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
     if utils.batch_spec(in_values, in_batched) is None:
         return await weighted_call_p.abind(in_values, ir=ir), False
 
-    out_bi = await asyncio.gather(*[
-        weighted_call_p.abind(utils.batch_index(in_values, in_batched, b), ir=ir)
-        for b in range(batch_size)
-    ])
+    weighted_ir = weighted(ir)
+    inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
+    out_bi = await scheduling.gather_p.abind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
