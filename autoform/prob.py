@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Probabilistic trace-weight primitives."""
+"""Probabilistic path-weight primitives."""
 
 from __future__ import annotations
 
@@ -34,10 +34,10 @@ number_type = (int, float, core.IntAVal, core.FloatAVal)
 
 
 def factor(weight: float, /, *, name: Hashable | None = None) -> None:
-    """Multiply the current trace weight by ``weight``.
+    """Multiply the current path weight by ``weight``.
 
     ``factor`` is neutral during ordinary execution. When an IR is transformed
-    with ``weighted``, each reached factor contributes to the returned trace
+    with ``weighted``, each reached factor contributes to the returned path
     weight.
     """
     hash(name)
@@ -119,7 +119,7 @@ core.batch_rules.aset(factor_p, abatch_factor)
 weighted_call_p = core.Prim("weighted_call")
 
 
-class TraceWeightInterpreter(core.Interpreter):
+class PathWeightInterpreter(core.Interpreter):
     __slots__ = ["log_weight", "parent"]
 
     def __init__(self):
@@ -145,7 +145,7 @@ class TraceWeightInterpreter(core.Interpreter):
 
 
 def weighted(ir: core.IR, /) -> core.IR:
-    """Transform an IR to return ``(output, trace_weight)`` for one trace."""
+    """Transform an IR to return ``(output, path_weight)`` for one path."""
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
 
     def make_out(atom):
@@ -163,7 +163,7 @@ def weighted(ir: core.IR, /) -> core.IR:
 
 
 def impl_weighted_call(in_tree, /, *, ir: core.IR):
-    interpreter = TraceWeightInterpreter()
+    interpreter = PathWeightInterpreter()
     with core.using_interpreter(interpreter):
         output = ir.call(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
@@ -171,7 +171,7 @@ def impl_weighted_call(in_tree, /, *, ir: core.IR):
 
 
 async def aimpl_weighted_call(in_tree, /, *, ir: core.IR):
-    interpreter = TraceWeightInterpreter()
+    interpreter = PathWeightInterpreter()
     with core.using_interpreter(interpreter):
         output = await ir.acall(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
@@ -186,7 +186,7 @@ def abstract_weighted_call(in_tree, /, *, ir: core.IR):
 def unsupported_weighted_call_transform(transform: str) -> None:
     raise NotImplementedError(
         f"`{transform}(af.weighted(ir))` is not supported. Apply `af.weighted` after "
-        f"`{transform}` if that is the intended trace-weight semantics."
+        f"`{transform}` if that is the intended path-weight semantics."
     )
 
 

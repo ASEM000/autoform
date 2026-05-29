@@ -43,7 +43,7 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 **Trace Weight**
 
-- {py:func}`factor <autoform.factor>`: multiply the current trace weight. Ordinary execution treats it as a no-output effect; {py:func}`weighted <autoform.weighted>` returns the accumulated trace weight.
+- {py:func}`factor <autoform.factor>`: multiply the current path weight. Ordinary execution treats it as a no-output effect; {py:func}`weighted <autoform.weighted>` returns the accumulated path weight.
 
 ## Primitive Definitions
 

@@ -9,6 +9,7 @@ trace-ir-execute
 the-ir
 primitives
 transforms
+path-weights
 tracing-semantics
 pytrees
 schemas
