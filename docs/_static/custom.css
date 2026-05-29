@@ -28,3 +28,63 @@ dl.py dt {
     white-space: normal;
     word-wrap: break-word;
 }
+
+:root {
+    --autoform-code-background: #f6f8fa;
+    --autoform-code-border: #d0d7de;
+    --color-code-background: var(--autoform-code-background);
+}
+
+.highlight,
+pre.literal-block,
+.highlighttable td.linenos,
+.code-block-caption {
+    background: var(--autoform-code-background);
+    background-color: var(--autoform-code-background);
+    border-color: var(--autoform-code-border);
+}
+
+.highlight,
+pre.literal-block {
+    border: 1px solid var(--autoform-code-border);
+}
+
+body[data-theme="dark"] {
+    --autoform-code-background: #2b313a;
+    --autoform-code-border: #526173;
+}
+
+body[data-theme="dark"] .highlight,
+body[data-theme="dark"] pre.literal-block,
+body[data-theme="dark"] .highlighttable td.linenos,
+body[data-theme="dark"] .code-block-caption {
+    background: var(--autoform-code-background);
+    background-color: var(--autoform-code-background);
+    border-color: var(--autoform-code-border);
+}
+
+body[data-theme="dark"] .highlight,
+body[data-theme="dark"] pre.literal-block {
+    border: 1px solid var(--autoform-code-border);
+}
+
+@media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) {
+        --autoform-code-background: #2b313a;
+        --autoform-code-border: #526173;
+    }
+
+    body:not([data-theme="light"]) .highlight,
+    body:not([data-theme="light"]) pre.literal-block,
+    body:not([data-theme="light"]) .highlighttable td.linenos,
+    body:not([data-theme="light"]) .code-block-caption {
+        background: var(--autoform-code-background);
+        background-color: var(--autoform-code-background);
+        border-color: var(--autoform-code-border);
+    }
+
+    body:not([data-theme="light"]) .highlight,
+    body:not([data-theme="light"]) pre.literal-block {
+        border: 1px solid var(--autoform-code-border);
+    }
+}
