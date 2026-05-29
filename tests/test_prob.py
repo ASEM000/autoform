@@ -12,9 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
+
 import pytest
 
 import autoform as af
+import autoform.core as core
+
+delay_p = core.Prim("test_prob_delay")
+
+
+def delay(value: float) -> float:
+    return delay_p.bind(value)
+
+
+def impl_delay(value: float) -> float:
+    return value
+
+
+async def aimpl_delay(value: float) -> float:
+    await asyncio.sleep(value)
+    return value
+
+
+def abstract_delay(value):
+    return value
+
+
+core.impl_rules.set(delay_p, impl_delay)
+core.impl_rules.aset(delay_p, aimpl_delay)
+core.abstract_rules.set(delay_p, abstract_delay)
 
 
 class TestFactor:
@@ -150,6 +177,41 @@ class TestWeighted:
 
         assert outputs == ["x1", "x2"]
         assert weights == pytest.approx([0.9, 0.2])
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_async_batch_over_weighted_collects_in_batch_order(self):
+        def program(seconds: float):
+            value = delay(seconds)
+            value = af.checkpoint(value, key="seen", collection="debug")
+            af.factor(1.0, name="score")
+            return value
+
+        ir = af.trace(program)(0.0)
+        batched = af.batch(af.weighted(ir), in_axes=True)
+
+        with af.collect(collection="debug") as collected:
+            outputs, weights = await batched.acall([0.03, 0.01, 0.02])
+
+        assert outputs == [0.03, 0.01, 0.02]
+        assert weights == [1.0, 1.0, 1.0]
+        assert collected == {"seen": [0.03, 0.01, 0.02]}
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_async_batch_over_weighted_injects_in_batch_order(self):
+        def program(seconds: float):
+            value = delay(seconds)
+            value = af.checkpoint(value, key="seen", collection="cache")
+            af.factor(1.0, name="score")
+            return value
+
+        ir = af.trace(program)(0.0)
+        batched = af.batch(af.weighted(ir), in_axes=True)
+
+        with af.inject(collection="cache", values={"seen": ["a", "b", "c"]}):
+            outputs, weights = await batched.acall([0.03, 0.01, 0.02])
+
+        assert outputs == ["a", "b", "c"]
+        assert weights == [1.0, 1.0, 1.0]
 
     def test_posterior_can_be_normalized_outside_core(self):
         def program(candidate: str, likelihood: float):

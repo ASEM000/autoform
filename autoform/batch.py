@@ -16,12 +16,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import functools as ft
 
 import autoform.ad as ad
 import autoform.core as core
 import autoform.dce as dce
+import autoform.scheduling as scheduling
 import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -336,7 +336,9 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> 
     batch_size, b_in, v_in = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(utils.batch_index, v_in, b_in)
-    v_bi = await asyncio.gather(*[batched_ir.acall(*unbatch(b)) for b in range(batch_size)])
+
+    inputs = [unbatch(b) for b in range(batch_size)]
+    v_bi = await scheduling.gather_p.abind(inputs, irs=[batched_ir] * batch_size)
     b_out = utils.tree.map(lambda _: True, ir.out_ir_tree)
     v_out = utils.batch_transpose(batch_size, b_out, list(v_bi))
     return v_out, b_out

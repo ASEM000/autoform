@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import functools as ft
 from collections import defaultdict
 from collections.abc import Callable
@@ -36,6 +35,7 @@ __all__ = [
 
 import autoform.core as core
 import autoform.dce as dce
+import autoform.scheduling as scheduling
 import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -363,7 +363,9 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     unbatch_p = ft.partial(utils.batch_index, p_cols, p_batched)
     unbatch_t = ft.partial(utils.batch_index, t_cols, t_batched)
     pf_ir = pushforward(ir)
-    out_bi = await asyncio.gather(*[pf_ir.acall(unbatch_p(b), unbatch_t(b)) for b in range(bs)])
+
+    inputs = [(unbatch_p(b), unbatch_t(b)) for b in range(bs)]
+    out_bi = await scheduling.gather_p.abind(inputs, irs=[pf_ir] * bs)
     out_batched = utils.tree.map(lambda _: True, pf_ir.out_ir_tree)
     out_ib = utils.batch_transpose(bs, out_batched, list(out_bi))
     return out_ib, out_batched
@@ -768,7 +770,9 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     unbatch_p = ft.partial(utils.batch_index, p_cols, p_batched)
     unbatch_c = ft.partial(utils.batch_index, c_cols, c_batched)
     pb_ir = pullback(ir)
-    out_bi = await asyncio.gather(*[pb_ir.acall(unbatch_p(b), unbatch_c(b)) for b in range(size)])
+
+    inputs = [(unbatch_p(b), unbatch_c(b)) for b in range(size)]
+    out_bi = await scheduling.gather_p.abind(inputs, irs=[pb_ir] * size)
     out_batched = utils.tree.map(lambda _: True, pb_ir.out_ir_tree)
     out_ib = utils.batch_transpose(size, out_batched, list(out_bi))
     return out_ib, out_batched

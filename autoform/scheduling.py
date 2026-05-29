@@ -19,7 +19,9 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 from collections import defaultdict, deque
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 import autoform.ad as ad
 import autoform.analysis as analysis
@@ -30,14 +32,31 @@ import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type TreeList = list[Tree]
-type BatchedTreeList = list[Tree[bool]]
 type IRList = list[core.IR]
-type GatherPair = tuple[TreeList, TreeList]
-type GatherResidual = tuple[TreeList, IRList]
-type GatherFwdResult = tuple[TreeList, GatherResidual]
-type BatchGatherInput = tuple[int, list[bool], TreeList]
-type BatchGatherOutput = tuple[TreeList, BatchedTreeList]
+type GatherPair = tuple[list[Tree], list[Tree]]
+type GatherResidual = tuple[list[Tree], IRList]
+type GatherFwdResult = tuple[list[Tree], GatherResidual]
+type BatchGatherInput = tuple[int, list[bool], list[Tree]]
+type BatchGatherOutput = tuple[list[Tree], list[Tree[bool]]]
+
+# ==================================================================================================
+# AWAITING
+# ==================================================================================================
+
+
+serial_fanout_flag: ContextVar[bool] = ContextVar("serial_fanout_flag", default=False)
+
+
+@contextmanager
+def serial_fanout() -> Generator[None, None, None]:
+    """Run scheduled async fanout sequentially inside the context."""
+
+    token = serial_fanout_flag.set(True)
+    try:
+        yield
+    finally:
+        serial_fanout_flag.reset(token)
+
 
 # ==================================================================================================
 # GATHER
@@ -46,26 +65,22 @@ type BatchGatherOutput = tuple[TreeList, BatchedTreeList]
 gather_p = core.Prim("gather")
 
 
-def impl_gather(in_tree: TreeList, /, *, irs: IRList) -> TreeList:
+def impl_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
     assert len(in_tree) == len(irs)
     return [ir.call(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
 
 
-async def aimpl_gather(in_tree: TreeList, /, *, irs: IRList) -> TreeList:
+async def aimpl_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
     assert len(in_tree) == len(irs)
-
     if len(irs) == 1:
-        [ir], [inputs] = irs, in_tree
-        return [await ir.acall(*inputs)]
-
-    async def run(pair):
-        ir, inp = pair
-        return await ir.acall(*inp)
-
-    return await asyncio.gather(*[run(pair) for pair in zip(irs, in_tree, strict=True)])
+        [ir], [inp] = irs, in_tree
+        return [await ir.acall(*inp)]
+    if serial_fanout_flag.get():
+        return [await ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
+    return await asyncio.gather(*[ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)])
 
 
-def abstract_gather(in_tree: TreeList, /, *, irs: IRList) -> TreeList:
+def abstract_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
     return [utils.tree.map(core.ir_aval, ir.out_ir_tree) for ir in irs]
 
 
@@ -87,19 +102,19 @@ async def apush_gather(in_tree: GatherPair, /, *, irs: IRList) -> GatherPair:
     return list(p_outs), list(t_outs)
 
 
-def pull_fwd_gather(in_tree: TreeList, /, *, irs: IRList) -> GatherFwdResult:
+def pull_fwd_gather(in_tree: list[Tree], /, *, irs: IRList) -> GatherFwdResult:
     results = gather_p.bind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
 
-async def apull_fwd_gather(in_tree: TreeList, /, *, irs: IRList) -> GatherFwdResult:
+async def apull_fwd_gather(in_tree: list[Tree], /, *, irs: IRList) -> GatherFwdResult:
     results = await gather_p.abind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
 
-def pull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> TreeList:
+def pull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -108,7 +123,7 @@ def pull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> TreeList:
     return [cot for _, cot in results]
 
 
-async def apull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> TreeList:
+async def apull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -120,8 +135,8 @@ async def apull_bwd_gather(in_tree: Tree, /, *, irs: IRList) -> TreeList:
 def batch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGatherOutput:
     batch_size, in_batched, inputs = in_tree
 
-    results: TreeList = []
-    out_batched: BatchedTreeList = []
+    results: list[Tree] = []
+    out_batched: list[Tree[bool]] = []
 
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if utils.batch_spec(inp, inp_batched) is None:
@@ -138,8 +153,8 @@ def batch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGatherOut
 async def abatch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGatherOutput:
     batch_size, in_batched, inputs = in_tree
 
-    results: TreeList = []
-    out_batched: BatchedTreeList = []
+    results: list[Tree] = []
+    out_batched: list[Tree[bool]] = []
 
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if utils.batch_spec(inp, inp_batched) is None:
