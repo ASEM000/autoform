@@ -72,6 +72,9 @@ def impl_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 async def aimpl_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
     assert len(in_tree) == len(irs)
+    if len(irs) == 1:
+        [ir], [inp] = irs, in_tree
+        return [await ir.acall(*inp)]
     if serial_fanout_flag.get():
         return [await ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
     return await asyncio.gather(*[ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)])
