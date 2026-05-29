@@ -7,7 +7,6 @@ Primitives are operations that tracing records as IR equations.
 ```{eval-rst}
 .. autofunction:: autoform.lm_call
 .. autofunction:: autoform.lm_schema_call
-.. autofunction:: autoform.checkpoint
 ```
 
 ## String
@@ -30,4 +29,16 @@ Primitives are operations that tracing records as IR equations.
 
 ```{eval-rst}
 .. autofunction:: autoform.depends
+```
+
+## Intercepts
+
+```{eval-rst}
+.. autofunction:: autoform.checkpoint
+```
+
+## Trace Weight
+
+```{eval-rst}
+.. autofunction:: autoform.factor
 ```
