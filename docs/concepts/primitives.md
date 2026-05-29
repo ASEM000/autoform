@@ -1,6 +1,6 @@
 # Primitives
 
-A primitive is a named operation that the [IR](the-ir.md) records instead of executing inline during [tracing](tracing-semantics.md). Examples include {py:func}`format <autoform.format>`, {py:func}`concat <autoform.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, and {py:func}`checkpoint <autoform.checkpoint>`.
+A primitive is a named operation that the [IR](the-ir.md) records instead of executing inline during [tracing](tracing-semantics.md). Examples include {py:func}`format <autoform.format>`, {py:func}`concat <autoform.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
 
 The name matters because [transforms](transforms.md) dispatch on primitive identity. {py:func}`pullback <autoform.pullback>` knows how to route feedback through the {py:func}`lm_call <autoform.lm_call>` primitive because a rule is registered for it. Plain Python operations do not have those rules, so they either run at trace time or fail when they need a concrete runtime value.
 
@@ -40,6 +40,10 @@ The split pullback rules matter: the forward sweep records the values needed lat
 **Intercepts**
 
 - {py:func}`checkpoint <autoform.checkpoint>`: mark an intermediate value for {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>`.
+
+**Trace Weight**
+
+- {py:func}`factor <autoform.factor>`: multiply the current path weight. Ordinary execution treats it as a no-output effect; {py:func}`weighted <autoform.weighted>` returns the accumulated path weight.
 
 ## Primitive Definitions
 

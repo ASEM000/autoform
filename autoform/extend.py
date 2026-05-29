@@ -27,6 +27,7 @@ import autoform.core as core
 import autoform.dce as dce
 import autoform.lm as lm
 import autoform.memoize as memoize
+import autoform.prob as prob
 import autoform.scheduling as scheduling
 import autoform.string as string
 import autoform.utils as utils
@@ -85,6 +86,8 @@ concat_p = string.concat_p
 match_p = string.match_p
 lm_call_p = lm.lm_call_p
 lm_schema_call_p = lm.lm_schema_call_p
+factor_p = prob.factor_p
+weighted_call_p = prob.weighted_call_p
 checkpoint_p = checkpoint.checkpoint_p
 stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
@@ -142,6 +145,8 @@ __all__ = [
     "match_p",
     "lm_call_p",
     "lm_schema_call_p",
+    "factor_p",
+    "weighted_call_p",
     "checkpoint_p",
     "stop_gradient_p",
     "switch_p",

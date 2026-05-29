@@ -28,6 +28,7 @@ import autoform.dce as dce
 import autoform.extend as extend
 import autoform.lm as lm
 import autoform.memoize as memoize
+import autoform.prob as prob
 import autoform.scheduling as scheduling
 import autoform.schemas as schemas
 import autoform.string as string
@@ -55,6 +56,7 @@ checkpoint = checkpoint.checkpoint
 dce = dce.dce
 sched = scheduling.sched
 memoize = memoize.memoize
+weighted = prob.weighted
 
 # ==================================================================================================
 # PRIMITIVES
@@ -70,6 +72,7 @@ stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
 depends = scheduling.depends
+factor = prob.factor
 
 # ==================================================================================================
 # SCHEMAS
@@ -109,6 +112,7 @@ __all__ = [
     "dce",
     "sched",
     "memoize",
+    "weighted",
     # primitives
     "format",
     "concat",
@@ -120,6 +124,7 @@ __all__ = [
     "switch",
     "while_loop",
     "depends",
+    "factor",
     # schemas
     "Bool",
     "Doc",
@@ -131,4 +136,5 @@ __all__ = [
     "PYTREE_NAMESPACE",
     # modules
     "extend",
+    "prob",
 ]

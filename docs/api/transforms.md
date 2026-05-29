@@ -8,4 +8,5 @@ These functions take an IR and return another IR.
 .. autofunction:: autoform.pushforward
 .. autofunction:: autoform.sched
 .. autofunction:: autoform.dce
+.. autofunction:: autoform.weighted
 ```

@@ -74,7 +74,7 @@ html_theme_options = {
     },
 }
 pygments_style = "github-light"
-pygments_dark_style = "github-dark"
+pygments_dark_style = "github-dark-high-contrast"
 
 # Napoleon settings
 napoleon_google_docstring = True
