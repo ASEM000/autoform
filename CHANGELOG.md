@@ -1,6 +1,6 @@
 # Changelog
 
-## vnext (unreleased)
+## v0.3.0 (May 30, 2026)
 
 ### Breaking Changes
 
