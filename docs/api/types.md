@@ -1,8 +1,13 @@
 # Types
 
-Public type-level constants.
+Public constants.
 
 ```{eval-rst}
+.. py:data:: autoform.__version__
+   :type: str
+
+   The package version.
+
 .. py:data:: autoform.PYTREE_NAMESPACE
    :type: str
 
