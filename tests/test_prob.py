@@ -72,7 +72,7 @@ class TestFactor:
 
 
 class TestWeighted:
-    def test_weighted_ir_returns_output_and_trace_weight(self):
+    def test_weighted_ir_returns_output_and_path_weight(self):
         def program(x: str, weight: float):
             af.factor(weight, name="score")
             return af.concat(x, "!")
@@ -138,7 +138,7 @@ class TestWeighted:
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
             af.weighted(af.trace(program)()).call()
 
-    def test_batch_over_weighted_ir_scores_candidate_traces(self):
+    def test_batch_over_weighted_ir_scores_candidate_paths(self):
         def program(candidate: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return candidate
@@ -146,29 +146,29 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         batched = af.batch(af.weighted(ir), in_axes=(True, True))
 
-        outputs, weights = batched.call(["flu", "cold"], [0.9, 0.2])
+        outputs, weights = batched.call(["x1", "x2"], [0.9, 0.2])
 
-        assert outputs == ["flu", "cold"]
+        assert outputs == ["x1", "x2"]
         assert weights == pytest.approx([0.9, 0.2])
 
     def test_posterior_can_be_normalized_outside_core(self):
         def program(candidate: str, likelihood: float):
-            af.factor(likelihood, name="fever")
+            af.factor(likelihood, name="e")
             return candidate
 
         ir = af.trace(program)("x", 1.0)
-        outputs, trace_weights = af.batch(af.weighted(ir), in_axes=(True, True)).call(
-            ["flu", "cold"],
+        outputs, path_weights = af.batch(af.weighted(ir), in_axes=(True, True)).call(
+            ["x1", "x2"],
             [0.9, 0.2],
         )
         priors = [0.5, 0.5]
-        unnormalized = [prior * trace_weight for prior, trace_weight in zip(priors, trace_weights)]
+        unnormalized = [prior * path_weight for prior, path_weight in zip(priors, path_weights)]
         total = sum(unnormalized)
         posterior = {
             output: weight / total for output, weight in zip(outputs, unnormalized, strict=True)
         }
 
-        assert posterior == pytest.approx({"flu": 0.45 / 0.55, "cold": 0.10 / 0.55})
+        assert posterior == pytest.approx({"x1": 0.45 / 0.55, "x2": 0.10 / 0.55})
 
     def test_weighted_after_batch_scores_whole_batched_trace(self):
         def program(candidate: str, likelihood: float):
@@ -178,13 +178,13 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         batched = af.batch(ir, in_axes=(True, True))
 
-        outputs, trace_weight = af.weighted(batched).call(
-            ["flu", "cold"],
+        outputs, path_weight = af.weighted(batched).call(
+            ["x1", "x2"],
             [0.9, 0.2],
         )
 
-        assert outputs == ["flu", "cold"]
-        assert trace_weight == pytest.approx(0.9 * 0.2)
+        assert outputs == ["x1", "x2"]
+        assert path_weight == pytest.approx(0.9 * 0.2)
 
     def test_weighted_after_pushforward_scores_primal_trace_once(self):
         def program(x: str, likelihood: float):
@@ -194,14 +194,14 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         pushforward_ir = af.pushforward(ir)
 
-        (output, tangent), trace_weight = af.weighted(pushforward_ir).call(
+        (output, tangent), path_weight = af.weighted(pushforward_ir).call(
             ("hello", 0.5),
             ("dhello", 0.0),
         )
 
         assert output == "hello!"
         assert tangent == "dhello"
-        assert trace_weight == 0.5
+        assert path_weight == 0.5
 
     def test_weighted_after_pullback_scores_forward_trace_once(self):
         def program(x: str, likelihood: float):
@@ -211,7 +211,7 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         pullback_ir = af.pullback(ir)
 
-        (output, cotangents), trace_weight = af.weighted(pullback_ir).call(
+        (output, cotangents), path_weight = af.weighted(pullback_ir).call(
             ("hello", 0.5),
             "feedback",
         )
@@ -219,7 +219,7 @@ class TestWeighted:
         assert output == "hello!"
         assert cotangents[0] == "feedback"
         assert af.ad.is_zero(cotangents[1])
-        assert trace_weight == 0.5
+        assert path_weight == 0.5
 
     def test_pushforward_of_weighted_ir_raises_not_supported(self):
         def program(x: str, likelihood: float):
