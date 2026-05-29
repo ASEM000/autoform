@@ -131,7 +131,9 @@
 
   - Reworked [Getting Started](docs/getting-started.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
 
-  - Added an [array extension recipe](docs/recipes/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
+  - Added [Path Weights](docs/concepts/path-weights.md) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/rank-tool-candidates.md) documentation for using {py:func}`factor <autoform.factor>` with {py:func}`weighted <autoform.weighted>` to score candidate paths, including the probabilistic reading and the `batch(weighted(ir))` composition pattern.
+
+  - Added an [array extension recipe](docs/recipes/extending/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
 
   - Normalized Mermaid diagrams across the README and docs, and added a GitHub footer link to the Furo docs theme.
 

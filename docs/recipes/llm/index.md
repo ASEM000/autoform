@@ -8,6 +8,7 @@ Use these recipes for LM calls, schemas, static context, and tool-use programs.
 prompt-optimization
 litellm-config
 schema-patterns
+rank-tool-candidates
 static-context
 tool-use-agent
 ```
