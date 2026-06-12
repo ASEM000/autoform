@@ -26,50 +26,50 @@ class TestFixpointImpl:
             del state
             return instruction
 
-        f_ir = af.trace(step)("draft", "done")
+        step_ir = af.trace(step)("draft", "done")
 
-        assert af.fixpoint(f_ir, "draft", "done", max_iters=10) == "done"
+        assert af.fixpoint(step_ir, "draft", "done", max_iters=10) == "done"
 
     def test_max_iters_bounds_nonconvergent_step(self):
         def step(state, instruction):
             del instruction
             return af.concat(state, ".")
 
-        f_ir = af.trace(step)("x", "unused")
+        step_ir = af.trace(step)("x", "unused")
 
-        assert af.fixpoint(f_ir, "x", "unused", max_iters=4) == "x...."
+        assert af.fixpoint(step_ir, "x", "unused", max_iters=4) == "x...."
 
     def test_custom_equiv_ir(self):
         def step(state, instruction):
             del instruction
             return af.concat(state, "!")
 
-        f_ir = af.trace(step)("x", "unused")
+        step_ir = af.trace(step)("x", "unused")
         equiv_ir = af.trace(lambda prev, new: af.match(new, "x!!"))("a", "b")
 
-        assert af.fixpoint(f_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x!!"
+        assert af.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x!!"
 
     def test_max_iters_validation(self):
         def step(state, instruction):
             del state
             return instruction
 
-        f_ir = af.trace(step)("draft", "done")
+        step_ir = af.trace(step)("draft", "done")
 
         with pytest.raises(AssertionError, match="max_iters must be >= 1"):
-            af.fixpoint(f_ir, "draft", "done", max_iters=0)
+            af.fixpoint(step_ir, "draft", "done", max_iters=0)
 
     def test_arity_validation(self):
-        f_ir = af.trace(lambda state: state)("draft")
+        step_ir = af.trace(lambda state: state)("draft")
 
         with pytest.raises(AssertionError, match="exactly two"):
-            af.fixpoint(f_ir, "draft", "done", max_iters=1)
+            af.fixpoint(step_ir, "draft", "done", max_iters=1)
 
     def test_state_structure_validation(self):
-        f_ir = af.trace(lambda state, instruction: (state, instruction))("draft", "done")
+        step_ir = af.trace(lambda state, instruction: (state, instruction))("draft", "done")
 
         with pytest.raises(AssertionError, match="identical state"):
-            af.fixpoint(f_ir, "draft", "done", max_iters=1)
+            af.fixpoint(step_ir, "draft", "done", max_iters=1)
 
 
 class TestFixpointTraced:
@@ -78,10 +78,10 @@ class TestFixpointTraced:
             del state
             return instruction
 
-        f_ir = af.trace(step)("draft", "done")
+        step_ir = af.trace(step)("draft", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10)
 
         ir = af.trace(program)("draft", "done")
 
@@ -94,10 +94,10 @@ class TestFixpointTraced:
             del state
             return instruction
 
-        f_ir = af.trace(step)("draft", "done")
+        step_ir = af.trace(step)("draft", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10)
 
         ir = af.trace(program)("draft", "done")
 
@@ -110,10 +110,10 @@ class TestFixpointPullback:
             del state
             return instruction
 
-        f_ir = af.trace(step)("draft", "done")
+        step_ir = af.trace(step)("draft", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10, adj_iters=2)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10, adj_iters=2)
 
         ir = af.trace(program)("draft", "done")
         out, (c_init, c_theta) = af.pullback(ir).call(("draft", "done"), "feedback")
@@ -126,10 +126,10 @@ class TestFixpointPullback:
         def step(state, instruction):
             return af.concat(state, instruction)
 
-        f_ir = af.trace(step)("s", "c")
+        step_ir = af.trace(step)("s", "c")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=2, adj_iters=1)
+            return af.fixpoint(step_ir, init, instruction, max_iters=2, adj_iters=1)
 
         ir = af.trace(program)("s", "c")
         out, (c_init, c_theta) = af.pullback(ir).call(("s", "c"), "g")
@@ -142,10 +142,10 @@ class TestFixpointPullback:
         def step(state, instruction):
             return af.concat(state, instruction)
 
-        f_ir = af.trace(step)("s", "c")
+        step_ir = af.trace(step)("s", "c")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=2)
+            return af.fixpoint(step_ir, init, instruction, max_iters=2)
 
         ir = af.trace(program)("s", "c")
         zero = af.ad.zeroof("g")
@@ -160,10 +160,10 @@ class TestFixpointPullback:
             del state
             return instruction
 
-        f_ir = af.trace(step)("draft", "done")
+        step_ir = af.trace(step)("draft", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10)
 
         ir = af.trace(program)("draft", "done")
         out, (c_init, c_theta) = await af.pullback(ir).acall(("draft", "done"), "feedback")
@@ -179,10 +179,10 @@ class TestFixpointBatch:
             del state
             return instruction
 
-        f_ir = af.trace(step)("x", "done")
+        step_ir = af.trace(step)("x", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10)
 
         ir = af.trace(program)("x", "done")
         batched = af.batch(ir, in_axes=(True, False))
@@ -195,10 +195,10 @@ class TestFixpointBatch:
             del state
             return instruction
 
-        f_ir = af.trace(step)("x", "done")
+        step_ir = af.trace(step)("x", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10)
 
         ir = af.trace(program)("x", "done")
         batched = af.batch(ir, in_axes=(True, False))
@@ -210,10 +210,10 @@ class TestFixpointBatch:
             del state
             return instruction
 
-        f_ir = af.trace(step)("x", "done")
+        step_ir = af.trace(step)("x", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10)
 
         ir = af.trace(program)("x", "done")
         composed = af.batch(af.pullback(ir), in_axes=((True, False), True))
@@ -228,10 +228,10 @@ class TestFixpointBatch:
             left, right = state
             return af.concat(left, instruction), right
 
-        f_ir = af.trace(step)(("x", "y"), "!")
+        step_ir = af.trace(step)(("x", "y"), "!")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=1)
+            return af.fixpoint(step_ir, init, instruction, max_iters=1)
 
         ir = af.trace(program)(("x", "y"), "!")
         batched = af.batch(ir, in_axes=(False, False))
@@ -244,10 +244,10 @@ class TestFixpointBatch:
             left, right = state
             return af.concat(left, instruction), right
 
-        f_ir = af.trace(step)(("x", "y"), "!")
+        step_ir = af.trace(step)(("x", "y"), "!")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=1)
+            return af.fixpoint(step_ir, init, instruction, max_iters=1)
 
         ir = af.trace(program)(("x", "y"), "!")
         batched = af.batch(ir, in_axes=(False, False))
@@ -268,10 +268,10 @@ class TestFixpointBatch:
                 label=state.label,
             )
 
-        f_ir = af.trace(step)(State("x", "keep", label="state"), "!")
+        step_ir = af.trace(step)(State("x", "keep", label="state"), "!")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=1)
+            return af.fixpoint(step_ir, init, instruction, max_iters=1)
 
         ir = af.trace(program)(State("x", "keep", label="state"), "!")
         batched = af.batch(ir, in_axes=(State(True, False, label="state"), False))
@@ -295,10 +295,10 @@ class TestFixpointBatch:
                 label=state.label,
             )
 
-        f_ir = af.trace(step)(State("x", "keep", label="state"), "!")
+        step_ir = af.trace(step)(State("x", "keep", label="state"), "!")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=1)
+            return af.fixpoint(step_ir, init, instruction, max_iters=1)
 
         ir = af.trace(program)(State("x", "keep", label="state"), "!")
         batched = af.batch(ir, in_axes=(State(True, False, label="state"), False))
@@ -324,11 +324,11 @@ class TestEquivIR:
             counters["judge"] += 1
             return new
 
-        f_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "unused")
+        step_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "unused")
         equiv_ir = af.trace(lambda prev, new: af.match(probe(prev, new), "x.."))("a", "b")
         counters["step"] = counters["judge"] = 0
 
-        assert af.fixpoint(f_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
+        assert af.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
         assert counters == dict(step=2, judge=2)
 
     def test_batched_equiv_ir(self):
@@ -336,11 +336,11 @@ class TestEquivIR:
             del instruction
             return af.concat(state, "!")
 
-        f_ir = af.trace(step)("x", "unused")
+        step_ir = af.trace(step)("x", "unused")
         equiv_ir = af.trace(lambda prev, new: af.match(new, af.concat(prev, "!")))("a", "b")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
 
         ir = af.trace(program)("x", "unused")
         batched = af.batch(ir, in_axes=(True, False))
@@ -353,26 +353,26 @@ class TestEquivIR:
             del state
             return instruction
 
-        f_ir = af.trace(step)("x", "done")
+        step_ir = af.trace(step)("x", "done")
         equiv_ir = af.trace(lambda prev, new: af.match(new, prev))("a", "b")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
 
         ir = af.trace(program)("x", "done")
 
         assert await ir.acall("x", "done") == "done"
 
     def test_equiv_ir_validation(self):
-        f_ir = af.trace(lambda state, instruction: af.concat(state, instruction))("x", "!")
+        step_ir = af.trace(lambda state, instruction: af.concat(state, instruction))("x", "!")
         one_arg = af.trace(lambda prev: af.match(prev, "x"))("a")
 
         with pytest.raises(AssertionError, match="two positional"):
-            af.fixpoint(f_ir, "x", "!", max_iters=3, equiv_ir=one_arg)
+            af.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=one_arg)
 
         wrong_struct = af.trace(lambda prev, new: af.match(prev[0], new[0]))(("a", "b"), ("c", "d"))
         with pytest.raises(AssertionError, match="state structure"):
-            af.fixpoint(f_ir, "x", "!", max_iters=3, equiv_ir=wrong_struct)
+            af.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=wrong_struct)
 
     def test_params_memoize_with_equiv_ir(self):
         counters = dict(step=0)
@@ -383,11 +383,11 @@ class TestEquivIR:
             counters["step"] += 1
             return instruction
 
-        f_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "done")
+        step_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "done")
         equiv_ir = af.trace(lambda prev, new: af.match(new, prev))("a", "b")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
+            return af.fixpoint(step_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
 
         ir = af.trace(program)("x", "done")
 

@@ -354,6 +354,68 @@ class TestNestedDCE:
 
         assert len(nested_branch.ir_eqns) == 1
 
+    def test_fixpoint_dces_inner_step_ir(self):
+        def step(state, theta):
+            dead = af.concat(theta, " DEAD")
+            live = af.concat(state, theta)
+            del dead
+            return live
+
+        step_ir = af.trace(step)("x", "!")
+        assert len(step_ir.ir_eqns) == 2
+
+        def program(init, theta):
+            return af.fixpoint(step_ir, init, theta, max_iters=1)
+
+        ir = af.trace(program)("x", "!")
+        dced = af.dce(ir)
+        dced_step_ir = dced.ir_eqns[0].params["step_ir"]
+
+        assert len(dced_step_ir.ir_eqns) == 1
+        assert dced.call("x", "!") == "x!"
+
+    def test_fixpoint_dces_inner_equiv_ir(self):
+        def step(state, theta):
+            return af.concat(state, theta)
+
+        def stable(prev, new):
+            dead = af.concat(prev, " DEAD")
+            del dead
+            return af.match(new, "x!")
+
+        step_ir = af.trace(step)("x", "!")
+        equiv_ir = af.trace(stable)("x", "x!")
+        assert len(equiv_ir.ir_eqns) == 2
+
+        def program(init, theta):
+            return af.fixpoint(step_ir, init, theta, max_iters=2, equiv_ir=equiv_ir)
+
+        ir = af.trace(program)("x", "!")
+        dced = af.dce(ir)
+        dced_equiv_ir = dced.ir_eqns[0].params["equiv_ir"]
+
+        assert len(dced_equiv_ir.ir_eqns) == 1
+        assert dced.call("x", "!") == "x!"
+
+    def test_fixpoint_dce_preserves_loop_carried_state(self):
+        def step(state, theta):
+            visible, hidden = state
+            next_visible = af.concat(visible, hidden)
+            next_hidden = af.concat(hidden, theta)
+            return next_visible, next_hidden
+
+        step_ir = af.trace(step)(("v", "h"), "!")
+
+        def program(init, theta):
+            return af.fixpoint(step_ir, init, theta, max_iters=2)
+
+        ir = af.trace(program)(("v", "h"), "!")
+        dced = af.dce(ir, out_used=(True, False))
+
+        dced_step_ir = dced.ir_eqns[0].params["step_ir"]
+        assert dced_step_ir.out_ir_tree[1] is not None
+        assert dced.call(("v", "h"), "!") == ("vhh!", "h!!")
+
 
 class TestDCEWithOutUsed:
     def test_out_used_single_output_true_keeps_deps(self):
