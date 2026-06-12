@@ -758,8 +758,9 @@ def pullback_fwd_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
-    del adj_iters
-    out = fixpoint_p.bind(in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=0, equiv_ir=equiv_ir)
+    out = fixpoint_p.bind(
+        in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+    )
     _, theta = in_tree
     return out, (out, theta)
 
@@ -773,9 +774,8 @@ async def apull_fwd_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
-    del adj_iters
     out = await fixpoint_p.abind(
-        in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=0, equiv_ir=equiv_ir
+        in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
     )
     _, theta = in_tree
     return out, (out, theta)
