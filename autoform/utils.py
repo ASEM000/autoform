@@ -64,6 +64,17 @@ def mask(in_tree: Tree, use: Tree[bool], replace: Any = None) -> Tree:
     return tree.map(func, in_tree, use)
 
 
+def tree_equal(lhs: Tree, rhs: Tree, /) -> bool:
+    """Return whether two pytrees have equal structure and leaves."""
+    if tree.structure(lhs) != tree.structure(rhs):
+        return False
+    lhs_leaves = tree.leaves(lhs)
+    rhs_leaves = tree.leaves(rhs)
+    return all(
+        lhs_leaf == rhs_leaf for lhs_leaf, rhs_leaf in zip(lhs_leaves, rhs_leaves, strict=True)
+    )
+
+
 # ==================================================================================================
 # BATCH UTILITIES
 # ==================================================================================================
