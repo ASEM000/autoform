@@ -93,6 +93,7 @@ checkpoint_p = checkpoint.checkpoint_p
 stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
 while_loop_p = control.while_loop_p
+fixpoint_p = control.fixpoint_p
 gather_p = scheduling.gather_p
 depends_p = scheduling.depends_p
 batch_call_p = batch.batch_call_p
@@ -153,6 +154,7 @@ __all__ = [
     "stop_gradient_p",
     "switch_p",
     "while_loop_p",
+    "fixpoint_p",
     "gather_p",
     "depends_p",
     "batch_call_p",
