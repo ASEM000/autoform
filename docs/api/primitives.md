@@ -23,6 +23,7 @@ Primitives are operations that tracing records as IR equations.
 .. autofunction:: autoform.stop_gradient
 .. autofunction:: autoform.switch
 .. autofunction:: autoform.while_loop
+.. autofunction:: autoform.fixpoint
 ```
 
 ## Scheduling

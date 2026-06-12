@@ -77,6 +77,7 @@ lm_client = lm.lm_client
 stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
+fixpoint = control.fixpoint
 depends = scheduling.depends
 factor = prob.factor
 
@@ -130,6 +131,7 @@ __all__ = [
     "checkpoint",
     "switch",
     "while_loop",
+    "fixpoint",
     "depends",
     "factor",
     # schemas

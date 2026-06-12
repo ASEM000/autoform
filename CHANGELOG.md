@@ -1,5 +1,13 @@
 # Changelog
 
+## vnext
+
+### New Features
+
+  - Added {py:func}`fixpoint <autoform.fixpoint>`, a bounded control-flow
+    primitive for iterating ``(State, Theta) -> State`` step functions to
+    structural convergence, with implicit pullback support.
+
 ## v0.3.0 (May 30, 2026)
 
 ### Breaking Changes
