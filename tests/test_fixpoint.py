@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import optree
 import pytest
 
 import autoform as af
+
+tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 
 
 class TestFixpointImpl:
@@ -250,6 +253,59 @@ class TestFixpointBatch:
         batched = af.batch(ir, in_axes=(False, False))
 
         assert await batched.acall(("x", "y"), "!") == ("x!", "y")
+
+    def test_batched_preserves_custom_state_container(self):
+        @tree.dataclasses.dataclass
+        class State:
+            text: str
+            status: str
+            label: str = tree.dataclasses.field(pytree_node=False)
+
+        def step(state, instruction):
+            return State(
+                text=af.concat(state.text, instruction),
+                status=state.status,
+                label=state.label,
+            )
+
+        f_ir = af.trace(step)(State("x", "keep", label="state"), "!")
+
+        def program(init, instruction):
+            return af.fixpoint(f_ir, init, instruction, max_iters=1)
+
+        ir = af.trace(program)(State("x", "keep", label="state"), "!")
+        batched = af.batch(ir, in_axes=(State(True, False, label="state"), False))
+        out = batched.call(State(["a", "b"], "keep", label="state"), "!")
+
+        assert isinstance(out, State)
+        assert out == State(text=["a!", "b!"], status=["keep", "keep"], label="state")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_async_batched_preserves_custom_state_container(self):
+        @tree.dataclasses.dataclass
+        class State:
+            text: str
+            status: str
+            label: str = tree.dataclasses.field(pytree_node=False)
+
+        def step(state, instruction):
+            return State(
+                text=af.concat(state.text, instruction),
+                status=state.status,
+                label=state.label,
+            )
+
+        f_ir = af.trace(step)(State("x", "keep", label="state"), "!")
+
+        def program(init, instruction):
+            return af.fixpoint(f_ir, init, instruction, max_iters=1)
+
+        ir = af.trace(program)(State("x", "keep", label="state"), "!")
+        batched = af.batch(ir, in_axes=(State(True, False, label="state"), False))
+        out = await batched.acall(State(["a", "b"], "keep", label="state"), "!")
+
+        assert isinstance(out, State)
+        assert out == State(text=["a!", "b!"], status=["keep", "keep"], label="state")
 
 
 class TestEquivIR:

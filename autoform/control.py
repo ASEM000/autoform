@@ -966,7 +966,10 @@ def batch_fixpoint(
             states[batch_idx] = new_state
 
     out_batched = utils.tree.map(core.is_irvar, f_ir.out_ir_tree)
-    return utils.batch_transpose(b_sz, out_batched, states), out_batched
+    out_tree = utils.batch_transpose(b_sz, out_batched, states)
+    in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
+    out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
+    return out_tree, out_batched
 
 
 async def abatch_fixpoint(
@@ -1028,7 +1031,10 @@ async def abatch_fixpoint(
             states[batch_idx] = new_state
 
     out_batched = utils.tree.map(core.is_irvar, f_ir.out_ir_tree)
-    return utils.batch_transpose(b_sz, out_batched, states), out_batched
+    out_tree = utils.batch_transpose(b_sz, out_batched, states)
+    in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
+    out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
+    return out_tree, out_batched
 
 
 core.impl_rules.set(fixpoint_p, impl_fixpoint)
