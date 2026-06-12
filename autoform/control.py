@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import functools as ft
-from collections.abc import Callable
 
 import autoform.ad as ad
 import autoform.batch as batch
@@ -29,7 +28,6 @@ import autoform.utils as utils
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Branches = dict[str, core.IR]
-type Equiv = Callable[[Tree, Tree], bool]
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -650,15 +648,15 @@ def fixpoint(
     *,
     max_iters: int,
     adj_iters: int = 1,
-    equiv: Equiv | None = None,
+    equiv_ir: core.IR | None = None,
 ) -> Tree:
     """Iterate ``f_ir`` until the state reaches a fixed point.
 
     ``f_ir`` must have shape ``(State, Theta) -> State``. The loop stops when
-    the new state is structurally equal to the previous state, or when
-    ``max_iters`` is reached. Under :func:`pullback <autoform.pullback>`,
-    ``fixpoint`` differentiates the equilibrium condition rather than replaying
-    the full forward trajectory.
+    the new state is equivalent to the previous state, or when ``max_iters``
+    is reached. Equivalence defaults to structural equality of the state
+    pytree; pass ``equiv_ir`` with shape ``(State, State) -> Bool`` to decide
+    stability inside the program.
     """
     assert isinstance(f_ir, core.IR), f"f_ir must be an IR, got {type(f_ir)}"
     assert len(f_ir.in_ir_tree) == 2, "f_ir must take exactly two positional arguments"
@@ -672,13 +670,19 @@ def fixpoint(
     )
     assert isinstance(max_iters, int) and max_iters >= 1, f"max_iters must be >= 1: {max_iters!r}"
     assert isinstance(adj_iters, int) and adj_iters >= 0, f"adj_iters must be >= 0: {adj_iters!r}"
-    assert equiv is None or callable(equiv), f"equiv must be callable or None: {equiv!r}"
+    if equiv_ir is not None:
+        assert isinstance(equiv_ir, core.IR), f"equiv_ir must be an IR, got {type(equiv_ir)}"
+        assert len(equiv_ir.in_ir_tree) == 2, "equiv_ir must take two positional arguments"
+        for side in equiv_ir.in_ir_tree:
+            assert utils.tree.structure(side) == in_struct, (
+                "equiv_ir inputs must both match the state structure"
+            )
     return fixpoint_p.bind(
         (init_val, theta),
         f_ir=f_ir,
         max_iters=max_iters,
         adj_iters=adj_iters,
-        equiv=equiv,
+        equiv_ir=equiv_ir,
     )
 
 
@@ -689,15 +693,19 @@ def impl_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> Tree:
     del adj_iters
     state, theta = in_tree
-    is_equiv = utils.tree_equal if equiv is None else equiv
 
     for _ in range(max_iters):
         new_state = f_ir.call(state, theta)
-        if is_equiv(state, new_state):
+        stable = (
+            utils.tree_equal(state, new_state)
+            if equiv_ir is None
+            else equiv_ir.call(state, new_state)
+        )
+        if stable:
             return new_state
         state = new_state
     return state
@@ -710,15 +718,19 @@ async def aimpl_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> Tree:
     del adj_iters
     state, theta = in_tree
-    is_equiv = utils.tree_equal if equiv is None else equiv
 
     for _ in range(max_iters):
         new_state = await f_ir.acall(state, theta)
-        if is_equiv(state, new_state):
+        stable = (
+            utils.tree_equal(state, new_state)
+            if equiv_ir is None
+            else await equiv_ir.acall(state, new_state)
+        )
+        if stable:
             return new_state
         state = new_state
     return state
@@ -731,9 +743,9 @@ def abstract_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> Tree:
-    del in_tree, max_iters, adj_iters, equiv
+    del in_tree, max_iters, adj_iters, equiv_ir
     return utils.tree.map(core.ir_aval, f_ir.out_ir_tree)
 
 
@@ -744,10 +756,10 @@ def pullback_fwd_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> TreePair:
     del adj_iters
-    out = fixpoint_p.bind(in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=0, equiv=equiv)
+    out = fixpoint_p.bind(in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=0, equiv_ir=equiv_ir)
     _, theta = in_tree
     return out, (out, theta)
 
@@ -759,10 +771,12 @@ async def apull_fwd_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> TreePair:
     del adj_iters
-    out = await fixpoint_p.abind(in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=0, equiv=equiv)
+    out = await fixpoint_p.abind(
+        in_tree, f_ir=f_ir, max_iters=max_iters, adj_iters=0, equiv_ir=equiv_ir
+    )
     _, theta = in_tree
     return out, (out, theta)
 
@@ -774,9 +788,9 @@ def pullback_bwd_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> Tree:
-    del max_iters, equiv
+    del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
     dx0 = utils.tree.map(ad.zeroof, x_star)
@@ -837,9 +851,9 @@ async def apull_bwd_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> Tree:
-    del max_iters, equiv
+    del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
     dx0 = utils.tree.map(ad.zeroof, x_star)
@@ -900,10 +914,10 @@ def batch_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> TreePair:
     b_sz, in_batched, in_values = in_tree
-    params = dict(f_ir=f_ir, max_iters=max_iters, adj_iters=adj_iters, equiv=equiv)
+    params = dict(f_ir=f_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
     if utils.batch_spec(in_values, in_batched) is None:
         out = fixpoint_p.bind(in_values, **params)
@@ -916,12 +930,14 @@ def batch_fixpoint(
     states = [init_at(b) for b in range(b_sz)]
     thetas = [theta_at(b) for b in range(b_sz)]
     alive = [True] * b_sz
-    is_equiv = utils.tree_equal if equiv is None else equiv
 
     state_in_axes = utils.tree.map(lambda _: True, f_ir.in_ir_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, f_ir.in_ir_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
     batched_f = batch.batch(f_ir, in_axes=in_axes)
+    if equiv_ir is not None:
+        equiv_axes = (state_in_axes, state_in_axes)
+        batched_equiv = batch.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -934,9 +950,18 @@ def batch_fixpoint(
         out_batched = utils.tree.map(core.is_irvar, f_ir.out_ir_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
-        for local_idx, batch_idx in enumerate(alive_idx):
-            new_state = out_at(local_idx)
-            if is_equiv(states[batch_idx], new_state):
+        new_states = [out_at(i) for i in range(n_alive)]
+        if equiv_ir is None:
+            flags = [
+                utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)
+            ]
+        else:
+            pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)]
+            equiv_in = utils.batch_transpose(n_alive, equiv_axes, pairs)
+            flags = batched_equiv.call(*equiv_in)
+
+        for flag, batch_idx, new_state in zip(flags, alive_idx, new_states, strict=True):
+            if flag:
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
@@ -951,10 +976,10 @@ async def abatch_fixpoint(
     f_ir: core.IR,
     max_iters: int,
     adj_iters: int,
-    equiv: Equiv | None,
+    equiv_ir: core.IR | None,
 ) -> TreePair:
     b_sz, in_batched, in_values = in_tree
-    params = dict(f_ir=f_ir, max_iters=max_iters, adj_iters=adj_iters, equiv=equiv)
+    params = dict(f_ir=f_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
     if utils.batch_spec(in_values, in_batched) is None:
         out = await fixpoint_p.abind(in_values, **params)
@@ -967,12 +992,14 @@ async def abatch_fixpoint(
     states = [init_at(b) for b in range(b_sz)]
     thetas = [theta_at(b) for b in range(b_sz)]
     alive = [True] * b_sz
-    is_equiv = utils.tree_equal if equiv is None else equiv
 
     state_in_axes = utils.tree.map(lambda _: True, f_ir.in_ir_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, f_ir.in_ir_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
     batched_f = batch.batch(f_ir, in_axes=in_axes)
+    if equiv_ir is not None:
+        equiv_axes = (state_in_axes, state_in_axes)
+        batched_equiv = batch.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -985,9 +1012,18 @@ async def abatch_fixpoint(
         out_batched = utils.tree.map(core.is_irvar, f_ir.out_ir_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
-        for local_idx, batch_idx in enumerate(alive_idx):
-            new_state = out_at(local_idx)
-            if is_equiv(states[batch_idx], new_state):
+        new_states = [out_at(i) for i in range(n_alive)]
+        if equiv_ir is None:
+            flags = [
+                utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)
+            ]
+        else:
+            pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)]
+            equiv_in = utils.batch_transpose(n_alive, equiv_axes, pairs)
+            flags = await batched_equiv.acall(*equiv_in)
+
+        for flag, batch_idx, new_state in zip(flags, alive_idx, new_states, strict=True):
+            if flag:
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 

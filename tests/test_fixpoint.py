@@ -36,18 +36,15 @@ class TestFixpointImpl:
 
         assert af.fixpoint(f_ir, "x", "unused", max_iters=4) == "x...."
 
-    def test_custom_equiv(self):
+    def test_custom_equiv_ir(self):
         def step(state, instruction):
             del instruction
             return af.concat(state, "!")
 
-        def enough(prev, new):
-            del prev
-            return new.endswith("!!")
-
         f_ir = af.trace(step)("x", "unused")
+        equiv_ir = af.trace(lambda prev, new: af.match(new, "x!!"))("a", "b")
 
-        assert af.fixpoint(f_ir, "x", "unused", max_iters=10, equiv=enough) == "x!!"
+        assert af.fixpoint(f_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x!!"
 
     def test_max_iters_validation(self):
         def step(state, instruction):
@@ -176,22 +173,18 @@ class TestFixpointPullback:
 class TestFixpointBatch:
     def test_batched_init_broadcast_theta(self):
         def step(state, instruction):
-            del instruction
-            return af.concat(state, "!")
+            del state
+            return instruction
 
-        def enough(prev, new):
-            del prev
-            return new.endswith("!!")
-
-        f_ir = af.trace(step)("x", "unused")
+        f_ir = af.trace(step)("x", "done")
 
         def program(init, instruction):
-            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv=enough)
+            return af.fixpoint(f_ir, init, instruction, max_iters=10)
 
-        ir = af.trace(program)("x", "unused")
+        ir = af.trace(program)("x", "done")
         batched = af.batch(ir, in_axes=(True, False))
 
-        assert batched.call(["a!", "b"], "unused") == ["a!!", "b!!"]
+        assert batched.call(["a", "b"], "done") == ["done", "done"]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_async_batch(self):
@@ -257,3 +250,95 @@ class TestFixpointBatch:
         batched = af.batch(ir, in_axes=(False, False))
 
         assert await batched.acall(("x", "y"), "!") == ("x!", "y")
+
+
+class TestEquivIR:
+    def test_judged_convergence_counts(self):
+        counters = dict(step=0, judge=0)
+
+        @af.custom
+        def step(state, instruction):
+            del instruction
+            counters["step"] += 1
+            return af.concat(state, ".")
+
+        @af.custom
+        def probe(prev, new):
+            del prev
+            counters["judge"] += 1
+            return new
+
+        f_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "unused")
+        equiv_ir = af.trace(lambda prev, new: af.match(probe(prev, new), "x.."))("a", "b")
+        counters["step"] = counters["judge"] = 0
+
+        assert af.fixpoint(f_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
+        assert counters == dict(step=2, judge=2)
+
+    def test_batched_equiv_ir(self):
+        def step(state, instruction):
+            del instruction
+            return af.concat(state, "!")
+
+        f_ir = af.trace(step)("x", "unused")
+        equiv_ir = af.trace(lambda prev, new: af.match(new, af.concat(prev, "!")))("a", "b")
+
+        def program(init, instruction):
+            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
+
+        ir = af.trace(program)("x", "unused")
+        batched = af.batch(ir, in_axes=(True, False))
+
+        assert batched.call(["a", "b"], "unused") == ["a!", "b!"]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_async_equiv_ir(self):
+        def step(state, instruction):
+            del state
+            return instruction
+
+        f_ir = af.trace(step)("x", "done")
+        equiv_ir = af.trace(lambda prev, new: af.match(new, prev))("a", "b")
+
+        def program(init, instruction):
+            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
+
+        ir = af.trace(program)("x", "done")
+
+        assert await ir.acall("x", "done") == "done"
+
+    def test_equiv_ir_validation(self):
+        f_ir = af.trace(lambda state, instruction: af.concat(state, instruction))("x", "!")
+        one_arg = af.trace(lambda prev: af.match(prev, "x"))("a")
+
+        with pytest.raises(AssertionError, match="two positional"):
+            af.fixpoint(f_ir, "x", "!", max_iters=3, equiv_ir=one_arg)
+
+        wrong_struct = af.trace(lambda prev, new: af.match(prev[0], new[0]))(("a", "b"), ("c", "d"))
+        with pytest.raises(AssertionError, match="state structure"):
+            af.fixpoint(f_ir, "x", "!", max_iters=3, equiv_ir=wrong_struct)
+
+    def test_params_memoize_with_equiv_ir(self):
+        counters = dict(step=0)
+
+        @af.custom
+        def step(state, instruction):
+            del state
+            counters["step"] += 1
+            return instruction
+
+        f_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "done")
+        equiv_ir = af.trace(lambda prev, new: af.match(new, prev))("a", "b")
+
+        def program(init, instruction):
+            return af.fixpoint(f_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
+
+        ir = af.trace(program)("x", "done")
+
+        with af.memoize():
+            first = ir.call("x", "done")
+            after_first = counters["step"]
+            second = ir.call("x", "done")
+
+        assert first == second == "done"
+        assert counters["step"] == after_first
