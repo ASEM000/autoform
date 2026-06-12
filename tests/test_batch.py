@@ -318,6 +318,15 @@ class TestBatchUtils:
         spec = batch_spec(col_tree, in_axes)
         assert spec is None
 
+    def test_tree_equal_same_structure_and_leaves(self):
+        assert af.utils.tree_equal(("a", ["b", "c"]), ("a", ["b", "c"]))
+
+    def test_tree_equal_different_structure(self):
+        assert not af.utils.tree_equal(("a", ["b", "c"]), ("a", ("b", "c")))
+
+    def test_tree_equal_different_leaves(self):
+        assert not af.utils.tree_equal(("a", ["b", "c"]), ("a", ["b", "d"]))
+
 
 class TestBatchRuleOutBatched:
     def test_format_out_batched_is_scalar(self):
