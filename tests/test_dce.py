@@ -354,6 +354,78 @@ class TestNestedDCE:
 
         assert len(nested_branch.ir_eqns) == 1
 
+    def test_while_loop_dces_inner_body_ir(self):
+        def cond(state):
+            return af.match(state, "go")
+
+        def body(state):
+            dead = af.concat(state, " DEAD")
+            live = af.concat(state, "!")
+            del dead
+            return live
+
+        cond_ir = af.trace(cond)("go")
+        body_ir = af.trace(body)("go")
+        assert len(body_ir.ir_eqns) == 2
+
+        def program(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=1)
+
+        ir = af.trace(program)("go")
+        dced = af.dce(ir)
+        dced_body_ir = dced.ir_eqns[0].params["body_ir"]
+
+        assert len(dced_body_ir.ir_eqns) == 1
+        assert dced.call("go") == "go!"
+
+    def test_while_loop_dces_inner_cond_ir(self):
+        def cond(state):
+            dead = af.concat(state, " DEAD")
+            del dead
+            return af.match(state, "go")
+
+        def body(state):
+            return af.concat(state, "!")
+
+        cond_ir = af.trace(cond)("go")
+        body_ir = af.trace(body)("go")
+        assert len(cond_ir.ir_eqns) == 2
+
+        def program(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=1)
+
+        ir = af.trace(program)("go")
+        dced = af.dce(ir)
+        dced_cond_ir = dced.ir_eqns[0].params["cond_ir"]
+
+        assert len(dced_cond_ir.ir_eqns) == 1
+        assert dced.call("go") == "go!"
+
+    def test_while_loop_dce_preserves_loop_carried_state(self):
+        def cond(state):
+            visible, hidden = state
+            del hidden
+            return af.match(visible, "v")
+
+        def body(state):
+            visible, hidden = state
+            next_visible = af.concat(visible, hidden)
+            next_hidden = af.concat(hidden, "!")
+            return next_visible, next_hidden
+
+        cond_ir = af.trace(cond)(("v", "h"))
+        body_ir = af.trace(body)(("v", "h"))
+
+        def program(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=1)
+
+        ir = af.trace(program)(("v", "h"))
+        dced = af.dce(ir, out_used=(True, False))
+
+        dced_body_ir = dced.ir_eqns[0].params["body_ir"]
+        assert dced_body_ir.out_ir_tree[1] is not None
+        assert dced.call(("v", "h")) == ("vh", "h!")
+
     def test_fixpoint_dces_inner_step_ir(self):
         def step(state, theta):
             dead = af.concat(theta, " DEAD")

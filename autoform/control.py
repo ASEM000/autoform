@@ -630,6 +630,21 @@ core.batch_rules.set(while_loop_p, batch_while_loop)
 core.batch_rules.aset(while_loop_p, abatch_while_loop)
 
 
+def dce_while_loop(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    cond_ir = ir_eqn.params["cond_ir"]
+    body_ir = ir_eqn.params["body_ir"]
+    # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
+    # even if the caller only uses part of the final state.
+    state_used = utils.tree.map(lambda _: True, body_ir.out_ir_tree)
+    cond_ir = dce.dce(cond_ir)
+    body_ir = dce.dce(body_ir, out_used=state_used)
+    new_eqn = ir_eqn.using(cond_ir=cond_ir, body_ir=body_ir)
+    return dce.default_dce(new_eqn, out_used)
+
+
+dce.dce_rules[while_loop_p] = dce_while_loop
+
+
 # ==================================================================================================
 # FIXPOINT
 # ==================================================================================================
