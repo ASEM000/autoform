@@ -34,7 +34,7 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 - {py:func}`switch <autoform.switch>`: choose one traced branch at execution time.
 - {py:func}`while_loop <autoform.while_loop>`: run a traced loop with an explicit iteration cap.
-- {py:func}`fixpoint <autoform.fixpoint>`: iterate a traced step function until the state stops changing.
+- {py:func}`fixpoint <autoform.fixpoint>`: iterate a traced step function until the state stops changing. See [Fixed Points](fixpoint.md).
 - {py:func}`stop_gradient <autoform.stop_gradient>`: pass `x` forward but block cotangents in pullback.
 - {py:func}`depends <autoform.depends>`: make a returned result wait for extra dependencies without changing its value.
 

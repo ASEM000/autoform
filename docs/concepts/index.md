@@ -8,6 +8,7 @@ These pages explain the mental model behind `autoform`: trace once, transform th
 trace-ir-execute
 the-ir
 primitives
+fixpoint
 transforms
 path-weights
 tracing-semantics

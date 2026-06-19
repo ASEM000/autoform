@@ -166,6 +166,7 @@ leaves:
 - {py:func}`batch <autoform.batch>` can vectorize over `State(topic=[...], draft=[...])`.
 - {py:func}`pullback <autoform.pullback>` can return field-shaped feedback such as `State(topic="be more specific", draft="too terse")`.
 - {py:func}`while_loop <autoform.while_loop>` can carry structured state as long as the body input and output structures match.
+- {py:func}`fixpoint <autoform.fixpoint>` can iterate structured state as long as the step input and output structures match.
 
 ## Leaf Guidelines
 

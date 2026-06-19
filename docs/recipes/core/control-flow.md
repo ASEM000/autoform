@@ -2,6 +2,8 @@
 
 `autoform` [control-flow primitives](../../concepts/primitives.md) keep branches and loops visible to the [IR](../../concepts/the-ir.md).
 Use them when the branch condition or loop state is part of the traced program.
+For loops that should stop when repeated application reaches a stable state, see
+[Iterate To A Fixed Point](fixpoint.md).
 
 ```{admonition} Concept
 [Primitives](../../concepts/primitives.md) · [The IR](../../concepts/the-ir.md) · [Pytrees](../../concepts/pytrees.md)
