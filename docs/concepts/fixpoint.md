@@ -47,8 +47,8 @@ By default, stability is structural equality between the previous state and the
 new state. For semantic or field-level convergence, pass `equiv_ir`:
 
 ```python
-equiv_ir = af.trace(lambda prev, new: af.match(new.status, "stable"))(state0, state0)
-result = af.fixpoint(step_ir, state0, theta, max_iters=8, equiv_ir=equiv_ir)
+equiv_ir = af.trace(lambda prev, new: af.match(new.status, "stable"))(example_state, example_state)
+result = af.fixpoint(step_ir, example_state, example_theta, max_iters=8, equiv_ir=equiv_ir)
 ```
 
 `equiv_ir` must have shape `(State, State) -> Bool`. It receives the previous
