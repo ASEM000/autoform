@@ -10,4 +10,5 @@ batch-in-axes
 pytree-modules
 concurrent-pipeline
 control-flow
+fixpoint
 ```

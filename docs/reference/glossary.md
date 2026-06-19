@@ -15,6 +15,7 @@
 | Dynamic argument | An input leaf represented by a placeholder during tracing and provided at execution time. |
 | Execute | The phase that runs an IR with concrete inputs through `.call(...)` or `.acall(...)`. |
 | {py:func}`factor <autoform.factor>` | A primitive that multiplies the current path weight. It is neutral during ordinary execution and contributes to {py:func}`weighted <autoform.weighted>` results. |
+| {py:func}`fixpoint <autoform.fixpoint>` | A higher-order control-flow primitive that repeatedly applies a traced `(State, Theta) -> State` step until the state is stable or `max_iters` is reached. |
 | {py:func}`fold <autoform.fold>` | A context manager that evaluates foldable primitive calls immediately during tracing and embeds the result as a literal. |
 | {py:func}`inject <autoform.inject>` | A context manager that substitutes checkpointed values from a provided dictionary during execution. |
 | Instance-first DSL | The schema style where the schema is a value-shaped Python instance, not a separate output class declaration. |
