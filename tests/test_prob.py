@@ -57,7 +57,7 @@ class TestFactor:
 
         assert [eqn.prim.name for eqn in ir.eqns] == ["factor", "concat"]
         assert ir.eqns[0].params["name"] == "score"
-        assert ir.eqns[0].out_ir_tree == ()
+        assert ir.eqns[0].out_tree == ()
         assert ir.call("hello", 0.5) == "hello!"
 
     def test_factor_rejects_negative_weight_in_normal_execution(self):

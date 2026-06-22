@@ -33,7 +33,7 @@ type TreePair = tuple[Tree, Tree]
 type CustomResult = tuple[core.IR, Tree]
 
 
-def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> core.IR:
+def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> core.IR:
     def to_ir_input(x, /):
         if core.is_irvar(x):
             return x
@@ -42,11 +42,11 @@ def trace_custom_func(func: Callable[..., Any], in_ir_tree: Tree, /) -> core.IR:
         assert core.is_traceable(x), f"Unsupported type for custom function: {type(x).__name__}"
         return core.Var.fresh(aval=core.avalof(x))
 
-    in_ir_tree = utils.tree.map(to_ir_input, in_ir_tree)
+    in_tree = utils.tree.map(to_ir_input, in_tree)
     with core.using_interpreter(core.TraceInterpreter()) as tracer:
-        out_trace_tree = func(*tracer.box(in_ir_tree))
-    out_ir_tree = tracer.unbox(out_trace_tree)
-    return core.IR(tracer.eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
+        out_trace_tree = func(*tracer.box(in_tree))
+    out_tree = tracer.unbox(out_trace_tree)
+    return core.IR(tracer.eqns, in_tree=in_tree, out_tree=out_tree)
 
 
 def call_custom_body(func: Callable[..., Any], in_tree: Tree, /) -> CustomResult:
@@ -74,7 +74,7 @@ async def aimpl_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tr
 
 def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
     ir = trace_custom_func(call, in_tree)
-    return utils.tree.map(core.ir_aval, ir.out_ir_tree)
+    return utils.tree.map(core.ir_aval, ir.out_tree)
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
@@ -128,7 +128,7 @@ def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair
     ir = trace_custom_func(call, example_values)
     batched_ir = batch.batch(ir, in_axes=axes)
     out = batched_ir.call(*values)
-    return out, tree_batched_like(ir.out_ir_tree, True)
+    return out, tree_batched_like(ir.out_tree, True)
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
@@ -140,7 +140,7 @@ async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
     ir = trace_custom_func(call, example_values)
     batched_ir = batch.batch(ir, in_axes=axes)
     out = await batched_ir.acall(*values)
-    return out, tree_batched_like(ir.out_ir_tree, True)
+    return out, tree_batched_like(ir.out_tree, True)
 
 
 def dce_custom_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:

@@ -48,7 +48,7 @@ def test_register_trace_type():
         af.core.trace_types.remove(Box)
         del af.core.aval_rules[Box]
 
-    assert ir.in_ir_tree[0].aval == BoxAVal()
+    assert ir.in_tree[0].aval == BoxAVal()
 
 
 def test_scalar_aval_reexports():

@@ -57,13 +57,13 @@ class TestDCE:
         assert len(dce.eqns) == 3
 
         for i in range(len(dce.eqns) - 1):
-            curr_out = dce.eqns[i].out_ir_tree
-            next_in_leaves = af.utils.tree.leaves(dce.eqns[i + 1].in_ir_tree)
+            curr_out = dce.eqns[i].out_tree
+            next_in_leaves = af.utils.tree.leaves(dce.eqns[i + 1].in_tree)
             assert curr_out in next_in_leaves
 
     def test_errors_on_dangling_used_output_irvar(self):
         dangling = Var.fresh(aval=af.core.StrAVal())
-        bad_ir = IR([], in_ir_tree=(), out_ir_tree=dangling)
+        bad_ir = IR([], in_tree=(), out_tree=dangling)
 
         with pytest.raises(AssertionError):
             af.dce(bad_ir, out_used=True)
@@ -423,7 +423,7 @@ class TestNestedDCE:
         dced = af.dce(ir, out_used=(True, False))
 
         dced_body_ir = dced.eqns[0].params["body_ir"]
-        assert dced_body_ir.out_ir_tree[1] is not None
+        assert dced_body_ir.out_tree[1] is not None
         assert dced.call(("v", "h")) == ("vh", "h!")
 
     def test_fixpoint_dces_inner_step_ir(self):
@@ -485,7 +485,7 @@ class TestNestedDCE:
         dced = af.dce(ir, out_used=(True, False))
 
         dced_step_ir = dced.eqns[0].params["step_ir"]
-        assert dced_step_ir.out_ir_tree[1] is not None
+        assert dced_step_ir.out_tree[1] is not None
         assert dced.call(("v", "h"), "!") == ("vhh!", "h!!")
 
 

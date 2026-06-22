@@ -90,7 +90,7 @@ class TestFold:
         ir = af.trace(program)("seed")
 
         assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
-        assert ir.eqns[0].in_ir_tree[0] == "AB"
+        assert ir.eqns[0].in_tree[0] == "AB"
         assert ir.call("C") == "ABC"
 
     def test_fold_block_allows_nested_interpreter_inside_trace(self):
@@ -159,7 +159,7 @@ class TestFold:
         ir = af.trace(program, static=(True, False))("Q", "seed")
 
         assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
-        assert ir.eqns[0].in_ir_tree[0] == "Q: "
+        assert ir.eqns[0].in_tree[0] == "Q: "
         assert ir.call("Q", "hello") == "Q: hello"
 
     def test_tracing_resumes_after_static_block(self):

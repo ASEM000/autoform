@@ -201,7 +201,7 @@ class TestGatherWithDCE:
         gather_eqn = [e for e in dce_ir.eqns if e.prim.name == "gather"][0]
         inner_dead = gather_eqn.params["irs"][1]
         assert len(inner_dead.eqns) == 0
-        leaves = af.utils.tree.leaves(inner_dead.out_ir_tree)
+        leaves = af.utils.tree.leaves(inner_dead.out_tree)
         assert all(x is None for x in leaves)
 
 
@@ -682,7 +682,7 @@ class TestDepends:
         depends_eqns = [e for e in ir.eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
-        in_leaves = af.utils.tree.leaves(depends_eqns[0].in_ir_tree)
+        in_leaves = af.utils.tree.leaves(depends_eqns[0].in_tree)
         assert len(in_leaves) >= 2
 
 

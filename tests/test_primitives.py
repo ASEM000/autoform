@@ -254,8 +254,8 @@ class TestLMPrimitive:
 
         assert eqn.prim.name == "lm_call"
         assert eqn.params == {"roles": ["user"]}
-        assert isinstance(eqn.in_ir_tree[0][0], af.core.Var)
-        assert isinstance(eqn.in_ir_tree[1], af.core.Var)
+        assert isinstance(eqn.in_tree[0][0], af.core.Var)
+        assert isinstance(eqn.in_tree[1], af.core.Var)
 
     def test_lm_call_only_traces_messages_and_model(self):
         def program(prompt: str, model: str):
@@ -265,9 +265,9 @@ class TestLMPrimitive:
         eqn = ir.eqns[0]
 
         assert eqn.params == {"roles": ["user"]}
-        assert len(eqn.in_ir_tree) == 2
-        assert isinstance(eqn.in_ir_tree[0][0], af.core.Var)
-        assert isinstance(eqn.in_ir_tree[1], af.core.Var)
+        assert len(eqn.in_tree) == 2
+        assert isinstance(eqn.in_tree[0][0], af.core.Var)
+        assert isinstance(eqn.in_tree[1], af.core.Var)
 
     def test_lm_call_leaves_litellm_params_to_active_client(self):
         class ConfiguredRouter:
@@ -572,8 +572,8 @@ class TestTransformWrapperAvals:
         ir = af.core.IR([], (var,), (var,))
 
         pf_ir = af.pushforward(ir)
-        primals_in, tangents_in = pf_ir.in_ir_tree
-        primals_out, tangents_out = pf_ir.out_ir_tree
+        primals_in, tangents_in = pf_ir.in_tree
+        primals_out, tangents_out = pf_ir.out_tree
 
         assert primals_in[0].aval is aval
         assert tangents_in[0].aval is aval
@@ -592,8 +592,8 @@ class TestTransformWrapperAvals:
         ir = af.core.IR([], (var,), (var,))
 
         pb_ir = af.pullback(ir)
-        primals_in, cotangents_in = pb_ir.in_ir_tree
-        primals_out, cotangents_out = pb_ir.out_ir_tree
+        primals_in, cotangents_in = pb_ir.in_tree
+        primals_out, cotangents_out = pb_ir.out_tree
 
         assert primals_in[0].aval is aval
         assert cotangents_in[0].aval is aval
@@ -733,7 +733,7 @@ class TestLiteralZeroing:
 
         tangent_ir = af.pushforward(ir)
 
-        _, tangent_in = tangent_ir.in_ir_tree
+        _, tangent_in = tangent_ir.in_tree
         t_lit, t_var = tangent_in
 
         assert af.ad.is_zero(t_lit)
@@ -746,12 +746,12 @@ class TestLiteralZeroing:
 
         ir = af.trace(f)("input")
 
-        res_var, res_lit = ir.out_ir_tree
+        res_var, res_lit = ir.out_tree
         assert res_lit == "constant_output"
 
         tangent_ir = af.pushforward(ir)
 
-        _, tangent_out = tangent_ir.out_ir_tree
+        _, tangent_out = tangent_ir.out_tree
         t_out_var, t_out_lit = tangent_out
 
         assert af.ad.is_zero(t_out_lit)
@@ -764,7 +764,7 @@ class TestLiteralZeroing:
         ir = af.trace(f)("input")
         adjoint_ir = af.pullback(ir)
 
-        _, cotangent_out = adjoint_ir.in_ir_tree
+        _, cotangent_out = adjoint_ir.in_tree
         c_out_var, c_out_lit = cotangent_out
 
         assert af.ad.is_zero(c_out_lit)
@@ -778,7 +778,7 @@ class TestLiteralZeroing:
 
         adjoint_ir = af.pullback(ir)
 
-        _, cotangent_in = adjoint_ir.out_ir_tree
+        _, cotangent_in = adjoint_ir.out_tree
         c_in_lit, c_in_var = cotangent_in
 
         assert af.ad.is_zero(c_in_lit)

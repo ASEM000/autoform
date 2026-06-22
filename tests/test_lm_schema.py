@@ -140,9 +140,9 @@ def test_lm_schema_call_traces_schema_as_static_param():
         == make_json_schema_and_parser(answer)[0]
     )
     assert "model" not in ir.eqns[0].params
-    assert isinstance(ir.eqns[0].in_ir_tree[1], af.core.Var)
-    assert isinstance(ir.eqns[0].out_ir_tree["text"], af.core.Var)
-    assert isinstance(ir.eqns[0].out_ir_tree["score"], af.core.Var)
+    assert isinstance(ir.eqns[0].in_tree[1], af.core.Var)
+    assert isinstance(ir.eqns[0].out_tree["text"], af.core.Var)
+    assert isinstance(ir.eqns[0].out_tree["score"], af.core.Var)
 
     with af.lm_client(SchemaRouter()):
         assert ir.call("hello", "m1") == "m1|hello"

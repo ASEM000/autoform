@@ -226,14 +226,14 @@ def pushforward(ir: core.IR, /) -> core.IR:
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return zeroof(atom)
 
-    p_in_ir = utils.tree.map(make_p, ir.in_ir_tree)
-    t_in_ir = utils.tree.map(make_t, ir.in_ir_tree)
-    in_ir_tree = (p_in_ir, t_in_ir)
-    p_out_ir = utils.tree.map(make_p, ir.out_ir_tree)
-    t_out_ir = utils.tree.map(make_t, ir.out_ir_tree)
-    out_ir_tree = (p_out_ir, t_out_ir)
-    eqn = core.Eqn(pushforward_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
-    return core.IR([eqn], in_ir_tree, out_ir_tree)
+    p_in_ir = utils.tree.map(make_p, ir.in_tree)
+    t_in_ir = utils.tree.map(make_t, ir.in_tree)
+    in_tree = (p_in_ir, t_in_ir)
+    p_out_ir = utils.tree.map(make_p, ir.out_tree)
+    t_out_ir = utils.tree.map(make_t, ir.out_tree)
+    out_tree = (p_out_ir, t_out_ir)
+    eqn = core.Eqn(pushforward_call_p, in_tree, out_tree, dict(ir=ir))
+    return core.IR([eqn], in_tree, out_tree)
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
@@ -273,7 +273,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def abstract_pushforward_call(_: Tree, /, *, ir: core.IR) -> TreePair:
-    out = utils.tree.map(core.ir_aval, ir.out_ir_tree)
+    out = utils.tree.map(core.ir_aval, ir.out_tree)
     return out, out
 
 
@@ -345,7 +345,7 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     unbatch_t = ft.partial(utils.batch_index, t_cols, t_batched)
     pf_ir = pushforward(ir)
     out_bi = [pf_ir.call(unbatch_p(b), unbatch_t(b)) for b in range(batch_size)]
-    out_batched = utils.tree.map(lambda _: True, pf_ir.out_ir_tree)
+    out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
@@ -366,7 +366,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
     inputs = [(unbatch_p(b), unbatch_t(b)) for b in range(bs)]
     out_bi = await scheduling.gather_p.abind(inputs, irs=[pf_ir] * bs)
-    out_batched = utils.tree.map(lambda _: True, pf_ir.out_ir_tree)
+    out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
     out_ib = utils.batch_transpose(bs, out_batched, list(out_bi))
     return out_ib, out_batched
 
@@ -521,12 +521,12 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
             return zeroof(atom)
         return cot_acc(cs)
 
-    utils.tree.map(write_c, ir.out_ir_tree, c_out)
+    utils.tree.map(write_c, ir.out_tree, c_out)
     for eqn in reversed(ir.eqns):
-        c_out = utils.tree.map(read_c, eqn.out_ir_tree)
+        c_out = utils.tree.map(read_c, eqn.out_tree)
         c_in = yield eqn, c_out
-        utils.tree.map(write_c, eqn.in_ir_tree, c_in)
-    yield None, utils.tree.map(read_c, ir.in_ir_tree)
+        utils.tree.map(write_c, eqn.in_tree, c_in)
+    yield None, utils.tree.map(read_c, ir.in_tree)
 
 
 class PullbackBwdInterpreter(core.BoxedInterpreter[PullbackBwdBox]):
@@ -596,14 +596,14 @@ def pullback(ir: core.IR, /) -> core.IR:
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return zeroof(atom)
 
-    p_in_ir = utils.tree.map(make_p, ir.in_ir_tree)
-    c_out_ir = utils.tree.map(make_c, ir.out_ir_tree)
-    in_ir_tree = (p_in_ir, c_out_ir)
-    p_out_ir = utils.tree.map(make_p, ir.out_ir_tree)
-    c_in_ir = utils.tree.map(make_c, ir.in_ir_tree)
-    out_ir_tree = (p_out_ir, c_in_ir)
-    eqn = core.Eqn(pullback_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
-    return core.IR([eqn], in_ir_tree, out_ir_tree)
+    p_in_ir = utils.tree.map(make_p, ir.in_tree)
+    c_out_ir = utils.tree.map(make_c, ir.out_tree)
+    in_tree = (p_in_ir, c_out_ir)
+    p_out_ir = utils.tree.map(make_p, ir.out_tree)
+    c_in_ir = utils.tree.map(make_c, ir.in_tree)
+    out_tree = (p_out_ir, c_in_ir)
+    eqn = core.Eqn(pullback_call_p, in_tree, out_tree, dict(ir=ir))
+    return core.IR([eqn], in_tree, out_tree)
 
 
 def impl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
@@ -675,8 +675,8 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def abstract_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    p_out = utils.tree.map(core.ir_aval, ir.out_ir_tree)
-    c_in = utils.tree.map(core.ir_aval, ir.in_ir_tree)
+    p_out = utils.tree.map(core.ir_aval, ir.out_tree)
+    c_in = utils.tree.map(core.ir_aval, ir.in_tree)
     return p_out, c_in
 
 
@@ -751,7 +751,7 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     unbatch_c = ft.partial(utils.batch_index, c_cols, c_batched)
     pb_ir = pullback(ir)
     out_bi = [pb_ir.call(unbatch_p(b), unbatch_c(b)) for b in range(size)]
-    out_batched = utils.tree.map(lambda _: True, pb_ir.out_ir_tree)
+    out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
     out_ib = utils.batch_transpose(size, out_batched, out_bi)
     return out_ib, out_batched
 
@@ -773,7 +773,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
     inputs = [(unbatch_p(b), unbatch_c(b)) for b in range(size)]
     out_bi = await scheduling.gather_p.abind(inputs, irs=[pb_ir] * size)
-    out_batched = utils.tree.map(lambda _: True, pb_ir.out_ir_tree)
+    out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
     out_ib = utils.batch_transpose(size, out_batched, list(out_bi))
     return out_ib, out_batched
 

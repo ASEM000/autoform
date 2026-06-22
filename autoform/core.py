@@ -137,7 +137,7 @@ class StrAVal(ScalarAVal):
     Example:
         >>> import autoform as af
         >>> ir = af.trace(lambda x: x)("x")
-        >>> (x,) = ir.in_ir_tree
+        >>> (x,) = ir.in_tree
         >>> x.aval
         StrAVal()
     """
@@ -151,7 +151,7 @@ class IntAVal(ScalarAVal):
     Example:
         >>> import autoform as af
         >>> ir = af.trace(lambda x: x)(1)
-        >>> (x,) = ir.in_ir_tree
+        >>> (x,) = ir.in_tree
         >>> x.aval
         IntAVal()
     """
@@ -165,7 +165,7 @@ class FloatAVal(ScalarAVal):
     Example:
         >>> import autoform as af
         >>> ir = af.trace(lambda x: x)(1.0)
-        >>> (x,) = ir.in_ir_tree
+        >>> (x,) = ir.in_tree
         >>> x.aval
         FloatAVal()
     """
@@ -179,7 +179,7 @@ class BoolAVal(ScalarAVal):
     Example:
         >>> import autoform as af
         >>> ir = af.trace(lambda x: x)(True)
-        >>> (x,) = ir.in_ir_tree
+        >>> (x,) = ir.in_tree
         >>> x.aval
         BoolAVal()
     """
@@ -383,19 +383,19 @@ class Eqn:
 
     Args:
         prim: Primitive represented by this equation.
-        in_ir_tree: Input tree containing IR variables and concrete literals.
-        out_ir_tree: Output tree containing IR variables and concrete literals.
+        in_tree: Input tree containing IR variables and concrete literals.
+        out_tree: Output tree containing IR variables and concrete literals.
         params: Static parameters passed to the primitive rule.
         tags: Tags associated with this equation.
     """
 
-    __slots__ = ["prim", "in_ir_tree", "out_ir_tree", "params", "tags"]
+    __slots__ = ["prim", "in_tree", "out_tree", "params", "tags"]
 
     def __init__(
         self,
         prim: Prim,
-        in_ir_tree: Tree,
-        out_ir_tree: Tree,
+        in_tree: Tree,
+        out_tree: Tree,
         params: dict[str, Any] | None = None,
         tags: frozenset[Hashable] = frozenset(),
     ):
@@ -403,8 +403,8 @@ class Eqn:
         assert isinstance(params, dict) or params is None
         assert isinstance(tags, frozenset)
         self.prim = prim
-        self.in_ir_tree = in_ir_tree
-        self.out_ir_tree = out_ir_tree
+        self.in_tree = in_tree
+        self.out_tree = out_tree
         self.params = params if params is not None else {}
         self.tags = tags
 
@@ -417,7 +417,7 @@ class Eqn:
             return await self.prim.abind(in_tree, **params)
 
     def using(self, **kwargs) -> Eqn:
-        return Eqn(self.prim, self.in_ir_tree, self.out_ir_tree, self.params | kwargs, self.tags)
+        return Eqn(self.prim, self.in_tree, self.out_tree, self.params | kwargs, self.tags)
 
 
 class IR[*A, R]:
@@ -430,19 +430,19 @@ class IR[*A, R]:
 
     Args:
         eqns: Ordered primitive equations.
-        in_ir_tree: Tree describing the runtime input structure.
-        out_ir_tree: Tree describing the runtime output structure.
+        in_tree: Tree describing the runtime input structure.
+        out_tree: Tree describing the runtime output structure.
     """
 
-    __slots__ = ["eqns", "in_ir_tree", "out_ir_tree"]
+    __slots__ = ["eqns", "in_tree", "out_tree"]
 
-    def __init__(self, eqns: list[Eqn], in_ir_tree: Tree, out_ir_tree: Tree):
+    def __init__(self, eqns: list[Eqn], in_tree: Tree, out_tree: Tree):
         assert isinstance(eqns, list)
         eqns = tuple(eqns)
         assert all(isinstance(eqn, Eqn) for eqn in eqns)
         self.eqns = eqns
-        self.in_ir_tree = in_ir_tree
-        self.out_ir_tree = out_ir_tree
+        self.in_tree = in_tree
+        self.out_tree = out_tree
 
     def __repr__(self) -> str:
         return generate_text_code(ir=self, expand_ir=True)
@@ -451,7 +451,7 @@ class IR[*A, R]:
         """Run IR with concrete runtime inputs.
 
         Use this after `trace(...)` has produced an `IR`. Pass values with the same
-        pytree structure as `in_ir_tree`; the method executes the stored equations
+        pytree structure as `in_tree`; the method executes the stored equations
         in order and returns the final output tree.
 
         Example:
@@ -538,19 +538,19 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
                 val_repr = val_repr[:27] + "..."
             return f"{val_repr}:Lit"
 
-    def format_tree(ir_tree: Tree) -> str:
-        leaves = utils.tree.leaves(ir_tree)
+    def format_tree(tree: Tree) -> str:
+        leaves = utils.tree.leaves(tree)
         return ", ".join(format_ir_val(leaf) for leaf in leaves) if leaves else "()"
 
-    in_sig = format_tree(ir.in_ir_tree)
-    out_sig = format_tree(ir.out_ir_tree)
+    in_sig = format_tree(ir.in_tree)
+    out_sig = format_tree(ir.out_tree)
 
     header = f"func({in_sig}) -> ({out_sig}) {{"
     lines = [header]
 
     for eqn in ir.eqns:
-        lhs = format_tree(eqn.out_ir_tree)
-        rhs = format_tree(eqn.in_ir_tree)
+        lhs = format_tree(eqn.out_tree)
+        rhs = format_tree(eqn.in_tree)
         eqn_args = [rhs]
         eqn_args.extend(f"{k}={eqn.params[k]!r}" for k in (eqn.params or {}))
         if eqn.tags:
@@ -889,12 +889,12 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             assert not is_irvar(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
             return value
 
-        in_ir_tree = self.unbox(in_tree)
+        in_tree = self.unbox(in_tree)
         params = self.unbox(params)
         params = utils.tree.map_with_path(to_concrete, params)
 
-        in_ir_tree = utils.tree.map(to_in_ir_atom, in_ir_tree)
-        in_aval_tree = utils.tree.map(ir_aval, in_ir_tree)
+        in_tree = utils.tree.map(to_in_ir_atom, in_tree)
+        in_aval_tree = utils.tree.map(ir_aval, in_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x):
@@ -903,9 +903,9 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             # this is basically delegated to the user to handle
             return Var.fresh(aval=x) if is_aval(x) else x
 
-        out_ir_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
-        self.eqns.append(Eqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
-        return self.box(out_ir_tree)
+        out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
+        self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
+        return self.box(out_tree)
 
 
 def trace[*A, R](
@@ -960,11 +960,11 @@ def trace[*A, R](
     def wrapper(*args: *A) -> IR[*A, R]:
         arg_tree = args
         in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
-        in_ir_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
+        in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
         with using_interpreter(TraceInterpreter()) as tracer:
-            out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
-        out_ir_tree = tracer.unbox(out_trace_tree)
-        return IR(eqns=tracer.eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
+            out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
+        out_tree = tracer.unbox(out_trace_tree)
+        return IR(eqns=tracer.eqns, in_tree=in_tree, out_tree=out_tree)
 
     return wrapper
 
@@ -1000,15 +1000,15 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
         def write(ir_val, value: Any):
             is_irvar(ir_val) and setitem(env, ir_val, value)
 
-        utils.tree.map(check_input, ir.in_ir_tree, args)
-        utils.tree.map(write, ir.in_ir_tree, args)
+        utils.tree.map(check_input, ir.in_tree, args)
+        utils.tree.map(write, ir.in_tree, args)
 
         for eqn in ir.eqns:
-            in_values = utils.tree.map(read, eqn.in_ir_tree)
+            in_values = utils.tree.map(read, eqn.in_tree)
             out_values = yield eqn, in_values
-            utils.tree.map(write, eqn.out_ir_tree, out_values)
+            utils.tree.map(write, eqn.out_tree, out_values)
 
-        yield None, utils.tree.map(read, ir.out_ir_tree)
+        yield None, utils.tree.map(read, ir.out_tree)
 
     return func
 

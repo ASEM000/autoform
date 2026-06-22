@@ -29,10 +29,10 @@ type Liveness = list[LiveSet]
 __all__ = ["var_leaves", "var_producers", "eqn_graph", "ir_liveness"]
 
 
-def var_leaves(ir_tree: Tree, /) -> list[core.Var]:
+def var_leaves(tree: Tree, /) -> list[core.Var]:
     """Return Vars from an IR tree in leaf order."""
 
-    return [cast(core.Var, x) for x in utils.tree.leaves(ir_tree) if core.is_irvar(x)]
+    return [cast(core.Var, x) for x in utils.tree.leaves(tree) if core.is_irvar(x)]
 
 
 def var_producers(ir: core.IR, /) -> dict[core.Var, core.Eqn]:
@@ -40,7 +40,7 @@ def var_producers(ir: core.IR, /) -> dict[core.Var, core.Eqn]:
 
     producers: dict[core.Var, core.Eqn] = {}
     for eqn in ir.eqns:
-        for var in var_leaves(eqn.out_ir_tree):
+        for var in var_leaves(eqn.out_tree):
             assert producers.get(var) is None
             producers[var] = eqn
     return producers
@@ -53,7 +53,7 @@ def eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
     adjacency_list: dict[core.Eqn, list[core.Eqn]] = {eqn: [] for eqn in ir.eqns}
     for eqn in ir.eqns:
         seen_parents: set[core.Eqn] = set()
-        for in_var in var_leaves(eqn.in_ir_tree):
+        for in_var in var_leaves(eqn.in_tree):
             if (p := var_to_parent.get(in_var)) is not None and p not in seen_parents:
                 adjacency_list[p].append(eqn)
                 seen_parents.add(p)
@@ -69,10 +69,10 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
     # the live input boundary, and the last item is the selected output boundary.
 
     if out_used is None:
-        live_after = set(var_leaves(ir.out_ir_tree))
+        live_after = set(var_leaves(ir.out_tree))
     else:
         assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
-        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_ir_tree)
+        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
         # NOTE(asem): with a partial output mask, only the selected output Vars are live.
         # >>> def program(x):
         # ...     a = af.concat(x, "!")
@@ -80,7 +80,7 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
         # ...     return a, b
         # >>> ir_liveness(ir, out_used=(True, False))[-1]
         # {a}
-        live_after = set(var_leaves(utils.mask(ir.out_ir_tree, out_used)))
+        live_after = set(var_leaves(utils.mask(ir.out_tree, out_used)))
 
     liveness: Liveness = [set() for _ in range(len(ir.eqns) + 1)]
     liveness[-1] = live_after
@@ -89,8 +89,8 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
         # NOTE(asem): move in reversed order of equation list starting from the output Vars
         # with each step up the live before is basically all the live Vars used + live after
         # without the Vars defined by the current equation.
-        uses: LiveSet = set(var_leaves(eqn.in_ir_tree))
-        defs: LiveSet = set(var_leaves(eqn.out_ir_tree))
+        uses: LiveSet = set(var_leaves(eqn.in_tree))
+        defs: LiveSet = set(var_leaves(eqn.out_tree))
         live_before = uses | (live_after - defs)
         liveness[i] = live_before
         live_after = live_before

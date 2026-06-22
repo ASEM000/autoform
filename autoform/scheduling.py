@@ -81,7 +81,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def abstract_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    return [utils.tree.map(core.ir_aval, ir.out_ir_tree) for ir in irs]
+    return [utils.tree.map(core.ir_aval, ir.out_tree) for ir in irs]
 
 
 def push_gather(in_tree: GatherPair, /, *, irs: IRList) -> GatherPair:
@@ -141,11 +141,11 @@ def batch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGatherOut
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if utils.batch_spec(inp, inp_batched) is None:
             results.append(ir.call(*inp))
-            out_batched.append(utils.tree.map(lambda _: False, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
         else:
             batched_ir = batch.batch(ir, in_axes=inp_batched)
             results.append(batched_ir.call(*inp))
-            out_batched.append(utils.tree.map(lambda _: True, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
 
     return results, out_batched
 
@@ -159,11 +159,11 @@ async def abatch_gather(in_tree: BatchGatherInput, /, *, irs: IRList) -> BatchGa
     for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
         if utils.batch_spec(inp, inp_batched) is None:
             results.append(await ir.acall(*inp))
-            out_batched.append(utils.tree.map(lambda _: False, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
         else:
             batched_ir = batch.batch(ir, in_axes=inp_batched)
             results.append(await batched_ir.acall(*inp))
-            out_batched.append(utils.tree.map(lambda _: True, ir.out_ir_tree))
+            out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
 
     return results, out_batched
 
@@ -363,10 +363,10 @@ def sched[*A, R](
         return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
 
     def make_gather(eqns: list[core.Eqn]) -> core.Eqn:
-        irs = [core.IR([eqn], (eqn.in_ir_tree,), eqn.out_ir_tree) for eqn in eqns]
-        in_ir_tree = [(eqn.in_ir_tree,) for eqn in eqns]
-        out_ir_tree = [eqn.out_ir_tree for eqn in eqns]
-        return core.Eqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
+        irs = [core.IR([eqn], (eqn.in_tree,), eqn.out_tree) for eqn in eqns]
+        in_tree = [(eqn.in_tree,) for eqn in eqns]
+        out_tree = [eqn.out_tree for eqn in eqns]
+        return core.Eqn(gather_p, in_tree, out_tree, dict(irs=irs))
 
     for level in levels:
         eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
@@ -375,4 +375,4 @@ def sched[*A, R](
         out_eqns.extend([make_gather(par_eqns)] if len(par_eqns) > 1 else par_eqns)
         out_eqns.extend(seq_eqns)
 
-    return core.IR(out_eqns, ir.in_ir_tree, ir.out_ir_tree)
+    return core.IR(out_eqns, ir.in_tree, ir.out_tree)

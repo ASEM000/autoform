@@ -73,13 +73,13 @@ class TestKwargsBuildIR:
         assert len(ir.eqns) == 1
         eqn = ir.eqns[0]
         assert eqn.prim == greet_p
-        match eqn.in_ir_tree:
+        match eqn.in_tree:
             case (name, {"greeting": greeting, "punctuation": punctuation}):
                 assert isinstance(name, af.core.Var)
                 assert greeting == "Hi"
                 assert punctuation == "?"
             case _:
-                pytest.fail("Unexpected in_ir_tree structure")
+                pytest.fail("Unexpected in_tree structure")
 
     def test_kwargs_execution(self):
         def program(name):
@@ -129,5 +129,5 @@ class TestKwargsPullback:
 
         ir = af.trace(program)("World")
         pb_ir = af.pullback(ir)
-        assert len(pb_ir.in_ir_tree) == 2
-        assert len(pb_ir.out_ir_tree) == 2
+        assert len(pb_ir.in_tree) == 2
+        assert len(pb_ir.out_tree) == 2

@@ -154,13 +154,13 @@ def weighted(ir: core.IR, /) -> core.IR:
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 
-    in_ir_tree = ir.in_ir_tree
-    out_ir_tree = (
-        utils.tree.map(make_out, ir.out_ir_tree),
+    in_tree = ir.in_tree
+    out_tree = (
+        utils.tree.map(make_out, ir.out_tree),
         core.Var.fresh(aval=core.FloatAVal()),
     )
-    eqn = core.Eqn(weighted_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
-    return core.IR([eqn], in_ir_tree, out_ir_tree)
+    eqn = core.Eqn(weighted_call_p, in_tree, out_tree, dict(ir=ir))
+    return core.IR([eqn], in_tree, out_tree)
 
 
 def impl_weighted_call(in_tree, /, *, ir: core.IR):
@@ -181,7 +181,7 @@ async def aimpl_weighted_call(in_tree, /, *, ir: core.IR):
 
 def abstract_weighted_call(in_tree, /, *, ir: core.IR):
     del in_tree
-    return utils.tree.map(core.ir_aval, ir.out_ir_tree), core.FloatAVal()
+    return utils.tree.map(core.ir_aval, ir.out_tree), core.FloatAVal()
 
 
 def unsupported_weighted_call_transform(transform: str) -> None:

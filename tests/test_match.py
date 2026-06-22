@@ -54,7 +54,7 @@ class TestEqnMatch:
         eqn = ir.eqns[0]
 
         match eqn:
-            case af.core.Eqn(prim=prim, in_ir_tree=in_tree, out_ir_tree=out_tree, params=params):
+            case af.core.Eqn(prim=prim, in_tree=in_tree, out_tree=out_tree, params=params):
                 assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
@@ -92,8 +92,8 @@ class TestEqnMatch:
 
         new_ir = af.core.IR(
             eqns=new_eqns,
-            in_ir_tree=ir.in_ir_tree,
-            out_ir_tree=ir.out_ir_tree,
+            in_tree=ir.in_tree,
+            out_tree=ir.out_tree,
         )
 
         assert new_ir.eqns[0].params["collection"] == "new_tag"
@@ -115,8 +115,8 @@ class TestEqnWithParams:
         assert eqn.params["collection"] == "old"
         assert new_eqn.params["collection"] == "new"
         assert new_eqn.prim == eqn.prim
-        assert new_eqn.in_ir_tree == eqn.in_ir_tree
-        assert new_eqn.out_ir_tree == eqn.out_ir_tree
+        assert new_eqn.in_tree == eqn.in_tree
+        assert new_eqn.out_tree == eqn.out_tree
 
     def test_using_preserves_fields(self):
         def func(x):
@@ -128,8 +128,8 @@ class TestEqnWithParams:
         new_eqn = eqn.using(collection="changed")
 
         assert new_eqn.prim is eqn.prim
-        assert new_eqn.in_ir_tree is eqn.in_ir_tree
-        assert new_eqn.out_ir_tree is eqn.out_ir_tree
+        assert new_eqn.in_tree is eqn.in_tree
+        assert new_eqn.out_tree is eqn.out_tree
 
 
 class TestInsertAfterPattern:
@@ -151,8 +151,8 @@ class TestInsertAfterPattern:
 
         new_ir = af.core.IR(
             eqns=new_eqns,
-            in_ir_tree=ir.in_ir_tree,
-            out_ir_tree=ir.out_ir_tree,
+            in_tree=ir.in_tree,
+            out_tree=ir.out_tree,
         )
 
         assert len(new_ir.eqns) == 3
@@ -166,7 +166,7 @@ class TestIRMatch:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(eqns=eqns, in_ir_tree=in_tree, out_ir_tree=out_tree):
+            case af.core.IR(eqns=eqns, in_tree=in_tree, out_tree=out_tree):
                 assert len(eqns) == 1
                 assert isinstance(in_tree, tuple)
                 assert len(in_tree) == 1
@@ -183,8 +183,8 @@ class TestIRMatch:
                 eqns=[
                     af.core.Eqn(
                         prim=prim,
-                        in_ir_tree=in_tree,
-                        out_ir_tree=out_tree,
+                        in_tree=in_tree,
+                        out_tree=out_tree,
                         params=params,
                     )
                 ]

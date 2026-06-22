@@ -59,10 +59,10 @@ class TestBuildIR:
 
         for traced, runtime, expected, aval in cases:
             ir = af.trace(program)(traced)
-            assert isinstance(ir.in_ir_tree, tuple)
-            assert len(ir.in_ir_tree) == 1
-            assert isinstance(ir.in_ir_tree[0], af.core.Var)
-            assert ir.in_ir_tree[0].aval == aval
+            assert isinstance(ir.in_tree, tuple)
+            assert len(ir.in_tree) == 1
+            assert isinstance(ir.in_tree[0], af.core.Var)
+            assert ir.in_tree[0].aval == aval
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -100,7 +100,7 @@ class TestBuildIR:
             del af.core.aval_rules[Blob]
             af.core.trace_types.remove(Blob)
 
-        assert ir.in_ir_tree[0].aval == BlobAVal(3)
+        assert ir.in_tree[0].aval == BlobAVal(3)
 
     def test_irvar_has_aval_but_is_not_traceable(self):
         var = af.core.Var(aval=af.core.StrAVal())
@@ -123,14 +123,14 @@ class TestBuildIR:
 
         ir = af.trace(program)("x0")
         assert len(ir.eqns) == 1
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 1
-        assert isinstance(ir.in_ir_tree[0], af.core.Var)
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 1
+        assert isinstance(ir.in_tree[0], af.core.Var)
         eqn = ir.eqns[0]
-        assert len(eqn.in_ir_tree) == 2
-        lit_candidate = eqn.in_ir_tree[0]
+        assert len(eqn.in_tree) == 2
+        lit_candidate = eqn.in_tree[0]
         assert lit_candidate == "Hello, "
-        assert isinstance(eqn.in_ir_tree[1], af.core.Var)
+        assert isinstance(eqn.in_tree[1], af.core.Var)
 
     def test_format_traces_template_and_args(self):
         def program(x):
@@ -139,7 +139,7 @@ class TestBuildIR:
         ir = af.trace(program)("World")
         assert len(ir.eqns) == 1
         eqn = ir.eqns[0]
-        args, kwargs_values = eqn.in_ir_tree
+        args, kwargs_values = eqn.in_tree
         assert len(args) == 1
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
@@ -166,7 +166,7 @@ class TestBuildIR:
 
         ir = af.trace(program)("x")
         eqn = ir.eqns[0]
-        args, kwargs_values = eqn.in_ir_tree
+        args, kwargs_values = eqn.in_tree
 
         assert args[0] == ["a", "b"]
         assert args[0] is not parts
@@ -175,7 +175,7 @@ class TestBuildIR:
 
         parts.append("c")
 
-        args, _ = eqn.in_ir_tree
+        args, _ = eqn.in_tree
         assert args[0] == ["a", "b"]
         assert ir.call("z") == "['a', 'b'] z"
 
@@ -193,17 +193,17 @@ class TestBuildIR:
             return af.concat(x, x)
 
         ir = af.trace(program)("test")
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 1
-        assert isinstance(ir.in_ir_tree[0], af.core.Var)
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 1
+        assert isinstance(ir.in_tree[0], af.core.Var)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
             return af.concat(a, b)
 
         ir = af.trace(program)("A", "B")
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 2
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 2
 
 
 class TestTraceStatic:
@@ -213,8 +213,8 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert ir.in_ir_tree[0] == "Hello"
-        assert isinstance(ir.in_ir_tree[1], af.core.Var)
+        assert ir.in_tree[0] == "Hello"
+        assert isinstance(ir.in_tree[1], af.core.Var)
         assert ir.call("Hello", "x0") == "Hello x0"
 
     def test_static_input_mismatch_errors_before_execution(self):
@@ -251,8 +251,8 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))(True, "World")
 
-        assert ir.in_ir_tree[0] is True
-        assert isinstance(ir.in_ir_tree[1], af.core.Var)
+        assert ir.in_tree[0] is True
+        assert isinstance(ir.in_tree[1], af.core.Var)
         assert ir.call(True, "x0") == "Hello x0"
 
 

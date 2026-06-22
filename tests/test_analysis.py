@@ -30,10 +30,10 @@ class TestIrVarLeaves:
             return af.format("{} {} {}", head, left, right)
 
         ir = af.trace(program)(("head", ("left", "right")))
-        (payload,) = ir.in_ir_tree
+        (payload,) = ir.in_tree
         head, pair = payload
 
-        assert var_leaves(ir.in_ir_tree) == [head, pair[0], pair[1]]
+        assert var_leaves(ir.in_tree) == [head, pair[0], pair[1]]
 
     def test_filters_static_input_literals(self):
         def program(prefix, name):
@@ -41,7 +41,7 @@ class TestIrVarLeaves:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert var_leaves(ir.in_ir_tree) == [ir.in_ir_tree[1]]
+        assert var_leaves(ir.in_tree) == [ir.in_tree[1]]
 
     def test_returns_output_vars_in_leaf_order(self):
         def program(x):
@@ -50,9 +50,9 @@ class TestIrVarLeaves:
             return ({"left": left}, (right, "const"))
 
         ir = af.trace(program)("seed")
-        left_tree, right_tree = ir.out_ir_tree
+        left_tree, right_tree = ir.out_tree
 
-        assert var_leaves(ir.out_ir_tree) == [left_tree["left"], right_tree[0]]
+        assert var_leaves(ir.out_tree) == [left_tree["left"], right_tree[0]]
 
     def test_filters_literal_outputs(self):
         def program(x):
@@ -60,7 +60,7 @@ class TestIrVarLeaves:
 
         ir = af.trace(program)("seed")
 
-        assert var_leaves(ir.out_ir_tree) == [ir.out_ir_tree[1]["value"]]
+        assert var_leaves(ir.out_tree) == [ir.out_tree[1]["value"]]
 
 
 class TestIrVarProducers:
@@ -72,7 +72,7 @@ class TestIrVarProducers:
 
         ir = af.trace(program)("seed")
         first_eqn, second_eqn = ir.eqns
-        left, right = ir.out_ir_tree
+        left, right = ir.out_tree
 
         assert var_producers(ir) == {left: first_eqn, right: second_eqn}
 
@@ -83,7 +83,7 @@ class TestIrVarProducers:
 
         ir = af.trace(program)("seed")
         producers = var_producers(ir)
-        produced = ir.out_ir_tree["value"]
+        produced = ir.out_tree["value"]
 
         assert producers == {produced: ir.eqns[0]}
 
@@ -91,7 +91,7 @@ class TestIrVarProducers:
         shared = af.core.Var.fresh(aval=af.core.StrAVal())
         eqn_a = af.core.Eqn(af.core.Prim("a"), (), shared, {})
         eqn_b = af.core.Eqn(af.core.Prim("b"), (), shared, {})
-        ir = af.core.IR([eqn_a, eqn_b], in_ir_tree=(), out_ir_tree=shared)
+        ir = af.core.IR([eqn_a, eqn_b], in_tree=(), out_tree=shared)
 
         with pytest.raises(AssertionError):
             var_producers(ir)
@@ -147,7 +147,7 @@ class TestIrLiveness:
             return x
 
         ir = af.trace(program)("seed")
-        (x,) = ir.in_ir_tree
+        (x,) = ir.in_tree
 
         assert ir_liveness(ir) == [{x}]
 
@@ -156,7 +156,7 @@ class TestIrLiveness:
             return x, y
 
         ir = af.trace(program)("x", "y")
-        x, y = ir.in_ir_tree
+        x, y = ir.in_tree
 
         assert ir_liveness(ir, out_used=(True, False)) == [{x}]
         assert ir_liveness(ir, out_used=(False, True)) == [{y}]
@@ -170,8 +170,8 @@ class TestIrLiveness:
             return c
 
         ir = af.trace(program)("seed")
-        (x,) = ir.in_ir_tree
-        a, b, c = (eqn.out_ir_tree for eqn in ir.eqns)
+        (x,) = ir.in_tree
+        a, b, c = (eqn.out_tree for eqn in ir.eqns)
 
         assert ir_liveness(ir) == [{x}, {a}, {b}, {c}]
 
@@ -182,8 +182,8 @@ class TestIrLiveness:
             return left, right
 
         ir = af.trace(program)("left", "right")
-        a, b = ir.in_ir_tree
-        left, right = (eqn.out_ir_tree for eqn in ir.eqns)
+        a, b = ir.in_tree
+        left, right = (eqn.out_tree for eqn in ir.eqns)
 
         assert ir_liveness(ir) == [{a, b}, {b, left}, {left, right}]
 
@@ -194,8 +194,8 @@ class TestIrLiveness:
             return a, b
 
         ir = af.trace(program)("seed")
-        (x,) = ir.in_ir_tree
-        a, b = (eqn.out_ir_tree for eqn in ir.eqns)
+        (x,) = ir.in_tree
+        a, b = (eqn.out_tree for eqn in ir.eqns)
 
         assert ir_liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
 
@@ -204,6 +204,6 @@ class TestIrLiveness:
             return af.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
-        out_var = ir.out_ir_tree
+        out_var = ir.out_tree
 
-        assert ir_liveness(ir) == [{ir.in_ir_tree[1]}, {out_var}]
+        assert ir_liveness(ir) == [{ir.in_tree[1]}, {out_var}]

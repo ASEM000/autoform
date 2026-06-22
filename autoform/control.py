@@ -143,10 +143,10 @@ def switch(key: str, branches: Branches, *args, **kwargs) -> Tree:
     """
     assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], core.IR) for k in branches)
-    tree_struct0 = utils.tree.structure(branches[next(iter(branches))].in_ir_tree)
-    assert all(utils.tree.structure(branches[key].in_ir_tree) == tree_struct0 for key in branches)
-    tree_struct0 = utils.tree.structure(branches[next(iter(branches))].out_ir_tree)
-    assert all(utils.tree.structure(branches[key].out_ir_tree) == tree_struct0 for key in branches)
+    tree_struct0 = utils.tree.structure(branches[next(iter(branches))].in_tree)
+    assert all(utils.tree.structure(branches[key].in_tree) == tree_struct0 for key in branches)
+    tree_struct0 = utils.tree.structure(branches[next(iter(branches))].out_tree)
+    assert all(utils.tree.structure(branches[key].out_tree) == tree_struct0 for key in branches)
     return switch_p.bind((key, args), branches=branches)
 
 
@@ -165,7 +165,7 @@ def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     assert type(key) in (str, core.StrAVal), f"`switch` expects string key: {key!r}"
     key0 = next(iter(branches))
     branch0 = branches[key0]
-    return utils.tree.map(core.ir_aval, branch0.out_ir_tree)
+    return utils.tree.map(core.ir_aval, branch0.out_tree)
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
@@ -309,11 +309,11 @@ def while_loop(cond_ir: core.IR, body_ir: core.IR, init_val: Tree, *, max_iters:
     """
     assert isinstance(cond_ir, core.IR), f"cond_ir must be an IR, got {type(cond_ir)}"
     assert isinstance(body_ir, core.IR), f"body_ir must be an IR, got {type(body_ir)}"
-    assert len(cond_ir.in_ir_tree) == 1, "cond_ir must take exactly one positional argument"
-    assert len(body_ir.in_ir_tree) == 1, "body_ir must take exactly one positional argument"
+    assert len(cond_ir.in_tree) == 1, "cond_ir must take exactly one positional argument"
+    assert len(body_ir.in_tree) == 1, "body_ir must take exactly one positional argument"
 
-    in_struct = utils.tree.structure(body_ir.in_ir_tree[0])
-    out_struct = utils.tree.structure(body_ir.out_ir_tree)
+    in_struct = utils.tree.structure(body_ir.in_tree[0])
+    out_struct = utils.tree.structure(body_ir.out_tree)
     assert in_struct == out_struct, (
         f"body_ir must have identical input/output structure (f: State -> State).\n"
         f"in_struct:  {in_struct}\n"
@@ -372,7 +372,7 @@ def abstract_while_loop(
     max_iters: int,
 ) -> Tree:
     del in_tree, cond_ir, max_iters
-    return utils.tree.map(core.ir_aval, body_ir.out_ir_tree)
+    return utils.tree.map(core.ir_aval, body_ir.out_tree)
 
 
 def pullback_fwd_while_loop(
@@ -516,7 +516,7 @@ def batch_while_loop(
     alive = [True] * b_sz
 
     # NOTE(asem): pre-batch cond and body IRs. True marks all leaves as batched.
-    state_in_axes = utils.tree.map(lambda _: True, body_ir.in_ir_tree)
+    state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
     batched_cond = batch.batch(cond_ir, in_axes=cond_in_axes)
@@ -548,14 +548,14 @@ def batch_while_loop(
             b_body = state_in_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = batched_body.call(*in_transposed)
-            out_batched = utils.tree.map(core.is_irvar, body_ir.out_ir_tree)
+            out_batched = utils.tree.map(core.is_irvar, body_ir.out_tree)
             out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     # only Var positions are batched; literal positions stay scalar
-    out_batched = utils.tree.map(core.is_irvar, body_ir.out_ir_tree)
+    out_batched = utils.tree.map(core.is_irvar, body_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -578,7 +578,7 @@ async def abatch_while_loop(
     alive = [True] * b_sz
 
     # NOTE(asem): pre-batch cond and body IRs
-    state_in_axes = utils.tree.map(lambda _: True, body_ir.in_ir_tree)
+    state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
     batched_cond = batch.batch(cond_ir, in_axes=cond_in_axes)
@@ -606,13 +606,13 @@ async def abatch_while_loop(
             b_body = state_in_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = await batched_body.acall(*in_transposed)
-            out_batched_body = utils.tree.map(core.is_irvar, body_ir.out_ir_tree)
+            out_batched_body = utils.tree.map(core.is_irvar, body_ir.out_tree)
             out_at = ft.partial(utils.batch_index, out_transposed, out_batched_body)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
 
-    out_batched = utils.tree.map(core.is_irvar, body_ir.out_ir_tree)
+    out_batched = utils.tree.map(core.is_irvar, body_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -635,7 +635,7 @@ def dce_while_loop(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     body_ir = eqn.params["body_ir"]
     # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
     # even if the caller only uses part of the final state.
-    state_used = utils.tree.map(lambda _: True, body_ir.out_ir_tree)
+    state_used = utils.tree.map(lambda _: True, body_ir.out_tree)
     cond_ir = dce.dce(cond_ir)
     body_ir = dce.dce(body_ir, out_used=state_used)
     new_eqn = eqn.using(cond_ir=cond_ir, body_ir=body_ir)
@@ -674,10 +674,10 @@ def fixpoint(
     stability inside the program.
     """
     assert isinstance(step_ir, core.IR), f"step_ir must be an IR, got {type(step_ir)}"
-    assert len(step_ir.in_ir_tree) == 2, "step_ir must take exactly two positional arguments"
+    assert len(step_ir.in_tree) == 2, "step_ir must take exactly two positional arguments"
 
-    in_struct = utils.tree.structure(step_ir.in_ir_tree[0])
-    out_struct = utils.tree.structure(step_ir.out_ir_tree)
+    in_struct = utils.tree.structure(step_ir.in_tree[0])
+    out_struct = utils.tree.structure(step_ir.out_tree)
     assert in_struct == out_struct, (
         f"step_ir must have identical state input/output structure (step: (State, Theta) -> State).\n"
         f"in_struct:  {in_struct}\n"
@@ -687,8 +687,8 @@ def fixpoint(
     assert isinstance(adj_iters, int) and adj_iters >= 0, f"adj_iters must be >= 0: {adj_iters!r}"
     if equiv_ir is not None:
         assert isinstance(equiv_ir, core.IR), f"equiv_ir must be an IR, got {type(equiv_ir)}"
-        assert len(equiv_ir.in_ir_tree) == 2, "equiv_ir must take two positional arguments"
-        for side in equiv_ir.in_ir_tree:
+        assert len(equiv_ir.in_tree) == 2, "equiv_ir must take two positional arguments"
+        for side in equiv_ir.in_tree:
             assert utils.tree.structure(side) == in_struct, (
                 "equiv_ir inputs must both match the state structure"
             )
@@ -761,7 +761,7 @@ def abstract_fixpoint(
     equiv_ir: core.IR | None,
 ) -> Tree:
     del in_tree, max_iters, adj_iters, equiv_ir
-    return utils.tree.map(core.ir_aval, step_ir.out_ir_tree)
+    return utils.tree.map(core.ir_aval, step_ir.out_tree)
 
 
 def pullback_fwd_fixpoint(
@@ -946,8 +946,8 @@ def batch_fixpoint(
     thetas = [theta_at(b) for b in range(b_sz)]
     alive = [True] * b_sz
 
-    state_in_axes = utils.tree.map(lambda _: True, step_ir.in_ir_tree[0])
-    theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_ir_tree[1])
+    state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
+    theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
     batched_step = batch.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
@@ -962,7 +962,7 @@ def batch_fixpoint(
         n_alive = len(alive_in)
         in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
         out_transposed = batched_step.call(*in_transposed)
-        out_batched = utils.tree.map(core.is_irvar, step_ir.out_ir_tree)
+        out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
         new_states = [out_at(i) for i in range(n_alive)]
@@ -980,7 +980,7 @@ def batch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = utils.tree.map(core.is_irvar, step_ir.out_ir_tree)
+    out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, states)
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -1011,8 +1011,8 @@ async def abatch_fixpoint(
     thetas = [theta_at(b) for b in range(b_sz)]
     alive = [True] * b_sz
 
-    state_in_axes = utils.tree.map(lambda _: True, step_ir.in_ir_tree[0])
-    theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_ir_tree[1])
+    state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
+    theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
     batched_step = batch.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
@@ -1027,7 +1027,7 @@ async def abatch_fixpoint(
         n_alive = len(alive_in)
         in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
         out_transposed = await batched_step.acall(*in_transposed)
-        out_batched = utils.tree.map(core.is_irvar, step_ir.out_ir_tree)
+        out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
         new_states = [out_at(i) for i in range(n_alive)]
@@ -1045,7 +1045,7 @@ async def abatch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = utils.tree.map(core.is_irvar, step_ir.out_ir_tree)
+    out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, states)
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -1068,7 +1068,7 @@ def dce_fixpoint(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     equiv_ir = eqn.params["equiv_ir"]
     # NOTE(asem): every state leaf is loop-carried into the next step, even if
     # the caller only uses part of the final state.
-    state_used = utils.tree.map(lambda _: True, step_ir.out_ir_tree)
+    state_used = utils.tree.map(lambda _: True, step_ir.out_tree)
     equiv_ir = None if equiv_ir is None else dce.dce(equiv_ir)
     step_ir = dce.dce(step_ir, out_used=state_used)
     new_eqn = eqn.using(step_ir=step_ir, equiv_ir=equiv_ir)
