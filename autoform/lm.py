@@ -31,6 +31,8 @@ import autoform.core as core
 import autoform.schemas as schemas
 import autoform.utils as utils
 
+__all__ = ["LMClient", "LiteLLMClient", "lm_client", "lm_call", "lm_schema_call"]
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Messages = list[dict[str, str]]

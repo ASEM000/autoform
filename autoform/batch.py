@@ -24,6 +24,8 @@ import autoform.dce as dce
 import autoform.scheduling as scheduling
 import autoform.utils as utils
 
+__all__ = ["batch"]
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 

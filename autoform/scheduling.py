@@ -30,6 +30,8 @@ import autoform.core as core
 import autoform.dce as dce
 import autoform.utils as utils
 
+__all__ = ["serial_fanout", "depends", "sched"]
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type IRList = list[core.IR]

@@ -25,6 +25,8 @@ import autoform.dce as dce
 import autoform.scheduling as scheduling
 import autoform.utils as utils
 
+__all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Branches = dict[str, core.IR]

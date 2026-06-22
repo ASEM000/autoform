@@ -23,6 +23,8 @@ import autoform.analysis as analysis
 import autoform.core as core
 import autoform.utils as utils
 
+__all__ = ["dce"]
+
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]
 type DCEResult = tuple[core.Eqn, UsedTree]

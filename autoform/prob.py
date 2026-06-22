@@ -27,6 +27,8 @@ import autoform.memoize as memoize
 import autoform.scheduling as scheduling
 import autoform.utils as utils
 
+__all__ = ["factor", "weighted"]
+
 factor_p = core.Prim("factor")
 dce.non_dce_primitives.add(factor_p)
 memoize.non_memoizable_primitives.add(factor_p)

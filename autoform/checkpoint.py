@@ -27,6 +27,8 @@ import autoform.dce as dce
 import autoform.scheduling as scheduling
 import autoform.utils as utils
 
+__all__ = ["checkpoint", "collect", "inject"]
+
 type Tree[T] = utils.Tree[T]
 
 # ==================================================================================================
