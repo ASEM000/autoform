@@ -152,8 +152,8 @@ class TestBatchIRStructure:
 
         ir = af.trace(f)("hello")
         batched_ir = af.batch(ir)
-        assert len(batched_ir.ir_eqns) == 1
-        assert batched_ir.ir_eqns[0].prim.name == "batch_call"
+        assert len(batched_ir.eqns) == 1
+        assert batched_ir.eqns[0].prim.name == "batch_call"
 
     def test_has_in_axes_param(self):
         def f(x):
@@ -161,7 +161,7 @@ class TestBatchIRStructure:
 
         ir = af.trace(f)("hello")
         batched_ir = af.batch(ir, in_axes=True)
-        assert "in_axes" in batched_ir.ir_eqns[0].params
+        assert "in_axes" in batched_ir.eqns[0].params
 
     def test_has_sub_ir_param(self):
         def f(x):
@@ -169,7 +169,7 @@ class TestBatchIRStructure:
 
         ir = af.trace(f)("hello")
         batched_ir = af.batch(ir)
-        assert "ir" in batched_ir.ir_eqns[0].params
+        assert "ir" in batched_ir.eqns[0].params
 
     def test_batch_wrapper_rewrites_batched_aval(self):
         class TaggedAVal(af.core.AVal):
@@ -179,13 +179,13 @@ class TestBatchIRStructure:
                 self.tag = tag
 
         aval = TaggedAVal("input")
-        var = af.core.IRVar(aval=aval)
+        var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
         batched_ir = af.batch(ir)
 
-        assert batched_ir.in_ir_tree[0].aval == BatchAVal(aval)
-        assert batched_ir.out_ir_tree[0].aval == BatchAVal(aval)
+        assert batched_ir.in_tree[0].aval == BatchAVal(aval)
+        assert batched_ir.out_tree[0].aval == BatchAVal(aval)
 
     def test_batch_wrapper_preserves_broadcast_aval(self):
         class TaggedAVal(af.core.AVal):
@@ -195,13 +195,13 @@ class TestBatchIRStructure:
                 self.tag = tag
 
         aval = TaggedAVal("input")
-        var = af.core.IRVar(aval=aval)
+        var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
         batched_ir = af.batch(ir, in_axes=False)
 
-        assert batched_ir.in_ir_tree[0].aval is aval
-        assert batched_ir.out_ir_tree[0].aval is aval
+        assert batched_ir.in_tree[0].aval is aval
+        assert batched_ir.out_tree[0].aval is aval
 
     def test_batch_constant_output_uses_mapped_wrapper_var(self):
         def f(x):
@@ -210,8 +210,8 @@ class TestBatchIRStructure:
         ir = af.trace(f)("x")
         batched_ir = af.batch(ir)
 
-        assert isinstance(batched_ir.out_ir_tree, af.core.IRVar)
-        assert batched_ir.out_ir_tree.aval == BatchAVal(af.core.StrAVal())
+        assert isinstance(batched_ir.out_tree, af.core.Var)
+        assert batched_ir.out_tree.aval == BatchAVal(af.core.StrAVal())
         assert batched_ir.call(["a", "b"]) == ["c", "c"]
 
     def test_batch_broadcast_constant_output_stays_literal(self):
@@ -221,7 +221,7 @@ class TestBatchIRStructure:
         ir = af.trace(f)("x")
         batched_ir = af.batch(ir, in_axes=False)
 
-        assert batched_ir.out_ir_tree == "c"
+        assert batched_ir.out_tree == "c"
         assert batched_ir.call("a") == "c"
 
 
@@ -233,8 +233,8 @@ class TestNestedBatch:
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
         double_batched_ir = af.batch(batched_ir)
-        assert double_batched_ir.in_ir_tree[0].aval == BatchAVal(BatchAVal(af.core.StrAVal()))
-        assert double_batched_ir.out_ir_tree.aval == BatchAVal(BatchAVal(af.core.StrAVal()))
+        assert double_batched_ir.in_tree[0].aval == BatchAVal(BatchAVal(af.core.StrAVal()))
+        assert double_batched_ir.out_tree.aval == BatchAVal(BatchAVal(af.core.StrAVal()))
         result = double_batched_ir.call([["a", "b"], ["c", "d", "e"]])
         assert result == [["a!", "b!"], ["c!", "d!", "e!"]]
 

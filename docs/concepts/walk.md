@@ -40,24 +40,24 @@ def program(text: str) -> str:
 ir = af.trace(program)("seed")
 
 gen = ir.walk("world")
-ir_eqn, in_values = next(gen)
+eqn, in_values = next(gen)
 
-assert ir_eqn.prim.name == "concat"
+assert eqn.prim.name == "concat"
 assert in_values == ("world", "!")
 
-out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-ir_eqn, in_values = gen.send(out_values)
+out_values = eqn.bind(in_values, **eqn.params)
+eqn, in_values = gen.send(out_values)
 
-assert ir_eqn.prim.name == "format"
+assert eqn.prim.name == "format"
 
-out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-ir_eqn, output = gen.send(out_values)
+out_values = eqn.bind(in_values, **eqn.params)
+eqn, output = gen.send(out_values)
 
-assert ir_eqn is None
+assert eqn is None
 assert output == "[world!]"
 ```
 
-`ir_eqn.bind(...)` runs the primitive's synchronous implementation for that one equation. Async runners can use `await ir_eqn.abind(...)` instead.
+`eqn.bind(...)` runs the primitive's synchronous implementation for that one equation. Async runners can use `await eqn.abind(...)` instead.
 
 ## Non-Goals
 

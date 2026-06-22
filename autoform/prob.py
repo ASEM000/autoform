@@ -27,6 +27,8 @@ import autoform.memoize as memoize
 import autoform.scheduling as scheduling
 import autoform.utils as utils
 
+__all__ = ["factor", "weighted"]
+
 factor_p = core.Prim("factor")
 dce.non_dce_primitives.add(factor_p)
 memoize.non_memoizable_primitives.add(factor_p)
@@ -150,17 +152,17 @@ def weighted(ir: core.IR, /) -> core.IR:
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
 
     def make_out(atom):
-        if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=core.ir_aval(atom), source=atom)
+        if core.is_var(atom):
+            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
         return atom
 
-    in_ir_tree = ir.in_ir_tree
-    out_ir_tree = (
-        utils.tree.map(make_out, ir.out_ir_tree),
-        core.IRVar.fresh(aval=core.FloatAVal()),
+    in_tree = ir.in_tree
+    out_tree = (
+        utils.tree.map(make_out, ir.out_tree),
+        core.Var.fresh(aval=core.FloatAVal()),
     )
-    ir_eqn = core.IREqn(weighted_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
-    return core.IR([ir_eqn], in_ir_tree, out_ir_tree)
+    eqn = core.Eqn(weighted_call_p, in_tree, out_tree, dict(ir=ir))
+    return core.IR([eqn], in_tree, out_tree)
 
 
 def impl_weighted_call(in_tree, /, *, ir: core.IR):
@@ -181,7 +183,7 @@ async def aimpl_weighted_call(in_tree, /, *, ir: core.IR):
 
 def abstract_weighted_call(in_tree, /, *, ir: core.IR):
     del in_tree
-    return utils.tree.map(core.ir_aval, ir.out_ir_tree), core.FloatAVal()
+    return utils.tree.map(core.aval_if_var, ir.out_tree), core.FloatAVal()
 
 
 def unsupported_weighted_call_transform(transform: str) -> None:
@@ -234,9 +236,9 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
     return out_ib, out_batched
 
 
-def dce_weighted_call(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_weighted_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     output_used, _ = out_used
-    new_eqn = ir_eqn.using(ir=dce.dce(ir_eqn.params["ir"], out_used=output_used))
+    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=output_used))
     return dce.default_dce(new_eqn, out_used)
 
 

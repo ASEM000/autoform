@@ -66,15 +66,15 @@ back into the generator.
 ```python
 def run_with_human_feedback(ir, *args, tag: str, feedback):
     gen = ir.walk(*args)
-    ir_eqn, in_values = next(gen)
+    eqn, in_values = next(gen)
 
-    while ir_eqn is not None:
-        out_values = ir_eqn.bind(in_values, **ir_eqn.params)
+    while eqn is not None:
+        out_values = eqn.bind(in_values, **eqn.params)
 
-        if tag in ir_eqn.tags:
+        if tag in eqn.tags:
             out_values = feedback(out_values)
 
-        ir_eqn, in_values = gen.send(out_values)
+        eqn, in_values = gen.send(out_values)
 
     return in_values
 ```

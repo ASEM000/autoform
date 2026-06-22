@@ -14,7 +14,7 @@ def program(text: str) -> str:
 
 ir = af.trace(program)("seed")
 
-assert len(ir.ir_eqns) == 1
+assert len(ir.eqns) == 1
 assert ir.call("world") == "hello world"
 ```
 

@@ -2,6 +2,18 @@
 
 ## vnext
 
+### Breaking Changes
+
+  - Renamed IR internals to remove redundant `IR` prefixes. `IRVar` is now
+    `Var`, `IREqn` is now `Eqn`, `IR.ir_eqns` is now `IR.eqns`, and equation
+    tree fields are now `in_tree` and `out_tree` instead of `in_ir_tree` and
+    `out_ir_tree`. The same shorter names are used throughout local variables
+    and pattern matching examples, so `ir_eqn` is now usually just `eqn`.
+
+  - Renamed the abstract-value helper `ir_aval` to `aval_if_var` to make its
+    behavior explicit: it returns the aval for a `Var` and leaves concrete
+    literals unchanged.
+
 ### New Features
 
   - Added {py:func}`fixpoint <autoform.fixpoint>`, a bounded control-flow

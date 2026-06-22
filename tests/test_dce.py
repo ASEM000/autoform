@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.core import IR, IRVar
+from autoform.core import IR, Var
 
 
 class TestDCE:
@@ -28,9 +28,9 @@ class TestDCE:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 2
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "concat"
+        assert len(ir.eqns) == 2
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "concat"
 
     def test_keeps_chained_dependencies(self):
         def program(x):
@@ -41,8 +41,8 @@ class TestDCE:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 2
-        assert len(dce.ir_eqns) == 2
+        assert len(ir.eqns) == 2
+        assert len(dce.eqns) == 2
 
     def test_preserves_equation_order(self):
         def program(x):
@@ -54,16 +54,16 @@ class TestDCE:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(dce.ir_eqns) == 3
+        assert len(dce.eqns) == 3
 
-        for i in range(len(dce.ir_eqns) - 1):
-            curr_out = dce.ir_eqns[i].out_ir_tree
-            next_in_leaves = af.utils.tree.leaves(dce.ir_eqns[i + 1].in_ir_tree)
+        for i in range(len(dce.eqns) - 1):
+            curr_out = dce.eqns[i].out_tree
+            next_in_leaves = af.utils.tree.leaves(dce.eqns[i + 1].in_tree)
             assert curr_out in next_in_leaves
 
     def test_errors_on_dangling_used_output_irvar(self):
-        dangling = IRVar.fresh(aval=af.core.StrAVal())
-        bad_ir = IR([], in_ir_tree=(), out_ir_tree=dangling)
+        dangling = Var.fresh(aval=af.core.StrAVal())
+        bad_ir = IR([], in_tree=(), out_tree=dangling)
 
         with pytest.raises(AssertionError):
             af.dce(bad_ir, out_used=True)
@@ -75,7 +75,7 @@ class TestDCE:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == len(dce.ir_eqns)
+        assert len(ir.eqns) == len(dce.eqns)
 
     def test_multiple_outputs_partial_use(self):
         def program(x):
@@ -87,9 +87,9 @@ class TestDCE:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 3
-        assert len(dce.ir_eqns) == 2
-        prim_names = [eqn.prim.name for eqn in dce.ir_eqns]
+        assert len(ir.eqns) == 3
+        assert len(dce.eqns) == 2
+        prim_names = [eqn.prim.name for eqn in dce.eqns]
         assert prim_names == ["concat", "concat"]
 
 
@@ -103,8 +103,8 @@ class TestDCEWithHigherOrderPrimitives:
         ir = af.trace(program)("input")
         dce = af.dce(ir)
 
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "concat"
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "concat"
 
     def test_inlined_dead_code_removed(self):
         def inner(x):
@@ -120,9 +120,9 @@ class TestDCEWithHigherOrderPrimitives:
         ir = af.trace(program)("input")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 2
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "concat"
+        assert len(ir.eqns) == 2
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "concat"
 
     def test_switch_kept_when_used(self):
         branches = {
@@ -136,8 +136,8 @@ class TestDCEWithHigherOrderPrimitives:
         ir = af.trace(program)("a", "input")
         dce = af.dce(ir)
 
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "switch"
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "switch"
 
     def test_switch_removed_when_unused(self):
         branches = {
@@ -153,9 +153,9 @@ class TestDCEWithHigherOrderPrimitives:
         ir = af.trace(program)("a", "input")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 2
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "concat"
+        assert len(ir.eqns) == 2
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "concat"
 
 
 class TestDCEWithTransformedIR:
@@ -169,7 +169,7 @@ class TestDCEWithTransformedIR:
         pf_ir = af.pushforward(ir)
         dce = af.dce(pf_ir)
 
-        assert len(dce.ir_eqns) <= len(pf_ir.ir_eqns)
+        assert len(dce.eqns) <= len(pf_ir.eqns)
 
     def test_dce_on_pullback(self):
         def program(x):
@@ -181,7 +181,7 @@ class TestDCEWithTransformedIR:
         pb_ir = af.pullback(ir)
         dce = af.dce(pb_ir)
 
-        assert len(dce.ir_eqns) <= len(pb_ir.ir_eqns)
+        assert len(dce.eqns) <= len(pb_ir.eqns)
 
     def test_dce_on_batch(self):
         def program(x):
@@ -193,7 +193,7 @@ class TestDCEWithTransformedIR:
         batch = af.batch(ir, in_axes=True)
         dce = af.dce(batch)
 
-        assert len(dce.ir_eqns) <= len(batch.ir_eqns)
+        assert len(dce.eqns) <= len(batch.eqns)
 
 
 class TestDCEEdgeCases:
@@ -204,8 +204,8 @@ class TestDCEEdgeCases:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 0
-        assert len(dce.ir_eqns) == 0
+        assert len(ir.eqns) == 0
+        assert len(dce.eqns) == 0
 
     def test_all_dead(self):
         def program(x):
@@ -216,8 +216,8 @@ class TestDCEEdgeCases:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 2
-        assert len(dce.ir_eqns) == 0
+        assert len(ir.eqns) == 2
+        assert len(dce.eqns) == 0
 
     def test_diamond_dependency(self):
         def program(x):
@@ -230,8 +230,8 @@ class TestDCEEdgeCases:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(ir.ir_eqns) == 4
-        assert len(dce.ir_eqns) == 4
+        assert len(ir.eqns) == 4
+        assert len(dce.eqns) == 4
 
     def test_stop_gradient_kept(self):
         def program(x):
@@ -242,8 +242,8 @@ class TestDCEEdgeCases:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(dce.ir_eqns) == 2
-        prim_names = [eqn.prim.name for eqn in dce.ir_eqns]
+        assert len(dce.eqns) == 2
+        prim_names = [eqn.prim.name for eqn in dce.eqns]
         assert prim_names == ["stop_gradient", "concat"]
 
 
@@ -257,7 +257,7 @@ class TestNestedDCE:
         branch_a = af.trace(branch_a_fn)("test")
         branch_b = af.trace(lambda x: af.concat(x, " B"))("test")
 
-        assert len(branch_a.ir_eqns) == 2
+        assert len(branch_a.eqns) == 2
 
         def program(key, x):
             return af.switch(key, {"a": branch_a, "b": branch_b}, x)
@@ -265,8 +265,8 @@ class TestNestedDCE:
         ir = af.trace(program)("a", "input")
         dce = af.dce(ir)
 
-        dced_branch_a = dce.ir_eqns[0].params["branches"]["a"]
-        assert len(dced_branch_a.ir_eqns) == 1
+        dced_branch_a = dce.eqns[0].params["branches"]["a"]
+        assert len(dced_branch_a.eqns) == 1
 
         result = dce.call("a", "hello")
         assert result == "hello LIVE"
@@ -278,13 +278,13 @@ class TestNestedDCE:
             return live
 
         inner_ir = af.trace(inner_fn)("test")
-        assert len(inner_ir.ir_eqns) == 2
+        assert len(inner_ir.eqns) == 2
 
         batch = af.batch(inner_ir, in_axes=True)
         dce = af.dce(batch)
 
-        dced_inner = dce.ir_eqns[0].params["ir"]
-        assert len(dced_inner.ir_eqns) == 1
+        dced_inner = dce.eqns[0].params["ir"]
+        assert len(dced_inner.eqns) == 1
 
     def test_pushforward_call_dces_inner_ir(self):
         def inner_fn(x):
@@ -293,13 +293,13 @@ class TestNestedDCE:
             return live
 
         inner_ir = af.trace(inner_fn)("test")
-        assert len(inner_ir.ir_eqns) == 2
+        assert len(inner_ir.eqns) == 2
 
         pf_ir = af.pushforward(inner_ir)
         dce = af.dce(pf_ir)
 
-        dced_inner = dce.ir_eqns[0].params["ir"]
-        assert len(dced_inner.ir_eqns) == 1
+        dced_inner = dce.eqns[0].params["ir"]
+        assert len(dced_inner.eqns) == 1
 
     def test_pullback_call_dces_inner_ir(self):
         def inner_fn(x):
@@ -308,13 +308,13 @@ class TestNestedDCE:
             return live
 
         inner_ir = af.trace(inner_fn)("test")
-        assert len(inner_ir.ir_eqns) == 2
+        assert len(inner_ir.eqns) == 2
 
         pb_ir = af.pullback(inner_ir)
         dce = af.dce(pb_ir, out_used=(True, (False,)))
 
-        dced_inner = dce.ir_eqns[0].params["ir"]
-        assert len(dced_inner.ir_eqns) == 1
+        dced_inner = dce.eqns[0].params["ir"]
+        assert len(dced_inner.eqns) == 1
 
     def test_pullback_call_keeps_inner_ir_when_cotangent_is_used(self):
         def inner_fn(x):
@@ -323,13 +323,13 @@ class TestNestedDCE:
             return live
 
         inner_ir = af.trace(inner_fn)("test")
-        assert len(inner_ir.ir_eqns) == 2
+        assert len(inner_ir.eqns) == 2
 
         pb_ir = af.pullback(inner_ir)
         dce = af.dce(pb_ir, out_used=(False, (True,)))
 
-        dced_inner = dce.ir_eqns[0].params["ir"]
-        assert len(dced_inner.ir_eqns) == 2
+        dced_inner = dce.eqns[0].params["ir"]
+        assert len(dced_inner.eqns) == 2
         assert dce.call(("x",), "cot") == ("x LIVE", ("cot",))
 
     def test_deeply_nested_dce(self):
@@ -339,7 +339,7 @@ class TestNestedDCE:
             return live
 
         branch = af.trace(branch_fn)("test")
-        assert len(branch.ir_eqns) == 2
+        assert len(branch.eqns) == 2
 
         def outer_fn(key, x):
             return af.switch(key, {"a": branch}, x)
@@ -348,11 +348,11 @@ class TestNestedDCE:
         batch = af.batch(outer_ir, in_axes=(False, True))
         dce = af.dce(batch)
 
-        batch_inner = dce.ir_eqns[0].params["ir"]
-        switch_eqn = batch_inner.ir_eqns[0]
+        batch_inner = dce.eqns[0].params["ir"]
+        switch_eqn = batch_inner.eqns[0]
         nested_branch = switch_eqn.params["branches"]["a"]
 
-        assert len(nested_branch.ir_eqns) == 1
+        assert len(nested_branch.eqns) == 1
 
     def test_while_loop_dces_inner_body_ir(self):
         def cond(state):
@@ -366,16 +366,16 @@ class TestNestedDCE:
 
         cond_ir = af.trace(cond)("go")
         body_ir = af.trace(body)("go")
-        assert len(body_ir.ir_eqns) == 2
+        assert len(body_ir.eqns) == 2
 
         def program(init):
             return af.while_loop(cond_ir, body_ir, init, max_iters=1)
 
         ir = af.trace(program)("go")
         dced = af.dce(ir)
-        dced_body_ir = dced.ir_eqns[0].params["body_ir"]
+        dced_body_ir = dced.eqns[0].params["body_ir"]
 
-        assert len(dced_body_ir.ir_eqns) == 1
+        assert len(dced_body_ir.eqns) == 1
         assert dced.call("go") == "go!"
 
     def test_while_loop_dces_inner_cond_ir(self):
@@ -389,16 +389,16 @@ class TestNestedDCE:
 
         cond_ir = af.trace(cond)("go")
         body_ir = af.trace(body)("go")
-        assert len(cond_ir.ir_eqns) == 2
+        assert len(cond_ir.eqns) == 2
 
         def program(init):
             return af.while_loop(cond_ir, body_ir, init, max_iters=1)
 
         ir = af.trace(program)("go")
         dced = af.dce(ir)
-        dced_cond_ir = dced.ir_eqns[0].params["cond_ir"]
+        dced_cond_ir = dced.eqns[0].params["cond_ir"]
 
-        assert len(dced_cond_ir.ir_eqns) == 1
+        assert len(dced_cond_ir.eqns) == 1
         assert dced.call("go") == "go!"
 
     def test_while_loop_dce_preserves_loop_carried_state(self):
@@ -422,8 +422,8 @@ class TestNestedDCE:
         ir = af.trace(program)(("v", "h"))
         dced = af.dce(ir, out_used=(True, False))
 
-        dced_body_ir = dced.ir_eqns[0].params["body_ir"]
-        assert dced_body_ir.out_ir_tree[1] is not None
+        dced_body_ir = dced.eqns[0].params["body_ir"]
+        assert dced_body_ir.out_tree[1] is not None
         assert dced.call(("v", "h")) == ("vh", "h!")
 
     def test_fixpoint_dces_inner_step_ir(self):
@@ -434,16 +434,16 @@ class TestNestedDCE:
             return live
 
         step_ir = af.trace(step)("x", "!")
-        assert len(step_ir.ir_eqns) == 2
+        assert len(step_ir.eqns) == 2
 
         def program(init, theta):
             return af.fixpoint(step_ir, init, theta, max_iters=1)
 
         ir = af.trace(program)("x", "!")
         dced = af.dce(ir)
-        dced_step_ir = dced.ir_eqns[0].params["step_ir"]
+        dced_step_ir = dced.eqns[0].params["step_ir"]
 
-        assert len(dced_step_ir.ir_eqns) == 1
+        assert len(dced_step_ir.eqns) == 1
         assert dced.call("x", "!") == "x!"
 
     def test_fixpoint_dces_inner_equiv_ir(self):
@@ -457,16 +457,16 @@ class TestNestedDCE:
 
         step_ir = af.trace(step)("x", "!")
         equiv_ir = af.trace(stable)("x", "x!")
-        assert len(equiv_ir.ir_eqns) == 2
+        assert len(equiv_ir.eqns) == 2
 
         def program(init, theta):
             return af.fixpoint(step_ir, init, theta, max_iters=2, equiv_ir=equiv_ir)
 
         ir = af.trace(program)("x", "!")
         dced = af.dce(ir)
-        dced_equiv_ir = dced.ir_eqns[0].params["equiv_ir"]
+        dced_equiv_ir = dced.eqns[0].params["equiv_ir"]
 
-        assert len(dced_equiv_ir.ir_eqns) == 1
+        assert len(dced_equiv_ir.eqns) == 1
         assert dced.call("x", "!") == "x!"
 
     def test_fixpoint_dce_preserves_loop_carried_state(self):
@@ -484,8 +484,8 @@ class TestNestedDCE:
         ir = af.trace(program)(("v", "h"), "!")
         dced = af.dce(ir, out_used=(True, False))
 
-        dced_step_ir = dced.ir_eqns[0].params["step_ir"]
-        assert dced_step_ir.out_ir_tree[1] is not None
+        dced_step_ir = dced.eqns[0].params["step_ir"]
+        assert dced_step_ir.out_tree[1] is not None
         assert dced.call(("v", "h"), "!") == ("vhh!", "h!!")
 
 
@@ -498,7 +498,7 @@ class TestDCEWithOutUsed:
         ir = af.trace(program)("x")
         dce = af.dce(ir, out_used=True)
 
-        assert len(dce.ir_eqns) == 1
+        assert len(dce.eqns) == 1
 
     def test_out_used_single_output_false_removes_all(self):
         def program(x):
@@ -508,7 +508,7 @@ class TestDCEWithOutUsed:
         ir = af.trace(program)("x")
         dce = af.dce(ir, out_used=False)
 
-        assert len(dce.ir_eqns) == 0
+        assert len(dce.eqns) == 0
 
     def test_out_used_tuple_partial(self):
         def program(x):
@@ -519,16 +519,16 @@ class TestDCEWithOutUsed:
         ir = af.trace(program)("x")
 
         dce_both = af.dce(ir, out_used=(True, True))
-        assert len(dce_both.ir_eqns) == 2
+        assert len(dce_both.eqns) == 2
 
         dce_first = af.dce(ir, out_used=(True, False))
-        assert len(dce_first.ir_eqns) == 1
+        assert len(dce_first.eqns) == 1
 
         dce_second = af.dce(ir, out_used=(False, True))
-        assert len(dce_second.ir_eqns) == 1
+        assert len(dce_second.eqns) == 1
 
         dce_none = af.dce(ir, out_used=(False, False))
-        assert len(dce_none.ir_eqns) == 0
+        assert len(dce_none.eqns) == 0
 
     def test_out_used_partial_is_callable_and_fills_none(self):
         def program(x):
@@ -550,8 +550,8 @@ class TestDCEWithOutUsed:
         ir = af.trace(program)("x")
 
         dce = af.dce(ir, out_used=(True, False))
-        assert len(dce.ir_eqns) == 2
-        prim_names = [eqn.prim.name for eqn in dce.ir_eqns]
+        assert len(dce.eqns) == 2
+        prim_names = [eqn.prim.name for eqn in dce.eqns]
         assert prim_names == ["concat", "concat"]
 
     def test_out_used_propagates_to_batch(self):
@@ -562,14 +562,14 @@ class TestDCEWithOutUsed:
             return (a, b)
 
         inner_ir = af.trace(inner)("x")
-        assert len(inner_ir.ir_eqns) == 3
+        assert len(inner_ir.eqns) == 3
 
         batch_ir = af.batch(inner_ir, in_axes=True)
 
         dce = af.dce(batch_ir, out_used=(True, True))
-        assert len(dce.ir_eqns) == 1
-        dced_inner = dce.ir_eqns[0].params["ir"]
-        assert len(dced_inner.ir_eqns) == 2
+        assert len(dce.eqns) == 1
+        dced_inner = dce.eqns[0].params["ir"]
+        assert len(dced_inner.eqns) == 2
 
     def test_out_used_propagates_to_switch(self):
         def branch_fn(x):
@@ -579,7 +579,7 @@ class TestDCEWithOutUsed:
             return (a, b)
 
         branch = af.trace(branch_fn)("x")
-        assert len(branch.ir_eqns) == 3
+        assert len(branch.eqns) == 3
 
         branches = {"a": branch, "b": branch}
 
@@ -589,9 +589,9 @@ class TestDCEWithOutUsed:
         ir = af.trace(program)("a", "x")
 
         dce = af.dce(ir, out_used=(True, True))
-        assert len(dce.ir_eqns) == 1
-        dced_branch = dce.ir_eqns[0].params["branches"]["a"]
-        assert len(dced_branch.ir_eqns) == 2
+        assert len(dce.eqns) == 1
+        dced_branch = dce.eqns[0].params["branches"]["a"]
+        assert len(dced_branch.eqns) == 2
 
 
 class TestDCEWithCheckpoints:
@@ -601,12 +601,12 @@ class TestDCEWithCheckpoints:
             return x
 
         ir = af.trace(program)("test")
-        assert len(ir.ir_eqns) == 1
+        assert len(ir.eqns) == 1
 
         dce = af.dce(ir)
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "checkpoint"
-        assert dce.ir_eqns[0].params["key"] == "save"
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "checkpoint"
+        assert dce.eqns[0].params["key"] == "save"
 
     def test_checkpoint_inputs_remain_active(self):
         def program(x):
@@ -615,10 +615,10 @@ class TestDCEWithCheckpoints:
             return x
 
         ir = af.trace(program)("test")
-        assert len(ir.ir_eqns) == 2
+        assert len(ir.eqns) == 2
 
         dce = af.dce(ir)
-        assert len(dce.ir_eqns) == 2
+        assert len(dce.eqns) == 2
 
     def test_mixed_checkpoint_and_dead(self):
         def program(x):
@@ -627,12 +627,12 @@ class TestDCEWithCheckpoints:
             return x
 
         ir = af.trace(program)("test")
-        assert len(ir.ir_eqns) == 2
+        assert len(ir.eqns) == 2
 
         dce = af.dce(ir)
-        assert len(dce.ir_eqns) == 1
-        assert dce.ir_eqns[0].prim.name == "checkpoint"
-        assert dce.ir_eqns[0].params["key"] == "save"
+        assert len(dce.eqns) == 1
+        assert dce.eqns[0].prim.name == "checkpoint"
+        assert dce.eqns[0].params["key"] == "save"
 
 
 class TestDCEWithDepends:
@@ -645,7 +645,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
+        depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 1
 
     def test_depends_removed_when_output_unused(self):
@@ -658,7 +658,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
+        depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
         assert len(depends_eqns) == 0
 
     def test_depends_keeps_its_deps_alive(self):
@@ -670,7 +670,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.ir_eqns if e.prim.name == "format"]
+        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
         assert len(format_eqns) == 2
 
     def test_depends_deps_removed_when_depends_unused(self):
@@ -683,7 +683,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        assert len(dce.ir_eqns) == 0
+        assert len(dce.eqns) == 0
 
     def test_depends_chained(self):
         def program(x):
@@ -697,8 +697,8 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.ir_eqns if e.prim.name == "format"]
-        depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
+        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
+        depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
         assert len(format_eqns) == 3
         assert len(depends_eqns) == 2
 
@@ -714,8 +714,8 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.ir_eqns if e.prim.name == "format"]
-        depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
+        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
+        depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
         assert len(format_eqns) == 2
         assert len(depends_eqns) == 1
 
@@ -729,7 +729,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.ir_eqns if e.prim.name == "format"]
+        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
         assert len(format_eqns) == 3
 
     def test_depends_no_deps(self):
@@ -740,8 +740,8 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.ir_eqns if e.prim.name == "format"]
-        depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
+        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
+        depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
         assert len(format_eqns) == 1
         assert len(depends_eqns) == 1
 
@@ -754,7 +754,7 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        checkpoint_eqns = [e for e in dce.ir_eqns if e.prim.name == "checkpoint"]
-        depends_eqns = [e for e in dce.ir_eqns if e.prim.name == "depends"]
+        checkpoint_eqns = [e for e in dce.eqns if e.prim.name == "checkpoint"]
+        depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
         assert len(checkpoint_eqns) == 1
         assert len(depends_eqns) == 1

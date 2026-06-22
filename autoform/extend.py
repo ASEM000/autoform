@@ -45,8 +45,8 @@ Prim = core.Prim
 Zero = ad.Zero
 Interpreter = core.Interpreter
 IR = core.IR
-IREqn = core.IREqn
-IRVar = core.IRVar
+Eqn = core.Eqn
+Var = core.Var
 
 # ==================================================================================================
 # RULE REGISTRIES
@@ -74,8 +74,8 @@ using_interpreter = core.using_interpreter
 serial_fanout = scheduling.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
-is_irvar = core.is_irvar
-ir_aval = core.ir_aval
+is_var = core.is_var
+aval_if_var = core.aval_if_var
 active_client = lm.active_client
 
 # ==================================================================================================
@@ -110,8 +110,8 @@ __all__ = [
     "Zero",
     "Interpreter",
     "IR",
-    "IREqn",
-    "IRVar",
+    "Eqn",
+    "Var",
     "register_trace_type",
     "register_zero",
     "register_cotangent_accumulator",
@@ -140,8 +140,8 @@ __all__ = [
     "serial_fanout",
     "active_interpreter",
     "active_tags",
-    "is_irvar",
-    "ir_aval",
+    "is_var",
+    "aval_if_var",
     "active_client",
     "format_p",
     "concat_p",

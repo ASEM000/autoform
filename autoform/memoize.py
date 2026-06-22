@@ -25,6 +25,8 @@ import autoform.checkpoint as checkpoint
 import autoform.core as core
 import autoform.utils as utils
 
+__all__ = ["memoize"]
+
 type Tree[T] = utils.Tree[T]
 type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
 non_memoizable_primitives: set[core.Prim] = {checkpoint.checkpoint_p}
@@ -84,7 +86,7 @@ def memoize() -> Generator[None, None, None]:
         ...         b = af.concat(x, "!")  # same call, will be cached
         ...         return a, b
         >>> ir = af.trace(program)("test")
-        >>> len(ir.ir_eqns)
+        >>> len(ir.eqns)
         1
     """
     with core.using_interpreter(MemoizingInterpreter()):

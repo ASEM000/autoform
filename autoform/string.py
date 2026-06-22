@@ -22,6 +22,8 @@ import autoform.ad as ad
 import autoform.core as core
 import autoform.utils as utils
 
+__all__ = ["format", "concat", "match"]
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 

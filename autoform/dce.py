@@ -23,25 +23,27 @@ import autoform.analysis as analysis
 import autoform.core as core
 import autoform.utils as utils
 
+__all__ = ["dce"]
+
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]
-type DCEResult = tuple[core.IREqn, UsedTree]
+type DCEResult = tuple[core.Eqn, UsedTree]
 
 # ==================================================================================================
 # DEAD CODE ELIMINATION
 # ==================================================================================================
 
 
-def default_dce(ir_eqn: core.IREqn, out_used: UsedTree) -> DCEResult:
-    # NOTE(asem): out_used is a pytree of bool matching the ir_eqn output pytree that
-    # denotes which output is used. the return is a another IREqn (mostly for edited HOP IR)
+def default_dce(eqn: core.Eqn, out_used: UsedTree) -> DCEResult:
+    # NOTE(asem): out_used is a pytree of bool matching the eqn output pytree that
+    # denotes which output is used. the return is a another Eqn (mostly for edited HOP IR)
     # and a out_used
     should_use = utils.tree.any(out_used)
-    in_used = utils.tree.map(lambda _: should_use, ir_eqn.in_ir_tree)
-    return ir_eqn, in_used
+    in_used = utils.tree.map(lambda _: should_use, eqn.in_tree)
+    return eqn, in_used
 
 
-type DCERule = Callable[[core.IREqn, UsedTree], DCEResult]
+type DCERule = Callable[[core.Eqn, UsedTree], DCEResult]
 
 dce_rules: dict[core.Prim, DCERule] = {}
 non_dce_primitives: set[core.Prim] = set()
@@ -63,57 +65,57 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         ...     live = af.concat(x, " live")  # returned
         ...     return live
         >>> ir = af.trace(program)("test")
-        >>> len(ir.ir_eqns)
+        >>> len(ir.eqns)
         2
         >>> dced = af.dce(ir)
-        >>> len(dced.ir_eqns)
+        >>> len(dced.eqns)
         1
     """
 
     if out_used is None:
-        user_out_used = utils.tree.map(lambda _: True, ir.out_ir_tree)
+        user_out_used = utils.tree.map(lambda _: True, ir.out_tree)
     else:
         assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
-        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_ir_tree)
+        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
         user_out_used = out_used
 
     live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
-    active_ir_vars: set[core.IRVar] = set(live_boundaries[-1])
-    active_ir_eqns: deque[core.IREqn] = deque()
+    active_vars: set[core.Var] = set(live_boundaries[-1])
+    active_eqns: deque[core.Eqn] = deque()
 
     def is_active_node(node) -> bool:
-        return core.is_irvar(node) and (node in active_ir_vars)
+        return core.is_var(node) and (node in active_vars)
 
-    for ir_eqn in reversed(ir.ir_eqns):
-        is_non_dce = ir_eqn.prim in non_dce_primitives
+    for eqn in reversed(ir.eqns):
+        is_non_dce = eqn.prim in non_dce_primitives
         # NOTE(asem): walk backwards and feed dce rules the appropriate
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
-        ir_eqn_out_used = utils.tree.map(is_active_node, ir_eqn.out_ir_tree)
-        new_ir_eqn, in_used = dce_rules.get(ir_eqn.prim, default_dce)(ir_eqn, ir_eqn_out_used)
-        assert utils.tree.structure(in_used) == utils.tree.structure(ir_eqn.in_ir_tree)
+        eqn_out_used = utils.tree.map(is_active_node, eqn.out_tree)
+        new_eqn, in_used = dce_rules.get(eqn.prim, default_dce)(eqn, eqn_out_used)
+        assert utils.tree.structure(in_used) == utils.tree.structure(eqn.in_tree)
 
         if is_non_dce:
-            active_ir_eqns.appendleft(new_ir_eqn)
-            active_ir_vars |= set(analysis.ir_var_leaves(ir_eqn.in_ir_tree))
+            active_eqns.appendleft(new_eqn)
+            active_vars |= set(analysis.var_leaves(eqn.in_tree))
 
         elif utils.tree.any(in_used):
-            active_ir_eqns.appendleft(new_ir_eqn)
-            active_ir_vars |= set(analysis.ir_var_leaves(utils.mask(ir_eqn.in_ir_tree, in_used)))
+            active_eqns.appendleft(new_eqn)
+            active_vars |= set(analysis.var_leaves(utils.mask(eqn.in_tree, in_used)))
 
     # NOTE(asem): output sanitization step
-    # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
-    # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
+    # `call(ir)` always reads `ir.out_tree`, even if a caller provided an `out_used` mask.
+    # so after DCE removes equations, `out_tree` may contain Vars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
-    in_vars = set(analysis.ir_var_leaves(ir.in_ir_tree))
-    defined_vars: set[core.IRVar] = set(in_vars)
-    for kept in active_ir_eqns:
-        for atom in utils.tree.leaves(kept.out_ir_tree):
-            core.is_irvar(atom) and defined_vars.add(atom)
+    in_vars = set(analysis.var_leaves(ir.in_tree))
+    defined_vars: set[core.Var] = set(in_vars)
+    for kept in active_eqns:
+        for atom in utils.tree.leaves(kept.out_tree):
+            core.is_var(atom) and defined_vars.add(atom)
 
     def sanitize_out_leaf(atom, used: bool):
-        if not core.is_irvar(atom):
+        if not core.is_var(atom):
             # NOTE(asem): leaf is already a literal, nothing to sanitize.
             # >>> def program(x):
             # ...     return (x, "const")
@@ -123,7 +125,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
             # >>> def program(x):
             # ...     y = af.concat(x, "!")
             # ...     return y
-            # y's IRVar is in `defined_vars` and stays as-is.
+            # y's Var is in `defined_vars` and stays as-is.
             return atom
         if not used:
             # NOTE(asem): unused-but-dangling output slot (typically from partial `out_used`).
@@ -137,9 +139,9 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
             return None
         # NOTE(asem): this should be unreachable for well-behaved primitives/rules.
         assert False, (
-            "DCE produced an invalid IR: a used output IRVar is not defined by inputs or kept equations. "
+            "DCE produced an invalid IR: a used output Var is not defined by inputs or kept equations. "
             "This typically indicates inconsistent `out_used` or a bug in a DCE rule for a primitive."
         )
 
-    out_ir_tree = utils.tree.map(sanitize_out_leaf, ir.out_ir_tree, user_out_used)
-    return core.IR(list(active_ir_eqns), in_ir_tree=ir.in_ir_tree, out_ir_tree=out_ir_tree)
+    out_tree = utils.tree.map(sanitize_out_leaf, ir.out_tree, user_out_used)
+    return core.IR(list(active_eqns), in_tree=ir.in_tree, out_tree=out_tree)

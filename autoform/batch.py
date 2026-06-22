@@ -24,6 +24,8 @@ import autoform.dce as dce
 import autoform.scheduling as scheduling
 import autoform.utils as utils
 
+__all__ = ["batch"]
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 
@@ -112,27 +114,27 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
         ['Hello, x0', 'Hello, x1', 'Hello, x2']
     """
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
-    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
+    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
     has_batched = any(utils.tree.leaves(b_in, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
         return BatchAVal(aval) if is_batched else aval
 
     def make_in(atom, is_batched: bool):
-        if not core.is_irvar(atom):
+        if not core.is_var(atom):
             return atom
-        return core.IRVar.fresh(aval=maybe_batched(atom.aval, is_batched), source=atom)
+        return core.Var.fresh(aval=maybe_batched(atom.aval, is_batched), source=atom)
 
     def make_out(atom):
-        if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
+        if core.is_var(atom):
+            return core.Var.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
-            return core.IRVar.fresh(aval=maybe_batched(core.avalof(atom), True))
+            return core.Var.fresh(aval=maybe_batched(core.avalof(atom), True))
         return atom
 
-    v_in_ir = utils.tree.map(make_in, ir.in_ir_tree, b_in)
-    v_out_ir = utils.tree.map(make_out, ir.out_ir_tree)
-    eqn = core.IREqn(batch_call_p, v_in_ir, v_out_ir, dict(ir=ir, in_axes=in_axes))
+    v_in_ir = utils.tree.map(make_in, ir.in_tree, b_in)
+    v_out_ir = utils.tree.map(make_out, ir.out_tree)
+    eqn = core.Eqn(batch_call_p, v_in_ir, v_out_ir, dict(ir=ir, in_axes=in_axes))
     return core.IR([eqn], v_in_ir, v_out_ir)
 
 
@@ -195,7 +197,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
     # >>> b_in = ReviewState(code=True, has_bugs=True)
     # >>> batch_size = 2
     v_in = in_tree
-    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
+    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
 
     if (spec := utils.batch_spec(v_in, b_in)) is None:
         return ir.call(*v_in)
@@ -212,15 +214,15 @@ def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
     with core.using_interpreter(batcher):
 
-        def custom_bind(ir_eqn: core.IREqn, boxed_in: Tree, /) -> Tree:
-            boxed_out = ir_eqn.bind(boxed_in, **ir_eqn.params)
+        def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+            boxed_out = eqn.bind(boxed_in, **eqn.params)
             v_out, b_out = batcher.unbox(boxed_out)
-            b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
+            b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
             return batcher.box((v_out, b_out))
 
-        ir_eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
-        while ir_eqn:
-            ir_eqn, boxed_in = gen.send(custom_bind(ir_eqn, boxed_in))
+        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        while eqn:
+            eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
 
     v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
@@ -228,7 +230,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
 
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
     v_in = in_tree
-    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
+    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
 
     if (spec := utils.batch_spec(v_in, b_in)) is None:
         return await ir.acall(*v_in)
@@ -239,15 +241,15 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> T
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
     with core.using_interpreter(batcher):
 
-        async def custom_abind(ir_eqn: core.IREqn, boxed_in: Tree, /) -> Tree:
-            boxed_out = await ir_eqn.abind(boxed_in, **ir_eqn.params)
+        async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+            boxed_out = await eqn.abind(boxed_in, **eqn.params)
             v_out, b_out = batcher.unbox(boxed_out)
-            b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
+            b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
             return batcher.box((v_out, b_out))
 
-        ir_eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
-        while ir_eqn:
-            ir_eqn, boxed_in = gen.send(await custom_abind(ir_eqn, boxed_in))
+        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        while eqn:
+            eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
 
     v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
@@ -255,20 +257,20 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> T
 
 def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
     del in_tree
-    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_ir_tree, is_leaf=is_axis_spec)
+    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
     has_batched = any(utils.tree.leaves(b_in, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
         return BatchAVal(aval) if is_batched else aval
 
     def out_aval(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return maybe_batched(atom.aval, has_batched)
         if has_batched:
             return maybe_batched(core.avalof(atom), True)
         return atom
 
-    return utils.tree.map(out_aval, ir.out_ir_tree)
+    return utils.tree.map(out_aval, ir.out_tree)
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> TreePair:
@@ -327,7 +329,7 @@ def batch_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> TreePai
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(utils.batch_index, v_in, b_in)
     v_bi = [batched_ir.call(*unbatch(b)) for b in range(batch_size)]
-    b_out = utils.tree.map(lambda _: True, ir.out_ir_tree)
+    b_out = utils.tree.map(lambda _: True, ir.out_tree)
     v_out = utils.batch_transpose(batch_size, b_out, v_bi)
     return v_out, b_out
 
@@ -339,7 +341,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> 
 
     inputs = [unbatch(b) for b in range(batch_size)]
     v_bi = await scheduling.gather_p.abind(inputs, irs=[batched_ir] * batch_size)
-    b_out = utils.tree.map(lambda _: True, ir.out_ir_tree)
+    b_out = utils.tree.map(lambda _: True, ir.out_tree)
     v_out = utils.batch_transpose(batch_size, b_out, list(v_bi))
     return v_out, b_out
 
@@ -357,8 +359,8 @@ core.batch_rules.set(batch_call_p, batch_batch_call)
 core.batch_rules.aset(batch_call_p, abatch_batch_call)
 
 
-def dce_batch_call(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    new_eqn = ir_eqn.using(ir=dce.dce(ir_eqn.params["ir"], out_used=out_used))
+def dce_batch_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=out_used))
     return dce.default_dce(new_eqn, out_used)
 
 

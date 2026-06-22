@@ -525,7 +525,7 @@ class TestAlternatingTransforms:
         pf1 = af.pushforward(pb1)
         pb2 = af.pullback(pf1)
         pf2 = af.pushforward(pb2)
-        input_tree = af.utils.tree.map(lambda _: "x", pf2.in_ir_tree)
+        input_tree = af.utils.tree.map(lambda _: "x", pf2.in_tree)
         result = pf2.call(*input_tree)
         assert result is not None
 

@@ -59,10 +59,10 @@ class TestBuildIR:
 
         for traced, runtime, expected, aval in cases:
             ir = af.trace(program)(traced)
-            assert isinstance(ir.in_ir_tree, tuple)
-            assert len(ir.in_ir_tree) == 1
-            assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-            assert ir.in_ir_tree[0].aval == aval
+            assert isinstance(ir.in_tree, tuple)
+            assert len(ir.in_tree) == 1
+            assert isinstance(ir.in_tree[0], af.core.Var)
+            assert ir.in_tree[0].aval == aval
             assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
@@ -100,10 +100,10 @@ class TestBuildIR:
             del af.core.aval_rules[Blob]
             af.core.trace_types.remove(Blob)
 
-        assert ir.in_ir_tree[0].aval == BlobAVal(3)
+        assert ir.in_tree[0].aval == BlobAVal(3)
 
     def test_irvar_has_aval_but_is_not_traceable(self):
-        var = af.core.IRVar(aval=af.core.StrAVal())
+        var = af.core.Var(aval=af.core.StrAVal())
         assert af.core.avalof(var) == af.core.StrAVal()
         assert not af.core.is_traceable(var)
 
@@ -122,28 +122,28 @@ class TestBuildIR:
             return af.concat("Hello, ", name)
 
         ir = af.trace(program)("x0")
-        assert len(ir.ir_eqns) == 1
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 1
-        assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-        eqn = ir.ir_eqns[0]
-        assert len(eqn.in_ir_tree) == 2
-        lit_candidate = eqn.in_ir_tree[0]
+        assert len(ir.eqns) == 1
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 1
+        assert isinstance(ir.in_tree[0], af.core.Var)
+        eqn = ir.eqns[0]
+        assert len(eqn.in_tree) == 2
+        lit_candidate = eqn.in_tree[0]
         assert lit_candidate == "Hello, "
-        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(eqn.in_tree[1], af.core.Var)
 
     def test_format_traces_template_and_args(self):
         def program(x):
             return af.format("Hello, {}!", x)
 
         ir = af.trace(program)("World")
-        assert len(ir.ir_eqns) == 1
-        eqn = ir.ir_eqns[0]
-        args, kwargs_values = eqn.in_ir_tree
+        assert len(ir.eqns) == 1
+        eqn = ir.eqns[0]
+        args, kwargs_values = eqn.in_tree
         assert len(args) == 1
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
-        assert isinstance(args[0], af.core.IRVar)
+        assert isinstance(args[0], af.core.Var)
         assert ir.call("x0") == "Hello, x0!"
 
     def test_tracing_unhashable_literal_leaf_errors(self):
@@ -165,8 +165,8 @@ class TestBuildIR:
             return af.format("{} {}", parts, x)
 
         ir = af.trace(program)("x")
-        eqn = ir.ir_eqns[0]
-        args, kwargs_values = eqn.in_ir_tree
+        eqn = ir.eqns[0]
+        args, kwargs_values = eqn.in_tree
 
         assert args[0] == ["a", "b"]
         assert args[0] is not parts
@@ -175,7 +175,7 @@ class TestBuildIR:
 
         parts.append("c")
 
-        args, _ = eqn.in_ir_tree
+        args, _ = eqn.in_tree
         assert args[0] == ["a", "b"]
         assert ir.call("z") == "['a', 'b'] z"
 
@@ -186,24 +186,24 @@ class TestBuildIR:
             return b
 
         ir = af.trace(program)("A", "B")
-        assert len(ir.ir_eqns) == 2
+        assert len(ir.eqns) == 2
 
     def test_single_input_tree_structure(self):
         def program(x):
             return af.concat(x, x)
 
         ir = af.trace(program)("test")
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 1
-        assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 1
+        assert isinstance(ir.in_tree[0], af.core.Var)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
             return af.concat(a, b)
 
         ir = af.trace(program)("A", "B")
-        assert isinstance(ir.in_ir_tree, tuple)
-        assert len(ir.in_ir_tree) == 2
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 2
 
 
 class TestTraceStatic:
@@ -213,8 +213,8 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert ir.in_ir_tree[0] == "Hello"
-        assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
+        assert ir.in_tree[0] == "Hello"
+        assert isinstance(ir.in_tree[1], af.core.Var)
         assert ir.call("Hello", "x0") == "Hello x0"
 
     def test_static_input_mismatch_errors_before_execution(self):
@@ -251,8 +251,8 @@ class TestTraceStatic:
 
         ir = af.trace(program, static=(True, False))(True, "World")
 
-        assert ir.in_ir_tree[0] is True
-        assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
+        assert ir.in_tree[0] is True
+        assert isinstance(ir.in_tree[1], af.core.Var)
         assert ir.call(True, "x0") == "Hello x0"
 
 
@@ -271,9 +271,9 @@ class TestTags:
 
         ir = af.trace(program)("seed")
 
-        assert ir.ir_eqns[0].tags == frozenset()
-        assert ir.ir_eqns[1].tags == frozenset({Label("planner")})
-        assert ir.ir_eqns[2].tags == frozenset({
+        assert ir.eqns[0].tags == frozenset()
+        assert ir.eqns[1].tags == frozenset({Label("planner")})
+        assert ir.eqns[2].tags == frozenset({
             Label("planner"),
             Label("draft"),
             CostTag(),
@@ -308,12 +308,12 @@ class TestTags:
 
     def test_ireqn_tags_input_is_frozenset(self):
         prim = af.core.Prim("tag_set")
-        eqn = af.core.IREqn(prim, (), (), None, frozenset({Label("draft")}))
+        eqn = af.core.Eqn(prim, (), (), None, frozenset({Label("draft")}))
 
         assert eqn.tags == frozenset({Label("draft")})
 
         with pytest.raises(AssertionError):
-            af.core.IREqn(prim, (), (), None, (Label("draft"),))
+            af.core.Eqn(prim, (), (), None, (Label("draft"),))
 
     def test_bind_reinstalls_equation_tags(self):
         probe_p = af.core.Prim("tag_probe")
@@ -340,7 +340,7 @@ class TestTags:
         with af.tag(Label("runtime")):
             assert ir.call("hello") == "cost,draft,runtime|hello"
 
-        assert ir.ir_eqns[0].tags == frozenset({Label("draft"), Label("cost")})
+        assert ir.eqns[0].tags == frozenset({Label("draft"), Label("cost")})
 
     def test_using_preserves_tags(self):
         def program(x):
@@ -348,7 +348,7 @@ class TestTags:
                 return af.concat(x, "!")
 
         ir = af.trace(program)("seed")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         new_eqn = eqn.using(collection="debug")
 
@@ -379,7 +379,7 @@ class TestTags:
 
         outer_ir = af.trace(outer_program)("seed")
 
-        assert outer_ir.ir_eqns[0].tags == frozenset({Label("inner"), Label("outer")})
+        assert outer_ir.eqns[0].tags == frozenset({Label("inner"), Label("outer")})
 
 
 class TestRunIR:
@@ -390,8 +390,8 @@ class TestRunIR:
         ir = af.trace(program)("hello")
         gen = ir.walk("world")
 
-        ir_eqn, in_values = next(gen)
-        assert ir_eqn.prim.name == "concat"
+        eqn, in_values = next(gen)
+        assert eqn.prim.name == "concat"
         assert in_values == ("world", "!")
 
         done, out = gen.send("world!")
@@ -405,10 +405,10 @@ class TestRunIR:
         ir = af.trace(program)("hello")
         gen = ir.walk("world")
 
-        ir_eqn, in_values = next(gen)
-        assert ir_eqn.prim.name == "concat"
+        eqn, in_values = next(gen)
+        assert eqn.prim.name == "concat"
         assert in_values == ("world", "!")
-        out_values = ir_eqn.bind(("there", "!"), **ir_eqn.params)
+        out_values = eqn.bind(("there", "!"), **eqn.params)
 
         done, out = gen.send(out_values)
         assert done is None
