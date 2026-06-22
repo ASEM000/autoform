@@ -25,23 +25,23 @@ import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]
-type DCEResult = tuple[core.IREqn, UsedTree]
+type DCEResult = tuple[core.Eqn, UsedTree]
 
 # ==================================================================================================
 # DEAD CODE ELIMINATION
 # ==================================================================================================
 
 
-def default_dce(ir_eqn: core.IREqn, out_used: UsedTree) -> DCEResult:
+def default_dce(ir_eqn: core.Eqn, out_used: UsedTree) -> DCEResult:
     # NOTE(asem): out_used is a pytree of bool matching the ir_eqn output pytree that
-    # denotes which output is used. the return is a another IREqn (mostly for edited HOP IR)
+    # denotes which output is used. the return is a another Eqn (mostly for edited HOP IR)
     # and a out_used
     should_use = utils.tree.any(out_used)
     in_used = utils.tree.map(lambda _: should_use, ir_eqn.in_ir_tree)
     return ir_eqn, in_used
 
 
-type DCERule = Callable[[core.IREqn, UsedTree], DCEResult]
+type DCERule = Callable[[core.Eqn, UsedTree], DCEResult]
 
 dce_rules: dict[core.Prim, DCERule] = {}
 non_dce_primitives: set[core.Prim] = set()
@@ -79,7 +79,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
 
     live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
     active_ir_vars: set[core.IRVar] = set(live_boundaries[-1])
-    active_ir_eqns: deque[core.IREqn] = deque()
+    active_ir_eqns: deque[core.Eqn] = deque()
 
     def is_active_node(node) -> bool:
         return core.is_irvar(node) and (node in active_ir_vars)

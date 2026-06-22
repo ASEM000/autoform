@@ -44,7 +44,7 @@ not part of the everyday user surface.
 | Term | Definition |
 | --- | --- |
 | Boxing | The internal technique interpreters use to wrap values with transform-specific metadata. Users normally see the result only through public transforms. |
-| `IREqn` | One recorded primitive application in an IR. |
+| `Eqn` | One recorded primitive application in an IR. |
 | `IRVar` | A typed placeholder for a runtime value inside an IR. |
 | `Prim` | A named primitive operation used as the dispatch key for execution and transform rules. |
 | `TraceBox` | The internal wrapper used by the trace interpreter to carry an `IRVar` through Python code. |

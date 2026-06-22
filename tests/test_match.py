@@ -15,7 +15,7 @@
 import autoform as af
 
 
-class TestIREqnMatch:
+class TestEqnMatch:
     def test_match_by_primitive(self):
         def func(x):
             return af.concat("Hello, ", x)
@@ -24,7 +24,7 @@ class TestIREqnMatch:
         eqn = ir.ir_eqns[0]
 
         match eqn:
-            case af.core.IREqn(prim=p) if p == af.string.concat_p:
+            case af.core.Eqn(prim=p) if p == af.string.concat_p:
                 matched = True
             case _:
                 matched = False
@@ -54,7 +54,7 @@ class TestIREqnMatch:
         eqn = ir.ir_eqns[0]
 
         match eqn:
-            case af.core.IREqn(prim=prim, in_ir_tree=in_tree, out_ir_tree=out_tree, params=params):
+            case af.core.Eqn(prim=prim, in_ir_tree=in_tree, out_ir_tree=out_tree, params=params):
                 assert prim == af.string.format_p
                 assert params["template"] == "Value: {}"
 
@@ -102,7 +102,7 @@ class TestIREqnMatch:
         assert result == "hello!"
 
 
-class TestIREqnWithParams:
+class TestEqnWithParams:
     def test_using_merges(self):
         def func(x):
             return af.checkpoint(x, key="x", collection="old")
@@ -181,7 +181,7 @@ class TestIRMatch:
         match ir:
             case af.core.IR(
                 ir_eqns=[
-                    af.core.IREqn(
+                    af.core.Eqn(
                         prim=prim,
                         in_ir_tree=in_tree,
                         out_ir_tree=out_tree,
@@ -203,7 +203,7 @@ class TestIRMatch:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(ir_eqns=[af.core.IREqn(prim=p1), af.core.IREqn(prim=p2)]):
+            case af.core.IR(ir_eqns=[af.core.Eqn(prim=p1), af.core.Eqn(prim=p2)]):
                 assert p1.name == "format"
                 assert p2.name == "concat"
             case _:
@@ -213,7 +213,7 @@ class TestIRMatch:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(ir_eqns=[af.core.IREqn(prim=af.core.Prim(name=name))]):
+            case af.core.IR(ir_eqns=[af.core.Eqn(prim=af.core.Prim(name=name))]):
                 assert name == "concat"
             case _:
                 assert False, "Pattern should match primitive name"
@@ -224,7 +224,7 @@ class TestIRMatch:
 
         match pf_ir:
             case af.core.IR(
-                ir_eqns=[af.core.IREqn(prim=af.core.Prim(name="pushforward_call"), params=params)]
+                ir_eqns=[af.core.Eqn(prim=af.core.Prim(name="pushforward_call"), params=params)]
             ):
                 nested = params["ir"]
                 assert isinstance(nested, af.core.IR)
@@ -244,9 +244,7 @@ class TestIRMatch:
         ir = af.trace(program)("a", "test")
 
         match ir:
-            case af.core.IR(
-                ir_eqns=[af.core.IREqn(prim=af.core.Prim(name="switch"), params=params)]
-            ):
+            case af.core.IR(ir_eqns=[af.core.Eqn(prim=af.core.Prim(name="switch"), params=params)]):
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
                 assert "b" in branch_dict

@@ -143,7 +143,7 @@ async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
     return out, tree_batched_like(ir.out_ir_tree, True)
 
 
-def dce_custom_call(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_custom_call(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     return dce.default_dce(ir_eqn, out_used)
 
 

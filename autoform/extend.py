@@ -45,7 +45,7 @@ Prim = core.Prim
 Zero = ad.Zero
 Interpreter = core.Interpreter
 IR = core.IR
-IREqn = core.IREqn
+Eqn = core.Eqn
 IRVar = core.IRVar
 
 # ==================================================================================================
@@ -110,7 +110,7 @@ __all__ = [
     "Zero",
     "Interpreter",
     "IR",
-    "IREqn",
+    "Eqn",
     "IRVar",
     "register_trace_type",
     "register_zero",

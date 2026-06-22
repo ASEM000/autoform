@@ -181,7 +181,7 @@ core.batch_rules.set(gather_p, batch_gather)
 core.batch_rules.aset(gather_p, abatch_gather)
 
 
-def dce_gather(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_gather(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     irs = ir_eqn.params["irs"]
     new_irs = [dce.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
     new_eqn = ir_eqn.using(irs=new_irs)
@@ -197,7 +197,7 @@ dce.dce_rules[gather_p] = dce_gather
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
-def toposort_levels(ir: core.IR, /) -> list[list[core.IREqn]]:
+def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
     """Group IR equations into dependency levels."""
 
     # NOTE(asem): equations form a dag where edges are defined by shared irvars.
@@ -322,7 +322,7 @@ core.batch_rules.aset(depends_p, utils.asyncify(batch_depends))
 
 @ft.partial(utils.lru_cache, maxsize=256)
 def sched[*A, R](
-    ir: core.IR[*A, R], /, *, cond: Callable[[core.IREqn], bool] | None = None
+    ir: core.IR[*A, R], /, *, cond: Callable[[core.Eqn], bool] | None = None
 ) -> core.IR[*A, R]:
     """Schedule independent operations for parallel execution.
 
@@ -355,18 +355,18 @@ def sched[*A, R](
         >>> # async execution (concurrent via asyncio.gather)
         >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
-    levels: list[list[core.IREqn]] = toposort_levels(ir)
-    out_ir_eqns: list[core.IREqn] = []
+    levels: list[list[core.Eqn]] = toposort_levels(ir)
+    out_ir_eqns: list[core.Eqn] = []
     cond = (lambda _: True) if cond is None else cond
 
     def recurse(leaf):
         return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
 
-    def make_gather(ir_eqns: list[core.IREqn]) -> core.IREqn:
+    def make_gather(ir_eqns: list[core.Eqn]) -> core.Eqn:
         irs = [core.IR([ir_eqn], (ir_eqn.in_ir_tree,), ir_eqn.out_ir_tree) for ir_eqn in ir_eqns]
         in_ir_tree = [(ir_eqn.in_ir_tree,) for ir_eqn in ir_eqns]
         out_ir_tree = [ir_eqn.out_ir_tree for ir_eqn in ir_eqns]
-        return core.IREqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
+        return core.Eqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
 
     for level in levels:
         ir_eqns = [ir_eqn.using(**utils.tree.map(recurse, ir_eqn.params)) for ir_eqn in level]

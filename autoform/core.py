@@ -70,7 +70,7 @@ __all__ = [
     "BatchRule",
     "ABatchRule",
     # ir structures
-    "IREqn",
+    "Eqn",
     "IR",
     # interpreters
     "BaseInterpreter",
@@ -374,7 +374,7 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
 # ==================================================================================================
 
 
-class IREqn:
+class Eqn:
     """One primitive application inside an :class:`IR`.
 
     An equation records the primitive to execute, the IR-shaped input and output
@@ -416,8 +416,8 @@ class IREqn:
         with tag(*self.tags):
             return await self.prim.abind(in_tree, **params)
 
-    def using(self, **kwargs) -> IREqn:
-        return IREqn(self.prim, self.in_ir_tree, self.out_ir_tree, self.params | kwargs, self.tags)
+    def using(self, **kwargs) -> Eqn:
+        return Eqn(self.prim, self.in_ir_tree, self.out_ir_tree, self.params | kwargs, self.tags)
 
 
 class IR[*A, R]:
@@ -436,10 +436,10 @@ class IR[*A, R]:
 
     __slots__ = ["ir_eqns", "in_ir_tree", "out_ir_tree"]
 
-    def __init__(self, ir_eqns: list[IREqn], in_ir_tree: Tree, out_ir_tree: Tree):
+    def __init__(self, ir_eqns: list[Eqn], in_ir_tree: Tree, out_ir_tree: Tree):
         assert isinstance(ir_eqns, list)
         ir_eqns = tuple(ir_eqns)
-        assert all(isinstance(ir_eqn, IREqn) for ir_eqn in ir_eqns)
+        assert all(isinstance(ir_eqn, Eqn) for ir_eqn in ir_eqns)
         self.ir_eqns = ir_eqns
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
@@ -482,7 +482,7 @@ class IR[*A, R]:
         """
         return await acall(self)(*args)
 
-    def walk(self, *args: *A) -> Generator[tuple[IREqn | None, Tree], Tree, None]:
+    def walk(self, *args: *A) -> Generator[tuple[Eqn | None, Tree], Tree, None]:
         """Step through this IR one equation at a time.
 
         Manual control over IR execution. Start with `next(gen)` to receive `(ir_eqn, in_values)`,
@@ -831,7 +831,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
     __slots__ = ["ir_eqns"]
 
     def __init__(self):
-        self.ir_eqns: list[IREqn] = []
+        self.ir_eqns: list[Eqn] = []
 
     def box(self, value, /) -> Tree:
         return utils.tree.map(lambda v: TraceBox(owner=self, ir_var=v) if is_irvar(v) else v, value)
@@ -904,7 +904,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
-        self.ir_eqns.append(IREqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
+        self.ir_eqns.append(Eqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
         return self.box(out_ir_tree)
 
 
@@ -973,7 +973,7 @@ def trace[*A, R](
 # WALK
 # ==================================================================================================
 
-type GenStep = tuple[IREqn | None, Tree]
+type GenStep = tuple[Eqn | None, Tree]
 
 
 @ft.partial(utils.lru_cache, maxsize=256)

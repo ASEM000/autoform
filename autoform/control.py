@@ -262,7 +262,7 @@ core.batch_rules.set(switch_p, batch_switch)
 core.batch_rules.aset(switch_p, abatch_switch)
 
 
-def dce_switch(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_switch(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     branches: Branches = ir_eqn.params["branches"]
     branches = {k: dce.dce(branches[k], out_used=out_used) for k in branches}
     new_eqn = ir_eqn.using(branches=branches)
@@ -630,7 +630,7 @@ core.batch_rules.set(while_loop_p, batch_while_loop)
 core.batch_rules.aset(while_loop_p, abatch_while_loop)
 
 
-def dce_while_loop(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_while_loop(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     cond_ir = ir_eqn.params["cond_ir"]
     body_ir = ir_eqn.params["body_ir"]
     # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
@@ -813,13 +813,13 @@ def pullback_bwd_fixpoint(
     if ad.all_zero(g):
         return dx0, utils.tree.map(ad.zeroof, theta)
 
-    res: dict[core.IREqn, Tree] = {}
+    res: dict[core.Eqn, Tree] = {}
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
     with core.using_interpreter(fwd):
 
-        def custom_bind(ir_eqn: core.IREqn, boxed_in: Tree, /) -> Tree:
+        def custom_bind(ir_eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
             boxed_out, residuals = ir_eqn.bind(boxed_in, **ir_eqn.params)
             res[ir_eqn] = residuals
             return boxed_out
@@ -832,7 +832,7 @@ def pullback_bwd_fixpoint(
         bwd = ad.PullbackBwdInterpreter(parent=parent)
         with core.using_interpreter(bwd):
 
-            def custom_bind(ir_eqn: core.IREqn, c_out: Tree, /) -> Tree:
+            def custom_bind(ir_eqn: core.Eqn, c_out: Tree, /) -> Tree:
                 residuals = res[ir_eqn]
                 boxed_c_out = bwd.box(c_out)
                 boxed_c_in = ir_eqn.bind((residuals, boxed_c_out), **ir_eqn.params)
@@ -876,13 +876,13 @@ async def apull_bwd_fixpoint(
     if ad.all_zero(g):
         return dx0, utils.tree.map(ad.zeroof, theta)
 
-    res: dict[core.IREqn, Tree] = {}
+    res: dict[core.Eqn, Tree] = {}
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
     with core.using_interpreter(fwd):
 
-        async def custom_abind(ir_eqn: core.IREqn, boxed_in: Tree, /) -> Tree:
+        async def custom_abind(ir_eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
             boxed_out, residuals = await ir_eqn.abind(boxed_in, **ir_eqn.params)
             res[ir_eqn] = residuals
             return boxed_out
@@ -895,7 +895,7 @@ async def apull_bwd_fixpoint(
         bwd = ad.PullbackBwdInterpreter(parent=parent)
         with core.using_interpreter(bwd):
 
-            async def custom_abind(ir_eqn: core.IREqn, c_out: Tree, /) -> Tree:
+            async def custom_abind(ir_eqn: core.Eqn, c_out: Tree, /) -> Tree:
                 residuals = res[ir_eqn]
                 boxed_c_out = bwd.box(c_out)
                 boxed_c_in = await ir_eqn.abind((residuals, boxed_c_out), **ir_eqn.params)
@@ -1063,7 +1063,7 @@ core.batch_rules.set(fixpoint_p, batch_fixpoint)
 core.batch_rules.aset(fixpoint_p, abatch_fixpoint)
 
 
-def dce_fixpoint(ir_eqn: core.IREqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_fixpoint(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     step_ir = ir_eqn.params["step_ir"]
     equiv_ir = ir_eqn.params["equiv_ir"]
     # NOTE(asem): every state leaf is loop-carried into the next step, even if

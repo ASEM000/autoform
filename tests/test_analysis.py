@@ -89,8 +89,8 @@ class TestIrVarProducers:
 
     def test_errors_if_same_ir_var_is_produced_twice(self):
         shared = af.core.IRVar.fresh(aval=af.core.StrAVal())
-        eqn_a = af.core.IREqn(af.core.Prim("a"), (), shared, {})
-        eqn_b = af.core.IREqn(af.core.Prim("b"), (), shared, {})
+        eqn_a = af.core.Eqn(af.core.Prim("a"), (), shared, {})
+        eqn_b = af.core.Eqn(af.core.Prim("b"), (), shared, {})
         ir = af.core.IR([eqn_a, eqn_b], in_ir_tree=(), out_ir_tree=shared)
 
         with pytest.raises(AssertionError):

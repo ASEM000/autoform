@@ -35,10 +35,10 @@ def ir_var_leaves(ir_tree: Tree, /) -> list[core.IRVar]:
     return [cast(core.IRVar, x) for x in utils.tree.leaves(ir_tree) if core.is_irvar(x)]
 
 
-def ir_var_producers(ir: core.IR, /) -> dict[core.IRVar, core.IREqn]:
+def ir_var_producers(ir: core.IR, /) -> dict[core.IRVar, core.Eqn]:
     """Return the top-level producer equation for each IRVar defined by ``ir``."""
 
-    producers: dict[core.IRVar, core.IREqn] = {}
+    producers: dict[core.IRVar, core.Eqn] = {}
     for ir_eqn in ir.ir_eqns:
         for ir_var in ir_var_leaves(ir_eqn.out_ir_tree):
             assert producers.get(ir_var) is None
@@ -46,13 +46,13 @@ def ir_var_producers(ir: core.IR, /) -> dict[core.IRVar, core.IREqn]:
     return producers
 
 
-def ir_eqn_graph(ir: core.IR, /) -> dict[core.IREqn, list[core.IREqn]]:
+def ir_eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
     """Return top-level equation dependencies as parent -> children adjacency."""
 
     ir_var_to_parent = ir_var_producers(ir)
-    adjacency_list: dict[core.IREqn, list[core.IREqn]] = {ir_eqn: [] for ir_eqn in ir.ir_eqns}
+    adjacency_list: dict[core.Eqn, list[core.Eqn]] = {ir_eqn: [] for ir_eqn in ir.ir_eqns}
     for ir_eqn in ir.ir_eqns:
-        seen_parents: set[core.IREqn] = set()
+        seen_parents: set[core.Eqn] = set()
         for in_ir_var in ir_var_leaves(ir_eqn.in_ir_tree):
             if (p := ir_var_to_parent.get(in_ir_var)) is not None and p not in seen_parents:
                 adjacency_list[p].append(ir_eqn)
