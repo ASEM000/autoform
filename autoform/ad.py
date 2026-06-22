@@ -21,6 +21,11 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, TypeGuard
 
+import autoform.core as core
+import autoform.dce as dce
+import autoform.scheduling as scheduling
+import autoform.utils as utils
+
 __all__ = [
     "Zero",
     "is_zero",
@@ -33,10 +38,6 @@ __all__ = [
     "pullback",
 ]
 
-import autoform.core as core
-import autoform.dce as dce
-import autoform.scheduling as scheduling
-import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
