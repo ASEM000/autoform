@@ -548,14 +548,14 @@ def batch_while_loop(
             b_body = state_in_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = batched_body.call(*in_transposed)
-            out_batched = utils.tree.map(core.is_irvar, body_ir.out_tree)
+            out_batched = utils.tree.map(core.is_var, body_ir.out_tree)
             out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     # only Var positions are batched; literal positions stay scalar
-    out_batched = utils.tree.map(core.is_irvar, body_ir.out_tree)
+    out_batched = utils.tree.map(core.is_var, body_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -606,13 +606,13 @@ async def abatch_while_loop(
             b_body = state_in_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = await batched_body.acall(*in_transposed)
-            out_batched_body = utils.tree.map(core.is_irvar, body_ir.out_tree)
+            out_batched_body = utils.tree.map(core.is_var, body_ir.out_tree)
             out_at = ft.partial(utils.batch_index, out_transposed, out_batched_body)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
 
-    out_batched = utils.tree.map(core.is_irvar, body_ir.out_tree)
+    out_batched = utils.tree.map(core.is_var, body_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -962,7 +962,7 @@ def batch_fixpoint(
         n_alive = len(alive_in)
         in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
         out_transposed = batched_step.call(*in_transposed)
-        out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
+        out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
         new_states = [out_at(i) for i in range(n_alive)]
@@ -980,7 +980,7 @@ def batch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
+    out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, states)
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -1027,7 +1027,7 @@ async def abatch_fixpoint(
         n_alive = len(alive_in)
         in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
         out_transposed = await batched_step.acall(*in_transposed)
-        out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
+        out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
         new_states = [out_at(i) for i in range(n_alive)]
@@ -1045,7 +1045,7 @@ async def abatch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = utils.tree.map(core.is_irvar, step_ir.out_tree)
+    out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, states)
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))

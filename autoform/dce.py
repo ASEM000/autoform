@@ -82,7 +82,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
     active_eqns: deque[core.Eqn] = deque()
 
     def is_active_node(node) -> bool:
-        return core.is_irvar(node) and (node in active_vars)
+        return core.is_var(node) and (node in active_vars)
 
     for eqn in reversed(ir.eqns):
         is_non_dce = eqn.prim in non_dce_primitives
@@ -110,10 +110,10 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
     defined_vars: set[core.Var] = set(in_vars)
     for kept in active_eqns:
         for atom in utils.tree.leaves(kept.out_tree):
-            core.is_irvar(atom) and defined_vars.add(atom)
+            core.is_var(atom) and defined_vars.add(atom)
 
     def sanitize_out_leaf(atom, used: bool):
-        if not core.is_irvar(atom):
+        if not core.is_var(atom):
             # NOTE(asem): leaf is already a literal, nothing to sanitize.
             # >>> def program(x):
             # ...     return (x, "const")

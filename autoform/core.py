@@ -44,7 +44,7 @@ __all__ = [
     "avalof",
     # ir vals
     "Var",
-    "is_irvar",
+    "is_var",
     "ir_aval",
     # primitive
     "Prim",
@@ -259,7 +259,7 @@ class Var:
 
     def __init__(self, /, *, aval: AVal, source: Var | None = None):
         self.id = next(self.counter)
-        assert is_irvar(source) or source is None
+        assert is_var(source) or source is None
         assert is_aval(aval)
         self.source = source
         self.aval = aval
@@ -274,7 +274,7 @@ class Var:
         return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
 
 
-def is_irvar(x) -> TypeGuard[Var]:
+def is_var(x) -> TypeGuard[Var]:
     """Return ``True`` if input is an :class:`Var`."""
 
     return isinstance(x, Var)
@@ -288,7 +288,7 @@ def ir_aval(x, /):
     abstract values needed to create fresh variables or abstract outputs.
     """
 
-    return x.aval if is_irvar(x) else x
+    return x.aval if is_var(x) else x
 
 
 aval_rules[Var] = lambda var: var.aval
@@ -517,7 +517,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     sp = " " * indent
 
     def format_ir_val(ir_val) -> str:
-        if is_irvar(ir_val):
+        if is_var(ir_val):
             var_type = type(ir_val).__name__
             aval_info = repr(ir_val.aval)
             type_info = f"[{aval_info}]"
@@ -713,7 +713,7 @@ class TraceBox:
 
     def __init__(self, /, *, owner: TraceInterpreter, var: Var):
         assert isinstance(owner, TraceInterpreter)
-        assert is_irvar(var)
+        assert is_var(var)
         self.owner = owner
         self.var = var
 
@@ -834,7 +834,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
         self.eqns: list[Eqn] = []
 
     def box(self, value, /) -> Tree:
-        return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_irvar(v) else v, value)
+        return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_var(v) else v, value)
 
     def unbox(self, value: Tree, /) -> Tree:
         def func(value, /):
@@ -881,12 +881,12 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
 
     def stage(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         def to_in_ir_atom(value):
-            if not is_irvar(value):
+            if not is_var(value):
                 hash(value)
             return value
 
         def to_concrete(leaf, value):
-            assert not is_irvar(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
+            assert not is_var(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
             return value
 
         in_tree = self.unbox(in_tree)
@@ -952,7 +952,7 @@ def trace[*A, R](
         return to_var(x)
 
     def to_var(x, /) -> Var:
-        assert not is_irvar(x), "Inputs to `trace` must be normal python types"
+        assert not is_var(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
         return Var.fresh(aval=avalof(x))
 
@@ -989,16 +989,16 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
         env: dict[Var, Any] = {}
 
         def read(ir_val) -> Any:
-            return env[ir_val] if is_irvar(ir_val) else ir_val
+            return env[ir_val] if is_var(ir_val) else ir_val
 
         def check_input(ir_val, value: Any):
-            if not is_irvar(ir_val):
+            if not is_var(ir_val):
                 expected = ir_val
                 msg = f"Static input mismatch: expected {expected!r}, got {value!r}"
                 assert expected == value, msg
 
         def write(ir_val, value: Any):
-            is_irvar(ir_val) and setitem(env, ir_val, value)
+            is_var(ir_val) and setitem(env, ir_val, value)
 
         utils.tree.map(check_input, ir.in_tree, args)
         utils.tree.map(write, ir.in_tree, args)

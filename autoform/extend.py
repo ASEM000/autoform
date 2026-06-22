@@ -74,7 +74,7 @@ using_interpreter = core.using_interpreter
 serial_fanout = scheduling.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
-is_irvar = core.is_irvar
+is_var = core.is_var
 ir_aval = core.ir_aval
 active_client = lm.active_client
 
@@ -140,7 +140,7 @@ __all__ = [
     "serial_fanout",
     "active_interpreter",
     "active_tags",
-    "is_irvar",
+    "is_var",
     "ir_aval",
     "active_client",
     "format_p",

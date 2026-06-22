@@ -32,7 +32,7 @@ __all__ = ["var_leaves", "var_producers", "eqn_graph", "ir_liveness"]
 def var_leaves(tree: Tree, /) -> list[core.Var]:
     """Return Vars from an IR tree in leaf order."""
 
-    return [cast(core.Var, x) for x in utils.tree.leaves(tree) if core.is_irvar(x)]
+    return [cast(core.Var, x) for x in utils.tree.leaves(tree) if core.is_var(x)]
 
 
 def var_producers(ir: core.IR, /) -> dict[core.Var, core.Eqn]:

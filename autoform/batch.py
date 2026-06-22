@@ -119,12 +119,12 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
         return BatchAVal(aval) if is_batched else aval
 
     def make_in(atom, is_batched: bool):
-        if not core.is_irvar(atom):
+        if not core.is_var(atom):
             return atom
         return core.Var.fresh(aval=maybe_batched(atom.aval, is_batched), source=atom)
 
     def make_out(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return core.Var.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
             return core.Var.fresh(aval=maybe_batched(core.avalof(atom), True))
@@ -262,7 +262,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree
         return BatchAVal(aval) if is_batched else aval
 
     def out_aval(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return maybe_batched(atom.aval, has_batched)
         if has_batched:
             return maybe_batched(core.avalof(atom), True)

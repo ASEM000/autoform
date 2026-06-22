@@ -217,12 +217,12 @@ def pushforward(ir: core.IR, /) -> core.IR:
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 
     def make_t(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return zeroof(atom)
 
@@ -512,10 +512,10 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
         # Var `x`, `c_env[x]` receives two cotangents: ["df", "df"].
         # `read_c(x)` then calls `cot_acc`, which combines them using
         # the registered `StrAVal` accumulator.
-        core.is_irvar(atom) and c_env[atom].append(value)
+        core.is_var(atom) and c_env[atom].append(value)
 
     def read_c(atom) -> Any:
-        if not core.is_irvar(atom):
+        if not core.is_var(atom):
             return zeroof(atom)
         if not (cs := c_env[atom]):
             return zeroof(atom)
@@ -587,12 +587,12 @@ def pullback(ir: core.IR, /) -> core.IR:
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 
     def make_c(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return zeroof(atom)
 

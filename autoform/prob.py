@@ -150,7 +150,7 @@ def weighted(ir: core.IR, /) -> core.IR:
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
 
     def make_out(atom):
-        if core.is_irvar(atom):
+        if core.is_var(atom):
             return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 

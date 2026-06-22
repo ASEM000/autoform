@@ -35,7 +35,7 @@ type CustomResult = tuple[core.IR, Tree]
 
 def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> core.IR:
     def to_ir_input(x, /):
-        if core.is_irvar(x):
+        if core.is_var(x):
             return x
         if core.is_aval(x):
             return core.Var.fresh(aval=x)

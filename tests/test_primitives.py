@@ -108,7 +108,7 @@ class TestVar:
     def test_var_aval_returns_aval(self):
         var = af.core.Var(aval=af.core.StrAVal())
 
-        assert af.core.is_irvar(var)
+        assert af.core.is_var(var)
         assert isinstance(var.aval, af.core.AVal)
         assert var.aval == af.core.StrAVal()
 
@@ -125,7 +125,7 @@ class TestVar:
             len(traced)
 
     def test_plain_literal_is_not_irvar(self):
-        assert not af.core.is_irvar("hello")
+        assert not af.core.is_var("hello")
 
 
 class TestFormatPrimitive:
