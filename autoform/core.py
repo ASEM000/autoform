@@ -291,7 +291,7 @@ def ir_aval(x, /):
     return x.aval if is_irvar(x) else x
 
 
-aval_rules[Var] = lambda ir_var: ir_var.aval
+aval_rules[Var] = lambda var: var.aval
 
 # ==================================================================================================
 # PRIMITIVE
@@ -709,20 +709,20 @@ trace_matmul_rules: dict[type[AVal], TraceRule] = {}
 
 
 class TraceBox:
-    __slots__ = ["owner", "ir_var"]
+    __slots__ = ["owner", "var"]
 
-    def __init__(self, /, *, owner: TraceInterpreter, ir_var: Var):
+    def __init__(self, /, *, owner: TraceInterpreter, var: Var):
         assert isinstance(owner, TraceInterpreter)
-        assert is_irvar(ir_var)
+        assert is_irvar(var)
         self.owner = owner
-        self.ir_var = ir_var
+        self.var = var
 
     @property
     def aval(self) -> AVal:
-        return self.ir_var.aval
+        return self.var.aval
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.ir_var!r})"
+        return f"{type(self).__name__}({self.var!r})"
 
     def __hash__(self):
         return object.__hash__(self)
@@ -834,7 +834,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
         self.eqns: list[Eqn] = []
 
     def box(self, value, /) -> Tree:
-        return utils.tree.map(lambda v: TraceBox(owner=self, ir_var=v) if is_irvar(v) else v, value)
+        return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_irvar(v) else v, value)
 
     def unbox(self, value: Tree, /) -> Tree:
         def func(value, /):
@@ -851,7 +851,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             # ...     return concat(leaked["first"], y)
             # >>> ir1 = af.trace(first_func)("input")
             # >>> ir2 = af.trace(second_func)("input")
-            return value.ir_var
+            return value.var
 
         return utils.tree.map(func, value)
 
@@ -949,9 +949,9 @@ def trace[*A, R](
         if is_static:
             hash(x)
             return x
-        return to_ir_var(x)
+        return to_var(x)
 
-    def to_ir_var(x, /) -> Var:
+    def to_var(x, /) -> Var:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
         return Var.fresh(aval=avalof(x))

@@ -105,17 +105,17 @@ class TestPrimitive:
 
 
 class TestVar:
-    def test_ir_var_aval_returns_aval(self):
-        ir_var = af.core.Var(aval=af.core.StrAVal())
+    def test_var_aval_returns_aval(self):
+        var = af.core.Var(aval=af.core.StrAVal())
 
-        assert af.core.is_irvar(ir_var)
-        assert isinstance(ir_var.aval, af.core.AVal)
-        assert ir_var.aval == af.core.StrAVal()
+        assert af.core.is_irvar(var)
+        assert isinstance(var.aval, af.core.AVal)
+        assert var.aval == af.core.StrAVal()
 
     def test_len_on_trace_box_has_informative_error(self):
         tracer = af.core.TraceInterpreter()
-        ir_var = af.core.Var(aval=af.core.StrAVal())
-        traced = tracer.box(ir_var)
+        var = af.core.Var(aval=af.core.StrAVal())
+        traced = tracer.box(var)
 
         with pytest.raises(
             TypeError,

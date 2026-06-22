@@ -207,11 +207,11 @@ def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
     # 2. level n must complete before level n+1 starts
 
     # NOTE(asem): three-step process:
-    # 1. map each ir_var to its creator equation
-    # 2. build adjacency list (parent -> children) from ir_var flow
+    # 1. map each var to its creator equation
+    # 2. build adjacency list (parent -> children) from var flow
     # 3. topological sort into levels using kahn's algorithm
 
-    # NOTE(asem): step 1/2: build adjacency list (parent -> children) from ir_var flow
+    # NOTE(asem): step 1/2: build adjacency list (parent -> children) from var flow
     adjacency_list = analysis.eqn_graph(ir)
     in_degree = defaultdict(lambda: 0)
     for children in adjacency_list.values():

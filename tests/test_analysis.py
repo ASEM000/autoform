@@ -18,13 +18,13 @@ import autoform as af
 from autoform.analysis import (
     eqn_graph,
     ir_liveness,
-    ir_var_leaves,
-    ir_var_producers,
+    var_leaves,
+    var_producers,
 )
 
 
 class TestIrVarLeaves:
-    def test_returns_input_ir_vars_in_leaf_order(self):
+    def test_returns_input_vars_in_leaf_order(self):
         def program(payload):
             head, (left, right) = payload
             return af.format("{} {} {}", head, left, right)
@@ -33,7 +33,7 @@ class TestIrVarLeaves:
         (payload,) = ir.in_ir_tree
         head, pair = payload
 
-        assert ir_var_leaves(ir.in_ir_tree) == [head, pair[0], pair[1]]
+        assert var_leaves(ir.in_ir_tree) == [head, pair[0], pair[1]]
 
     def test_filters_static_input_literals(self):
         def program(prefix, name):
@@ -41,9 +41,9 @@ class TestIrVarLeaves:
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
-        assert ir_var_leaves(ir.in_ir_tree) == [ir.in_ir_tree[1]]
+        assert var_leaves(ir.in_ir_tree) == [ir.in_ir_tree[1]]
 
-    def test_returns_output_ir_vars_in_leaf_order(self):
+    def test_returns_output_vars_in_leaf_order(self):
         def program(x):
             left = af.concat(x, "1")
             right = af.concat(x, "2")
@@ -52,7 +52,7 @@ class TestIrVarLeaves:
         ir = af.trace(program)("seed")
         left_tree, right_tree = ir.out_ir_tree
 
-        assert ir_var_leaves(ir.out_ir_tree) == [left_tree["left"], right_tree[0]]
+        assert var_leaves(ir.out_ir_tree) == [left_tree["left"], right_tree[0]]
 
     def test_filters_literal_outputs(self):
         def program(x):
@@ -60,11 +60,11 @@ class TestIrVarLeaves:
 
         ir = af.trace(program)("seed")
 
-        assert ir_var_leaves(ir.out_ir_tree) == [ir.out_ir_tree[1]["value"]]
+        assert var_leaves(ir.out_ir_tree) == [ir.out_ir_tree[1]["value"]]
 
 
 class TestIrVarProducers:
-    def test_maps_each_output_ir_var_to_its_producer(self):
+    def test_maps_each_output_var_to_its_producer(self):
         def program(x):
             left = af.concat(x, "1")
             right = af.concat(left, "2")
@@ -74,27 +74,27 @@ class TestIrVarProducers:
         first_eqn, second_eqn = ir.eqns
         left, right = ir.out_ir_tree
 
-        assert ir_var_producers(ir) == {left: first_eqn, right: second_eqn}
+        assert var_producers(ir) == {left: first_eqn, right: second_eqn}
 
-    def test_includes_all_ir_vars_from_tree_outputs(self):
+    def test_includes_all_vars_from_tree_outputs(self):
         def program(x):
             pair = af.concat(x, "!")
             return {"value": pair, "original": x}
 
         ir = af.trace(program)("seed")
-        producers = ir_var_producers(ir)
+        producers = var_producers(ir)
         produced = ir.out_ir_tree["value"]
 
         assert producers == {produced: ir.eqns[0]}
 
-    def test_errors_if_same_ir_var_is_produced_twice(self):
+    def test_errors_if_same_var_is_produced_twice(self):
         shared = af.core.Var.fresh(aval=af.core.StrAVal())
         eqn_a = af.core.Eqn(af.core.Prim("a"), (), shared, {})
         eqn_b = af.core.Eqn(af.core.Prim("b"), (), shared, {})
         ir = af.core.IR([eqn_a, eqn_b], in_ir_tree=(), out_ir_tree=shared)
 
         with pytest.raises(AssertionError):
-            ir_var_producers(ir)
+            var_producers(ir)
 
 
 class TestIrEqnDependencyGraph:
@@ -199,7 +199,7 @@ class TestIrLiveness:
 
         assert ir_liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
 
-    def test_static_inputs_do_not_become_live_ir_vars(self):
+    def test_static_inputs_do_not_become_live_vars(self):
         def program(prefix, name):
             return af.format("{} {}", prefix, name)
 

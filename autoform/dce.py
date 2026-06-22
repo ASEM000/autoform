@@ -78,11 +78,11 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         user_out_used = out_used
 
     live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
-    active_ir_vars: set[core.Var] = set(live_boundaries[-1])
+    active_vars: set[core.Var] = set(live_boundaries[-1])
     active_eqns: deque[core.Eqn] = deque()
 
     def is_active_node(node) -> bool:
-        return core.is_irvar(node) and (node in active_ir_vars)
+        return core.is_irvar(node) and (node in active_vars)
 
     for eqn in reversed(ir.eqns):
         is_non_dce = eqn.prim in non_dce_primitives
@@ -95,18 +95,18 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
 
         if is_non_dce:
             active_eqns.appendleft(new_eqn)
-            active_ir_vars |= set(analysis.ir_var_leaves(eqn.in_ir_tree))
+            active_vars |= set(analysis.var_leaves(eqn.in_ir_tree))
 
         elif utils.tree.any(in_used):
             active_eqns.appendleft(new_eqn)
-            active_ir_vars |= set(analysis.ir_var_leaves(utils.mask(eqn.in_ir_tree, in_used)))
+            active_vars |= set(analysis.var_leaves(utils.mask(eqn.in_ir_tree, in_used)))
 
     # NOTE(asem): output sanitization step
     # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
     # so after DCE removes equations, `out_ir_tree` may contain Vars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
-    in_vars = set(analysis.ir_var_leaves(ir.in_ir_tree))
+    in_vars = set(analysis.var_leaves(ir.in_ir_tree))
     defined_vars: set[core.Var] = set(in_vars)
     for kept in active_eqns:
         for atom in utils.tree.leaves(kept.out_ir_tree):
