@@ -554,7 +554,7 @@ def batch_while_loop(
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
-    # only IRVar positions are batched; literal positions stay scalar
+    # only Var positions are batched; literal positions stay scalar
     out_batched = utils.tree.map(core.is_irvar, body_ir.out_ir_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)

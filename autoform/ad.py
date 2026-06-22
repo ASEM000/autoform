@@ -218,12 +218,12 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
     def make_p(atom):
         if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 
     def make_t(atom):
         if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return zeroof(atom)
 
     p_in_ir = utils.tree.map(make_p, ir.in_ir_tree)
@@ -498,18 +498,18 @@ class PullbackBwdBox:
 def transpose_walk(ir: core.IR, c_out: Tree, /):
     # NOTE(asem): walk the IR in reverse accumulating cotangents in an environment.
     # used for pullback backward pass.
-    c_env: defaultdict[core.IRVar, list[Any]] = defaultdict(list)
+    c_env: defaultdict[core.Var, list[Any]] = defaultdict(list)
 
     def write_c(atom, value: Any):
         # NOTE(asem): cotangent contributions are collected by appending them to the
-        # same IRVar entry in `c_env`. accumulation happens when that IRVar is read.
+        # same Var entry in `c_env`. accumulation happens when that Var is read.
         # for example:
         # >>> def f(x): return x + x
         # >>> ir = af.trace(f)("...")
         # >>> out, (dx,) = af.pullback(ir).call(("...",), "df")
         # the trace contains `concat(x, x)`. during transpose, the concat pullback
         # returns one cotangent for each concat input. since both inputs are the same
-        # IRVar `x`, `c_env[x]` receives two cotangents: ["df", "df"].
+        # Var `x`, `c_env[x]` receives two cotangents: ["df", "df"].
         # `read_c(x)` then calls `cot_acc`, which combines them using
         # the registered `StrAVal` accumulator.
         core.is_irvar(atom) and c_env[atom].append(value)
@@ -588,12 +588,12 @@ def pullback(ir: core.IR, /) -> core.IR:
 
     def make_p(atom):
         if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 
     def make_c(atom):
         if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return zeroof(atom)
 
     p_in_ir = utils.tree.map(make_p, ir.in_ir_tree)

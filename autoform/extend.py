@@ -46,7 +46,7 @@ Zero = ad.Zero
 Interpreter = core.Interpreter
 IR = core.IR
 Eqn = core.Eqn
-IRVar = core.IRVar
+Var = core.Var
 
 # ==================================================================================================
 # RULE REGISTRIES
@@ -111,7 +111,7 @@ __all__ = [
     "Interpreter",
     "IR",
     "Eqn",
-    "IRVar",
+    "Var",
     "register_trace_type",
     "register_zero",
     "register_cotangent_accumulator",

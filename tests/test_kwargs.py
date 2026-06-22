@@ -75,7 +75,7 @@ class TestKwargsBuildIR:
         assert eqn.prim == greet_p
         match eqn.in_ir_tree:
             case (name, {"greeting": greeting, "punctuation": punctuation}):
-                assert isinstance(name, af.core.IRVar)
+                assert isinstance(name, af.core.Var)
                 assert greeting == "Hi"
                 assert punctuation == "?"
             case _:

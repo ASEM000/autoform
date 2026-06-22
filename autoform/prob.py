@@ -151,13 +151,13 @@ def weighted(ir: core.IR, /) -> core.IR:
 
     def make_out(atom):
         if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
         return atom
 
     in_ir_tree = ir.in_ir_tree
     out_ir_tree = (
         utils.tree.map(make_out, ir.out_ir_tree),
-        core.IRVar.fresh(aval=core.FloatAVal()),
+        core.Var.fresh(aval=core.FloatAVal()),
     )
     eqn = core.Eqn(weighted_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
     return core.IR([eqn], in_ir_tree, out_ir_tree)

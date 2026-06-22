@@ -22,7 +22,7 @@
 ```{eval-rst}
 .. autoclass:: autoform.extend.IR
 .. autoclass:: autoform.extend.Eqn
-.. autoclass:: autoform.extend.IRVar
+.. autoclass:: autoform.extend.Var
 ```
 
 ## Interpreters

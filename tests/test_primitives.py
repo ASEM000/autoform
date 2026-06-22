@@ -104,9 +104,9 @@ class TestPrimitive:
         assert af.core.pull_bwd_rules.get(p) is pb_bwd_rule
 
 
-class TestIRVar:
+class TestVar:
     def test_ir_var_aval_returns_aval(self):
-        ir_var = af.core.IRVar(aval=af.core.StrAVal())
+        ir_var = af.core.Var(aval=af.core.StrAVal())
 
         assert af.core.is_irvar(ir_var)
         assert isinstance(ir_var.aval, af.core.AVal)
@@ -114,7 +114,7 @@ class TestIRVar:
 
     def test_len_on_trace_box_has_informative_error(self):
         tracer = af.core.TraceInterpreter()
-        ir_var = af.core.IRVar(aval=af.core.StrAVal())
+        ir_var = af.core.Var(aval=af.core.StrAVal())
         traced = tracer.box(ir_var)
 
         with pytest.raises(
@@ -254,8 +254,8 @@ class TestLMPrimitive:
 
         assert eqn.prim.name == "lm_call"
         assert eqn.params == {"roles": ["user"]}
-        assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[0][0], af.core.Var)
+        assert isinstance(eqn.in_ir_tree[1], af.core.Var)
 
     def test_lm_call_only_traces_messages_and_model(self):
         def program(prompt: str, model: str):
@@ -266,8 +266,8 @@ class TestLMPrimitive:
 
         assert eqn.params == {"roles": ["user"]}
         assert len(eqn.in_ir_tree) == 2
-        assert isinstance(eqn.in_ir_tree[0][0], af.core.IRVar)
-        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[0][0], af.core.Var)
+        assert isinstance(eqn.in_ir_tree[1], af.core.Var)
 
     def test_lm_call_leaves_litellm_params_to_active_client(self):
         class ConfiguredRouter:
@@ -352,7 +352,7 @@ class TestInterpreter:
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
+            af.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
             assert len(tracer.eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
@@ -360,7 +360,7 @@ class TestInterpreter:
     def test_tracing_interpreter_creates_eqns(self):
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
-            af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
+            af.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
         assert len(tracer.eqns) == 1
 
 
@@ -568,7 +568,7 @@ class TestTransformWrapperAvals:
                 self.tag = tag
 
         aval = TaggedAVal("pf")
-        var = af.core.IRVar(aval=aval)
+        var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
         pf_ir = af.pushforward(ir)
@@ -588,7 +588,7 @@ class TestTransformWrapperAvals:
                 self.tag = tag
 
         aval = TaggedAVal("pb")
-        var = af.core.IRVar(aval=aval)
+        var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
         pb_ir = af.pullback(ir)
@@ -726,7 +726,7 @@ class TestCotangentHelpers:
 class TestLiteralZeroing:
     def test_pushforward_zeros_literal_input_tangent(self):
         lit = "constant"
-        var = af.core.IRVar(aval=af.core.StrAVal())
+        var = af.core.Var(aval=af.core.StrAVal())
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)
@@ -738,7 +738,7 @@ class TestLiteralZeroing:
 
         assert af.ad.is_zero(t_lit)
         assert t_lit.aval == af.core.StrAVal()
-        assert isinstance(t_var, af.core.IRVar)
+        assert isinstance(t_var, af.core.Var)
 
     def test_pushforward_zeros_literal_output_tangent(self):
         def f(x):
@@ -755,7 +755,7 @@ class TestLiteralZeroing:
         t_out_var, t_out_lit = tangent_out
 
         assert af.ad.is_zero(t_out_lit)
-        assert isinstance(t_out_var, af.core.IRVar)
+        assert isinstance(t_out_var, af.core.Var)
 
     def test_pullback_zeros_literal_output_cotangent(self):
         def f(x):
@@ -771,7 +771,7 @@ class TestLiteralZeroing:
 
     def test_pullback_zeros_literal_input_cotangent(self):
         lit = "constant_input"
-        var = af.core.IRVar(aval=af.core.StrAVal())
+        var = af.core.Var(aval=af.core.StrAVal())
         in_tree = (lit, var)
         out_tree = (var,)
         ir = af.core.IR([], in_tree, out_tree)

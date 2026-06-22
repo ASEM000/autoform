@@ -23,22 +23,22 @@ import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]
-type LiveSet = set[core.IRVar]
+type LiveSet = set[core.Var]
 type Liveness = list[LiveSet]
 
 __all__ = ["ir_var_leaves", "ir_var_producers", "eqn_graph", "ir_liveness"]
 
 
-def ir_var_leaves(ir_tree: Tree, /) -> list[core.IRVar]:
-    """Return IRVars from an IR tree in leaf order."""
+def ir_var_leaves(ir_tree: Tree, /) -> list[core.Var]:
+    """Return Vars from an IR tree in leaf order."""
 
-    return [cast(core.IRVar, x) for x in utils.tree.leaves(ir_tree) if core.is_irvar(x)]
+    return [cast(core.Var, x) for x in utils.tree.leaves(ir_tree) if core.is_irvar(x)]
 
 
-def ir_var_producers(ir: core.IR, /) -> dict[core.IRVar, core.Eqn]:
-    """Return the top-level producer equation for each IRVar defined by ``ir``."""
+def ir_var_producers(ir: core.IR, /) -> dict[core.Var, core.Eqn]:
+    """Return the top-level producer equation for each Var defined by ``ir``."""
 
-    producers: dict[core.IRVar, core.Eqn] = {}
+    producers: dict[core.Var, core.Eqn] = {}
     for eqn in ir.eqns:
         for ir_var in ir_var_leaves(eqn.out_ir_tree):
             assert producers.get(ir_var) is None
@@ -62,9 +62,9 @@ def eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
 
 
 def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness:
-    """Return live IRVars at each IR boundary."""
+    """Return live Vars at each IR boundary."""
 
-    # NOTE(asem): liveness is a backward dataflow analysis that computes IRVars live
+    # NOTE(asem): liveness is a backward dataflow analysis that computes Vars live
     # at each boundary. The result length is len(ir.eqns) + 1: the first item is
     # the live input boundary, and the last item is the selected output boundary.
 
@@ -73,7 +73,7 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
     else:
         assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
         assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_ir_tree)
-        # NOTE(asem): with a partial output mask, only the selected output IRVars are live.
+        # NOTE(asem): with a partial output mask, only the selected output Vars are live.
         # >>> def program(x):
         # ...     a = af.concat(x, "!")
         # ...     b = af.concat(x, "?")
@@ -86,9 +86,9 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
     liveness[-1] = live_after
 
     for i, eqn in reversed(tuple(enumerate(ir.eqns))):
-        # NOTE(asem): move in reversed order of equation list starting from the output IRVars
-        # with each step up the live before is basically all the live IRVars used + live after
-        # without the IRVars defined by the current equation.
+        # NOTE(asem): move in reversed order of equation list starting from the output Vars
+        # with each step up the live before is basically all the live Vars used + live after
+        # without the Vars defined by the current equation.
         uses: LiveSet = set(ir_var_leaves(eqn.in_ir_tree))
         defs: LiveSet = set(ir_var_leaves(eqn.out_ir_tree))
         live_before = uses | (live_after - defs)

@@ -61,7 +61,7 @@ class TestBuildIR:
             ir = af.trace(program)(traced)
             assert isinstance(ir.in_ir_tree, tuple)
             assert len(ir.in_ir_tree) == 1
-            assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
+            assert isinstance(ir.in_ir_tree[0], af.core.Var)
             assert ir.in_ir_tree[0].aval == aval
             assert ir.call(runtime) == expected
 
@@ -103,7 +103,7 @@ class TestBuildIR:
         assert ir.in_ir_tree[0].aval == BlobAVal(3)
 
     def test_irvar_has_aval_but_is_not_traceable(self):
-        var = af.core.IRVar(aval=af.core.StrAVal())
+        var = af.core.Var(aval=af.core.StrAVal())
         assert af.core.avalof(var) == af.core.StrAVal()
         assert not af.core.is_traceable(var)
 
@@ -125,12 +125,12 @@ class TestBuildIR:
         assert len(ir.eqns) == 1
         assert isinstance(ir.in_ir_tree, tuple)
         assert len(ir.in_ir_tree) == 1
-        assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
+        assert isinstance(ir.in_ir_tree[0], af.core.Var)
         eqn = ir.eqns[0]
         assert len(eqn.in_ir_tree) == 2
         lit_candidate = eqn.in_ir_tree[0]
         assert lit_candidate == "Hello, "
-        assert isinstance(eqn.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(eqn.in_ir_tree[1], af.core.Var)
 
     def test_format_traces_template_and_args(self):
         def program(x):
@@ -143,7 +143,7 @@ class TestBuildIR:
         assert len(args) == 1
         assert len(kwargs_values) == 0
         assert eqn.params["template"] == "Hello, {}!"
-        assert isinstance(args[0], af.core.IRVar)
+        assert isinstance(args[0], af.core.Var)
         assert ir.call("x0") == "Hello, x0!"
 
     def test_tracing_unhashable_literal_leaf_errors(self):
@@ -195,7 +195,7 @@ class TestBuildIR:
         ir = af.trace(program)("test")
         assert isinstance(ir.in_ir_tree, tuple)
         assert len(ir.in_ir_tree) == 1
-        assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
+        assert isinstance(ir.in_ir_tree[0], af.core.Var)
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
@@ -214,7 +214,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
         assert ir.in_ir_tree[0] == "Hello"
-        assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(ir.in_ir_tree[1], af.core.Var)
         assert ir.call("Hello", "x0") == "Hello x0"
 
     def test_static_input_mismatch_errors_before_execution(self):
@@ -252,7 +252,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))(True, "World")
 
         assert ir.in_ir_tree[0] is True
-        assert isinstance(ir.in_ir_tree[1], af.core.IRVar)
+        assert isinstance(ir.in_ir_tree[1], af.core.Var)
         assert ir.call(True, "x0") == "Hello x0"
 
 

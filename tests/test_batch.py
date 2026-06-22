@@ -179,7 +179,7 @@ class TestBatchIRStructure:
                 self.tag = tag
 
         aval = TaggedAVal("input")
-        var = af.core.IRVar(aval=aval)
+        var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
         batched_ir = af.batch(ir)
@@ -195,7 +195,7 @@ class TestBatchIRStructure:
                 self.tag = tag
 
         aval = TaggedAVal("input")
-        var = af.core.IRVar(aval=aval)
+        var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
         batched_ir = af.batch(ir, in_axes=False)
@@ -210,7 +210,7 @@ class TestBatchIRStructure:
         ir = af.trace(f)("x")
         batched_ir = af.batch(ir)
 
-        assert isinstance(batched_ir.out_ir_tree, af.core.IRVar)
+        assert isinstance(batched_ir.out_ir_tree, af.core.Var)
         assert batched_ir.out_ir_tree.aval == BatchAVal(af.core.StrAVal())
         assert batched_ir.call(["a", "b"]) == ["c", "c"]
 

@@ -121,13 +121,13 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
     def make_in(atom, is_batched: bool):
         if not core.is_irvar(atom):
             return atom
-        return core.IRVar.fresh(aval=maybe_batched(atom.aval, is_batched), source=atom)
+        return core.Var.fresh(aval=maybe_batched(atom.aval, is_batched), source=atom)
 
     def make_out(atom):
         if core.is_irvar(atom):
-            return core.IRVar.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
+            return core.Var.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
-            return core.IRVar.fresh(aval=maybe_batched(core.avalof(atom), True))
+            return core.Var.fresh(aval=maybe_batched(core.avalof(atom), True))
         return atom
 
     v_in_ir = utils.tree.map(make_in, ir.in_ir_tree, b_in)

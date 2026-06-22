@@ -45,8 +45,8 @@ not part of the everyday user surface.
 | --- | --- |
 | Boxing | The internal technique interpreters use to wrap values with transform-specific metadata. Users normally see the result only through public transforms. |
 | `Eqn` | One recorded primitive application in an IR. |
-| `IRVar` | A typed placeholder for a runtime value inside an IR. |
+| `Var` | A typed placeholder for a runtime value inside an IR. |
 | `Prim` | A named primitive operation used as the dispatch key for execution and transform rules. |
-| `TraceBox` | The internal wrapper used by the trace interpreter to carry an `IRVar` through Python code. |
+| `TraceBox` | The internal wrapper used by the trace interpreter to carry an `Var` through Python code. |
 | Tracer | The trace-time interpreter machinery that records primitive calls instead of executing them normally. |
 | `walk` | The manual IR stepping interface used by execution internals and advanced debugging code. See [Walk](../concepts/walk.md). |

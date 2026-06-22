@@ -78,7 +78,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         user_out_used = out_used
 
     live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
-    active_ir_vars: set[core.IRVar] = set(live_boundaries[-1])
+    active_ir_vars: set[core.Var] = set(live_boundaries[-1])
     active_eqns: deque[core.Eqn] = deque()
 
     def is_active_node(node) -> bool:
@@ -103,11 +103,11 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
 
     # NOTE(asem): output sanitization step
     # `call(ir)` always reads `ir.out_ir_tree`, even if a caller provided an `out_used` mask.
-    # so after DCE removes equations, `out_ir_tree` may contain IRVars that are no longer
+    # so after DCE removes equations, `out_ir_tree` may contain Vars that are no longer
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
     in_vars = set(analysis.ir_var_leaves(ir.in_ir_tree))
-    defined_vars: set[core.IRVar] = set(in_vars)
+    defined_vars: set[core.Var] = set(in_vars)
     for kept in active_eqns:
         for atom in utils.tree.leaves(kept.out_ir_tree):
             core.is_irvar(atom) and defined_vars.add(atom)
@@ -123,7 +123,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
             # >>> def program(x):
             # ...     y = af.concat(x, "!")
             # ...     return y
-            # y's IRVar is in `defined_vars` and stays as-is.
+            # y's Var is in `defined_vars` and stays as-is.
             return atom
         if not used:
             # NOTE(asem): unused-but-dangling output slot (typically from partial `out_used`).
@@ -137,7 +137,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
             return None
         # NOTE(asem): this should be unreachable for well-behaved primitives/rules.
         assert False, (
-            "DCE produced an invalid IR: a used output IRVar is not defined by inputs or kept equations. "
+            "DCE produced an invalid IR: a used output Var is not defined by inputs or kept equations. "
             "This typically indicates inconsistent `out_used` or a bug in a DCE rule for a primitive."
         )
 

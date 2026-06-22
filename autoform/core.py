@@ -43,7 +43,7 @@ __all__ = [
     "is_traceable",
     "avalof",
     # ir vals
-    "IRVar",
+    "Var",
     "is_irvar",
     "ir_aval",
     # primitive
@@ -241,10 +241,10 @@ def avalof(x, /) -> AVal:
 
 # NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
 # Concrete literals are kept as plain Python values in IR trees.
-class IRVar:
+class Var:
     """Symbolic variable stored in IR trees.
 
-    ``IRVar`` leaves stand for runtime values inside traced programs. Each
+    ``Var`` leaves stand for runtime values inside traced programs. Each
     variable carries an :class:`AVal` describing its abstract value, and an
     optional source variable used by transforms that create rewritten IR.
 
@@ -257,7 +257,7 @@ class IRVar:
     counter: ClassVar[it.count[int]] = it.count(0)
     lock: ClassVar[RLock] = RLock()
 
-    def __init__(self, /, *, aval: AVal, source: IRVar | None = None):
+    def __init__(self, /, *, aval: AVal, source: Var | None = None):
         self.id = next(self.counter)
         assert is_irvar(source) or source is None
         assert is_aval(aval)
@@ -265,7 +265,7 @@ class IRVar:
         self.aval = aval
 
     @classmethod
-    def fresh(cls, *, aval: AVal, source: IRVar | None = None) -> Self:
+    def fresh(cls, *, aval: AVal, source: Var | None = None) -> Self:
         with cls.lock:
             return cls(source=source, aval=aval)
 
@@ -274,10 +274,10 @@ class IRVar:
         return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
 
 
-def is_irvar(x) -> TypeGuard[IRVar]:
-    """Return ``True`` if input is an :class:`IRVar`."""
+def is_irvar(x) -> TypeGuard[Var]:
+    """Return ``True`` if input is an :class:`Var`."""
 
-    return isinstance(x, IRVar)
+    return isinstance(x, Var)
 
 
 def ir_aval(x, /):
@@ -291,7 +291,7 @@ def ir_aval(x, /):
     return x.aval if is_irvar(x) else x
 
 
-aval_rules[IRVar] = lambda ir_var: ir_var.aval
+aval_rules[Var] = lambda ir_var: ir_var.aval
 
 # ==================================================================================================
 # PRIMITIVE
@@ -711,7 +711,7 @@ trace_matmul_rules: dict[type[AVal], TraceRule] = {}
 class TraceBox:
     __slots__ = ["owner", "ir_var"]
 
-    def __init__(self, /, *, owner: TraceInterpreter, ir_var: IRVar):
+    def __init__(self, /, *, owner: TraceInterpreter, ir_var: Var):
         assert isinstance(owner, TraceInterpreter)
         assert is_irvar(ir_var)
         self.owner = owner
@@ -901,7 +901,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             # NOTE(asem): abstract rules return `AVal`/ python leaves.
             # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
-            return IRVar.fresh(aval=x) if is_aval(x) else x
+            return Var.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
         self.eqns.append(Eqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
@@ -951,10 +951,10 @@ def trace[*A, R](
             return x
         return to_ir_var(x)
 
-    def to_ir_var(x, /) -> IRVar:
+    def to_ir_var(x, /) -> Var:
         assert not is_irvar(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return IRVar.fresh(aval=avalof(x))
+        return Var.fresh(aval=avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
@@ -986,7 +986,7 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
 
     def func(*args: *A) -> Generator[GenStep, Tree, None]:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        env: dict[IRVar, Any] = {}
+        env: dict[Var, Any] = {}
 
         def read(ir_val) -> Any:
             return env[ir_val] if is_irvar(ir_val) else ir_val

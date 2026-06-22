@@ -170,8 +170,8 @@ class TestIRMatch:
                 assert len(eqns) == 1
                 assert isinstance(in_tree, tuple)
                 assert len(in_tree) == 1
-                assert isinstance(in_tree[0], af.core.IRVar)
-                assert isinstance(out_tree, af.core.IRVar)
+                assert isinstance(in_tree[0], af.core.Var)
+                assert isinstance(out_tree, af.core.Var)
             case _:
                 assert False, "Pattern should match"
 
