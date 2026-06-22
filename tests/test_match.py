@@ -21,7 +21,7 @@ class TestEqnMatch:
             return af.concat("Hello, ", x)
 
         ir = af.trace(func)("world")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         match eqn:
             case af.core.Eqn(prim=p) if p == af.string.concat_p:
@@ -36,7 +36,7 @@ class TestEqnMatch:
             return af.checkpoint(x, key="x", collection="step1")
 
         ir = af.trace(func)("test")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         match eqn.params:
             case {"key": key, "collection": collection}:
@@ -51,7 +51,7 @@ class TestEqnMatch:
             return af.format("Value: {}", x)
 
         ir = af.trace(func)("test")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         match eqn:
             case af.core.Eqn(prim=prim, in_ir_tree=in_tree, out_ir_tree=out_tree, params=params):
@@ -68,7 +68,7 @@ class TestEqnMatch:
         ir = af.trace(func)("test")
 
         tags_found = []
-        for eqn in ir.ir_eqns:
+        for eqn in ir.eqns:
             match eqn.params:
                 case {"key": _, "collection": collection}:
                     tags_found.append(collection)
@@ -83,7 +83,7 @@ class TestEqnMatch:
         ir = af.trace(func)("test")
 
         new_eqns = []
-        for eqn in ir.ir_eqns:
+        for eqn in ir.eqns:
             match eqn.params:
                 case {"key": _, "collection": "old_tag"}:
                     new_eqns.append(eqn.using(collection="new_tag"))
@@ -91,12 +91,12 @@ class TestEqnMatch:
                     new_eqns.append(eqn)
 
         new_ir = af.core.IR(
-            ir_eqns=new_eqns,
+            eqns=new_eqns,
             in_ir_tree=ir.in_ir_tree,
             out_ir_tree=ir.out_ir_tree,
         )
 
-        assert new_ir.ir_eqns[0].params["collection"] == "new_tag"
+        assert new_ir.eqns[0].params["collection"] == "new_tag"
 
         result = new_ir.call("hello")
         assert result == "hello!"
@@ -108,7 +108,7 @@ class TestEqnWithParams:
             return af.checkpoint(x, key="x", collection="old")
 
         ir = af.trace(func)("test")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         new_eqn = eqn.using(collection="new")
 
@@ -123,7 +123,7 @@ class TestEqnWithParams:
             return af.checkpoint(x, key="x", collection="test")
 
         ir = af.trace(func)("test")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         new_eqn = eqn.using(collection="changed")
 
@@ -139,10 +139,10 @@ class TestInsertAfterPattern:
             return af.concat(a, "!")
 
         ir = af.trace(func)("test")
-        assert len(ir.ir_eqns) == 2
+        assert len(ir.eqns) == 2
 
         new_eqns = []
-        for eqn in ir.ir_eqns:
+        for eqn in ir.eqns:
             new_eqns.append(eqn)
             match eqn.params:
                 case {"key": _, "collection": "insert_here"}:
@@ -150,15 +150,15 @@ class TestInsertAfterPattern:
                     new_eqns.append(inserted)
 
         new_ir = af.core.IR(
-            ir_eqns=new_eqns,
+            eqns=new_eqns,
             in_ir_tree=ir.in_ir_tree,
             out_ir_tree=ir.out_ir_tree,
         )
 
-        assert len(new_ir.ir_eqns) == 3
-        assert new_ir.ir_eqns[0].params["collection"] == "insert_here"
-        assert new_ir.ir_eqns[1].params["collection"] == "inserted"
-        assert new_ir.ir_eqns[2].prim == af.string.concat_p
+        assert len(new_ir.eqns) == 3
+        assert new_ir.eqns[0].params["collection"] == "insert_here"
+        assert new_ir.eqns[1].params["collection"] == "inserted"
+        assert new_ir.eqns[2].prim == af.string.concat_p
 
 
 class TestIRMatch:
@@ -166,7 +166,7 @@ class TestIRMatch:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(ir_eqns=eqns, in_ir_tree=in_tree, out_ir_tree=out_tree):
+            case af.core.IR(eqns=eqns, in_ir_tree=in_tree, out_ir_tree=out_tree):
                 assert len(eqns) == 1
                 assert isinstance(in_tree, tuple)
                 assert len(in_tree) == 1
@@ -180,7 +180,7 @@ class TestIRMatch:
 
         match ir:
             case af.core.IR(
-                ir_eqns=[
+                eqns=[
                     af.core.Eqn(
                         prim=prim,
                         in_ir_tree=in_tree,
@@ -203,7 +203,7 @@ class TestIRMatch:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(ir_eqns=[af.core.Eqn(prim=p1), af.core.Eqn(prim=p2)]):
+            case af.core.IR(eqns=[af.core.Eqn(prim=p1), af.core.Eqn(prim=p2)]):
                 assert p1.name == "format"
                 assert p2.name == "concat"
             case _:
@@ -213,7 +213,7 @@ class TestIRMatch:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(ir_eqns=[af.core.Eqn(prim=af.core.Prim(name=name))]):
+            case af.core.IR(eqns=[af.core.Eqn(prim=af.core.Prim(name=name))]):
                 assert name == "concat"
             case _:
                 assert False, "Pattern should match primitive name"
@@ -224,11 +224,11 @@ class TestIRMatch:
 
         match pf_ir:
             case af.core.IR(
-                ir_eqns=[af.core.Eqn(prim=af.core.Prim(name="pushforward_call"), params=params)]
+                eqns=[af.core.Eqn(prim=af.core.Prim(name="pushforward_call"), params=params)]
             ):
                 nested = params["ir"]
                 assert isinstance(nested, af.core.IR)
-                assert len(nested.ir_eqns) == 1
+                assert len(nested.eqns) == 1
             case _:
                 assert False, "Pattern should match pushforward_call"
 
@@ -244,7 +244,7 @@ class TestIRMatch:
         ir = af.trace(program)("a", "test")
 
         match ir:
-            case af.core.IR(ir_eqns=[af.core.Eqn(prim=af.core.Prim(name="switch"), params=params)]):
+            case af.core.IR(eqns=[af.core.Eqn(prim=af.core.Prim(name="switch"), params=params)]):
                 branch_dict = params["branches"]
                 assert "a" in branch_dict
                 assert "b" in branch_dict
@@ -256,9 +256,9 @@ class TestIRMatch:
         ir = af.trace(lambda x: af.concat("a", x))("b")
 
         match ir:
-            case af.core.IR(ir_eqns=eqns) if len(eqns) == 1:
+            case af.core.IR(eqns=eqns) if len(eqns) == 1:
                 single_eqn = True
-            case af.core.IR(ir_eqns=eqns) if len(eqns) > 1:
+            case af.core.IR(eqns=eqns) if len(eqns) > 1:
                 single_eqn = False
             case _:
                 single_eqn = None
@@ -273,7 +273,7 @@ class TestIRMatch:
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(ir_eqns=eqns) if all(e.prim.name in {"format", "concat"} for e in eqns):
+            case af.core.IR(eqns=eqns) if all(e.prim.name in {"format", "concat"} for e in eqns):
                 all_expected = True
             case _:
                 all_expected = False

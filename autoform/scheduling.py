@@ -181,10 +181,10 @@ core.batch_rules.set(gather_p, batch_gather)
 core.batch_rules.aset(gather_p, abatch_gather)
 
 
-def dce_gather(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    irs = ir_eqn.params["irs"]
+def dce_gather(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    irs = eqn.params["irs"]
     new_irs = [dce.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
-    new_eqn = ir_eqn.using(irs=new_irs)
+    new_eqn = eqn.using(irs=new_irs)
     return dce.default_dce(new_eqn, out_used)
 
 
@@ -212,7 +212,7 @@ def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
     # 3. topological sort into levels using kahn's algorithm
 
     # NOTE(asem): step 1/2: build adjacency list (parent -> children) from ir_var flow
-    adjacency_list = analysis.ir_eqn_graph(ir)
+    adjacency_list = analysis.eqn_graph(ir)
     in_degree = defaultdict(lambda: 0)
     for children in adjacency_list.values():
         for child in children:
@@ -220,7 +220,7 @@ def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
 
     # NOTE(asem): step 3: kahn's algorithm
     # basically prune nodes with 0 indegree then update the children indegree
-    queue = deque(ir_eqn for ir_eqn in ir.ir_eqns if in_degree[ir_eqn] == 0)
+    queue = deque(eqn for eqn in ir.eqns if in_degree[eqn] == 0)
     levels = []
 
     while queue:
@@ -356,23 +356,23 @@ def sched[*A, R](
         >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
     levels: list[list[core.Eqn]] = toposort_levels(ir)
-    out_ir_eqns: list[core.Eqn] = []
+    out_eqns: list[core.Eqn] = []
     cond = (lambda _: True) if cond is None else cond
 
     def recurse(leaf):
         return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
 
-    def make_gather(ir_eqns: list[core.Eqn]) -> core.Eqn:
-        irs = [core.IR([ir_eqn], (ir_eqn.in_ir_tree,), ir_eqn.out_ir_tree) for ir_eqn in ir_eqns]
-        in_ir_tree = [(ir_eqn.in_ir_tree,) for ir_eqn in ir_eqns]
-        out_ir_tree = [ir_eqn.out_ir_tree for ir_eqn in ir_eqns]
+    def make_gather(eqns: list[core.Eqn]) -> core.Eqn:
+        irs = [core.IR([eqn], (eqn.in_ir_tree,), eqn.out_ir_tree) for eqn in eqns]
+        in_ir_tree = [(eqn.in_ir_tree,) for eqn in eqns]
+        out_ir_tree = [eqn.out_ir_tree for eqn in eqns]
         return core.Eqn(gather_p, in_ir_tree, out_ir_tree, dict(irs=irs))
 
     for level in levels:
-        ir_eqns = [ir_eqn.using(**utils.tree.map(recurse, ir_eqn.params)) for ir_eqn in level]
-        seq_ir_eqns = [ir_eqn for ir_eqn in ir_eqns if not cond(ir_eqn)]
-        par_ir_eqns = [ir_eqn for ir_eqn in ir_eqns if cond(ir_eqn)]
-        out_ir_eqns.extend([make_gather(par_ir_eqns)] if len(par_ir_eqns) > 1 else par_ir_eqns)
-        out_ir_eqns.extend(seq_ir_eqns)
+        eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
+        seq_eqns = [eqn for eqn in eqns if not cond(eqn)]
+        par_eqns = [eqn for eqn in eqns if cond(eqn)]
+        out_eqns.extend([make_gather(par_eqns)] if len(par_eqns) > 1 else par_eqns)
+        out_eqns.extend(seq_eqns)
 
-    return core.IR(out_ir_eqns, ir.in_ir_tree, ir.out_ir_tree)
+    return core.IR(out_eqns, ir.in_ir_tree, ir.out_ir_tree)

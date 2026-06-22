@@ -351,9 +351,9 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
         ...         with af.tag("inner"):
         ...             return af.concat(head, "?")
         >>> ir = af.trace(program)("seed")
-        >>> ir.ir_eqns[0].tags == frozenset({"outer"})
+        >>> ir.eqns[0].tags == frozenset({"outer"})
         True
-        >>> ir.ir_eqns[1].tags == frozenset({"outer", "inner"})
+        >>> ir.eqns[1].tags == frozenset({"outer", "inner"})
         True
     """
 
@@ -429,18 +429,18 @@ class IR[*A, R]:
     rewrite or wrap a program.
 
     Args:
-        ir_eqns: Ordered primitive equations.
+        eqns: Ordered primitive equations.
         in_ir_tree: Tree describing the runtime input structure.
         out_ir_tree: Tree describing the runtime output structure.
     """
 
-    __slots__ = ["ir_eqns", "in_ir_tree", "out_ir_tree"]
+    __slots__ = ["eqns", "in_ir_tree", "out_ir_tree"]
 
-    def __init__(self, ir_eqns: list[Eqn], in_ir_tree: Tree, out_ir_tree: Tree):
-        assert isinstance(ir_eqns, list)
-        ir_eqns = tuple(ir_eqns)
-        assert all(isinstance(ir_eqn, Eqn) for ir_eqn in ir_eqns)
-        self.ir_eqns = ir_eqns
+    def __init__(self, eqns: list[Eqn], in_ir_tree: Tree, out_ir_tree: Tree):
+        assert isinstance(eqns, list)
+        eqns = tuple(eqns)
+        assert all(isinstance(eqn, Eqn) for eqn in eqns)
+        self.eqns = eqns
         self.in_ir_tree = in_ir_tree
         self.out_ir_tree = out_ir_tree
 
@@ -485,9 +485,9 @@ class IR[*A, R]:
     def walk(self, *args: *A) -> Generator[tuple[Eqn | None, Tree], Tree, None]:
         """Step through this IR one equation at a time.
 
-        Manual control over IR execution. Start with `next(gen)` to receive `(ir_eqn, in_values)`,
-        compute or override the equation output, using `ir_eqn.bind(in_values, **ir_eqn.params)`
-        for synchronous execution or `await ir_eqn.abind(in_values, **ir_eqn.params)` for async
+        Manual control over IR execution. Start with `next(gen)` to receive `(eqn, in_values)`,
+        compute or override the equation output, using `eqn.bind(in_values, **eqn.params)`
+        for synchronous execution or `await eqn.abind(in_values, **eqn.params)` for async
         execution, and send that output back with `gen.send(...)`. After the last equation,
         the generator yields `(None, out_tree)`.
 
@@ -498,14 +498,14 @@ class IR[*A, R]:
             ...     return af.format("[{}]", punctuated)
             >>> ir = af.trace(wrap)("x")
             >>> gen = ir.walk("y")
-            >>> ir_eqn, in_values = next(gen)
-            >>> ir_eqn.prim.name
+            >>> eqn, in_values = next(gen)
+            >>> eqn.prim.name
             'concat'
-            >>> step = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
-            >>> ir_eqn, in_values = step
-            >>> ir_eqn.prim.name
+            >>> step = gen.send(eqn.bind(in_values, **eqn.params))
+            >>> eqn, in_values = step
+            >>> eqn.prim.name
             'format'
-            >>> done, out = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+            >>> done, out = gen.send(eqn.bind(in_values, **eqn.params))
             >>> done is None, out
             (True, '[y!]')
         """
@@ -528,7 +528,7 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
                 sub_code = generate_text_code(val, indent, expand_ir=True)
                 return f"<IR:{{\n{sub_code}\n}}>"
             else:
-                prim_names = ",".join(e.prim.name for e in val.ir_eqns)
+                prim_names = ",".join(e.prim.name for e in val.eqns)
                 if len(prim_names) > 20:
                     prim_names = prim_names[:17] + "..."
                 return f"<IR:[{prim_names}]>"
@@ -548,15 +548,15 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
     header = f"func({in_sig}) -> ({out_sig}) {{"
     lines = [header]
 
-    for ir_eqn in ir.ir_eqns:
-        lhs = format_tree(ir_eqn.out_ir_tree)
-        rhs = format_tree(ir_eqn.in_ir_tree)
+    for eqn in ir.eqns:
+        lhs = format_tree(eqn.out_ir_tree)
+        rhs = format_tree(eqn.in_ir_tree)
         eqn_args = [rhs]
-        eqn_args.extend(f"{k}={ir_eqn.params[k]!r}" for k in (ir_eqn.params or {}))
-        if ir_eqn.tags:
-            tags = ", ".join(sorted(repr(tag) for tag in ir_eqn.tags))
+        eqn_args.extend(f"{k}={eqn.params[k]!r}" for k in (eqn.params or {}))
+        if eqn.tags:
+            tags = ", ".join(sorted(repr(tag) for tag in eqn.tags))
             eqn_args.append(f"tags={{{tags}}}")
-        lines.append(f"{sp}({lhs}) = {ir_eqn.prim.name}({', '.join(eqn_args)})")
+        lines.append(f"{sp}({lhs}) = {eqn.prim.name}({', '.join(eqn_args)})")
 
     lines.append("}")
     return "\n".join(lines)
@@ -656,7 +656,7 @@ def fold() -> Generator[None, None, None]:
         ...         prefix = af.concat("hello", " ")
         ...     return af.concat(prefix, x)
         >>> ir = af.trace(program)("seed")
-        >>> len(ir.ir_eqns)
+        >>> len(ir.eqns)
         1
         >>> ir.call("world")
         'hello world'
@@ -828,10 +828,10 @@ def assert_foldable(prim: Prim, value: Tree) -> None:
 
 
 class TraceInterpreter(BoxedInterpreter[TraceBox]):
-    __slots__ = ["ir_eqns"]
+    __slots__ = ["eqns"]
 
     def __init__(self):
-        self.ir_eqns: list[Eqn] = []
+        self.eqns: list[Eqn] = []
 
     def box(self, value, /) -> Tree:
         return utils.tree.map(lambda v: TraceBox(owner=self, ir_var=v) if is_irvar(v) else v, value)
@@ -904,7 +904,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             return IRVar.fresh(aval=x) if is_aval(x) else x
 
         out_ir_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
-        self.ir_eqns.append(Eqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
+        self.eqns.append(Eqn(prim, in_ir_tree, out_ir_tree, params, active_tags.get()))
         return self.box(out_ir_tree)
 
 
@@ -964,7 +964,7 @@ def trace[*A, R](
         with using_interpreter(TraceInterpreter()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_ir_tree)))
         out_ir_tree = tracer.unbox(out_trace_tree)
-        return IR(ir_eqns=tracer.ir_eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
+        return IR(eqns=tracer.eqns, in_ir_tree=in_ir_tree, out_ir_tree=out_ir_tree)
 
     return wrapper
 
@@ -1003,10 +1003,10 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
         utils.tree.map(check_input, ir.in_ir_tree, args)
         utils.tree.map(write, ir.in_ir_tree, args)
 
-        for ir_eqn in ir.ir_eqns:
-            in_values = utils.tree.map(read, ir_eqn.in_ir_tree)
-            out_values = yield ir_eqn, in_values
-            utils.tree.map(write, ir_eqn.out_ir_tree, out_values)
+        for eqn in ir.eqns:
+            in_values = utils.tree.map(read, eqn.in_ir_tree)
+            out_values = yield eqn, in_values
+            utils.tree.map(write, eqn.out_ir_tree, out_values)
 
         yield None, utils.tree.map(read, ir.out_ir_tree)
 
@@ -1023,9 +1023,9 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
-        ir_eqn, in_values = next(gen := walk(ir)(*args))
-        while ir_eqn:
-            ir_eqn, in_values = gen.send(ir_eqn.bind(in_values, **ir_eqn.params))
+        eqn, in_values = next(gen := walk(ir)(*args))
+        while eqn:
+            eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
         return in_values
 
     return func
@@ -1036,9 +1036,9 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
-        ir_eqn, in_values = next(gen := walk(ir)(*args))
-        while ir_eqn:
-            ir_eqn, in_values = gen.send(await ir_eqn.abind(in_values, **ir_eqn.params))
+        eqn, in_values = next(gen := walk(ir)(*args))
+        while eqn:
+            eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
         return in_values
 
     return func

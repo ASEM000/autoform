@@ -18,8 +18,8 @@ def program(text: str) -> str:
 
 
 ir = af.trace(program)("seed")
-assert draft in ir.ir_eqns[0].tags
-assert draft not in ir.ir_eqns[1].tags
+assert draft in ir.eqns[0].tags
+assert draft not in ir.eqns[1].tags
 ```
 
 Nested tag blocks accumulate tags. Code outside the block does not receive the tags from the block.
@@ -29,7 +29,7 @@ Nested tag blocks accumulate tags. Code outside the block does not receive the t
 {py:func}`sched <autoform.sched>` accepts a `cond` callback that receives each IR equation. Tags give that callback a stable way to select only part of a traced program.
 
 ```python
-scheduled = af.sched(ir, cond=lambda ir_eqn: draft in ir_eqn.tags)
+scheduled = af.sched(ir, cond=lambda eqn: draft in eqn.tags)
 assert scheduled.call("world") == "[world!]"
 ```
 
@@ -41,13 +41,13 @@ assert scheduled.call("world") == "[world!]"
 def run_and_record_tagged_prims(ir, text: str):
     tagged_prims = []
     gen = ir.walk(text)
-    ir_eqn, in_values = next(gen)
+    eqn, in_values = next(gen)
 
-    while ir_eqn is not None:
-        if draft in ir_eqn.tags:
-            tagged_prims.append(ir_eqn.prim.name)
-        out_values = ir_eqn.bind(in_values, **ir_eqn.params)
-        ir_eqn, in_values = gen.send(out_values)
+    while eqn is not None:
+        if draft in eqn.tags:
+            tagged_prims.append(eqn.prim.name)
+        out_values = eqn.bind(in_values, **eqn.params)
+        eqn, in_values = gen.send(out_values)
 
     return in_values, tagged_prims
 

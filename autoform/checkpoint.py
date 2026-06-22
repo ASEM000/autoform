@@ -281,7 +281,7 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
         ...         normalized = af.checkpoint(normalized, key="normalized", collection="cache")
         ...     return af.concat(normalized, "!")
         >>> ir = af.trace(program)("test")
-        >>> [ir_eqn.prim.name for ir_eqn in ir.ir_eqns]
+        >>> [eqn.prim.name for eqn in ir.eqns]
         ['format', 'concat']
         >>> ir.call("alpha")
         'cached item!'

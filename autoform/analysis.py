@@ -26,7 +26,7 @@ type UsedTree = Tree[bool]
 type LiveSet = set[core.IRVar]
 type Liveness = list[LiveSet]
 
-__all__ = ["ir_var_leaves", "ir_var_producers", "ir_eqn_graph", "ir_liveness"]
+__all__ = ["ir_var_leaves", "ir_var_producers", "eqn_graph", "ir_liveness"]
 
 
 def ir_var_leaves(ir_tree: Tree, /) -> list[core.IRVar]:
@@ -39,23 +39,23 @@ def ir_var_producers(ir: core.IR, /) -> dict[core.IRVar, core.Eqn]:
     """Return the top-level producer equation for each IRVar defined by ``ir``."""
 
     producers: dict[core.IRVar, core.Eqn] = {}
-    for ir_eqn in ir.ir_eqns:
-        for ir_var in ir_var_leaves(ir_eqn.out_ir_tree):
+    for eqn in ir.eqns:
+        for ir_var in ir_var_leaves(eqn.out_ir_tree):
             assert producers.get(ir_var) is None
-            producers[ir_var] = ir_eqn
+            producers[ir_var] = eqn
     return producers
 
 
-def ir_eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
+def eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
     """Return top-level equation dependencies as parent -> children adjacency."""
 
     ir_var_to_parent = ir_var_producers(ir)
-    adjacency_list: dict[core.Eqn, list[core.Eqn]] = {ir_eqn: [] for ir_eqn in ir.ir_eqns}
-    for ir_eqn in ir.ir_eqns:
+    adjacency_list: dict[core.Eqn, list[core.Eqn]] = {eqn: [] for eqn in ir.eqns}
+    for eqn in ir.eqns:
         seen_parents: set[core.Eqn] = set()
-        for in_ir_var in ir_var_leaves(ir_eqn.in_ir_tree):
+        for in_ir_var in ir_var_leaves(eqn.in_ir_tree):
             if (p := ir_var_to_parent.get(in_ir_var)) is not None and p not in seen_parents:
-                adjacency_list[p].append(ir_eqn)
+                adjacency_list[p].append(eqn)
                 seen_parents.add(p)
 
     return adjacency_list
@@ -65,7 +65,7 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
     """Return live IRVars at each IR boundary."""
 
     # NOTE(asem): liveness is a backward dataflow analysis that computes IRVars live
-    # at each boundary. The result length is len(ir.ir_eqns) + 1: the first item is
+    # at each boundary. The result length is len(ir.eqns) + 1: the first item is
     # the live input boundary, and the last item is the selected output boundary.
 
     if out_used is None:
@@ -82,15 +82,15 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
         # {a}
         live_after = set(ir_var_leaves(utils.mask(ir.out_ir_tree, out_used)))
 
-    liveness: Liveness = [set() for _ in range(len(ir.ir_eqns) + 1)]
+    liveness: Liveness = [set() for _ in range(len(ir.eqns) + 1)]
     liveness[-1] = live_after
 
-    for i, ir_eqn in reversed(tuple(enumerate(ir.ir_eqns))):
+    for i, eqn in reversed(tuple(enumerate(ir.eqns))):
         # NOTE(asem): move in reversed order of equation list starting from the output IRVars
         # with each step up the live before is basically all the live IRVars used + live after
         # without the IRVars defined by the current equation.
-        uses: LiveSet = set(ir_var_leaves(ir_eqn.in_ir_tree))
-        defs: LiveSet = set(ir_var_leaves(ir_eqn.out_ir_tree))
+        uses: LiveSet = set(ir_var_leaves(eqn.in_ir_tree))
+        defs: LiveSet = set(ir_var_leaves(eqn.out_ir_tree))
         live_before = uses | (live_after - defs)
         liveness[i] = live_before
         live_after = live_before

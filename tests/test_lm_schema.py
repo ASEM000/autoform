@@ -134,15 +134,15 @@ def test_lm_schema_call_traces_schema_as_static_param():
         return af.format("{}", result["text"])
 
     ir = af.trace(program)("test", "gpt-5.5")
-    assert [eqn.prim.name for eqn in ir.ir_eqns] == ["lm_schema_call", "format"]
+    assert [eqn.prim.name for eqn in ir.eqns] == ["lm_schema_call", "format"]
     assert (
-        make_json_schema_and_parser(ir.ir_eqns[0].params["schema"])[0]
+        make_json_schema_and_parser(ir.eqns[0].params["schema"])[0]
         == make_json_schema_and_parser(answer)[0]
     )
-    assert "model" not in ir.ir_eqns[0].params
-    assert isinstance(ir.ir_eqns[0].in_ir_tree[1], af.core.IRVar)
-    assert isinstance(ir.ir_eqns[0].out_ir_tree["text"], af.core.IRVar)
-    assert isinstance(ir.ir_eqns[0].out_ir_tree["score"], af.core.IRVar)
+    assert "model" not in ir.eqns[0].params
+    assert isinstance(ir.eqns[0].in_ir_tree[1], af.core.IRVar)
+    assert isinstance(ir.eqns[0].out_ir_tree["text"], af.core.IRVar)
+    assert isinstance(ir.eqns[0].out_ir_tree["score"], af.core.IRVar)
 
     with af.lm_client(SchemaRouter()):
         assert ir.call("hello", "m1") == "m1|hello"

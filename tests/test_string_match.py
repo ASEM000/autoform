@@ -51,8 +51,8 @@ class TestMatchTraced:
 
         ir = trace(check)("dummy")
 
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim is af.string.match_p
         assert ir.call("yes") is True
         assert ir.call("no") is False
 
@@ -62,8 +62,8 @@ class TestMatchTraced:
 
         ir = trace(check)("dummy")
 
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim is af.string.match_p
         assert ir.call("yes") is True
         assert ir.call("no") is False
 
@@ -73,8 +73,8 @@ class TestMatchTraced:
 
         ir = trace(check)("a", "b")
 
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim is af.string.match_p
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim is af.string.match_p
         assert ir.call("same", "same") is True
         assert ir.call("same", "other") is False
 

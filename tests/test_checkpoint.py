@@ -41,10 +41,10 @@ class TestSow:
             return af.checkpoint(x, key="my_name", collection="my_tag")
 
         ir = af.trace(func)("test")
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "checkpoint"
-        assert ir.ir_eqns[0].params["collection"] == "my_tag"
-        assert ir.ir_eqns[0].params["key"] == "my_name"
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim.name == "checkpoint"
+        assert ir.eqns[0].params["collection"] == "my_tag"
+        assert ir.eqns[0].params["key"] == "my_name"
 
     def test_run_ir(self):
         def func(x):
@@ -295,16 +295,16 @@ class TestInjectAndDCE:
 
         ir = af.trace(program)("test")
 
-        assert len(ir.ir_eqns) == 3
+        assert len(ir.eqns) == 3
 
         def wrapped(x):
             with af.inject(collection="cache", values={"result": ["CACHED"]}):
                 return ir.call("ignored")
 
         traced_ir = af.trace(wrapped)("example")
-        assert len(traced_ir.ir_eqns) == 2
+        assert len(traced_ir.eqns) == 2
 
-        last_eqn = traced_ir.ir_eqns[-1]
+        last_eqn = traced_ir.eqns[-1]
         assert last_eqn.prim.name == "concat"
 
     def test_dce_removes_dead_code_after_inject(self):
@@ -320,9 +320,9 @@ class TestInjectAndDCE:
                 return ir.call("ignored")
 
         traced_ir = af.trace(wrapped)("example")
-        assert len(traced_ir.ir_eqns) == 2
+        assert len(traced_ir.eqns) == 2
         optimized_ir = af.dce(traced_ir)
-        assert len(optimized_ir.ir_eqns) == 1
+        assert len(optimized_ir.eqns) == 1
 
         result = optimized_ir.call("any_input")
         assert result == "Got: CACHED"
@@ -336,7 +336,7 @@ class TestInjectAndDCE:
             return af.concat("final:", saved2)
 
         ir = af.trace(program)("test")
-        assert len(ir.ir_eqns) == 5
+        assert len(ir.eqns) == 5
 
         def wrapped(x):
             with af.inject(collection="cache", values={"first": ["CACHED1"]}):
@@ -448,7 +448,7 @@ class TestMemoizeWithCheckpoints:
 
         ir = af.trace(func)("test")
 
-        checkpoint_eqns = [eqn for eqn in ir.ir_eqns if eqn.prim.name == "checkpoint"]
+        checkpoint_eqns = [eqn for eqn in ir.eqns if eqn.prim.name == "checkpoint"]
         assert len(checkpoint_eqns) == 2
         assert checkpoint_eqns[0].params["key"] == "first"
         assert checkpoint_eqns[1].params["key"] == "second"

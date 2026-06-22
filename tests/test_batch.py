@@ -152,8 +152,8 @@ class TestBatchIRStructure:
 
         ir = af.trace(f)("hello")
         batched_ir = af.batch(ir)
-        assert len(batched_ir.ir_eqns) == 1
-        assert batched_ir.ir_eqns[0].prim.name == "batch_call"
+        assert len(batched_ir.eqns) == 1
+        assert batched_ir.eqns[0].prim.name == "batch_call"
 
     def test_has_in_axes_param(self):
         def f(x):
@@ -161,7 +161,7 @@ class TestBatchIRStructure:
 
         ir = af.trace(f)("hello")
         batched_ir = af.batch(ir, in_axes=True)
-        assert "in_axes" in batched_ir.ir_eqns[0].params
+        assert "in_axes" in batched_ir.eqns[0].params
 
     def test_has_sub_ir_param(self):
         def f(x):
@@ -169,7 +169,7 @@ class TestBatchIRStructure:
 
         ir = af.trace(f)("hello")
         batched_ir = af.batch(ir)
-        assert "ir" in batched_ir.ir_eqns[0].params
+        assert "ir" in batched_ir.eqns[0].params
 
     def test_batch_wrapper_rewrites_batched_aval(self):
         class TaggedAVal(af.core.AVal):

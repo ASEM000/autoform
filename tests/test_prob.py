@@ -55,9 +55,9 @@ class TestFactor:
 
         ir = af.trace(program)("x", 1.0)
 
-        assert [eqn.prim.name for eqn in ir.ir_eqns] == ["factor", "concat"]
-        assert ir.ir_eqns[0].params["name"] == "score"
-        assert ir.ir_eqns[0].out_ir_tree == ()
+        assert [eqn.prim.name for eqn in ir.eqns] == ["factor", "concat"]
+        assert ir.eqns[0].params["name"] == "score"
+        assert ir.eqns[0].out_ir_tree == ()
         assert ir.call("hello", 0.5) == "hello!"
 
     def test_factor_rejects_negative_weight_in_normal_execution(self):
@@ -95,7 +95,7 @@ class TestFactor:
 
         dced = af.dce(af.trace(program)("x", 1.0))
 
-        assert [eqn.prim.name for eqn in dced.ir_eqns] == ["factor", "concat"]
+        assert [eqn.prim.name for eqn in dced.eqns] == ["factor", "concat"]
 
 
 class TestWeighted:
@@ -109,8 +109,8 @@ class TestWeighted:
 
         output, weight = weighted_ir.call("hello", 0.5)
 
-        assert len(weighted_ir.ir_eqns) == 1
-        assert weighted_ir.ir_eqns[0].prim is af.prob.weighted_call_p
+        assert len(weighted_ir.eqns) == 1
+        assert weighted_ir.eqns[0].prim is af.prob.weighted_call_p
         assert output == "hello!"
         assert weight == 0.5
 
@@ -311,6 +311,6 @@ class TestWeighted:
 
         weighted_ir = af.weighted(af.trace(program)("x", 1.0))
         dced = af.dce(weighted_ir, out_used=(False, True))
-        inner_ir = dced.ir_eqns[0].params["ir"]
+        inner_ir = dced.eqns[0].params["ir"]
 
-        assert [eqn.prim.name for eqn in inner_ir.ir_eqns] == ["factor"]
+        assert [eqn.prim.name for eqn in inner_ir.eqns] == ["factor"]

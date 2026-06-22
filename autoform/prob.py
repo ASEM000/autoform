@@ -159,8 +159,8 @@ def weighted(ir: core.IR, /) -> core.IR:
         utils.tree.map(make_out, ir.out_ir_tree),
         core.IRVar.fresh(aval=core.FloatAVal()),
     )
-    ir_eqn = core.Eqn(weighted_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
-    return core.IR([ir_eqn], in_ir_tree, out_ir_tree)
+    eqn = core.Eqn(weighted_call_p, in_ir_tree, out_ir_tree, dict(ir=ir))
+    return core.IR([eqn], in_ir_tree, out_ir_tree)
 
 
 def impl_weighted_call(in_tree, /, *, ir: core.IR):
@@ -234,9 +234,9 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
     return out_ib, out_batched
 
 
-def dce_weighted_call(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_weighted_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
     output_used, _ = out_used
-    new_eqn = ir_eqn.using(ir=dce.dce(ir_eqn.params["ir"], out_used=output_used))
+    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=output_used))
     return dce.default_dce(new_eqn, out_used)
 
 

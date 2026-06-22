@@ -122,11 +122,11 @@ class TestBuildIR:
             return af.concat("Hello, ", name)
 
         ir = af.trace(program)("x0")
-        assert len(ir.ir_eqns) == 1
+        assert len(ir.eqns) == 1
         assert isinstance(ir.in_ir_tree, tuple)
         assert len(ir.in_ir_tree) == 1
         assert isinstance(ir.in_ir_tree[0], af.core.IRVar)
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
         assert len(eqn.in_ir_tree) == 2
         lit_candidate = eqn.in_ir_tree[0]
         assert lit_candidate == "Hello, "
@@ -137,8 +137,8 @@ class TestBuildIR:
             return af.format("Hello, {}!", x)
 
         ir = af.trace(program)("World")
-        assert len(ir.ir_eqns) == 1
-        eqn = ir.ir_eqns[0]
+        assert len(ir.eqns) == 1
+        eqn = ir.eqns[0]
         args, kwargs_values = eqn.in_ir_tree
         assert len(args) == 1
         assert len(kwargs_values) == 0
@@ -165,7 +165,7 @@ class TestBuildIR:
             return af.format("{} {}", parts, x)
 
         ir = af.trace(program)("x")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
         args, kwargs_values = eqn.in_ir_tree
 
         assert args[0] == ["a", "b"]
@@ -186,7 +186,7 @@ class TestBuildIR:
             return b
 
         ir = af.trace(program)("A", "B")
-        assert len(ir.ir_eqns) == 2
+        assert len(ir.eqns) == 2
 
     def test_single_input_tree_structure(self):
         def program(x):
@@ -271,9 +271,9 @@ class TestTags:
 
         ir = af.trace(program)("seed")
 
-        assert ir.ir_eqns[0].tags == frozenset()
-        assert ir.ir_eqns[1].tags == frozenset({Label("planner")})
-        assert ir.ir_eqns[2].tags == frozenset({
+        assert ir.eqns[0].tags == frozenset()
+        assert ir.eqns[1].tags == frozenset({Label("planner")})
+        assert ir.eqns[2].tags == frozenset({
             Label("planner"),
             Label("draft"),
             CostTag(),
@@ -340,7 +340,7 @@ class TestTags:
         with af.tag(Label("runtime")):
             assert ir.call("hello") == "cost,draft,runtime|hello"
 
-        assert ir.ir_eqns[0].tags == frozenset({Label("draft"), Label("cost")})
+        assert ir.eqns[0].tags == frozenset({Label("draft"), Label("cost")})
 
     def test_using_preserves_tags(self):
         def program(x):
@@ -348,7 +348,7 @@ class TestTags:
                 return af.concat(x, "!")
 
         ir = af.trace(program)("seed")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         new_eqn = eqn.using(collection="debug")
 
@@ -379,7 +379,7 @@ class TestTags:
 
         outer_ir = af.trace(outer_program)("seed")
 
-        assert outer_ir.ir_eqns[0].tags == frozenset({Label("inner"), Label("outer")})
+        assert outer_ir.eqns[0].tags == frozenset({Label("inner"), Label("outer")})
 
 
 class TestRunIR:
@@ -390,8 +390,8 @@ class TestRunIR:
         ir = af.trace(program)("hello")
         gen = ir.walk("world")
 
-        ir_eqn, in_values = next(gen)
-        assert ir_eqn.prim.name == "concat"
+        eqn, in_values = next(gen)
+        assert eqn.prim.name == "concat"
         assert in_values == ("world", "!")
 
         done, out = gen.send("world!")
@@ -405,10 +405,10 @@ class TestRunIR:
         ir = af.trace(program)("hello")
         gen = ir.walk("world")
 
-        ir_eqn, in_values = next(gen)
-        assert ir_eqn.prim.name == "concat"
+        eqn, in_values = next(gen)
+        assert eqn.prim.name == "concat"
         assert in_values == ("world", "!")
-        out_values = ir_eqn.bind(("there", "!"), **ir_eqn.params)
+        out_values = eqn.bind(("there", "!"), **eqn.params)
 
         done, out = gen.send(out_values)
         assert done is None

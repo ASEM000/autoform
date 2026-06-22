@@ -262,10 +262,10 @@ core.batch_rules.set(switch_p, batch_switch)
 core.batch_rules.aset(switch_p, abatch_switch)
 
 
-def dce_switch(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    branches: Branches = ir_eqn.params["branches"]
+def dce_switch(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    branches: Branches = eqn.params["branches"]
     branches = {k: dce.dce(branches[k], out_used=out_used) for k in branches}
-    new_eqn = ir_eqn.using(branches=branches)
+    new_eqn = eqn.using(branches=branches)
     return dce.default_dce(new_eqn, out_used)
 
 
@@ -630,15 +630,15 @@ core.batch_rules.set(while_loop_p, batch_while_loop)
 core.batch_rules.aset(while_loop_p, abatch_while_loop)
 
 
-def dce_while_loop(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    cond_ir = ir_eqn.params["cond_ir"]
-    body_ir = ir_eqn.params["body_ir"]
+def dce_while_loop(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    cond_ir = eqn.params["cond_ir"]
+    body_ir = eqn.params["body_ir"]
     # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
     # even if the caller only uses part of the final state.
     state_used = utils.tree.map(lambda _: True, body_ir.out_ir_tree)
     cond_ir = dce.dce(cond_ir)
     body_ir = dce.dce(body_ir, out_used=state_used)
-    new_eqn = ir_eqn.using(cond_ir=cond_ir, body_ir=body_ir)
+    new_eqn = eqn.using(cond_ir=cond_ir, body_ir=body_ir)
     return dce.default_dce(new_eqn, out_used)
 
 
@@ -819,28 +819,28 @@ def pullback_bwd_fixpoint(
 
     with core.using_interpreter(fwd):
 
-        def custom_bind(ir_eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
-            boxed_out, residuals = ir_eqn.bind(boxed_in, **ir_eqn.params)
-            res[ir_eqn] = residuals
+        def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+            boxed_out, residuals = eqn.bind(boxed_in, **eqn.params)
+            res[eqn] = residuals
             return boxed_out
 
-        ir_eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
-        while ir_eqn:
-            ir_eqn, boxed_in = gen.send(custom_bind(ir_eqn, boxed_in))
+        eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
+        while eqn:
+            eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
 
     def transpose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
         with core.using_interpreter(bwd):
 
-            def custom_bind(ir_eqn: core.Eqn, c_out: Tree, /) -> Tree:
-                residuals = res[ir_eqn]
+            def custom_bind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
+                residuals = res[eqn]
                 boxed_c_out = bwd.box(c_out)
-                boxed_c_in = ir_eqn.bind((residuals, boxed_c_out), **ir_eqn.params)
+                boxed_c_in = eqn.bind((residuals, boxed_c_out), **eqn.params)
                 return bwd.unbox(boxed_c_in)
 
-            ir_eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
-            while ir_eqn:
-                ir_eqn, c_out = gen.send(custom_bind(ir_eqn, c_out))
+            eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
+            while eqn:
+                eqn, c_out = gen.send(custom_bind(eqn, c_out))
         return c_out
 
     # g is the output cotangent at x*.  transpose_eq(u) returns cotangents for (x*, theta).
@@ -882,28 +882,28 @@ async def apull_bwd_fixpoint(
 
     with core.using_interpreter(fwd):
 
-        async def custom_abind(ir_eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
-            boxed_out, residuals = await ir_eqn.abind(boxed_in, **ir_eqn.params)
-            res[ir_eqn] = residuals
+        async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+            boxed_out, residuals = await eqn.abind(boxed_in, **eqn.params)
+            res[eqn] = residuals
             return boxed_out
 
-        ir_eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
-        while ir_eqn:
-            ir_eqn, boxed_in = gen.send(await custom_abind(ir_eqn, boxed_in))
+        eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
+        while eqn:
+            eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
         with core.using_interpreter(bwd):
 
-            async def custom_abind(ir_eqn: core.Eqn, c_out: Tree, /) -> Tree:
-                residuals = res[ir_eqn]
+            async def custom_abind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
+                residuals = res[eqn]
                 boxed_c_out = bwd.box(c_out)
-                boxed_c_in = await ir_eqn.abind((residuals, boxed_c_out), **ir_eqn.params)
+                boxed_c_in = await eqn.abind((residuals, boxed_c_out), **eqn.params)
                 return bwd.unbox(boxed_c_in)
 
-            ir_eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
-            while ir_eqn:
-                ir_eqn, c_out = gen.send(await custom_abind(ir_eqn, c_out))
+            eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
+            while eqn:
+                eqn, c_out = gen.send(await custom_abind(eqn, c_out))
         return c_out
 
     # g is the output cotangent at x*.  atranspose_eq(u) returns cotangents for (x*, theta).
@@ -1063,15 +1063,15 @@ core.batch_rules.set(fixpoint_p, batch_fixpoint)
 core.batch_rules.aset(fixpoint_p, abatch_fixpoint)
 
 
-def dce_fixpoint(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    step_ir = ir_eqn.params["step_ir"]
-    equiv_ir = ir_eqn.params["equiv_ir"]
+def dce_fixpoint(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    step_ir = eqn.params["step_ir"]
+    equiv_ir = eqn.params["equiv_ir"]
     # NOTE(asem): every state leaf is loop-carried into the next step, even if
     # the caller only uses part of the final state.
     state_used = utils.tree.map(lambda _: True, step_ir.out_ir_tree)
     equiv_ir = None if equiv_ir is None else dce.dce(equiv_ir)
     step_ir = dce.dce(step_ir, out_used=state_used)
-    new_eqn = ir_eqn.using(step_ir=step_ir, equiv_ir=equiv_ir)
+    new_eqn = eqn.using(step_ir=step_ir, equiv_ir=equiv_ir)
     return dce.default_dce(new_eqn, out_used)
 
 

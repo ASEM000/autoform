@@ -70,8 +70,8 @@ class TestKwargsBuildIR:
             return greet(name, greeting="Hi", punctuation="?")
 
         ir = af.trace(program)("World")
-        assert len(ir.ir_eqns) == 1
-        eqn = ir.ir_eqns[0]
+        assert len(ir.eqns) == 1
+        eqn = ir.eqns[0]
         assert eqn.prim == greet_p
         match eqn.in_ir_tree:
             case (name, {"greeting": greeting, "punctuation": punctuation}):

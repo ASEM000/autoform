@@ -212,15 +212,15 @@ def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
     with core.using_interpreter(batcher):
 
-        def custom_bind(ir_eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
-            boxed_out = ir_eqn.bind(boxed_in, **ir_eqn.params)
+        def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+            boxed_out = eqn.bind(boxed_in, **eqn.params)
             v_out, b_out = batcher.unbox(boxed_out)
-            b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
+            b_out = assert_trees(b_out, eqn.out_ir_tree, eqn.prim.name)
             return batcher.box((v_out, b_out))
 
-        ir_eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
-        while ir_eqn:
-            ir_eqn, boxed_in = gen.send(custom_bind(ir_eqn, boxed_in))
+        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        while eqn:
+            eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
 
     v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
@@ -239,15 +239,15 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> T
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
     with core.using_interpreter(batcher):
 
-        async def custom_abind(ir_eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
-            boxed_out = await ir_eqn.abind(boxed_in, **ir_eqn.params)
+        async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+            boxed_out = await eqn.abind(boxed_in, **eqn.params)
             v_out, b_out = batcher.unbox(boxed_out)
-            b_out = assert_trees(b_out, ir_eqn.out_ir_tree, ir_eqn.prim.name)
+            b_out = assert_trees(b_out, eqn.out_ir_tree, eqn.prim.name)
             return batcher.box((v_out, b_out))
 
-        ir_eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
-        while ir_eqn:
-            ir_eqn, boxed_in = gen.send(await custom_abind(ir_eqn, boxed_in))
+        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        while eqn:
+            eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
 
     v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
@@ -357,8 +357,8 @@ core.batch_rules.set(batch_call_p, batch_batch_call)
 core.batch_rules.aset(batch_call_p, abatch_batch_call)
 
 
-def dce_batch_call(ir_eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    new_eqn = ir_eqn.using(ir=dce.dce(ir_eqn.params["ir"], out_used=out_used))
+def dce_batch_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=out_used))
     return dce.default_dce(new_eqn, out_used)
 
 

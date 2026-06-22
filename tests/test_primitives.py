@@ -142,8 +142,8 @@ class TestFormatPrimitive:
             return af.format("Value: {}", x)
 
         ir = af.trace(func)("test")
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "format"
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim.name == "format"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_format_ir_async(self):
@@ -173,8 +173,8 @@ class TestConcatPrimitive:
             return af.concat(x, y)
 
         ir = af.trace(func)("a", "b")
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "concat"
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim.name == "concat"
 
     def test_traced_string_add_lowers_to_concat(self):
         def func(x):
@@ -182,8 +182,8 @@ class TestConcatPrimitive:
 
         ir = af.trace(func)("a")
 
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim is af.string.concat_p
         assert ir.call("hello") == "hello!"
 
     def test_traced_string_radd_lowers_to_concat(self):
@@ -192,8 +192,8 @@ class TestConcatPrimitive:
 
         ir = af.trace(func)("a")
 
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim is af.string.concat_p
         assert ir.call("world") == "Hello, world"
 
     def test_traced_string_add_both_args_lowers_to_concat(self):
@@ -202,8 +202,8 @@ class TestConcatPrimitive:
 
         ir = af.trace(func)("a", "b")
 
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim is af.string.concat_p
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim is af.string.concat_p
         assert ir.call("left", "right") == "leftright"
 
     def test_traced_string_add_unsupported_operand_raises_concat_error(self):
@@ -250,7 +250,7 @@ class TestLMPrimitive:
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         assert eqn.prim.name == "lm_call"
         assert eqn.params == {"roles": ["user"]}
@@ -262,7 +262,7 @@ class TestLMPrimitive:
             return af.lm_call([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
-        eqn = ir.ir_eqns[0]
+        eqn = ir.eqns[0]
 
         assert eqn.params == {"roles": ["user"]}
         assert len(eqn.in_ir_tree) == 2
@@ -338,7 +338,7 @@ class TestBind:
             return p.bind(x, multiplier=3)
 
         ir = af.trace(func)("A")
-        assert ir.ir_eqns[0].params["multiplier"] == 3
+        assert ir.eqns[0].params["multiplier"] == 3
         result = ir.call("B")
         assert result == "BBB"
 
@@ -353,15 +353,15 @@ class TestInterpreter:
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
             af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
-            assert len(tracer.ir_eqns) == 1
+            assert len(tracer.eqns) == 1
         result = af.concat("a", "b")
         assert result == "ab"
 
-    def test_tracing_interpreter_creates_ir_eqns(self):
+    def test_tracing_interpreter_creates_eqns(self):
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
             af.format("Hello, {}!", af.core.IRVar.fresh(aval=af.core.StrAVal()))
-        assert len(tracer.ir_eqns) == 1
+        assert len(tracer.eqns) == 1
 
 
 class TestStopGradient:
@@ -374,8 +374,8 @@ class TestStopGradient:
             return af.stop_gradient(x)
 
         ir = af.trace(func)("test")
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "stop_gradient"
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim.name == "stop_gradient"
 
     def test_run_ir(self):
         def func(x):
@@ -474,8 +474,8 @@ class TestRunIRInline:
 
         outer_ir = af.trace(outer)("X")
 
-        assert len(outer_ir.ir_eqns) == 1
-        assert outer_ir.ir_eqns[0].prim.name == "format"
+        assert len(outer_ir.eqns) == 1
+        assert outer_ir.eqns[0].prim.name == "format"
 
     def test_run_ir_inline_executes_correctly(self):
         """Inlined run_ir produces correct output."""
@@ -502,7 +502,7 @@ class TestRunIRInline:
             return inner_ir.call(x)
 
         outer_ir = af.trace(outer)("X")
-        assert len(outer_ir.ir_eqns) == 2
+        assert len(outer_ir.eqns) == 2
         result = outer_ir.call("hello")
         assert result == "[hello!]"
 
@@ -516,7 +516,7 @@ class TestRunIRInline:
             return ir2.call(r1)
 
         outer_ir = af.trace(outer)("X")
-        assert len(outer_ir.ir_eqns) == 2
+        assert len(outer_ir.eqns) == 2
         result = outer_ir.call("start")
         assert result == "start12"
 

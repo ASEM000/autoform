@@ -28,10 +28,10 @@ class TestCheckpointBasics:
             return checkpoint(x, key="my_key", collection="my_col")
 
         ir = af.trace(func)("test")
-        assert len(ir.ir_eqns) == 1
-        assert ir.ir_eqns[0].prim.name == "checkpoint"
-        assert ir.ir_eqns[0].params["key"] == "my_key"
-        assert ir.ir_eqns[0].params["collection"] == "my_col"
+        assert len(ir.eqns) == 1
+        assert ir.eqns[0].prim.name == "checkpoint"
+        assert ir.eqns[0].params["key"] == "my_key"
+        assert ir.eqns[0].params["collection"] == "my_col"
 
 
 class TestCollect:

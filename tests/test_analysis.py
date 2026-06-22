@@ -16,7 +16,7 @@ import pytest
 
 import autoform as af
 from autoform.analysis import (
-    ir_eqn_graph,
+    eqn_graph,
     ir_liveness,
     ir_var_leaves,
     ir_var_producers,
@@ -71,7 +71,7 @@ class TestIrVarProducers:
             return left, right
 
         ir = af.trace(program)("seed")
-        first_eqn, second_eqn = ir.ir_eqns
+        first_eqn, second_eqn = ir.eqns
         left, right = ir.out_ir_tree
 
         assert ir_var_producers(ir) == {left: first_eqn, right: second_eqn}
@@ -85,7 +85,7 @@ class TestIrVarProducers:
         producers = ir_var_producers(ir)
         produced = ir.out_ir_tree["value"]
 
-        assert producers == {produced: ir.ir_eqns[0]}
+        assert producers == {produced: ir.eqns[0]}
 
     def test_errors_if_same_ir_var_is_produced_twice(self):
         shared = af.core.IRVar.fresh(aval=af.core.StrAVal())
@@ -104,7 +104,7 @@ class TestIrEqnDependencyGraph:
 
         ir = af.trace(program)("seed")
 
-        assert ir_eqn_graph(ir) == {}
+        assert eqn_graph(ir) == {}
 
     def test_includes_independent_equations_with_empty_children(self):
         def program(a, b):
@@ -113,9 +113,9 @@ class TestIrEqnDependencyGraph:
             return left, right
 
         ir = af.trace(program)("a", "b")
-        left_eqn, right_eqn = ir.ir_eqns
+        left_eqn, right_eqn = ir.eqns
 
-        assert ir_eqn_graph(ir) == {left_eqn: [], right_eqn: []}
+        assert eqn_graph(ir) == {left_eqn: [], right_eqn: []}
 
     def test_maps_parent_equations_to_children(self):
         def program(x):
@@ -125,9 +125,9 @@ class TestIrEqnDependencyGraph:
             return c
 
         ir = af.trace(program)("seed")
-        a_eqn, b_eqn, c_eqn = ir.ir_eqns
+        a_eqn, b_eqn, c_eqn = ir.eqns
 
-        assert ir_eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: [c_eqn], c_eqn: []}
+        assert eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: [c_eqn], c_eqn: []}
 
     def test_dedupes_repeated_input_dependencies(self):
         def program(x):
@@ -136,9 +136,9 @@ class TestIrEqnDependencyGraph:
             return b
 
         ir = af.trace(program)("seed")
-        a_eqn, b_eqn = ir.ir_eqns
+        a_eqn, b_eqn = ir.eqns
 
-        assert ir_eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: []}
+        assert eqn_graph(ir) == {a_eqn: [b_eqn], b_eqn: []}
 
 
 class TestIrLiveness:
@@ -171,7 +171,7 @@ class TestIrLiveness:
 
         ir = af.trace(program)("seed")
         (x,) = ir.in_ir_tree
-        a, b, c = (ir_eqn.out_ir_tree for ir_eqn in ir.ir_eqns)
+        a, b, c = (eqn.out_ir_tree for eqn in ir.eqns)
 
         assert ir_liveness(ir) == [{x}, {a}, {b}, {c}]
 
@@ -183,7 +183,7 @@ class TestIrLiveness:
 
         ir = af.trace(program)("left", "right")
         a, b = ir.in_ir_tree
-        left, right = (ir_eqn.out_ir_tree for ir_eqn in ir.ir_eqns)
+        left, right = (eqn.out_ir_tree for eqn in ir.eqns)
 
         assert ir_liveness(ir) == [{a, b}, {b, left}, {left, right}]
 
@@ -195,7 +195,7 @@ class TestIrLiveness:
 
         ir = af.trace(program)("seed")
         (x,) = ir.in_ir_tree
-        a, b = (ir_eqn.out_ir_tree for ir_eqn in ir.ir_eqns)
+        a, b = (eqn.out_ir_tree for eqn in ir.eqns)
 
         assert ir_liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
 

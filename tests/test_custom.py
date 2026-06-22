@@ -33,10 +33,10 @@ class TestCustomFunction:
             return af.format("[{}]", x)
 
         ir = af.trace(lambda x: af.concat(bracket(x), "!"))("seed")
-        custom_eqn = ir.ir_eqns[0]
+        custom_eqn = ir.eqns[0]
 
-        assert ir.ir_eqns[0].prim.name.startswith("custom_call_p<bracket-")
-        assert [eqn.prim.name.split("-")[0] for eqn in ir.ir_eqns] == [
+        assert ir.eqns[0].prim.name.startswith("custom_call_p<bracket-")
+        assert [eqn.prim.name.split("-")[0] for eqn in ir.eqns] == [
             "custom_call_p<bracket",
             "concat",
         ]

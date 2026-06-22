@@ -89,8 +89,8 @@ class TestFold:
 
         ir = af.trace(program)("seed")
 
-        assert [eqn.prim.name for eqn in ir.ir_eqns] == ["concat"]
-        assert ir.ir_eqns[0].in_ir_tree[0] == "AB"
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
+        assert ir.eqns[0].in_ir_tree[0] == "AB"
         assert ir.call("C") == "ABC"
 
     def test_fold_block_allows_nested_interpreter_inside_trace(self):
@@ -102,7 +102,7 @@ class TestFold:
 
         ir = af.trace(program)("seed")
 
-        assert [eqn.prim.name for eqn in ir.ir_eqns] == ["concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
         assert ir.call("C") == "ABC"
 
     def test_fold_block_rejects_dynamic_trace_values(self):
@@ -158,8 +158,8 @@ class TestFold:
 
         ir = af.trace(program, static=(True, False))("Q", "seed")
 
-        assert [eqn.prim.name for eqn in ir.ir_eqns] == ["concat"]
-        assert ir.ir_eqns[0].in_ir_tree[0] == "Q: "
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
+        assert ir.eqns[0].in_ir_tree[0] == "Q: "
         assert ir.call("Q", "hello") == "Q: hello"
 
     def test_tracing_resumes_after_static_block(self):
@@ -172,7 +172,7 @@ class TestFold:
 
         ir = af.trace(program)("seed")
 
-        assert [eqn.prim.name for eqn in ir.ir_eqns] == ["concat", "concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "concat"]
         assert ir.call("c") == "[ab]c!"
 
     def test_fold_block_evaluates_lm_call_during_trace(self):
@@ -205,7 +205,7 @@ class TestFold:
             ir = af.trace(program)("seed")
 
         assert client.calls == 1
-        assert [eqn.prim.name for eqn in ir.ir_eqns] == ["format"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["format"]
         assert ir.call("question") == "rubric: question"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -222,7 +222,7 @@ class TestFold:
             result = await async_probe_p.abind("literal")
 
         assert isinstance(result, af.core.TraceBox)
-        assert [eqn.prim.name for eqn in tracer.ir_eqns] == ["async_dynamic_fold_probe"]
+        assert [eqn.prim.name for eqn in tracer.eqns] == ["async_dynamic_fold_probe"]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_async_fold_trace_dispatch_evaluates_primitive(self):
@@ -238,4 +238,4 @@ class TestFold:
                 result = await async_probe_p.abind("literal")
 
         assert result == "literal!"
-        assert tracer.ir_eqns == []
+        assert tracer.eqns == []
