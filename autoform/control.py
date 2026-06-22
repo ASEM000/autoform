@@ -165,7 +165,7 @@ def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     assert type(key) in (str, core.StrAVal), f"`switch` expects string key: {key!r}"
     key0 = next(iter(branches))
     branch0 = branches[key0]
-    return utils.tree.map(core.ir_aval, branch0.out_tree)
+    return utils.tree.map(core.aval_if_var, branch0.out_tree)
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
@@ -372,7 +372,7 @@ def abstract_while_loop(
     max_iters: int,
 ) -> Tree:
     del in_tree, cond_ir, max_iters
-    return utils.tree.map(core.ir_aval, body_ir.out_tree)
+    return utils.tree.map(core.aval_if_var, body_ir.out_tree)
 
 
 def pullback_fwd_while_loop(
@@ -761,7 +761,7 @@ def abstract_fixpoint(
     equiv_ir: core.IR | None,
 ) -> Tree:
     del in_tree, max_iters, adj_iters, equiv_ir
-    return utils.tree.map(core.ir_aval, step_ir.out_tree)
+    return utils.tree.map(core.aval_if_var, step_ir.out_tree)
 
 
 def pullback_fwd_fixpoint(

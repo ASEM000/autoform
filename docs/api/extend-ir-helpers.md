@@ -4,5 +4,5 @@
 .. autofunction:: autoform.extend.using_interpreter
 .. autofunction:: autoform.extend.serial_fanout
 .. autofunction:: autoform.extend.is_var
-.. autofunction:: autoform.extend.ir_aval
+.. autofunction:: autoform.extend.aval_if_var
 ```

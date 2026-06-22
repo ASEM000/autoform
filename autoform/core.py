@@ -45,7 +45,7 @@ __all__ = [
     # ir vals
     "Var",
     "is_var",
-    "ir_aval",
+    "aval_if_var",
     # primitive
     "Prim",
     # rule registries
@@ -280,7 +280,7 @@ def is_var(x) -> TypeGuard[Var]:
     return isinstance(x, Var)
 
 
-def ir_aval(x, /):
+def aval_if_var(x, /):
     """Return the aval for an IR variable, otherwise return input unchanged.
 
     This is useful when constructing new IR trees from existing ones: concrete
@@ -894,7 +894,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
         params = utils.tree.map_with_path(to_concrete, params)
 
         in_tree = utils.tree.map(to_in_ir_atom, in_tree)
-        in_aval_tree = utils.tree.map(ir_aval, in_tree)
+        in_aval_tree = utils.tree.map(aval_if_var, in_tree)
         out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x):

@@ -74,7 +74,7 @@ async def aimpl_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tr
 
 def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
     ir = trace_custom_func(call, in_tree)
-    return utils.tree.map(core.ir_aval, ir.out_tree)
+    return utils.tree.map(core.aval_if_var, ir.out_tree)
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:

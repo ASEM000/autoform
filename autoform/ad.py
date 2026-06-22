@@ -218,12 +218,12 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
     def make_p(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
         return atom
 
     def make_t(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
         return zeroof(atom)
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
@@ -273,7 +273,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def abstract_pushforward_call(_: Tree, /, *, ir: core.IR) -> TreePair:
-    out = utils.tree.map(core.ir_aval, ir.out_tree)
+    out = utils.tree.map(core.aval_if_var, ir.out_tree)
     return out, out
 
 
@@ -588,12 +588,12 @@ def pullback(ir: core.IR, /) -> core.IR:
 
     def make_p(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
         return atom
 
     def make_c(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.ir_aval(atom), source=atom)
+            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
         return zeroof(atom)
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
@@ -675,8 +675,8 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def abstract_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    p_out = utils.tree.map(core.ir_aval, ir.out_tree)
-    c_in = utils.tree.map(core.ir_aval, ir.in_tree)
+    p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
+    c_in = utils.tree.map(core.aval_if_var, ir.in_tree)
     return p_out, c_in
 
 

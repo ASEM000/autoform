@@ -81,7 +81,7 @@ async def aimpl_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def abstract_gather(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    return [utils.tree.map(core.ir_aval, ir.out_tree) for ir in irs]
+    return [utils.tree.map(core.aval_if_var, ir.out_tree) for ir in irs]
 
 
 def push_gather(in_tree: GatherPair, /, *, irs: IRList) -> GatherPair:
