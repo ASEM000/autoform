@@ -92,6 +92,7 @@ __all__ = [
     # ir building and execution
     "fold",
     "trace",
+    "check_static_inputs",
     "walk",
 ]
 
@@ -976,6 +977,18 @@ def trace[*A, R](
 type GenStep = tuple[Eqn | None, Tree]
 
 
+def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
+    """Validate runtime inputs against static literals in an IR input tree."""
+
+    def check_input(atom, value: Any):
+        if not is_var(atom):
+            expected = atom
+            msg = f"Static input mismatch: expected {expected!r}, got {value!r}"
+            assert expected == value, msg
+
+    utils.tree.map(check_input, atoms, args)
+
+
 @ft.partial(utils.lru_cache, maxsize=256)
 def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
     """Walk an IR one equation at a time."""
@@ -991,16 +1004,9 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
         def read(ir_val) -> Any:
             return env[ir_val] if is_var(ir_val) else ir_val
 
-        def check_input(ir_val, value: Any):
-            if not is_var(ir_val):
-                expected = ir_val
-                msg = f"Static input mismatch: expected {expected!r}, got {value!r}"
-                assert expected == value, msg
-
         def write(ir_val, value: Any):
             is_var(ir_val) and setitem(env, ir_val, value)
 
-        utils.tree.map(check_input, ir.in_tree, args)
         utils.tree.map(write, ir.in_tree, args)
 
         for eqn in ir.eqns:
@@ -1023,6 +1029,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
+        check_static_inputs(ir.in_tree, args)
         eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
@@ -1036,6 +1043,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
+        check_static_inputs(ir.in_tree, args)
         eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))

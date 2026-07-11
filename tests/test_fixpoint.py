@@ -172,6 +172,37 @@ class TestFixpointPullback:
         assert af.ad.is_zero(c_init)
         assert c_theta == "feedback"
 
+    def test_pullback_static_step_literal_is_not_boxed(self):
+        def step(state, suffix):
+            return af.concat(state, suffix)
+
+        step_ir = af.trace(step, static=(False, True))("s", "!")
+
+        def program(init):
+            return af.fixpoint(step_ir, init, "!", max_iters=2, adj_iters=1)
+
+        ir = af.trace(program)("s")
+        out, (c_init,) = af.pullback(ir).call(("s",), "g")
+
+        assert out == "s!!"
+        assert af.ad.is_zero(c_init)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_static_step_literal_is_not_boxed_async(self):
+        def step(state, suffix):
+            return af.concat(state, suffix)
+
+        step_ir = af.trace(step, static=(False, True))("s", "!")
+
+        def program(init):
+            return af.fixpoint(step_ir, init, "!", max_iters=2, adj_iters=1)
+
+        ir = af.trace(program)("s")
+        out, (c_init,) = await af.pullback(ir).acall(("s",), "g")
+
+        assert out == "s!!"
+        assert af.ad.is_zero(c_init)
+
 
 class TestFixpointBatch:
     def test_batched_init_broadcast_theta(self):

@@ -18,7 +18,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.batch import BatchAVal
+from autoform.batch import BatchAVal, BatchBox, BatchInterpreter
 from autoform.utils import batch_spec, batch_transpose
 
 tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
@@ -143,6 +143,29 @@ class TestBatchBasic:
         batched_ir = af.batch(ir)
         with pytest.raises(AssertionError):
             batched_ir.call([])
+
+    def test_static_input_literal_is_not_boxed(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        batched_ir = af.batch(ir, in_axes=(False, True))
+
+        assert batched_ir.call("Q", ["a", "b"]) == ["Qa", "Qb"]
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            batched_ir.call("R", ["a", "b"])
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_static_input_literal_is_not_boxed_async(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        batched_ir = af.batch(ir, in_axes=(False, True))
+
+        assert await batched_ir.acall("Q", ["a", "b"]) == ["Qa", "Qb"]
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            await batched_ir.acall("R", ["a", "b"])
 
 
 class TestBatchIRStructure:
@@ -300,6 +323,15 @@ class TestBatchInAxes:
 
 
 class TestBatchUtils:
+    def test_batch_box_treats_axis_spec_as_prefix(self):
+        batcher = BatchInterpreter(batch_size=2, parent=af.core.active_interpreter.get())
+
+        boxed = batcher.box((["a", "b"], True))
+
+        assert isinstance(boxed, BatchBox)
+        assert boxed.value == ["a", "b"]
+        assert boxed.batched is True
+
     def test_basic_axes_tree(self):
         col_tree = (["a", "b"], ["x", "y"])
         in_axes = True
