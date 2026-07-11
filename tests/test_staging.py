@@ -70,6 +70,83 @@ class CountingInterpreter(af.core.Interpreter):
         return await self.parent.ainterpret(prim, in_tree, **params)
 
 
+class TestConstfold:
+    def test_evaluates_concrete_equations(self):
+        def program(x):
+            prefix = af.concat("A", "B")
+            header = af.format("[{}]", prefix)
+            return af.concat(header, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir)
+
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "format", "concat"]
+        assert [eqn.prim.name for eqn in folded.eqns] == ["concat"]
+        assert folded.eqns[0].in_tree[0] == "[AB]"
+        assert folded.call("C") == "[AB]C"
+
+    def test_preserves_static_input_checks(self):
+        def program(prefix, x):
+            header = af.concat(prefix, ": ")
+            return af.concat(header, x)
+
+        ir = af.trace(program, static=(True, False))("Q", "seed")
+        folded = af.constfold(ir)
+
+        assert [eqn.prim.name for eqn in folded.eqns] == ["concat"]
+        assert folded.eqns[0].in_tree[0] == "Q: "
+        assert folded.call("Q", "hello") == "Q: hello"
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            folded.call("R", "hello")
+
+    def test_cond_selects_concrete_equations(self):
+        def program(x):
+            prefix = af.concat("A", "B")
+            header = af.format("[{}]", prefix)
+            return af.concat(header, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir, cond=lambda e: e.prim.name == "concat")
+
+        assert [eqn.prim.name for eqn in folded.eqns] == ["format", "concat"]
+        assert folded.eqns[0].in_tree[0][0] == "AB"
+        assert folded.call("C") == "[AB]C"
+
+    def test_cond_blocks_concrete_equation_evaluation(self):
+        counter_p = af.core.Prim("constfold_counter_probe")
+        calls = 0
+
+        def counter(x):
+            return counter_p.bind(x)
+
+        def impl_counter(in_tree):
+            nonlocal calls
+            calls += 1
+            return f"{in_tree}!"
+
+        def abstract_counter(in_tree):
+            del in_tree
+            return af.core.StrAVal()
+
+        af.core.impl_rules.set(counter_p, impl_counter)
+        af.core.abstract_rules.set(counter_p, abstract_counter)
+
+        def program(x):
+            prefix = counter("A")
+            return af.concat(prefix, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir, cond=lambda e: e.prim is not counter_p)
+
+        assert calls == 0
+        assert [eqn.prim.name for eqn in folded.eqns] == [
+            "constfold_counter_probe",
+            "concat",
+        ]
+        assert folded.call("B") == "A!B"
+        assert calls == 1
+
+
 class TestFold:
     def test_fold_block_is_noop_outside_trace(self):
         counter = CountingInterpreter()
