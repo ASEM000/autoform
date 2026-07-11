@@ -20,6 +20,13 @@
     primitive for iterating ``(State, Theta) -> State`` step functions to
     structural convergence, with implicit pullback support.
 
+  - Added {py:func}`constfold <autoform.constfold>` for IR constant folding.
+    It evaluates equations whose inputs are concrete literals and leaves
+    dynamic equations staged. It accepts a `cond` predicate, matching
+    {py:func}`sched <autoform.sched>`, to choose which concrete equations are
+    eligible. The existing {py:func}`fold <autoform.fold>` trace-time context
+    manager is unchanged.
+
 ### Fixed
 
   - Fixed boxed transforms over IRs with static input literals. {py:func}`batch
