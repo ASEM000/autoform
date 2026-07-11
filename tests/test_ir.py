@@ -226,6 +226,24 @@ class TestTraceStatic:
         with pytest.raises(AssertionError, match="Static input mismatch"):
             ir.call("Hi", "x0")
 
+    def test_static_input_check_is_separate_from_walk(self):
+        def program(prefix, name):
+            return af.format("{} {}", prefix, name)
+
+        ir = af.trace(program, static=(True, False))("Hello", "World")
+
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            af.core.check_static_inputs(ir.in_tree, ("Hi", "x0"))
+
+        gen = ir.walk("Hi", "x0")
+
+        eqn, in_values = next(gen)
+        assert in_values == (("Hello", "x0"), ())
+        done, out = gen.send(eqn.bind(in_values, **eqn.params))
+
+        assert done is None
+        assert out == "Hello x0"
+
     @pytest.mark.asyncio(loop_scope="function")
     async def test_static_input_mismatch_errors_before_async_execution(self):
         def program(prefix, name):

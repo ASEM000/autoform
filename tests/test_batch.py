@@ -144,6 +144,29 @@ class TestBatchBasic:
         with pytest.raises(AssertionError):
             batched_ir.call([])
 
+    def test_static_input_literal_is_not_boxed(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        batched_ir = af.batch(ir, in_axes=(False, True))
+
+        assert batched_ir.call("Q", ["a", "b"]) == ["Qa", "Qb"]
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            batched_ir.call("R", ["a", "b"])
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_static_input_literal_is_not_boxed_async(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        batched_ir = af.batch(ir, in_axes=(False, True))
+
+        assert await batched_ir.acall("Q", ["a", "b"]) == ["Qa", "Qb"]
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            await batched_ir.acall("R", ["a", "b"])
+
 
 class TestBatchIRStructure:
     def test_creates_single_eqn(self):

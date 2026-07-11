@@ -782,3 +782,65 @@ class TestLiteralZeroing:
         c_in_lit, c_in_var = cotangent_in
 
         assert af.ad.is_zero(c_in_lit)
+
+
+class TestStaticTransformInputs:
+    def test_pushforward_static_input_literal_is_not_boxed(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        pf_ir = af.pushforward(ir)
+
+        out, tangent = pf_ir.call(("Q", "x"), (af.ad.zeroof("Q"), "dx"))
+
+        assert out == "Qx"
+        assert tangent == "dx"
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            pf_ir.call(("R", "x"), (af.ad.zeroof("R"), "dx"))
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pushforward_static_input_literal_is_not_boxed_async(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        pf_ir = af.pushforward(ir)
+
+        out, tangent = await pf_ir.acall(("Q", "x"), (af.ad.zeroof("Q"), "dx"))
+
+        assert out == "Qx"
+        assert tangent == "dx"
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            await pf_ir.acall(("R", "x"), (af.ad.zeroof("R"), "dx"))
+
+    def test_pullback_static_input_literal_is_not_boxed(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        pb_ir = af.pullback(ir)
+
+        out, (c_prefix, c_value) = pb_ir.call(("Q", "x"), "g")
+
+        assert out == "Qx"
+        assert af.ad.is_zero(c_prefix)
+        assert c_value == "g"
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            pb_ir.call(("R", "x"), "g")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_pullback_static_input_literal_is_not_boxed_async(self):
+        def label(prefix, value):
+            return af.concat(prefix, value)
+
+        ir = af.trace(label, static=(True, False))("Q", "x")
+        pb_ir = af.pullback(ir)
+
+        out, (c_prefix, c_value) = await pb_ir.acall(("Q", "x"), "g")
+
+        assert out == "Qx"
+        assert af.ad.is_zero(c_prefix)
+        assert c_value == "g"
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            await pb_ir.acall(("R", "x"), "g")

@@ -154,15 +154,8 @@ class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
         self.parent = parent
         self.batch_size = batch_size
 
-    def box(self, value, /) -> Tree:
-        v, b = value
-        # NOTE(asem): ``b`` is a prefix spec, not necessarily the same structure
-        # as ``v``. For example, v=["a", "b"] and b=True means the whole list is
-        # one batched leaf, not two leaves.
-        spec = utils.tree.structure(b, is_leaf=is_axis_spec)
-        v = spec.flatten_up_to(v)
-        b = utils.tree.leaves(b, is_leaf=is_axis_spec)
-        return spec.unflatten(BatchBox(self, v, b) for v, b in zip(v, b, strict=True))
+    def box(self, batched, value, /) -> BatchBox:
+        return BatchBox(self, value, batched)
 
     def unbox(self, v: Tree, /) -> TreePair:
         def value(v):
@@ -178,7 +171,7 @@ class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
             v_out, b_out = core.batch_rules.get(prim)((b_sz, b_in, v_in), **params)
-        return self.box((v_out, b_out))
+        return utils.tree.map(self.box, b_out, v_out, is_leaf=is_axis_spec)
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         # NOTE(asem): async batch rules must be explicitly seted - no fallback to sync.
@@ -186,7 +179,7 @@ class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
             v_out, b_out = await core.batch_rules.aget(prim)((b_sz, b_in, v_in), **params)
-        return self.box((v_out, b_out))
+        return utils.tree.map(self.box, b_out, v_out, is_leaf=is_axis_spec)
 
 
 def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
@@ -218,9 +211,11 @@ def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
             boxed_out = eqn.bind(boxed_in, **eqn.params)
             v_out, b_out = batcher.unbox(boxed_out)
             b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
-            return batcher.box((v_out, b_out))
+            return utils.tree.map(batcher.box, b_out, v_out, is_leaf=is_axis_spec)
 
-        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        eqn, boxed_in = next(
+            gen := ir.walk(*utils.tree.map(batcher.box, b_in, v_in, is_leaf=is_axis_spec))
+        )
         while eqn:
             eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
 
@@ -245,9 +240,11 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> T
             boxed_out = await eqn.abind(boxed_in, **eqn.params)
             v_out, b_out = batcher.unbox(boxed_out)
             b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
-            return batcher.box((v_out, b_out))
+            return utils.tree.map(batcher.box, b_out, v_out, is_leaf=is_axis_spec)
 
-        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
+        eqn, boxed_in = next(
+            gen := ir.walk(*utils.tree.map(batcher.box, b_in, v_in, is_leaf=is_axis_spec))
+        )
         while eqn:
             eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
 
