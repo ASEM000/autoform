@@ -597,7 +597,7 @@ class BoxedInterpreter[T](BaseInterpreter):
     # when rules need the underlying payload.
 
     @abstractmethod
-    def box(self, *value) -> T: ...
+    def box(self, value, /) -> Tree[T]: ...
 
     @abstractmethod
     def unbox(self, value: Tree, /): ...
@@ -835,7 +835,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
         self.eqns: list[Eqn] = []
 
     def box(self, value, /) -> Tree:
-        return TraceBox(owner=self, var=value) if is_var(value) else value
+        return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_var(v) else v, value)
 
     def unbox(self, value: Tree, /) -> Tree:
         def func(value, /):
@@ -906,7 +906,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
 
         out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
         self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
-        return utils.tree.map(self.box, out_tree)
+        return self.box(out_tree)
 
 
 def trace[*A, R](
@@ -963,7 +963,7 @@ def trace[*A, R](
         in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
         in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
         with using_interpreter(TraceInterpreter()) as tracer:
-            out_trace_tree = func(*cast(tuple, utils.tree.map(tracer.box, in_tree)))
+            out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
         out_tree = tracer.unbox(out_trace_tree)
         return IR(eqns=tracer.eqns, in_tree=in_tree, out_tree=out_tree)
 

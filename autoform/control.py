@@ -826,7 +826,7 @@ def pullback_bwd_fixpoint(
             res[eqn] = residuals
             return boxed_out
 
-        eqn, boxed_in = next(gen := step_ir.walk(*utils.tree.map(fwd.box, (x_star, theta))))
+        eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
         while eqn:
             eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
 
@@ -836,7 +836,7 @@ def pullback_bwd_fixpoint(
 
             def custom_bind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
                 residuals = res[eqn]
-                boxed_c_out = utils.tree.map(bwd.box, c_out)
+                boxed_c_out = bwd.box(c_out)
                 boxed_c_in = eqn.bind((residuals, boxed_c_out), **eqn.params)
                 return bwd.unbox(boxed_c_in)
 
@@ -889,7 +889,7 @@ async def apull_bwd_fixpoint(
             res[eqn] = residuals
             return boxed_out
 
-        eqn, boxed_in = next(gen := step_ir.walk(*utils.tree.map(fwd.box, (x_star, theta))))
+        eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
         while eqn:
             eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
 
@@ -899,7 +899,7 @@ async def apull_bwd_fixpoint(
 
             async def custom_abind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
                 residuals = res[eqn]
-                boxed_c_out = utils.tree.map(bwd.box, c_out)
+                boxed_c_out = bwd.box(c_out)
                 boxed_c_in = await eqn.abind((residuals, boxed_c_out), **eqn.params)
                 return bwd.unbox(boxed_c_in)
 

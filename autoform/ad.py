@@ -160,8 +160,9 @@ class PushforwardInterpreter(core.BoxedInterpreter[PushforwardBox]):
     def __init__(self, *, parent):
         self.parent = parent
 
-    def box(self, primal, tangent, /) -> PushforwardBox:
-        return PushforwardBox(self, primal, tangent)
+    def box(self, value, /) -> Tree:
+        p, t = value
+        return utils.tree.map(lambda p, t: PushforwardBox(self, p, t), p, t)
 
     def unbox(self, values: Tree, /) -> TreePair:
         # NOTE(asem): pushforward is structural, so this is not fixing a current
@@ -180,13 +181,13 @@ class PushforwardInterpreter(core.BoxedInterpreter[PushforwardBox]):
         p_in, t_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
             p_out, t_out = core.push_rules.get(prim)((p_in, t_in), **params)
-        return utils.tree.map(self.box, p_out, t_out)
+        return self.box((p_out, t_out))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in, t_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
             p_out, t_out = await core.push_rules.aget(prim)((p_in, t_in), **params)
-        return utils.tree.map(self.box, p_out, t_out)
+        return self.box((p_out, t_out))
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
@@ -246,10 +247,9 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
                 return eqn.bind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = eqn.bind(p_in, **eqn.params)
-            return utils.tree.map(pusher.box, p_out, utils.tree.map(zeroof, p_out))
+            return pusher.box((p_out, utils.tree.map(zeroof, p_out)))
 
-        p_in, t_in = in_tree
-        eqn, boxed_in = next(gen := ir.walk(*utils.tree.map(pusher.box, p_in, t_in)))
+        eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
         while eqn:
             eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
         return pusher.unbox(boxed_in)
@@ -265,10 +265,9 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
                 return await eqn.abind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = await eqn.abind(p_in, **eqn.params)
-            return utils.tree.map(pusher.box, p_out, utils.tree.map(zeroof, p_out))
+            return pusher.box((p_out, utils.tree.map(zeroof, p_out)))
 
-        p_in, t_in = in_tree
-        eqn, boxed_in = next(gen := ir.walk(*utils.tree.map(pusher.box, p_in, t_in)))
+        eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
         while eqn:
             eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
         return pusher.unbox(boxed_in)
@@ -467,8 +466,8 @@ class PullbackFwdInterpreter(core.BoxedInterpreter[PullbackFwdBox]):
     def __init__(self, *, parent):
         self.parent = parent
 
-    def box(self, primal, /) -> PullbackFwdBox:
-        return PullbackFwdBox(self, primal)
+    def box(self, value, /) -> Tree:
+        return utils.tree.map(lambda p: PullbackFwdBox(self, p), value)
 
     def unbox(self, values: Tree, /) -> Tree:
         def primal(v):
@@ -480,13 +479,13 @@ class PullbackFwdInterpreter(core.BoxedInterpreter[PullbackFwdBox]):
         p_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
             p_out, residuals = core.pull_fwd_rules.get(prim)(p_in, **params)
-        return utils.tree.map(self.box, p_out), residuals
+        return self.box(p_out), residuals
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
             p_out, residuals = await core.pull_fwd_rules.aget(prim)(p_in, **params)
-        return utils.tree.map(self.box, p_out), residuals
+        return self.box(p_out), residuals
 
 
 class PullbackBwdBox:
@@ -537,8 +536,8 @@ class PullbackBwdInterpreter(core.BoxedInterpreter[PullbackBwdBox]):
     def __init__(self, *, parent):
         self.parent = parent
 
-    def box(self, cotangent, /) -> PullbackBwdBox:
-        return PullbackBwdBox(self, cotangent)
+    def box(self, value, /) -> Tree:
+        return utils.tree.map(lambda c: PullbackBwdBox(self, c), value)
 
     def unbox(self, values: Tree, /) -> Tree:
         def cotangent(v):
@@ -551,14 +550,14 @@ class PullbackBwdInterpreter(core.BoxedInterpreter[PullbackBwdBox]):
         c_out = self.unbox(c_out)
         with core.using_interpreter(self.parent):
             c_in = core.pull_bwd_rules.get(prim)((residuals, c_out), **params)
-        return utils.tree.map(self.box, c_in)
+        return self.box(c_in)
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         residuals, c_out = in_tree
         c_out = self.unbox(c_out)
         with core.using_interpreter(self.parent):
             c_in = await core.pull_bwd_rules.aget(prim)((residuals, c_out), **params)
-        return utils.tree.map(self.box, c_in)
+        return self.box(c_in)
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
@@ -623,7 +622,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
             res[eqn] = residuals
             return boxed_out
 
-        eqn, boxed_in = next(gen := ir.walk(*utils.tree.map(fwd.box, p_in)))
+        eqn, boxed_in = next(gen := ir.walk(*fwd.box(p_in)))
         while eqn:
             eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
 
@@ -631,7 +630,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
         def custom_bind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
             residuals = res[eqn]
-            boxed_c_out = utils.tree.map(bwd.box, c_out)
+            boxed_c_out = bwd.box(c_out)
             boxed_c_in = eqn.bind((residuals, boxed_c_out), **eqn.params)
             return bwd.unbox(boxed_c_in)
 
@@ -657,7 +656,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
             res[eqn] = residuals
             return boxed_out
 
-        eqn, boxed_in = next(gen := ir.walk(*utils.tree.map(fwd.box, p_in)))
+        eqn, boxed_in = next(gen := ir.walk(*fwd.box(p_in)))
         while eqn:
             eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
 
@@ -665,7 +664,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
         async def custom_abind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
             residuals = res[eqn]
-            boxed_c_out = utils.tree.map(bwd.box, c_out)
+            boxed_c_out = bwd.box(c_out)
             boxed_c_in = await eqn.abind((residuals, boxed_c_out), **eqn.params)
             return bwd.unbox(boxed_c_in)
 

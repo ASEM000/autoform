@@ -18,7 +18,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.batch import BatchAVal
+from autoform.batch import BatchAVal, BatchBox, BatchInterpreter
 from autoform.utils import batch_spec, batch_transpose
 
 tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
@@ -323,6 +323,15 @@ class TestBatchInAxes:
 
 
 class TestBatchUtils:
+    def test_batch_box_treats_axis_spec_as_prefix(self):
+        batcher = BatchInterpreter(batch_size=2, parent=af.core.active_interpreter.get())
+
+        boxed = batcher.box((["a", "b"], True))
+
+        assert isinstance(boxed, BatchBox)
+        assert boxed.value == ["a", "b"]
+        assert boxed.batched is True
+
     def test_basic_axes_tree(self):
         col_tree = (["a", "b"], ["x", "y"])
         in_axes = True
