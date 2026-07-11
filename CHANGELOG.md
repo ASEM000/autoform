@@ -20,6 +20,14 @@
     primitive for iterating ``(State, Theta) -> State`` step functions to
     structural convergence, with implicit pullback support.
 
+### Fixed
+
+  - Fixed boxed transforms over IRs with static input literals. {py:func}`batch
+    <autoform.batch>`, {py:func}`pushforward <autoform.pushforward>`,
+    {py:func}`pullback <autoform.pullback>`, and fixpoint pullbacks now preserve
+    traced static-input checks at the public call boundary while allowing
+    transform-internal IR walks to seed boxed dynamic values.
+
 ## v0.3.0 (May 30, 2026)
 
 ### Breaking Changes
