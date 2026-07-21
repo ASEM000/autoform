@@ -31,7 +31,7 @@ import autoform.utils as utils
 __all__ = ["factor", "weighted"]
 
 factor_p = core.Prim("factor")
-constfold.non_constfold_primitives.add(factor_p)
+constfold.constfold_rules[factor_p] = lambda eqn, _: eqn
 dce.non_dce_primitives.add(factor_p)
 memoize.non_memoizable_primitives.add(factor_p)
 
@@ -256,3 +256,10 @@ core.pull_bwd_rules.aset(weighted_call_p, utils.asyncify(pullback_bwd_weighted_c
 core.batch_rules.set(weighted_call_p, batch_weighted_call)
 core.batch_rules.aset(weighted_call_p, abatch_weighted_call)
 dce.dce_rules[weighted_call_p] = dce_weighted_call
+
+
+def constfold_weighted_call(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    return eqn.using(ir=constfold.constfold(eqn.params["ir"], cond=cond))
+
+
+constfold.constfold_rules[weighted_call_p] = constfold_weighted_call

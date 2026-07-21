@@ -38,7 +38,7 @@ type Tree[T] = utils.Tree[T]
 
 
 checkpoint_p = core.Prim("checkpoint")
-constfold.non_constfold_primitives.add(checkpoint_p)
+constfold.constfold_rules[checkpoint_p] = lambda eqn, _: eqn
 dce.non_dce_primitives.add(checkpoint_p)
 
 

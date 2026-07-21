@@ -22,6 +22,7 @@ from typing import Any
 
 import autoform.ad as ad
 import autoform.batch as batch
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.utils as utils
@@ -159,6 +160,7 @@ def install_custom_call_rules(prim: core.Prim, /) -> None:
     core.pull_bwd_rules.aset(prim, apullback_bwd_custom_call)
     core.batch_rules.set(prim, batch_custom_call)
     core.batch_rules.aset(prim, abatch_custom_call)
+    constfold.constfold_rules[prim] = lambda eqn, _: eqn
     dce.dce_rules[prim] = dce_custom_call
 
 

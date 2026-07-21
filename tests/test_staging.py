@@ -212,6 +212,57 @@ class TestConstfold:
 
         assert client.calls == 1
 
+    def test_hop_rule_folds_nested_ir_but_keeps_container_staged(self):
+        def branch(x):
+            prefix = af.concat("A", "B")
+            return af.concat(prefix, x)
+
+        branches = {"only": af.trace(branch)("seed")}
+        ir = af.trace(lambda: af.switch("only", branches, "C"))()
+        folded = af.constfold(ir)
+
+        assert [eqn.prim.name for eqn in folded.eqns] == ["switch"]
+        folded_branch = folded.eqns[0].params["branches"]["only"]
+        assert [eqn.prim.name for eqn in folded_branch.eqns] == ["concat"]
+        assert folded.call() == "ABC"
+
+    def test_hop_rule_does_not_execute_nested_lm_call(self):
+        class Response:
+            def __init__(self):
+                self.choices = [SimpleNamespace(message=SimpleNamespace(content="answer"))]
+
+        class Client:
+            def __init__(self):
+                self.calls = 0
+
+            def completion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+            async def acompletion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+        def branch(_):
+            return af.lm_call(
+                [{"role": "user", "content": "literal prompt"}],
+                model="test-model",
+            )
+
+        branches = {"only": af.trace(branch)("seed")}
+        client = Client()
+        with af.lm_client(client):
+            ir = af.trace(lambda: af.switch("only", branches, "literal"))()
+            folded = af.constfold(ir, cond=lambda _: True)
+
+            assert client.calls == 0
+            assert [eqn.prim.name for eqn in folded.eqns] == ["switch"]
+            folded_branch = folded.eqns[0].params["branches"]["only"]
+            assert [eqn.prim.name for eqn in folded_branch.eqns] == ["lm_call"]
+            assert folded.call() == "answer"
+
+        assert client.calls == 1
+
 
 class TestFold:
     def test_fold_block_is_noop_outside_trace(self):

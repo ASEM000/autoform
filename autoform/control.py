@@ -20,6 +20,7 @@ import functools as ft
 
 import autoform.ad as ad
 import autoform.batch as batch
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.scheduling as scheduling
@@ -272,6 +273,15 @@ def dce_switch(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
 
 
 dce.dce_rules[switch_p] = dce_switch
+
+
+def constfold_switch(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    branches: Branches = eqn.params["branches"]
+    branches = {key: constfold.constfold(branch, cond=cond) for key, branch in branches.items()}
+    return eqn.using(branches=branches)
+
+
+constfold.constfold_rules[switch_p] = constfold_switch
 
 
 # ==================================================================================================
@@ -645,6 +655,15 @@ def dce_while_loop(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
 
 
 dce.dce_rules[while_loop_p] = dce_while_loop
+
+
+def constfold_while_loop(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    cond_ir = constfold.constfold(eqn.params["cond_ir"], cond=cond)
+    body_ir = constfold.constfold(eqn.params["body_ir"], cond=cond)
+    return eqn.using(cond_ir=cond_ir, body_ir=body_ir)
+
+
+constfold.constfold_rules[while_loop_p] = constfold_while_loop
 
 
 # ==================================================================================================
@@ -1078,3 +1097,13 @@ def dce_fixpoint(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
 
 
 dce.dce_rules[fixpoint_p] = dce_fixpoint
+
+
+def constfold_fixpoint(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    step_ir = constfold.constfold(eqn.params["step_ir"], cond=cond)
+    equiv_ir = eqn.params["equiv_ir"]
+    equiv_ir = None if equiv_ir is None else constfold.constfold(equiv_ir, cond=cond)
+    return eqn.using(step_ir=step_ir, equiv_ir=equiv_ir)
+
+
+constfold.constfold_rules[fixpoint_p] = constfold_fixpoint

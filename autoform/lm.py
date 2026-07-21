@@ -95,7 +95,7 @@ def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
 # ==================================================================================================
 
 lm_call_p = core.Prim("lm_call")
-constfold.non_constfold_primitives.add(lm_call_p)
+constfold.constfold_rules[lm_call_p] = lambda eqn, _: eqn
 
 # TODO(asem): take a look into this
 GRAD_PROMPT = """Given this LLM interaction:
@@ -290,7 +290,7 @@ core.batch_rules.aset(lm_call_p, abatch_lm_call)
 # ==================================================================================================
 
 lm_schema_call_p = core.Prim("lm_schema_call")
-constfold.non_constfold_primitives.add(lm_schema_call_p)
+constfold.constfold_rules[lm_schema_call_p] = lambda eqn, _: eqn
 
 
 SCHEMA_GRAD_PROMPT = """Given this LLM interaction:

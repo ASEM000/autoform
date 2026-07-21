@@ -25,7 +25,10 @@ import autoform.utils as utils
 __all__ = ["constfold"]
 
 type Tree[T] = utils.Tree[T]
-non_constfold_primitives: set[core.Prim] = set()
+type ConstfoldCond = Callable[[core.Eqn], bool]
+type ConstfoldRule = Callable[[core.Eqn, ConstfoldCond], core.Eqn]
+
+constfold_rules: dict[core.Prim, ConstfoldRule] = {}
 
 
 def constfold[*A, R](
@@ -38,8 +41,8 @@ def constfold[*A, R](
         cond: Optional predicate that takes an equation and returns ``True`` if
             the equation may be evaluated when its inputs are concrete. If
             ``None``, all concrete equations are candidates. Primitives
-            registered as non-constfold are never evaluated, even when ``cond``
-            returns ``True``.
+            with a registered constfold rule are handled by that rule and remain
+            staged, even when ``cond`` returns ``True``.
 
     Example:
         >>> import autoform as af
@@ -58,9 +61,6 @@ def constfold[*A, R](
     def has_var(value: Tree) -> bool:
         return any(core.is_var(leaf) for leaf in utils.tree.leaves(value))
 
-    def fold_param(value):
-        return constfold(value, cond=cond) if isinstance(value, core.IR) else value
-
     env: dict[core.Var, Any] = {}
     out_eqns: list[core.Eqn] = []
 
@@ -73,9 +73,11 @@ def constfold[*A, R](
 
     for eqn in ir.eqns:
         in_tree = utils.tree.map(read, eqn.in_tree)
-        params = utils.tree.map(fold_param, eqn.params)
-        eqn = core.Eqn(eqn.prim, in_tree, eqn.out_tree, params, eqn.tags)
-        if has_var(in_tree) or eqn.prim in non_constfold_primitives or not cond(eqn):
+        eqn = core.Eqn(eqn.prim, in_tree, eqn.out_tree, eqn.params, eqn.tags)
+        if rule := constfold_rules.get(eqn.prim):
+            out_eqns.append(rule(eqn, cond))
+            continue
+        if has_var(in_tree) or not cond(eqn):
             out_eqns.append(eqn)
             continue
 

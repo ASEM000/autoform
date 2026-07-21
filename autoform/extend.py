@@ -295,9 +295,9 @@ def register_non_constfold[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
-    rules = constfold.non_constfold_primitives
-    assert prim not in rules, f"Primitive {prim} is already registered as non-constfold."
-    rules.add(prim)
+    rules = constfold.constfold_rules
+    assert prim not in rules, f"Constfold rule for primitive {prim} already defined."
+    rules[prim] = lambda eqn, _: eqn
     return prim
 
 

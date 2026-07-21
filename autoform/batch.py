@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools as ft
 
 import autoform.ad as ad
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.scheduling as scheduling
@@ -365,3 +366,10 @@ def dce_batch_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
 
 
 dce.dce_rules[batch_call_p] = dce_batch_call
+
+
+def constfold_batch_call(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    return eqn.using(ir=constfold.constfold(eqn.params["ir"], cond=cond))
+
+
+constfold.constfold_rules[batch_call_p] = constfold_batch_call
