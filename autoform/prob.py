@@ -21,6 +21,7 @@ import math
 from collections.abc import Hashable
 
 import autoform.ad as ad
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.memoize as memoize
@@ -30,6 +31,7 @@ import autoform.utils as utils
 __all__ = ["factor", "weighted"]
 
 factor_p = core.Prim("factor")
+constfold.non_constfold_primitives.add(factor_p)
 dce.non_dce_primitives.add(factor_p)
 memoize.non_memoizable_primitives.add(factor_p)
 
