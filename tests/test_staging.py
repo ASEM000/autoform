@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 import autoform as af
+import autoform.extend as afe
 
 
 class TestTraceValuePythonOps:
@@ -145,6 +146,71 @@ class TestConstfold:
         ]
         assert folded.call("B") == "A!B"
         assert calls == 1
+
+    def test_non_constfold_registration_cannot_be_overridden_by_cond(self):
+        counter_p = afe.register_non_constfold(af.core.Prim("non_constfold_probe"))
+        calls = 0
+
+        def counter(x):
+            return counter_p.bind(x)
+
+        def impl_counter(in_tree):
+            nonlocal calls
+            calls += 1
+            return f"{in_tree}!"
+
+        af.core.impl_rules.set(counter_p, impl_counter)
+        af.core.abstract_rules.set(counter_p, lambda _: af.core.StrAVal())
+
+        def program(x):
+            prefix = counter("A")
+            return af.concat(prefix, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir, cond=lambda _: True)
+
+        assert calls == 0
+        assert [eqn.prim.name for eqn in folded.eqns] == [
+            "non_constfold_probe",
+            "concat",
+        ]
+        assert folded.call("B") == "A!B"
+        assert calls == 1
+
+    def test_lm_call_remains_staged_when_inputs_are_concrete(self):
+        class Response:
+            def __init__(self):
+                self.choices = [SimpleNamespace(message=SimpleNamespace(content="rubric"))]
+
+        class Client:
+            def __init__(self):
+                self.calls = 0
+
+            def completion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+            async def acompletion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+        def program(question):
+            rubric = af.lm_call(
+                [{"role": "user", "content": "make a rubric"}],
+                model="test-model",
+            )
+            return af.format("{}: {}", rubric, question)
+
+        client = Client()
+        with af.lm_client(client):
+            ir = af.trace(program)("seed")
+            folded = af.constfold(ir, cond=lambda _: True)
+
+            assert client.calls == 0
+            assert [eqn.prim.name for eqn in folded.eqns] == ["lm_call", "format"]
+            assert folded.call("question") == "rubric: question"
+
+        assert client.calls == 1
 
 
 class TestFold:
