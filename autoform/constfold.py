@@ -25,6 +25,7 @@ import autoform.utils as utils
 __all__ = ["constfold"]
 
 type Tree[T] = utils.Tree[T]
+non_constfold_primitives: set[core.Prim] = set()
 
 
 def constfold[*A, R](
@@ -36,7 +37,9 @@ def constfold[*A, R](
         ir: The IR to fold.
         cond: Optional predicate that takes an equation and returns ``True`` if
             the equation may be evaluated when its inputs are concrete. If
-            ``None``, all concrete equations are candidates.
+            ``None``, all concrete equations are candidates. Primitives
+            registered as non-constfold are never evaluated, even when ``cond``
+            returns ``True``.
 
     Example:
         >>> import autoform as af
@@ -72,7 +75,7 @@ def constfold[*A, R](
         in_tree = utils.tree.map(read, eqn.in_tree)
         params = utils.tree.map(fold_param, eqn.params)
         eqn = core.Eqn(eqn.prim, in_tree, eqn.out_tree, params, eqn.tags)
-        if has_var(in_tree) or not cond(eqn):
+        if has_var(in_tree) or eqn.prim in non_constfold_primitives or not cond(eqn):
             out_eqns.append(eqn)
             continue
 
