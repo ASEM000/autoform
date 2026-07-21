@@ -22,6 +22,7 @@ from typing import Any
 import autoform.ad as ad
 import autoform.batch as batch
 import autoform.checkpoint as checkpoint
+import autoform.constfold as constfold
 import autoform.control as control
 import autoform.core as core
 import autoform.dce as dce
@@ -115,6 +116,7 @@ __all__ = [
     "register_trace_type",
     "register_zero",
     "register_cotangent_accumulator",
+    "register_non_constfold",
     "register_non_dce",
     "register_non_memoizable",
     "register_add",
@@ -277,6 +279,24 @@ def register_non_dce[T: Prim](prim: T, /) -> T:
     """
     rules = dce.non_dce_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
+    rules.add(prim)
+    return prim
+
+
+def register_non_constfold[T: Prim](prim: T, /) -> T:
+    """Register a primitive as excluded from :func:`autoform.constfold`.
+
+    Marks an extension primitive as unsafe to evaluate while rewriting an IR,
+    such as stochastic sampling, logging, or calls that observe external state.
+
+    Args:
+        prim: Primitive excluded from constant folding.
+
+    Returns:
+        The registered primitive.
+    """
+    rules = constfold.non_constfold_primitives
+    assert prim not in rules, f"Primitive {prim} is already registered as non-constfold."
     rules.add(prim)
     return prim
 
