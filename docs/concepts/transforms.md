@@ -98,7 +98,8 @@ constfold(ir, /, *, cond=None) -> IR
 {py:func}`constfold <autoform.constfold>` evaluates equations whose inputs are
 all concrete literals and rewrites their uses to the resulting literals. Pass
 `cond` to restrict which concrete equations are eligible; rejected equations stay
-staged and their outputs remain dynamic for downstream equations.
+staged and their outputs remain dynamic for downstream equations. Primitives
+registered as non-constfold, including language-model calls, always remain staged.
 
 ```python
 folded = af.constfold(ir, cond=lambda e: e.prim.name in {"concat", "format"})
