@@ -97,8 +97,6 @@ fixpoint_p = control.fixpoint_p
 gather_p = scheduling.gather_p
 depends_p = scheduling.depends_p
 batch_call_p = batch.batch_call_p
-pushforward_call_p = ad.pushforward_call_p
-pullback_call_p = ad.pullback_call_p
 
 __all__ = [
     "AVal",
@@ -158,8 +156,6 @@ __all__ = [
     "gather_p",
     "depends_p",
     "batch_call_p",
-    "pushforward_call_p",
-    "pullback_call_p",
 ]
 
 type AValRule = Callable[[Any], AVal]

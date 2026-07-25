@@ -542,7 +542,7 @@ class TestMemoizeTransformedIRs:
         )
 
         assert r1 == r2
-        assert misses == 3
+        assert misses == 2
 
     def test_memoize_pullback_ir(self):
         def func(x):
@@ -556,7 +556,7 @@ class TestMemoizeTransformedIRs:
         )
 
         assert r1 == r2
-        assert misses == 2
+        assert misses == 1
 
     def test_memoize_batched_different_inputs(self):
         def func(x):

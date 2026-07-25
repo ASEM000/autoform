@@ -286,7 +286,7 @@ class TestNestedDCE:
         dced_inner = dce.eqns[0].params["ir"]
         assert len(dced_inner.eqns) == 1
 
-    def test_pushforward_call_dces_inner_ir(self):
+    def test_dce_of_pushforward_removes_dead_primal_and_tangent_equations(self):
         def inner_fn(x):
             dead = af.concat(x, " DEAD")
             live = af.concat(x, " LIVE")
@@ -296,12 +296,13 @@ class TestNestedDCE:
         assert len(inner_ir.eqns) == 2
 
         pf_ir = af.pushforward(inner_ir)
-        dce = af.dce(pf_ir)
+        assert len(pf_ir.eqns) == 4
 
-        dced_inner = dce.eqns[0].params["ir"]
-        assert len(dced_inner.eqns) == 1
+        dced = af.dce(pf_ir)
+        assert len(dced.eqns) == 2
+        assert dced.call(("a",), ("da",)) == ("a LIVE", "da")
 
-    def test_pullback_call_dces_inner_ir(self):
+    def test_dce_of_pullback_removes_dead_primal_equations(self):
         def inner_fn(x):
             dead = af.concat(x, " DEAD")
             live = af.concat(x, " LIVE")
@@ -311,12 +312,12 @@ class TestNestedDCE:
         assert len(inner_ir.eqns) == 2
 
         pb_ir = af.pullback(inner_ir)
-        dce = af.dce(pb_ir, out_used=(True, (False,)))
+        assert [eqn.prim.name for eqn in pb_ir.eqns] == ["concat", "concat"]
 
-        dced_inner = dce.eqns[0].params["ir"]
-        assert len(dced_inner.eqns) == 1
+        dced = af.dce(pb_ir, out_used=(True, (False,)))
+        assert [eqn.prim.name for eqn in dced.eqns] == ["concat"]
 
-    def test_pullback_call_keeps_inner_ir_when_cotangent_is_used(self):
+    def test_dce_of_pullback_can_keep_only_cotangent_dataflow(self):
         def inner_fn(x):
             dead = af.concat(x, " DEAD")
             live = af.concat(x, " LIVE")
@@ -326,11 +327,10 @@ class TestNestedDCE:
         assert len(inner_ir.eqns) == 2
 
         pb_ir = af.pullback(inner_ir)
-        dce = af.dce(pb_ir, out_used=(False, (True,)))
+        dced = af.dce(pb_ir, out_used=(False, (True,)))
 
-        dced_inner = dce.eqns[0].params["ir"]
-        assert len(dced_inner.eqns) == 2
-        assert dce.call(("x",), "cot") == ("x LIVE", ("cot",))
+        assert not dced.eqns
+        assert dced.call(("x",), "cot") == (None, ("cot",))
 
     def test_deeply_nested_dce(self):
         def branch_fn(x):

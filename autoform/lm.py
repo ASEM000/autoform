@@ -29,6 +29,7 @@ from litellm import acompletion, completion
 import autoform.ad as ad
 import autoform.core as core
 import autoform.schemas as schemas
+import autoform.string as string
 import autoform.utils as utils
 
 __all__ = ["LMClient", "LiteLLMClient", "lm_client", "lm_call", "lm_schema_call"]
@@ -227,7 +228,12 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
     contents, model, out = residuals
     grads = []
     for content in contents:
-        grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
+        grad_prompt = string.format(
+            GRAD_PROMPT,
+            content=content,
+            out=out,
+            out_cotangent=out_cotangent,
+        )
         grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
     return grads, ad.zeroof(model)
@@ -239,7 +245,12 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
     contents, model, out = residuals
 
     async def grad(c):
-        prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
+        prompt = string.format(
+            GRAD_PROMPT,
+            content=c,
+            out=out,
+            out_cotangent=out_cotangent,
+        )
         grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 

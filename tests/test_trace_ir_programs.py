@@ -68,7 +68,7 @@ class TestTraceBatchIR:
 
 
 class TestTracePushforwardIR:
-    def test_trace_pushforward_creates_pushforward_call(self):
+    def test_trace_pushforward_inlines_its_equations(self):
         def inner_program(x):
             return af.format("[{}]", x)
 
@@ -79,8 +79,7 @@ class TestTracePushforwardIR:
             return pf_ir.call((primals,), (tangents,))
 
         outer_ir = af.trace(program_with_pushforward)("p", "t")
-        assert len(outer_ir.eqns) == 1
-        assert outer_ir.eqns[0].prim.name == "pushforward_call"
+        assert [eqn.prim.name for eqn in outer_ir.eqns] == ["format", "format"]
         result = outer_ir.call("primal", "tangent")
         assert result == ("[primal]", "[tangent]")
 
@@ -101,7 +100,7 @@ class TestTracePushforwardIR:
 
 
 class TestTracePullbackIR:
-    def test_trace_pullback_creates_pullback_call(self):
+    def test_trace_pullback_inlines_its_equations(self):
         def inner_program(x):
             return af.format("<{}>", x)
 
@@ -113,7 +112,7 @@ class TestTracePullbackIR:
 
         outer_ir = af.trace(program_with_pullback)("p", "c")
         assert len(outer_ir.eqns) == 1
-        assert outer_ir.eqns[0].prim.name == "pullback_call"
+        assert outer_ir.eqns[0].prim.name == "format"
         result = outer_ir.call("primal", "cotan")
         assert result == ("<primal>", ("cotan",))
 

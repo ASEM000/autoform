@@ -13,6 +13,4 @@
 .. autodata:: autoform.extend.gather_p
 .. autodata:: autoform.extend.depends_p
 .. autodata:: autoform.extend.batch_call_p
-.. autodata:: autoform.extend.pushforward_call_p
-.. autodata:: autoform.extend.pullback_call_p
 ```

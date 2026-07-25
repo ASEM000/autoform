@@ -250,7 +250,7 @@ class TestTripleNesting:
 
         assert result == (
             (["a!", "b!"], ["t1a", "t1b"]),
-            (["t2a!", "t2b!"], ["t2t1a", "t2t1b"]),
+            (["t2a", "t2b"], ["t2t1a", "t2t1b"]),
         )
 
 
@@ -297,8 +297,8 @@ class TestTriplePushforward:
         result = pf3.call((((p,), (t1,)), t2), t3)
 
         assert result == (
-            (("a!", "t1"), ("t2p!", "t2t")),
-            (("t3pp!", "t3pt"), ("t3tp!", "t3tt")),
+            (("a!", "t1"), ("t2p", "t2t")),
+            (("t3pp", "t3pt"), ("t3tp", "t3tt")),
         )
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -317,8 +317,8 @@ class TestTriplePushforward:
         result = await pf3.acall((((p,), (t1,)), t2), t3)
 
         assert result == (
-            (("a!", "t1"), ("t2p!", "t2t")),
-            (("t3pp!", "t3pt"), ("t3tp!", "t3tt")),
+            (("a!", "t1"), ("t2p", "t2t")),
+            (("t3pp", "t3pt"), ("t3tp", "t3tt")),
         )
 
     def test_quadruple_pushforward(self):
@@ -511,7 +511,7 @@ class TestMixedDeepNesting:
 
         assert result == (
             (["a!", "b!"], ["t1a", "t1b"]),
-            (["t2pa!", "t2pb!"], ["t2ta", "t2tb"]),
+            (["t2pa", "t2pb"], ["t2ta", "t2tb"]),
         )
 
 
@@ -562,7 +562,7 @@ class TestAlternatingTransforms:
 
         assert result == (
             ([["a!", "b!"], ["c!", "d!"]], [["ta", "tb"], ["tc", "td"]]),
-            ([["qa!", "qb!"], ["qc!", "qd!"]], [["qta", "qtb"], ["qtc", "qtd"]]),
+            ([["qa", "qb"], ["qc", "qd"]], [["qta", "qtb"], ["qtc", "qtd"]]),
         )
 
 
@@ -693,38 +693,19 @@ class TestChainedOperations:
 
 class TestBatchOfPushforwardAllUnbatched:
     def test_pushforward_batch_all_unbatched(self):
-        def program(x):
-            return af.concat(x, "!")
-
-        ir = af.trace(program)("x")
+        ir = af.trace(lambda x: af.concat(x, "!"))("x")
         pf_ir = af.pushforward(ir)
+        batch_pf_ir = af.batch(pf_ir, in_axes=(False, False))
 
-        batch_size = 3
-        in_batched = (False, False)
-        in_values = (("hello",), ("tangent",))
-
-        out_vals, out_batched = af.core.batch_rules.get(af.ad.pushforward_call_p)(
-            (batch_size, in_batched, in_values), ir=ir
-        )
-        assert out_vals == ("hello!", "tangent")
-        assert out_batched == (False, False)
+        assert batch_pf_ir.call(("hello",), ("tangent",)) == ("hello!", "tangent")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_batch_all_unbatched_async(self):
-        def program(x):
-            return af.concat(x, "!")
+        ir = af.trace(lambda x: af.concat(x, "!"))("x")
+        pf_ir = af.pushforward(ir)
+        batch_pf_ir = af.batch(pf_ir, in_axes=(False, False))
 
-        ir = af.trace(program)("x")
-
-        batch_size = 3
-        in_batched = (False, False)
-        in_values = (("hello",), ("tangent",))
-
-        out_vals, out_batched = await af.core.batch_rules.aget(af.ad.pushforward_call_p)(
-            (batch_size, in_batched, in_values), ir=ir
-        )
-        assert out_vals == ("hello!", "tangent")
-        assert out_batched == (False, False)
+        assert await batch_pf_ir.acall(("hello",), ("tangent",)) == ("hello!", "tangent")
 
     def test_pushforward_batch_primals_batched_tangents_unbatched(self):
         def program(x):
@@ -743,16 +724,12 @@ class TestBatchOfPullbackAllUnbatched:
             return af.concat(x, "!")
 
         ir = af.trace(program)("x")
-
-        batch_size = 3
-        in_batched = (False, False)
-        in_values = (("hello",), "cotangent")
-
-        out_vals, out_batched = af.core.batch_rules.get(af.ad.pullback_call_p)(
-            (batch_size, in_batched, in_values), ir=ir
+        pb_ir = af.pullback(ir)
+        batch_pb_ir = af.batch(pb_ir, in_axes=(False, False))
+        assert batch_pb_ir.call(("hello",), "cotangent") == (
+            "hello!",
+            ("cotangent",),
         )
-        assert out_vals == ("hello!", ("cotangent",))
-        assert out_batched == (False, (False,))
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_batch_all_unbatched_async(self):
@@ -760,16 +737,12 @@ class TestBatchOfPullbackAllUnbatched:
             return af.concat(x, "!")
 
         ir = af.trace(program)("x")
-
-        batch_size = 3
-        in_batched = (False, False)
-        in_values = (("hello",), "cotangent")
-
-        out_vals, out_batched = await af.core.batch_rules.aget(af.ad.pullback_call_p)(
-            (batch_size, in_batched, in_values), ir=ir
+        pb_ir = af.pullback(ir)
+        batch_pb_ir = af.batch(pb_ir, in_axes=(False, False))
+        assert await batch_pb_ir.acall(("hello",), "cotangent") == (
+            "hello!",
+            ("cotangent",),
         )
-        assert out_vals == ("hello!", ("cotangent",))
-        assert out_batched == (False, (False,))
 
     def test_pullback_batch_primals_batched_cotangents_unbatched(self):
         def program(x):
@@ -928,7 +901,7 @@ class TestPullbackOfPullback:
         assert out_p == "<a>"
         assert in_c == ("g",)
         assert in_c_p == ("cp",)
-        assert in_c_cout == "<cc>"
+        assert in_c_cout == "cc"
 
     def test_pullback_of_pullback_two_args(self):
         def f(x, y):

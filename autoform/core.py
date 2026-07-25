@@ -820,6 +820,9 @@ class TraceBox:
         raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="string coercion"))
 
 
+aval_rules[TraceBox] = lambda box: box.aval
+
+
 def assert_foldable(prim: Prim, value: Tree) -> None:
     traced_values = [x for x in utils.tree.leaves(value) if isinstance(x, TraceBox)]
     assert not traced_values, (

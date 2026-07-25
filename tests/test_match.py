@@ -220,17 +220,17 @@ class TestIRMatch:
 
     def test_match_higher_order_primitive_with_nested_ir(self):
         inner_ir = af.trace(lambda x: af.concat("a", x))("b")
-        pf_ir = af.pushforward(inner_ir)
+        batched_ir = af.batch(inner_ir, in_axes=False)
 
-        match pf_ir:
+        match batched_ir:
             case af.core.IR(
-                eqns=[af.core.Eqn(prim=af.core.Prim(name="pushforward_call"), params=params)]
+                eqns=[af.core.Eqn(prim=af.core.Prim(name="batch_call"), params=params)]
             ):
                 nested = params["ir"]
                 assert isinstance(nested, af.core.IR)
                 assert len(nested.eqns) == 1
             case _:
-                assert False, "Pattern should match pushforward_call"
+                assert False, "Pattern should match batch_call"
 
     def test_match_switch_branches(self):
         branches = {

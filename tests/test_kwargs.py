@@ -41,18 +41,19 @@ def abstract_greet(in_tree) -> af.core.AVal:
 def pushforward_greet(in_tree):
     primals, tangents = in_tree
     tangents = af.ad.materialize(tangents)
-    return impl_greet(primals), impl_greet(tangents)
+    return greet_p.bind(primals), greet_p.bind(tangents)
 
 
 @ft.partial(af.core.pull_fwd_rules.set, greet_p)
 def pullback_fwd_greet(in_tree):
-    out = impl_greet(in_tree)
+    out = greet_p.bind(in_tree)
     residuals = in_tree
     return out, residuals
 
 
 @ft.partial(af.core.pull_bwd_rules.set, greet_p)
-def pullback_bwd_greet(residuals, out_cotangent):
+def pullback_bwd_greet(in_tree):
+    residuals, out_cotangent = in_tree
     match residuals:
         case (_, {"greeting": greeting, "punctuation": punct}):
             return (
