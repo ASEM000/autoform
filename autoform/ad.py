@@ -238,7 +238,8 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    pusher = PushforwardInterpreter(parent=core.active_interpreter.get())
+    parent = core.active_interpreter.get()
+    pusher = PushforwardInterpreter(parent=parent)
     with core.using_interpreter(pusher):
 
         def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
@@ -256,7 +257,8 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    pusher = PushforwardInterpreter(parent=core.active_interpreter.get())
+    parent = core.active_interpreter.get()
+    pusher = PushforwardInterpreter(parent=parent)
     with core.using_interpreter(pusher):
 
         async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
@@ -279,21 +281,17 @@ def abstract_pushforward_call(_: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def pushforward_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    p, t = in_tree
-    (p_in, t_in), (t_p_in, t_t_in) = p, t
-    pf_ir = pushforward(ir)
-    p_out = pf_ir.call(p_in, t_in)
-    t_out = pf_ir.call(t_p_in, t_t_in)
-    return p_out, t_out
+    parent = core.active_interpreter.get()
+    pusher = PushforwardInterpreter(parent=parent)
+    with core.using_interpreter(pusher):
+        return pusher.unbox(impl_pushforward_call(pusher.box(in_tree), ir=ir))
 
 
 async def apushforward_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    p, t = in_tree
-    (p_in, t_in), (t_p_in, t_t_in) = p, t
-    pf_ir = pushforward(ir)
-    p_out = await pf_ir.acall(p_in, t_in)
-    t_out = await pf_ir.acall(t_p_in, t_t_in)
-    return p_out, t_out
+    parent = core.active_interpreter.get()
+    pusher = PushforwardInterpreter(parent=parent)
+    with core.using_interpreter(pusher):
+        return pusher.unbox(await aimpl_pushforward_call(pusher.box(in_tree), ir=ir))
 
 
 def pullback_fwd_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
