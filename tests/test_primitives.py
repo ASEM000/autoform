@@ -660,6 +660,24 @@ class TestCotangentHelpers:
         result = af.ad.cot_acc(["a", "b", "c"])
         assert result == "abc"
 
+    def test_cot_acc_is_traceable(self):
+        ir = af.trace(lambda x, y: af.ad.cot_acc([x, y]))("a", "b")
+        assert [eqn.prim for eqn in ir.eqns] == [af.ad.cot_acc_p]
+        assert ir.call("c", "d") == "cd"
+
+    def test_cot_acc_transform_rules(self):
+        ir = af.trace(lambda x, y: af.ad.cot_acc([x, y]))("a", "b")
+        assert af.pushforward(ir).call(("a", "b"), ("da", "db")) == ("ab", "dadb")
+        assert af.pullback(ir).call(("a", "b"), "g") == ("ab", ("g", "g"))
+        assert af.batch(ir).call(["a", "b"], ["c", "d"]) == ["ac", "bd"]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cot_acc_transform_rules_async(self):
+        ir = af.trace(lambda x, y: af.ad.cot_acc([x, y]))("a", "b")
+        assert await af.pushforward(ir).acall(("a", "b"), ("da", "db")) == ("ab", "dadb")
+        assert await af.pullback(ir).acall(("a", "b"), "g") == ("ab", ("g", "g"))
+        assert await af.batch(ir).acall(["a", "b"], ["c", "d"]) == ["ac", "bd"]
+
     def test_cot_acc_lists_elementwise(self):
         result = af.ad.cot_acc([["a", "b"], ["c", "d"]])
         assert result == ["ac", "bd"]
