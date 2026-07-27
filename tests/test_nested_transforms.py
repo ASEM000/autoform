@@ -250,7 +250,7 @@ class TestTripleNesting:
 
         assert result == (
             (["a!", "b!"], ["t1a", "t1b"]),
-            (["t2a!", "t2b!"], ["t2t1a", "t2t1b"]),
+            (["t2a", "t2b"], ["t2t1a", "t2t1b"]),
         )
 
 
@@ -297,8 +297,8 @@ class TestTriplePushforward:
         result = pf3.call((((p,), (t1,)), t2), t3)
 
         assert result == (
-            (("a!", "t1"), ("t2p!", "t2t")),
-            (("t3pp!", "t3pt"), ("t3tp!", "t3tt")),
+            (("a!", "t1"), ("t2p", "t2t")),
+            (("t3pp", "t3pt"), ("t3tp", "t3tt")),
         )
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -317,8 +317,8 @@ class TestTriplePushforward:
         result = await pf3.acall((((p,), (t1,)), t2), t3)
 
         assert result == (
-            (("a!", "t1"), ("t2p!", "t2t")),
-            (("t3pp!", "t3pt"), ("t3tp!", "t3tt")),
+            (("a!", "t1"), ("t2p", "t2t")),
+            (("t3pp", "t3pt"), ("t3tp", "t3tt")),
         )
 
     def test_quadruple_pushforward(self):
@@ -511,7 +511,7 @@ class TestMixedDeepNesting:
 
         assert result == (
             (["a!", "b!"], ["t1a", "t1b"]),
-            (["t2pa!", "t2pb!"], ["t2ta", "t2tb"]),
+            (["t2pa", "t2pb"], ["t2ta", "t2tb"]),
         )
 
 
@@ -562,7 +562,7 @@ class TestAlternatingTransforms:
 
         assert result == (
             ([["a!", "b!"], ["c!", "d!"]], [["ta", "tb"], ["tc", "td"]]),
-            ([["qa!", "qb!"], ["qc!", "qd!"]], [["qta", "qtb"], ["qtc", "qtd"]]),
+            ([["qa", "qb"], ["qc", "qd"]], [["qta", "qtb"], ["qtc", "qtd"]]),
         )
 
 
