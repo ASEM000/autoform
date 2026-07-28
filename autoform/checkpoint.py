@@ -22,6 +22,7 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.scheduling as scheduling
@@ -37,6 +38,7 @@ type Tree[T] = utils.Tree[T]
 
 
 checkpoint_p = core.Prim("checkpoint")
+constfold.constfold_rules[checkpoint_p] = lambda eqn, _: eqn
 dce.non_dce_primitives.add(checkpoint_p)
 
 

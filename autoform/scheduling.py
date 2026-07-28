@@ -26,6 +26,7 @@ from contextvars import ContextVar
 import autoform.ad as ad
 import autoform.analysis as analysis
 import autoform.batch as batch
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.utils as utils
@@ -191,6 +192,14 @@ def dce_gather(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
 
 
 dce.dce_rules[gather_p] = dce_gather
+
+
+def constfold_gather(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    irs = [constfold.constfold(ir, cond=cond) for ir in eqn.params["irs"]]
+    return eqn.using(irs=irs)
+
+
+constfold.constfold_rules[gather_p] = constfold_gather
 
 
 # ==================================================================================================

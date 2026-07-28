@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 import autoform as af
+import autoform.extend as afe
 
 
 class TestTraceValuePythonOps:
@@ -68,6 +69,199 @@ class CountingInterpreter(af.core.Interpreter):
     async def ainterpret(self, prim, in_tree, /, **params):
         self.calls += 1
         return await self.parent.ainterpret(prim, in_tree, **params)
+
+
+class TestConstfold:
+    def test_evaluates_concrete_equations(self):
+        def program(x):
+            prefix = af.concat("A", "B")
+            header = af.format("[{}]", prefix)
+            return af.concat(header, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir)
+
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "format", "concat"]
+        assert [eqn.prim.name for eqn in folded.eqns] == ["concat"]
+        assert folded.eqns[0].in_tree[0] == "[AB]"
+        assert folded.call("C") == "[AB]C"
+
+    def test_preserves_static_input_checks(self):
+        def program(prefix, x):
+            header = af.concat(prefix, ": ")
+            return af.concat(header, x)
+
+        ir = af.trace(program, static=(True, False))("Q", "seed")
+        folded = af.constfold(ir)
+
+        assert [eqn.prim.name for eqn in folded.eqns] == ["concat"]
+        assert folded.eqns[0].in_tree[0] == "Q: "
+        assert folded.call("Q", "hello") == "Q: hello"
+        with pytest.raises(AssertionError, match="Static input mismatch"):
+            folded.call("R", "hello")
+
+    def test_cond_selects_concrete_equations(self):
+        def program(x):
+            prefix = af.concat("A", "B")
+            header = af.format("[{}]", prefix)
+            return af.concat(header, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir, cond=lambda e: e.prim.name == "concat")
+
+        assert [eqn.prim.name for eqn in folded.eqns] == ["format", "concat"]
+        assert folded.eqns[0].in_tree[0][0] == "AB"
+        assert folded.call("C") == "[AB]C"
+
+    def test_cond_blocks_concrete_equation_evaluation(self):
+        counter_p = af.core.Prim("constfold_counter_probe")
+        calls = 0
+
+        def counter(x):
+            return counter_p.bind(x)
+
+        def impl_counter(in_tree):
+            nonlocal calls
+            calls += 1
+            return f"{in_tree}!"
+
+        def abstract_counter(in_tree):
+            del in_tree
+            return af.core.StrAVal()
+
+        af.core.impl_rules.set(counter_p, impl_counter)
+        af.core.abstract_rules.set(counter_p, abstract_counter)
+
+        def program(x):
+            prefix = counter("A")
+            return af.concat(prefix, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir, cond=lambda e: e.prim is not counter_p)
+
+        assert calls == 0
+        assert [eqn.prim.name for eqn in folded.eqns] == [
+            "constfold_counter_probe",
+            "concat",
+        ]
+        assert folded.call("B") == "A!B"
+        assert calls == 1
+
+    def test_non_constfold_registration_cannot_be_overridden_by_cond(self):
+        counter_p = afe.register_non_constfold(af.core.Prim("non_constfold_probe"))
+        calls = 0
+
+        def counter(x):
+            return counter_p.bind(x)
+
+        def impl_counter(in_tree):
+            nonlocal calls
+            calls += 1
+            return f"{in_tree}!"
+
+        af.core.impl_rules.set(counter_p, impl_counter)
+        af.core.abstract_rules.set(counter_p, lambda _: af.core.StrAVal())
+
+        def program(x):
+            prefix = counter("A")
+            return af.concat(prefix, x)
+
+        ir = af.trace(program)("seed")
+        folded = af.constfold(ir, cond=lambda _: True)
+
+        assert calls == 0
+        assert [eqn.prim.name for eqn in folded.eqns] == [
+            "non_constfold_probe",
+            "concat",
+        ]
+        assert folded.call("B") == "A!B"
+        assert calls == 1
+
+    def test_lm_call_remains_staged_when_inputs_are_concrete(self):
+        class Response:
+            def __init__(self):
+                self.choices = [SimpleNamespace(message=SimpleNamespace(content="rubric"))]
+
+        class Client:
+            def __init__(self):
+                self.calls = 0
+
+            def completion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+            async def acompletion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+        def program(question):
+            rubric = af.lm_call(
+                [{"role": "user", "content": "make a rubric"}],
+                model="test-model",
+            )
+            return af.format("{}: {}", rubric, question)
+
+        client = Client()
+        with af.lm_client(client):
+            ir = af.trace(program)("seed")
+            folded = af.constfold(ir, cond=lambda _: True)
+
+            assert client.calls == 0
+            assert [eqn.prim.name for eqn in folded.eqns] == ["lm_call", "format"]
+            assert folded.call("question") == "rubric: question"
+
+        assert client.calls == 1
+
+    def test_hop_rule_folds_nested_ir_but_keeps_container_staged(self):
+        def branch(x):
+            prefix = af.concat("A", "B")
+            return af.concat(prefix, x)
+
+        branches = {"only": af.trace(branch)("seed")}
+        ir = af.trace(lambda: af.switch("only", branches, "C"))()
+        folded = af.constfold(ir)
+
+        assert [eqn.prim.name for eqn in folded.eqns] == ["switch"]
+        folded_branch = folded.eqns[0].params["branches"]["only"]
+        assert [eqn.prim.name for eqn in folded_branch.eqns] == ["concat"]
+        assert folded.call() == "ABC"
+
+    def test_hop_rule_does_not_execute_nested_lm_call(self):
+        class Response:
+            def __init__(self):
+                self.choices = [SimpleNamespace(message=SimpleNamespace(content="answer"))]
+
+        class Client:
+            def __init__(self):
+                self.calls = 0
+
+            def completion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+            async def acompletion(self, **kwargs):
+                self.calls += 1
+                return Response()
+
+        def branch(_):
+            return af.lm_call(
+                [{"role": "user", "content": "literal prompt"}],
+                model="test-model",
+            )
+
+        branches = {"only": af.trace(branch)("seed")}
+        client = Client()
+        with af.lm_client(client):
+            ir = af.trace(lambda: af.switch("only", branches, "literal"))()
+            folded = af.constfold(ir, cond=lambda _: True)
+
+            assert client.calls == 0
+            assert [eqn.prim.name for eqn in folded.eqns] == ["switch"]
+            folded_branch = folded.eqns[0].params["branches"]["only"]
+            assert [eqn.prim.name for eqn in folded_branch.eqns] == ["lm_call"]
+            assert folded.call() == "answer"
+
+        assert client.calls == 1
 
 
 class TestFold:

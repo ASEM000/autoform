@@ -21,6 +21,7 @@
 import autoform.ad as ad
 import autoform.batch as batch
 import autoform.checkpoint as checkpoint
+import autoform.constfold as constfold
 import autoform.control as control
 import autoform.core as core
 import autoform.custom as custom
@@ -52,6 +53,7 @@ tag = core.tag
 # TRANSFORMS
 # ==================================================================================================
 
+constfold = constfold.constfold
 pushforward = ad.pushforward
 pullback = ad.pullback
 batch = batch.batch
@@ -111,6 +113,7 @@ __all__ = [
     "lm_client",
     "tag",
     # transformations
+    "constfold",
     "pushforward",
     "pullback",
     "custom",

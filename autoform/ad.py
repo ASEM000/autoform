@@ -21,6 +21,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, TypeGuard
 
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.dce as dce
 import autoform.scheduling as scheduling
@@ -389,6 +390,13 @@ def dce_pushforward_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCERes
 
 
 dce.dce_rules[pushforward_call_p] = dce_pushforward_call
+
+
+def constfold_pushforward_call(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    return eqn.using(ir=constfold.constfold(eqn.params["ir"], cond=cond))
+
+
+constfold.constfold_rules[pushforward_call_p] = constfold_pushforward_call
 
 
 # ==================================================================================================
@@ -836,3 +844,10 @@ def dce_pullback_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult
 
 
 dce.dce_rules[pullback_call_p] = dce_pullback_call
+
+
+def constfold_pullback_call(eqn: core.Eqn, cond: constfold.ConstfoldCond, /) -> core.Eqn:
+    return eqn.using(ir=constfold.constfold(eqn.params["ir"], cond=cond))
+
+
+constfold.constfold_rules[pullback_call_p] = constfold_pullback_call

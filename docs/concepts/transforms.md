@@ -16,6 +16,7 @@ The output is another executable IR. That one property is what makes composition
 | {py:func}`pushforward <autoform.pushforward>` | Original inputs plus input tangents. | Original output plus output tangent. | Push a proposed input change forward. |
 | {py:func}`pullback <autoform.pullback>` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
 | {py:func}`sched <autoform.sched>` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
+| {py:func}`constfold <autoform.constfold>` | The same inputs as `ir`. | The same output as `ir`. | Precompute literal-only equations before execution. |
 | {py:func}`dce <autoform.dce>` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the needed outputs. |
 | {py:func}`weighted <autoform.weighted>` | The same inputs as `ir`. | `(output, path_weight)`. | Score one concrete path with reached `factor` calls. |
 
@@ -84,6 +85,25 @@ import asyncio
 
 scheduled = af.sched(ir)
 result = asyncio.run(scheduled.acall("topic"))
+```
+
+`````
+
+`````{tab-item} constfold
+
+```python
+constfold(ir, /, *, cond=None) -> IR
+```
+
+{py:func}`constfold <autoform.constfold>` evaluates equations whose inputs are
+all concrete literals and rewrites their uses to the resulting literals. Pass
+`cond` to restrict which concrete equations are eligible; rejected equations stay
+staged and their outputs remain dynamic for downstream equations. Primitives
+registered as non-constfold, including language-model calls, always remain staged.
+
+```python
+folded = af.constfold(ir, cond=lambda e: e.prim.name in {"concat", "format"})
+result = folded.call("topic")
 ```
 
 `````

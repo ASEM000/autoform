@@ -27,6 +27,7 @@ from typing import Any, Protocol, runtime_checkable
 from litellm import acompletion, completion
 
 import autoform.ad as ad
+import autoform.constfold as constfold
 import autoform.core as core
 import autoform.schemas as schemas
 import autoform.utils as utils
@@ -94,6 +95,7 @@ def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
 # ==================================================================================================
 
 lm_call_p = core.Prim("lm_call")
+constfold.constfold_rules[lm_call_p] = lambda eqn, _: eqn
 
 # TODO(asem): take a look into this
 GRAD_PROMPT = """Given this LLM interaction:
@@ -288,6 +290,7 @@ core.batch_rules.aset(lm_call_p, abatch_lm_call)
 # ==================================================================================================
 
 lm_schema_call_p = core.Prim("lm_schema_call")
+constfold.constfold_rules[lm_schema_call_p] = lambda eqn, _: eqn
 
 
 SCHEMA_GRAD_PROMPT = """Given this LLM interaction:
