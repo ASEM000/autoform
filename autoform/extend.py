@@ -71,7 +71,7 @@ batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
-serial_fanout = scheduling.serial_fanout
+serial_fanout = batch.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
 is_var = core.is_var
@@ -94,7 +94,7 @@ stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
 while_loop_p = control.while_loop_p
 fixpoint_p = control.fixpoint_p
-gather_p = scheduling.gather_p
+fanout_p = batch.fanout_p
 depends_p = scheduling.depends_p
 batch_call_p = batch.batch_call_p
 pushforward_call_p = ad.pushforward_call_p
@@ -155,7 +155,7 @@ __all__ = [
     "switch_p",
     "while_loop_p",
     "fixpoint_p",
-    "gather_p",
+    "fanout_p",
     "depends_p",
     "batch_call_p",
     "pushforward_call_p",

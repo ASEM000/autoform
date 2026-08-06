@@ -22,7 +22,6 @@ import autoform.ad as ad
 import autoform.batch as batch
 import autoform.core as core
 import autoform.dce as dce
-import autoform.scheduling as scheduling
 import autoform.utils as utils
 
 __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
@@ -245,7 +244,7 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResu
 
     irs = [branches[key_col[b] if key_batched else key_col] for b in range(batch_size)]
     inputs = [unbatch(b) for b in range(batch_size)]
-    results = await scheduling.gather_p.abind(inputs, irs=irs)
+    results = await batch.fanout_p.abind(inputs, irs=irs)
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_tree = utils.batch_transpose(batch_size, out_batched, results)
     return out_tree, out_batched
