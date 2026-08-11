@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import autoform as af
-from autoform.checkpoint import checkpoint
+from autoform.ckpt import checkpoint
 from autoform.core import Interpreter, active_interpreter, using_interpreter
 
 

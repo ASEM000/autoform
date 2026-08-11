@@ -21,7 +21,7 @@ from typing import Any
 
 import autoform.ad as ad
 import autoform.axes as axes
-import autoform.checkpoint as checkpoint
+import autoform.ckpt as ckpt
 import autoform.control as control
 import autoform.core as core
 import autoform.dce as dce
@@ -89,7 +89,7 @@ lm_call_p = lm.lm_call_p
 lm_schema_call_p = lm.lm_schema_call_p
 factor_p = prob.factor_p
 weighted_call_p = prob.weighted_call_p
-checkpoint_p = checkpoint.checkpoint_p
+checkpoint_p = ckpt.checkpoint_p
 stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
 while_loop_p = control.while_loop_p

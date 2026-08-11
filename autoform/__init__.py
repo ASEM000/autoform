@@ -20,7 +20,7 @@
 
 import autoform.ad as ad
 import autoform.axes as axes
-import autoform.checkpoint as checkpoint
+import autoform.ckpt as ckpt
 import autoform.control as control
 import autoform.core as core
 import autoform.custom as custom
@@ -56,9 +56,9 @@ pushforward = ad.pushforward
 pullback = ad.pullback
 batch = axes.batch
 custom = custom.custom
-collect = checkpoint.collect
-inject = checkpoint.inject
-checkpoint = checkpoint.checkpoint
+collect = ckpt.collect
+inject = ckpt.inject
+checkpoint = ckpt.checkpoint
 dce = dce.dce
 sched = scheduling.sched
 memoize = memoize.memoize
