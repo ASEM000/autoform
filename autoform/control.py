@@ -18,17 +18,98 @@ from __future__ import annotations
 
 import functools as ft
 
-import autoform.ad as ad
-import autoform.batch as batch
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
-__all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
+__all__ = ["depends", "stop_gradient", "switch", "while_loop", "fixpoint"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Branches = dict[str, core.IR]
+
+# ==================================================================================================
+# DEPENDS
+# ==================================================================================================
+
+depends_p = core.Prim("depends")
+
+type DependsType[T] = tuple[T, tuple[Tree, ...]]
+type DependsPair = tuple[DependsType[Tree], DependsType[Tree]]
+type DependsFwdResult = tuple[Tree, DependsType[Tree]]
+type DependsBwdInput = tuple[DependsType[Tree], Tree]
+type BatchDependsInput = tuple[int, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
+
+
+def depends[T](value: T, /, *deps) -> T:
+    """Annotate that `value` depends on the evaluation of `deps`.
+
+    This primitive inserts an ordering barrier without changing the forward
+    value. The equations that produce `value` and `deps` may still run in the
+    same scheduling level; the barrier's output is available only after
+    `value` and all `deps` have been evaluated.
+
+    Args:
+        value: The main value to return.
+        *deps: Values that `value` depends on.
+    Returns:
+        The original `value`, through a barrier that also depends on `deps`.
+    Example:
+        >>> import autoform as af
+        >>> def program(x):
+        ...     a = af.format("First: {}", x)
+        ...     b = af.format("Second: {}", x)
+        ...     return af.depends(b, a)  # return b after a has also run
+    """
+    return depends_p.bind((value, deps))
+
+
+def impl_depends[T](in_tree: DependsType[T], /) -> T:
+    value, _ = in_tree
+    return value
+
+
+def abstract_depends(in_tree: DependsType[Tree], /) -> Tree:
+    value, _ = in_tree
+    return value
+
+
+def push_depends(in_tree: DependsPair, /) -> TreePair:
+    (primal_value, primal_deps), (tangent_value, tangent_deps) = in_tree
+    p_out = depends_p.bind((primal_value, primal_deps))
+    t_out = depends_p.bind((tangent_value, tangent_deps))
+    return p_out, t_out
+
+
+def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
+    value, deps = in_tree
+    return depends_p.bind((value, deps)), in_tree
+
+
+def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
+    import autoform.ad as ad
+
+    (_, deps), out_cotangent = in_tree
+    return out_cotangent, utils.tree.map(lambda d: d if ad.is_zero(d) else ad.zeroof(d), deps)
+
+
+def batch_depends(in_tree: BatchDependsInput, /) -> core.BatchRuleResult:
+    _, (value_batched, _), (value, deps) = in_tree
+    return depends_p.bind((value, deps)), value_batched
+
+
+core.impl_rules.set(depends_p, impl_depends)
+core.impl_rules.aset(depends_p, utils.asyncify(impl_depends))
+core.abstract_rules.set(depends_p, abstract_depends)
+core.push_rules.set(depends_p, push_depends)
+core.push_rules.aset(depends_p, utils.asyncify(push_depends))
+core.pull_fwd_rules.set(depends_p, pull_fwd_depends)
+core.pull_fwd_rules.aset(depends_p, utils.asyncify(pull_fwd_depends))
+core.pull_bwd_rules.set(depends_p, pull_bwd_depends)
+core.pull_bwd_rules.aset(depends_p, utils.asyncify(pull_bwd_depends))
+core.batch_rules.set(depends_p, batch_depends)
+core.batch_rules.aset(depends_p, utils.asyncify(batch_depends))
+
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -71,6 +152,8 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
+    import autoform.ad as ad
+
     primal, tangent = in_tree
     zero_t = utils.tree.map(lambda p: p if ad.is_zero(p) else ad.zeroof(p), primal)
     return primal, zero_t
@@ -82,6 +165,8 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
 
 
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del out_cotangent
     return utils.tree.map(lambda r: r if ad.is_zero(r) else ad.zeroof(r), residuals)
@@ -170,6 +255,8 @@ def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -177,6 +264,8 @@ def pushforward_switch(in_tree, /, *, branches: Branches):
 
 
 async def apush_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -198,6 +287,8 @@ async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
@@ -206,6 +297,8 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
@@ -233,6 +326,8 @@ def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
 
 
 async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
+    import autoform.axes as axes
+
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
@@ -244,7 +339,7 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResu
 
     irs = [branches[key_col[b] if key_batched else key_col] for b in range(batch_size)]
     inputs = [unbatch(b) for b in range(batch_size)]
-    results = await batch.fanout_p.abind(inputs, irs=irs)
+    results = await axes.fanout_p.abind(inputs, irs=irs)
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_tree = utils.batch_transpose(batch_size, out_batched, results)
     return out_tree, out_batched
@@ -263,14 +358,14 @@ core.batch_rules.set(switch_p, batch_switch)
 core.batch_rules.aset(switch_p, abatch_switch)
 
 
-def dce_switch(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_switch(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     branches: Branches = eqn.params["branches"]
-    branches = {k: dce.dce(branches[k], out_used=out_used) for k in branches}
+    branches = {k: dead.dce(branches[k], out_used=out_used) for k in branches}
     new_eqn = eqn.using(branches=branches)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[switch_p] = dce_switch
+dead.dce_rules[switch_p] = dce_switch
 
 
 # ==================================================================================================
@@ -430,6 +525,8 @@ def pullback_bwd_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
@@ -454,6 +551,8 @@ async def apull_bwd_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
@@ -478,6 +577,8 @@ def batch_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, init_val = in_tree
     # NOTE(asem): in_tree is a SoA object, however we need to pass in only parts of the SoA
     # that are alive (:= still needs some work). so we need to convert from SoA to AoS
@@ -520,8 +621,8 @@ def batch_while_loop(
     state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
-    batched_cond = batch.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = batch.batch(body_ir, in_axes=body_in_axes)
+    batched_cond = axes.batch(cond_ir, in_axes=cond_in_axes)
+    batched_body = axes.batch(body_ir, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -571,6 +672,8 @@ async def abatch_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, init_val = in_tree
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
@@ -582,8 +685,8 @@ async def abatch_while_loop(
     state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
-    batched_cond = batch.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = batch.batch(body_ir, in_axes=body_in_axes)
+    batched_cond = axes.batch(cond_ir, in_axes=cond_in_axes)
+    batched_body = axes.batch(body_ir, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -631,19 +734,19 @@ core.batch_rules.set(while_loop_p, batch_while_loop)
 core.batch_rules.aset(while_loop_p, abatch_while_loop)
 
 
-def dce_while_loop(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_while_loop(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     cond_ir = eqn.params["cond_ir"]
     body_ir = eqn.params["body_ir"]
     # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
     # even if the caller only uses part of the final state.
     state_used = utils.tree.map(lambda _: True, body_ir.out_tree)
-    cond_ir = dce.dce(cond_ir)
-    body_ir = dce.dce(body_ir, out_used=state_used)
+    cond_ir = dead.dce(cond_ir)
+    body_ir = dead.dce(body_ir, out_used=state_used)
     new_eqn = eqn.using(cond_ir=cond_ir, body_ir=body_ir)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[while_loop_p] = dce_while_loop
+dead.dce_rules[while_loop_p] = dce_while_loop
 
 
 # ==================================================================================================
@@ -654,6 +757,8 @@ fixpoint_p = core.Prim("fixpoint")
 
 
 def cot_tree_acc(lhs: Tree, rhs: Tree, /) -> Tree:
+    import autoform.ad as ad
+
     return utils.tree.map(lambda l, r: ad.cot_acc([l, r]), lhs, rhs, is_leaf=ad.is_zero)
 
 
@@ -806,6 +911,8 @@ def pullback_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> Tree:
+    import autoform.ad as ad
+
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
@@ -869,6 +976,8 @@ async def apull_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> Tree:
+    import autoform.ad as ad
+
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
@@ -932,6 +1041,8 @@ def batch_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
@@ -950,10 +1061,10 @@ def batch_fixpoint(
     state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
-    batched_step = batch.batch(step_ir, in_axes=in_axes)
+    batched_step = axes.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
         equiv_axes = (state_in_axes, state_in_axes)
-        batched_equiv = batch.batch(equiv_ir, in_axes=equiv_axes)
+        batched_equiv = axes.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -997,6 +1108,8 @@ async def abatch_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
@@ -1015,10 +1128,10 @@ async def abatch_fixpoint(
     state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
-    batched_step = batch.batch(step_ir, in_axes=in_axes)
+    batched_step = axes.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
         equiv_axes = (state_in_axes, state_in_axes)
-        batched_equiv = batch.batch(equiv_ir, in_axes=equiv_axes)
+        batched_equiv = axes.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -1064,16 +1177,16 @@ core.batch_rules.set(fixpoint_p, batch_fixpoint)
 core.batch_rules.aset(fixpoint_p, abatch_fixpoint)
 
 
-def dce_fixpoint(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_fixpoint(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     step_ir = eqn.params["step_ir"]
     equiv_ir = eqn.params["equiv_ir"]
     # NOTE(asem): every state leaf is loop-carried into the next step, even if
     # the caller only uses part of the final state.
     state_used = utils.tree.map(lambda _: True, step_ir.out_tree)
-    equiv_ir = None if equiv_ir is None else dce.dce(equiv_ir)
-    step_ir = dce.dce(step_ir, out_used=state_used)
+    equiv_ir = None if equiv_ir is None else dead.dce(equiv_ir)
+    step_ir = dead.dce(step_ir, out_used=state_used)
     new_eqn = eqn.using(step_ir=step_ir, equiv_ir=equiv_ir)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[fixpoint_p] = dce_fixpoint
+dead.dce_rules[fixpoint_p] = dce_fixpoint

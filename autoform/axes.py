@@ -18,16 +18,16 @@ from __future__ import annotations
 
 import asyncio
 import functools as ft
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-import autoform.ad as ad
+import autoform.analysis as analysis
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
-__all__ = ["batch", "serial_fanout"]
+__all__ = ["batch", "sched", "serial_fanout"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
@@ -80,6 +80,8 @@ def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
@@ -89,6 +91,8 @@ def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
 
 async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
@@ -110,6 +114,8 @@ async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdR
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -119,6 +125,8 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -176,14 +184,77 @@ core.batch_rules.set(fanout_p, batch_fanout)
 core.batch_rules.aset(fanout_p, abatch_fanout)
 
 
-def dce_fanout(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     irs = eqn.params["irs"]
-    new_irs = [dce.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
+    new_irs = [dead.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
     new_eqn = eqn.using(irs=new_irs)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[fanout_p] = dce_fanout
+dead.dce_rules[fanout_p] = dce_fanout
+
+# ==================================================================================================
+# SCHED
+# ==================================================================================================
+
+
+@ft.partial(utils.lru_cache, maxsize=256)
+def sched[*A, R](
+    ir: core.IR[*A, R], /, *, cond: Callable[[core.Eqn], bool] | None = None
+) -> core.IR[*A, R]:
+    """Schedule independent operations for parallel execution.
+
+    Args:
+        ir: The IR to schedule.
+        cond: Predicate that takes an IR Equation and returns True if the
+              equation should be parallelized. If None, all operations are
+              candidates for parallelization.
+
+    Returns:
+        A new IR with independent operations grouped together for parallel execution.
+
+    Example:
+        >>> import autoform as af
+        >>> import asyncio
+        >>>
+        >>> def parallel_calls(x):
+        ...     msg1 = [dict(role="user", content=af.format("Q1: {}", x))]
+        ...     msg2 = [dict(role="user", content=af.format("Q2: {}", x))]
+        ...     a = af.lm_call(msg1, model="gpt-5.5")
+        ...     b = af.lm_call(msg2, model="gpt-5.5")
+        ...     return af.concat(a, b)
+        >>>
+        >>> ir = af.trace(parallel_calls)("input")
+        >>> scheduled = af.sched(ir)
+        >>>
+        >>> # sync execution (sequential)
+        >>> result = scheduled.call("hello") # doctest: +SKIP
+        >>>
+        >>> # async execution (concurrent via asyncio.gather)
+        >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
+    """
+    levels: list[list[core.Eqn]] = analysis.toposort_levels(ir)
+    out_eqns: list[core.Eqn] = []
+    cond = (lambda _: True) if cond is None else cond
+
+    def recurse(leaf):
+        return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
+
+    def make_fanout(eqns: list[core.Eqn]) -> core.Eqn:
+        irs = [core.IR([eqn], (eqn.in_tree,), eqn.out_tree) for eqn in eqns]
+        in_tree = [(eqn.in_tree,) for eqn in eqns]
+        out_tree = [eqn.out_tree for eqn in eqns]
+        return core.Eqn(fanout_p, in_tree, out_tree, dict(irs=irs))
+
+    for level in levels:
+        eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
+        seq_eqns = [eqn for eqn in eqns if not cond(eqn)]
+        par_eqns = [eqn for eqn in eqns if cond(eqn)]
+        out_eqns.extend([make_fanout(par_eqns)] if len(par_eqns) > 1 else par_eqns)
+        out_eqns.extend(seq_eqns)
+
+    return core.IR(out_eqns, ir.in_tree, ir.out_tree)
+
 
 # ==================================================================================================
 # BATCH
@@ -430,6 +501,8 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> TreePair:
+    import autoform.ad as ad
+
     p, t = in_tree
     pf_ir = ad.pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -437,6 +510,8 @@ def pushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> T
 
 
 async def apushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> TreePair:
+    import autoform.ad as ad
+
     p, t = in_tree
     pf_ir = ad.pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -460,6 +535,8 @@ async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tr
 
 
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
+    import autoform.ad as ad
+
     residuals, c_out = in_tree
     p, _ = residuals
     pb_ir = ad.pullback(ir)
@@ -469,6 +546,8 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> 
 
 
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
+    import autoform.ad as ad
+
     residuals, c_out = in_tree
     p, _ = residuals
     pb_ir = ad.pullback(ir)
@@ -515,9 +594,9 @@ core.batch_rules.set(batch_call_p, batch_batch_call)
 core.batch_rules.aset(batch_call_p, abatch_batch_call)
 
 
-def dce_batch_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=out_used))
-    return dce.default_dce(new_eqn, out_used)
+def dce_batch_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+    new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=out_used))
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[batch_call_p] = dce_batch_call
+dead.dce_rules[batch_call_p] = dce_batch_call

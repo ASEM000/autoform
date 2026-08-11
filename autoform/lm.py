@@ -26,7 +26,6 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import acompletion, completion
 
-import autoform.ad as ad
 import autoform.core as core
 import autoform.schemas as schemas
 import autoform.utils as utils
@@ -186,6 +185,8 @@ def abstract_lm_call(in_tree: Tree, /, *, roles: Roles) -> core.EvalType:
 
 
 def pushforward_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
@@ -197,6 +198,8 @@ def pushforward_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
 
 
 async def apush_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
@@ -222,6 +225,8 @@ async def apull_fwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
 
 
 def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     out_cotangent = ad.materialize(out_cotangent)
     contents, model, out = residuals
@@ -234,6 +239,8 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
 
 
 async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     out_cotangent = ad.materialize(out_cotangent)
     contents, model, out = residuals
@@ -415,6 +422,8 @@ def abstract_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> T
 
 
 def pushforward_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
@@ -426,6 +435,8 @@ def pushforward_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -
 
 
 async def apush_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
@@ -451,6 +462,7 @@ async def apull_fwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: An
 
 
 def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
+    import autoform.ad as ad
 
     def validate_schema_feedback(path: str, feedback: Any) -> str:
         if ad.is_zero(feedback):
@@ -472,6 +484,8 @@ def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
 
 
 def pullback_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     contents, model, out = residuals
     feedback = build_cotangent_schema_summary(out, out_cotangent)
@@ -484,6 +498,8 @@ def pullback_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) 
 
 
 async def apull_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     contents, model, out = residuals
     feedback = build_cotangent_schema_summary(out, out_cotangent)

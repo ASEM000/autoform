@@ -20,18 +20,16 @@ import asyncio
 import math
 from collections.abc import Hashable
 
-import autoform.ad as ad
-import autoform.batch as batch
 import autoform.core as core
-import autoform.dce as dce
-import autoform.memoize as memoize
+import autoform.dead as dead
+import autoform.memo as memo
 import autoform.utils as utils
 
 __all__ = ["factor", "weighted"]
 
 factor_p = core.Prim("factor")
-dce.non_dce_primitives.add(factor_p)
-memoize.non_memoizable_primitives.add(factor_p)
+dead.non_dce_primitives.add(factor_p)
+memo.non_memoizable_primitives.add(factor_p)
 
 number_type = (int, float, core.IntAVal, core.FloatAVal)
 
@@ -75,6 +73,8 @@ def pullback_fwd_factor(weight, /, *, name: Hashable | None = None):
 
 
 def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
+    import autoform.ad as ad
+
     del name
     weight, _ = in_tree
     return ad.zeroof(weight)
@@ -209,6 +209,8 @@ def pullback_bwd_weighted_call(in_tree, /, *, ir: core.IR):
 
 
 def batch_weighted_call(in_tree, /, *, ir: core.IR):
+    import autoform.axes as axes
+
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -216,13 +218,15 @@ def batch_weighted_call(in_tree, /, *, ir: core.IR):
 
     weighted_ir = weighted(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = batch.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = axes.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
 async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
+    import autoform.axes as axes
+
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -230,16 +234,16 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
 
     weighted_ir = weighted(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = await batch.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = await axes.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
-def dce_weighted_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_weighted_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     output_used, _ = out_used
-    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=output_used))
-    return dce.default_dce(new_eqn, out_used)
+    new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=output_used))
+    return dead.default_dce(new_eqn, out_used)
 
 
 core.impl_rules.set(weighted_call_p, impl_weighted_call)
@@ -253,4 +257,4 @@ core.pull_bwd_rules.set(weighted_call_p, pullback_bwd_weighted_call)
 core.pull_bwd_rules.aset(weighted_call_p, utils.asyncify(pullback_bwd_weighted_call))
 core.batch_rules.set(weighted_call_p, batch_weighted_call)
 core.batch_rules.aset(weighted_call_p, abatch_weighted_call)
-dce.dce_rules[weighted_call_p] = dce_weighted_call
+dead.dce_rules[weighted_call_p] = dce_weighted_call

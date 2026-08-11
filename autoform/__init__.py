@@ -19,17 +19,16 @@
 # ==================================================================================================
 
 import autoform.ad as ad
-import autoform.batch as batch
-import autoform.checkpoint as checkpoint
+import autoform.axes as axes
+import autoform.ckpt as ckpt
 import autoform.control as control
 import autoform.core as core
-import autoform.custom as custom
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.extend as extend
 import autoform.lm as lm
-import autoform.memoize as memoize
+import autoform.memo as memo
+import autoform.opaque as opaque
 import autoform.prob as prob
-import autoform.scheduling as scheduling
 import autoform.schemas as schemas
 import autoform.string as string
 import autoform.utils as utils
@@ -54,14 +53,14 @@ tag = core.tag
 
 pushforward = ad.pushforward
 pullback = ad.pullback
-batch = batch.batch
-custom = custom.custom
-collect = checkpoint.collect
-inject = checkpoint.inject
-checkpoint = checkpoint.checkpoint
-dce = dce.dce
-sched = scheduling.sched
-memoize = memoize.memoize
+batch = axes.batch
+custom = opaque.custom
+collect = ckpt.collect
+inject = ckpt.inject
+checkpoint = ckpt.checkpoint
+dce = dead.dce
+sched = axes.sched
+memoize = memo.memoize
 weighted = prob.weighted
 
 # ==================================================================================================
@@ -78,7 +77,7 @@ stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
 fixpoint = control.fixpoint
-depends = scheduling.depends
+depends = control.depends
 factor = prob.factor
 
 # ==================================================================================================

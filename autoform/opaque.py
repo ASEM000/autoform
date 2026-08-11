@@ -20,10 +20,8 @@ import functools as ft
 from collections.abc import Callable
 from typing import Any
 
-import autoform.ad as ad
-import autoform.batch as batch
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
 __all__ = ["custom"]
@@ -78,6 +76,8 @@ def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     ir, p_out = call_custom_body(call, primals)
     _, t_out = ad.pushforward(ir).call(primals, tangents)
@@ -85,6 +85,8 @@ def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tr
 
 
 async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     ir, p_out = await acall_custom_body(call, primals)
     _, t_out = await ad.pushforward(ir).acall(primals, tangents)
@@ -104,6 +106,8 @@ async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
+    import autoform.ad as ad
+
     primals, out = in_tree[0]
     cotangent = in_tree[1]
     ir = trace_custom_func(call, primals)
@@ -112,6 +116,8 @@ def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
 
 
 async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
+    import autoform.ad as ad
+
     primals, out = in_tree[0]
     cotangent = in_tree[1]
     ir = trace_custom_func(call, primals)
@@ -120,31 +126,35 @@ async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    _, axes, values = in_tree
-    if utils.batch_spec(values, axes) is None:
+    import autoform.axes as axes
+
+    _, in_axes, values = in_tree
+    if utils.batch_spec(values, in_axes) is None:
         _, out = call_custom_body(call, values)
         return out, tree_batched_like(out, False)
-    example_values = utils.batch_index(values, axes, 0)
+    example_values = utils.batch_index(values, in_axes, 0)
     ir = trace_custom_func(call, example_values)
-    batched_ir = batch.batch(ir, in_axes=axes)
+    batched_ir = axes.batch(ir, in_axes=in_axes)
     out = batched_ir.call(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    _, axes, values = in_tree
-    if utils.batch_spec(values, axes) is None:
+    import autoform.axes as axes
+
+    _, in_axes, values = in_tree
+    if utils.batch_spec(values, in_axes) is None:
         _, out = await acall_custom_body(call, values)
         return out, tree_batched_like(out, False)
-    example_values = utils.batch_index(values, axes, 0)
+    example_values = utils.batch_index(values, in_axes, 0)
     ir = trace_custom_func(call, example_values)
-    batched_ir = batch.batch(ir, in_axes=axes)
+    batched_ir = axes.batch(ir, in_axes=in_axes)
     out = await batched_ir.acall(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
-def dce_custom_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    return dce.default_dce(eqn, out_used)
+def dce_custom_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+    return dead.default_dce(eqn, out_used)
 
 
 def install_custom_call_rules(prim: core.Prim, /) -> None:
@@ -159,7 +169,7 @@ def install_custom_call_rules(prim: core.Prim, /) -> None:
     core.pull_bwd_rules.aset(prim, apullback_bwd_custom_call)
     core.batch_rules.set(prim, batch_custom_call)
     core.batch_rules.aset(prim, abatch_custom_call)
-    dce.dce_rules[prim] = dce_custom_call
+    dead.dce_rules[prim] = dce_custom_call
 
 
 def custom_prim_name(func: Callable[..., Any]) -> str:
