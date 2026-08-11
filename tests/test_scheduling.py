@@ -17,7 +17,7 @@ import functools as ft
 import pytest
 
 import autoform as af
-import autoform.scheduling as scheduling
+from autoform.batch import fanout_p
 from autoform.scheduling import toposort_levels
 
 
@@ -30,12 +30,12 @@ def scheduled_parallel_formats():
     return af.sched(af.trace(program)("a"))
 
 
-class TestInternalGatherViaSched:
+class TestInternalFanoutViaSched:
     def test_two_independent_ops(self):
         scheduled = scheduled_parallel_formats()
 
         prim_names = [e.prim.name for e in scheduled.eqns]
-        assert prim_names == ["gather"]
+        assert prim_names == ["fanout"]
         assert scheduled.call("A") == ("[A]", "<A>")
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -67,7 +67,7 @@ class TestInternalGatherViaSched:
             scheduled.call("A")
 
 
-class TestGatherWithTransforms:
+class TestFanoutWithTransforms:
     def test_pushforward(self):
         pf_ir = af.pushforward(scheduled_parallel_formats())
         (p_out, t_out) = pf_ir.call(("primal",), ("tangent",))
@@ -95,19 +95,19 @@ class TestGatherWithTransforms:
         assert cotangent == ("grad1grad2",)
 
 
-class TestGatherWithBatch:
-    def test_batch_gather(self):
+class TestFanoutWithBatch:
+    def test_batch_fanout(self):
         batched_ir = af.batch(scheduled_parallel_formats())
         result = batched_ir.call(["A", "B", "C"])
         assert result == (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"])
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_batch_gather_async(self):
+    async def test_batch_fanout_async(self):
         batched_ir = af.batch(scheduled_parallel_formats())
         result = await batched_ir.acall(["A", "B", "C"])
         assert result == (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"])
 
-    def test_batch_gather_mixed_axes(self):
+    def test_batch_fanout_mixed_axes(self):
         def program(x, y):
             a = af.format("[{}]", x)
             b = af.format("<{}>", y)
@@ -119,7 +119,7 @@ class TestGatherWithBatch:
         assert result == (["[A]", "[B]", "[C]"], ["<STATIC>", "<STATIC>", "<STATIC>"])
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_batch_gather_mixed_axes_async(self):
+    async def test_batch_fanout_mixed_axes_async(self):
         def program(x, y):
             a = af.format("[{}]", x)
             b = af.format("<{}>", y)
@@ -131,14 +131,14 @@ class TestGatherWithBatch:
         assert result == (["[X]", "[Y]"], ["<STATIC>", "<STATIC>"])
 
 
-class TestGatherWithDCE:
-    def test_gather_kept_when_used(self):
+class TestFanoutWithDCE:
+    def test_fanout_kept_when_used(self):
         dce_ir = af.dce(scheduled_parallel_formats())
 
         assert len(dce_ir.eqns) == 1
-        assert dce_ir.eqns[0].prim.name == "gather"
+        assert dce_ir.eqns[0].prim.name == "fanout"
 
-    def test_gather_removed_when_unused(self):
+    def test_fanout_removed_when_unused(self):
         def program(x):
             _ = af.format("[{}]", x)
             _ = af.format("<{}>", x)
@@ -148,9 +148,9 @@ class TestGatherWithDCE:
         scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
         dce_ir = af.dce(scheduled)
 
-        assert all(eqn.prim.name != "gather" for eqn in dce_ir.eqns)
+        assert all(eqn.prim.name != "fanout" for eqn in dce_ir.eqns)
 
-    def test_gather_dce_propagates_to_branches(self):
+    def test_fanout_dce_propagates_to_branches(self):
         def program(x):
             live = af.format("[{}]", x)
             dead = af.format("<{}>", x)
@@ -159,12 +159,12 @@ class TestGatherWithDCE:
         scheduled = af.sched(af.trace(program)("a"))
         dce_ir = af.dce(scheduled, out_used=True)
 
-        gather_eqn = dce_ir.eqns[0]
-        dce_branch = gather_eqn.params["irs"][1]
+        fanout_eqn = dce_ir.eqns[0]
+        dce_branch = fanout_eqn.params["irs"][1]
 
         assert len(dce_branch.eqns) == 0
 
-    def test_gather_partial_output_used(self):
+    def test_fanout_partial_output_used(self):
         def program(x):
             a = af.format("[{}]", x)
             _ = af.format("<{}>", x)
@@ -172,13 +172,13 @@ class TestGatherWithDCE:
 
         scheduled = af.sched(af.trace(program)("a"))
         dce_ir = af.dce(scheduled, out_used=True)
-        gather_eqns = [e for e in dce_ir.eqns if e.prim.name == "gather"]
-        assert len(gather_eqns) == 1
-        inner_irs = gather_eqns[0].params["irs"]
+        fanout_eqns = [e for e in dce_ir.eqns if e.prim.name == "fanout"]
+        assert len(fanout_eqns) == 1
+        inner_irs = fanout_eqns[0].params["irs"]
         assert len(inner_irs[0].eqns) == 1
         assert len(inner_irs[1].eqns) == 0
 
-    def test_gather_unused_branch_structured_output_is_callable(self):
+    def test_fanout_unused_branch_structured_output_is_callable(self):
         def structured_with_dead(x):
             a = af.concat(x, "a")
             b = af.concat(x, "b")
@@ -198,14 +198,14 @@ class TestGatherWithDCE:
 
         assert dce_ir.call("X") == "X!"
 
-        gather_eqn = [e for e in dce_ir.eqns if e.prim.name == "gather"][0]
-        inner_dead = gather_eqn.params["irs"][1]
+        fanout_eqn = [e for e in dce_ir.eqns if e.prim.name == "fanout"][0]
+        inner_dead = fanout_eqn.params["irs"][1]
         assert len(inner_dead.eqns) == 0
         leaves = af.utils.tree.leaves(inner_dead.out_tree)
         assert all(x is None for x in leaves)
 
 
-class TestGatherContextPreservation:
+class TestFanoutContextPreservation:
     def test_preserves_collect(self):
         def program(a, b):
             x = af.checkpoint(a, key="val", collection="debug")
@@ -234,7 +234,7 @@ class TestGatherContextPreservation:
 
         assert results == ("CACHED1", "CACHED2")
 
-    def test_nested_gather(self):
+    def test_nested_fanout(self):
         def inner(x):
             return af.checkpoint(x, key="inner", collection="debug")
 
@@ -269,7 +269,7 @@ class TestSched:
         scheduled = af.sched(ir)
 
         prim_names = [e.prim.name for e in scheduled.eqns]
-        assert prim_names == ["gather", "concat"]
+        assert prim_names == ["fanout", "concat"]
 
         result = scheduled.call("test")
         assert result == "[test]<test>"
@@ -306,8 +306,8 @@ class TestSched:
         ir = af.trace(program)("a", "b")
         scheduled = af.sched(ir)
 
-        gather_count = sum(1 for e in scheduled.eqns if e.prim.name == "gather")
-        assert gather_count == 2
+        fanout_count = sum(1 for e in scheduled.eqns if e.prim.name == "fanout")
+        assert fanout_count == 2
 
     def test_checkpoint_ordering_via_depends(self):
         def program(a, b):
@@ -331,8 +331,8 @@ class TestSched:
         ir = af.trace(program)("a", "b", "c")
         scheduled = af.sched(ir)
 
-        gather_count = sum(1 for e in scheduled.eqns if e.prim.name == "gather")
-        assert gather_count == 1
+        fanout_count = sum(1 for e in scheduled.eqns if e.prim.name == "fanout")
+        assert fanout_count == 1
 
         result = scheduled.call("a", "b", "c")
         assert result == ("[a]", "<b>", "{c}")
@@ -353,7 +353,7 @@ class TestSchedRecursive:
 
         switch_eqn = scheduled.eqns[0]
         branch_a = switch_eqn.params["branches"]["a"]
-        assert any(e.prim.name == "gather" for e in branch_a.eqns)
+        assert any(e.prim.name == "fanout" for e in branch_a.eqns)
 
         assert scheduled.call("a", "hello") == "[hello]<hello>"
         assert scheduled.call("b", "hello") == "(hello)"
@@ -383,13 +383,13 @@ class TestSchedRecursive:
         outer_switch = scheduled.eqns[0]
         inner_switch = outer_switch.params["branches"]["A"].eqns[0]
         inner_branch_x = inner_switch.params["branches"]["x"]
-        assert any(e.prim.name == "gather" for e in inner_branch_x.eqns)
+        assert any(e.prim.name == "fanout" for e in inner_branch_x.eqns)
 
         assert scheduled.call("A", "x", "hello") == "[hello]<hello>"
         assert scheduled.call("A", "y", "hello") == "(hello)"
         assert scheduled.call("B", "ignored", "world") == "ignored world"
 
-    def test_sched_gather_nested_irs(self):
+    def test_sched_fanout_nested_irs(self):
         branches1 = {
             "a": af.trace(lambda x: af.concat(af.format("[{}]", x), af.format("<{}>", x)))("x")
         }
@@ -405,11 +405,11 @@ class TestSchedRecursive:
         ir = af.trace(program)("a", "hello", "world")
         scheduled = af.sched(ir)
 
-        outer_gather = scheduled.eqns[0]
-        for inner_ir in outer_gather.params["irs"]:
+        outer_fanout = scheduled.eqns[0]
+        for inner_ir in outer_fanout.params["irs"]:
             switch_eqn = inner_ir.eqns[0]
             branch = switch_eqn.params["branches"]["a"]
-            assert any(e.prim.name == "gather" for e in branch.eqns)
+            assert any(e.prim.name == "fanout" for e in branch.eqns)
 
         result = scheduled.call("a", "hello", "world")
         assert result == ("[hello]<hello>", "(world){world}")
@@ -428,7 +428,7 @@ class TestSchedRecursive:
 
         switch_eqn = scheduled.eqns[0]
         branch_a = switch_eqn.params["branches"]["a"]
-        assert not any(e.prim.name == "gather" for e in branch_a.eqns)
+        assert not any(e.prim.name == "fanout" for e in branch_a.eqns)
 
         assert scheduled.call("a", "test") == ("[test]", "test!")
 
@@ -1189,8 +1189,8 @@ class TestToposortLevelsWithCheckpoints:
         assert has_parallel
 
 
-class TestGatherBatchAllUnbatched:
-    def test_gather_batch_all_unbatched(self):
+class TestFanoutBatchAllUnbatched:
+    def test_fanout_batch_all_unbatched(self):
         ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
         irs = [ir1, ir2]
@@ -1199,14 +1199,14 @@ class TestGatherBatchAllUnbatched:
         in_batched = [False, False]
         in_values = [("hello",), ("world",)]
 
-        out_vals, out_batched = af.core.batch_rules.get(scheduling.gather_p)(
+        out_vals, out_batched = af.core.batch_rules.get(fanout_p)(
             (batch_size, in_batched, in_values), irs=irs
         )
         assert out_vals == ["[hello]", "<world>"]
         assert out_batched == [False, False]
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_gather_batch_all_unbatched_async(self):
+    async def test_fanout_batch_all_unbatched_async(self):
         ir1 = af.trace(lambda x: af.format("[{}]", x))("a")
         ir2 = af.trace(lambda x: af.format("<{}>", x))("a")
         irs = [ir1, ir2]
@@ -1215,13 +1215,13 @@ class TestGatherBatchAllUnbatched:
         in_batched = [False, False]
         in_values = [("hello",), ("world",)]
 
-        out_vals, out_batched = await af.core.batch_rules.aget(scheduling.gather_p)(
+        out_vals, out_batched = await af.core.batch_rules.aget(fanout_p)(
             (batch_size, in_batched, in_values), irs=irs
         )
         assert out_vals == ["[hello]", "<world>"]
         assert out_batched == [False, False]
 
-    def test_gather_batch_single_ir_unbatched(self):
+    def test_fanout_batch_single_ir_unbatched(self):
         ir = af.trace(lambda x: af.format("[{}]", x))("a")
         irs = [ir]
 
@@ -1229,13 +1229,13 @@ class TestGatherBatchAllUnbatched:
         in_batched = [False]
         in_values = [("hello",)]
 
-        out_vals, out_batched = af.core.batch_rules.get(scheduling.gather_p)(
+        out_vals, out_batched = af.core.batch_rules.get(fanout_p)(
             (batch_size, in_batched, in_values), irs=irs
         )
         assert out_vals == ["[hello]"]
         assert out_batched == [False]
 
-    def test_gather_integration_mixed_batched(self):
+    def test_fanout_integration_mixed_batched(self):
         def program(x, y):
             a = af.format("[{}]", x)
             b = af.format("<{}>", y)
@@ -1247,7 +1247,7 @@ class TestGatherBatchAllUnbatched:
         assert result == (["[a]", "[b]"], ["<constant>", "<constant>"])
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_gather_integration_mixed_batched_async(self):
+    async def test_fanout_integration_mixed_batched_async(self):
         def program(x, y):
             a = af.format("[{}]", x)
             b = af.format("<{}>", y)
