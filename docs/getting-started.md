@@ -472,7 +472,7 @@ print(f"sequential: {sequential_s:.2f}s")
 print(f"scheduled:  {parallel_s:.2f}s")
 ```
 
-The scheduled form groups independent [equations](concepts/the-ir.md) into `gather` steps. With `scheduled.acall(...)`, those groups use `asyncio.gather`, so the two first LM calls can overlap. The final LM call still waits for both inputs.
+The scheduled form groups independent [equations](concepts/the-ir.md) into `fanout` steps. With `scheduled.acall(...)`, those groups use `asyncio.gather`, so the two first LM calls can overlap. The final LM call still waits for both inputs.
 
 The measured speedup depends on provider latency, provider-side rate limits, and the active [LiteLLM client](recipes/llm/litellm-config.md). The invariant is the dependency structure: independent equations can share a scheduling level; dependent equations cannot.
 
