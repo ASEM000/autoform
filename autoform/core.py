@@ -39,9 +39,10 @@ __all__ = [
     "BoolAVal",
     "Val",
     "trace_types",
-    "aval_rules",
     "is_traceable",
-    "avalof",
+    # spaces
+    "Space",
+    "primal_s",
     # ir vals
     "Var",
     "is_var",
@@ -190,13 +191,38 @@ class BoolAVal(ScalarAVal):
 
 type Val = str | int | float | bool
 
-trace_types: set[type] = {str, int, float, bool}
+# ==================================================================================================
+# SPACES
+# ==================================================================================================
 
-aval_rules: dict[type, Callable[[Any], AVal]] = {}
-aval_rules[str] = lambda _: StrAVal()
-aval_rules[int] = lambda _: IntAVal()
-aval_rules[float] = lambda _: FloatAVal()
-aval_rules[bool] = lambda _: BoolAVal()
+
+class Space:
+    __slots__ = ["name", "rules"]
+
+    def __init__(self, name: str, /):
+        assert isinstance(name, str), f"Expected str, got {name!r}"
+        self.name = name
+        self.rules: dict[type, Callable[[Any], AVal]] = {}
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name!r})"
+
+    def avalof(self, value, /) -> AVal:
+        """Return the abstract value of ``value`` in this space."""
+        if (rule := self.rules.get(type(value))) is None:
+            raise TypeError(f"No {self.name} aval rule registered for {value!r}")
+        aval = rule(value)
+        assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
+        return aval
+
+
+primal_s = Space("primal")
+primal_s.rules[str] = lambda _: StrAVal()
+primal_s.rules[int] = lambda _: IntAVal()
+primal_s.rules[float] = lambda _: FloatAVal()
+primal_s.rules[bool] = lambda _: BoolAVal()
+
+trace_types: set[type] = {str, int, float, bool}
 
 
 def is_traceable(x) -> TypeGuard[Val]:
@@ -208,31 +234,6 @@ def is_aval(x) -> TypeGuard[AVal]:
 
 
 type EvalType = AVal | Val
-
-
-def avalof(x, /) -> AVal:
-    """Return the abstract value for a traceable leaf.
-
-    ``avalof`` applies the registered aval rule for ``type(x)``. It is the
-    concrete-to-abstract direction used by :func:`autoform.trace`, zeros, and
-    extension code that needs to inspect a value domain.
-
-    Args:
-        x: Concrete value, symbolic zero, or IR value with a registered aval
-            rule.
-
-    Returns:
-        The abstract value for ``x``.
-
-    Raises:
-        TypeError: If no aval rule is registered for ``type(x)``.
-    """
-    rule = aval_rules.get(type(x))
-    if rule is None:
-        raise TypeError(f"Unsupported input leaf type for `trace`: {type(x).__name__}.")
-    aval = rule(x)
-    assert is_aval(aval), f"aval rule for {type(x).__name__} returned {aval!r}"
-    return aval
 
 
 # ==================================================================================================
@@ -292,7 +293,7 @@ def aval_if_var(x, /):
     return x.aval if is_var(x) else x
 
 
-aval_rules[Var] = lambda var: var.aval
+primal_s.rules[Var] = lambda var: var.aval
 
 # ==================================================================================================
 # PRIMITIVE
@@ -955,7 +956,7 @@ def trace[*A, R](
     def to_var(x, /) -> Var:
         assert not is_var(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return Var.fresh(aval=avalof(x))
+        return Var.fresh(aval=primal_s.avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:

@@ -356,7 +356,7 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
         if core.is_var(atom):
             return core.Var.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
-            return core.Var.fresh(aval=maybe_batched(core.avalof(atom), True))
+            return core.Var.fresh(aval=maybe_batched(core.primal_s.avalof(atom), True))
         return atom
 
     v_in_ir = utils.tree.map(make_in, ir.in_tree, b_in)
@@ -494,7 +494,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree
         if core.is_var(atom):
             return maybe_batched(atom.aval, has_batched)
         if has_batched:
-            return maybe_batched(core.avalof(atom), True)
+            return maybe_batched(core.primal_s.avalof(atom), True)
         return atom
 
     return utils.tree.map(out_aval, ir.out_tree)
