@@ -29,7 +29,6 @@ import autoform.lm as lm
 import autoform.memo as memo
 import autoform.opaque as opaque
 import autoform.prob as prob
-import autoform.scheduling as scheduling
 import autoform.schemas as schemas
 import autoform.string as string
 import autoform.utils as utils
@@ -60,7 +59,7 @@ collect = ckpt.collect
 inject = ckpt.inject
 checkpoint = ckpt.checkpoint
 dce = dead.dce
-sched = scheduling.sched
+sched = axes.sched
 memoize = memo.memoize
 weighted = prob.weighted
 
@@ -78,7 +77,7 @@ stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
 fixpoint = control.fixpoint
-depends = scheduling.depends
+depends = control.depends
 factor = prob.factor
 
 # ==================================================================================================

@@ -28,7 +28,6 @@ import autoform.dead as dead
 import autoform.lm as lm
 import autoform.memo as memo
 import autoform.prob as prob
-import autoform.scheduling as scheduling
 import autoform.string as string
 import autoform.utils as utils
 
@@ -95,7 +94,7 @@ switch_p = control.switch_p
 while_loop_p = control.while_loop_p
 fixpoint_p = control.fixpoint_p
 fanout_p = axes.fanout_p
-depends_p = scheduling.depends_p
+depends_p = control.depends_p
 batch_call_p = axes.batch_call_p
 pushforward_call_p = ad.pushforward_call_p
 pullback_call_p = ad.pullback_call_p
