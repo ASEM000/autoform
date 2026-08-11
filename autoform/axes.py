@@ -24,7 +24,7 @@ from contextvars import ContextVar
 
 import autoform.ad as ad
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
 __all__ = ["batch", "serial_fanout"]
@@ -176,14 +176,14 @@ core.batch_rules.set(fanout_p, batch_fanout)
 core.batch_rules.aset(fanout_p, abatch_fanout)
 
 
-def dce_fanout(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     irs = eqn.params["irs"]
-    new_irs = [dce.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
+    new_irs = [dead.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
     new_eqn = eqn.using(irs=new_irs)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[fanout_p] = dce_fanout
+dead.dce_rules[fanout_p] = dce_fanout
 
 # ==================================================================================================
 # BATCH
@@ -515,9 +515,9 @@ core.batch_rules.set(batch_call_p, batch_batch_call)
 core.batch_rules.aset(batch_call_p, abatch_batch_call)
 
 
-def dce_batch_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=out_used))
-    return dce.default_dce(new_eqn, out_used)
+def dce_batch_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+    new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=out_used))
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[batch_call_p] = dce_batch_call
+dead.dce_rules[batch_call_p] = dce_batch_call

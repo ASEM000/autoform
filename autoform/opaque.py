@@ -23,7 +23,7 @@ from typing import Any
 import autoform.ad as ad
 import autoform.axes as axes
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
 __all__ = ["custom"]
@@ -143,8 +143,8 @@ async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
     return out, tree_batched_like(ir.out_tree, True)
 
 
-def dce_custom_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
-    return dce.default_dce(eqn, out_used)
+def dce_custom_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+    return dead.default_dce(eqn, out_used)
 
 
 def install_custom_call_rules(prim: core.Prim, /) -> None:
@@ -159,7 +159,7 @@ def install_custom_call_rules(prim: core.Prim, /) -> None:
     core.pull_bwd_rules.aset(prim, apullback_bwd_custom_call)
     core.batch_rules.set(prim, batch_custom_call)
     core.batch_rules.aset(prim, abatch_custom_call)
-    dce.dce_rules[prim] = dce_custom_call
+    dead.dce_rules[prim] = dce_custom_call
 
 
 def custom_prim_name(func: Callable[..., Any]) -> str:

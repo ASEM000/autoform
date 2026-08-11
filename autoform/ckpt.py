@@ -24,7 +24,7 @@ from typing import Any
 
 import autoform.axes as axes
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
 __all__ = ["checkpoint", "collect", "inject"]
@@ -37,7 +37,7 @@ type Tree[T] = utils.Tree[T]
 
 
 checkpoint_p = core.Prim("checkpoint")
-dce.non_dce_primitives.add(checkpoint_p)
+dead.non_dce_primitives.add(checkpoint_p)
 
 
 def impl_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):

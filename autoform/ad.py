@@ -23,7 +23,7 @@ from typing import Any, TypeGuard
 
 import autoform.axes as axes
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
 __all__ = [
@@ -381,14 +381,14 @@ core.batch_rules.set(pushforward_call_p, batch_pushforward_call)
 core.batch_rules.aset(pushforward_call_p, abatch_pushforward_call)
 
 
-def dce_pushforward_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_pushforward_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     p_used, t_used = out_used
     original_out_used = utils.tree.map(lambda p, t: p or t, p_used, t_used)
-    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=original_out_used))
-    return dce.default_dce(new_eqn, out_used)
+    new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=original_out_used))
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[pushforward_call_p] = dce_pushforward_call
+dead.dce_rules[pushforward_call_p] = dce_pushforward_call
 
 
 # ==================================================================================================
@@ -827,12 +827,12 @@ core.batch_rules.set(pullback_call_p, batch_pullback_call)
 core.batch_rules.aset(pullback_call_p, abatch_pullback_call)
 
 
-def dce_pullback_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_pullback_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     out, in_cot = out_used
     used = utils.tree.any(in_cot)
-    inner_ir = eqn.params["ir"] if used else dce.dce(eqn.params["ir"], out_used=out)
+    inner_ir = eqn.params["ir"] if used else dead.dce(eqn.params["ir"], out_used=out)
     new_eqn = eqn.using(ir=inner_ir)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[pullback_call_p] = dce_pullback_call
+dead.dce_rules[pullback_call_p] = dce_pullback_call

@@ -23,7 +23,7 @@ import autoform.axes as axes
 import autoform.ckpt as ckpt
 import autoform.control as control
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.extend as extend
 import autoform.lm as lm
 import autoform.memoize as memoize
@@ -59,7 +59,7 @@ custom = opaque.custom
 collect = ckpt.collect
 inject = ckpt.inject
 checkpoint = ckpt.checkpoint
-dce = dce.dce
+dce = dead.dce
 sched = scheduling.sched
 memoize = memoize.memoize
 weighted = prob.weighted

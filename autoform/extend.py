@@ -24,7 +24,7 @@ import autoform.axes as axes
 import autoform.ckpt as ckpt
 import autoform.control as control
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.lm as lm
 import autoform.memoize as memoize
 import autoform.prob as prob
@@ -275,7 +275,7 @@ def register_non_dce[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
-    rules = dce.non_dce_primitives
+    rules = dead.non_dce_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
     rules.add(prim)
     return prim

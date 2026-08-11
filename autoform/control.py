@@ -21,7 +21,7 @@ import functools as ft
 import autoform.ad as ad
 import autoform.axes as axes
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.utils as utils
 
 __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
@@ -263,14 +263,14 @@ core.batch_rules.set(switch_p, batch_switch)
 core.batch_rules.aset(switch_p, abatch_switch)
 
 
-def dce_switch(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_switch(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     branches: Branches = eqn.params["branches"]
-    branches = {k: dce.dce(branches[k], out_used=out_used) for k in branches}
+    branches = {k: dead.dce(branches[k], out_used=out_used) for k in branches}
     new_eqn = eqn.using(branches=branches)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[switch_p] = dce_switch
+dead.dce_rules[switch_p] = dce_switch
 
 
 # ==================================================================================================
@@ -631,19 +631,19 @@ core.batch_rules.set(while_loop_p, batch_while_loop)
 core.batch_rules.aset(while_loop_p, abatch_while_loop)
 
 
-def dce_while_loop(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_while_loop(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     cond_ir = eqn.params["cond_ir"]
     body_ir = eqn.params["body_ir"]
     # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
     # even if the caller only uses part of the final state.
     state_used = utils.tree.map(lambda _: True, body_ir.out_tree)
-    cond_ir = dce.dce(cond_ir)
-    body_ir = dce.dce(body_ir, out_used=state_used)
+    cond_ir = dead.dce(cond_ir)
+    body_ir = dead.dce(body_ir, out_used=state_used)
     new_eqn = eqn.using(cond_ir=cond_ir, body_ir=body_ir)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[while_loop_p] = dce_while_loop
+dead.dce_rules[while_loop_p] = dce_while_loop
 
 
 # ==================================================================================================
@@ -1064,16 +1064,16 @@ core.batch_rules.set(fixpoint_p, batch_fixpoint)
 core.batch_rules.aset(fixpoint_p, abatch_fixpoint)
 
 
-def dce_fixpoint(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_fixpoint(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     step_ir = eqn.params["step_ir"]
     equiv_ir = eqn.params["equiv_ir"]
     # NOTE(asem): every state leaf is loop-carried into the next step, even if
     # the caller only uses part of the final state.
     state_used = utils.tree.map(lambda _: True, step_ir.out_tree)
-    equiv_ir = None if equiv_ir is None else dce.dce(equiv_ir)
-    step_ir = dce.dce(step_ir, out_used=state_used)
+    equiv_ir = None if equiv_ir is None else dead.dce(equiv_ir)
+    step_ir = dead.dce(step_ir, out_used=state_used)
     new_eqn = eqn.using(step_ir=step_ir, equiv_ir=equiv_ir)
-    return dce.default_dce(new_eqn, out_used)
+    return dead.default_dce(new_eqn, out_used)
 
 
-dce.dce_rules[fixpoint_p] = dce_fixpoint
+dead.dce_rules[fixpoint_p] = dce_fixpoint

@@ -23,14 +23,14 @@ from collections.abc import Hashable
 import autoform.ad as ad
 import autoform.axes as axes
 import autoform.core as core
-import autoform.dce as dce
+import autoform.dead as dead
 import autoform.memoize as memoize
 import autoform.utils as utils
 
 __all__ = ["factor", "weighted"]
 
 factor_p = core.Prim("factor")
-dce.non_dce_primitives.add(factor_p)
+dead.non_dce_primitives.add(factor_p)
 memoize.non_memoizable_primitives.add(factor_p)
 
 number_type = (int, float, core.IntAVal, core.FloatAVal)
@@ -236,10 +236,10 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
     return out_ib, out_batched
 
 
-def dce_weighted_call(eqn: core.Eqn, out_used: dce.UsedTree, /) -> dce.DCEResult:
+def dce_weighted_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     output_used, _ = out_used
-    new_eqn = eqn.using(ir=dce.dce(eqn.params["ir"], out_used=output_used))
-    return dce.default_dce(new_eqn, out_used)
+    new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=output_used))
+    return dead.default_dce(new_eqn, out_used)
 
 
 core.impl_rules.set(weighted_call_p, impl_weighted_call)
@@ -253,4 +253,4 @@ core.pull_bwd_rules.set(weighted_call_p, pullback_bwd_weighted_call)
 core.pull_bwd_rules.aset(weighted_call_p, utils.asyncify(pullback_bwd_weighted_call))
 core.batch_rules.set(weighted_call_p, batch_weighted_call)
 core.batch_rules.aset(weighted_call_p, abatch_weighted_call)
-dce.dce_rules[weighted_call_p] = dce_weighted_call
+dead.dce_rules[weighted_call_p] = dce_weighted_call
