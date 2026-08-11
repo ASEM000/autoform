@@ -20,8 +20,6 @@ import functools as ft
 from collections.abc import Callable
 from typing import Any
 
-import autoform.ad as ad
-import autoform.axes as axes
 import autoform.core as core
 import autoform.dead as dead
 import autoform.utils as utils
@@ -78,6 +76,8 @@ def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     ir, p_out = call_custom_body(call, primals)
     _, t_out = ad.pushforward(ir).call(primals, tangents)
@@ -85,6 +85,8 @@ def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tr
 
 
 async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     ir, p_out = await acall_custom_body(call, primals)
     _, t_out = await ad.pushforward(ir).acall(primals, tangents)
@@ -104,6 +106,8 @@ async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
+    import autoform.ad as ad
+
     primals, out = in_tree[0]
     cotangent = in_tree[1]
     ir = trace_custom_func(call, primals)
@@ -112,6 +116,8 @@ def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
 
 
 async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
+    import autoform.ad as ad
+
     primals, out = in_tree[0]
     cotangent = in_tree[1]
     ir = trace_custom_func(call, primals)
@@ -120,6 +126,8 @@ async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+    import autoform.axes as axes
+
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
         _, out = call_custom_body(call, values)
@@ -132,6 +140,8 @@ def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+    import autoform.axes as axes
+
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
         _, out = await acall_custom_body(call, values)

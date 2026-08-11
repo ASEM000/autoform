@@ -22,7 +22,6 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
-import autoform.axes as axes
 import autoform.core as core
 import autoform.dead as dead
 import autoform.utils as utils
@@ -238,6 +237,8 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Yields:
         A dict that maps keys to lists of collected values.
     """
+    import autoform.axes as axes
+
     interpreter = CollectingInterpreter(collection=collection)
     with axes.serial_fanout(), core.using_interpreter(interpreter):
         yield interpreter.collected
@@ -297,6 +298,8 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     Yields:
         None.
     """
+    import autoform.axes as axes
+
     assert isinstance(values, dict)
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."

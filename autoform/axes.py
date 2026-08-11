@@ -22,7 +22,6 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-import autoform.ad as ad
 import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
@@ -81,6 +80,8 @@ def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
@@ -90,6 +91,8 @@ def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
 
 async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
@@ -111,6 +114,8 @@ async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdR
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -120,6 +125,8 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -494,6 +501,8 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> TreePair:
+    import autoform.ad as ad
+
     p, t = in_tree
     pf_ir = ad.pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -501,6 +510,8 @@ def pushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> T
 
 
 async def apushforward_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> TreePair:
+    import autoform.ad as ad
+
     p, t = in_tree
     pf_ir = ad.pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -524,6 +535,8 @@ async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tr
 
 
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
+    import autoform.ad as ad
+
     residuals, c_out = in_tree
     p, _ = residuals
     pb_ir = ad.pullback(ir)
@@ -533,6 +546,8 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> 
 
 
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
+    import autoform.ad as ad
+
     residuals, c_out = in_tree
     p, _ = residuals
     pb_ir = ad.pullback(ir)

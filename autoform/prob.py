@@ -20,8 +20,6 @@ import asyncio
 import math
 from collections.abc import Hashable
 
-import autoform.ad as ad
-import autoform.axes as axes
 import autoform.core as core
 import autoform.dead as dead
 import autoform.memo as memo
@@ -75,6 +73,8 @@ def pullback_fwd_factor(weight, /, *, name: Hashable | None = None):
 
 
 def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
+    import autoform.ad as ad
+
     del name
     weight, _ = in_tree
     return ad.zeroof(weight)
@@ -209,6 +209,8 @@ def pullback_bwd_weighted_call(in_tree, /, *, ir: core.IR):
 
 
 def batch_weighted_call(in_tree, /, *, ir: core.IR):
+    import autoform.axes as axes
+
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -223,6 +225,8 @@ def batch_weighted_call(in_tree, /, *, ir: core.IR):
 
 
 async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
+    import autoform.axes as axes
+
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:

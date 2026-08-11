@@ -21,7 +21,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, TypeGuard
 
-import autoform.axes as axes
 import autoform.core as core
 import autoform.dead as dead
 import autoform.utils as utils
@@ -348,6 +347,8 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
+    import autoform.axes as axes
+
     bs, in_batched, in_values = in_tree
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
 
@@ -793,6 +794,8 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
+    import autoform.axes as axes
+
     size, in_batched, in_values = in_tree
     (p_cols, c_cols) = in_values
     (p_batched, c_batched) = in_batched

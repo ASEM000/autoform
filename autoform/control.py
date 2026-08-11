@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import functools as ft
 
-import autoform.ad as ad
-import autoform.axes as axes
 import autoform.core as core
 import autoform.dead as dead
 import autoform.utils as utils
@@ -89,6 +87,8 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
 
 
 def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
+    import autoform.ad as ad
+
     (_, deps), out_cotangent = in_tree
     return out_cotangent, utils.tree.map(lambda d: d if ad.is_zero(d) else ad.zeroof(d), deps)
 
@@ -152,6 +152,8 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
+    import autoform.ad as ad
+
     primal, tangent = in_tree
     zero_t = utils.tree.map(lambda p: p if ad.is_zero(p) else ad.zeroof(p), primal)
     return primal, zero_t
@@ -163,6 +165,8 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
 
 
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del out_cotangent
     return utils.tree.map(lambda r: r if ad.is_zero(r) else ad.zeroof(r), residuals)
@@ -251,6 +255,8 @@ def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -258,6 +264,8 @@ def pushforward_switch(in_tree, /, *, branches: Branches):
 
 
 async def apush_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -279,6 +287,8 @@ async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
@@ -287,6 +297,8 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
@@ -314,6 +326,8 @@ def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
 
 
 async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
+    import autoform.axes as axes
+
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
@@ -511,6 +525,8 @@ def pullback_bwd_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
@@ -535,6 +551,8 @@ async def apull_bwd_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
@@ -559,6 +577,8 @@ def batch_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, init_val = in_tree
     # NOTE(asem): in_tree is a SoA object, however we need to pass in only parts of the SoA
     # that are alive (:= still needs some work). so we need to convert from SoA to AoS
@@ -652,6 +672,8 @@ async def abatch_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, init_val = in_tree
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
@@ -735,6 +757,8 @@ fixpoint_p = core.Prim("fixpoint")
 
 
 def cot_tree_acc(lhs: Tree, rhs: Tree, /) -> Tree:
+    import autoform.ad as ad
+
     return utils.tree.map(lambda l, r: ad.cot_acc([l, r]), lhs, rhs, is_leaf=ad.is_zero)
 
 
@@ -887,6 +911,8 @@ def pullback_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> Tree:
+    import autoform.ad as ad
+
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
@@ -950,6 +976,8 @@ async def apull_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> Tree:
+    import autoform.ad as ad
+
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
@@ -1013,6 +1041,8 @@ def batch_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
@@ -1078,6 +1108,8 @@ async def abatch_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
+    import autoform.axes as axes
+
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 

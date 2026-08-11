@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import functools as ft
 
-import autoform.ad as ad
 import autoform.core as core
 import autoform.utils as utils
 
@@ -61,6 +60,8 @@ def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -
 
 
 def pushforward_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     p_out = format_p.bind(primals, template=template, keys=keys)
     tangents = ad.materialize(tangents)
@@ -142,6 +143,8 @@ def abstract_concat(in_tree: Tree, /) -> core.EvalType:
 
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     tangents = ad.materialize(tangents)
     return concat_p.bind(primals), concat_p.bind(tangents)
@@ -223,6 +226,8 @@ def abstract_match(in_tree: Tree, /) -> core.EvalType:
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
+    import autoform.ad as ad
+
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
     return out_primal, ad.Zero(core.BoolAVal())
@@ -235,6 +240,8 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 
 
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
+    import autoform.ad as ad
+
     residuals, out_cotangent = in_tree
     del out_cotangent
     return utils.tree.map(lambda r: r if ad.is_zero(r) else ad.zeroof(r), residuals)
