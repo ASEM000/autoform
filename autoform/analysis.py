@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import functools as ft
+from collections import defaultdict, deque
 from typing import cast
 
 import autoform.core as core
@@ -26,7 +28,7 @@ type UsedTree = Tree[bool]
 type LiveSet = set[core.Var]
 type Liveness = list[LiveSet]
 
-__all__ = ["var_leaves", "var_producers", "eqn_graph", "ir_liveness"]
+__all__ = ["var_leaves", "var_producers", "eqn_graph", "ir_liveness", "toposort_levels"]
 
 
 def var_leaves(tree: Tree, /) -> list[core.Var]:
@@ -59,6 +61,45 @@ def eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
                 seen_parents.add(p)
 
     return adjacency_list
+
+
+@ft.partial(utils.lru_cache, maxsize=256)
+def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
+    """Group IR equations into dependency levels."""
+
+    # NOTE(asem): equations form a dag where edges are defined by shared irvars.
+    # if equation a produces $x and equation b uses $x, then a -> b.
+    # this function groups equations into levels where:
+    # 1. equations in the same level are independent (can run in parallel)
+    # 2. level n must complete before level n+1 starts
+
+    # NOTE(asem): three-step process:
+    # 1. map each var to its creator equation
+    # 2. build adjacency list (parent -> children) from var flow
+    # 3. topological sort into levels using kahn's algorithm
+
+    # NOTE(asem): step 1/2: build adjacency list (parent -> children) from var flow
+    adjacency_list = eqn_graph(ir)
+    in_degree = defaultdict(lambda: 0)
+    for children in adjacency_list.values():
+        for child in children:
+            in_degree[child] += 1
+
+    # NOTE(asem): step 3: kahn's algorithm
+    # basically prune nodes with 0 indegree then update the children indegree
+    queue = deque(eqn for eqn in ir.eqns if in_degree[eqn] == 0)
+    levels = []
+
+    while queue:
+        level = []
+        for _ in range(len(queue)):
+            node = queue.popleft()
+            level.append(node)
+            for child in adjacency_list[node]:
+                in_degree[child] -= 1
+                in_degree[child] == 0 and queue.append(child)
+        levels.append(level)
+    return levels
 
 
 def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness:
