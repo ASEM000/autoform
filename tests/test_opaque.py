@@ -21,7 +21,7 @@ import autoform as af
 
 class TestCustomFunction:
     def test_only_custom_is_exported(self):
-        custom_module = importlib.import_module("autoform.custom")
+        custom_module = importlib.import_module("autoform.opaque")
 
         assert af.custom is custom_module.custom
         assert not hasattr(af, "CustomFunction")

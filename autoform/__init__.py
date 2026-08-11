@@ -23,11 +23,11 @@ import autoform.axes as axes
 import autoform.ckpt as ckpt
 import autoform.control as control
 import autoform.core as core
-import autoform.custom as custom
 import autoform.dce as dce
 import autoform.extend as extend
 import autoform.lm as lm
 import autoform.memoize as memoize
+import autoform.opaque as opaque
 import autoform.prob as prob
 import autoform.scheduling as scheduling
 import autoform.schemas as schemas
@@ -55,7 +55,7 @@ tag = core.tag
 pushforward = ad.pushforward
 pullback = ad.pullback
 batch = axes.batch
-custom = custom.custom
+custom = opaque.custom
 collect = ckpt.collect
 inject = ckpt.inject
 checkpoint = ckpt.checkpoint
