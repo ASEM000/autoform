@@ -24,14 +24,14 @@ import autoform.ad as ad
 import autoform.axes as axes
 import autoform.core as core
 import autoform.dead as dead
-import autoform.memoize as memoize
+import autoform.memo as memo
 import autoform.utils as utils
 
 __all__ = ["factor", "weighted"]
 
 factor_p = core.Prim("factor")
 dead.non_dce_primitives.add(factor_p)
-memoize.non_memoizable_primitives.add(factor_p)
+memo.non_memoizable_primitives.add(factor_p)
 
 number_type = (int, float, core.IntAVal, core.FloatAVal)
 

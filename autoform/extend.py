@@ -26,7 +26,7 @@ import autoform.control as control
 import autoform.core as core
 import autoform.dead as dead
 import autoform.lm as lm
-import autoform.memoize as memoize
+import autoform.memo as memo
 import autoform.prob as prob
 import autoform.scheduling as scheduling
 import autoform.string as string
@@ -293,7 +293,7 @@ def register_non_memoizable[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
-    rules = memoize.non_memoizable_primitives
+    rules = memo.non_memoizable_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
     rules.add(prim)
     return prim

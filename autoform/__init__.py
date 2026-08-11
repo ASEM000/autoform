@@ -26,7 +26,7 @@ import autoform.core as core
 import autoform.dead as dead
 import autoform.extend as extend
 import autoform.lm as lm
-import autoform.memoize as memoize
+import autoform.memo as memo
 import autoform.opaque as opaque
 import autoform.prob as prob
 import autoform.scheduling as scheduling
@@ -61,7 +61,7 @@ inject = ckpt.inject
 checkpoint = ckpt.checkpoint
 dce = dead.dce
 sched = scheduling.sched
-memoize = memoize.memoize
+memoize = memo.memoize
 weighted = prob.weighted
 
 # ==================================================================================================
