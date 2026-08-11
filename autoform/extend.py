@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 import autoform.ad as ad
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.checkpoint as checkpoint
 import autoform.control as control
 import autoform.core as core
@@ -71,7 +71,7 @@ batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
-serial_fanout = batch.serial_fanout
+serial_fanout = axes.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
 is_var = core.is_var
@@ -94,9 +94,9 @@ stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
 while_loop_p = control.while_loop_p
 fixpoint_p = control.fixpoint_p
-fanout_p = batch.fanout_p
+fanout_p = axes.fanout_p
 depends_p = scheduling.depends_p
-batch_call_p = batch.batch_call_p
+batch_call_p = axes.batch_call_p
 pushforward_call_p = ad.pushforward_call_p
 pullback_call_p = ad.pullback_call_p
 

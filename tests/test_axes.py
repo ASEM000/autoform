@@ -18,7 +18,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.batch import BatchAVal, BatchBox, BatchInterpreter
+from autoform.axes import BatchAVal, BatchBox, BatchInterpreter
 from autoform.utils import batch_spec, batch_transpose
 
 tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)

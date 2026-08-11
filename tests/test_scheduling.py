@@ -17,7 +17,7 @@ import functools as ft
 import pytest
 
 import autoform as af
-from autoform.batch import fanout_p
+from autoform.axes import fanout_p
 from autoform.scheduling import toposort_levels
 
 

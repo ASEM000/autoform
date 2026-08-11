@@ -21,7 +21,7 @@ import math
 from collections.abc import Hashable
 
 import autoform.ad as ad
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.core as core
 import autoform.dce as dce
 import autoform.memoize as memoize
@@ -216,7 +216,7 @@ def batch_weighted_call(in_tree, /, *, ir: core.IR):
 
     weighted_ir = weighted(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = batch.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = axes.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -230,7 +230,7 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
 
     weighted_ir = weighted(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = await batch.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = await axes.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched

@@ -21,7 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 import autoform.ad as ad
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.core as core
 import autoform.dce as dce
 import autoform.utils as utils
@@ -120,25 +120,25 @@ async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    _, axes, values = in_tree
-    if utils.batch_spec(values, axes) is None:
+    _, in_axes, values = in_tree
+    if utils.batch_spec(values, in_axes) is None:
         _, out = call_custom_body(call, values)
         return out, tree_batched_like(out, False)
-    example_values = utils.batch_index(values, axes, 0)
+    example_values = utils.batch_index(values, in_axes, 0)
     ir = trace_custom_func(call, example_values)
-    batched_ir = batch.batch(ir, in_axes=axes)
+    batched_ir = axes.batch(ir, in_axes=in_axes)
     out = batched_ir.call(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    _, axes, values = in_tree
-    if utils.batch_spec(values, axes) is None:
+    _, in_axes, values = in_tree
+    if utils.batch_spec(values, in_axes) is None:
         _, out = await acall_custom_body(call, values)
         return out, tree_batched_like(out, False)
-    example_values = utils.batch_index(values, axes, 0)
+    example_values = utils.batch_index(values, in_axes, 0)
     ir = trace_custom_func(call, example_values)
-    batched_ir = batch.batch(ir, in_axes=axes)
+    batched_ir = axes.batch(ir, in_axes=in_axes)
     out = await batched_ir.acall(*values)
     return out, tree_batched_like(ir.out_tree, True)
 

@@ -22,7 +22,7 @@ from collections.abc import Callable
 
 import autoform.ad as ad
 import autoform.analysis as analysis
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.core as core
 import autoform.utils as utils
 
@@ -206,7 +206,7 @@ def sched[*A, R](
         irs = [core.IR([eqn], (eqn.in_tree,), eqn.out_tree) for eqn in eqns]
         in_tree = [(eqn.in_tree,) for eqn in eqns]
         out_tree = [eqn.out_tree for eqn in eqns]
-        return core.Eqn(batch.fanout_p, in_tree, out_tree, dict(irs=irs))
+        return core.Eqn(axes.fanout_p, in_tree, out_tree, dict(irs=irs))
 
     for level in levels:
         eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]

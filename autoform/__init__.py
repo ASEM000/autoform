@@ -19,7 +19,7 @@
 # ==================================================================================================
 
 import autoform.ad as ad
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.checkpoint as checkpoint
 import autoform.control as control
 import autoform.core as core
@@ -54,7 +54,7 @@ tag = core.tag
 
 pushforward = ad.pushforward
 pullback = ad.pullback
-batch = batch.batch
+batch = axes.batch
 custom = custom.custom
 collect = checkpoint.collect
 inject = checkpoint.inject

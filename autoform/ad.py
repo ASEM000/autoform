@@ -21,7 +21,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, TypeGuard
 
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.core as core
 import autoform.dce as dce
 import autoform.utils as utils
@@ -362,7 +362,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     pf_ir = pushforward(ir)
 
     inputs = [(unbatch_p(b), unbatch_t(b)) for b in range(bs)]
-    out_bi = await batch.fanout_p.abind(inputs, irs=[pf_ir] * bs)
+    out_bi = await axes.fanout_p.abind(inputs, irs=[pf_ir] * bs)
     out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
     out_ib = utils.batch_transpose(bs, out_batched, list(out_bi))
     return out_ib, out_batched
@@ -808,7 +808,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     pb_ir = pullback(ir)
 
     inputs = [(unbatch_p(b), unbatch_c(b)) for b in range(size)]
-    out_bi = await batch.fanout_p.abind(inputs, irs=[pb_ir] * size)
+    out_bi = await axes.fanout_p.abind(inputs, irs=[pb_ir] * size)
     out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
     out_ib = utils.batch_transpose(size, out_batched, list(out_bi))
     return out_ib, out_batched

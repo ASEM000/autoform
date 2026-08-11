@@ -19,7 +19,7 @@ from __future__ import annotations
 import functools as ft
 
 import autoform.ad as ad
-import autoform.batch as batch
+import autoform.axes as axes
 import autoform.core as core
 import autoform.dce as dce
 import autoform.utils as utils
@@ -244,7 +244,7 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResu
 
     irs = [branches[key_col[b] if key_batched else key_col] for b in range(batch_size)]
     inputs = [unbatch(b) for b in range(batch_size)]
-    results = await batch.fanout_p.abind(inputs, irs=irs)
+    results = await axes.fanout_p.abind(inputs, irs=irs)
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_tree = utils.batch_transpose(batch_size, out_batched, results)
     return out_tree, out_batched
@@ -520,8 +520,8 @@ def batch_while_loop(
     state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
-    batched_cond = batch.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = batch.batch(body_ir, in_axes=body_in_axes)
+    batched_cond = axes.batch(cond_ir, in_axes=cond_in_axes)
+    batched_body = axes.batch(body_ir, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -582,8 +582,8 @@ async def abatch_while_loop(
     state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
-    batched_cond = batch.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = batch.batch(body_ir, in_axes=body_in_axes)
+    batched_cond = axes.batch(cond_ir, in_axes=cond_in_axes)
+    batched_body = axes.batch(body_ir, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -950,10 +950,10 @@ def batch_fixpoint(
     state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
-    batched_step = batch.batch(step_ir, in_axes=in_axes)
+    batched_step = axes.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
         equiv_axes = (state_in_axes, state_in_axes)
-        batched_equiv = batch.batch(equiv_ir, in_axes=equiv_axes)
+        batched_equiv = axes.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -1015,10 +1015,10 @@ async def abatch_fixpoint(
     state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
-    batched_step = batch.batch(step_ir, in_axes=in_axes)
+    batched_step = axes.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
         equiv_axes = (state_in_axes, state_in_axes)
-        batched_equiv = batch.batch(equiv_ir, in_axes=equiv_axes)
+        batched_equiv = axes.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
