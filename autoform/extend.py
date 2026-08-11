@@ -40,6 +40,8 @@ StrAVal = core.StrAVal
 IntAVal = core.IntAVal
 FloatAVal = core.FloatAVal
 BoolAVal = core.BoolAVal
+Space = core.Space
+primal_s = core.primal_s
 Prim = core.Prim
 Zero = ad.Zero
 Interpreter = core.Interpreter
@@ -62,7 +64,6 @@ batch_rules = core.batch_rules
 # HELPERS
 # ==================================================================================================
 
-avalof = core.avalof
 zeroof = ad.zeroof
 materialize = ad.materialize
 is_zero = ad.is_zero
@@ -105,6 +106,8 @@ __all__ = [
     "IntAVal",
     "FloatAVal",
     "BoolAVal",
+    "Space",
+    "primal_s",
     "Prim",
     "Zero",
     "Interpreter",
@@ -128,7 +131,6 @@ __all__ = [
     "pull_fwd_rules",
     "pull_bwd_rules",
     "batch_rules",
-    "avalof",
     "zeroof",
     "materialize",
     "is_zero",
@@ -199,7 +201,7 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ...     return TokenAVal()
     """
     core.trace_types.add(type)
-    core.aval_rules[type] = aval_rule
+    core.primal_s.rules[type] = aval_rule
     return aval_rule
 
 
