@@ -43,6 +43,8 @@ __all__ = [
     # spaces
     "Space",
     "primal_s",
+    "tangent_s",
+    "cotangent_s",
     # ir vals
     "Var",
     "is_var",
@@ -231,6 +233,18 @@ primal_s.set(str, lambda _: StrAVal())
 primal_s.set(int, lambda _: IntAVal())
 primal_s.set(float, lambda _: FloatAVal())
 primal_s.set(bool, lambda _: BoolAVal())
+
+tangent_s = Space("tangent")
+tangent_s.set(StrAVal, lambda aval: aval)
+tangent_s.set(IntAVal, lambda aval: aval)
+tangent_s.set(FloatAVal, lambda aval: aval)
+tangent_s.set(BoolAVal, lambda aval: aval)
+
+cotangent_s = Space("cotangent")
+cotangent_s.set(StrAVal, lambda aval: aval)
+cotangent_s.set(IntAVal, lambda aval: aval)
+cotangent_s.set(FloatAVal, lambda aval: aval)
+cotangent_s.set(BoolAVal, lambda aval: aval)
 
 trace_types: set[type] = {str, int, float, bool}
 
