@@ -123,10 +123,17 @@ class TestSpace:
         tangent_s = af.core.Space("tangent")
         cotangent_s = af.core.Space("cotangent")
         tangent_s.set(TextAVal, lambda _: TextEditAVal())
+        tangent_s.set(TextEditAVal, lambda aval: aval)
         cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
+        cotangent_s.set(TextFeedbackAVal, lambda aval: aval)
 
-        assert isinstance(tangent_s.avalof(TextAVal()), TextEditAVal)
-        assert isinstance(cotangent_s.avalof(TextAVal()), TextFeedbackAVal)
+        tangent = tangent_s.avalof(TextAVal())
+        cotangent = cotangent_s.avalof(TextAVal())
+
+        assert isinstance(tangent, TextEditAVal)
+        assert isinstance(cotangent, TextFeedbackAVal)
+        assert tangent_s.avalof(tangent) is tangent
+        assert cotangent_s.avalof(cotangent) is cotangent
 
     @pytest.mark.parametrize("space", [af.core.tangent_s, af.core.cotangent_s])
     def test_missing_ad_space_rule(self, space):

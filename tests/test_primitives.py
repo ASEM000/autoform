@@ -581,6 +581,7 @@ class TestTransformWrapperAvals:
 
         af.core.primal_s.set(Text, lambda _: TextAVal())
         af.core.tangent_s.set(TextAVal, lambda _: TextEditAVal())
+        af.core.tangent_s.set(TextEditAVal, lambda aval: aval)
 
         aval = TextAVal()
         var = af.core.Var(aval=aval)
@@ -606,6 +607,11 @@ class TestTransformWrapperAvals:
         assert isinstance(t_aval[0], TextEditAVal)
         assert isinstance(af.ad.tangent_zeroof(text).aval, TextEditAVal)
 
+        pf_pf_ir = af.pushforward(pf_ir)
+        (_, _), (t_p_in, t_t_in) = pf_pf_ir.in_tree
+        assert isinstance(t_p_in[0].aval, TextEditAVal)
+        assert isinstance(t_t_in[0].aval, TextEditAVal)
+
     def test_pullback_wrapper_uses_cotangent_space(self):
         class Text:
             __slots__ = ["value"]
@@ -627,6 +633,7 @@ class TestTransformWrapperAvals:
 
         af.core.primal_s.set(Text, lambda _: TextAVal())
         af.core.cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
+        af.core.cotangent_s.set(TextFeedbackAVal, lambda aval: aval)
 
         aval = TextAVal()
         var = af.core.Var(aval=aval)
@@ -651,6 +658,11 @@ class TestTransformWrapperAvals:
         assert p_aval == (aval,)
         assert isinstance(c_aval[0], TextFeedbackAVal)
         assert isinstance(af.ad.cotangent_zeroof(text).aval, TextFeedbackAVal)
+
+        pb_pb_ir = af.pullback(pb_ir)
+        _, (c_p_out, c_c_in) = pb_pb_ir.in_tree
+        assert isinstance(c_p_out[0].aval, TextFeedbackAVal)
+        assert isinstance(c_c_in[0].aval, TextFeedbackAVal)
 
 
 class TestCotangentHelpers:
