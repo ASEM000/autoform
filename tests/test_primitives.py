@@ -606,14 +606,29 @@ class TestTransformWrapperAvals:
         assert isinstance(t_aval[0], TextEditAVal)
         assert isinstance(af.ad.tangent_zeroof(text).aval, TextEditAVal)
 
-    def test_pullback_wrapper_preserves_aval(self):
-        class TaggedAVal(af.core.AVal):
-            __slots__ = ["tag"]
+    def test_pullback_wrapper_uses_cotangent_space(self):
+        class Text:
+            __slots__ = ["value"]
 
-            def __init__(self, tag):
-                self.tag = tag
+            def __init__(self, value):
+                self.value = value
 
-        aval = TaggedAVal("pb")
+        class TextFeedback:
+            __slots__ = ["value"]
+
+            def __init__(self, value):
+                self.value = value
+
+        class TextAVal(af.core.AVal):
+            pass
+
+        class TextFeedbackAVal(af.core.AVal):
+            pass
+
+        af.core.primal_s.set(Text, lambda _: TextAVal())
+        af.core.cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
+
+        aval = TextAVal()
         var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
@@ -622,9 +637,20 @@ class TestTransformWrapperAvals:
         primals_out, cotangents_out = pb_ir.out_tree
 
         assert primals_in[0].aval is aval
-        assert cotangents_in[0].aval is aval
+        assert isinstance(cotangents_in[0].aval, TextFeedbackAVal)
         assert primals_out[0].aval is aval
-        assert cotangents_out[0].aval is aval
+        assert isinstance(cotangents_out[0].aval, TextFeedbackAVal)
+
+        text = Text("hello")
+        feedback = TextFeedback("be clearer")
+        p_out, c_in = pb_ir.call((text,), (feedback,))
+        assert p_out == (text,)
+        assert c_in == (feedback,)
+
+        p_aval, c_aval = af.core.abstract_rules.get(af.ad.pullback_call_p)(None, ir=ir)
+        assert p_aval == (aval,)
+        assert isinstance(c_aval[0], TextFeedbackAVal)
+        assert isinstance(af.ad.cotangent_zeroof(text).aval, TextFeedbackAVal)
 
 
 class TestCotangentHelpers:
@@ -761,6 +787,45 @@ class TestCotangentHelpers:
 
         assert isinstance(result, Blob)
         assert result.text == "a|b"
+
+    def test_pullback_accumulates_custom_cotangent_space(self):
+        class Text:
+            __slots__ = ["value"]
+
+            def __init__(self, value):
+                self.value = value
+
+        class TextFeedback:
+            __slots__ = ["value"]
+
+            def __init__(self, value):
+                self.value = value
+
+        class TextAVal(af.core.AVal):
+            pass
+
+        class TextFeedbackAVal(af.core.AVal):
+            pass
+
+        af.core.primal_s.set(Text, lambda _: TextAVal())
+        af.core.primal_s.set(TextFeedback, lambda _: TextFeedbackAVal())
+        af.core.cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
+        af.ad.zero_rules[TextFeedbackAVal] = lambda _: TextFeedback("")
+        af.ad.cot_acc_rules[TextFeedbackAVal] = lambda cs, _: TextFeedback(
+            " | ".join(c.value for c in cs)
+        )
+
+        aval = TextAVal()
+        var = af.core.Var(aval=aval)
+        ir = af.core.IR([], (var,), (var, var))
+        text = Text("hello")
+
+        p_out, c_in = af.pullback(ir).call((text,), (TextFeedback("left"), TextFeedback("right")))
+
+        assert p_out == (text, text)
+        assert isinstance(c_in[0], TextFeedback)
+        assert c_in[0].value == "left | right"
+        assert af.ad.materialize(af.ad.cotangent_zeroof(text)).value == ""
 
 
 class TestLiteralZeroing:

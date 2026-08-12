@@ -174,6 +174,10 @@ class TestBatchIRStructure:
         aval = BatchAVal(af.core.StrAVal())
         assert af.core.tangent_s.avalof(aval) == BatchAVal(af.core.StrAVal())
 
+    def test_batch_aval_cotangent_space(self):
+        aval = BatchAVal(af.core.StrAVal())
+        assert af.core.cotangent_s.avalof(aval) == BatchAVal(af.core.StrAVal())
+
     def test_creates_single_eqn(self):
         def f(x):
             return af.concat(x, x)
