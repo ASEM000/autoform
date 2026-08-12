@@ -43,10 +43,10 @@ def test_register_trace_type():
     assert afe.register_trace_type(Box, aval_rule) is aval_rule
     try:
         ir = af.trace(lambda x: x)(Box(1))
-        assert afe.avalof(Box(1)) == BoxAVal()
+        assert afe.primal_s.avalof(Box(1)) == BoxAVal()
     finally:
         af.core.trace_types.remove(Box)
-        del af.core.aval_rules[Box]
+        del af.core.primal_s.rules[Box]
 
     assert ir.in_tree[0].aval == BoxAVal()
 
@@ -56,6 +56,8 @@ def test_scalar_aval_reexports():
     assert afe.IntAVal is af.core.IntAVal
     assert afe.FloatAVal is af.core.FloatAVal
     assert afe.BoolAVal is af.core.BoolAVal
+    assert afe.Space is af.core.Space
+    assert afe.primal_s is af.core.primal_s
 
 
 def test_register_zero_and_cotangent_accumulator():
@@ -69,7 +71,7 @@ def test_register_zero_and_cotangent_accumulator():
         assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
     finally:
         af.core.trace_types.remove(Box)
-        del af.core.aval_rules[Box]
+        del af.core.primal_s.rules[Box]
         del af.ad.zero_rules[BoxAVal]
         del af.ad.cot_acc_rules[BoxAVal]
 
@@ -97,7 +99,7 @@ def test_register_add_with_primitive_rules():
         assert ir.call(Box(3), Box(4)) == Box(7)
     finally:
         af.core.trace_types.remove(Box)
-        del af.core.aval_rules[Box]
+        del af.core.primal_s.rules[Box]
         del af.core.trace_add_rules[BoxAVal]
 
 
@@ -137,11 +139,11 @@ def test_registration_helpers_work_as_decorators():
         return x, y
 
     try:
-        assert af.core.aval_rules[Box] is aval_rule
+        assert af.core.primal_s.rules[Box] is aval_rule
         assert af.ad.zero_rules[BoxAVal] is zero_rule
         assert af.core.trace_add_rules[BoxAVal] is add_rule
     finally:
         af.core.trace_types.remove(Box)
-        del af.core.aval_rules[Box]
+        del af.core.primal_s.rules[Box]
         del af.ad.zero_rules[BoxAVal]
         del af.core.trace_add_rules[BoxAVal]

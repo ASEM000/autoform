@@ -46,6 +46,20 @@ class BlobAVal(af.core.AVal):
         return hash((type(self), self.size))
 
 
+class TestSpace:
+    def test_avalof_uses_own_rules(self):
+        space = af.core.Space("blob")
+        space.rules[Blob] = lambda value: BlobAVal(value.size)
+
+        assert space.avalof(Blob(3)) == BlobAVal(3)
+
+    def test_missing_rule(self):
+        space = af.core.Space("empty")
+
+        with pytest.raises(TypeError, match="No empty aval rule registered"):
+            space.avalof(Blob(3))
+
+
 class TestBuildIR:
     def test_trace_scalar_input_is_dynamic(self):
         def program(x):
@@ -92,19 +106,19 @@ class TestBuildIR:
         def program(x):
             return x
 
-        af.core.aval_rules[Blob] = lambda x: BlobAVal(x.size)
+        af.core.primal_s.rules[Blob] = lambda x: BlobAVal(x.size)
         af.core.trace_types.add(Blob)
         try:
             ir = af.trace(program)(Blob(3))
         finally:
-            del af.core.aval_rules[Blob]
+            del af.core.primal_s.rules[Blob]
             af.core.trace_types.remove(Blob)
 
         assert ir.in_tree[0].aval == BlobAVal(3)
 
     def test_irvar_has_aval_but_is_not_traceable(self):
         var = af.core.Var(aval=af.core.StrAVal())
-        assert af.core.avalof(var) == af.core.StrAVal()
+        assert af.core.primal_s.avalof(var) == af.core.StrAVal()
         assert not af.core.is_traceable(var)
 
     def test_trace_static_unhashable_input_errors(self):
