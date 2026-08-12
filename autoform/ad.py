@@ -31,6 +31,7 @@ __all__ = [
     "zero_rules",
     "zeroof",
     "tangent_zeroof",
+    "cotangent_zeroof",
     "materialize",
     "cot_acc",
     "cot_acc_rules",
@@ -109,6 +110,12 @@ def tangent_zeroof(primal, /) -> Zero:
     """Return a symbolic zero in the tangent space of ``primal``."""
     primal_aval = primal if core.is_aval(primal) else core.primal_s.avalof(primal)
     return Zero(core.tangent_s.avalof(primal_aval))
+
+
+def cotangent_zeroof(primal, /) -> Zero:
+    """Return a symbolic zero in the cotangent space of ``primal``."""
+    primal_aval = primal if core.is_aval(primal) else core.primal_s.avalof(primal)
+    return Zero(core.cotangent_s.avalof(primal_aval))
 
 
 def materialize(x: Tree, /) -> Tree:
@@ -578,9 +585,9 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
 
     def read_c(atom) -> Any:
         if not core.is_var(atom):
-            return zeroof(atom)
+            return cotangent_zeroof(atom)
         if not (cs := c_env[atom]):
-            return zeroof(atom)
+            return cotangent_zeroof(atom)
         return cot_acc(cs)
 
     utils.tree.map(write_c, ir.out_tree, c_out)
@@ -655,8 +662,8 @@ def pullback(ir: core.IR, /) -> core.IR:
 
     def make_c(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
-        return zeroof(atom)
+            return core.Var.fresh(aval=core.cotangent_s.avalof(atom.aval), source=atom)
+        return cotangent_zeroof(atom)
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
     c_out_ir = utils.tree.map(make_c, ir.out_tree)
@@ -735,8 +742,13 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def abstract_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
+    def cotangent_aval(atom):
+        if core.is_var(atom):
+            return core.cotangent_s.avalof(atom.aval)
+        return cotangent_zeroof(atom)
+
     p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
-    c_in = utils.tree.map(core.aval_if_var, ir.in_tree)
+    c_in = utils.tree.map(cotangent_aval, ir.in_tree)
     return p_out, c_in
 
 
