@@ -560,14 +560,29 @@ class TestRunIRInline:
 
 
 class TestTransformWrapperAvals:
-    def test_pushforward_wrapper_preserves_aval(self):
-        class TaggedAVal(af.core.AVal):
-            __slots__ = ["tag"]
+    def test_pushforward_wrapper_uses_tangent_space(self):
+        class Text:
+            __slots__ = ["value"]
 
-            def __init__(self, tag):
-                self.tag = tag
+            def __init__(self, value):
+                self.value = value
 
-        aval = TaggedAVal("pf")
+        class TextEdit:
+            __slots__ = ["value"]
+
+            def __init__(self, value):
+                self.value = value
+
+        class TextAVal(af.core.AVal):
+            pass
+
+        class TextEditAVal(af.core.AVal):
+            pass
+
+        af.core.primal_s.set(Text, lambda _: TextAVal())
+        af.core.tangent_s.set(TextAVal, lambda _: TextEditAVal())
+
+        aval = TextAVal()
         var = af.core.Var(aval=aval)
         ir = af.core.IR([], (var,), (var,))
 
@@ -576,9 +591,20 @@ class TestTransformWrapperAvals:
         primals_out, tangents_out = pf_ir.out_tree
 
         assert primals_in[0].aval is aval
-        assert tangents_in[0].aval is aval
+        assert isinstance(tangents_in[0].aval, TextEditAVal)
         assert primals_out[0].aval is aval
-        assert tangents_out[0].aval is aval
+        assert isinstance(tangents_out[0].aval, TextEditAVal)
+
+        text = Text("hello")
+        edit = TextEdit("replace hello")
+        p_out, t_out = pf_ir.call((text,), (edit,))
+        assert p_out == (text,)
+        assert t_out == (edit,)
+
+        p_aval, t_aval = af.core.abstract_rules.get(af.ad.pushforward_call_p)(None, ir=ir)
+        assert p_aval == (aval,)
+        assert isinstance(t_aval[0], TextEditAVal)
+        assert isinstance(af.ad.tangent_zeroof(text).aval, TextEditAVal)
 
     def test_pullback_wrapper_preserves_aval(self):
         class TaggedAVal(af.core.AVal):
