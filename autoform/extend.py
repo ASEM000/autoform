@@ -67,6 +67,7 @@ batch_rules = core.batch_rules
 # ==================================================================================================
 
 zeroof = ad.zeroof
+tangent_zeroof = ad.tangent_zeroof
 materialize = ad.materialize
 is_zero = ad.is_zero
 batch_index = utils.batch_index
@@ -136,6 +137,7 @@ __all__ = [
     "pull_bwd_rules",
     "batch_rules",
     "zeroof",
+    "tangent_zeroof",
     "materialize",
     "is_zero",
     "batch_index",
