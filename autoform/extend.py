@@ -42,6 +42,8 @@ FloatAVal = core.FloatAVal
 BoolAVal = core.BoolAVal
 Space = core.Space
 primal_s = core.primal_s
+tangent_s = core.tangent_s
+cotangent_s = core.cotangent_s
 Prim = core.Prim
 Zero = ad.Zero
 Interpreter = core.Interpreter
@@ -108,6 +110,8 @@ __all__ = [
     "BoolAVal",
     "Space",
     "primal_s",
+    "tangent_s",
+    "cotangent_s",
     "Prim",
     "Zero",
     "Interpreter",
