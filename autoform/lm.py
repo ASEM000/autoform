@@ -396,7 +396,7 @@ schema_abstract_rules[schemas.Str] = lambda _: core.StrAVal()
 schema_abstract_rules[schemas.Int] = lambda _: core.IntAVal()
 schema_abstract_rules[schemas.Float] = lambda _: core.FloatAVal()
 schema_abstract_rules[schemas.Bool] = lambda _: core.BoolAVal()
-schema_abstract_rules[schemas.Enum] = lambda s: core.aval_rules[type(s.values[0])](s.values[0])
+schema_abstract_rules[schemas.Enum] = lambda s: core.primal_s.avalof(s.values[0])
 schema_abstract_rules[schemas.Docd] = lambda s: schema_abstract_tree(s.value)
 
 

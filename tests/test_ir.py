@@ -46,6 +46,55 @@ class BlobAVal(af.core.AVal):
         return hash((type(self), self.size))
 
 
+class TestSpace:
+    def test_avalof_uses_own_rules(self):
+        space = af.core.Space("blob")
+        rule = lambda value: BlobAVal(value.size)
+
+        assert space.set(Blob, rule) is rule
+        assert space.avalof(Blob(3)) == BlobAVal(3)
+
+    def test_missing_rule(self):
+        space = af.core.Space("empty")
+
+        with pytest.raises(TypeError, match="No empty aval rule registered"):
+            space.avalof(Blob(3))
+
+    def test_set_requires_type(self):
+        space = af.core.Space("blob")
+
+        with pytest.raises(AssertionError, match="Expected type"):
+            space.set(Blob(3), lambda value: BlobAVal(value.size))
+
+    def test_set_requires_callable(self):
+        space = af.core.Space("blob")
+
+        with pytest.raises(AssertionError, match="Expected callable"):
+            space.set(Blob, BlobAVal(3))
+
+    def test_set_rejects_duplicate_rule(self):
+        space = af.core.Space("blob")
+        space.set(Blob, lambda value: BlobAVal(value.size))
+
+        with pytest.raises(AssertionError, match="already defined"):
+            space.set(Blob, lambda value: BlobAVal(value.size + 1))
+
+    def test_set_replaces_rule(self):
+        space = af.core.Space("blob")
+        space.set(Blob, lambda value: BlobAVal(value.size))
+
+        rule = lambda value: BlobAVal(value.size + 1)
+
+        assert space.set(Blob, rule, replace=True) is rule
+        assert space.avalof(Blob(3)) == BlobAVal(4)
+
+    def test_set_requires_bool_replace(self):
+        space = af.core.Space("blob")
+
+        with pytest.raises(AssertionError, match="Expected bool for replace"):
+            space.set(Blob, lambda value: BlobAVal(value.size), replace=1)
+
+
 class TestBuildIR:
     def test_trace_scalar_input_is_dynamic(self):
         def program(x):
@@ -92,19 +141,16 @@ class TestBuildIR:
         def program(x):
             return x
 
-        af.core.aval_rules[Blob] = lambda x: BlobAVal(x.size)
+        af.core.primal_s.set(Blob, lambda x: BlobAVal(x.size))
         af.core.trace_types.add(Blob)
-        try:
-            ir = af.trace(program)(Blob(3))
-        finally:
-            del af.core.aval_rules[Blob]
-            af.core.trace_types.remove(Blob)
+
+        ir = af.trace(program)(Blob(3))
 
         assert ir.in_tree[0].aval == BlobAVal(3)
 
     def test_irvar_has_aval_but_is_not_traceable(self):
         var = af.core.Var(aval=af.core.StrAVal())
-        assert af.core.avalof(var) == af.core.StrAVal()
+        assert af.core.primal_s.avalof(var) == af.core.StrAVal()
         assert not af.core.is_traceable(var)
 
     def test_trace_static_unhashable_input_errors(self):

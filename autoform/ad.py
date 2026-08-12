@@ -87,7 +87,7 @@ def is_zero(x, /) -> TypeGuard[Zero]:
 
 zero_rules: dict[type[core.AVal], Callable[[core.AVal], Any]] = {}
 zero_rules[core.StrAVal] = lambda _: ""
-core.aval_rules[Zero] = lambda z: z.aval
+core.primal_s.set(Zero, lambda z: z.aval)
 
 
 def zeroof(v, /) -> Zero:
@@ -99,9 +99,9 @@ def zeroof(v, /) -> Zero:
         v: Concrete value, IR value, or symbolic zero.
 
     Returns:
-        A ``Zero`` carrying ``avalof(v)``.
+        A ``Zero`` carrying ``primal_s.avalof(v)``.
     """
-    return v if is_zero(v) else Zero(core.avalof(v))
+    return v if is_zero(v) else Zero(core.primal_s.avalof(v))
 
 
 def materialize(x: Tree, /) -> Tree:
@@ -418,7 +418,7 @@ def cot_acc(cots: list[Any | Zero]) -> Any:
         # >>> af.pullback(ir).call(("a",), (z, z))
         # (('a', 'a'), (Zero(StrAVal()),))
         first_zero, *rest_zero = cots
-        assert all(core.avalof(c) == core.avalof(first_zero) for c in rest_zero)
+        assert all(core.primal_s.avalof(c) == core.primal_s.avalof(first_zero) for c in rest_zero)
         return first_zero
     if len(non_zero) == 1:
         # NOTE(asem): exactly one output path into the same input is live.
@@ -448,7 +448,7 @@ def cot_acc(cots: list[Any | Zero]) -> Any:
 
 
 def impl_cot_acc(cots: list[Any], /) -> Any:
-    aval = core.avalof(cots[0])
+    aval = core.primal_s.avalof(cots[0])
     if (rule := cot_acc_rules.get(type(aval))) is None:
         raise TypeError(f"No cotangent accumulator registered for {aval!r}")
     return rule(cots, aval)
@@ -456,7 +456,7 @@ def impl_cot_acc(cots: list[Any], /) -> Any:
 
 def abstract_cot_acc(cots: list[core.EvalType], /) -> core.AVal:
     first = cots[0]
-    aval = first if core.is_aval(first) else core.avalof(first)
+    aval = first if core.is_aval(first) else core.primal_s.avalof(first)
     if type(aval) not in cot_acc_rules:
         raise TypeError(f"No cotangent accumulator registered for {aval!r}")
     return aval

@@ -630,7 +630,7 @@ class TestCotangentHelpers:
 
     def test_zero_has_aval_but_is_not_traceable(self):
         z = af.ad.Zero(af.core.StrAVal())
-        assert af.core.avalof(z) == af.core.StrAVal()
+        assert af.core.primal_s.avalof(z) == af.core.StrAVal()
         assert not af.core.is_traceable(z)
 
     def test_zero_materializes_with_registered_aval_rule(self):
@@ -647,10 +647,8 @@ class TestCotangentHelpers:
                 return hash((type(self), self.size))
 
         af.ad.zero_rules[BlobAVal] = lambda aval: ("zero", aval.size)
-        try:
-            assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
-        finally:
-            del af.ad.zero_rules[BlobAVal]
+
+        assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
 
     def test_cot_acc_single(self):
         result = af.ad.cot_acc(["hello"])
@@ -717,7 +715,7 @@ class TestCotangentHelpers:
         class Blob:
             pass
 
-        with pytest.raises(TypeError, match="Unsupported input leaf type"):
+        with pytest.raises(TypeError, match="No primal aval rule registered"):
             af.ad.cot_acc([Blob(), Blob()])
 
     def test_cot_acc_uses_registered_aval_rule(self):
@@ -730,15 +728,13 @@ class TestCotangentHelpers:
         class BlobAVal(af.core.AVal):
             __slots__ = []
 
-        af.core.aval_rules[Blob] = lambda _: BlobAVal()
+        af.core.primal_s.set(Blob, lambda _: BlobAVal())
         af.ad.cot_acc_rules[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
-        try:
-            result = af.ad.cot_acc([Blob("a"), Blob("b")])
-            assert isinstance(result, Blob)
-            assert result.text == "a|b"
-        finally:
-            del af.core.aval_rules[Blob]
-            del af.ad.cot_acc_rules[BlobAVal]
+
+        result = af.ad.cot_acc([Blob("a"), Blob("b")])
+
+        assert isinstance(result, Blob)
+        assert result.text == "a|b"
 
 
 class TestLiteralZeroing:
