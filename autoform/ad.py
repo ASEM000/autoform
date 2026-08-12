@@ -30,6 +30,7 @@ __all__ = [
     "is_zero",
     "zero_rules",
     "zeroof",
+    "tangent_zeroof",
     "materialize",
     "cot_acc",
     "cot_acc_rules",
@@ -47,9 +48,9 @@ type TreePair = tuple[Tree, Tree]
 
 
 class Zero[T: core.AVal]:
-    """Symbolic zero cotangent for an abstract value.
+    """Symbolic zero for an abstract value.
 
-    ``Zero`` keeps reverse-mode and pushforward rules from materializing a
+    ``Zero`` keeps differentiation rules from materializing a
     concrete zero until one is actually needed. Use :func:`materialize` to
     replace symbolic zeros with concrete values.
 
@@ -77,7 +78,7 @@ class Zero[T: core.AVal]:
 
 
 def is_zero(x, /) -> TypeGuard[Zero]:
-    """Return whether the input is a symbolic zero cotangent.
+    """Return whether the input is a symbolic zero.
 
     This is intended for rule implementations that need to preserve symbolic
     zeros instead of treating them as ordinary values.
@@ -102,6 +103,12 @@ def zeroof(v, /) -> Zero:
         A ``Zero`` carrying ``primal_s.avalof(v)``.
     """
     return v if is_zero(v) else Zero(core.primal_s.avalof(v))
+
+
+def tangent_zeroof(primal, /) -> Zero:
+    """Return a symbolic zero in the tangent space of ``primal``."""
+    primal_aval = primal if core.is_aval(primal) else core.primal_s.avalof(primal)
+    return Zero(core.tangent_s.avalof(primal_aval))
 
 
 def materialize(x: Tree, /) -> Tree:
@@ -172,7 +179,9 @@ class PushforwardInterpreter(core.BoxedInterpreter[PushforwardBox]):
             return v.primal if isinstance(v, PushforwardBox) and v.owner is self else v
 
         def tangent(v):
-            return v.tangent if isinstance(v, PushforwardBox) and v.owner is self else zeroof(v)
+            if isinstance(v, PushforwardBox) and v.owner is self:
+                return v.tangent
+            return tangent_zeroof(v)
 
         return utils.tree.map(primal, values), utils.tree.map(tangent, values)
 
@@ -223,8 +232,8 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
     def make_t(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
-        return zeroof(atom)
+            return core.Var.fresh(aval=core.tangent_s.avalof(atom.aval), source=atom)
+        return tangent_zeroof(atom)
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
     t_in_ir = utils.tree.map(make_t, ir.in_tree)
@@ -247,7 +256,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
                 return eqn.bind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = eqn.bind(p_in, **eqn.params)
-            return pusher.box((p_out, utils.tree.map(zeroof, p_out)))
+            return pusher.box((p_out, utils.tree.map(tangent_zeroof, p_out)))
 
         eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
         while eqn:
@@ -266,7 +275,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
                 return await eqn.abind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = await eqn.abind(p_in, **eqn.params)
-            return pusher.box((p_out, utils.tree.map(zeroof, p_out)))
+            return pusher.box((p_out, utils.tree.map(tangent_zeroof, p_out)))
 
         eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
         while eqn:
@@ -275,8 +284,14 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 def abstract_pushforward_call(_: Tree, /, *, ir: core.IR) -> TreePair:
-    out = utils.tree.map(core.aval_if_var, ir.out_tree)
-    return out, out
+    def tangent_aval(atom):
+        if core.is_var(atom):
+            return core.tangent_s.avalof(atom.aval)
+        return tangent_zeroof(atom)
+
+    p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
+    t_out = utils.tree.map(tangent_aval, ir.out_tree)
+    return p_out, t_out
 
 
 def pushforward_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
