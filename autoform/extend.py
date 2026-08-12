@@ -216,13 +216,13 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
 def register_zero[T: ZeroRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register the concrete zero value for an abstract value type.
 
-    Reverse-mode transforms use :class:`Zero` to represent a missing or blocked
-    cotangent. :func:`autoform.extend.materialize` later turns that symbolic zero
-    into a concrete runtime value by looking up this rule.
+    Differentiation transforms use :class:`Zero` to represent a missing or blocked
+    tangent or cotangent. :func:`autoform.extend.materialize` later turns that
+    symbolic zero into a concrete runtime value by looking up this rule.
 
-    Register this for differentiable value domains whose cotangents may need to
-    flow through primitives that materialize zeros, such as
-    :func:`autoform.pushforward` or custom pullback rules.
+    Register this for differentiable value domains whose tangents or cotangents may
+    need to flow through primitives that materialize zeros, such as custom
+    pushforward or pullback rules.
 
     Args:
         aval_type: Abstract value type this zero rule handles.
