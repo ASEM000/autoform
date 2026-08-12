@@ -49,8 +49,9 @@ class BlobAVal(af.core.AVal):
 class TestSpace:
     def test_avalof_uses_own_rules(self):
         space = af.core.Space("blob")
-        space.rules[Blob] = lambda value: BlobAVal(value.size)
+        rule = lambda value: BlobAVal(value.size)
 
+        assert space.set(Blob, rule) is rule
         assert space.avalof(Blob(3)) == BlobAVal(3)
 
     def test_missing_rule(self):
@@ -58,6 +59,40 @@ class TestSpace:
 
         with pytest.raises(TypeError, match="No empty aval rule registered"):
             space.avalof(Blob(3))
+
+    def test_set_requires_type(self):
+        space = af.core.Space("blob")
+
+        with pytest.raises(AssertionError, match="Expected type"):
+            space.set(Blob(3), lambda value: BlobAVal(value.size))
+
+    def test_set_requires_callable(self):
+        space = af.core.Space("blob")
+
+        with pytest.raises(AssertionError, match="Expected callable"):
+            space.set(Blob, BlobAVal(3))
+
+    def test_set_rejects_duplicate_rule(self):
+        space = af.core.Space("blob")
+        space.set(Blob, lambda value: BlobAVal(value.size))
+
+        with pytest.raises(AssertionError, match="already defined"):
+            space.set(Blob, lambda value: BlobAVal(value.size + 1))
+
+    def test_set_replaces_rule(self):
+        space = af.core.Space("blob")
+        space.set(Blob, lambda value: BlobAVal(value.size))
+
+        rule = lambda value: BlobAVal(value.size + 1)
+
+        assert space.set(Blob, rule, replace=True) is rule
+        assert space.avalof(Blob(3)) == BlobAVal(4)
+
+    def test_set_requires_bool_replace(self):
+        space = af.core.Space("blob")
+
+        with pytest.raises(AssertionError, match="Expected bool for replace"):
+            space.set(Blob, lambda value: BlobAVal(value.size), replace=1)
 
 
 class TestBuildIR:
@@ -106,7 +141,7 @@ class TestBuildIR:
         def program(x):
             return x
 
-        af.core.primal_s.rules[Blob] = lambda x: BlobAVal(x.size)
+        af.core.primal_s.set(Blob, lambda x: BlobAVal(x.size))
         af.core.trace_types.add(Blob)
         try:
             ir = af.trace(program)(Blob(3))

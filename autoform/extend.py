@@ -201,7 +201,7 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ...     return TokenAVal()
     """
     core.trace_types.add(type)
-    core.primal_s.rules[type] = aval_rule
+    core.primal_s.set(type, aval_rule)
     return aval_rule
 
 

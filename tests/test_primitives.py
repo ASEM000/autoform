@@ -730,7 +730,7 @@ class TestCotangentHelpers:
         class BlobAVal(af.core.AVal):
             __slots__ = []
 
-        af.core.primal_s.rules[Blob] = lambda _: BlobAVal()
+        af.core.primal_s.set(Blob, lambda _: BlobAVal())
         af.ad.cot_acc_rules[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
         try:
             result = af.ad.cot_acc([Blob("a"), Blob("b")])

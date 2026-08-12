@@ -2,7 +2,7 @@
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.Space
-    :members: avalof
+    :members: avalof, set
 
 .. autodata:: autoform.extend.primal_s
 .. autofunction:: autoform.extend.zeroof

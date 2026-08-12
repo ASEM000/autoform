@@ -207,6 +207,16 @@ class Space:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
+    def set[R: Callable[[Any], AVal]](
+        self, value_type: type, rule: R, /, *, replace: bool = False
+    ) -> R:
+        assert isinstance(value_type, type), f"Expected type, got {value_type!r}"
+        assert callable(rule), f"Expected callable, got {rule!r}"
+        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+        assert replace or value_type not in self.rules, f"Rule for {value_type} already defined"
+        self.rules[value_type] = rule
+        return rule
+
     def avalof(self, value, /) -> AVal:
         """Return the abstract value of ``value`` in this space."""
         if (rule := self.rules.get(type(value))) is None:
@@ -217,10 +227,10 @@ class Space:
 
 
 primal_s = Space("primal")
-primal_s.rules[str] = lambda _: StrAVal()
-primal_s.rules[int] = lambda _: IntAVal()
-primal_s.rules[float] = lambda _: FloatAVal()
-primal_s.rules[bool] = lambda _: BoolAVal()
+primal_s.set(str, lambda _: StrAVal())
+primal_s.set(int, lambda _: IntAVal())
+primal_s.set(float, lambda _: FloatAVal())
+primal_s.set(bool, lambda _: BoolAVal())
 
 trace_types: set[type] = {str, int, float, bool}
 
@@ -293,7 +303,7 @@ def aval_if_var(x, /):
     return x.aval if is_var(x) else x
 
 
-primal_s.rules[Var] = lambda var: var.aval
+primal_s.set(Var, lambda var: var.aval)
 
 # ==================================================================================================
 # PRIMITIVE

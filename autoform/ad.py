@@ -87,7 +87,7 @@ def is_zero(x, /) -> TypeGuard[Zero]:
 
 zero_rules: dict[type[core.AVal], Callable[[core.AVal], Any]] = {}
 zero_rules[core.StrAVal] = lambda _: ""
-core.primal_s.rules[Zero] = lambda z: z.aval
+core.primal_s.set(Zero, lambda z: z.aval)
 
 
 def zeroof(v, /) -> Zero:
