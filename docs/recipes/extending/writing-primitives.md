@@ -59,7 +59,7 @@ afe.register_trace_type(
 )
 ```
 
-This allows values of the Python type to enter `af.trace` and teaches `avalof(...)` how to infer their abstract value.
+This allows values of the Python type to enter `af.trace` and teaches `primal_s.avalof(...)` how to infer their abstract value.
 
 ## Rules by Phase
 
