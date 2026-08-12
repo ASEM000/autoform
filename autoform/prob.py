@@ -77,7 +77,7 @@ def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
 
     del name
     weight, _ = in_tree
-    return ad.zeroof(weight)
+    return ad.cotangent_zeroof(weight)
 
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):

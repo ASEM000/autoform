@@ -58,6 +58,7 @@ def test_scalar_aval_reexports():
     assert afe.BoolAVal is af.core.BoolAVal
     assert afe.Space is af.core.Space
     assert afe.primal_s is af.core.primal_s
+    assert afe.tangent_zeroof is af.ad.tangent_zeroof
 
 
 def test_register_zero_and_cotangent_accumulator():

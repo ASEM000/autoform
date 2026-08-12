@@ -94,6 +94,55 @@ class TestSpace:
         with pytest.raises(AssertionError, match="Expected bool for replace"):
             space.set(Blob, lambda value: BlobAVal(value.size), replace=1)
 
+    @pytest.mark.parametrize(
+        ("space", "aval"),
+        [
+            (space, aval)
+            for space in (af.core.tangent_s, af.core.cotangent_s)
+            for aval in (
+                af.core.StrAVal(),
+                af.core.IntAVal(),
+                af.core.FloatAVal(),
+                af.core.BoolAVal(),
+            )
+        ],
+    )
+    def test_builtin_ad_spaces_preserve_aval(self, space, aval):
+        assert space.avalof(aval) is aval
+
+    def test_custom_ad_spaces(self):
+        class TextAVal(af.core.AVal):
+            pass
+
+        class TextEditAVal(af.core.AVal):
+            pass
+
+        class TextFeedbackAVal(af.core.AVal):
+            pass
+
+        tangent_s = af.core.Space("tangent")
+        cotangent_s = af.core.Space("cotangent")
+        tangent_s.set(TextAVal, lambda _: TextEditAVal())
+        tangent_s.set(TextEditAVal, lambda aval: aval)
+        cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
+        cotangent_s.set(TextFeedbackAVal, lambda aval: aval)
+
+        tangent = tangent_s.avalof(TextAVal())
+        cotangent = cotangent_s.avalof(TextAVal())
+
+        assert isinstance(tangent, TextEditAVal)
+        assert isinstance(cotangent, TextFeedbackAVal)
+        assert tangent_s.avalof(tangent) is tangent
+        assert cotangent_s.avalof(cotangent) is cotangent
+
+    @pytest.mark.parametrize("space", [af.core.tangent_s, af.core.cotangent_s])
+    def test_missing_ad_space_rule(self, space):
+        class UnknownAVal(af.core.AVal):
+            pass
+
+        with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
+            space.avalof(UnknownAVal())
+
 
 class TestBuildIR:
     def test_trace_scalar_input_is_dynamic(self):
