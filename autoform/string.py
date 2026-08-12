@@ -230,7 +230,7 @@ def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, ad.Zero(core.BoolAVal())
+    return out_primal, ad.tangent_zeroof(core.BoolAVal())
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:

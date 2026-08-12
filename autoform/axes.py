@@ -281,6 +281,9 @@ class BatchAVal(core.AVal):
         return hash((type(self), self.base))
 
 
+core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.avalof(aval.base)))
+
+
 def is_axis_spec(v) -> bool:
     return isinstance(v, bool)
 

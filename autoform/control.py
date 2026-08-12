@@ -155,7 +155,7 @@ def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
     import autoform.ad as ad
 
     primal, tangent = in_tree
-    zero_t = utils.tree.map(lambda p: p if ad.is_zero(p) else ad.zeroof(p), primal)
+    zero_t = utils.tree.map(ad.tangent_zeroof, primal)
     return primal, zero_t
 
 
