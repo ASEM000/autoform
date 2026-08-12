@@ -282,6 +282,7 @@ class BatchAVal(core.AVal):
 
 
 core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.avalof(aval.base)))
+core.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(core.cotangent_s.avalof(aval.base)))
 
 
 def is_axis_spec(v) -> bool:
