@@ -647,10 +647,8 @@ class TestCotangentHelpers:
                 return hash((type(self), self.size))
 
         af.ad.zero_rules[BlobAVal] = lambda aval: ("zero", aval.size)
-        try:
-            assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
-        finally:
-            del af.ad.zero_rules[BlobAVal]
+
+        assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
 
     def test_cot_acc_single(self):
         result = af.ad.cot_acc(["hello"])
@@ -732,13 +730,11 @@ class TestCotangentHelpers:
 
         af.core.primal_s.set(Blob, lambda _: BlobAVal())
         af.ad.cot_acc_rules[BlobAVal] = lambda cs, aval: Blob("|".join(c.text for c in cs))
-        try:
-            result = af.ad.cot_acc([Blob("a"), Blob("b")])
-            assert isinstance(result, Blob)
-            assert result.text == "a|b"
-        finally:
-            del af.core.primal_s.rules[Blob]
-            del af.ad.cot_acc_rules[BlobAVal]
+
+        result = af.ad.cot_acc([Blob("a"), Blob("b")])
+
+        assert isinstance(result, Blob)
+        assert result.text == "a|b"
 
 
 class TestLiteralZeroing:

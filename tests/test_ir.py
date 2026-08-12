@@ -143,11 +143,8 @@ class TestBuildIR:
 
         af.core.primal_s.set(Blob, lambda x: BlobAVal(x.size))
         af.core.trace_types.add(Blob)
-        try:
-            ir = af.trace(program)(Blob(3))
-        finally:
-            del af.core.primal_s.rules[Blob]
-            af.core.trace_types.remove(Blob)
+
+        ir = af.trace(program)(Blob(3))
 
         assert ir.in_tree[0].aval == BlobAVal(3)
 
