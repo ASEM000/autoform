@@ -28,6 +28,7 @@ import autoform.extend as extend
 import autoform.intercept as intercept
 import autoform.lm as lm
 import autoform.memo as memo
+import autoform.order as order
 import autoform.path as path
 import autoform.schemas as schemas
 import autoform.string as string
@@ -77,7 +78,7 @@ stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
 fixpoint = control.fixpoint
-depends = control.depends
+depends = order.depends
 factor = path.factor
 
 # ==================================================================================================

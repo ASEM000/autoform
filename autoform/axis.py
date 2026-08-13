@@ -16,182 +16,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import functools as ft
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Callable
 
 import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
+import autoform.order as order
 import autoform.utils as utils
 
-__all__ = ["batch", "sched", "serial_fanout"]
+__all__ = ["batch", "sched"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type IRList = list[core.IR]
-type FanoutPair = tuple[list[Tree], list[Tree]]
-type FanoutResidual = tuple[list[Tree], IRList]
-type FanoutFwdResult = tuple[list[Tree], FanoutResidual]
-type BatchFanoutInput = tuple[int, list[bool], list[Tree]]
-type BatchFanoutOutput = tuple[list[Tree], list[Tree[bool]]]
-
-# ==================================================================================================
-# FANOUT
-# ==================================================================================================
-
-
-serial_fanout_flag: ContextVar[bool] = ContextVar("serial_fanout_flag", default=False)
-
-
-@contextmanager
-def serial_fanout() -> Generator[None, None, None]:
-    """Run async fanout sequentially inside the context."""
-
-    token = serial_fanout_flag.set(True)
-    try:
-        yield
-    finally:
-        serial_fanout_flag.reset(token)
-
-
-fanout_p = core.Prim("fanout")
-
-
-def impl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    assert len(in_tree) == len(irs)
-    return [ir.call(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
-
-
-async def aimpl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    assert len(in_tree) == len(irs)
-    if len(irs) == 1:
-        [ir], [inp] = irs, in_tree
-        return [await ir.acall(*inp)]
-    if serial_fanout_flag.get():
-        return [await ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
-    return await asyncio.gather(*[ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)])
-
-
-def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    return [utils.tree.map(core.aval_if_var, ir.out_tree) for ir in irs]
-
-
-def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    import autoform.ad as ad
-
-    primals, tangents = in_tree
-    pf_irs = [ad.pushforward(ir) for ir in irs]
-    pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
-    results = fanout_p.bind(pf_inputs, irs=pf_irs)
-    p_outs, t_outs = zip(*results)
-    return list(p_outs), list(t_outs)
-
-
-async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    import autoform.ad as ad
-
-    primals, tangents = in_tree
-    pf_irs = [ad.pushforward(ir) for ir in irs]
-    pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
-    results = await fanout_p.abind(pf_inputs, irs=pf_irs)
-    p_outs, t_outs = zip(*results)
-    return list(p_outs), list(t_outs)
-
-
-def pull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
-    results = fanout_p.bind(in_tree, irs=irs)
-    residuals = (in_tree, irs)
-    return results, residuals
-
-
-async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
-    results = await fanout_p.abind(in_tree, irs=irs)
-    residuals = (in_tree, irs)
-    return results, residuals
-
-
-def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    import autoform.ad as ad
-
-    residuals, out_cotangent = in_tree
-    inputs, _ = residuals
-    pb_irs = [ad.pullback(ir) for ir in irs]
-    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
-    results = fanout_p.bind(pb_inputs, irs=pb_irs)
-    return [cot for _, cot in results]
-
-
-async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    import autoform.ad as ad
-
-    residuals, out_cotangent = in_tree
-    inputs, _ = residuals
-    pb_irs = [ad.pullback(ir) for ir in irs]
-    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
-    results = await fanout_p.abind(pb_inputs, irs=pb_irs)
-    return [cot for _, cot in results]
-
-
-def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    batch_size, in_batched, inputs = in_tree
-
-    results: list[Tree] = []
-    out_batched: list[Tree[bool]] = []
-
-    for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
-        if utils.batch_spec(inp, inp_batched) is None:
-            results.append(ir.call(*inp))
-            out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
-        else:
-            batched_ir = batch(ir, in_axes=inp_batched)
-            results.append(batched_ir.call(*inp))
-            out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
-
-    return results, out_batched
-
-
-async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    batch_size, in_batched, inputs = in_tree
-
-    results: list[Tree] = []
-    out_batched: list[Tree[bool]] = []
-
-    for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
-        if utils.batch_spec(inp, inp_batched) is None:
-            results.append(await ir.acall(*inp))
-            out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
-        else:
-            batched_ir = batch(ir, in_axes=inp_batched)
-            results.append(await batched_ir.acall(*inp))
-            out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
-
-    return results, out_batched
-
-
-core.impl_rules.set(fanout_p, impl_fanout)
-core.impl_rules.aset(fanout_p, aimpl_fanout)
-core.abstract_rules.set(fanout_p, abstract_fanout)
-core.push_rules.set(fanout_p, push_fanout)
-core.push_rules.aset(fanout_p, apush_fanout)
-core.pull_fwd_rules.set(fanout_p, pull_fwd_fanout)
-core.pull_fwd_rules.aset(fanout_p, apull_fwd_fanout)
-core.pull_bwd_rules.set(fanout_p, pull_bwd_fanout)
-core.pull_bwd_rules.aset(fanout_p, apull_bwd_fanout)
-core.batch_rules.set(fanout_p, batch_fanout)
-core.batch_rules.aset(fanout_p, abatch_fanout)
-
-
-def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
-    irs = eqn.params["irs"]
-    new_irs = [dead.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
-    new_eqn = eqn.using(irs=new_irs)
-    return dead.default_dce(new_eqn, out_used)
-
-
-dead.dce_rules[fanout_p] = dce_fanout
 
 # ==================================================================================================
 # SCHED
@@ -244,7 +81,7 @@ def sched[*A, R](
         irs = [core.IR([eqn], (eqn.in_tree,), eqn.out_tree) for eqn in eqns]
         in_tree = [(eqn.in_tree,) for eqn in eqns]
         out_tree = [eqn.out_tree for eqn in eqns]
-        return core.Eqn(fanout_p, in_tree, out_tree, dict(irs=irs))
+        return core.Eqn(order.fanout_p, in_tree, out_tree, dict(irs=irs))
 
     for level in levels:
         eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
@@ -579,7 +416,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> 
     unbatch = ft.partial(utils.batch_index, v_in, b_in)
 
     inputs = [unbatch(b) for b in range(batch_size)]
-    v_bi = await fanout_p.abind(inputs, irs=[batched_ir] * batch_size)
+    v_bi = await order.fanout_p.abind(inputs, irs=[batched_ir] * batch_size)
     b_out = utils.tree.map(lambda _: True, ir.out_tree)
     v_out = utils.batch_transpose(batch_size, b_out, list(v_bi))
     return v_out, b_out

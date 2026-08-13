@@ -23,6 +23,7 @@ from typing import Any, TypeGuard
 
 import autoform.core as core
 import autoform.dead as dead
+import autoform.order as order
 import autoform.utils as utils
 
 __all__ = [
@@ -369,8 +370,6 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    import autoform.axis as axis
-
     bs, in_batched, in_values = in_tree
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
 
@@ -385,7 +384,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     pf_ir = pushforward(ir)
 
     inputs = [(unbatch_p(b), unbatch_t(b)) for b in range(bs)]
-    out_bi = await axis.fanout_p.abind(inputs, irs=[pf_ir] * bs)
+    out_bi = await order.fanout_p.abind(inputs, irs=[pf_ir] * bs)
     out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
     out_ib = utils.batch_transpose(bs, out_batched, list(out_bi))
     return out_ib, out_batched
@@ -821,8 +820,6 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 
 async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
-    import autoform.axis as axis
-
     size, in_batched, in_values = in_tree
     (p_cols, c_cols) = in_values
     (p_batched, c_batched) = in_batched
@@ -838,7 +835,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     pb_ir = pullback(ir)
 
     inputs = [(unbatch_p(b), unbatch_c(b)) for b in range(size)]
-    out_bi = await axis.fanout_p.abind(inputs, irs=[pb_ir] * size)
+    out_bi = await order.fanout_p.abind(inputs, irs=[pb_ir] * size)
     out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
     out_ib = utils.batch_transpose(size, out_batched, list(out_bi))
     return out_ib, out_batched

@@ -24,6 +24,7 @@ from typing import Any
 
 import autoform.core as core
 import autoform.dead as dead
+import autoform.order as order
 import autoform.utils as utils
 
 __all__ = ["checkpoint", "collect", "inject"]
@@ -237,10 +238,8 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Yields:
         A dict that maps keys to lists of collected values.
     """
-    import autoform.axis as axis
-
     interpreter = CollectingInterpreter(collection=collection)
-    with axis.serial_fanout(), core.using_interpreter(interpreter):
+    with order.serial_fanout(), core.using_interpreter(interpreter):
         yield interpreter.collected
 
 
@@ -298,12 +297,10 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     Yields:
         None.
     """
-    import autoform.axis as axis
-
     assert isinstance(values, dict)
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
     interpreter = InjectingInterpreter(collection=collection, values=values)
-    with axis.serial_fanout(), core.using_interpreter(interpreter):
+    with order.serial_fanout(), core.using_interpreter(interpreter):
         yield

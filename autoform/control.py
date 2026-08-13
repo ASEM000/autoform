@@ -20,98 +20,14 @@ import functools as ft
 
 import autoform.core as core
 import autoform.dead as dead
+import autoform.order as order
 import autoform.utils as utils
 
-__all__ = ["depends", "stop_gradient", "switch", "while_loop", "fixpoint"]
+__all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Branches = dict[str, core.IR]
-
-# ==================================================================================================
-# DEPENDS
-# ==================================================================================================
-
-depends_p = core.Prim("depends")
-
-type DependsType[T] = tuple[T, tuple[Tree, ...]]
-type DependsPair = tuple[DependsType[Tree], DependsType[Tree]]
-type DependsFwdResult = tuple[Tree, DependsType[Tree]]
-type DependsBwdInput = tuple[DependsType[Tree], Tree]
-type BatchDependsInput = tuple[int, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
-
-
-def depends[T](value: T, /, *deps) -> T:
-    """Annotate that `value` depends on the evaluation of `deps`.
-
-    This primitive inserts an ordering barrier without changing the forward
-    value. The equations that produce `value` and `deps` may still run in the
-    same scheduling level; the barrier's output is available only after
-    `value` and all `deps` have been evaluated.
-
-    Args:
-        value: The main value to return.
-        *deps: Values that `value` depends on.
-    Returns:
-        The original `value`, through a barrier that also depends on `deps`.
-    Example:
-        >>> import autoform as af
-        >>> def program(x):
-        ...     a = af.format("First: {}", x)
-        ...     b = af.format("Second: {}", x)
-        ...     return af.depends(b, a)  # return b after a has also run
-    """
-    return depends_p.bind((value, deps))
-
-
-def impl_depends[T](in_tree: DependsType[T], /) -> T:
-    value, _ = in_tree
-    return value
-
-
-def abstract_depends(in_tree: DependsType[Tree], /) -> Tree:
-    value, _ = in_tree
-    return value
-
-
-def push_depends(in_tree: DependsPair, /) -> TreePair:
-    (primal_value, primal_deps), (tangent_value, tangent_deps) = in_tree
-    p_out = depends_p.bind((primal_value, primal_deps))
-    t_out = depends_p.bind((tangent_value, tangent_deps))
-    return p_out, t_out
-
-
-def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
-    value, deps = in_tree
-    return depends_p.bind((value, deps)), in_tree
-
-
-def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
-    import autoform.ad as ad
-
-    (_, deps), out_cotangent = in_tree
-    return out_cotangent, utils.tree.map(
-        lambda d: d if ad.is_zero(d) else ad.cotangent_zeroof(d), deps
-    )
-
-
-def batch_depends(in_tree: BatchDependsInput, /) -> core.BatchRuleResult:
-    _, (value_batched, _), (value, deps) = in_tree
-    return depends_p.bind((value, deps)), value_batched
-
-
-core.impl_rules.set(depends_p, impl_depends)
-core.impl_rules.aset(depends_p, utils.asyncify(impl_depends))
-core.abstract_rules.set(depends_p, abstract_depends)
-core.push_rules.set(depends_p, push_depends)
-core.push_rules.aset(depends_p, utils.asyncify(push_depends))
-core.pull_fwd_rules.set(depends_p, pull_fwd_depends)
-core.pull_fwd_rules.aset(depends_p, utils.asyncify(pull_fwd_depends))
-core.pull_bwd_rules.set(depends_p, pull_bwd_depends)
-core.pull_bwd_rules.aset(depends_p, utils.asyncify(pull_bwd_depends))
-core.batch_rules.set(depends_p, batch_depends)
-core.batch_rules.aset(depends_p, utils.asyncify(batch_depends))
-
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -328,8 +244,6 @@ def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
 
 
 async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
-    import autoform.axis as axis
-
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
@@ -341,7 +255,7 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResu
 
     irs = [branches[key_col[b] if key_batched else key_col] for b in range(batch_size)]
     inputs = [unbatch(b) for b in range(batch_size)]
-    results = await axis.fanout_p.abind(inputs, irs=irs)
+    results = await order.fanout_p.abind(inputs, irs=irs)
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_tree = utils.batch_transpose(batch_size, out_batched, results)
     return out_tree, out_batched

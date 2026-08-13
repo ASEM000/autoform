@@ -27,6 +27,7 @@ import autoform.dead as dead
 import autoform.intercept as intercept
 import autoform.lm as lm
 import autoform.memo as memo
+import autoform.order as order
 import autoform.path as path
 import autoform.string as string
 import autoform.utils as utils
@@ -75,7 +76,7 @@ batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
-serial_fanout = axis.serial_fanout
+serial_fanout = order.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
 is_var = core.is_var
@@ -98,8 +99,8 @@ stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
 while_loop_p = control.while_loop_p
 fixpoint_p = control.fixpoint_p
-fanout_p = axis.fanout_p
-depends_p = control.depends_p
+fanout_p = order.fanout_p
+depends_p = order.depends_p
 batch_call_p = axis.batch_call_p
 pushforward_call_p = ad.pushforward_call_p
 pullback_call_p = ad.pullback_call_p
