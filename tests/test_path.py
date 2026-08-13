@@ -19,7 +19,7 @@ import pytest
 import autoform as af
 import autoform.core as core
 
-delay_p = core.Prim("test_prob_delay")
+delay_p = core.Prim("test_path_delay")
 
 
 def delay(value: float) -> float:
@@ -110,7 +110,7 @@ class TestWeighted:
         output, weight = weighted_ir.call("hello", 0.5)
 
         assert len(weighted_ir.eqns) == 1
-        assert weighted_ir.eqns[0].prim is af.prob.weighted_call_p
+        assert weighted_ir.eqns[0].prim is af.path.weighted_call_p
         assert output == "hello!"
         assert weight == 0.5
 

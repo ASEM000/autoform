@@ -20,14 +20,15 @@ from collections.abc import Callable
 from typing import Any
 
 import autoform.ad as ad
-import autoform.axes as axes
-import autoform.ckpt as ckpt
+import autoform.axis as axis
 import autoform.control as control
 import autoform.core as core
 import autoform.dead as dead
+import autoform.intercept as intercept
 import autoform.lm as lm
 import autoform.memo as memo
-import autoform.prob as prob
+import autoform.order as order
+import autoform.path as path
 import autoform.string as string
 import autoform.utils as utils
 
@@ -75,7 +76,7 @@ batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
-serial_fanout = axes.serial_fanout
+serial_fanout = order.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
 is_var = core.is_var
@@ -91,16 +92,16 @@ concat_p = string.concat_p
 match_p = string.match_p
 lm_call_p = lm.lm_call_p
 lm_schema_call_p = lm.lm_schema_call_p
-factor_p = prob.factor_p
-weighted_call_p = prob.weighted_call_p
-checkpoint_p = ckpt.checkpoint_p
+factor_p = path.factor_p
+weighted_call_p = path.weighted_call_p
+checkpoint_p = intercept.checkpoint_p
 stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
 while_loop_p = control.while_loop_p
 fixpoint_p = control.fixpoint_p
-fanout_p = axes.fanout_p
-depends_p = control.depends_p
-batch_call_p = axes.batch_call_p
+fanout_p = order.fanout_p
+depends_p = order.depends_p
+batch_call_p = axis.batch_call_p
 pushforward_call_p = ad.pushforward_call_p
 pullback_call_p = ad.pullback_call_p
 

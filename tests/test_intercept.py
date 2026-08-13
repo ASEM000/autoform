@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import autoform as af
-from autoform.ckpt import checkpoint
 from autoform.core import Interpreter, active_interpreter, using_interpreter
+from autoform.intercept import checkpoint
 
 
 class CountingInterpreter(Interpreter):

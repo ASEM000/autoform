@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Probabilistic path-weight primitives."""
+"""Path-weight primitives."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from collections.abc import Hashable
 import autoform.core as core
 import autoform.dead as dead
 import autoform.memo as memo
+import autoform.order as order
 import autoform.utils as utils
 
 __all__ = ["factor", "weighted"]
@@ -209,8 +210,6 @@ def pullback_bwd_weighted_call(in_tree, /, *, ir: core.IR):
 
 
 def batch_weighted_call(in_tree, /, *, ir: core.IR):
-    import autoform.axes as axes
-
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -218,15 +217,13 @@ def batch_weighted_call(in_tree, /, *, ir: core.IR):
 
     weighted_ir = weighted(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = axes.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = order.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
 async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
-    import autoform.axes as axes
-
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -234,7 +231,7 @@ async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
 
     weighted_ir = weighted(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = await axes.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = await order.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched

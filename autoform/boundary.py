@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Custom transform rules for composite Autoform functions."""
+"""Custom boundary primitives and transform rules."""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
@@ -134,13 +134,13 @@ def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair
         return out, tree_batched_like(out, False)
     example_values = utils.batch_index(values, in_axes, 0)
     ir = trace_custom_func(call, example_values)
-    batched_ir = axes.batch(ir, in_axes=in_axes)
+    batched_ir = axis.batch(ir, in_axes=in_axes)
     out = batched_ir.call(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
@@ -148,7 +148,7 @@ async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
         return out, tree_batched_like(out, False)
     example_values = utils.batch_index(values, in_axes, 0)
     ir = trace_custom_func(call, example_values)
-    batched_ir = axes.batch(ir, in_axes=in_axes)
+    batched_ir = axis.batch(ir, in_axes=in_axes)
     out = await batched_ir.acall(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
