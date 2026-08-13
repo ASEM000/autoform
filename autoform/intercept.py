@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Checkpoint"""
+"""Checkpoint, collect, and inject intercepts."""
 
 from __future__ import annotations
 
@@ -237,10 +237,10 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Yields:
         A dict that maps keys to lists of collected values.
     """
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     interpreter = CollectingInterpreter(collection=collection)
-    with axes.serial_fanout(), core.using_interpreter(interpreter):
+    with axis.serial_fanout(), core.using_interpreter(interpreter):
         yield interpreter.collected
 
 
@@ -298,12 +298,12 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     Yields:
         None.
     """
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     assert isinstance(values, dict)
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
     interpreter = InjectingInterpreter(collection=collection, values=values)
-    with axes.serial_fanout(), core.using_interpreter(interpreter):
+    with axis.serial_fanout(), core.using_interpreter(interpreter):
         yield

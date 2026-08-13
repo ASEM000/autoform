@@ -21,15 +21,15 @@ from contextlib import contextmanager
 
 from optree import PyTreeSpec
 
-import autoform.ckpt as ckpt
 import autoform.core as core
+import autoform.intercept as intercept
 import autoform.utils as utils
 
 __all__ = ["memoize"]
 
 type Tree[T] = utils.Tree[T]
 type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
-non_memoizable_primitives: set[core.Prim] = {ckpt.checkpoint_p}
+non_memoizable_primitives: set[core.Prim] = {intercept.checkpoint_p}
 
 
 def make_key(prim: core.Prim, in_tree: Tree, /, **params) -> CacheKey:

@@ -328,7 +328,7 @@ def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
 
 
 async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
@@ -341,7 +341,7 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResu
 
     irs = [branches[key_col[b] if key_batched else key_col] for b in range(batch_size)]
     inputs = [unbatch(b) for b in range(batch_size)]
-    results = await axes.fanout_p.abind(inputs, irs=irs)
+    results = await axis.fanout_p.abind(inputs, irs=irs)
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_tree = utils.batch_transpose(batch_size, out_batched, results)
     return out_tree, out_batched
@@ -579,7 +579,7 @@ def batch_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> TreePair:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     b_sz, in_batched, init_val = in_tree
     # NOTE(asem): in_tree is a SoA object, however we need to pass in only parts of the SoA
@@ -623,8 +623,8 @@ def batch_while_loop(
     state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
-    batched_cond = axes.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = axes.batch(body_ir, in_axes=body_in_axes)
+    batched_cond = axis.batch(cond_ir, in_axes=cond_in_axes)
+    batched_body = axis.batch(body_ir, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -674,7 +674,7 @@ async def abatch_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> TreePair:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     b_sz, in_batched, init_val = in_tree
 
@@ -687,8 +687,8 @@ async def abatch_while_loop(
     state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
     cond_in_axes = state_in_axes
     body_in_axes = state_in_axes
-    batched_cond = axes.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = axes.batch(body_ir, in_axes=body_in_axes)
+    batched_cond = axis.batch(cond_ir, in_axes=cond_in_axes)
+    batched_body = axis.batch(body_ir, in_axes=body_in_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -1043,7 +1043,7 @@ def batch_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
@@ -1063,10 +1063,10 @@ def batch_fixpoint(
     state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
-    batched_step = axes.batch(step_ir, in_axes=in_axes)
+    batched_step = axis.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
         equiv_axes = (state_in_axes, state_in_axes)
-        batched_equiv = axes.batch(equiv_ir, in_axes=equiv_axes)
+        batched_equiv = axis.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -1110,7 +1110,7 @@ async def abatch_fixpoint(
     adj_iters: int,
     equiv_ir: core.IR | None,
 ) -> TreePair:
-    import autoform.axes as axes
+    import autoform.axis as axis
 
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
@@ -1130,10 +1130,10 @@ async def abatch_fixpoint(
     state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
     theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
     in_axes = (state_in_axes, theta_in_axes)
-    batched_step = axes.batch(step_ir, in_axes=in_axes)
+    batched_step = axis.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
         equiv_axes = (state_in_axes, state_in_axes)
-        batched_equiv = axes.batch(equiv_ir, in_axes=equiv_axes)
+        batched_equiv = axis.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):

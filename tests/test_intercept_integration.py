@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from autoform.ckpt import checkpoint
+from autoform.intercept import checkpoint
 
 
 class TestCheckpointBasics:

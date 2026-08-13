@@ -19,7 +19,7 @@ import pytest
 
 import autoform as af
 from autoform.analysis import toposort_levels
-from autoform.axes import BatchAVal, BatchBox, BatchInterpreter, fanout_p
+from autoform.axis import BatchAVal, BatchBox, BatchInterpreter, fanout_p
 from autoform.utils import batch_spec, batch_transpose
 
 tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)

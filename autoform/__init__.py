@@ -19,16 +19,16 @@
 # ==================================================================================================
 
 import autoform.ad as ad
-import autoform.axes as axes
-import autoform.ckpt as ckpt
+import autoform.axis as axis
+import autoform.boundary as boundary
 import autoform.control as control
 import autoform.core as core
 import autoform.dead as dead
 import autoform.extend as extend
+import autoform.intercept as intercept
 import autoform.lm as lm
 import autoform.memo as memo
-import autoform.opaque as opaque
-import autoform.prob as prob
+import autoform.path as path
 import autoform.schemas as schemas
 import autoform.string as string
 import autoform.utils as utils
@@ -53,15 +53,15 @@ tag = core.tag
 
 pushforward = ad.pushforward
 pullback = ad.pullback
-batch = axes.batch
-custom = opaque.custom
-collect = ckpt.collect
-inject = ckpt.inject
-checkpoint = ckpt.checkpoint
+batch = axis.batch
+custom = boundary.custom
+collect = intercept.collect
+inject = intercept.inject
+checkpoint = intercept.checkpoint
 dce = dead.dce
-sched = axes.sched
+sched = axis.sched
 memoize = memo.memoize
-weighted = prob.weighted
+weighted = path.weighted
 
 # ==================================================================================================
 # PRIMITIVES
@@ -78,7 +78,7 @@ switch = control.switch
 while_loop = control.while_loop
 fixpoint = control.fixpoint
 depends = control.depends
-factor = prob.factor
+factor = path.factor
 
 # ==================================================================================================
 # SCHEMAS
@@ -144,5 +144,5 @@ __all__ = [
     "PYTREE_NAMESPACE",
     # modules
     "extend",
-    "prob",
+    "path",
 ]
