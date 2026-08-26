@@ -60,7 +60,7 @@ collect = intercept.collect
 inject = intercept.inject
 checkpoint = intercept.checkpoint
 dce = dead.dce
-sched = axis.sched
+sched = order.sched
 memoize = memo.memoize
 weighted = path.weighted
 
