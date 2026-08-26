@@ -4,6 +4,10 @@
 
 ### Breaking Changes
 
+  - Renamed the path-weight transform from `weighted` to {py:func}`weight
+    <autoform.weight>`. The associated extension primitive is now
+    `weight_call_p`, and the internal interpreter is `WeightInterpreter`.
+
   - Renamed IR internals to remove redundant `IR` prefixes. `IRVar` is now
     `Var`, `IREqn` is now `Eqn`, `IR.ir_eqns` is now `IR.eqns`, and equation
     tree fields are now `in_tree` and `out_tree` instead of `in_ir_tree` and
@@ -159,7 +163,7 @@
 
   - Reworked [Getting Started](docs/getting-started.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
 
-  - Added [Path Weights](docs/concepts/path-weights.md) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/rank-tool-candidates.md) documentation for using {py:func}`factor <autoform.factor>` with {py:func}`weighted <autoform.weighted>` to score candidate paths, including the probabilistic reading and the `batch(weighted(ir))` composition pattern.
+  - Added [Path Weights](docs/concepts/path-weights.md) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/rank-tool-candidates.md) documentation for using {py:func}`factor <autoform.factor>` with the path-weight transform to score candidate paths, including the probabilistic reading and independent batched scoring.
 
   - Added an [array extension recipe](docs/recipes/extending/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
 

@@ -98,39 +98,39 @@ class TestFactor:
         assert [eqn.prim.name for eqn in dced.eqns] == ["factor", "concat"]
 
 
-class TestWeighted:
-    def test_weighted_ir_returns_output_and_path_weight(self):
+class TestWeight:
+    def test_weight_ir_returns_output_and_path_weight(self):
         def program(x: str, weight: float):
             af.factor(weight, name="score")
             return af.concat(x, "!")
 
         ir = af.trace(program)("x", 1.0)
-        weighted_ir = af.weighted(ir)
+        weight_ir = af.weight(ir)
 
-        output, weight = weighted_ir.call("hello", 0.5)
+        output, weight = weight_ir.call("hello", 0.5)
 
-        assert len(weighted_ir.eqns) == 1
-        assert weighted_ir.eqns[0].prim is af.path.weighted_call_p
+        assert len(weight_ir.eqns) == 1
+        assert weight_ir.eqns[0].prim is af.path.weight_call_p
         assert output == "hello!"
         assert weight == 0.5
 
-    def test_weighted_multiplies_factors(self):
+    def test_weight_multiplies_factors(self):
         def program(x: str):
             af.factor(0.5, name="a")
             af.factor(0.25, name="b")
             return x
 
-        output, weight = af.weighted(af.trace(program)("x")).call("done")
+        output, weight = af.weight(af.trace(program)("x")).call("done")
 
         assert output == "done"
         assert weight == pytest.approx(0.125)
 
-    def test_weighted_zero_factor_returns_zero_weight(self):
+    def test_weight_zero_factor_returns_zero_weight(self):
         def program(x: str):
             af.factor(0.0, name="reject")
             return x
 
-        output, weight = af.weighted(af.trace(program)("x")).call("done")
+        output, weight = af.weight(af.trace(program)("x")).call("done")
 
         assert output == "done"
         assert weight == 0.0
@@ -142,7 +142,7 @@ class TestWeighted:
 
         assert af.trace(program)("x").call("done") == "done"
 
-    def test_weighted_intercepts_nested_factor(self):
+    def test_weight_intercepts_nested_factor(self):
         def branch():
             af.factor(0.25, name="branch")
             return "hit"
@@ -152,26 +152,26 @@ class TestWeighted:
         def program(key: str):
             return af.switch(key, branches)
 
-        output, weight = af.weighted(af.trace(program)("hit")).call("hit")
+        output, weight = af.weight(af.trace(program)("hit")).call("hit")
 
         assert output == "hit"
         assert weight == 0.25
 
-    def test_weighted_validates_factor_weight(self):
+    def test_weight_validates_factor_weight(self):
         def program():
             af.factor(-0.1, name="bad")
             return "done"
 
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
-            af.weighted(af.trace(program)()).call()
+            af.weight(af.trace(program)()).call()
 
-    def test_batch_over_weighted_ir_scores_candidate_paths(self):
+    def test_batch_over_weight_ir_scores_candidate_paths(self):
         def program(candidate: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return candidate
 
         ir = af.trace(program)("x", 1.0)
-        batched = af.batch(af.weighted(ir), in_axes=(True, True))
+        batched = af.batch(af.weight(ir), in_axes=(True, True))
 
         outputs, weights = batched.call(["x1", "x2"], [0.9, 0.2])
 
@@ -179,7 +179,7 @@ class TestWeighted:
         assert weights == pytest.approx([0.9, 0.2])
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_async_batch_over_weighted_collects_in_batch_order(self):
+    async def test_async_batch_over_weight_collects_in_batch_order(self):
         def program(seconds: float):
             value = delay(seconds)
             value = af.checkpoint(value, key="seen", collection="debug")
@@ -187,7 +187,7 @@ class TestWeighted:
             return value
 
         ir = af.trace(program)(0.0)
-        batched = af.batch(af.weighted(ir), in_axes=True)
+        batched = af.batch(af.weight(ir), in_axes=True)
 
         with af.collect(collection="debug") as collected:
             outputs, weights = await batched.acall([0.03, 0.01, 0.02])
@@ -197,7 +197,7 @@ class TestWeighted:
         assert collected == {"seen": [0.03, 0.01, 0.02]}
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_async_batch_over_weighted_injects_in_batch_order(self):
+    async def test_async_batch_over_weight_injects_in_batch_order(self):
         def program(seconds: float):
             value = delay(seconds)
             value = af.checkpoint(value, key="seen", collection="cache")
@@ -205,7 +205,7 @@ class TestWeighted:
             return value
 
         ir = af.trace(program)(0.0)
-        batched = af.batch(af.weighted(ir), in_axes=True)
+        batched = af.batch(af.weight(ir), in_axes=True)
 
         with af.inject(collection="cache", values={"seen": ["a", "b", "c"]}):
             outputs, weights = await batched.acall([0.03, 0.01, 0.02])
@@ -219,7 +219,7 @@ class TestWeighted:
             return candidate
 
         ir = af.trace(program)("x", 1.0)
-        outputs, path_weights = af.batch(af.weighted(ir), in_axes=(True, True)).call(
+        outputs, path_weights = af.batch(af.weight(ir), in_axes=(True, True)).call(
             ["x1", "x2"],
             [0.9, 0.2],
         )
@@ -232,7 +232,7 @@ class TestWeighted:
 
         assert posterior == pytest.approx({"x1": 0.45 / 0.55, "x2": 0.10 / 0.55})
 
-    def test_weighted_after_batch_scores_whole_batched_trace(self):
+    def test_weight_after_batch_scores_whole_batched_trace(self):
         def program(candidate: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return candidate
@@ -240,7 +240,7 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         batched = af.batch(ir, in_axes=(True, True))
 
-        outputs, path_weight = af.weighted(batched).call(
+        outputs, path_weight = af.weight(batched).call(
             ["x1", "x2"],
             [0.9, 0.2],
         )
@@ -248,7 +248,7 @@ class TestWeighted:
         assert outputs == ["x1", "x2"]
         assert path_weight == pytest.approx(0.9 * 0.2)
 
-    def test_weighted_after_pushforward_scores_primal_trace_once(self):
+    def test_weight_after_pushforward_scores_primal_trace_once(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return af.concat(x, "!")
@@ -256,7 +256,7 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         pushforward_ir = af.pushforward(ir)
 
-        (output, tangent), path_weight = af.weighted(pushforward_ir).call(
+        (output, tangent), path_weight = af.weight(pushforward_ir).call(
             ("hello", 0.5),
             ("dhello", 0.0),
         )
@@ -265,7 +265,7 @@ class TestWeighted:
         assert tangent == "dhello"
         assert path_weight == 0.5
 
-    def test_weighted_after_pullback_scores_forward_trace_once(self):
+    def test_weight_after_pullback_scores_forward_trace_once(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return af.concat(x, "!")
@@ -273,7 +273,7 @@ class TestWeighted:
         ir = af.trace(program)("x", 1.0)
         pullback_ir = af.pullback(ir)
 
-        (output, cotangents), path_weight = af.weighted(pullback_ir).call(
+        (output, cotangents), path_weight = af.weight(pullback_ir).call(
             ("hello", 0.5),
             "feedback",
         )
@@ -283,34 +283,34 @@ class TestWeighted:
         assert af.ad.is_zero(cotangents[1])
         assert path_weight == 0.5
 
-    def test_pushforward_of_weighted_ir_raises_not_supported(self):
+    def test_pushforward_of_weight_ir_raises_not_supported(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return af.concat(x, "!")
 
-        weighted_ir = af.weighted(af.trace(program)("x", 1.0))
+        weight_ir = af.weight(af.trace(program)("x", 1.0))
 
-        with pytest.raises(NotImplementedError, match=r"pushforward\(af\.weighted\(ir\)\)"):
-            af.pushforward(weighted_ir).call(("hello", 0.5), ("dhello", 0.0))
+        with pytest.raises(NotImplementedError, match=r"pushforward\(af\.weight\(ir\)\)"):
+            af.pushforward(weight_ir).call(("hello", 0.5), ("dhello", 0.0))
 
-    def test_pullback_of_weighted_ir_raises_not_supported(self):
+    def test_pullback_of_weight_ir_raises_not_supported(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
             return af.concat(x, "!")
 
-        weighted_ir = af.weighted(af.trace(program)("x", 1.0))
+        weight_ir = af.weight(af.trace(program)("x", 1.0))
 
-        with pytest.raises(NotImplementedError, match=r"pullback\(af\.weighted\(ir\)\)"):
-            af.pullback(weighted_ir).call(("hello", 0.5), ("feedback", 1.0))
+        with pytest.raises(NotImplementedError, match=r"pullback\(af\.weight\(ir\)\)"):
+            af.pullback(weight_ir).call(("hello", 0.5), ("feedback", 1.0))
 
-    def test_dce_weighted_ir_optimizes_inner_trace(self):
+    def test_dce_weight_ir_optimizes_inner_trace(self):
         def program(x: str, likelihood: float):
             output = af.concat(x, "!")
             af.factor(likelihood, name="evidence")
             return output
 
-        weighted_ir = af.weighted(af.trace(program)("x", 1.0))
-        dced = af.dce(weighted_ir, out_used=(False, True))
+        weight_ir = af.weight(af.trace(program)("x", 1.0))
+        dced = af.dce(weight_ir, out_used=(False, True))
         inner_ir = dced.eqns[0].params["ir"]
 
         assert [eqn.prim.name for eqn in inner_ir.eqns] == ["factor"]

@@ -26,7 +26,7 @@ import autoform.memo as memo
 import autoform.order as order
 import autoform.utils as utils
 
-__all__ = ["factor", "weighted"]
+__all__ = ["factor", "weight"]
 
 factor_p = core.Prim("factor")
 dead.non_dce_primitives.add(factor_p)
@@ -39,7 +39,7 @@ def factor(weight: float, /, *, name: Hashable | None = None) -> None:
     """Multiply the current path weight by ``weight``.
 
     ``factor`` is neutral during ordinary execution. When an IR is transformed
-    with ``weighted``, each reached factor contributes to the returned path
+    with ``weight``, each reached factor contributes to the returned path
     weight.
     """
     hash(name)
@@ -120,10 +120,10 @@ core.batch_rules.set(factor_p, batch_factor)
 core.batch_rules.aset(factor_p, abatch_factor)
 
 
-weighted_call_p = core.Prim("weighted_call")
+weight_call_p = core.Prim("weight_call")
 
 
-class PathWeightInterpreter(core.Interpreter):
+class WeightInterpreter(core.Interpreter):
     __slots__ = ["log_weight", "parent"]
 
     def __init__(self):
@@ -148,7 +148,7 @@ class PathWeightInterpreter(core.Interpreter):
         return await self.parent.ainterpret(prim, in_tree, **params)
 
 
-def weighted(ir: core.IR, /) -> core.IR:
+def weight(ir: core.IR, /) -> core.IR:
     """Transform an IR to return ``(output, path_weight)`` for one path."""
     assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
 
@@ -162,96 +162,96 @@ def weighted(ir: core.IR, /) -> core.IR:
         utils.tree.map(make_out, ir.out_tree),
         core.Var.fresh(aval=core.FloatAVal()),
     )
-    eqn = core.Eqn(weighted_call_p, in_tree, out_tree, dict(ir=ir))
+    eqn = core.Eqn(weight_call_p, in_tree, out_tree, dict(ir=ir))
     return core.IR([eqn], in_tree, out_tree)
 
 
-def impl_weighted_call(in_tree, /, *, ir: core.IR):
-    interpreter = PathWeightInterpreter()
+def impl_weight_call(in_tree, /, *, ir: core.IR):
+    interpreter = WeightInterpreter()
     with core.using_interpreter(interpreter):
         output = ir.call(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
     return output, weight
 
 
-async def aimpl_weighted_call(in_tree, /, *, ir: core.IR):
-    interpreter = PathWeightInterpreter()
+async def aimpl_weight_call(in_tree, /, *, ir: core.IR):
+    interpreter = WeightInterpreter()
     with core.using_interpreter(interpreter):
         output = await ir.acall(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
     return output, weight
 
 
-def abstract_weighted_call(in_tree, /, *, ir: core.IR):
+def abstract_weight_call(in_tree, /, *, ir: core.IR):
     del in_tree
     return utils.tree.map(core.aval_if_var, ir.out_tree), core.FloatAVal()
 
 
-def unsupported_weighted_call_transform(transform: str) -> None:
+def unsupported_weight_call_transform(transform: str) -> None:
     raise NotImplementedError(
-        f"`{transform}(af.weighted(ir))` is not supported. Apply `af.weighted` after "
+        f"`{transform}(af.weight(ir))` is not supported. Apply `af.weight` after "
         f"`{transform}` if that is the intended path-weight semantics."
     )
 
 
-def pushforward_weighted_call(in_tree, /, *, ir: core.IR):
+def pushforward_weight_call(in_tree, /, *, ir: core.IR):
     del in_tree, ir
-    unsupported_weighted_call_transform("pushforward")
+    unsupported_weight_call_transform("pushforward")
 
 
-def pullback_fwd_weighted_call(in_tree, /, *, ir: core.IR):
+def pullback_fwd_weight_call(in_tree, /, *, ir: core.IR):
     del in_tree, ir
-    unsupported_weighted_call_transform("pullback")
+    unsupported_weight_call_transform("pullback")
 
 
-def pullback_bwd_weighted_call(in_tree, /, *, ir: core.IR):
+def pullback_bwd_weight_call(in_tree, /, *, ir: core.IR):
     del in_tree, ir
-    unsupported_weighted_call_transform("pullback")
+    unsupported_weight_call_transform("pullback")
 
 
-def batch_weighted_call(in_tree, /, *, ir: core.IR):
+def batch_weight_call(in_tree, /, *, ir: core.IR):
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
-        return weighted_call_p.bind(in_values, ir=ir), False
+        return weight_call_p.bind(in_values, ir=ir), False
 
-    weighted_ir = weighted(ir)
+    weight_ir = weight(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = order.fanout_p.bind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = order.fanout_p.bind(inputs, irs=[weight_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
-async def abatch_weighted_call(in_tree, /, *, ir: core.IR):
+async def abatch_weight_call(in_tree, /, *, ir: core.IR):
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
-        return await weighted_call_p.abind(in_values, ir=ir), False
+        return await weight_call_p.abind(in_values, ir=ir), False
 
-    weighted_ir = weighted(ir)
+    weight_ir = weight(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = await order.fanout_p.abind(inputs, irs=[weighted_ir] * batch_size)
+    out_bi = await order.fanout_p.abind(inputs, irs=[weight_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
 
-def dce_weighted_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+def dce_weight_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     output_used, _ = out_used
     new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=output_used))
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(weighted_call_p, impl_weighted_call)
-core.impl_rules.aset(weighted_call_p, aimpl_weighted_call)
-core.abstract_rules.set(weighted_call_p, abstract_weighted_call)
-core.push_rules.set(weighted_call_p, pushforward_weighted_call)
-core.push_rules.aset(weighted_call_p, utils.asyncify(pushforward_weighted_call))
-core.pull_fwd_rules.set(weighted_call_p, pullback_fwd_weighted_call)
-core.pull_fwd_rules.aset(weighted_call_p, utils.asyncify(pullback_fwd_weighted_call))
-core.pull_bwd_rules.set(weighted_call_p, pullback_bwd_weighted_call)
-core.pull_bwd_rules.aset(weighted_call_p, utils.asyncify(pullback_bwd_weighted_call))
-core.batch_rules.set(weighted_call_p, batch_weighted_call)
-core.batch_rules.aset(weighted_call_p, abatch_weighted_call)
-dead.dce_rules[weighted_call_p] = dce_weighted_call
+core.impl_rules.set(weight_call_p, impl_weight_call)
+core.impl_rules.aset(weight_call_p, aimpl_weight_call)
+core.abstract_rules.set(weight_call_p, abstract_weight_call)
+core.push_rules.set(weight_call_p, pushforward_weight_call)
+core.push_rules.aset(weight_call_p, utils.asyncify(pushforward_weight_call))
+core.pull_fwd_rules.set(weight_call_p, pullback_fwd_weight_call)
+core.pull_fwd_rules.aset(weight_call_p, utils.asyncify(pullback_fwd_weight_call))
+core.pull_bwd_rules.set(weight_call_p, pullback_bwd_weight_call)
+core.pull_bwd_rules.aset(weight_call_p, utils.asyncify(pullback_bwd_weight_call))
+core.batch_rules.set(weight_call_p, batch_weight_call)
+core.batch_rules.aset(weight_call_p, abatch_weight_call)
+dead.dce_rules[weight_call_p] = dce_weight_call

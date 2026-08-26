@@ -2,8 +2,8 @@
 
 Use this recipe to rank a fixed set of candidate tools against a request. The
 traced function asks an LM for two fit scores, records those scores
-with {py:func}`factor <autoform.factor>`, and {py:func}`weighted
-<autoform.weighted>` returns one path weight per tool.
+with {py:func}`factor <autoform.factor>`, and {py:func}`weight
+<autoform.weight>` returns one path weight per tool.
 
 This recipe uses live provider calls. It requires an active LM client that
 supports structured output. Change the `MODEL` constant to use a different
@@ -71,19 +71,19 @@ def judge_tool(tool: str, description: str, request: str, history: str):
 ```
 
 The returned dictionary is the ordinary program output. The factors contribute
-only to the path weight returned by `weighted(ir)`.
+only to the path weight returned by `weight(ir)`.
 
 ## Score Every Tool
 
 Trace once with representative values, then compose {py:func}`batch
-<autoform.batch>` around {py:func}`weighted <autoform.weighted>`.
+<autoform.batch>` around {py:func}`weight <autoform.weight>`.
 
 ```python
 request = "<request body>"
 history = "<history body>"
 
 ir = af.trace(judge_tool)("web_search", tool_descriptions[0], request, history)
-score_tools = af.batch(af.weighted(ir), in_axes=(True, True, False, False))
+score_tools = af.batch(af.weight(ir), in_axes=(True, True, False, False))
 
 outputs, path_weights = score_tools.call(
     tools,
@@ -93,7 +93,7 @@ outputs, path_weights = score_tools.call(
 )
 ```
 
-`batch(weighted(ir))` scores each tool independently. The first two inputs vary
+`batch(weight(ir))` scores each tool independently. The first two inputs vary
 by candidate; `request` and `history` are broadcast to every candidate.
 
 ## Normalize the Scores

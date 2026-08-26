@@ -62,7 +62,7 @@ checkpoint = intercept.checkpoint
 dce = dead.dce
 sched = order.sched
 memoize = memo.memoize
-weighted = path.weighted
+weight = path.weight
 
 # ==================================================================================================
 # PRIMITIVES
@@ -120,7 +120,7 @@ __all__ = [
     "dce",
     "sched",
     "memoize",
-    "weighted",
+    "weight",
     # primitives
     "format",
     "concat",

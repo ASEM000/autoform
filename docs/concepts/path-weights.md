@@ -22,12 +22,12 @@ def label_path(label: str, weight: float) -> str:
 ```
 
 During ordinary execution, `factor` is a no-output effect. During
-{py:func}`weighted <autoform.weighted>` execution, each reached factor
+{py:func}`weight <autoform.weight>` execution, each reached factor
 multiplies the returned path weight:
 
 ```python
 ir = af.trace(label_path)("p1", 1.0)
-output, path_weight = af.weighted(ir).call("p1", 0.9)
+output, path_weight = af.weight(ir).call("p1", 0.9)
 ```
 
 Mathematically, for one concrete execution path `p`:
@@ -49,7 +49,7 @@ def program(x: str, a: float, b: float) -> str:
 
 
 ir = af.trace(program)("x1", 1.0, 1.0)
-output, path_weight = af.weighted(ir).call("x1", 0.5, 0.25)
+output, path_weight = af.weight(ir).call("x1", 0.5, 0.25)
 ```
 
 `factor` contributes to the path-weight channel. It does not change the
@@ -67,12 +67,12 @@ same concrete execution path.
 
 ## Batch Path Scoring
 
-Use {py:func}`batch <autoform.batch>` around {py:func}`weighted
-<autoform.weighted>` when each input path should get its own independent path
+Use {py:func}`batch <autoform.batch>` around {py:func}`weight
+<autoform.weight>` when each input path should get its own independent path
 weight:
 
 ```python
-scored = af.batch(af.weighted(ir), in_axes=(True, True))
+scored = af.batch(af.weight(ir), in_axes=(True, True))
 
 labels = ["p1", "p2"]
 weights = [0.9, 0.2]
@@ -82,26 +82,26 @@ outputs, path_weights = scored.call(labels, weights)
 This is the common shape when several paths should be scored:
 
 1. Prepare the batched inputs.
-2. Run `batch(weighted(ir))`.
+2. Run `batch(weight(ir))`.
 3. Use the returned `path_weights` in the caller.
 
 Order matters:
 
 | Expression | Meaning |
 | --- | --- |
-| `batch(weighted(ir))` | Score many paths independently. The result has one weight per path. |
-| `weighted(batch(ir))` | Score one batched path. Reached factors across the whole batched execution multiply into one weight. |
+| `batch(weight(ir))` | Score many paths independently. The result has one weight per path. |
+| `weight(batch(ir))` | Score one batched path. Reached factors across the whole batched execution multiply into one weight. |
 
 ## Boundaries
 
 `factor` does not produce a value in the user program. It only contributes to the
-path weight returned by {py:func}`weighted <autoform.weighted>`.
+path weight returned by {py:func}`weight <autoform.weight>`.
 
-`weighted(ir)` does not change the original output. It wraps that output with a
+`weight(ir)` does not change the original output. It wraps that output with a
 second value:
 
 ```python
-output, path_weight = af.weighted(ir).call(...)
+output, path_weight = af.weight(ir).call(...)
 ```
 
 The returned `path_weight` is an ordinary Python number. Caller code decides what
@@ -122,7 +122,7 @@ For a small discrete example:
 | Evidence `e` | An observed condition used to score candidates. |
 | Prior `P(x)` | The probability of candidate `x` before using `e`. |
 | Likelihood `L(e \| x)` | How likely candidate `x` would be to generate evidence `e`. |
-| Path weight `w(x)` | The value returned by `weighted(ir)` for candidate `x`. |
+| Path weight `w(x)` | The value returned by `weight(ir)` for candidate `x`. |
 | Posterior `P(x \| e)` | The normalized result after combining the prior and path weight. |
 
 When each reached `factor` represents calibrated evidence compatibility, the

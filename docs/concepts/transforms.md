@@ -17,7 +17,7 @@ The output is another executable IR. That one property is what makes composition
 | {py:func}`pullback <autoform.pullback>` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
 | {py:func}`sched <autoform.sched>` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
 | {py:func}`dce <autoform.dce>` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the needed outputs. |
-| {py:func}`weighted <autoform.weighted>` | The same inputs as `ir`. | `(output, path_weight)`. | Score one concrete path with reached `factor` calls. |
+| {py:func}`weight <autoform.weight>` | The same inputs as `ir`. | `(output, path_weight)`. | Score one concrete path with reached `factor` calls. |
 
 ## IR Transforms
 
@@ -88,16 +88,16 @@ result = asyncio.run(scheduled.acall("topic"))
 
 `````
 
-`````{tab-item} weighted
+`````{tab-item} weight
 
 ```python
-weighted(ir, /) -> IR
+weight(ir, /) -> IR
 ```
 
-{py:func}`weighted <autoform.weighted>` turns an IR into a path scorer. The returned IR runs one concrete path and returns the original output plus the product of reached {py:func}`factor <autoform.factor>` weights.
+{py:func}`weight <autoform.weight>` turns an IR into a path scorer. The returned IR runs one concrete path and returns the original output plus the product of reached {py:func}`factor <autoform.factor>` weights.
 
 ```python
-scored = af.weighted(ir)
+scored = af.weight(ir)
 output, path_weight = scored.call("topic", 0.8)
 ```
 
@@ -137,8 +137,8 @@ Order still matters:
 | --- | --- |
 | `batch(pullback(ir))` | Run many independent pullback calls at once. Each input pairs with its own output feedback. |
 | `pullback(batch(ir))` | Treat the whole batched function as the program receiving feedback. The cotangent matches the batched output. |
-| `batch(weighted(ir))` | Score many candidate paths separately. The result contains one weight per candidate. |
-| `weighted(batch(ir))` | Score one batched path. Reached factors across the batched execution multiply into one weight. |
+| `batch(weight(ir))` | Score many candidate paths separately. The result contains one weight per candidate. |
+| `weight(batch(ir))` | Score one batched path. Reached factors across the batched execution multiply into one weight. |
 
 ## Non-Transforms
 
