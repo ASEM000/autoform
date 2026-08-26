@@ -14,7 +14,7 @@
 | {py:class}`Doc <autoform.Doc>` annotation | A schema description attached with `field @ af.Doc("...")`. |
 | Dynamic argument | An input leaf represented by a placeholder during tracing and provided at execution time. |
 | Execute | The phase that runs an IR with concrete inputs through `.call(...)` or `.acall(...)`. |
-| {py:func}`factor <autoform.factor>` | A primitive that multiplies the current path weight. It is neutral during ordinary execution and contributes to {py:func}`weighted <autoform.weighted>` results. |
+| {py:func}`factor <autoform.factor>` | A primitive that multiplies the current path weight. It is neutral during ordinary execution and contributes to {py:func}`weight <autoform.weight>` results. |
 | {py:func}`fixpoint <autoform.fixpoint>` | A higher-order control-flow primitive that repeatedly applies a traced `(State, Theta) -> State` step until the state is stable or `max_iters` is reached. |
 | {py:func}`fold <autoform.fold>` | A context manager that evaluates foldable primitive calls immediately during tracing and embeds the result as a literal. |
 | {py:func}`inject <autoform.inject>` | A context manager that substitutes checkpointed values from a provided dictionary during execution. |
@@ -33,8 +33,8 @@
 | tag value | A hashable metadata value attached to equations during tracing. |
 | {py:func}`tag <autoform.tag>` | A context manager that activates one or more tag values for equations created in its block. |
 | Trace | The phase that runs a Python function once with placeholders and records `autoform` primitive calls as IR equations. |
-| Transform | A function that consumes an IR and returns another IR. Current IR transforms include {py:func}`batch <autoform.batch>`, {py:func}`pushforward <autoform.pushforward>`, {py:func}`pullback <autoform.pullback>`, {py:func}`sched <autoform.sched>`, {py:func}`dce <autoform.dce>`, and {py:func}`weighted <autoform.weighted>`. |
-| {py:func}`weighted <autoform.weighted>` | An IR transform that returns `(output, path_weight)` for one concrete path. |
+| Transform | A function that consumes an IR and returns another IR. Current IR transforms include {py:func}`batch <autoform.batch>`, {py:func}`pushforward <autoform.pushforward>`, {py:func}`pullback <autoform.pullback>`, {py:func}`sched <autoform.sched>`, {py:func}`dce <autoform.dce>`, and {py:func}`weight <autoform.weight>`. |
+| {py:func}`weight <autoform.weight>` | An IR transform that returns `(output, path_weight)` for one concrete path. |
 
 ## Internal IR Machinery
 
