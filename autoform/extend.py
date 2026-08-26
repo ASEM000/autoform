@@ -93,7 +93,7 @@ match_p = string.match_p
 lm_call_p = lm.lm_call_p
 lm_schema_call_p = lm.lm_schema_call_p
 factor_p = path.factor_p
-weighted_call_p = path.weighted_call_p
+weight_call_p = path.weight_call_p
 checkpoint_p = intercept.checkpoint_p
 stop_gradient_p = control.stop_gradient_p
 switch_p = control.switch_p
@@ -159,7 +159,7 @@ __all__ = [
     "lm_call_p",
     "lm_schema_call_p",
     "factor_p",
-    "weighted_call_p",
+    "weight_call_p",
     "checkpoint_p",
     "stop_gradient_p",
     "switch_p",
