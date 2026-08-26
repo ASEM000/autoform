@@ -17,15 +17,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
+import functools as ft
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.utils as utils
 
-__all__ = ["depends", "serial_fanout"]
+__all__ = ["depends", "sched", "serial_fanout"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
@@ -199,6 +201,69 @@ def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
 
 
 dead.dce_rules[fanout_p] = dce_fanout
+
+# ==================================================================================================
+# SCHED
+# ==================================================================================================
+
+
+@ft.partial(utils.lru_cache, maxsize=256)
+def sched[*A, R](
+    ir: core.IR[*A, R], /, *, cond: Callable[[core.Eqn], bool] | None = None
+) -> core.IR[*A, R]:
+    """Schedule independent operations for parallel execution.
+
+    Args:
+        ir: The IR to schedule.
+        cond: Predicate that takes an IR Equation and returns True if the
+              equation should be parallelized. If None, all operations are
+              candidates for parallelization.
+
+    Returns:
+        A new IR with independent operations grouped together for parallel execution.
+
+    Example:
+        >>> import autoform as af
+        >>> import asyncio
+        >>>
+        >>> def parallel_calls(x):
+        ...     msg1 = [dict(role="user", content=af.format("Q1: {}", x))]
+        ...     msg2 = [dict(role="user", content=af.format("Q2: {}", x))]
+        ...     a = af.lm_call(msg1, model="gpt-5.5")
+        ...     b = af.lm_call(msg2, model="gpt-5.5")
+        ...     return af.concat(a, b)
+        >>>
+        >>> ir = af.trace(parallel_calls)("input")
+        >>> scheduled = af.sched(ir)
+        >>>
+        >>> # sync execution (sequential)
+        >>> result = scheduled.call("hello") # doctest: +SKIP
+        >>>
+        >>> # async execution (concurrent via asyncio.gather)
+        >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
+    """
+    levels: list[list[core.Eqn]] = analysis.toposort_levels(ir)
+    out_eqns: list[core.Eqn] = []
+    cond = (lambda _: True) if cond is None else cond
+
+    def recurse(leaf):
+        return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
+
+    def make_fanout(eqns: list[core.Eqn]) -> core.Eqn:
+        irs = [core.IR([eqn], (eqn.in_tree,), eqn.out_tree) for eqn in eqns]
+        in_tree = [(eqn.in_tree,) for eqn in eqns]
+        out_tree = [eqn.out_tree for eqn in eqns]
+        return core.Eqn(fanout_p, in_tree, out_tree, dict(irs=irs))
+
+    for level in levels:
+        eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
+        seq_eqns = [eqn for eqn in eqns if not cond(eqn)]
+        par_eqns = [eqn for eqn in eqns if cond(eqn)]
+        out_eqns.extend([make_fanout(par_eqns)] if len(par_eqns) > 1 else par_eqns)
+        out_eqns.extend(seq_eqns)
+
+    return core.IR(out_eqns, ir.in_tree, ir.out_tree)
+
 
 # ==================================================================================================
 # DEPENDS
