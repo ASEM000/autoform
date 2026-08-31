@@ -236,13 +236,11 @@ primal_s.set(bool, lambda _: BoolAVal())
 
 tangent_s = Space("tangent")
 tangent_s.set(StrAVal, lambda aval: aval)
-tangent_s.set(IntAVal, lambda aval: aval)
 tangent_s.set(FloatAVal, lambda aval: aval)
 tangent_s.set(BoolAVal, lambda aval: aval)
 
 cotangent_s = Space("cotangent")
 cotangent_s.set(StrAVal, lambda aval: aval)
-cotangent_s.set(IntAVal, lambda aval: aval)
 cotangent_s.set(FloatAVal, lambda aval: aval)
 cotangent_s.set(BoolAVal, lambda aval: aval)
 
