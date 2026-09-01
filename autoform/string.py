@@ -180,7 +180,7 @@ core.batch_rules.set(concat_p, batch_concat)
 core.batch_rules.aset(concat_p, utils.asyncify(batch_concat))
 
 
-core.trace_add_rules[core.StrAVal] = concat
+core.dunder_rules[core.Dunder.ADD, core.StrAVal] = concat
 
 
 # ==================================================================================================
@@ -265,4 +265,4 @@ core.batch_rules.aset(match_p, utils.asyncify(batch_match))
 ad.zero_rules[core.StrAVal] = lambda _: ""
 ad.cot_acc_rules[core.StrAVal] = lambda cs, _: "".join(cs)
 
-core.trace_eq_rules[core.StrAVal] = match
+core.dunder_rules[core.Dunder.EQ, core.StrAVal] = match
