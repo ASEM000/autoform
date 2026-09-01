@@ -22,36 +22,26 @@ import autoform as af
 
 class TestTraceValuePythonOps:
     @pytest.mark.parametrize(
-        ("description", "program"),
+        ("dunder", "program"),
         [
-            ("truthiness", lambda x: "yes" if x else "no"),
-            ("string coercion", lambda x: str(x)),
-            ("string formatting", lambda x: f"{x}"),
-            ("iteration", lambda x: list(x)),
-            ("integer-index coercion", lambda x: range(x)),
-            ("integer coercion", lambda x: int(x)),
-            ("float coercion", lambda x: float(x)),
-            ("bytes coercion", lambda x: bytes(x)),
-            ("indexing", lambda x: x[0]),
-            ("membership testing", lambda x: "a" in x),
+            ("bool", lambda x: "yes" if x else "no"),
+            ("str", lambda x: str(x)),
+            ("format", lambda x: f"{x}"),
+            ("iter", lambda x: list(x)),
+            ("index", lambda x: range(x)),
+            ("int", lambda x: int(x)),
+            ("float", lambda x: float(x)),
+            ("complex", lambda x: complex(x)),
+            ("bytes", lambda x: bytes(x)),
+            ("getitem", lambda x: x[0]),
+            ("contains", lambda x: "a" in x),
+            ("len", lambda x: len(x)),
         ],
     )
-    def test_host_python_operations_on_traced_values_error(self, description, program):
+    def test_unregistered_python_operations_on_traced_values_error(self, dunder, program):
         with pytest.raises(
             TypeError,
-            match=rf"Cannot use {re.escape(description)} on a traced value\.",
-        ):
-            af.trace(program)("seed")
-
-    def test_len_on_traced_value_has_informative_error(self):
-        def program(x):
-            return len(x)
-
-        with pytest.raises(
-            TypeError,
-            match=r"Cannot use length on a traced value\..*"
-            r"Python length needs a concrete runtime value.*"
-            r"af\.trace\(\.\.\., static=\.\.\.\)",
+            match=rf"No trace rule for {re.escape(dunder)} on values of type StrAVal\(\)",
         ):
             af.trace(program)("seed")
 

@@ -112,15 +112,14 @@ class TestVar:
         assert isinstance(var.aval, af.core.AVal)
         assert var.aval == af.core.StrAVal()
 
-    def test_len_on_trace_box_has_informative_error(self):
+    def test_len_on_trace_box_requires_rule(self):
         tracer = af.core.TraceInterpreter()
         var = af.core.Var(aval=af.core.StrAVal())
         traced = tracer.box(var)
 
         with pytest.raises(
             TypeError,
-            match=r"Cannot use length on a traced value\..*"
-            r"Python length needs a concrete runtime value",
+            match=r"No trace rule for len on values of type StrAVal\(\)",
         ):
             len(traced)
 
@@ -224,7 +223,7 @@ class TestConcatPrimitive:
         def func(x):
             return x + 1
 
-        with pytest.raises(TypeError, match=r"No trace rule for \+ on values of type IntAVal\(\)"):
+        with pytest.raises(TypeError, match=r"No trace rule for add on values of type IntAVal\(\)"):
             af.trace(func)(1)
 
     def test_concat_trace_rejects_non_string_input(self):

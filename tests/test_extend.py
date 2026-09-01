@@ -14,6 +14,8 @@
 
 import functools as ft
 
+import pytest
+
 import autoform as af
 import autoform.extend as afe
 
@@ -73,7 +75,7 @@ def test_register_zero_and_cotangent_accumulator():
     assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
 
 
-def test_register_add_with_primitive_rules():
+def test_register_dunder_with_primitive_rules():
     Box, BoxAVal = make_box_domain()
     box_add_p = afe.Prim("test_box_add")
 
@@ -89,7 +91,7 @@ def test_register_add_with_primitive_rules():
         return BoxAVal()
 
     afe.register_trace_type(Box, lambda value: BoxAVal())
-    afe.register_add(BoxAVal, box_add)
+    afe.register_dunder(afe.Dunder.ADD, BoxAVal, box_add)
     afe.impl_rules.set(box_add_p, impl_add)
     afe.abstract_rules.set(box_add_p, abstract_add)
 
@@ -98,24 +100,30 @@ def test_register_add_with_primitive_rules():
     assert ir.call(Box(3), Box(4)) == Box(7)
 
 
-def test_operator_registration_helpers():
+def test_register_dunder_with_static_python_protocol():
+    Box, BoxAVal = make_box_domain()
+    afe.register_trace_type(Box, lambda value: BoxAVal())
+    afe.register_dunder(afe.Dunder.LEN, BoxAVal, lambda value: 1)
+
+    ir = af.trace(lambda x: len(x))(Box(1))
+
+    assert ir.call(Box(2)) == 1
+
+
+def test_register_dunder_requires_explicit_replace():
     _, BoxAVal = make_box_domain()
 
-    def rule(x, y):
+    def first_rule(x, y):
         return x, y
 
-    cases = [
-        (afe.register_add, af.core.trace_add_rules),
-        (afe.register_sub, af.core.trace_sub_rules),
-        (afe.register_mul, af.core.trace_mul_rules),
-        (afe.register_div, af.core.trace_truediv_rules),
-        (afe.register_matmul, af.core.trace_matmul_rules),
-        (afe.register_eq, af.core.trace_eq_rules),
-    ]
+    def second_rule(x, y):
+        return y, x
 
-    for register, registry in cases:
-        assert register(BoxAVal, rule) is rule
-        assert registry[BoxAVal] is rule
+    assert afe.register_dunder(afe.Dunder.ADD, BoxAVal, first_rule) is first_rule
+    with pytest.raises(AssertionError, match="already defined"):
+        afe.register_dunder(afe.Dunder.ADD, BoxAVal, second_rule)
+    assert afe.register_dunder(afe.Dunder.ADD, BoxAVal, second_rule, replace=True) is second_rule
+    assert af.core.dunder_rules[afe.Dunder.ADD, BoxAVal] is second_rule
 
 
 def test_registration_helpers_work_as_decorators():
@@ -129,10 +137,10 @@ def test_registration_helpers_work_as_decorators():
     def zero_rule(aval):
         return Box(0)
 
-    @ft.partial(afe.register_add, BoxAVal)
+    @ft.partial(afe.register_dunder, afe.Dunder.ADD, BoxAVal)
     def add_rule(x, y):
         return x, y
 
     assert isinstance(afe.primal_s.avalof(Box(1)), BoxAVal)
     assert af.ad.zero_rules[BoxAVal] is zero_rule
-    assert af.core.trace_add_rules[BoxAVal] is add_rule
+    assert af.core.dunder_rules[afe.Dunder.ADD, BoxAVal] is add_rule
