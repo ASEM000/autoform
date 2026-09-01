@@ -46,6 +46,7 @@ primal_s = core.primal_s
 tangent_s = core.tangent_s
 cotangent_s = core.cotangent_s
 Prim = core.Prim
+Dunder = core.Dunder
 Zero = ad.Zero
 Interpreter = core.Interpreter
 IR = core.IR
@@ -116,6 +117,7 @@ __all__ = [
     "tangent_s",
     "cotangent_s",
     "Prim",
+    "Dunder",
     "Zero",
     "Interpreter",
     "IR",
@@ -126,12 +128,7 @@ __all__ = [
     "register_cotangent_accumulator",
     "register_non_dce",
     "register_non_memoizable",
-    "register_add",
-    "register_sub",
-    "register_mul",
-    "register_div",
-    "register_matmul",
-    "register_eq",
+    "register_dunder",
     "impl_rules",
     "abstract_rules",
     "push_rules",
@@ -187,11 +184,6 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
     :func:`autoform.trace` treats registered Python types as dynamic leaves. During
     tracing, each concrete value is passed to ``aval_rule`` and replaced by an
     :class:`AVal` that carries the abstract information needed by primitive rules.
-
-    Registering a trace type only teaches AutoForm how to abstract concrete
-    inputs. It does not define concrete execution, AD behavior, batching, or
-    Python operator syntax. Those are registered separately through primitive
-    rules and the other helpers in this module.
 
     Args:
         type: Concrete Python type accepted as a dynamic input leaf.
@@ -310,125 +302,34 @@ def register_non_memoizable[T: Prim](prim: T, /) -> T:
 
 
 # ==================================================================================================
-# OPERATOR REGISTRATION
+# DUNDER REGISTRATION
 # ==================================================================================================
 
 
-def register_add[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register tracing dispatch for ``+`` on traced values with this aval.
-
-    This treats ``+`` as staged syntax while tracing. The rule is called during
-    tracing, not during normal execution, and should usually bind an AutoForm
-    primitive that implements the operation.
+def register_dunder[T: Callable[..., Any]](
+    dunder: Dunder,
+    aval_type: type[AVal],
+    rule: T,
+    /,
+    *,
+    replace: bool = False,
+) -> T:
+    """Register Python :class:`autoform.extend.Dunder` behavior for a traced abstract value type.
 
     Args:
-        aval_type: Abstract value type of the left traced operand.
-        rule: Function called as ``rule(left, right)`` for ``left + right`` and
-            ``rule(right, left)`` for reflected ``right + left``.
+        dunder: :class:`autoform.extend.Dunder` being staged.
+        aval_type: Abstract value type that selects the rule.
+        rule: Callable implementing the trace-time dunder behavior.
+        replace: Whether to replace an existing rule explicitly.
 
     Returns:
         The registered rule.
     """
-    rules = core.trace_add_rules
-    assert aval_type not in rules, f"Addition for {aval_type} is already registered."
-    rules[aval_type] = rule
-    return rule
-
-
-def register_sub[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register tracing dispatch for ``-`` on traced values with this aval.
-
-    This treats ``-`` as staged syntax while tracing. The rule should normally
-    bind the primitive that represents subtraction for the extension domain.
-
-    Args:
-        aval_type: Abstract value type of the traced operand that dispatches.
-        rule: Function called as ``rule(left, right)`` for ``left - right`` and
-            ``rule(right, left)`` for reflected ``right - left``.
-
-    Returns:
-        The registered rule.
-    """
-    rules = core.trace_sub_rules
-    assert aval_type not in rules, f"Subtraction for {aval_type} is already registered."
-    rules[aval_type] = rule
-    return rule
-
-
-def register_mul[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register tracing dispatch for ``*`` on traced values with this aval.
-
-    This treats ``*`` as staged syntax while tracing, instead of evaluating the
-    operation with Python.
-
-    Args:
-        aval_type: Abstract value type of the traced operand that dispatches.
-        rule: Function called as ``rule(left, right)`` for ``left * right`` and
-            ``rule(right, left)`` for reflected ``right * left``.
-
-    Returns:
-        The registered rule.
-    """
-    rules = core.trace_mul_rules
-    assert aval_type not in rules, f"Multiplication for {aval_type} is already registered."
-    rules[aval_type] = rule
-    return rule
-
-
-def register_div[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register tracing dispatch for ``/`` on traced values with this aval.
-
-    This treats true division as staged syntax while tracing.
-
-    Args:
-        aval_type: Abstract value type of the traced operand that dispatches.
-        rule: Function called as ``rule(left, right)`` for ``left / right`` and
-            ``rule(right, left)`` for reflected ``right / left``.
-
-    Returns:
-        The registered rule, so the helper can be used as a decorator.
-    """
-    rules = core.trace_truediv_rules
-    assert aval_type not in rules, f"True division for {aval_type} is already registered."
-    rules[aval_type] = rule
-    return rule
-
-
-def register_matmul[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register tracing dispatch for ``@`` on traced values with this aval.
-
-    This treats matrix multiplication as staged syntax while tracing. It is
-    intended for domains such as arrays, matrices, or tensors where
-    matrix multiplication should stage a primitive into the IR.
-
-    Args:
-        aval_type: Abstract value type of the traced operand that dispatches.
-        rule: Function called as ``rule(left, right)`` for ``left @ right`` and
-            ``rule(right, left)`` for reflected ``right @ left``.
-
-    Returns:
-        The registered rule, so the helper can be used as a decorator.
-    """
-    rules = core.trace_matmul_rules
-    assert aval_type not in rules, f"Matrix multiplication for {aval_type} is already registered."
-    rules[aval_type] = rule
-    return rule
-
-
-def register_eq[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register tracing dispatch for ``==`` on traced values with this aval.
-
-    Python equality on a traced value cannot be evaluated concretely during
-    tracing. Register this when equality should become a staged primitive.
-
-    Args:
-        aval_type: Abstract value type of the left traced operand.
-        rule: Function called as ``rule(left, right)`` for ``left == right``.
-
-    Returns:
-        The registered rule, so the helper can be used as a decorator.
-    """
-    rules = core.trace_eq_rules
-    assert aval_type not in rules, f"Equality for {aval_type} is already registered."
-    rules[aval_type] = rule
+    assert isinstance(dunder, Dunder), f"Expected Dunder, got {dunder!r}"
+    assert issubclass(aval_type, AVal), f"Expected AVal type, got {aval_type!r}"
+    assert callable(rule), f"Expected callable, got {rule!r}"
+    assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+    key = dunder, aval_type
+    assert replace or key not in core.dunder_rules, f"Dunder rule is already defined"
+    core.dunder_rules[key] = rule
     return rule

@@ -19,12 +19,13 @@ from __future__ import annotations
 import functools as ft
 import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator, Hashable
+from collections.abc import Awaitable, Callable, Generator, Hashable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from enum import Enum
 from operator import setitem
 from threading import RLock
-from typing import Any, ClassVar, NoReturn, Protocol, Self, TypeGuard, cast
+from typing import Any, ClassVar, Protocol, Self, TypeGuard, cast
 
 import autoform.utils as utils
 
@@ -80,13 +81,8 @@ __all__ = [
     "BoxedInterpreter",
     "Interpreter",
     "EvalInterpreter",
+    "Dunder",
     "TraceBox",
-    "trace_add_rules",
-    "trace_sub_rules",
-    "trace_mul_rules",
-    "trace_truediv_rules",
-    "trace_matmul_rules",
-    "trace_eq_rules",
     "TraceInterpreter",
     "active_interpreter",
     "using_interpreter",
@@ -236,13 +232,11 @@ primal_s.set(bool, lambda _: BoolAVal())
 
 tangent_s = Space("tangent")
 tangent_s.set(StrAVal, lambda aval: aval)
-tangent_s.set(IntAVal, lambda aval: aval)
 tangent_s.set(FloatAVal, lambda aval: aval)
 tangent_s.set(BoolAVal, lambda aval: aval)
 
 cotangent_s = Space("cotangent")
 cotangent_s.set(StrAVal, lambda aval: aval)
-cotangent_s.set(IntAVal, lambda aval: aval)
 cotangent_s.set(FloatAVal, lambda aval: aval)
 cotangent_s.set(BoolAVal, lambda aval: aval)
 
@@ -711,27 +705,37 @@ def fold() -> Generator[None, None, None]:
         fold_flag.reset(token)
 
 
-TRACE_UNSUPPORTED_OP_ERROR = (
-    "Cannot use {desc} on a traced value."
-    "During af.trace(), values only carry abstract type information; "
-    "Python {desc} needs a concrete runtime value and cannot be staged "
-    "implicitly. If this value should be known while tracing, mark it static with "
-    "af.trace(..., static=...) or compute this operation outside the traced function. "
-    "If you need this operation at runtime in the IR, define an explicit autoform "
-    "primitive for it."
-)
+class Dunder(Enum):
+    NEG = "neg"
+    ADD = "add"
+    SUB = "sub"
+    MUL = "mul"
+    DIV = "div"
+    POW = "pow"
+    MATMUL = "matmul"
+    EQ = "eq"
+    NE = "ne"
+    LT = "lt"
+    LE = "le"
+    GT = "gt"
+    GE = "ge"
+    BOOL = "bool"
+    BYTES = "bytes"
+    COMPLEX = "complex"
+    CONTAINS = "contains"
+    FLOAT = "float"
+    FORMAT = "format"
+    GETITEM = "getitem"
+    INDEX = "index"
+    INT = "int"
+    ITER = "iter"
+    LEN = "len"
+    STR = "str"
 
-TRACE_MISSING_RULE_ERROR = "No trace rule for {desc} on values of type {aval!r}. "
 
-type TraceRule = Callable[[Any, Any], Any]
+type DunderRule = Callable[..., Any]
 
-
-trace_eq_rules: dict[type[AVal], TraceRule] = {}
-trace_add_rules: dict[type[AVal], TraceRule] = {}
-trace_sub_rules: dict[type[AVal], TraceRule] = {}
-trace_mul_rules: dict[type[AVal], TraceRule] = {}
-trace_truediv_rules: dict[type[AVal], TraceRule] = {}
-trace_matmul_rules: dict[type[AVal], TraceRule] = {}
+dunder_rules: dict[tuple[Dunder, type[AVal]], DunderRule] = {}
 
 
 class TraceBox:
@@ -754,95 +758,103 @@ class TraceBox:
         return object.__hash__(self)
 
     def __eq__(self, other) -> Any:
-        if rule := trace_eq_rules.get(type(self.aval)):
-            return rule(self, other)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="==", aval=self.aval))
+        return apply_dunder(Dunder.EQ, self, self, other)
+
+    def __ne__(self, other) -> Any:
+        return apply_dunder(Dunder.NE, self, self, other)
+
+    def __lt__(self, other) -> Any:
+        return apply_dunder(Dunder.LT, self, self, other)
+
+    def __le__(self, other) -> Any:
+        return apply_dunder(Dunder.LE, self, self, other)
+
+    def __gt__(self, other) -> Any:
+        return apply_dunder(Dunder.GT, self, self, other)
+
+    def __ge__(self, other) -> Any:
+        return apply_dunder(Dunder.GE, self, self, other)
+
+    def __neg__(self) -> Any:
+        return apply_dunder(Dunder.NEG, self, self)
 
     def __add__(self, other) -> Any:
-        if rule := trace_add_rules.get(type(self.aval)):
-            return rule(self, other)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
+        return apply_dunder(Dunder.ADD, self, self, other)
 
     def __radd__(self, other) -> Any:
-        if rule := trace_add_rules.get(type(self.aval)):
-            return rule(other, self)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="+", aval=self.aval))
+        return apply_dunder(Dunder.ADD, self, other, self)
 
     def __sub__(self, other) -> Any:
-        if rule := trace_sub_rules.get(type(self.aval)):
-            return rule(self, other)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="-", aval=self.aval))
+        return apply_dunder(Dunder.SUB, self, self, other)
 
     def __rsub__(self, other) -> Any:
-        if rule := trace_sub_rules.get(type(self.aval)):
-            return rule(other, self)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="-", aval=self.aval))
+        return apply_dunder(Dunder.SUB, self, other, self)
 
     def __mul__(self, other) -> Any:
-        if rule := trace_mul_rules.get(type(self.aval)):
-            return rule(self, other)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="*", aval=self.aval))
+        return apply_dunder(Dunder.MUL, self, self, other)
 
     def __rmul__(self, other) -> Any:
-        if rule := trace_mul_rules.get(type(self.aval)):
-            return rule(other, self)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="*", aval=self.aval))
+        return apply_dunder(Dunder.MUL, self, other, self)
 
     def __truediv__(self, other) -> Any:
-        if rule := trace_truediv_rules.get(type(self.aval)):
-            return rule(self, other)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="/", aval=self.aval))
+        return apply_dunder(Dunder.DIV, self, self, other)
 
     def __rtruediv__(self, other) -> Any:
-        if rule := trace_truediv_rules.get(type(self.aval)):
-            return rule(other, self)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="/", aval=self.aval))
+        return apply_dunder(Dunder.DIV, self, other, self)
+
+    def __pow__(self, other) -> Any:
+        return apply_dunder(Dunder.POW, self, self, other)
+
+    def __rpow__(self, other) -> Any:
+        return apply_dunder(Dunder.POW, self, other, self)
 
     def __matmul__(self, other) -> Any:
-        if rule := trace_matmul_rules.get(type(self.aval)):
-            return rule(self, other)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="@", aval=self.aval))
+        return apply_dunder(Dunder.MATMUL, self, self, other)
 
     def __rmatmul__(self, other) -> Any:
-        if rule := trace_matmul_rules.get(type(self.aval)):
-            return rule(other, self)
-        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="@", aval=self.aval))
+        return apply_dunder(Dunder.MATMUL, self, other, self)
 
-    def __bool__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="truthiness"))
+    def __bool__(self) -> bool:
+        return apply_dunder(Dunder.BOOL, self, self)
 
-    def __bytes__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="bytes coercion"))
+    def __bytes__(self) -> bytes:
+        return apply_dunder(Dunder.BYTES, self, self)
 
-    def __complex__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="complex number coercion"))
+    def __complex__(self) -> complex:
+        return apply_dunder(Dunder.COMPLEX, self, self)
 
-    def __contains__(self, _) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="membership testing"))
+    def __contains__(self, item) -> bool:
+        return apply_dunder(Dunder.CONTAINS, self, self, item)
 
-    def __float__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="float coercion"))
+    def __float__(self) -> float:
+        return apply_dunder(Dunder.FLOAT, self, self)
 
-    def __format__(self, _) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="string formatting"))
+    def __format__(self, format_spec: str) -> str:
+        return apply_dunder(Dunder.FORMAT, self, self, format_spec)
 
-    def __getitem__(self, _) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="indexing"))
+    def __getitem__(self, key) -> Any:
+        return apply_dunder(Dunder.GETITEM, self, self, key)
 
-    def __index__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="integer-index coercion"))
+    def __index__(self) -> int:
+        return apply_dunder(Dunder.INDEX, self, self)
 
-    def __int__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="integer coercion"))
+    def __int__(self) -> int:
+        return apply_dunder(Dunder.INT, self, self)
 
-    def __iter__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="iteration"))
+    def __iter__(self) -> Iterator[Any]:
+        return apply_dunder(Dunder.ITER, self, self)
 
-    def __len__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="length"))
+    def __len__(self) -> int:
+        return apply_dunder(Dunder.LEN, self, self)
 
-    def __str__(self) -> NoReturn:
-        raise TypeError(TRACE_UNSUPPORTED_OP_ERROR.format(desc="string coercion"))
+    def __str__(self) -> str:
+        return apply_dunder(Dunder.STR, self, self)
+
+
+def apply_dunder(dunder: Dunder, box: TraceBox, *operands):
+    if (rule := dunder_rules.get((dunder, type(box.aval)))) is None:
+        raise TypeError(f"No trace rule for {dunder.value} on values of type {box.aval!r}.")
+    return rule(*operands)
 
 
 def assert_foldable(prim: Prim, value: Tree) -> None:

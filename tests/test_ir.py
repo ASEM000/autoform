@@ -101,7 +101,6 @@ class TestSpace:
             for space in (af.core.tangent_s, af.core.cotangent_s)
             for aval in (
                 af.core.StrAVal(),
-                af.core.IntAVal(),
                 af.core.FloatAVal(),
                 af.core.BoolAVal(),
             )

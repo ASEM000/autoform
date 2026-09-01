@@ -173,15 +173,16 @@ a_matmul = register_binary(
     lambda x, y, g: (a_matmul(g, y.T), a_matmul(x.T, g)),
 )
 
-afe.register_add(ArrayAVal, a_add)
-afe.register_sub(ArrayAVal, a_sub)
-afe.register_mul(ArrayAVal, a_mul)
-afe.register_div(ArrayAVal, a_div)
-afe.register_matmul(ArrayAVal, a_matmul)
+afe.register_dunder(afe.Dunder.ADD, ArrayAVal, a_add)
+afe.register_dunder(afe.Dunder.SUB, ArrayAVal, a_sub)
+afe.register_dunder(afe.Dunder.MUL, ArrayAVal, a_mul)
+afe.register_dunder(afe.Dunder.DIV, ArrayAVal, a_div)
+afe.register_dunder(afe.Dunder.MATMUL, ArrayAVal, a_matmul)
 ```
 
-The last five registrations connect traced Python syntax to the primitives. For
-example, `x + y` stages `a_add` when `x` has `ArrayAVal`.
+The final registrations connect traced Python syntax to the primitives through
+one dunder rule table. For example, `x + y` stages `a_add` when `x` has
+`ArrayAVal`.
 
 ## Use the Extension
 

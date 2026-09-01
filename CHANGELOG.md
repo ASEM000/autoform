@@ -4,6 +4,14 @@
 
 ### Breaking Changes
 
+  - Replaced the operator-specific `autoform.extend` helpers `register_add`,
+    `register_sub`, `register_mul`, `register_div`, `register_matmul`, and
+    `register_eq` with {py:func}`register_dunder <autoform.extend.register_dunder>`.
+    Pass the corresponding {py:class}`Dunder <autoform.extend.Dunder>` member,
+    abstract value type, and rule, for example
+    `register_dunder(Dunder.ADD, ArrayAVal, array_add)`. The separate
+    `core.trace_*_rules` registries are replaced by one internal dunder rule table.
+
   - Renamed the path-weight transform from `weighted` to {py:func}`weight
     <autoform.weight>`. The associated extension primitive is now
     `weight_call_p`, and the internal interpreter is `WeightInterpreter`.

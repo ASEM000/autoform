@@ -14,5 +14,5 @@ extend-ir-helpers
 extend-active-contexts
 extend-primitive-keys
 extend-registration
-extend-operator-registration
+extend-dunder-registration
 ```

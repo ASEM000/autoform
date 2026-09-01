@@ -112,15 +112,14 @@ class TestVar:
         assert isinstance(var.aval, af.core.AVal)
         assert var.aval == af.core.StrAVal()
 
-    def test_len_on_trace_box_has_informative_error(self):
+    def test_len_on_trace_box_requires_rule(self):
         tracer = af.core.TraceInterpreter()
         var = af.core.Var(aval=af.core.StrAVal())
         traced = tracer.box(var)
 
         with pytest.raises(
             TypeError,
-            match=r"Cannot use length on a traced value\..*"
-            r"Python length needs a concrete runtime value",
+            match=r"No trace rule for len on values of type StrAVal\(\)",
         ):
             len(traced)
 
@@ -224,7 +223,7 @@ class TestConcatPrimitive:
         def func(x):
             return x + 1
 
-        with pytest.raises(TypeError, match=r"No trace rule for \+ on values of type IntAVal\(\)"):
+        with pytest.raises(TypeError, match=r"No trace rule for add on values of type IntAVal\(\)"):
             af.trace(func)(1)
 
     def test_concat_trace_rejects_non_string_input(self):
@@ -560,6 +559,14 @@ class TestRunIRInline:
 
 
 class TestTransformWrapperAvals:
+    def test_int_input_is_not_differentiable(self):
+        ir = af.trace(lambda x: x)(1)
+
+        with pytest.raises(TypeError):
+            af.pushforward(ir)
+        with pytest.raises(TypeError):
+            af.pullback(ir)
+
     def test_pushforward_wrapper_uses_tangent_space(self):
         class Text:
             __slots__ = ["value"]
@@ -746,10 +753,10 @@ class TestCotangentHelpers:
 
     def test_cot_acc_nested_containers_elementwise(self):
         result = af.ad.cot_acc([
-            {"x": [1, af.ad.Zero(af.core.StrAVal())], "y": "a"},
-            {"x": [2, "b"], "y": "c"},
+            {"x": ["1", af.ad.Zero(af.core.StrAVal())], "y": "a"},
+            {"x": ["2", "b"], "y": "c"},
         ])
-        assert result == {"x": [3, "b"], "y": "ac"}
+        assert result == {"x": ["12", "b"], "y": "ac"}
 
     def test_cot_acc_all_zeros(self):
         result = af.ad.cot_acc([
@@ -764,10 +771,6 @@ class TestCotangentHelpers:
                 af.ad.Zero(af.core.StrAVal()),
                 af.ad.Zero(af.core.IntAVal()),
             ])
-
-    def test_cot_acc_ints_use_registered_rule(self):
-        result = af.ad.cot_acc([1, 2, 3])
-        assert result == 6
 
     def test_cot_acc_registered_val_without_rule_raises(self):
         with pytest.raises(
