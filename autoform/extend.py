@@ -314,10 +314,10 @@ def register_dunder[T: Callable[..., Any]](
     *,
     replace: bool = False,
 ) -> T:
-    """Register Python :func:`autoform.extension.Dunder` syntax for traced values with an abstract value type.
+    """Register Python :class:`autoform.extend.Dunder` behavior for a traced abstract value type.
 
     Args:
-        dunder: :func:`autoform.extension.Dunder` enum being staged.
+        dunder: :class:`autoform.extend.Dunder` being staged.
         aval_type: Abstract value type that selects the rule.
         rule: Callable implementing the trace-time dunder behavior.
         replace: Whether to replace an existing rule explicitly.
