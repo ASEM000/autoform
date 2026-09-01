@@ -134,6 +134,11 @@ __all__ = [
     "register_pow",
     "register_matmul",
     "register_eq",
+    "register_ne",
+    "register_lt",
+    "register_le",
+    "register_gt",
+    "register_ge",
     "impl_rules",
     "abstract_rules",
     "push_rules",
@@ -448,5 +453,45 @@ def register_eq[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """
     rules = core.trace_eq_rules
     assert aval_type not in rules, f"Equality for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
+def register_ne[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for ``!=`` on traced values with this aval."""
+    rules = core.trace_ne_rules
+    assert aval_type not in rules, f"Comparison for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
+def register_lt[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for ``<`` on traced values with this aval."""
+    rules = core.trace_lt_rules
+    assert aval_type not in rules, f"Comparison for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
+def register_le[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for ``<=`` on traced values with this aval."""
+    rules = core.trace_le_rules
+    assert aval_type not in rules, f"Comparison for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
+def register_gt[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for ``>`` on traced values with this aval."""
+    rules = core.trace_gt_rules
+    assert aval_type not in rules, f"Comparison for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
+def register_ge[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for ``>=`` on traced values with this aval."""
+    rules = core.trace_ge_rules
+    assert aval_type not in rules, f"Comparison for {aval_type} is already registered."
     rules[aval_type] = rule
     return rule

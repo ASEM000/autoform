@@ -89,6 +89,11 @@ __all__ = [
     "trace_pow_rules",
     "trace_matmul_rules",
     "trace_eq_rules",
+    "trace_ne_rules",
+    "trace_lt_rules",
+    "trace_le_rules",
+    "trace_gt_rules",
+    "trace_ge_rules",
     "TraceInterpreter",
     "active_interpreter",
     "using_interpreter",
@@ -735,6 +740,11 @@ trace_mul_rules: dict[type[AVal], TraceRule] = {}
 trace_truediv_rules: dict[type[AVal], TraceRule] = {}
 trace_pow_rules: dict[type[AVal], TraceRule] = {}
 trace_matmul_rules: dict[type[AVal], TraceRule] = {}
+trace_ne_rules: dict[type[AVal], TraceRule] = {}
+trace_lt_rules: dict[type[AVal], TraceRule] = {}
+trace_le_rules: dict[type[AVal], TraceRule] = {}
+trace_gt_rules: dict[type[AVal], TraceRule] = {}
+trace_ge_rules: dict[type[AVal], TraceRule] = {}
 
 
 class TraceBox:
@@ -760,6 +770,31 @@ class TraceBox:
         if rule := trace_eq_rules.get(type(self.aval)):
             return rule(self, other)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="==", aval=self.aval))
+
+    def __ne__(self, other) -> Any:
+        if rule := trace_ne_rules.get(type(self.aval)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="!=", aval=self.aval))
+
+    def __lt__(self, other) -> Any:
+        if rule := trace_lt_rules.get(type(self.aval)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="<", aval=self.aval))
+
+    def __le__(self, other) -> Any:
+        if rule := trace_le_rules.get(type(self.aval)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="<=", aval=self.aval))
+
+    def __gt__(self, other) -> Any:
+        if rule := trace_gt_rules.get(type(self.aval)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc=">", aval=self.aval))
+
+    def __ge__(self, other) -> Any:
+        if rule := trace_ge_rules.get(type(self.aval)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc=">=", aval=self.aval))
 
     def __neg__(self) -> Any:
         if rule := trace_neg_rules.get(type(self.aval)):
