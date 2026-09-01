@@ -81,10 +81,12 @@ __all__ = [
     "Interpreter",
     "EvalInterpreter",
     "TraceBox",
+    "trace_neg_rules",
     "trace_add_rules",
     "trace_sub_rules",
     "trace_mul_rules",
     "trace_truediv_rules",
+    "trace_pow_rules",
     "trace_matmul_rules",
     "trace_eq_rules",
     "TraceInterpreter",
@@ -721,14 +723,17 @@ TRACE_UNSUPPORTED_OP_ERROR = (
 
 TRACE_MISSING_RULE_ERROR = "No trace rule for {desc} on values of type {aval!r}. "
 
+type TraceUnaryRule = Callable[[Any], Any]
 type TraceRule = Callable[[Any, Any], Any]
 
 
 trace_eq_rules: dict[type[AVal], TraceRule] = {}
+trace_neg_rules: dict[type[AVal], TraceUnaryRule] = {}
 trace_add_rules: dict[type[AVal], TraceRule] = {}
 trace_sub_rules: dict[type[AVal], TraceRule] = {}
 trace_mul_rules: dict[type[AVal], TraceRule] = {}
 trace_truediv_rules: dict[type[AVal], TraceRule] = {}
+trace_pow_rules: dict[type[AVal], TraceRule] = {}
 trace_matmul_rules: dict[type[AVal], TraceRule] = {}
 
 
@@ -755,6 +760,11 @@ class TraceBox:
         if rule := trace_eq_rules.get(type(self.aval)):
             return rule(self, other)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="==", aval=self.aval))
+
+    def __neg__(self) -> Any:
+        if rule := trace_neg_rules.get(type(self.aval)):
+            return rule(self)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="unary -", aval=self.aval))
 
     def __add__(self, other) -> Any:
         if rule := trace_add_rules.get(type(self.aval)):
@@ -795,6 +805,16 @@ class TraceBox:
         if rule := trace_truediv_rules.get(type(self.aval)):
             return rule(other, self)
         raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="/", aval=self.aval))
+
+    def __pow__(self, other) -> Any:
+        if rule := trace_pow_rules.get(type(self.aval)):
+            return rule(self, other)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="**", aval=self.aval))
+
+    def __rpow__(self, other) -> Any:
+        if rule := trace_pow_rules.get(type(self.aval)):
+            return rule(other, self)
+        raise TypeError(TRACE_MISSING_RULE_ERROR.format(desc="**", aval=self.aval))
 
     def __matmul__(self, other) -> Any:
         if rule := trace_matmul_rules.get(type(self.aval)):
