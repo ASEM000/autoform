@@ -27,6 +27,7 @@ import autoform.dead as dead
 import autoform.intercept as intercept
 import autoform.lm as lm
 import autoform.memo as memo
+import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
 import autoform.string as string
@@ -91,6 +92,17 @@ active_client = lm.active_client
 format_p = string.format_p
 concat_p = string.concat_p
 match_p = string.match_p
+neg_p = numeric.neg_p
+add_p = numeric.add_p
+sub_p = numeric.sub_p
+mul_p = numeric.mul_p
+div_p = numeric.div_p
+eq_p = numeric.eq_p
+ne_p = numeric.ne_p
+lt_p = numeric.lt_p
+le_p = numeric.le_p
+gt_p = numeric.gt_p
+ge_p = numeric.ge_p
 lm_call_p = lm.lm_call_p
 lm_schema_call_p = lm.lm_schema_call_p
 factor_p = path.factor_p
@@ -153,6 +165,17 @@ __all__ = [
     "format_p",
     "concat_p",
     "match_p",
+    "neg_p",
+    "add_p",
+    "sub_p",
+    "mul_p",
+    "div_p",
+    "eq_p",
+    "ne_p",
+    "lt_p",
+    "le_p",
+    "gt_p",
+    "ge_p",
     "lm_call_p",
     "lm_schema_call_p",
     "factor_p",
