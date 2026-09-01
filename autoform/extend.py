@@ -127,9 +127,11 @@ __all__ = [
     "register_non_dce",
     "register_non_memoizable",
     "register_add",
+    "register_neg",
     "register_sub",
     "register_mul",
     "register_div",
+    "register_pow",
     "register_matmul",
     "register_eq",
     "impl_rules",
@@ -314,6 +316,14 @@ def register_non_memoizable[T: Prim](prim: T, /) -> T:
 # ==================================================================================================
 
 
+def register_neg[T: core.TraceUnaryRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for unary ``-`` on traced values with this aval."""
+    rules = core.trace_neg_rules
+    assert aval_type not in rules, f"Negation for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
 def register_add[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """Register tracing dispatch for ``+`` on traced values with this aval.
 
@@ -390,6 +400,14 @@ def register_div[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
     """
     rules = core.trace_truediv_rules
     assert aval_type not in rules, f"True division for {aval_type} is already registered."
+    rules[aval_type] = rule
+    return rule
+
+
+def register_pow[T: core.TraceRule](aval_type: type[AVal], rule: T, /) -> T:
+    """Register tracing dispatch for ``**`` on traced values with this aval."""
+    rules = core.trace_pow_rules
+    assert aval_type not in rules, f"Power for {aval_type} is already registered."
     rules[aval_type] = rule
     return rule
 
