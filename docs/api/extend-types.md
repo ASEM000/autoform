@@ -17,6 +17,13 @@
 .. autoclass:: autoform.extend.Zero
 ```
 
+## Dunders
+
+```{eval-rst}
+.. autoclass:: autoform.extend.Dunder
+   :members:
+```
+
 ## IR
 
 ```{eval-rst}
