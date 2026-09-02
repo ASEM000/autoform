@@ -94,7 +94,7 @@ json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 type JsonSchema = dict[str, Any]
 type Parser[T] = Callable[[Any], T]
-type SchemaRule = Callable[[Any], JsonSchema]
+type SchemaRule = Callable[[Any], JsonSchema | None]
 type ValidRule = Callable[[Any, Any, PyTreeAccessor, PyTreeAccessor], Any]
 type FlattenedSchema = tuple[tuple[Spec, ...], PyTreeSpec]
 
@@ -120,6 +120,14 @@ class Spec(Hashable):
     def __repr__(self) -> str:
         fields = ", ".join(f"{name}={getattr(self, name)!r}" for name in type(self).__slots__)
         return f"{type(self).__name__}({fields})"
+
+
+class Drop(Spec):
+    # NOTE(asem): relevant to partially pruning schemas using DCE
+    __slots__ = []
+
+
+utils.tree.register_node(Drop, lambda _: ((), ()), lambda _, __: Drop())
 
 
 class Str(Spec):
@@ -366,15 +374,22 @@ def number_schema(s: Float) -> JsonSchema:
     return schema
 
 
+def docd_schema(docd: Docd[Any]) -> JsonSchema | None:
+    if (schema := schema_build(docd.value)) is None:
+        return None
+    return schema | {"description": docd.text}
+
+
+schema_rules[Drop] = lambda _: None
 schema_rules[Str] = string_schema
 schema_rules[Int] = integer_schema
 schema_rules[Float] = number_schema
-schema_rules[Bool] = lambda s: {"type": "boolean"}
+schema_rules[Bool] = lambda _: {"type": "boolean"}
 schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
-schema_rules[Docd] = lambda s: schema_build(s.value) | {"description": s.text}
+schema_rules[Docd] = docd_schema
 
 
-def schema_build(schema_node: Any) -> JsonSchema:
+def schema_build(schema_node: Any) -> JsonSchema | None:
     if rule := schema_rules.get(type(schema_node)):
         return rule(schema_node)
     if utils.tree.is_leaf(schema_node):
@@ -390,7 +405,16 @@ def schema_build(schema_node: Any) -> JsonSchema:
         property_name = str(entry)
         if property_name in properties:
             raise TypeError(f"{SCHEMA_MSG}; duplicate object entries {(property_name,)!r}")
-        properties[property_name] = schema_build(child)
+
+        if (child_schema := schema_build(child)) is not None:
+            # NOTE(asem): None is a special value to allow rules to avoid emitting any schemas
+            # useful here for the DCE stuff.
+            properties[property_name] = child_schema
+
+    if children and not properties:
+        # NOTE(asem): in case of {parent: {child: Drop()}} -> would not produce properties
+        # but key exists so the entire container is replaced with None
+        return None
 
     return {
         "type": "object",
