@@ -122,11 +122,7 @@ class Spec(Hashable):
         return f"{type(self).__name__}({fields})"
 
 
-class Scalar[T](Spec):
-    __slots__ = []
-
-
-class Str(Scalar[str]):
+class Str(Spec):
     """String schema node with optional length and pattern constraints.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -169,7 +165,7 @@ class Str(Scalar[str]):
         self.pattern = pattern
 
 
-class Int(Scalar[int]):
+class Int(Spec):
     """Integer schema node with optional range constraints.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -196,7 +192,7 @@ class Int(Scalar[int]):
         self.max = max
 
 
-class Float(Scalar[float]):
+class Float(Spec):
     """Number schema node with optional range constraints.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
@@ -228,7 +224,7 @@ class Float(Scalar[float]):
         self.max = max
 
 
-class Bool(Scalar[bool]):
+class Bool(Spec):
     """Boolean schema node.
 
     Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
