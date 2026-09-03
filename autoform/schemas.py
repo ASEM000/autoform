@@ -374,21 +374,17 @@ schema_rules[Docd] = docd_schema
 
 def is_static_schema_leaf(schema_node: Any) -> bool:
     spec_type = type(schema_node) in schema_rules
-    leaf_type = utils.tree.is_leaf(schema_node, none_is_leaf=True)
+    leaf_type = utils.tree.is_leaf(schema_node)
     return not spec_type and leaf_type
 
 
-def schema_build(schema_node: Any) -> JsonSchema | None:
-    if rule := schema_rules.get(type(schema_node)):
-        return rule(schema_node)
-    if is_static_schema_leaf(schema_node):
+def schema_build(node: Any) -> JsonSchema | None:
+    if rule := schema_rules.get(type(node)):
+        return rule(node)
+    if is_static_schema_leaf(node):
         return None
 
-    children, spec = utils.tree.flatten(
-        schema_node,
-        is_leaf=lambda node: id(node) != id(schema_node),
-        none_is_leaf=True,
-    )
+    children, spec = utils.tree.flatten(node, is_leaf=lambda node: id(node) != id(node))
     properties = OrderedDict()
     for entry, child in zip(spec.entries(), children, strict=True):
         property_name = str(entry)
@@ -455,24 +451,14 @@ valid_rules[Enum] = lambda s, value: value if value in s else error(f"one of {s.
 valid_rules[Docd] = lambda s, value: tree_parse(s.value, value)
 
 
-def tree_parse(schema_tree: Any, value_tree: Any) -> Any:
-    if rule := valid_rules.get(type(schema_tree)):
-        return rule(schema_tree, value_tree)
-    if is_static_schema_leaf(schema_tree):
-        return schema_tree
+def tree_parse(schema: Any, value: Any) -> Any:
+    if rule := valid_rules.get(type(schema)):
+        return rule(schema, value)
+    if is_static_schema_leaf(schema):
+        return schema
 
-    flat_schemas, spec_schema = utils.tree.flatten(
-        schema_tree,
-        is_leaf=lambda node: id(node) != id(schema_tree),
-        none_is_leaf=True,
-    )
-
-    flat_values, spec_value = utils.tree.flatten(
-        value_tree,
-        is_leaf=lambda node: id(node) != id(value_tree),
-        none_is_leaf=True,
-    )
-
+    flat_schemas, spec_schema = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    flat_values, spec_value = utils.tree.flatten(value, is_leaf=lambda x: id(x) != id(value))
     schema_keys = [str(entry) for entry in spec_schema.entries()]
     emitted = [schema_build(child) is not None for child in flat_schemas]
     expected_keys = [k for k, e in zip(schema_keys, emitted, strict=True) if e]
