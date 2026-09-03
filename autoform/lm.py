@@ -404,20 +404,15 @@ schema_abstract_rules[schemas.Enum] = lambda s: core.primal_s.avalof(s.values[0]
 schema_abstract_rules[schemas.Docd] = lambda s: schema_abstract_tree(s.value)
 
 
-def is_schema_abstract_leaf(x: Any) -> bool:
-    return type(x) in schema_abstract_rules or schemas.is_static_schema_leaf(x)
-
-
-def schema_abstract_node(x: Any) -> Any:
-    if rule := schema_abstract_rules.get(type(x)):
-        return rule(x)
-    if schemas.is_static_schema_leaf(x):
-        return x
-    raise TypeError(f"No abstract rule for schema node type {type(x)}")
-
-
 def schema_abstract_tree(schema: Any) -> Tree:
-    return utils.tree.map(schema_abstract_node, schema, is_leaf=is_schema_abstract_leaf)
+    def abstract(x: Any) -> Any:
+        if rule := schema_abstract_rules.get(type(x)):
+            return rule(x)
+        if not core.is_traceable(x):
+            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
+        return x
+
+    return utils.tree.map(abstract, schema, is_leaf=lambda x: type(x) in schema_abstract_rules)
 
 
 def abstract_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:

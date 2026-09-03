@@ -81,11 +81,9 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
         decision: object
         details: object
 
-    omitted = object()
     details = {
-        "literal": "fixed",
+        "literal": "fixed" @ af.Doc("Not generated."),
         "nothing": None,
-        "reasoning": omitted @ af.Doc("Not generated."),
     }
     answer = Answer(af.Str(), details)
 
@@ -100,10 +98,9 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
     parsed = parse({"decision": "accept"})
     expected = Answer(
         "accept",
-        {"literal": "fixed", "nothing": None, "reasoning": omitted},
+        {"literal": "fixed", "nothing": None},
     )
     assert parsed == expected
-    assert parsed.details["reasoning"] is omitted
 
     def program(prompt: str):
         return af.lm_schema_call(
@@ -122,6 +119,36 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
     done, result = walk.send(parsed)
     assert done is None
     assert result == expected
+
+
+def test_schema_dsl_reconstructs_untraceable_static_leaf():
+    metadata = object()
+
+    json_schema, parse = make_json_schema_and_parser({"decision": af.Str(), "metadata": metadata})
+
+    assert json_schema == {
+        "type": "object",
+        "properties": {"decision": {"type": "string"}},
+        "required": ["decision"],
+        "additionalProperties": False,
+    }
+    parsed = parse({"decision": "accept"})
+    assert parsed["decision"] == "accept"
+    assert parsed["metadata"] is metadata
+
+
+def test_lm_schema_trace_rejects_untraceable_static_leaf():
+    metadata = object()
+
+    def program(prompt: str):
+        return af.lm_schema_call(
+            [dict(role="user", content=prompt)],
+            model="m1",
+            schema={"decision": af.Str(), "metadata": metadata},
+        )
+
+    with pytest.raises(TypeError, match="Static schema leaf must be traceable"):
+        af.trace(program)("test")
 
 
 def test_schema_dsl_builds_string_constraints():

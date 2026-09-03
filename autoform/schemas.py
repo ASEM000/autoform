@@ -384,7 +384,7 @@ def schema_build(node: Any) -> JsonSchema | None:
     if is_static_schema_leaf(node):
         return None
 
-    children, spec = utils.tree.flatten(node, is_leaf=lambda node: id(node) != id(node))
+    children, spec = utils.tree.flatten(node, is_leaf=lambda x: id(x) != id(node))
     properties = OrderedDict()
     for entry, child in zip(spec.entries(), children, strict=True):
         property_name = str(entry)
