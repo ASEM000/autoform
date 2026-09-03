@@ -143,11 +143,11 @@ def test_schema_dsl_builds_string_constraints():
         "additionalProperties": False,
     }
     assert parse({"name": "okay"}) == {"name": "okay"}
-    with pytest.raises(ValueError, match=r"\$\['name'\]: expected string with length >= 2"):
+    with pytest.raises(ValueError, match="Expected string with length >= 2"):
         parse({"name": "x"})
-    with pytest.raises(ValueError, match=r"\$\['name'\]: expected string with length <= 4"):
+    with pytest.raises(ValueError, match="Expected string with length <= 4"):
         parse({"name": "hello"})
-    with pytest.raises(ValueError, match=r"\$\['name'\]: expected string matching"):
+    with pytest.raises(ValueError, match="Expected string matching"):
         parse({"name": "OK"})
 
 
@@ -167,13 +167,13 @@ def test_schema_dsl_builds_number_constraints():
         "additionalProperties": False,
     }
     assert parse({"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
-    with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer >= -2"):
+    with pytest.raises(ValueError, match="Expected integer >= -2"):
         parse({"count": -3, "score": 0.5})
-    with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer <= 2"):
+    with pytest.raises(ValueError, match="Expected integer <= 2"):
         parse({"count": 3, "score": 0.5})
-    with pytest.raises(ValueError, match=r"\$\['score'\]: expected number >= 0"):
+    with pytest.raises(ValueError, match="Expected number >= 0"):
         parse({"count": 0, "score": -0.1})
-    with pytest.raises(ValueError, match=r"\$\['score'\]: expected number <= 1"):
+    with pytest.raises(ValueError, match="Expected number <= 1"):
         parse({"count": 0, "score": 1.1})
 
 
@@ -240,13 +240,13 @@ def test_schema_dsl_rejects_invalid_forms():
         af.Doc(1)
 
 
-def test_schema_dsl_reports_value_errors_by_path():
+def test_schema_dsl_reports_value_errors():
     _, parse_count = make_json_schema_and_parser({"count": af.Int()})
     _, parse_score = make_json_schema_and_parser({"score": af.Float()})
 
-    with pytest.raises(ValueError, match=r"\$\['count'\]: expected integer"):
+    with pytest.raises(ValueError, match="Expected integer"):
         parse_count({"count": True})
-    with pytest.raises(ValueError, match=r"\$\['score'\]: expected number"):
+    with pytest.raises(ValueError, match="Expected number"):
         parse_score({"score": "bad"})
 
 

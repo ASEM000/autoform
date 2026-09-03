@@ -76,7 +76,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from typing import Any, NoReturn
 
-from optree import GetAttrEntry, PyTreeAccessor
+from optree import GetAttrEntry
 
 import autoform.utils as utils
 
@@ -90,7 +90,7 @@ __all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "make_json_schema_and_p
 type JsonSchema = dict[str, Any]
 type Parser = Callable[[Any], Any]
 type SchemaRule = Callable[[Any], JsonSchema | None]
-type ValidRule = Callable[[Any, Any, PyTreeAccessor, PyTreeAccessor], Any]
+type ValidRule = Callable[[Any, Any], Any]
 
 
 # ==================================================================================================
@@ -408,132 +408,89 @@ def schema_build(schema_node: Any) -> JsonSchema | None:
     }
 
 
-def error(
-    in_acc: PyTreeAccessor,
-    out_acc: PyTreeAccessor,
-    expected: Any,
-) -> NoReturn:
-    source, target = out_acc.codify("$"), in_acc.codify("$")
-    raise ValueError(f"json {source} -> tree {target}: expected {expected}")
+def error(expected: Any) -> NoReturn:
+    raise ValueError(f"Expected {expected}")
 
 
 valid_rules: dict[type[Any], ValidRule] = {}
 
 
-def string_value(
-    s: Str,
-    value: str,
-    in_acc: PyTreeAccessor,
-    out_acc: PyTreeAccessor,
-) -> str:
+def string_value(s: Str, value: str) -> str:
     if type(value) is not str:
-        error(in_acc, out_acc, "string")
+        error("string")
     if s.min is not None and len(value) < s.min:
-        error(in_acc, out_acc, f"string with length >= {s.min}")
+        error(f"string with length >= {s.min}")
     if s.max is not None and len(value) > s.max:
-        error(in_acc, out_acc, f"string with length <= {s.max}")
+        error(f"string with length <= {s.max}")
     if s.pattern is not None and not re.search(s.pattern, value):
-        error(in_acc, out_acc, f"string matching {s.pattern!r}")
+        error(f"string matching {s.pattern!r}")
     return value
 
 
-def integer_value(
-    s: Int,
-    value: int,
-    in_acc: PyTreeAccessor,
-    out_acc: PyTreeAccessor,
-) -> int:
+def integer_value(s: Int, value: int) -> int:
     if type(value) is not int:
-        error(in_acc, out_acc, "integer")
+        error("integer")
     if s.min is not None and value < s.min:
-        error(in_acc, out_acc, f"integer >= {s.min}")
+        error(f"integer >= {s.min}")
     if s.max is not None and value > s.max:
-        error(in_acc, out_acc, f"integer <= {s.max}")
+        error(f"integer <= {s.max}")
     return value
 
 
-def number_value(
-    s: Float,
-    value: int | float,
-    in_acc: PyTreeAccessor,
-    out_acc: PyTreeAccessor,
-) -> float:
+def number_value(s: Float, value: int | float) -> float:
     if type(value) not in (int, float):
-        error(in_acc, out_acc, "number")
+        error("number")
     if s.min is not None and value < s.min:
-        error(in_acc, out_acc, f"number >= {s.min}")
+        error(f"number >= {s.min}")
     if s.max is not None and value > s.max:
-        error(in_acc, out_acc, f"number <= {s.max}")
+        error(f"number <= {s.max}")
     return float(value)
 
 
 valid_rules[Str] = string_value
 valid_rules[Int] = integer_value
 valid_rules[Float] = number_value
-valid_rules[Bool] = lambda _, v, i, o: v if type(v) is bool else error(i, o, "boolean")
-valid_rules[Enum] = lambda s, v, i, o: v if v in s else error(i, o, f"one of {s.values!r}")
-valid_rules[Docd] = lambda s, v, i, o: tree_parse(s.value, v, i, o)
+valid_rules[Bool] = lambda _, value: value if type(value) is bool else error("boolean")
+valid_rules[Enum] = lambda s, value: value if value in s else error(f"one of {s.values!r}")
+valid_rules[Docd] = lambda s, value: tree_parse(s.value, value)
 
 
-def tree_parse(
-    schema_tree: Any,
-    value_tree: Any,
-    schema_acc: PyTreeAccessor,
-    value_acc: PyTreeAccessor,
-) -> Any:
-    # NOTE(asem): recursively validate value_tree against schema_tree,
-    # using the accessors to track the path for error messages.
-    # while the value tree is the json output with a dict structure, this code does not assume
-    # dicts.
+def tree_parse(schema_tree: Any, value_tree: Any) -> Any:
     if rule := valid_rules.get(type(schema_tree)):
-        return rule(schema_tree, value_tree, schema_acc, value_acc)
+        return rule(schema_tree, value_tree)
     if is_static_schema_leaf(schema_tree):
         return schema_tree
 
-    flat_schema, spec_schema = utils.tree.flatten(
+    flat_schemas, spec_schema = utils.tree.flatten(
         schema_tree,
         is_leaf=lambda node: id(node) != id(schema_tree),
         none_is_leaf=True,
     )
 
-    flat_value, spec_value = utils.tree.flatten(
+    flat_values, spec_value = utils.tree.flatten(
         value_tree,
         is_leaf=lambda node: id(node) != id(value_tree),
         none_is_leaf=True,
     )
 
     schema_keys = [str(entry) for entry in spec_schema.entries()]
-    emitted = [schema_build(child) is not None for child in flat_schema]
-    expected_keys = [
-        key for key, is_emitted in zip(schema_keys, emitted, strict=True) if is_emitted
-    ]
+    emitted = [schema_build(child) is not None for child in flat_schemas]
+    expected_keys = [k for k, e in zip(schema_keys, emitted, strict=True) if e]
     value_keys = [str(entry) for entry in spec_value.entries()]
 
     if len(expected_keys) != len(value_keys) or set(expected_keys) != set(value_keys):
         raise ValueError(f"Key mismatch: expected entries {expected_keys!r}, got {value_keys!r}")
 
-    out_pos = {key: i for i, key in enumerate(value_keys)}
-    out_accessors = spec_value.accessors()
+    out_pos = {k: i for i, k in enumerate(value_keys)}
     values = (
-        tree_parse(
-            child,
-            flat_value[out_pos[key]] if is_emitted else None,
-            schema_acc + accessor,
-            value_acc + out_accessors[out_pos[key]] if is_emitted else value_acc,
-        )
-        for key, child, accessor, is_emitted in zip(
-            schema_keys,
-            flat_schema,
-            spec_schema.accessors(),
-            emitted,
-            strict=True,
-        )
+        tree_parse(child, flat_values[out_pos[key]] if emit else None)
+        for key, child, emit in zip(schema_keys, flat_schemas, emitted, strict=True)
     )
     return spec_schema.unflatten(values)
 
 
 def make_json_schema_and_parser(schema: Any) -> tuple[JsonSchema | None, Parser]:
     def parse(out_json: Any) -> Any:
-        return tree_parse(schema, out_json, PyTreeAccessor(), PyTreeAccessor())
+        return tree_parse(schema, out_json)
 
     return schema_build(schema), parse
