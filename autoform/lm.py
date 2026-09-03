@@ -370,6 +370,8 @@ def schema_response_format(json_schema: dict[str, Any]) -> dict[str, Any]:
 def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
     json_schema, parse = schemas.make_json_schema_and_parser(schema)
+    if json_schema is None:
+        return parse(None)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = active_client.get().completion(
         messages=messages,
@@ -382,6 +384,8 @@ def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
 async def aimpl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
     json_schema, parse = schemas.make_json_schema_and_parser(schema)
+    if json_schema is None:
+        return parse(None)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = await active_client.get().acompletion(
         messages=messages,
@@ -401,12 +405,14 @@ schema_abstract_rules[schemas.Docd] = lambda s: schema_abstract_tree(s.value)
 
 
 def is_schema_abstract_leaf(x: Any) -> bool:
-    return type(x) in schema_abstract_rules
+    return type(x) in schema_abstract_rules or schemas.is_static_schema_leaf(x)
 
 
 def schema_abstract_node(x: Any) -> Any:
     if rule := schema_abstract_rules.get(type(x)):
         return rule(x)
+    if schemas.is_static_schema_leaf(x):
+        return x
     raise TypeError(f"No abstract rule for schema node type {type(x)}")
 
 

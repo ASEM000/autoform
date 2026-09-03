@@ -71,21 +71,16 @@ Any registered pytree can carry the schema:
 
 from __future__ import annotations
 
-import functools as ft
 import re
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
-from typing import Any, NoReturn, TypeGuard
+from typing import Any, NoReturn
 
-from optree import GetAttrEntry, PyTreeAccessor, PyTreeSpec
+from optree import GetAttrEntry, PyTreeAccessor
 
 import autoform.utils as utils
 
-type Tree[T] = utils.Tree[T]
-
 __all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str", "make_json_schema_and_parser"]
-
-json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 # ==================================================================================================
 # TYPES
@@ -93,10 +88,9 @@ json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 
 type JsonSchema = dict[str, Any]
-type Parser[T] = Callable[[Any], T]
+type Parser = Callable[[Any], Any]
 type SchemaRule = Callable[[Any], JsonSchema | None]
 type ValidRule = Callable[[Any, Any, PyTreeAccessor, PyTreeAccessor], Any]
-type FlattenedSchema = tuple[tuple[Spec, ...], PyTreeSpec]
 
 
 # ==================================================================================================
@@ -120,14 +114,6 @@ class Spec(Hashable):
     def __repr__(self) -> str:
         fields = ", ".join(f"{name}={getattr(self, name)!r}" for name in type(self).__slots__)
         return f"{type(self).__name__}({fields})"
-
-
-class Drop(Spec):
-    # NOTE(asem): relevant to partially pruning schemas using DCE
-    __slots__ = []
-
-
-utils.tree.register_node(Drop, lambda _: ((), ()), lambda _, __: Drop())
 
 
 class Str(Spec):
@@ -334,13 +320,11 @@ utils.tree.register_node(
 )
 
 
-SCHEMA_MSG = "Expected a pytree containing Str(), Int(), Float(), Bool(), Enum(...)"
-
-
 # ==================================================================================================
-# SCHEMA BUILD
+# JSON
 # ==================================================================================================
 
+json_type = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 schema_rules: dict[type[Any], SchemaRule] = {}
 
@@ -380,7 +364,6 @@ def docd_schema(docd: Docd[Any]) -> JsonSchema | None:
     return schema | {"description": docd.text}
 
 
-schema_rules[Drop] = lambda _: None
 schema_rules[Str] = string_schema
 schema_rules[Int] = integer_schema
 schema_rules[Float] = number_schema
@@ -389,11 +372,17 @@ schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": li
 schema_rules[Docd] = docd_schema
 
 
+def is_static_schema_leaf(schema_node: Any) -> bool:
+    spec_type = type(schema_node) in schema_rules
+    leaf_type = utils.tree.is_leaf(schema_node, none_is_leaf=True)
+    return not spec_type and leaf_type
+
+
 def schema_build(schema_node: Any) -> JsonSchema | None:
     if rule := schema_rules.get(type(schema_node)):
         return rule(schema_node)
-    if utils.tree.is_leaf(schema_node):
-        raise TypeError(f"{SCHEMA_MSG}, got {schema_node!r}")
+    if is_static_schema_leaf(schema_node):
+        return None
 
     children, spec = utils.tree.flatten(
         schema_node,
@@ -403,17 +392,12 @@ def schema_build(schema_node: Any) -> JsonSchema | None:
     properties = OrderedDict()
     for entry, child in zip(spec.entries(), children, strict=True):
         property_name = str(entry)
-        if property_name in properties:
-            raise TypeError(f"{SCHEMA_MSG}; duplicate object entries {(property_name,)!r}")
-
         if (child_schema := schema_build(child)) is not None:
-            # NOTE(asem): None is a special value to allow rules to avoid emitting any schemas
-            # useful here for the DCE stuff.
+            if property_name in properties:
+                raise TypeError(f"Duplicate object entries {(property_name,)!r}")
             properties[property_name] = child_schema
 
-    if children and not properties:
-        # NOTE(asem): in case of {parent: {child: Drop()}} -> would not produce properties
-        # but key exists so the entire container is replaced with None
+    if not properties:
         return None
 
     return {
@@ -422,15 +406,6 @@ def schema_build(schema_node: Any) -> JsonSchema | None:
         "required": list(properties),
         "additionalProperties": False,
     }
-
-
-def is_schema_spec(node: Any) -> TypeGuard[Spec]:
-    return isinstance(node, Spec)
-
-
-# ==================================================================================================
-# PARSING
-# ==================================================================================================
 
 
 def error(
@@ -500,20 +475,20 @@ valid_rules[Enum] = lambda s, v, i, o: v if v in s else error(i, o, f"one of {s.
 valid_rules[Docd] = lambda s, v, i, o: tree_parse(s.value, v, i, o)
 
 
-def tree_parse[T: Tree[Spec | Docd[Spec]]](
-    schema_tree: T,
+def tree_parse(
+    schema_tree: Any,
     value_tree: Any,
     schema_acc: PyTreeAccessor,
     value_acc: PyTreeAccessor,
-) -> T:
+) -> Any:
     # NOTE(asem): recursively validate value_tree against schema_tree,
     # using the accessors to track the path for error messages.
     # while the value tree is the json output with a dict structure, this code does not assume
     # dicts.
     if rule := valid_rules.get(type(schema_tree)):
         return rule(schema_tree, value_tree, schema_acc, value_acc)
-    if utils.tree.is_leaf(schema_tree):
-        raise TypeError(f"{schema_acc.codify('$')}: {SCHEMA_MSG}, got {schema_tree!r}")
+    if is_static_schema_leaf(schema_tree):
+        return schema_tree
 
     flat_schema, spec_schema = utils.tree.flatten(
         schema_tree,
@@ -528,55 +503,37 @@ def tree_parse[T: Tree[Spec | Docd[Spec]]](
     )
 
     schema_keys = [str(entry) for entry in spec_schema.entries()]
+    emitted = [schema_build(child) is not None for child in flat_schema]
+    expected_keys = [
+        key for key, is_emitted in zip(schema_keys, emitted, strict=True) if is_emitted
+    ]
     value_keys = [str(entry) for entry in spec_value.entries()]
 
-    if len(schema_keys) != len(value_keys) or set(schema_keys) != set(value_keys):
-        raise ValueError(f"Key mismatch: expected entries {schema_keys!r}, got {value_keys!r}")
+    if len(expected_keys) != len(value_keys) or set(expected_keys) != set(value_keys):
+        raise ValueError(f"Key mismatch: expected entries {expected_keys!r}, got {value_keys!r}")
 
     out_pos = {key: i for i, key in enumerate(value_keys)}
     out_accessors = spec_value.accessors()
     values = (
         tree_parse(
-            in_child,
-            flat_value[out_pos[in_key]],
-            schema_acc + in_accessor,
-            value_acc + out_accessors[out_pos[in_key]],
+            child,
+            flat_value[out_pos[key]] if is_emitted else None,
+            schema_acc + accessor,
+            value_acc + out_accessors[out_pos[key]] if is_emitted else value_acc,
         )
-        for in_key, in_child, in_accessor in zip(
+        for key, child, accessor, is_emitted in zip(
             schema_keys,
             flat_schema,
             spec_schema.accessors(),
+            emitted,
             strict=True,
         )
     )
     return spec_schema.unflatten(values)
 
 
-# ==================================================================================================
-# CACHED BUILD
-# ==================================================================================================
+def make_json_schema_and_parser(schema: Any) -> tuple[JsonSchema | None, Parser]:
+    def parse(out_json: Any) -> Any:
+        return tree_parse(schema, out_json, PyTreeAccessor(), PyTreeAccessor())
 
-
-@ft.lru_cache(maxsize=256)
-def schema_from_flat_and_spec(schema: FlattenedSchema) -> JsonSchema:
-    leaves, treespec = schema
-    return schema_build(treespec.unflatten(leaves))
-
-
-@ft.lru_cache(maxsize=256)
-def parser_from_flat_and_spec[T](flattened_schema: FlattenedSchema) -> Parser[T]:
-    schema_leaves, treespec = flattened_schema
-    in_schema = treespec.unflatten(schema_leaves)
-
-    def parse(out_json: Any) -> T:
-        return tree_parse(in_schema, out_json, PyTreeAccessor(), PyTreeAccessor())
-
-    return parse
-
-
-def make_json_schema_and_parser[T](schema: T) -> tuple[JsonSchema, Parser[T]]:
-    leaves, treespec = utils.tree.flatten(schema, is_leaf=is_schema_spec, none_is_leaf=True)
-    flat_and_spec = (tuple(leaves), treespec)
-    json_schema = schema_from_flat_and_spec(flat_and_spec)
-    parser = parser_from_flat_and_spec(flat_and_spec)
-    return json_schema, parser
+    return schema_build(schema), parse

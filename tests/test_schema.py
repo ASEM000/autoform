@@ -16,7 +16,6 @@ import optree
 import pytest
 
 import autoform as af
-import autoform.schemas as schemas
 from autoform.schemas import make_json_schema_and_parser
 from autoform.utils import tree
 
@@ -74,6 +73,55 @@ def test_schema_dsl_builds_tree():
         "ok": True,
         "kind": "summary",
     }
+
+
+def test_schema_dsl_reconstructs_unemitted_subtree():
+    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+    class Answer:
+        decision: object
+        details: object
+
+    omitted = object()
+    details = {
+        "literal": "fixed",
+        "nothing": None,
+        "reasoning": omitted @ af.Doc("Not generated."),
+    }
+    answer = Answer(af.Str(), details)
+
+    json_schema, parse = make_json_schema_and_parser(answer)
+
+    assert json_schema == {
+        "type": "object",
+        "properties": {"decision": {"type": "string"}},
+        "required": ["decision"],
+        "additionalProperties": False,
+    }
+    parsed = parse({"decision": "accept"})
+    expected = Answer(
+        "accept",
+        {"literal": "fixed", "nothing": None, "reasoning": omitted},
+    )
+    assert parsed == expected
+    assert parsed.details["reasoning"] is omitted
+
+    def program(prompt: str):
+        return af.lm_schema_call(
+            [dict(role="user", content=prompt)],
+            model="m1",
+            schema=answer,
+        )
+
+    ir = af.trace(program)("test")
+    assert isinstance(ir.eqns[0].out_tree.decision, af.core.Var)
+    assert ir.eqns[0].out_tree.details == expected.details
+
+    walk = ir.walk("hello")
+    equation, _ = next(walk)
+    assert equation is ir.eqns[0]
+    done, result = walk.send(parsed)
+    assert done is None
+    assert result == expected
 
 
 def test_schema_dsl_builds_string_constraints():
@@ -216,23 +264,3 @@ def test_schema_dsl_nodes_compare_by_value():
     for left, right in pairs:
         assert left == right
         assert hash(left) == hash(right)
-
-
-def test_schema_dsl_reuses_cache_for_equal_schema_nodes():
-    schemas.schema_from_flat_and_spec.cache_clear()
-    schemas.parser_from_flat_and_spec.cache_clear()
-
-    def answer():
-        return {
-            "name": af.Str(min=1, max=80),
-            "count": af.Int(min=0, max=10),
-            "score": af.Float(min=0, max=1),
-            "ok": af.Bool(),
-            "kind": af.Enum("summary", "definition"),
-        } @ af.Doc("Answer object.")
-
-    make_json_schema_and_parser(answer())
-    make_json_schema_and_parser(answer())
-
-    assert schemas.schema_from_flat_and_spec.cache_info().hits == 1
-    assert schemas.parser_from_flat_and_spec.cache_info().hits == 1
