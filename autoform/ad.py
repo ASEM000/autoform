@@ -90,6 +90,7 @@ def is_zero(x, /) -> TypeGuard[Zero]:
 
 zero_rules: dict[type[core.AVal], Callable[[core.AVal], Any]] = {}
 core.primal_s.set(Zero, lambda z: z.aval)
+zero_rules[core.StrAVal] = lambda _: ""
 
 
 def zeroof(v, /) -> Zero:
@@ -421,6 +422,7 @@ cot_acc_p = core.Prim("cot_acc")
 
 
 cot_acc_rules: dict[type[core.AVal], Callable[[list[Any], core.AVal], Any]] = {}
+cot_acc_rules[core.StrAVal] = lambda cs, _: "".join(cs)
 
 
 def cot_acc(cots: list[Any | Zero]) -> Any:
