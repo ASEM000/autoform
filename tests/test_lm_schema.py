@@ -17,7 +17,7 @@ import json
 import pytest
 
 import autoform as af
-from autoform.schemas import make_json_schema_and_parser
+from autoform.lm import emit_json_schema
 
 
 class FakeMessage:
@@ -88,6 +88,7 @@ def test_lm_schema_call_executes_with_response_format():
     router = SchemaRouter()
     answer = {
         "text": af.Str(min=1, max=80),
+        "metadata": {"source": "literal", "reasoning": None},
         "score": af.Float(min=0, max=1),
     }
 
@@ -98,7 +99,11 @@ def test_lm_schema_call_executes_with_response_format():
             schema=answer,
         )
 
-    assert result == {"text": "m1|hello", "score": 0.5}
+    assert result == {
+        "text": "m1|hello",
+        "metadata": {"source": "literal", "reasoning": None},
+        "score": 0.5,
+    }
     assert router.response_formats == [
         {
             "type": "json_schema",
@@ -135,10 +140,7 @@ def test_lm_schema_call_traces_schema_as_static_param():
 
     ir = af.trace(program)("test", "gpt-5.5")
     assert [eqn.prim.name for eqn in ir.eqns] == ["lm_schema_call", "format"]
-    assert (
-        make_json_schema_and_parser(ir.eqns[0].params["schema"])[0]
-        == make_json_schema_and_parser(answer)[0]
-    )
+    assert emit_json_schema(ir.eqns[0].params["schema"]) == emit_json_schema(answer)
     assert "model" not in ir.eqns[0].params
     assert isinstance(ir.eqns[0].in_tree[1], af.core.Var)
     assert isinstance(ir.eqns[0].out_tree["text"], af.core.Var)
@@ -146,6 +148,13 @@ def test_lm_schema_call_traces_schema_as_static_param():
 
     with af.lm_client(SchemaRouter()):
         assert ir.call("hello", "m1") == "m1|hello"
+
+
+def test_emit_json_schema_rejects_non_json_enum_values():
+    enum = af.Enum(object())
+
+    with pytest.raises(TypeError, match="Enum values must be str, int, float, or bool"):
+        emit_json_schema({"kind": enum})
 
 
 def test_batch_lm_schema_call_supports_variable_models():

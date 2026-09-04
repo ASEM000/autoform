@@ -16,7 +16,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.schemas import make_json_schema_and_parser
+from autoform.lm import emit_json_schema, parse_json
 from autoform.utils import tree
 
 
@@ -27,7 +27,7 @@ def test_schema_dsl_builds_described_schema():
         "score": af.Float() @ af.Doc("Confidence score."),
     } @ af.Doc("Answer object.")
 
-    json_schema, parse = make_json_schema_and_parser(answer)
+    json_schema = emit_json_schema(answer)
 
     assert json_schema == {
         "type": "object",
@@ -44,7 +44,8 @@ def test_schema_dsl_builds_described_schema():
         "additionalProperties": False,
         "description": "Answer object.",
     }
-    assert parse(
+    assert parse_json(
+        answer,
         {"name": "subject", "kind": "summary", "score": 1},
     ) == {
         "name": "subject",
@@ -62,9 +63,8 @@ def test_schema_dsl_builds_tree():
         "kind": af.Enum("summary", "definition"),
     }
 
-    _, parse = make_json_schema_and_parser(answer)
-
-    assert parse(
+    assert parse_json(
+        answer,
         {"name": "hello", "count": 2, "score": 1, "ok": True, "kind": "summary"},
     ) == {
         "name": "hello",
@@ -87,7 +87,7 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
     }
     answer = Answer(af.Str(), details)
 
-    json_schema, parse = make_json_schema_and_parser(answer)
+    json_schema = emit_json_schema(answer)
 
     assert json_schema == {
         "type": "object",
@@ -95,7 +95,7 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
         "required": ["decision"],
         "additionalProperties": False,
     }
-    parsed = parse({"decision": "accept"})
+    parsed = parse_json(answer, {"decision": "accept"})
     expected = Answer(
         "accept",
         {"literal": "fixed", "nothing": None},
@@ -124,7 +124,9 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
 def test_schema_dsl_reconstructs_untraceable_static_leaf():
     metadata = object()
 
-    json_schema, parse = make_json_schema_and_parser({"decision": af.Str(), "metadata": metadata})
+    answer = {"decision": af.Str(), "metadata": metadata}
+
+    json_schema = emit_json_schema(answer)
 
     assert json_schema == {
         "type": "object",
@@ -132,7 +134,7 @@ def test_schema_dsl_reconstructs_untraceable_static_leaf():
         "required": ["decision"],
         "additionalProperties": False,
     }
-    parsed = parse({"decision": "accept"})
+    parsed = parse_json(answer, {"decision": "accept"})
     assert parsed["decision"] == "accept"
     assert parsed["metadata"] is metadata
 
@@ -152,9 +154,9 @@ def test_lm_schema_trace_rejects_untraceable_static_leaf():
 
 
 def test_schema_dsl_builds_string_constraints():
-    json_schema, parse = make_json_schema_and_parser({
-        "name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")
-    })
+    answer = {"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")}
+
+    json_schema = emit_json_schema(answer)
 
     assert json_schema == {
         "type": "object",
@@ -169,20 +171,22 @@ def test_schema_dsl_builds_string_constraints():
         "required": ["name"],
         "additionalProperties": False,
     }
-    assert parse({"name": "okay"}) == {"name": "okay"}
+    assert parse_json(answer, {"name": "okay"}) == {"name": "okay"}
     with pytest.raises(ValueError, match="Expected string with length >= 2"):
-        parse({"name": "x"})
+        parse_json(answer, {"name": "x"})
     with pytest.raises(ValueError, match="Expected string with length <= 4"):
-        parse({"name": "hello"})
+        parse_json(answer, {"name": "hello"})
     with pytest.raises(ValueError, match="Expected string matching"):
-        parse({"name": "OK"})
+        parse_json(answer, {"name": "OK"})
 
 
 def test_schema_dsl_builds_number_constraints():
-    json_schema, parse = make_json_schema_and_parser({
+    answer = {
         "count": af.Int(min=-2, max=2),
         "score": af.Float(min=0, max=1),
-    })
+    }
+
+    json_schema = emit_json_schema(answer)
 
     assert json_schema == {
         "type": "object",
@@ -193,15 +197,15 @@ def test_schema_dsl_builds_number_constraints():
         "required": ["count", "score"],
         "additionalProperties": False,
     }
-    assert parse({"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
+    assert parse_json(answer, {"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
     with pytest.raises(ValueError, match="Expected integer >= -2"):
-        parse({"count": -3, "score": 0.5})
+        parse_json(answer, {"count": -3, "score": 0.5})
     with pytest.raises(ValueError, match="Expected integer <= 2"):
-        parse({"count": 3, "score": 0.5})
+        parse_json(answer, {"count": 3, "score": 0.5})
     with pytest.raises(ValueError, match="Expected number >= 0"):
-        parse({"count": 0, "score": -0.1})
+        parse_json(answer, {"count": 0, "score": -0.1})
     with pytest.raises(ValueError, match="Expected number <= 1"):
-        parse({"count": 0, "score": 1.1})
+        parse_json(answer, {"count": 0, "score": 1.1})
 
 
 def test_schema_dsl_builds_custom_pytree_value():
@@ -226,7 +230,7 @@ def test_schema_dsl_builds_custom_pytree_value():
 
     answer = Answer(af.Str(), af.Float())
 
-    json_schema, parse = make_json_schema_and_parser(answer)
+    json_schema = emit_json_schema(answer)
 
     assert json_schema == {
         "type": "object",
@@ -237,7 +241,7 @@ def test_schema_dsl_builds_custom_pytree_value():
         "required": ["text", "score"],
         "additionalProperties": False,
     }
-    assert parse({"text": "hello", "score": 2}) == Answer("hello", 2.0)
+    assert parse_json(answer, {"text": "hello", "score": 2}) == Answer("hello", 2.0)
 
 
 def test_schema_dsl_rejects_invalid_forms():
@@ -268,13 +272,13 @@ def test_schema_dsl_rejects_invalid_forms():
 
 
 def test_schema_dsl_reports_value_errors():
-    _, parse_count = make_json_schema_and_parser({"count": af.Int()})
-    _, parse_score = make_json_schema_and_parser({"score": af.Float()})
+    count = {"count": af.Int()}
+    score = {"score": af.Float()}
 
     with pytest.raises(ValueError, match="Expected integer"):
-        parse_count({"count": True})
+        parse_json(count, {"count": True})
     with pytest.raises(ValueError, match="Expected number"):
-        parse_score({"score": "bad"})
+        parse_json(score, {"score": "bad"})
 
 
 def test_schema_dsl_nodes_compare_by_value():
