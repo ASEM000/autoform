@@ -357,14 +357,14 @@ def lm_schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
 
 
 def schema_response_format(json_schema: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "autoform_schema",
-            "strict": True,
-            "schema": json_schema,
-        },
-    }
+    return dict(
+        type="json_schema",
+        json_schema=dict(
+            name="autoform_schema",
+            strict=True,
+            schema=json_schema,
+        ),
+    )
 
 
 def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
@@ -395,13 +395,37 @@ async def aimpl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -
     return parse(json.loads(resp.choices[0].message.content))
 
 
+def string_schema_abstract(_: schemas.Str) -> core.StrAVal:
+    return core.StrAVal()
+
+
+def integer_schema_abstract(_: schemas.Int) -> core.IntAVal:
+    return core.IntAVal()
+
+
+def number_schema_abstract(_: schemas.Float) -> core.FloatAVal:
+    return core.FloatAVal()
+
+
+def boolean_schema_abstract(_: schemas.Bool) -> core.BoolAVal:
+    return core.BoolAVal()
+
+
+def enum_schema_abstract(s: schemas.Enum) -> core.AVal:
+    return core.primal_s.avalof(s.values[0])
+
+
+def docd_schema_abstract(s: schemas.Docd[Any]) -> Tree:
+    return schema_abstract_tree(s.value)
+
+
 schema_abstract_rules = {}
-schema_abstract_rules[schemas.Str] = lambda _: core.StrAVal()
-schema_abstract_rules[schemas.Int] = lambda _: core.IntAVal()
-schema_abstract_rules[schemas.Float] = lambda _: core.FloatAVal()
-schema_abstract_rules[schemas.Bool] = lambda _: core.BoolAVal()
-schema_abstract_rules[schemas.Enum] = lambda s: core.primal_s.avalof(s.values[0])
-schema_abstract_rules[schemas.Docd] = lambda s: schema_abstract_tree(s.value)
+schema_abstract_rules[schemas.Str] = string_schema_abstract
+schema_abstract_rules[schemas.Int] = integer_schema_abstract
+schema_abstract_rules[schemas.Float] = number_schema_abstract
+schema_abstract_rules[schemas.Bool] = boolean_schema_abstract
+schema_abstract_rules[schemas.Enum] = enum_schema_abstract
+schema_abstract_rules[schemas.Docd] = docd_schema_abstract
 
 
 def schema_abstract_tree(schema: Any) -> Tree:

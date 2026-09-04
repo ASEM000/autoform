@@ -330,7 +330,7 @@ schema_rules: dict[type[Any], SchemaRule] = {}
 
 
 def string_schema(s: Str) -> JsonSchema:
-    schema: JsonSchema = {"type": "string"}
+    schema: JsonSchema = dict(type="string")
     if s.min is not None:
         schema["minLength"] = s.min
     if s.max is not None:
@@ -341,7 +341,7 @@ def string_schema(s: Str) -> JsonSchema:
 
 
 def integer_schema(s: Int) -> JsonSchema:
-    schema: JsonSchema = {"type": "integer"}
+    schema: JsonSchema = dict(type="integer")
     if s.min is not None:
         schema["minimum"] = s.min
     if s.max is not None:
@@ -350,7 +350,7 @@ def integer_schema(s: Int) -> JsonSchema:
 
 
 def number_schema(s: Float) -> JsonSchema:
-    schema: JsonSchema = {"type": "number"}
+    schema: JsonSchema = dict(type="number")
     if s.min is not None:
         schema["minimum"] = s.min
     if s.max is not None:
@@ -358,17 +358,25 @@ def number_schema(s: Float) -> JsonSchema:
     return schema
 
 
+def boolean_schema(_: Bool) -> JsonSchema:
+    return dict(type="boolean")
+
+
+def enum_schema(s: Enum) -> JsonSchema:
+    return dict(type=json_type[type(s.values[0])], enum=list(s.values))
+
+
 def docd_schema(docd: Docd[Any]) -> JsonSchema | None:
     if (schema := schema_build(docd.value)) is None:
         return None
-    return schema | {"description": docd.text}
+    return schema | dict(description=docd.text)
 
 
 schema_rules[Str] = string_schema
 schema_rules[Int] = integer_schema
 schema_rules[Float] = number_schema
-schema_rules[Bool] = lambda _: {"type": "boolean"}
-schema_rules[Enum] = lambda s: {"type": json_type[type(s.values[0])], "enum": list(s.values)}
+schema_rules[Bool] = boolean_schema
+schema_rules[Enum] = enum_schema
 schema_rules[Docd] = docd_schema
 
 
@@ -396,12 +404,12 @@ def schema_build(node: Any) -> JsonSchema | None:
     if not properties:
         return None
 
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(properties),
-        "additionalProperties": False,
-    }
+    return dict(
+        type="object",
+        properties=properties,
+        required=list(properties),
+        additionalProperties=False,
+    )
 
 
 def error(expected: Any) -> NoReturn:
@@ -443,12 +451,28 @@ def number_value(s: Float, value: int | float) -> float:
     return float(value)
 
 
+def boolean_value(_: Bool, value: Any) -> bool:
+    if type(value) is not bool:
+        error("boolean")
+    return value
+
+
+def enum_value(s: Enum, value: Any) -> Any:
+    if value not in s:
+        error(f"one of {s.values!r}")
+    return value
+
+
+def docd_value(s: Docd[Any], value: Any) -> Any:
+    return tree_parse(s.value, value)
+
+
 valid_rules[Str] = string_value
 valid_rules[Int] = integer_value
 valid_rules[Float] = number_value
-valid_rules[Bool] = lambda _, value: value if type(value) is bool else error("boolean")
-valid_rules[Enum] = lambda s, value: value if value in s else error(f"one of {s.values!r}")
-valid_rules[Docd] = lambda s, value: tree_parse(s.value, value)
+valid_rules[Bool] = boolean_value
+valid_rules[Enum] = enum_value
+valid_rules[Docd] = docd_value
 
 
 def tree_parse(schema: Any, value: Any) -> Any:
