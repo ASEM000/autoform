@@ -19,7 +19,9 @@ from __future__ import annotations
 import asyncio
 import functools as ft
 import json
-from collections.abc import Awaitable, Generator
+import re
+from collections import OrderedDict
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, runtime_checkable
@@ -30,12 +32,23 @@ import autoform.core as core
 import autoform.schemas as schemas
 import autoform.utils as utils
 
-__all__ = ["LMClient", "LiteLLMClient", "lm_client", "lm_call", "lm_schema_call"]
+__all__ = [
+    "LMClient",
+    "LiteLLMClient",
+    "lm_client",
+    "lm_call",
+    "lm_schema_call",
+    "emit_json_schema",
+    "parse_json",
+]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Messages = list[dict[str, str]]
 type Roles = list[str]
+type JsonSchema = dict[str, Any]
+type JsonSchemaRule = Callable[[Any], JsonSchema | None]
+type JsonValueRule = Callable[[Any, Any], Any]
 
 
 @runtime_checkable
@@ -356,62 +369,258 @@ def lm_schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
     return lm_schema_call_p.bind((contents, model), roles=roles, schema=schema)
 
 
-def schema_response_format(json_schema: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "autoform_schema",
-            "strict": True,
-            "schema": json_schema,
-        },
-    }
+json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
+
+json_schema_rules: dict[type[Any], JsonSchemaRule] = {}
+
+
+def string_json_schema(s: schemas.Str) -> JsonSchema:
+    schema: JsonSchema = dict(type="string")
+    if s.min is not None:
+        schema["minLength"] = s.min
+    if s.max is not None:
+        schema["maxLength"] = s.max
+    if s.pattern is not None:
+        schema["pattern"] = s.pattern
+    return schema
+
+
+def integer_json_schema(s: schemas.Int) -> JsonSchema:
+    schema: JsonSchema = dict(type="integer")
+    if s.min is not None:
+        schema["minimum"] = s.min
+    if s.max is not None:
+        schema["maximum"] = s.max
+    return schema
+
+
+def number_json_schema(s: schemas.Float) -> JsonSchema:
+    schema: JsonSchema = dict(type="number")
+    if s.min is not None:
+        schema["minimum"] = s.min
+    if s.max is not None:
+        schema["maximum"] = s.max
+    return schema
+
+
+def boolean_json_schema(_: schemas.Bool) -> JsonSchema:
+    return dict(type="boolean")
+
+
+def enum_json_schema(s: schemas.Enum) -> JsonSchema:
+    value_type = type(s.values[0])
+    if value_type not in json_types:
+        raise TypeError("Enum values must be str, int, float, or bool")
+    return dict(type=json_types[value_type], enum=list(s.values))
+
+
+def docd_json_schema(docd: schemas.Docd[Any]) -> JsonSchema | None:
+    if (schema := emit_json_schema(docd.value)) is None:
+        return None
+    return schema | dict(description=docd.text)
+
+
+json_schema_rules[schemas.Str] = string_json_schema
+json_schema_rules[schemas.Int] = integer_json_schema
+json_schema_rules[schemas.Float] = number_json_schema
+json_schema_rules[schemas.Bool] = boolean_json_schema
+json_schema_rules[schemas.Enum] = enum_json_schema
+json_schema_rules[schemas.Docd] = docd_json_schema
+
+
+def emit_json_schema(node: Any) -> JsonSchema | None:
+    if rule := json_schema_rules.get(type(node)):
+        return rule(node)
+    if type(node) not in json_schema_rules and utils.tree.is_leaf(node):
+        return None
+
+    children, spec = utils.tree.flatten(node, is_leaf=lambda x: id(x) != id(node))
+    properties = OrderedDict()
+    for entry, child in zip(spec.entries(), children, strict=True):
+        property_name = str(entry)
+        if (child_schema := emit_json_schema(child)) is not None:
+            if property_name in properties:
+                raise TypeError(f"Duplicate object entries {(property_name,)!r}")
+            properties[property_name] = child_schema
+
+    if not properties:
+        return None
+
+    return dict(
+        type="object",
+        properties=properties,
+        required=list(properties),
+        additionalProperties=False,
+    )
+
+
+json_value_rules: dict[type[Any], JsonValueRule] = {}
+
+
+def string_json_value(s: schemas.Str, value: str) -> str:
+    if type(value) is not str:
+        raise ValueError("Expected string")
+    if s.min is not None and len(value) < s.min:
+        raise ValueError(f"Expected string with length >= {s.min}")
+    if s.max is not None and len(value) > s.max:
+        raise ValueError(f"Expected string with length <= {s.max}")
+    if s.pattern is not None and not re.search(s.pattern, value):
+        raise ValueError(f"Expected string matching {s.pattern!r}")
+    return value
+
+
+def integer_json_value(s: schemas.Int, value: int) -> int:
+    if type(value) is not int:
+        raise ValueError("Expected integer")
+    if s.min is not None and value < s.min:
+        raise ValueError(f"Expected integer >= {s.min}")
+    if s.max is not None and value > s.max:
+        raise ValueError(f"Expected integer <= {s.max}")
+    return value
+
+
+def number_json_value(s: schemas.Float, value: int | float) -> float:
+    if type(value) not in (int, float):
+        raise ValueError("Expected number")
+    if s.min is not None and value < s.min:
+        raise ValueError(f"Expected number >= {s.min}")
+    if s.max is not None and value > s.max:
+        raise ValueError(f"Expected number <= {s.max}")
+    return float(value)
+
+
+def boolean_json_value(_: schemas.Bool, value: Any) -> bool:
+    if type(value) is not bool:
+        raise ValueError("Expected boolean")
+    return value
+
+
+def enum_json_value(s: schemas.Enum, value: Any) -> Any:
+    if value not in s:
+        raise ValueError(f"Expected one of {s.values!r}")
+    return value
+
+
+def docd_json_value(s: schemas.Docd[Any], value: Any) -> Any:
+    return parse_json(s.value, value)
+
+
+json_value_rules[schemas.Str] = string_json_value
+json_value_rules[schemas.Int] = integer_json_value
+json_value_rules[schemas.Float] = number_json_value
+json_value_rules[schemas.Bool] = boolean_json_value
+json_value_rules[schemas.Enum] = enum_json_value
+json_value_rules[schemas.Docd] = docd_json_value
+
+
+def parse_json(schema: Any, value: Any) -> Any:
+    if rule := json_value_rules.get(type(schema)):
+        return rule(schema, value)
+    if type(schema) not in json_schema_rules and utils.tree.is_leaf(schema):
+        return schema
+
+    flat_schemas, spec_schema = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    flat_values, spec_value = utils.tree.flatten(value, is_leaf=lambda x: id(x) != id(value))
+    schema_keys = [str(entry) for entry in spec_schema.entries()]
+    emitted = [emit_json_schema(child) is not None for child in flat_schemas]
+    expected_keys = [k for k, e in zip(schema_keys, emitted, strict=True) if e]
+    value_keys = [str(entry) for entry in spec_value.entries()]
+
+    if len(expected_keys) != len(value_keys) or set(expected_keys) != set(value_keys):
+        raise ValueError(f"Key mismatch: expected entries {expected_keys!r}, got {value_keys!r}")
+
+    out_pos = {k: i for i, k in enumerate(value_keys)}
+    values = (
+        parse_json(child, flat_values[out_pos[key]] if emit else None)
+        for key, child, emit in zip(schema_keys, flat_schemas, emitted, strict=True)
+    )
+    return spec_schema.unflatten(values)
 
 
 def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
-    json_schema, parse = schemas.make_json_schema_and_parser(schema)
+    json_schema = emit_json_schema(schema)
+    if json_schema is None:
+        return parse_json(schema, None)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = active_client.get().completion(
         messages=messages,
         model=model,
-        response_format=schema_response_format(json_schema),
+        response_format=dict(
+            type="json_schema",
+            json_schema=dict(
+                name="autoform_schema",
+                strict=True,
+                schema=json_schema,
+            ),
+        ),
     )
-    return parse(json.loads(resp.choices[0].message.content))
+    return parse_json(schema, json.loads(resp.choices[0].message.content))
 
 
 async def aimpl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
-    json_schema, parse = schemas.make_json_schema_and_parser(schema)
+    json_schema = emit_json_schema(schema)
+    if json_schema is None:
+        return parse_json(schema, None)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = await active_client.get().acompletion(
         messages=messages,
         model=model,
-        response_format=schema_response_format(json_schema),
+        response_format=dict(
+            type="json_schema",
+            json_schema=dict(
+                name="autoform_schema",
+                strict=True,
+                schema=json_schema,
+            ),
+        ),
     )
-    return parse(json.loads(resp.choices[0].message.content))
+    return parse_json(schema, json.loads(resp.choices[0].message.content))
+
+
+def string_schema_abstract(_: schemas.Str) -> core.StrAVal:
+    return core.StrAVal()
+
+
+def integer_schema_abstract(_: schemas.Int) -> core.IntAVal:
+    return core.IntAVal()
+
+
+def number_schema_abstract(_: schemas.Float) -> core.FloatAVal:
+    return core.FloatAVal()
+
+
+def boolean_schema_abstract(_: schemas.Bool) -> core.BoolAVal:
+    return core.BoolAVal()
+
+
+def enum_schema_abstract(s: schemas.Enum) -> core.AVal:
+    return core.primal_s.avalof(s.values[0])
+
+
+def docd_schema_abstract(s: schemas.Docd[Any]) -> Tree:
+    return schema_abstract_tree(s.value)
 
 
 schema_abstract_rules = {}
-schema_abstract_rules[schemas.Str] = lambda _: core.StrAVal()
-schema_abstract_rules[schemas.Int] = lambda _: core.IntAVal()
-schema_abstract_rules[schemas.Float] = lambda _: core.FloatAVal()
-schema_abstract_rules[schemas.Bool] = lambda _: core.BoolAVal()
-schema_abstract_rules[schemas.Enum] = lambda s: core.primal_s.avalof(s.values[0])
-schema_abstract_rules[schemas.Docd] = lambda s: schema_abstract_tree(s.value)
-
-
-def is_schema_abstract_leaf(x: Any) -> bool:
-    return type(x) in schema_abstract_rules
-
-
-def schema_abstract_node(x: Any) -> Any:
-    if rule := schema_abstract_rules.get(type(x)):
-        return rule(x)
-    raise TypeError(f"No abstract rule for schema node type {type(x)}")
+schema_abstract_rules[schemas.Str] = string_schema_abstract
+schema_abstract_rules[schemas.Int] = integer_schema_abstract
+schema_abstract_rules[schemas.Float] = number_schema_abstract
+schema_abstract_rules[schemas.Bool] = boolean_schema_abstract
+schema_abstract_rules[schemas.Enum] = enum_schema_abstract
+schema_abstract_rules[schemas.Docd] = docd_schema_abstract
 
 
 def schema_abstract_tree(schema: Any) -> Tree:
-    return utils.tree.map(schema_abstract_node, schema, is_leaf=is_schema_abstract_leaf)
+    def abstract(x: Any) -> Any:
+        if rule := schema_abstract_rules.get(type(x)):
+            return rule(x)
+        if not core.is_traceable(x):
+            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
+        return x
+
+    return utils.tree.map(abstract, schema, is_leaf=lambda x: type(x) in schema_abstract_rules)
 
 
 def abstract_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
