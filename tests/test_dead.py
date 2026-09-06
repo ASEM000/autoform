@@ -496,6 +496,33 @@ class TestNestedDCE:
 
 
 class TestDCEWithOutUsed:
+    @pytest.mark.asyncio
+    async def test_partial_switch_keeps_branch_outputs_consistent(self):
+        branches = {
+            "a": af.trace(lambda x: (af.concat(x, "!"), x))("x"),
+            "b": af.trace(lambda x: (af.concat(x, "?"), af.concat(x, ".")))("x"),
+        }
+        ir = af.trace(lambda key, x: af.switch(key, branches, x))("a", "x")
+        dced = af.dce(ir, out_used=(True, False))
+
+        assert dced.call("a", "x") == ("x!", None)
+        assert af.dce(dced).call("b", "x") == ("x?", None)
+        batched = af.batch(dced)
+        assert batched.call(["a", "b"], ["x", "y"]) == (["x!", "y?"], None)
+        assert await batched.acall(["a", "b"], ["x", "y"]) == (["x!", "y?"], None)
+        assert ir.call("b", "x") == ("x?", "x.")
+
+    def test_partial_switch_keeps_shared_dependencies(self):
+        def branch(x):
+            shared = af.concat(x, "!")
+            return af.concat(shared, "?"), shared
+
+        branch_ir = af.trace(branch)("x")
+        ir = af.trace(lambda x: af.switch("a", {"a": branch_ir}, x))("x")
+        dced = af.dce(ir, out_used=(True, False))
+
+        assert dced.call("x") == ("x!?", None)
+
     def test_out_used_single_output_true_keeps_deps(self):
         def program(x):
             y = af.concat(x, "a")
