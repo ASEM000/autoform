@@ -411,6 +411,32 @@ class TestWhileLoopWithMark:
 
 
 class TestWhileLoopValidation:
+    @pytest.mark.parametrize("condition, max_iters", [(False, 10), (True, 0)])
+    def test_rejects_literal_output_for_dynamic_state(self, condition, max_iters):
+        cond_ir = trace(lambda x: condition)("go")
+        body_ir = trace(lambda x: "stop")("go")
+
+        def loop(init):
+            return af.while_loop(cond_ir, body_ir, init, max_iters=max_iters)
+
+        with pytest.raises(AssertionError, match="initial state must match"):
+            trace(loop)("go")
+
+    @pytest.mark.parametrize("initial, result", [("go", "stop"), (True, 1)])
+    def test_rejects_different_literal_state(self, initial, result):
+        cond_ir = trace(lambda x: False)(initial)
+        body_ir = trace(lambda x: result)(initial)
+
+        with pytest.raises(AssertionError, match="initial state must match"):
+            trace(lambda: af.while_loop(cond_ir, body_ir, initial, max_iters=0))()
+
+    def test_accepts_matching_literal_state(self):
+        cond_ir = trace(lambda x: False)("stop")
+        body_ir = trace(lambda x: "stop")("stop")
+        ir = trace(lambda: af.while_loop(cond_ir, body_ir, "stop", max_iters=0))()
+
+        assert ir.call() == "stop"
+
     def test_cond_must_be_ir(self):
         def body(x):
             return x
@@ -618,6 +644,9 @@ class TestWhileLoopAdvanced:
 
         result = af.while_loop(cond_ir, body_ir, "start", max_iters=0)
         assert result == "start"
+
+        loop_ir = trace(lambda init: af.while_loop(cond_ir, body_ir, init, max_iters=0))("x")
+        assert loop_ir.call("start") == "start"
 
     def test_single_iteration(self):
         def cond(x):
