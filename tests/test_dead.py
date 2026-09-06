@@ -19,6 +19,12 @@ from autoform.core import IR, Var
 
 
 class TestDCE:
+    def test_keeps_used_equation_without_inputs(self):
+        ir = af.trace(lambda: af.concat())()
+
+        assert af.dce(ir).call() == ""
+        assert not af.dce(ir, out_used=False).eqns
+
     def test_removes_unused_equation(self):
         def program(x):
             dead = af.concat(x, "dead")

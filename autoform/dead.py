@@ -99,7 +99,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
             active_eqns.appendleft(new_eqn)
             active_vars |= set(analysis.var_leaves(eqn.in_tree))
 
-        elif utils.tree.any(in_used):
+        elif utils.tree.any(eqn_out_used):
             active_eqns.appendleft(new_eqn)
             active_vars |= set(analysis.var_leaves(utils.mask(eqn.in_tree, in_used)))
 
