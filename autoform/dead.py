@@ -49,6 +49,81 @@ dce_rules: dict[core.Prim, DCERule] = {}
 non_dce_primitives: set[core.Prim] = set()
 
 
+def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
+    # NOTE(asem): an inner IR may lose outputs while its wrapper still runs.
+    # >>> def save(x):
+    # ...     af.checkpoint(x, key="save")
+    # ...     return af.concat(x, "!")
+    # >>> ir = af.batch(af.trace(save)("x"))
+    # >>> dced = af.dce(ir, out_used=False)
+    # the DCE pass removes concat but ir.out_tree needs to be updated
+    def keep_var(atom, out):
+        if isinstance(out, core.AVal):
+            # NOTE(asem): assure DCE does not change avals
+            assert core.is_var(atom) and atom.aval == out
+            return atom
+        assert not (core.is_var(atom) and atom in active_vars)
+        return out
+
+    in_avals = utils.tree.map(core.aval_if_var, eqn.in_tree)
+    out_avals = core.abstract_rules.get(eqn.prim)(in_avals, **eqn.params)
+    out_tree = utils.tree.map(keep_var, eqn.out_tree, out_avals)
+    return core.Eqn(eqn.prim, eqn.in_tree, out_tree, eqn.params, eqn.tags)
+
+
+def sanitize_out(ir: core.IR, eqns: list[core.Eqn], out_used: UsedTree, /) -> Tree:
+    # NOTE(asem): output sanitization step
+    # `call(ir)` always reads `ir.out_tree`, even if a caller provided an `out_used` mask.
+    # so after DCE removes equations, `out_tree` may contain Vars that are no longer
+    # defined ("dangling"), which would crash at runtime when the interpreter tries to
+    # read them.
+    # >>> def program(x):
+    # ...     a = af.concat(x, "!")
+    # ...     b = af.concat(x, "?")
+    # ...     return x, a, b
+    # >>> ir = af.trace(program)("x")
+    # >>> af.dce(ir, out_used=(True, True, False)).call("x")
+    # ('x', 'x!', None)
+    # eqns contains only the kept equations: x is an input, a is still produced,
+    # and b has no producer left, so only b's output slot becomes None.
+    in_vars = set(analysis.var_leaves(ir.in_tree))
+    defined_vars: set[core.Var] = set(in_vars)
+    for kept in eqns:
+        for atom in utils.tree.leaves(kept.out_tree):
+            core.is_var(atom) and defined_vars.add(atom)
+
+    def sanitize_out_leaf(atom, used: bool):
+        if not core.is_var(atom):
+            # NOTE(asem): leaf is already a literal, nothing to sanitize.
+            # >>> def program(x):
+            # ...     return (x, "const")
+            return atom
+        if atom in defined_vars:
+            # NOTE(asem): defined output var (either an input var or produced by a kept eqn).
+            # >>> def program(x):
+            # ...     y = af.concat(x, "!")
+            # ...     return y
+            # y's Var is in `defined_vars` and stays as-is.
+            return atom
+        if not used:
+            # NOTE(asem): unused-but-dangling output slot (typically from partial `out_used`).
+            # >>> def program(x):
+            # ...   a=af.concat(x,"a")
+            # ...   b=af.concat(x,"b")
+            # ...   return (a, b)
+            # >>> af.dce(ir, out_used=(True, False))
+            # drops eqn for b, but keeps a 2-tuple output.
+            # the second leaf becomes None.
+            return None
+        # NOTE(asem): this should be unreachable for well-behaved primitives/rules.
+        assert False, (
+            "DCE produced an invalid IR: a used output Var is not defined by inputs or kept equations. "
+            "This typically indicates inconsistent `out_used` or a bug in a DCE rule for a primitive."
+        )
+
+    return utils.tree.map(sanitize_out_leaf, ir.out_tree, out_used)
+
+
 def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> core.IR[*A, R]:
     """Remove dead code from an IR.
 
@@ -87,61 +162,27 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         return core.is_var(node) and (node in active_vars)
 
     for eqn in reversed(ir.eqns):
-        is_non_dce = eqn.prim in non_dce_primitives
         # NOTE(asem): walk backwards and feed dce rules the appropriate
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
-        eqn_out_used = utils.tree.map(is_active_node, eqn.out_tree)
+        protected = eqn.prim in non_dce_primitives
+        eqn_out_used: Tree[bool] = utils.tree.map(is_active_node, eqn.out_tree)
         new_eqn, in_used = dce_rules.get(eqn.prim, default_dce)(eqn, eqn_out_used)
         assert utils.tree.structure(in_used) == utils.tree.structure(eqn.in_tree)
 
-        if is_non_dce:
+        changed = new_eqn is not eqn
+        used = utils.tree.any(eqn_out_used)
+        keep = protected or used
+        new_eqn = update_eqn_out(new_eqn, active_vars) if changed and keep else new_eqn
+
+        if protected:
             active_eqns.appendleft(new_eqn)
             active_vars |= set(analysis.var_leaves(eqn.in_tree))
 
-        elif utils.tree.any(eqn_out_used):
+        elif used:
             active_eqns.appendleft(new_eqn)
             active_vars |= set(analysis.var_leaves(utils.mask(eqn.in_tree, in_used)))
 
-    # NOTE(asem): output sanitization step
-    # `call(ir)` always reads `ir.out_tree`, even if a caller provided an `out_used` mask.
-    # so after DCE removes equations, `out_tree` may contain Vars that are no longer
-    # defined ("dangling"), which would crash at runtime when the interpreter tries to
-    # read them.
-    in_vars = set(analysis.var_leaves(ir.in_tree))
-    defined_vars: set[core.Var] = set(in_vars)
-    for kept in active_eqns:
-        for atom in utils.tree.leaves(kept.out_tree):
-            core.is_var(atom) and defined_vars.add(atom)
-
-    def sanitize_out_leaf(atom, used: bool):
-        if not core.is_var(atom):
-            # NOTE(asem): leaf is already a literal, nothing to sanitize.
-            # >>> def program(x):
-            # ...     return (x, "const")
-            return atom
-        if atom in defined_vars:
-            # NOTE(asem): defined output var (either an input var or produced by a kept eqn).
-            # >>> def program(x):
-            # ...     y = af.concat(x, "!")
-            # ...     return y
-            # y's Var is in `defined_vars` and stays as-is.
-            return atom
-        if not used:
-            # NOTE(asem): unused-but-dangling output slot (typically from partial `out_used`).
-            # >>> def program(x):
-            # ...   a=af.concat(x,"a")
-            # ...   b=af.concat(x,"b")
-            # ...   return (a,b)
-            # >>> af.dce(ir, out_used=(True, False))
-            # drops eqn for b, but keeps a 2-tuple output.
-            # the second leaf becomes None.
-            return None
-        # NOTE(asem): this should be unreachable for well-behaved primitives/rules.
-        assert False, (
-            "DCE produced an invalid IR: a used output Var is not defined by inputs or kept equations. "
-            "This typically indicates inconsistent `out_used` or a bug in a DCE rule for a primitive."
-        )
-
-    out_tree = utils.tree.map(sanitize_out_leaf, ir.out_tree, user_out_used)
-    return core.IR(list(active_eqns), in_tree=ir.in_tree, out_tree=out_tree)
+    eqns = list(active_eqns)
+    out_tree = sanitize_out(ir, eqns, user_out_used)
+    return core.IR(eqns, in_tree=ir.in_tree, out_tree=out_tree)
