@@ -390,8 +390,29 @@ def abstract_while_loop(
     body_ir: core.IR,
     max_iters: int,
 ) -> Tree:
-    del in_tree, cond_ir, max_iters
-    return utils.tree.map(core.aval_if_var, body_ir.out_tree)
+    del cond_ir, max_iters
+    out_tree = utils.tree.map(core.aval_if_var, body_ir.out_tree)
+    assert utils.tree.structure(in_tree) == utils.tree.structure(out_tree)
+
+    def same_state(x, y):
+        if core.is_aval(y) and not core.is_aval(x):
+            # NOTE(asem): the key idea here is that in case inital state is a literal
+            # and body returns AVal e.g.
+            # >>> cond = af.trace(lambda x: False)("x")
+            # >>> body = af.trace(lambda x: af.concat(x, "!"))("x")
+            # >>> def program():
+            # ...   return af.while_loop(cond, body, "hello", max_iters=10)
+            # >>> ir = af.trace(program)()
+            # >>> ir.call()  # "hello"
+            # in here same_state normalizes hello -> StrAval
+            x = core.primal_s.avalof(x)
+        return type(x) is type(y) and x == y
+
+    assert utils.tree.all(utils.tree.map(same_state, in_tree, out_tree)), (
+        "`while_loop` may run zero times: the initial state must match "
+        "the body's output types and literal values"
+    )
+    return out_tree
 
 
 def pullback_fwd_while_loop(
