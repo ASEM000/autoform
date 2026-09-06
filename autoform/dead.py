@@ -49,6 +49,22 @@ dce_rules: dict[core.Prim, DCERule] = {}
 non_dce_primitives: set[core.Prim] = set()
 
 
+def is_non_dce(eqn: core.Eqn, /) -> bool:
+    # NOTE(asem): recursively check if any nested irs contains non-dce prim
+    # for example
+    # >>> branch = af.trace(lambda x: af.checkpoint(x, key="save"))("x")
+    # >>> def program(x):
+    # ...     value = af.concat(x, "!")
+    # ...     af.switch("a", {"a": branch}, value)
+    # ...     return x
+    # the switch result is unused, but dropping it would also drop the checkpoint.
+    # value must stay live because the checkpoint still needs it.
+    def func(leaf):
+        return isinstance(leaf, core.IR) and any(is_non_dce(eqn) for eqn in leaf.eqns)
+
+    return eqn.prim in non_dce_primitives or utils.tree.any(utils.tree.map(func, eqn.params))
+
+
 def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
     # NOTE(asem): an inner IR may lose outputs while its wrapper still runs.
     # >>> def save(x):
@@ -165,7 +181,7 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         # NOTE(asem): walk backwards and feed dce rules the appropriate
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
-        protected = eqn.prim in non_dce_primitives
+        protected = is_non_dce(eqn)
         eqn_out_used: Tree[bool] = utils.tree.map(is_active_node, eqn.out_tree)
         new_eqn, in_used = dce_rules.get(eqn.prim, default_dce)(eqn, eqn_out_used)
         assert utils.tree.structure(in_used) == utils.tree.structure(eqn.in_tree)
