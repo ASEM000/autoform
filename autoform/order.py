@@ -195,8 +195,20 @@ core.batch_rules.aset(fanout_p, abatch_fanout)
 
 def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     irs = eqn.params["irs"]
-    new_irs = [dead.dce(ir, out_used=ou) for ir, ou in zip(irs, out_used, strict=True)]
-    new_eqn = eqn.using(irs=new_irs)
+
+    # NOTE(asem): pruning each inner IR can change the outputs returned by fanout.
+    # for example:
+    # inner IR 1 => a(x) = concat(x, "!")
+    # inner IR 2 => b(x) = concat(x, "?")
+    # after DCE with [True, False] mask
+    # fanout returns [a(x), None], but its out_tree still declares [a, b].
+    # the fix is to enforce the mask on each IR's out_tree and the parent out_tree.
+    def func(ir: core.IR, used: dead.UsedTree):
+        ir = core.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, used))
+        return dead.dce(ir)
+
+    new_eqn = eqn.using(irs=utils.tree.map(func, irs, out_used))
+    new_eqn.out_tree = utils.mask(eqn.out_tree, out_used)
     return dead.default_dce(new_eqn, out_used)
 
 

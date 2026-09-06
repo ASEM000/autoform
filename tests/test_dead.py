@@ -497,6 +497,25 @@ class TestNestedDCE:
 
 class TestDCEWithOutUsed:
     @pytest.mark.asyncio
+    async def test_partial_fanout_composes_with_dce_and_batch(self):
+        ir = af.sched(af.trace(lambda x: (af.concat(x, "!"), af.concat(x, "?")))("x"))
+        dced = af.dce(ir, out_used=(True, False))
+
+        assert dced.call("x") == ("x!", None)
+        assert af.dce(dced).call("x") == ("x!", None)
+        batched = af.batch(dced)
+        assert batched.call(["x", "y"]) == (["x!", "y!"], None)
+        assert await batched.acall(["x", "y"]) == (["x!", "y!"], None)
+        assert ir.call("x") == ("x!", "x?")
+
+    def test_partial_fanout_masks_nested_outputs(self):
+        inner = af.trace(lambda x: (x, af.concat(x, "!")))("x")
+        ir = af.trace(lambda x: af.order.fanout_p.bind([(x,)], irs=[inner]))("x")
+        dced = af.dce(ir, out_used=[(False, True)])
+
+        assert af.dce(dced).call("x") == [(None, "x!")]
+
+    @pytest.mark.asyncio
     async def test_partial_switch_keeps_branch_outputs_consistent(self):
         branches = {
             "a": af.trace(lambda x: (af.concat(x, "!"), x))("x"),
