@@ -18,9 +18,63 @@ import autoform as af
 from autoform.analysis import (
     eqn_graph,
     ir_liveness,
+    is_same_stucture,
     var_leaves,
     var_producers,
 )
+
+
+class TestIrStructure:
+    def test_ignores_variable_identity_and_body(self):
+        lhs = af.trace(lambda x: (x, "same"))("X")
+        rhs = af.trace(lambda x: (af.concat(x, "!"), "same"))("Y")
+
+        assert is_same_stucture(lhs, rhs)
+
+    @pytest.mark.parametrize("left, right", [("L", "R"), (1, True)])
+    def test_rejects_different_literal_outputs(self, left, right):
+        lhs = af.trace(lambda: left)()
+        rhs = af.trace(lambda: right)()
+
+        assert not is_same_stucture(lhs, rhs)
+
+    @pytest.mark.parametrize("left, right", [("X", 1), ("X", ["X"])])
+    def test_rejects_different_inputs(self, left, right):
+        lhs = af.trace(lambda x: "same")(left)
+        rhs = af.trace(lambda x: "same")(right)
+
+        assert not is_same_stucture(lhs, rhs)
+
+    def test_rejects_different_static_inputs(self):
+        lhs = af.trace(lambda x: "same", static=True)("L")
+        rhs = af.trace(lambda x: "same", static=True)("R")
+
+        assert not is_same_stucture(lhs, rhs)
+
+    def test_rejects_static_and_dynamic_inputs(self):
+        lhs = af.trace(lambda x: "same", static=True)("X")
+        rhs = af.trace(lambda x: "same")("X")
+
+        assert not is_same_stucture(lhs, rhs)
+
+    def test_rejects_variable_and_literal_outputs(self):
+        lhs = af.trace(lambda x: x)("X")
+        rhs = af.trace(lambda x: "X")("X")
+
+        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_stucture(rhs, lhs)
+
+    def test_rejects_different_output_structure(self):
+        lhs = af.trace(lambda x: x)("X")
+        rhs = af.trace(lambda x: [x])("X")
+
+        assert not is_same_stucture(lhs, rhs)
+
+    def test_rejects_different_aval_metadata(self):
+        lhs = af.batch(af.trace(lambda text, count: text)("X", 1))
+        rhs = af.batch(af.trace(lambda text, count: count)("X", 1))
+
+        assert not is_same_stucture(lhs, rhs)
 
 
 class TestIrVarLeaves:

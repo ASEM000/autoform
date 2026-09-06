@@ -17,6 +17,37 @@ import pytest
 import autoform as af
 
 
+def test_switch_contract():
+    class Key(str):
+        pass
+
+    af.extend.register_trace_type(Key, lambda _: af.core.StrAVal())
+    left = af.trace(lambda x: af.concat("L", x))("X")
+    right = af.trace(lambda x: af.concat("R", x))("X")
+    for keys in (("L", "R"), (0, 1), (False, True), (0.5, 1.5), (Key("L"), Key("R"))):
+        branches = dict(zip(keys, (left, right), strict=True))
+        ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
+        assert ir.call(keys[0]) == "LX"
+        assert ir.call(keys[1]) == "RX"
+
+    for keys, selector in (
+        ((0, "R"), 0),
+        ((False, 2), False),
+        ((0, 2.0), 0),
+        ((b"L", b"R"), "L"),
+        ((0, 1), True),
+        ((False, True), 1),
+        ((0, 1), 1.0),
+    ):
+        branches = dict(zip(keys, (left, right), strict=True))
+        with pytest.raises(AssertionError):
+            af.trace(lambda key: af.switch(key, branches, "X"))(selector)
+
+    branches = {"L": af.trace(lambda: "L")(), "R": af.trace(lambda: "R")()}
+    with pytest.raises(AssertionError):
+        af.trace(lambda key: af.switch(key, branches))("L")
+
+
 class TestSwitchBasic:
     def test_switch_key_zero(self):
         branches = {

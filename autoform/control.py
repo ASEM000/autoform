@@ -17,7 +17,9 @@
 from __future__ import annotations
 
 import functools as ft
+from collections.abc import Hashable
 
+import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
@@ -27,7 +29,7 @@ __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type Branches = dict[str, core.IR]
+type Branches = dict[Hashable, core.IR]
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -116,12 +118,13 @@ core.batch_rules.aset(stop_gradient_p, utils.asyncify(batch_stop_gradient))
 switch_p = core.Prim("switch")
 
 
-def switch(key: str, branches: Branches, *args, **kwargs) -> Tree:
-    """Select and execute one of multiple IR branches based on a string key.
+def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
+    """Select and execute one of multiple IR branches based on a traceable key.
 
     Args:
-        key: String key selecting which branch to execute.
-        branches: Dict mapping string keys to IR irs, each with compatible input signature.
+        key: Key selecting which branch to execute, with the same AVal as the branch keys.
+        branches: Dict whose keys share one registered trace type and AVal mapping to IRs of
+            matching input/output structures.
         *args: Positional arguments passed to the selected branch.
 
     Returns:
@@ -147,10 +150,13 @@ def switch(key: str, branches: Branches, *args, **kwargs) -> Tree:
     """
     assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], core.IR) for k in branches)
-    tree_struct0 = utils.tree.structure(branches[next(iter(branches))].in_tree)
-    assert all(utils.tree.structure(branches[key].in_tree) == tree_struct0 for key in branches)
-    tree_struct0 = utils.tree.structure(branches[next(iter(branches))].out_tree)
-    assert all(utils.tree.structure(branches[key].out_tree) == tree_struct0 for key in branches)
+    key0 = next(iter(branches))
+    assert core.is_traceable(key0)
+    assert all(type(k) is type(key0) for k in branches)
+    key_aval = core.primal_s.avalof(key0)
+    assert all(core.primal_s.avalof(k) == key_aval for k in branches)
+    branch0 = branches[key0]
+    assert all(analysis.is_same_stucture(branch0, branch) for branch in branches.values())
     return switch_p.bind((key, args), branches=branches)
 
 
@@ -166,8 +172,9 @@ async def aimpl_switch(in_tree, /, *, branches: Branches):
 
 def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     key, _ = in_tree
-    assert type(key) in (str, core.StrAVal), f"`switch` expects string key: {key!r}"
     key0 = next(iter(branches))
+    key_aval = key if core.is_aval(key) else core.primal_s.avalof(key)
+    assert key_aval == core.primal_s.avalof(key0)
     branch0 = branches[key0]
     return utils.tree.map(core.aval_if_var, branch0.out_tree)
 

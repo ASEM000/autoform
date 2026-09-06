@@ -28,7 +28,32 @@ type UsedTree = Tree[bool]
 type LiveSet = set[core.Var]
 type Liveness = list[LiveSet]
 
-__all__ = ["var_leaves", "var_producers", "eqn_graph", "ir_liveness", "toposort_levels"]
+__all__ = [
+    "is_same_stucture",
+    "var_leaves",
+    "var_producers",
+    "eqn_graph",
+    "ir_liveness",
+    "toposort_levels",
+]
+
+
+def is_same_stucture(lhs: core.IR, rhs: core.IR, /) -> bool:
+    """Compare IR input/output structures"""
+
+    assert isinstance(lhs, core.IR)
+    assert isinstance(rhs, core.IR)
+
+    def same_atom(x, y):
+        if core.is_var(x) and core.is_var(y):
+            return x.aval == y.aval
+        # NOTE(asem): check for literals.
+        return type(x) is type(y) and x == y
+
+    left, right = (lhs.in_tree, lhs.out_tree), (rhs.in_tree, rhs.out_tree)
+    if utils.tree.structure(left) != utils.tree.structure(right):
+        return False
+    return utils.tree.all(utils.tree.map(same_atom, left, right))
 
 
 def var_leaves(tree: Tree, /) -> list[core.Var]:
