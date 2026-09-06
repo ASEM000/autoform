@@ -283,8 +283,22 @@ core.batch_rules.aset(switch_p, abatch_switch)
 
 def dce_switch(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     branches: Branches = eqn.params["branches"]
-    branches = {k: dead.dce(branches[k], out_used=out_used) for k in branches}
-    new_eqn = eqn.using(branches=branches)
+
+    # NOTE(asem): a bit more care here, simply map DCE to each branch would not work
+    # for example:
+    # branch 1 => a(x) = (x, x)
+    # branch 2 => b(x) = (x, concat(x, "-"))
+    # after DCE with (True, False) mask
+    # dce(a(x)) = (x, x)
+    # dce(b(x)) = (x, None)
+    # here, the two branches disagree on the output structure and shall fail.
+    # the fix is to enforce the mask on each of IR's out_tree
+    def func(ir: core.IR):
+        ir = core.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, out_used))
+        return dead.dce(ir)
+
+    new_eqn = eqn.using(branches=utils.tree.map(func, branches))
+    new_eqn.out_tree = utils.mask(eqn.out_tree, out_used)
     return dead.default_dce(new_eqn, out_used)
 
 

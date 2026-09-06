@@ -19,6 +19,12 @@ from autoform.core import IR, Var
 
 
 class TestDCE:
+    def test_keeps_used_equation_without_inputs(self):
+        ir = af.trace(lambda: af.concat())()
+
+        assert af.dce(ir).call() == ""
+        assert not af.dce(ir, out_used=False).eqns
+
     def test_removes_unused_equation(self):
         def program(x):
             dead = af.concat(x, "dead")
@@ -159,6 +165,18 @@ class TestDCEWithHigherOrderPrimitives:
 
 
 class TestDCEWithTransformedIR:
+    @pytest.mark.asyncio
+    async def test_partial_pullback_preserves_cotangent_structure(self):
+        ir = af.trace(lambda x: (af.concat(x, "!"), af.concat(x, "?")))("x")
+        pb = af.pullback(ir)
+        dced = af.dce(pb, out_used=((True, False), (False,)))
+        args = (("x",), ("g", "h"))
+        expected = pb.call(*args)
+
+        assert dced.call(*args) == expected
+        assert await dced.acall(*args) == expected
+        assert af.dce(dced).call(*args) == expected
+
     def test_dce_on_pushforward(self):
         def program(x):
             y = af.concat(x, "a")
@@ -490,6 +508,52 @@ class TestNestedDCE:
 
 
 class TestDCEWithOutUsed:
+    @pytest.mark.asyncio
+    async def test_partial_fanout_composes_with_dce_and_batch(self):
+        ir = af.sched(af.trace(lambda x: (af.concat(x, "!"), af.concat(x, "?")))("x"))
+        dced = af.dce(ir, out_used=(True, False))
+
+        assert dced.call("x") == ("x!", None)
+        assert af.dce(dced).call("x") == ("x!", None)
+        batched = af.batch(dced)
+        assert batched.call(["x", "y"]) == (["x!", "y!"], None)
+        assert await batched.acall(["x", "y"]) == (["x!", "y!"], None)
+        assert ir.call("x") == ("x!", "x?")
+
+    def test_partial_fanout_masks_nested_outputs(self):
+        inner = af.trace(lambda x: (x, af.concat(x, "!")))("x")
+        ir = af.trace(lambda x: af.order.fanout_p.bind([(x,)], irs=[inner]))("x")
+        dced = af.dce(ir, out_used=[(False, True)])
+
+        assert af.dce(dced).call("x") == [(None, "x!")]
+
+    @pytest.mark.asyncio
+    async def test_partial_switch_keeps_branch_outputs_consistent(self):
+        branches = {
+            "a": af.trace(lambda x: (af.concat(x, "!"), x))("x"),
+            "b": af.trace(lambda x: (af.concat(x, "?"), af.concat(x, ".")))("x"),
+        }
+        ir = af.trace(lambda key, x: af.switch(key, branches, x))("a", "x")
+        dced = af.dce(ir, out_used=(True, False))
+
+        assert dced.call("a", "x") == ("x!", None)
+        assert af.dce(dced).call("b", "x") == ("x?", None)
+        batched = af.batch(dced)
+        assert batched.call(["a", "b"], ["x", "y"]) == (["x!", "y?"], None)
+        assert await batched.acall(["a", "b"], ["x", "y"]) == (["x!", "y?"], None)
+        assert ir.call("b", "x") == ("x?", "x.")
+
+    def test_partial_switch_keeps_shared_dependencies(self):
+        def branch(x):
+            shared = af.concat(x, "!")
+            return af.concat(shared, "?"), shared
+
+        branch_ir = af.trace(branch)("x")
+        ir = af.trace(lambda x: af.switch("a", {"a": branch_ir}, x))("x")
+        dced = af.dce(ir, out_used=(True, False))
+
+        assert dced.call("x") == ("x!?", None)
+
     def test_out_used_single_output_true_keeps_deps(self):
         def program(x):
             y = af.concat(x, "a")
@@ -595,6 +659,81 @@ class TestDCEWithOutUsed:
 
 
 class TestDCEWithCheckpoints:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "transform, args",
+        [
+            (af.batch, (["x"],)),
+            (af.pushforward, (("x",), ("t",))),
+            (af.pullback, (("x",), "g")),
+            (af.weight, ("x",)),
+        ],
+    )
+    async def test_unused_wrapper_keeps_checkpoint(self, transform, args):
+        def save(x):
+            x = af.checkpoint(x, key="save", collection="cache")
+            return af.concat(x, "!")
+
+        wrapped = transform(af.trace(save)("x"))
+
+        def program(*xs):
+            wrapped.call(*xs)
+            return "done"
+
+        ir = af.trace(program)(*args)
+        with af.collect(collection="cache") as expected:
+            ir.call(*args)
+            await ir.acall(*args)
+        assert expected
+        dced = af.dce(ir)
+        if transform is not af.pullback:
+            assert len(dced.eqns[0].params["ir"].eqns) == 1
+        assert len(wrapped.eqns[0].params["ir"].eqns) == 2
+        for candidate in (dced, af.dce(dced)):
+            with af.collect(collection="cache") as saved:
+                assert candidate.call(*args) == "done"
+                assert await candidate.acall(*args) == "done"
+            assert saved == expected
+
+    @pytest.mark.asyncio
+    async def test_partial_batch_keeps_checkpoint_and_live_output(self):
+        def save(x):
+            af.checkpoint(x, key="save", collection="cache")
+            return af.concat(x, "!"), af.concat(x, "?")
+
+        ir = af.batch(af.trace(save)("x"))
+        dced = af.dce(ir, out_used=(True, False))
+        assert dced.eqns[0].out_tree[0] is ir.eqns[0].out_tree[0]
+        assert len(dced.eqns[0].params["ir"].eqns) == 2
+        for candidate in (dced, af.dce(dced)):
+            with af.collect(collection="cache") as saved:
+                assert candidate.call(["x"]) == (["x!"], None)
+                assert await candidate.acall(["y"]) == (["y!"], None)
+            assert saved == {"save": ["x", "y"]}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scheduled", [False, True])
+    async def test_unused_switch_keeps_checkpoint(self, scheduled):
+        def save(x):
+            af.concat(x, "dead")
+            return af.checkpoint(x, key="save", collection="cache")
+
+        branch = af.trace(save)("x")
+
+        def program(x):
+            af.switch("a", {"a": branch}, af.concat(x, "!"))
+            return x
+
+        ir = af.trace(program)("x")
+        dced = af.dce(af.sched(ir) if scheduled else ir)
+        if not scheduled:
+            assert len(dced.eqns[-1].params["branches"]["a"].eqns) == 1
+        for candidate in (dced, af.dce(dced)):
+            with af.collect(collection="cache") as saved:
+                assert candidate.call("x") == "x"
+                assert await candidate.acall("y") == "y"
+            assert saved == {"save": ["x!", "y!"]}
+
     def test_checkpoint_equation_not_removed(self):
         def program(x):
             saved = af.checkpoint(x, key="save", collection="cache")
