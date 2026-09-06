@@ -165,6 +165,18 @@ class TestDCEWithHigherOrderPrimitives:
 
 
 class TestDCEWithTransformedIR:
+    @pytest.mark.asyncio
+    async def test_partial_pullback_preserves_cotangent_structure(self):
+        ir = af.trace(lambda x: (af.concat(x, "!"), af.concat(x, "?")))("x")
+        pb = af.pullback(ir)
+        dced = af.dce(pb, out_used=((True, False), (False,)))
+        args = (("x",), ("g", "h"))
+        expected = pb.call(*args)
+
+        assert dced.call(*args) == expected
+        assert await dced.acall(*args) == expected
+        assert af.dce(dced).call(*args) == expected
+
     def test_dce_on_pushforward(self):
         def program(x):
             y = af.concat(x, "a")

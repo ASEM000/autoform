@@ -853,9 +853,21 @@ core.batch_rules.aset(pullback_call_p, abatch_pullback_call)
 
 
 def dce_pullback_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
-    out, in_cot = out_used
+    _, in_cot = out_used
     used = utils.tree.any(in_cot)
-    inner_ir = eqn.params["ir"] if used else dead.dce(eqn.params["ir"], out_used=out)
+    # NOTE(asem): when input cotangents are used, avoid threading the output mask
+    # to DCE on the IR, to avoid pruning paths still needed for cotangents even if
+    # the output is not needed. for example
+    # >>> def program(x):
+    # ...    a = af.concat(x, "!")
+    # ...    b = af.concat(x, "?")
+    # ...    return a, b
+    # >>> pb = af.pullback(af.trace(program)("x"))
+    # >>> (a, b), (dx,) = pb.call(("x",), ("g", "h"))
+    # even if b is not used, dx has contribution from b cotangent (h),
+    # even when dx is unused, the wrapper still runs backward and consumes (g, h).
+    # keep both primal outputs so their structure matches the incoming cotangents.
+    inner_ir = eqn.params["ir"] if used else dead.dce(eqn.params["ir"])
     new_eqn = eqn.using(ir=inner_ir)
     return dead.default_dce(new_eqn, out_used)
 
