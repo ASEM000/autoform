@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
 import autoform as af
 from autoform.core import Interpreter, active_interpreter, using_interpreter
 from autoform.intercept import checkpoint
@@ -409,6 +411,34 @@ class TestMemoizeBasic:
 
 
 class TestMemoizeWithCheckpoints:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scheduled", [False, True])
+    async def test_memoize_keeps_nested_checkpoints(self, scheduled):
+        branch = af.trace(lambda x: checkpoint(x, key="save", collection="cache"))("x")
+        ir = af.trace(lambda x: af.switch("a", {"a": branch}, x))("x")
+        ir = af.sched(ir) if scheduled else ir
+
+        with af.collect(collection="cache") as saved:
+            with af.memoize():
+                for _ in range(2):
+                    assert ir.call("x") == "x"
+                    assert await ir.acall("x") == "x"
+        assert saved == {"save": ["x"] * 4}
+
+    def test_memoize_inside_trace_keeps_nested_checkpoints(self):
+        branch = af.trace(lambda x: checkpoint(x, key="save", collection="cache"))("x")
+
+        def program(x):
+            with af.memoize():
+                a = af.switch("a", {"a": branch}, x)
+                b = af.switch("a", {"a": branch}, x)
+                return a, b
+
+        ir = af.trace(program)("x")
+        with af.collect(collection="cache") as saved:
+            assert ir.call("x") == ("x", "x")
+        assert saved == {"save": ["x", "x"]}
+
     def test_memoize_with_checkpoint(self):
         def func(x):
             a = checkpoint(af.concat(x, "!"), key="val", collection="debug")
