@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import functools as ft
+import json
 
 import pytest
 
@@ -319,6 +320,107 @@ class TestLMPrimitive:
         assert out == "m1|hello"
         assert isinstance(cotangent[0], str)
         assert cotangent[1] == af.ad.Zero(af.core.StrAVal())
+
+
+class TestEchoLMClient:
+    @pytest.mark.parametrize(
+        ("entries", "expected"),
+        [
+            ([], ""),
+            ([("user", "")], "<user> "),
+            ([("user", "hello")], "<user> hello"),
+            (
+                [("system", "Translate."), ("user", "Hello!"), ("assistant", "Hi!")],
+                "<system> Translate.\n<user> Hello!\n<assistant> Hi!",
+            ),
+            ([("user", "first\nsecond")], "<user> first\nsecond"),
+        ],
+    )
+    def test_direct_call(self, entries, expected):
+        messages = [dict(role=role, content=content) for role, content in entries]
+        with af.lm_client(af.EchoLMClient()):
+            assert af.lm_call(messages, model="any-model") == expected
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_traced_and_batched_execution(self):
+        def program(text):
+            prompt = af.format("Hello, {}!", text)
+            return af.lm_call(
+                [
+                    dict(role="system", content="Translate to Korean."),
+                    dict(role="user", content=prompt),
+                ],
+                model="echo",
+            )
+
+        ir = af.trace(program)("name")
+        with af.lm_client(af.EchoLMClient()):
+            assert ir.call("World") == "<system> Translate to Korean.\n<user> Hello, World!"
+            assert await ir.acall("World") == "<system> Translate to Korean.\n<user> Hello, World!"
+            batched = af.batch(ir)
+            expected = [
+                "<system> Translate to Korean.\n<user> Hello, A!",
+                "<system> Translate to Korean.\n<user> Hello, B!",
+            ]
+            assert batched.call(["A", "B"]) == expected
+            assert await batched.acall(["A", "B"]) == expected
+
+    def test_restores_outer_client_after_exception(self):
+        messages = [dict(role="user", content="hello")]
+        with af.lm_client(EchoRouter()):
+            with pytest.raises(ValueError, match="stop"):
+                with af.lm_client(af.EchoLMClient()):
+                    assert af.lm_call(messages, model="m1") == "<user> hello"
+                    raise ValueError("stop")
+            assert af.lm_call(messages, model="m1") == "m1|hello"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_custom_renderer_receives_all_messages(self):
+        def render(messages):
+            return " | ".join(message["content"] for message in messages)
+
+        def program(text):
+            return af.lm_call(
+                [dict(role="system", content="Translate."), dict(role="user", content=text)],
+                model="echo",
+            )
+
+        ir = af.trace(program)("text")
+        with af.lm_client(af.EchoLMClient(render=render)):
+            assert ir.call("Hello!") == "Translate. | Hello!"
+            assert await ir.acall("Hello!") == "Translate. | Hello!"
+            expected = ["Translate. | A", "Translate. | B"]
+            assert af.batch(ir).call(["A", "B"]) == expected
+            assert await af.batch(ir).acall(["A", "B"]) == expected
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_custom_renderer_supplies_schema_json(self):
+        def render(messages):
+            return json.dumps({"text": messages[-1]["content"]})
+
+        def program(text):
+            return af.lm_schema_call(
+                [dict(role="user", content=text)], model="echo", schema={"text": af.Str()}
+            )
+
+        ir = af.trace(program)("text")
+        with af.lm_client(af.EchoLMClient(render=render)):
+            assert ir.call('Hello "world"!') == {"text": 'Hello "world"!'}
+            assert await ir.acall("Hello!") == {"text": "Hello!"}
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_schema_call_rejects_role_prefixed_text(self):
+        def program(text):
+            return af.lm_schema_call(
+                [dict(role="user", content=text)], model="echo", schema={"text": af.Str()}
+            )
+
+        ir = af.trace(program)("json")
+        with af.lm_client(af.EchoLMClient()):
+            with pytest.raises(json.JSONDecodeError):
+                ir.call('{"text": "hello"}')
+            with pytest.raises(json.JSONDecodeError):
+                await ir.acall('{"text": "hello"}')
 
 
 class TestBind:
