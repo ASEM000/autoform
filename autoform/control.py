@@ -896,20 +896,19 @@ def pullback_bwd_fixpoint(
 
     def transpose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
-        with core.using_interpreter(bwd):
 
-            def custom_bind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
-                residuals = res[eqn]
-                boxed_c_out = bwd.box(c_out)
+        def custom_bind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
+            residuals = res[eqn]
+            boxed_c_out = bwd.box(c_out)
+            with core.using_interpreter(bwd):
                 boxed_c_in = eqn.bind((residuals, boxed_c_out), **eqn.params)
-                return bwd.unbox(boxed_c_in)
+            return bwd.unbox(boxed_c_in)
 
-            eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
-            while eqn:
-                eqn, c_out = gen.send(custom_bind(eqn, c_out))
+        eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
+        while eqn:
+            eqn, c_out = gen.send(custom_bind(eqn, c_out))
         return c_out
 
-    # g is the output cotangent at x*.  transpose_eq(u) returns cotangents for (x*, theta).
     u = g
 
     for _ in range(adj_iters):
@@ -961,20 +960,19 @@ async def apull_bwd_fixpoint(
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
-        with core.using_interpreter(bwd):
 
-            async def custom_abind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
-                residuals = res[eqn]
-                boxed_c_out = bwd.box(c_out)
+        async def custom_abind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
+            residuals = res[eqn]
+            boxed_c_out = bwd.box(c_out)
+            with core.using_interpreter(bwd):
                 boxed_c_in = await eqn.abind((residuals, boxed_c_out), **eqn.params)
-                return bwd.unbox(boxed_c_in)
+            return bwd.unbox(boxed_c_in)
 
-            eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
-            while eqn:
-                eqn, c_out = gen.send(await custom_abind(eqn, c_out))
+        eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
+        while eqn:
+            eqn, c_out = gen.send(await custom_abind(eqn, c_out))
         return c_out
 
-    # g is the output cotangent at x*.  atranspose_eq(u) returns cotangents for (x*, theta).
     u = g
 
     for _ in range(adj_iters):
