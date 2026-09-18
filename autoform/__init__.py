@@ -96,6 +96,7 @@ Str = schemas.Str
 # TYPES
 # ==================================================================================================
 
+EchoLMClient = lm.EchoLMClient
 PYTREE_NAMESPACE = utils.PYTREE_NAMESPACE
 
 # ==================================================================================================
@@ -142,6 +143,7 @@ __all__ = [
     "Int",
     "Str",
     # types
+    "EchoLMClient",
     "PYTREE_NAMESPACE",
     # modules
     "extend",
