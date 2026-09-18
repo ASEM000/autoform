@@ -21,12 +21,12 @@ import functools as ft
 import json
 import re
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, runtime_checkable
 
-from litellm import acompletion, completion
+from litellm import ModelResponse, acompletion, completion
 
 import autoform.core as core
 import autoform.schemas as schemas
@@ -49,21 +49,22 @@ type Roles = list[str]
 type JsonSchema = dict[str, Any]
 type JsonSchemaRule = Callable[[Any], JsonSchema | None]
 type JsonValueRule = Callable[[Any, Any], Any]
+type ClientType = ModelResponse
 
 
 @runtime_checkable
 class LMClient(Protocol):
-    def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any: ...
-    def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> Awaitable[Any]: ...
+    def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType: ...
+    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType: ...
 
 
 class LiteLLMClient:
     __slots__ = []
 
-    def completion(self, *, messages: list[dict], model: str, **kwargs) -> Any:
+    def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
         return completion(messages=messages, model=model, **kwargs)
 
-    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> Any:
+    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
         return await acompletion(messages=messages, model=model, **kwargs)
 
 
@@ -173,20 +174,14 @@ def lm_call(messages: Messages, /, *, model: str) -> str:
 def impl_lm_call(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    response = active_client.get().completion(
-        messages=messages,
-        model=model,
-    )
+    response = active_client.get().completion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
 async def aimpl_lm_call(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
-    response = await active_client.get().acompletion(
-        messages=messages,
-        model=model,
-    )
+    response = await active_client.get().acompletion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
