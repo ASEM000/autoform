@@ -136,7 +136,7 @@ def test_lm_schema_call_traces_schema_as_static_param():
             model=model,
             schema=answer,
         )
-        return af.format("{}", result["text"])
+        return af.string.format("{}", result["text"])
 
     ir = af.trace(program)("test", "gpt-5.5")
     assert [eqn.prim.name for eqn in ir.eqns] == ["lm_schema_call", "format"]
@@ -233,7 +233,7 @@ def test_lm_schema_call_pullback_treats_zero_as_no_feedback():
             model="m1",
             schema=answer,
         )
-        return af.format("{}", result["text"])
+        return af.string.format("{}", result["text"])
 
     ir = af.trace(program)("seed")
     with af.lm_client(router):

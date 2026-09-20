@@ -29,7 +29,7 @@ with af.memoize():
 print(result)
 ```
 
-Each `+` records a {py:func}`concat <autoform.concat>` equation. The two equations that build `right` repeat the inputs used to build `left`, so both read cached results.
+Each `+` records a {py:func}`concat <autoform.string.concat>` equation. The two equations that build `right` repeat the inputs used to build `left`, so both read cached results.
 
 ## Deduplicate During Tracing
 
@@ -51,7 +51,7 @@ ir = af.trace(duplicated)("seed")
 print(ir.call("alpha"))
 ```
 
-The repeated {py:func}`concat <autoform.concat>` call is cached while the trace is being built. {py:func}`checkpoint <autoform.checkpoint>`
+The repeated {py:func}`concat <autoform.string.concat>` call is cached while the trace is being built. {py:func}`checkpoint <autoform.checkpoint>`
 is not memoized because repeated checkpoints are meant to remain visible to
 {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`. For other primitives, use {py:func}`memoize <autoform.memoize>` when the same inputs
 really should mean the same result.

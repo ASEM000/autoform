@@ -36,7 +36,7 @@ The argument `"DNA"` is not the real input for later runs. It is a shape/type wi
 
 During that run:
 
-- calls to `autoform` primitives such as {py:func}`format <autoform.format>`, {py:func}`concat <autoform.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, and {py:func}`while_loop <autoform.while_loop>` become IR equations;
+- calls to `autoform` primitives such as {py:func}`format <autoform.string.format>`, {py:func}`concat <autoform.string.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, and {py:func}`while_loop <autoform.while_loop>` become IR equations;
 - ordinary Python that depends only on concrete or static values runs immediately and is baked into the trace;
 - Python control flow that depends on a traced value is not available as a normal `if` or variable-length loop.
 
@@ -60,7 +60,7 @@ output: output
 Read it as data flow:
 
 - `topic` is the runtime input;
-- the first two {py:func}`concat <autoform.concat>` equations build `prompt`;
+- the first two {py:func}`concat <autoform.string.concat>` equations build `prompt`;
 - the third adds the `"Prompt: "` prefix;
 - `output` is the returned value.
 

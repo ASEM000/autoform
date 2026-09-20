@@ -28,7 +28,7 @@ class TestWhileLoopImpl:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -42,7 +42,7 @@ class TestWhileLoopImpl:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -59,7 +59,7 @@ class TestWhileLoopImpl:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -77,7 +77,7 @@ class TestWhileLoopImpl:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -94,7 +94,7 @@ class TestWhileLoopImpl:
             return True
 
         def body(x):
-            return af.concat(x, "DONE")
+            return af.string.concat(x, "DONE")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -108,7 +108,7 @@ class TestWhileLoopBatch:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -130,7 +130,7 @@ class TestWhileLoopBatch:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -148,10 +148,10 @@ class TestWhileLoopBatch:
 
     def test_batch_with_data_dependent_cond(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -172,7 +172,7 @@ class TestWhileLoopBatch:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -194,7 +194,7 @@ class TestWhileLoopBatch:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -212,10 +212,10 @@ class TestWhileLoopBatch:
 
     def test_batch_preserves_tuple_container(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -234,10 +234,10 @@ class TestWhileLoopBatch:
 
     def test_batch_preserves_list_container(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -261,7 +261,7 @@ class TestWhileLoopPullback:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -286,7 +286,7 @@ class TestWhileLoopPullback:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -310,7 +310,7 @@ class TestWhileLoopPullback:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -335,7 +335,7 @@ class TestWhileLoopPullback:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -361,7 +361,7 @@ class TestWhileLoopWithMark:
             return False
 
         def body(x):
-            new_x = af.concat(x, "x")
+            new_x = af.string.concat(x, "x")
             return af.checkpoint(new_x, key="state", collection="trace")
 
         cond_ir = trace(cond)("x")
@@ -382,7 +382,7 @@ class TestWhileLoopWithMark:
             return True
 
         def body(x):
-            new_x = af.concat(x, "x")
+            new_x = af.string.concat(x, "x")
             return af.checkpoint(new_x, key="state", collection="trace")
 
         cond_ir = trace(cond)("x")
@@ -481,17 +481,17 @@ class TestWhileLoopValidation:
 class TestWhileLoopAdvanced:
     def test_nested_while_loop(self):
         def inner_cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def inner_body(x):
-            return af.concat(x, "i")
+            return af.string.concat(x, "i")
 
         inner_cond_ir = trace(inner_cond)("x")
         inner_body_ir = trace(inner_body)("x")
 
         def outer_body(x):
             inner_result = af.while_loop(inner_cond_ir, inner_body_ir, "", max_iters=2)
-            return af.concat(x, inner_result)
+            return af.string.concat(x, inner_result)
 
         def outer_cond(x):
             return True
@@ -509,17 +509,17 @@ class TestWhileLoopAdvanced:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_nested_while_loop_async(self):
         def inner_cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def inner_body(x):
-            return af.concat(x, "i")
+            return af.string.concat(x, "i")
 
         inner_cond_ir = trace(inner_cond)("x")
         inner_body_ir = trace(inner_body)("x")
 
         def outer_body(x):
             inner_result = af.while_loop(inner_cond_ir, inner_body_ir, "", max_iters=2)
-            return af.concat(x, inner_result)
+            return af.string.concat(x, inner_result)
 
         def outer_cond(x):
             return True
@@ -536,10 +536,10 @@ class TestWhileLoopAdvanced:
 
     def test_batch_divergent_exit(self):
         def cond(x):
-            return af.match(x, "go")
+            return af.string.match(x, "go")
 
         def body(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -560,10 +560,10 @@ class TestWhileLoopAdvanced:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_divergent_exit_async(self):
         def cond(x):
-            return af.match(x, "go")
+            return af.string.match(x, "go")
 
         def body(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -586,7 +586,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -612,7 +612,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -637,7 +637,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -653,7 +653,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -670,7 +670,7 @@ class TestWhileLoopAdvanced:
             return False
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -688,10 +688,10 @@ class TestWhileLoopAdvanced:
 
     def test_batch_staggered_exit(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -713,10 +713,10 @@ class TestWhileLoopAdvanced:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_staggered_exit_async(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -740,7 +740,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -758,7 +758,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -772,10 +772,10 @@ class TestWhileLoopAdvanced:
 
     def test_batch_variable_iteration_counts(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -797,10 +797,10 @@ class TestWhileLoopAdvanced:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_variable_iteration_counts_async(self):
         def cond(x):
-            return af.match(x, "")
+            return af.string.match(x, "")
 
         def body(x):
-            return af.concat(x, "x")
+            return af.string.concat(x, "x")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -824,7 +824,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -846,7 +846,7 @@ class TestWhileLoopAdvanced:
             return True
 
         def body(x):
-            return af.concat(x, ".")
+            return af.string.concat(x, ".")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -864,11 +864,11 @@ class TestWhileLoopAdvanced:
 
     def test_batch_early_exit_vs_max_iters(self):
         def cond(x):
-            check = af.match(x, "go")
+            check = af.string.match(x, "go")
             return check
 
         def body(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -890,11 +890,11 @@ class TestWhileLoopAdvanced:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_early_exit_vs_max_iters_async(self):
         def cond(x):
-            check = af.match(x, "go")
+            check = af.string.match(x, "go")
             return check
 
         def body(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("x")
@@ -1010,7 +1010,7 @@ class TestWhileLoopWithLLM:
         )
 
         def analyze(text):
-            msgs = [{"role": "user", "content": af.format("Analyze sentiment: {}", text)}]
+            msgs = [{"role": "user", "content": af.string.format("Analyze sentiment: {}", text)}]
             return af.lm_schema_call(msgs, model=TEST_MODEL, schema=sentiment_schema)
 
         analyze_ir = trace(analyze)("text")
@@ -1046,13 +1046,13 @@ class TestWhileLoopWithLLM:
     def test_collect_lm_marks(self):
         def process(text):
             step1 = af.lm_call(
-                [{"role": "user", "content": af.format("Summarize: {}", text)}],
+                [{"role": "user", "content": af.string.format("Summarize: {}", text)}],
                 model=TEST_MODEL,
             )
             step1 = af.checkpoint(step1, key="summary", collection="steps")
 
             step2 = af.lm_call(
-                [{"role": "user", "content": af.format("Translate to Spanish: {}", step1)}],
+                [{"role": "user", "content": af.string.format("Translate to Spanish: {}", step1)}],
                 model=TEST_MODEL,
             )
             step2 = af.checkpoint(step2, key="translation", collection="steps")
@@ -1084,7 +1084,7 @@ class TestWhileLoopWithLLM:
                 [
                     {
                         "role": "user",
-                        "content": af.format(
+                        "content": af.string.format(
                             "Does this text need improvement to be more professional? Text: '{}'",
                             text,
                         ),

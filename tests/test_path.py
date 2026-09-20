@@ -51,7 +51,7 @@ class TestFactor:
     def test_factor_traces_to_primitive(self):
         def program(x: str, weight: float):
             af.factor(weight, name="score")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x", 1.0)
 
@@ -91,7 +91,7 @@ class TestFactor:
     def test_dce_preserves_factor(self):
         def program(x: str, weight: float):
             af.factor(weight, name="score")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         dced = af.dce(af.trace(program)("x", 1.0))
 
@@ -102,7 +102,7 @@ class TestWeight:
     def test_weight_ir_returns_output_and_path_weight(self):
         def program(x: str, weight: float):
             af.factor(weight, name="score")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x", 1.0)
         weight_ir = af.weight(ir)
@@ -251,7 +251,7 @@ class TestWeight:
     def test_weight_after_pushforward_scores_primal_trace_once(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x", 1.0)
         pushforward_ir = af.pushforward(ir)
@@ -268,7 +268,7 @@ class TestWeight:
     def test_weight_after_pullback_scores_forward_trace_once(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x", 1.0)
         pullback_ir = af.pullback(ir)
@@ -286,7 +286,7 @@ class TestWeight:
     def test_pushforward_of_weight_ir_raises_not_supported(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         weight_ir = af.weight(af.trace(program)("x", 1.0))
 
@@ -296,7 +296,7 @@ class TestWeight:
     def test_pullback_of_weight_ir_raises_not_supported(self):
         def program(x: str, likelihood: float):
             af.factor(likelihood, name="evidence")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         weight_ir = af.weight(af.trace(program)("x", 1.0))
 
@@ -305,7 +305,7 @@ class TestWeight:
 
     def test_dce_weight_ir_optimizes_inner_trace(self):
         def program(x: str, likelihood: float):
-            output = af.concat(x, "!")
+            output = af.string.concat(x, "!")
             af.factor(likelihood, name="evidence")
             return output
 

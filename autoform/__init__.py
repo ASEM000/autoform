@@ -69,9 +69,6 @@ weight = path.weight
 # PRIMITIVES
 # ==================================================================================================
 
-format = string.format
-concat = string.concat
-match = string.match
 lm_call = lm.lm_call
 lm_schema_call = lm.lm_schema_call
 lm_client = lm.lm_client
@@ -124,9 +121,6 @@ __all__ = [
     "memoize",
     "weight",
     # primitives
-    "format",
-    "concat",
-    "match",
     "lm_call",
     "lm_schema_call",
     "stop_gradient",
@@ -149,5 +143,6 @@ __all__ = [
     # modules
     "extend",
     "numeric",
+    "string",
     "path",
 ]

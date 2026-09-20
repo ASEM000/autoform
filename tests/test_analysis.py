@@ -27,7 +27,7 @@ from autoform.analysis import (
 class TestIrStructure:
     def test_ignores_variable_identity_and_body(self):
         lhs = af.trace(lambda x: (x, "same"))("X")
-        rhs = af.trace(lambda x: (af.concat(x, "!"), "same"))("Y")
+        rhs = af.trace(lambda x: (af.string.concat(x, "!"), "same"))("Y")
 
         assert is_same_stucture(lhs, rhs)
 
@@ -81,7 +81,7 @@ class TestIrVarLeaves:
     def test_returns_input_vars_in_leaf_order(self):
         def program(payload):
             head, (left, right) = payload
-            return af.format("{} {} {}", head, left, right)
+            return af.string.format("{} {} {}", head, left, right)
 
         ir = af.trace(program)(("head", ("left", "right")))
         (payload,) = ir.in_tree
@@ -91,7 +91,7 @@ class TestIrVarLeaves:
 
     def test_filters_static_input_literals(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
@@ -99,8 +99,8 @@ class TestIrVarLeaves:
 
     def test_returns_output_vars_in_leaf_order(self):
         def program(x):
-            left = af.concat(x, "1")
-            right = af.concat(x, "2")
+            left = af.string.concat(x, "1")
+            right = af.string.concat(x, "2")
             return ({"left": left}, (right, "const"))
 
         ir = af.trace(program)("seed")
@@ -120,8 +120,8 @@ class TestIrVarLeaves:
 class TestIrVarProducers:
     def test_maps_each_output_var_to_its_producer(self):
         def program(x):
-            left = af.concat(x, "1")
-            right = af.concat(left, "2")
+            left = af.string.concat(x, "1")
+            right = af.string.concat(left, "2")
             return left, right
 
         ir = af.trace(program)("seed")
@@ -132,7 +132,7 @@ class TestIrVarProducers:
 
     def test_includes_all_vars_from_tree_outputs(self):
         def program(x):
-            pair = af.concat(x, "!")
+            pair = af.string.concat(x, "!")
             return {"value": pair, "original": x}
 
         ir = af.trace(program)("seed")
@@ -162,8 +162,8 @@ class TestIrEqnDependencyGraph:
 
     def test_includes_independent_equations_with_empty_children(self):
         def program(a, b):
-            left = af.format("{}", a)
-            right = af.format("{}", b)
+            left = af.string.format("{}", a)
+            right = af.string.format("{}", b)
             return left, right
 
         ir = af.trace(program)("a", "b")
@@ -173,9 +173,9 @@ class TestIrEqnDependencyGraph:
 
     def test_maps_parent_equations_to_children(self):
         def program(x):
-            a = af.format("{}", x)
-            b = af.concat(a, "!")
-            c = af.concat(b, "?")
+            a = af.string.format("{}", x)
+            b = af.string.concat(a, "!")
+            c = af.string.concat(b, "?")
             return c
 
         ir = af.trace(program)("seed")
@@ -185,8 +185,8 @@ class TestIrEqnDependencyGraph:
 
     def test_dedupes_repeated_input_dependencies(self):
         def program(x):
-            a = af.format("{}", x)
-            b = af.concat(a, a)
+            a = af.string.format("{}", x)
+            b = af.string.concat(a, a)
             return b
 
         ir = af.trace(program)("seed")
@@ -218,9 +218,9 @@ class TestIrLiveness:
 
     def test_chain_returns_boundary_liveness(self):
         def program(x):
-            a = af.format("{}", x)
-            b = af.concat(a, "!")
-            c = af.concat(b, "?")
+            a = af.string.format("{}", x)
+            b = af.string.concat(a, "!")
+            c = af.string.concat(b, "?")
             return c
 
         ir = af.trace(program)("seed")
@@ -231,8 +231,8 @@ class TestIrLiveness:
 
     def test_parallel_equations_keep_suffix_live_ins(self):
         def program(a, b):
-            left = af.format("{}", a)
-            right = af.format("{}", b)
+            left = af.string.format("{}", a)
+            right = af.string.format("{}", b)
             return left, right
 
         ir = af.trace(program)("left", "right")
@@ -243,8 +243,8 @@ class TestIrLiveness:
 
     def test_partial_output_mask_reduces_output_boundary_liveness(self):
         def program(x):
-            a = af.concat(x, "a")
-            b = af.concat(x, "b")
+            a = af.string.concat(x, "a")
+            b = af.string.concat(x, "b")
             return a, b
 
         ir = af.trace(program)("seed")
@@ -255,7 +255,7 @@ class TestIrLiveness:
 
     def test_static_inputs_do_not_become_live_vars(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
         out_var = ir.out_tree

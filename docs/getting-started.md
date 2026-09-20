@@ -71,7 +71,7 @@ Tracing runs the function once with placeholder values. Calls to [`autoform` pri
 The resulting IR contains:
 
 - one runtime input, `topic`;
-- two {py:func}`concat <autoform.concat>` equations that build the prompt, one for each `+`;
+- two {py:func}`concat <autoform.string.concat>` equations that build the prompt, one for each `+`;
 - one {py:func}`lm_call <autoform.lm_call>` equation that records a future provider call with role `user` and model `gpt-5.5`;
 - one string output.
 

@@ -93,7 +93,7 @@ class TestSow:
     def test_in_chain(self):
         def func(x):
             sowed = af.checkpoint(x, key="input", collection="debug")
-            return af.concat("[", sowed, "]")
+            return af.string.concat("[", sowed, "]")
 
         ir = af.trace(func)("a")
         result = ir.call("hello")
@@ -114,7 +114,7 @@ class TestRunAndReap:
     def test_reap_multiple_sows_same_tag(self):
         def func(x):
             a = af.checkpoint(x, key="first", collection="debug")
-            b = af.concat(a, "!")
+            b = af.string.concat(a, "!")
             c = af.checkpoint(b, key="second", collection="debug")
             return c
 
@@ -152,7 +152,7 @@ class TestRunAndReap:
 
     def test_reap_with_no_sows(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
         with af.collect(collection="debug") as collected:
@@ -162,8 +162,8 @@ class TestRunAndReap:
 
     def test_reap_preserves_execution(self):
         def func(x):
-            a = af.checkpoint(af.format("Q: {}", x), key="prompt", collection="debug")
-            response = af.concat(a, " A: 42")
+            a = af.checkpoint(af.string.format("Q: {}", x), key="prompt", collection="debug")
+            response = af.string.concat(a, " A: 42")
             return af.checkpoint(response, key="response", collection="debug")
 
         ir = af.trace(func)("test")
@@ -177,7 +177,7 @@ class TestRunAndReap:
 class TestRunAndPlant:
     def test_plant_overrides_sow(self):
         def func(x):
-            return af.checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
+            return af.checkpoint(af.string.concat("Hello, ", x), key="greeting", collection="cache")
 
         ir = af.trace(func)("test")
 
@@ -191,7 +191,7 @@ class TestRunAndPlant:
     def test_plant_partial(self):
         def func(x):
             a = af.checkpoint(x, key="first", collection="cache")
-            b = af.checkpoint(af.concat(a, "!"), key="second", collection="cache")
+            b = af.checkpoint(af.string.concat(a, "!"), key="second", collection="cache")
             return b
 
         ir = af.trace(func)("test")
@@ -270,10 +270,10 @@ class TestTransformThenReap:
 
     def test_reap_captures_in_switch_branches(self):
         def branch_a(x):
-            return af.checkpoint(af.concat("a: ", x), key="result", collection="debug")
+            return af.checkpoint(af.string.concat("a: ", x), key="result", collection="debug")
 
         def branch_b(x):
-            return af.checkpoint(af.concat("b: ", x), key="result", collection="debug")
+            return af.checkpoint(af.string.concat("b: ", x), key="result", collection="debug")
 
         ir_a = af.trace(branch_a)("x")
         ir_b = af.trace(branch_b)("x")
@@ -291,9 +291,9 @@ class TestTransformThenReap:
 class TestInjectAndDCE:
     def test_inject_trace_creates_literal(self):
         def program(x):
-            expensive = af.concat("EXPENSIVE:", x)
+            expensive = af.string.concat("EXPENSIVE:", x)
             cached = af.checkpoint(expensive, key="result", collection="cache")
-            return af.concat("Got: ", cached)
+            return af.string.concat("Got: ", cached)
 
         ir = af.trace(program)("test")
 
@@ -311,9 +311,9 @@ class TestInjectAndDCE:
 
     def test_dce_removes_dead_code_after_inject(self):
         def program(x):
-            expensive = af.concat("EXPENSIVE:", x)
+            expensive = af.string.concat("EXPENSIVE:", x)
             cached = af.checkpoint(expensive, key="result", collection="cache")
-            return af.concat("Got: ", cached)
+            return af.string.concat("Got: ", cached)
 
         ir = af.trace(program)("test")
 
@@ -331,11 +331,11 @@ class TestInjectAndDCE:
 
     def test_inject_dce_with_multiple_marks(self):
         def program(x):
-            step1 = af.concat("step1:", x)
+            step1 = af.string.concat("step1:", x)
             saved1 = af.checkpoint(step1, key="first", collection="cache")
-            step2 = af.concat("step2:", saved1)
+            step2 = af.string.concat("step2:", saved1)
             saved2 = af.checkpoint(step2, key="second", collection="cache")
-            return af.concat("final:", saved2)
+            return af.string.concat("final:", saved2)
 
         ir = af.trace(program)("test")
         assert len(ir.eqns) == 5
@@ -351,9 +351,9 @@ class TestInjectAndDCE:
 
     def test_inject_works_with_nested_transforms(self):
         def program(x):
-            expensive = af.concat("EXPENSIVE:", x)
+            expensive = af.string.concat("EXPENSIVE:", x)
             cached = af.checkpoint(expensive, key="result", collection="cache")
-            return af.concat("Got: ", cached)
+            return af.string.concat("Got: ", cached)
 
         ir = af.trace(program)("test")
         batched_ir = af.batch(ir)
@@ -367,9 +367,9 @@ class TestInjectAndDCE:
 class TestMemoizeBasic:
     def test_memoize_caches_duplicate_calls(self):
         def func(x):
-            a = af.concat(x, "!")
-            b = af.concat(x, "!")
-            return af.concat(a, b)
+            a = af.string.concat(x, "!")
+            b = af.string.concat(x, "!")
+            return af.string.concat(a, b)
 
         ir = af.trace(func)("test")
 
@@ -383,7 +383,7 @@ class TestMemoizeBasic:
 
     def test_memoize_returns_correct_result(self):
         def func(x):
-            a = af.concat(x, "!")
+            a = af.string.concat(x, "!")
             return a
 
         ir = af.trace(func)("test")
@@ -395,7 +395,7 @@ class TestMemoizeBasic:
 
     def test_memoize_different_inputs_not_cached(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
 
@@ -441,7 +441,7 @@ class TestMemoizeWithCheckpoints:
 
     def test_memoize_with_checkpoint(self):
         def func(x):
-            a = checkpoint(af.concat(x, "!"), key="val", collection="debug")
+            a = checkpoint(af.string.concat(x, "!"), key="val", collection="debug")
             return a
 
         ir = af.trace(func)("test")
@@ -457,7 +457,7 @@ class TestMemoizeWithCheckpoints:
         def func(x):
             a = checkpoint(x, key="first", collection="debug")
             b = checkpoint(x, key="second", collection="debug")
-            return af.concat(a, b)
+            return af.string.concat(a, b)
 
         ir = af.trace(func)("test")
 
@@ -474,7 +474,7 @@ class TestMemoizeWithCheckpoints:
             with af.memoize():
                 a = checkpoint(x, key="first", collection="debug")
                 b = checkpoint(x, key="second", collection="debug")
-                return af.concat(a, b)
+                return af.string.concat(a, b)
 
         ir = af.trace(func)("test")
 
@@ -502,7 +502,7 @@ class TestMemoizeWithCheckpoints:
 class TestMemoizeMultipleCalls:
     def test_memoize_across_multiple_ir_calls(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
 
@@ -518,7 +518,7 @@ class TestMemoizeMultipleCalls:
 
     def test_memoize_scope_is_context(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
 
@@ -548,7 +548,7 @@ class TestMemoizeTransformedIRs:
 
     def test_memoize_batched_ir(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
         batched = af.batch(ir)
@@ -562,7 +562,7 @@ class TestMemoizeTransformedIRs:
 
     def test_memoize_pushforward_ir(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
         pf_ir = af.pushforward(ir)
@@ -576,7 +576,7 @@ class TestMemoizeTransformedIRs:
 
     def test_memoize_pullback_ir(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
         pb_ir = af.pullback(ir)
@@ -590,7 +590,7 @@ class TestMemoizeTransformedIRs:
 
     def test_memoize_batched_different_inputs(self):
         def func(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(func)("test")
         batched = af.batch(ir)

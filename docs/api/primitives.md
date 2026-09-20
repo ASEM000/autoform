@@ -12,9 +12,9 @@ Primitives are operations that tracing records as IR equations.
 ## String
 
 ```{eval-rst}
-.. autofunction:: autoform.format
-.. autofunction:: autoform.concat
-.. autofunction:: autoform.match
+.. autofunction:: autoform.string.format
+.. autofunction:: autoform.string.concat
+.. autofunction:: autoform.string.match
 ```
 
 ## Numeric

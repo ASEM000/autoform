@@ -22,8 +22,8 @@ def test_switch_contract():
         pass
 
     af.extend.register_trace_type(Key, lambda _: af.core.StrAVal())
-    left = af.trace(lambda x: af.concat("L", x))("X")
-    right = af.trace(lambda x: af.concat("R", x))("X")
+    left = af.trace(lambda x: af.string.concat("L", x))("X")
+    right = af.trace(lambda x: af.string.concat("R", x))("X")
     for keys in (("L", "R"), (0, 1), (False, True), (0.5, 1.5), (Key("L"), Key("R"))):
         branches = dict(zip(keys, (left, right), strict=True))
         ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
@@ -51,9 +51,9 @@ def test_switch_contract():
 class TestSwitchBasic:
     def test_switch_key_zero(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
-            "two": af.trace(lambda x: af.concat("two: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
+            "two": af.trace(lambda x: af.string.concat("two: ", x))("X"),
         }
 
         def program(key, x):
@@ -66,9 +66,9 @@ class TestSwitchBasic:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_switch_key_zero_async(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
-            "two": af.trace(lambda x: af.concat("two: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
+            "two": af.trace(lambda x: af.string.concat("two: ", x))("X"),
         }
 
         def program(key, x):
@@ -80,9 +80,9 @@ class TestSwitchBasic:
 
     def test_switch_key_one(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
-            "two": af.trace(lambda x: af.concat("two: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
+            "two": af.trace(lambda x: af.string.concat("two: ", x))("X"),
         }
 
         def program(key, x):
@@ -95,8 +95,8 @@ class TestSwitchBasic:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_switch_key_one_async(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -108,9 +108,9 @@ class TestSwitchBasic:
 
     def test_switch_key_two(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
-            "two": af.trace(lambda x: af.concat("two: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
+            "two": af.trace(lambda x: af.string.concat("two: ", x))("X"),
         }
 
         def program(key, x):
@@ -122,16 +122,16 @@ class TestSwitchBasic:
 
     def test_switch_invalid_key_raises(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A:", x))("X"),
-            "b": af.trace(lambda x: af.concat("B:", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A:", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B:", x))("X"),
         }
         with pytest.raises(KeyError):
             af.switch("invalid_key", branches, "hello")
 
     def test_switch_with_multiple_operands(self):
         branches = {
-            "concat": af.trace(af.concat)("A", "B"),
-            "format": af.trace(lambda a, b: af.format("{} - {}", a, b))("A", "B"),
+            "concat": af.trace(af.string.concat)("A", "B"),
+            "format": af.trace(lambda a, b: af.string.format("{} - {}", a, b))("A", "B"),
         }
 
         def program(key, x, y):
@@ -145,8 +145,8 @@ class TestSwitchBasic:
 
     def test_switch_direct_call(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A:", x))("X"),
-            "b": af.trace(lambda x: af.concat("B:", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A:", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B:", x))("X"),
         }
         result = af.switch("a", branches, "test")
         assert result == "A:test"
@@ -157,8 +157,8 @@ class TestSwitchBasic:
 class TestSwitchIRStructure:
     def test_creates_switch_eqn(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("a", x))("X"),
-            "b": af.trace(lambda x: af.concat("b", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("a", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("b", x))("X"),
         }
 
         def program(key, x):
@@ -185,8 +185,8 @@ class TestSwitchIRStructure:
 class TestSwitchPushforward:
     def test_pushforward_selects_correct_branch(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -204,8 +204,8 @@ class TestSwitchPushforward:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_selects_correct_branch_async(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -222,8 +222,8 @@ class TestSwitchPushforward:
 
     def test_pushforward_key_one(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -245,8 +245,8 @@ class TestSwitchPullback:
             return af.ad.is_zero(val)
 
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -266,8 +266,8 @@ class TestSwitchPullback:
             return af.ad.is_zero(val)
 
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -286,8 +286,8 @@ class TestSwitchPullback:
             return af.ad.is_zero(val)
 
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -305,8 +305,8 @@ class TestSwitchPullback:
 class TestSwitchBatch:
     def test_batch_same_key(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -319,8 +319,8 @@ class TestSwitchBatch:
 
     def test_batch_varying_key(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -333,8 +333,8 @@ class TestSwitchBatch:
 
     def test_batch_varying_key_static_operand(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -348,8 +348,8 @@ class TestSwitchBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_same_key_async(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -363,8 +363,8 @@ class TestSwitchBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_varying_key_async(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -378,8 +378,8 @@ class TestSwitchBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_varying_key_static_operand_async(self):
         branches = {
-            "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-            "one": af.trace(lambda x: af.concat("one: ", x))("X"),
+            "zero": af.trace(lambda x: af.string.concat("zero: ", x))("X"),
+            "one": af.trace(lambda x: af.string.concat("one: ", x))("X"),
         }
 
         def program(key, x):
@@ -394,8 +394,8 @@ class TestSwitchBatch:
 class TestSwitchNestedTransforms:
     def test_pushforward_of_batch(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A:", x))("X"),
-            "b": af.trace(lambda x: af.concat("B:", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A:", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B:", x))("X"),
         }
 
         def program(key, x):
@@ -413,8 +413,8 @@ class TestSwitchNestedTransforms:
 
     def test_pullback_of_batch(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A:", x))("X"),
-            "b": af.trace(lambda x: af.concat("B:", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A:", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B:", x))("X"),
         }
 
         def program(key, x):
@@ -434,8 +434,8 @@ class TestSwitchNestedTransforms:
 class TestSwitchWithOperands:
     def test_switch_with_multiple_operands(self):
         branches = {
-            "dash": af.trace(lambda x, y: af.format("{}-{}", x, y))("X", "Y"),
-            "plus": af.trace(lambda x, y: af.format("{}+{}", x, y))("X", "Y"),
+            "dash": af.trace(lambda x, y: af.string.format("{}-{}", x, y))("X", "Y"),
+            "plus": af.trace(lambda x, y: af.string.format("{}+{}", x, y))("X", "Y"),
         }
         result = af.switch("dash", branches, "a", "b")
         assert result == "a-b"
@@ -446,13 +446,13 @@ class TestSwitchWithOperands:
 class TestSwitchComplexBranches:
     def test_branches_with_multiple_ops(self):
         def make_branch0(x):
-            step1 = af.format("[{}]", x)
-            step2 = af.concat(step1, "!")
+            step1 = af.string.format("[{}]", x)
+            step2 = af.string.concat(step1, "!")
             return step2
 
         def make_branch1(x):
-            step1 = af.format("({})", x)
-            step2 = af.concat(step1, "?")
+            step1 = af.string.format("({})", x)
+            step2 = af.string.concat(step1, "?")
             return step2
 
         branches = {
@@ -469,7 +469,7 @@ class TestSwitchComplexBranches:
 
     def test_many_branches(self):
         branches = {
-            f"branch{i}": af.trace(lambda x, i=i: af.format("branch{}: {}", str(i), x))("X")
+            f"branch{i}": af.trace(lambda x, i=i: af.string.format("branch{}: {}", str(i), x))("X")
             for i in range(5)
         }
 
@@ -485,8 +485,8 @@ class TestSwitchComplexBranches:
 class TestSwitchBatchAllUnbatched:
     def test_switch_batch_all_unbatched(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
-            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B: ", x))("X"),
         }
         batch_size = 3
         in_batched = (False, False)
@@ -499,8 +499,8 @@ class TestSwitchBatchAllUnbatched:
 
     def test_switch_batch_key_batched_operand_unbatched(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
-            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B: ", x))("X"),
         }
 
         def program(key, x):
@@ -513,8 +513,8 @@ class TestSwitchBatchAllUnbatched:
 
     def test_switch_batch_key_unbatched_operand_batched(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
-            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B: ", x))("X"),
         }
 
         def program(key, x):
@@ -528,8 +528,8 @@ class TestSwitchBatchAllUnbatched:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_switch_batch_all_unbatched_async(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
-            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B: ", x))("X"),
         }
         batch_size = 3
         in_batched = (False, False)

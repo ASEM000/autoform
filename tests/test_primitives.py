@@ -130,16 +130,16 @@ class TestVar:
 
 class TestFormatPrimitive:
     def test_basic_format(self):
-        result = af.format("Hello, {}!", "World")
+        result = af.string.format("Hello, {}!", "World")
         assert result == "Hello, World!"
 
     def test_multiple_placeholders(self):
-        result = af.format("{} + {} = {}", "1", "2", "3")
+        result = af.string.format("{} + {} = {}", "1", "2", "3")
         assert result == "1 + 2 = 3"
 
     def test_format_ir(self):
         def func(x):
-            return af.format("Value: {}", x)
+            return af.string.format("Value: {}", x)
 
         ir = af.trace(func)("test")
         assert len(ir.eqns) == 1
@@ -148,7 +148,7 @@ class TestFormatPrimitive:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_format_ir_async(self):
         def func(x):
-            return af.format("Value: {}", x)
+            return af.string.format("Value: {}", x)
 
         ir = af.trace(func)("test")
         result = await ir.acall("hello")
@@ -157,20 +157,20 @@ class TestFormatPrimitive:
 
 class TestConcatPrimitive:
     def test_basic_concat(self):
-        result = af.concat("Hello", " ", "World")
+        result = af.string.concat("Hello", " ", "World")
         assert result == "Hello World"
 
     def test_two_args(self):
-        result = af.concat("A", "B")
+        result = af.string.concat("A", "B")
         assert result == "AB"
 
     def test_concat_rejects_non_string_input(self):
         with pytest.raises(TypeError):
-            af.concat("A", 1)
+            af.string.concat("A", 1)
 
     def test_concat_ir(self):
         def func(x, y):
-            return af.concat(x, y)
+            return af.string.concat(x, y)
 
         ir = af.trace(func)("a", "b")
         assert len(ir.eqns) == 1
@@ -229,7 +229,7 @@ class TestConcatPrimitive:
 
     def test_concat_trace_rejects_non_string_input(self):
         def func(x, y, z):
-            return af.concat(x, y, z)
+            return af.string.concat(x, y, z)
 
         with pytest.raises(AssertionError, match="Expected strings"):
             af.trace(func)("a", "b", 1)
@@ -237,7 +237,7 @@ class TestConcatPrimitive:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_concat_ir_async(self):
         def func(x, y):
-            return af.concat(x, y)
+            return af.string.concat(x, y)
 
         ir = af.trace(func)("a", "b")
         result = await ir.acall("hello", " world")
@@ -344,7 +344,7 @@ class TestEchoLMClient:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_traced_and_batched_execution(self):
         def program(text):
-            prompt = af.format("Hello, {}!", text)
+            prompt = af.string.format("Hello, {}!", text)
             return af.lm_call(
                 [
                     dict(role="system", content="Translate to Korean."),
@@ -446,22 +446,22 @@ class TestBind:
 
 class TestInterpreter:
     def test_eval_interpreter_is_default(self):
-        result = af.concat("a", "b")
+        result = af.string.concat("a", "b")
         assert result == "ab"
 
     def test_use_interpreter_context(self):
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
+            af.string.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
             assert len(tracer.eqns) == 1
-        result = af.concat("a", "b")
+        result = af.string.concat("a", "b")
         assert result == "ab"
 
     def test_tracing_interpreter_creates_eqns(self):
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
-            af.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
+            af.string.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
         assert len(tracer.eqns) == 1
 
 
@@ -527,7 +527,7 @@ class TestStopGradient:
     def test_in_chain_stops_gradient(self):
         def func(x, y):
             stopped = af.stop_gradient(x)
-            return af.concat(stopped, y)
+            return af.string.concat(stopped, y)
 
         ir = af.trace(func)("a", "b")
         pb_ir = af.pullback(ir)
@@ -538,7 +538,7 @@ class TestStopGradient:
     def test_chained_with_format(self):
         def func(x):
             stopped = af.stop_gradient(x)
-            return af.format("[{}]", stopped)
+            return af.string.format("[{}]", stopped)
 
         ir = af.trace(func)("test")
         result = ir.call("hello")
@@ -568,7 +568,7 @@ class TestRunIRInline:
 
     def test_run_ir_inlines_operations(self):
         """run_ir inside a traced function inlines the inner IR's operations."""
-        inner_ir = af.trace(lambda x: af.format("[{}]", x))("X")
+        inner_ir = af.trace(lambda x: af.string.format("[{}]", x))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -580,7 +580,7 @@ class TestRunIRInline:
 
     def test_run_ir_inline_executes_correctly(self):
         """Inlined run_ir produces correct output."""
-        inner_ir = af.trace(lambda x: af.format("<{}>", x))("X")
+        inner_ir = af.trace(lambda x: af.string.format("<{}>", x))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -593,8 +593,8 @@ class TestRunIRInline:
         """Multiple operations are all inlined."""
 
         def inner(x):
-            a = af.concat(x, "!")
-            b = af.format("[{}]", a)
+            a = af.string.concat(x, "!")
+            b = af.string.format("[{}]", a)
             return b
 
         inner_ir = af.trace(inner)("X")
@@ -609,8 +609,8 @@ class TestRunIRInline:
 
     def test_nested_run_ir_inlines(self):
         """Nested run_ir calls all get inlined."""
-        ir1 = af.trace(lambda x: af.concat(x, "1"))("X")
-        ir2 = af.trace(lambda x: af.concat(x, "2"))("X")
+        ir1 = af.trace(lambda x: af.string.concat(x, "1"))("X")
+        ir2 = af.trace(lambda x: af.string.concat(x, "2"))("X")
 
         def outer(x):
             r1 = ir1.call(x)
@@ -623,7 +623,7 @@ class TestRunIRInline:
 
     def test_pushforward_on_inlined_run_ir(self):
         """Pushforward works on inlined run_ir."""
-        inner_ir = af.trace(lambda x: af.concat(x, "!"))("X")
+        inner_ir = af.trace(lambda x: af.string.concat(x, "!"))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -637,7 +637,7 @@ class TestRunIRInline:
 
     def test_pullback_on_inlined_run_ir(self):
         """Pullback works on inlined run_ir."""
-        inner_ir = af.trace(lambda x: af.concat(x, "!"))("X")
+        inner_ir = af.trace(lambda x: af.string.concat(x, "!"))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -649,7 +649,7 @@ class TestRunIRInline:
 
     def test_batch_on_inlined_run_ir(self):
         """Batch works on inlined run_ir."""
-        inner_ir = af.trace(lambda x: af.format("[{}]", x))("X")
+        inner_ir = af.trace(lambda x: af.string.format("[{}]", x))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -1009,7 +1009,7 @@ class TestLiteralZeroing:
 class TestStaticTransformInputs:
     def test_pushforward_static_input_literal_is_not_boxed(self):
         def label(prefix, value):
-            return af.concat(prefix, value)
+            return af.string.concat(prefix, value)
 
         ir = af.trace(label, static=(True, False))("Q", "x")
         pf_ir = af.pushforward(ir)
@@ -1024,7 +1024,7 @@ class TestStaticTransformInputs:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_static_input_literal_is_not_boxed_async(self):
         def label(prefix, value):
-            return af.concat(prefix, value)
+            return af.string.concat(prefix, value)
 
         ir = af.trace(label, static=(True, False))("Q", "x")
         pf_ir = af.pushforward(ir)
@@ -1038,7 +1038,7 @@ class TestStaticTransformInputs:
 
     def test_pullback_static_input_literal_is_not_boxed(self):
         def label(prefix, value):
-            return af.concat(prefix, value)
+            return af.string.concat(prefix, value)
 
         ir = af.trace(label, static=(True, False))("Q", "x")
         pb_ir = af.pullback(ir)
@@ -1054,7 +1054,7 @@ class TestStaticTransformInputs:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_static_input_literal_is_not_boxed_async(self):
         def label(prefix, value):
-            return af.concat(prefix, value)
+            return af.string.concat(prefix, value)
 
         ir = af.trace(label, static=(True, False))("Q", "x")
         pb_ir = af.pullback(ir)

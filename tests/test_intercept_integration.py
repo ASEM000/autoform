@@ -92,7 +92,7 @@ class TestCollect:
 class TestInject:
     def test_inject_replaces_value(self):
         def func(x):
-            return checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
+            return checkpoint(af.string.concat("Hello, ", x), key="greeting", collection="cache")
 
         ir = af.trace(func)("test")
 
@@ -107,7 +107,7 @@ class TestInject:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_inject_replaces_value_async(self):
         def func(x):
-            return checkpoint(af.concat("Hello, ", x), key="greeting", collection="cache")
+            return checkpoint(af.string.concat("Hello, ", x), key="greeting", collection="cache")
 
         ir = af.trace(func)("test")
 
@@ -118,7 +118,7 @@ class TestInject:
     def test_inject_partial(self):
         def func(x):
             a = checkpoint(x, key="first", collection="cache")
-            b = checkpoint(af.concat(a, "!"), key="second", collection="cache")
+            b = checkpoint(af.string.concat(a, "!"), key="second", collection="cache")
             return b
 
         ir = af.trace(func)("test")

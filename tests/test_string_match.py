@@ -21,25 +21,25 @@ from autoform.string import abstract_match
 
 class TestMatchBasic:
     def test_match_equal_strings(self):
-        assert af.match("yes", "yes") is True
+        assert af.string.match("yes", "yes") is True
 
     def test_match_unequal_strings(self):
-        assert af.match("yes", "no") is False
+        assert af.string.match("yes", "no") is False
 
     def test_match_empty_strings(self):
-        assert af.match("", "") is True
+        assert af.string.match("", "") is True
 
     def test_match_empty_vs_nonempty(self):
-        assert af.match("", "x") is False
+        assert af.string.match("", "x") is False
 
     def test_match_rejects_non_string_input(self):
-        assert af.match("yes", 1) is False
+        assert af.string.match("yes", 1) is False
 
 
 class TestMatchTraced:
     def test_traced_match(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         assert ir.call("yes") is True
@@ -80,7 +80,7 @@ class TestMatchTraced:
 
     def test_traced_match_both_args(self):
         def check(a, b):
-            return af.match(a, b)
+            return af.string.match(a, b)
 
         ir = trace(check)("a", "b")
         assert ir.call("hello", "hello") is True
@@ -88,7 +88,7 @@ class TestMatchTraced:
 
     def test_match_with_literal_second_arg(self):
         def check(x):
-            return af.match(x, "target")
+            return af.string.match(x, "target")
 
         ir = trace(check)("dummy")
         assert ir.call("target") is True
@@ -96,7 +96,7 @@ class TestMatchTraced:
 
     def test_traced_match_rejects_non_string_input(self):
         def check(a, b):
-            return af.match(a, b)
+            return af.string.match(a, b)
 
         with pytest.raises(AssertionError, match="Expected strings"):
             trace(check)("yes", 1)
@@ -119,7 +119,7 @@ class TestMatchTraced:
 class TestMatchBatch:
     def test_batch_match_all_equal(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         batched_ir = af.batch(ir, in_axes=True)
@@ -129,7 +129,7 @@ class TestMatchBatch:
 
     def test_batch_match_mixed(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         batched_ir = af.batch(ir, in_axes=True)
@@ -139,7 +139,7 @@ class TestMatchBatch:
 
     def test_batch_match_both_args_batched(self):
         def check(a, b):
-            return af.match(a, b)
+            return af.string.match(a, b)
 
         ir = trace(check)("a", "b")
         batched_ir = af.batch(ir, in_axes=(True, True))
@@ -149,7 +149,7 @@ class TestMatchBatch:
 
     def test_batch_match_one_arg_broadcast(self):
         def check(a, b):
-            return af.match(a, b)
+            return af.string.match(a, b)
 
         ir = trace(check)("a", "b")
         batched_ir = af.batch(ir, in_axes=(True, False))
@@ -161,7 +161,7 @@ class TestMatchBatch:
 class TestMatchPushforward:
     def test_pushforward_match(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
@@ -174,7 +174,7 @@ class TestMatchPushforward:
 
     def test_pushforward_match_false_case(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         pf_ir = af.pushforward(ir)
@@ -189,7 +189,7 @@ class TestMatchPushforward:
 class TestMatchPullback:
     def test_pullback_match(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
@@ -202,7 +202,7 @@ class TestMatchPullback:
 
     def test_pullback_match_false_case(self):
         def check(x):
-            return af.match(x, "yes")
+            return af.string.match(x, "yes")
 
         ir = trace(check)("dummy")
         pb_ir = af.pullback(ir)
@@ -217,8 +217,8 @@ class TestMatchPullback:
 class TestMatchComposition:
     def test_match_in_larger_program(self):
         def process(status, text):
-            is_active = af.match(status, "active")
-            formatted = af.format("Status check: {}", text)
+            is_active = af.string.match(status, "active")
+            formatted = af.string.format("Status check: {}", text)
             return is_active, formatted
 
         ir = trace(process)("status", "text")
@@ -233,8 +233,8 @@ class TestMatchComposition:
 
     def test_batch_match_with_format(self):
         def process(status):
-            is_yes = af.match(status, "yes")
-            msg = af.format("Input was: {}", status)
+            is_yes = af.string.match(status, "yes")
+            msg = af.string.format("Input was: {}", status)
             return is_yes, msg
 
         ir = trace(process)("status")

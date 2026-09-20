@@ -146,7 +146,7 @@ class TestSpace:
 class TestBuildIR:
     def test_trace_scalar_input_is_dynamic(self):
         def program(x):
-            return af.format("{}", x)
+            return af.string.format("{}", x)
 
         cases = [
             (1, 2, "2", af.core.IntAVal()),
@@ -164,7 +164,7 @@ class TestBuildIR:
 
     def test_trace_dict_input_with_scalar_leaves(self):
         def program(payload):
-            return af.format(
+            return af.string.format(
                 "{} {} {} {}",
                 payload["name"],
                 payload["count"],
@@ -213,7 +213,7 @@ class TestBuildIR:
 
     def test_traces_literal_and_variable(self):
         def program(name):
-            return af.concat("Hello, ", name)
+            return af.string.concat("Hello, ", name)
 
         ir = af.trace(program)("x0")
         assert len(ir.eqns) == 1
@@ -228,7 +228,7 @@ class TestBuildIR:
 
     def test_format_traces_template_and_args(self):
         def program(x):
-            return af.format("Hello, {}!", x)
+            return af.string.format("Hello, {}!", x)
 
         ir = af.trace(program)("World")
         assert len(ir.eqns) == 1
@@ -247,7 +247,7 @@ class TestBuildIR:
         literal = Unhashable()
 
         def program(x):
-            return af.format("{} {}", literal, x)
+            return af.string.format("{} {}", literal, x)
 
         with pytest.raises(TypeError):
             af.trace(program)("x")
@@ -256,7 +256,7 @@ class TestBuildIR:
         parts = ["a", "b"]
 
         def program(x):
-            return af.format("{} {}", parts, x)
+            return af.string.format("{} {}", parts, x)
 
         ir = af.trace(program)("x")
         eqn = ir.eqns[0]
@@ -275,8 +275,8 @@ class TestBuildIR:
 
     def test_multiple_operations(self):
         def program(x, y):
-            a = af.concat(x, y)
-            b = af.format("[{}]", a)
+            a = af.string.concat(x, y)
+            b = af.string.format("[{}]", a)
             return b
 
         ir = af.trace(program)("A", "B")
@@ -284,7 +284,7 @@ class TestBuildIR:
 
     def test_single_input_tree_structure(self):
         def program(x):
-            return af.concat(x, x)
+            return af.string.concat(x, x)
 
         ir = af.trace(program)("test")
         assert isinstance(ir.in_tree, tuple)
@@ -293,7 +293,7 @@ class TestBuildIR:
 
     def test_tuple_input_tree_structure(self):
         def program(a, b):
-            return af.concat(a, b)
+            return af.string.concat(a, b)
 
         ir = af.trace(program)("A", "B")
         assert isinstance(ir.in_tree, tuple)
@@ -303,7 +303,7 @@ class TestBuildIR:
 class TestTraceStatic:
     def test_static_inputs_become_literals(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
@@ -313,7 +313,7 @@ class TestTraceStatic:
 
     def test_static_input_mismatch_errors_before_execution(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
@@ -322,7 +322,7 @@ class TestTraceStatic:
 
     def test_static_input_check_is_separate_from_walk(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
@@ -341,7 +341,7 @@ class TestTraceStatic:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_static_input_mismatch_errors_before_async_execution(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
@@ -350,7 +350,7 @@ class TestTraceStatic:
 
     def test_static_spec_must_match_input_tree(self):
         def program(prefix, name):
-            return af.format("{} {}", prefix, name)
+            return af.string.format("{} {}", prefix, name)
 
         with pytest.raises(ValueError):
             af.trace(program, static=(True, False, True))("Hello", "World")
@@ -358,8 +358,8 @@ class TestTraceStatic:
     def test_static_bool_specializes_python_branch(self):
         def program(flag, name):
             if flag:
-                return af.format("Hello {}", name)
-            return af.format("Bye {}", name)
+                return af.string.format("Hello {}", name)
+            return af.string.format("Bye {}", name)
 
         ir = af.trace(program, static=(True, False))(True, "World")
 
@@ -374,11 +374,11 @@ class TestTags:
 
     def test_trace_snapshots_tags_per_equation(self):
         def program(x):
-            head = af.concat(x, "!")
+            head = af.string.concat(x, "!")
             with af.tag(Label("planner")):
-                mid = af.concat(head, "?")
+                mid = af.string.concat(head, "?")
                 with af.tag(Label("draft"), CostTag()):
-                    tail = af.concat(mid, ".")
+                    tail = af.string.concat(mid, ".")
             return tail
 
         ir = af.trace(program)("seed")
@@ -457,7 +457,7 @@ class TestTags:
     def test_using_preserves_tags(self):
         def program(x):
             with af.tag(Label("draft")):
-                return af.concat(x, "!")
+                return af.string.concat(x, "!")
 
         ir = af.trace(program)("seed")
         eqn = ir.eqns[0]
@@ -469,9 +469,9 @@ class TestTags:
 
     def test_repr_includes_non_empty_tags(self):
         def program(x):
-            head = af.concat(x, "!")
+            head = af.string.concat(x, "!")
             with af.tag(Label("draft"), CostTag()):
-                return af.concat(head, "?")
+                return af.string.concat(head, "?")
 
         lines = repr(af.trace(program)("seed")).splitlines()
 
@@ -481,7 +481,7 @@ class TestTags:
     def test_calling_existing_ir_while_tracing_unions_runtime_and_equation_tags(self):
         def inner_program(x):
             with af.tag(Label("inner")):
-                return af.concat(x, "!")
+                return af.string.concat(x, "!")
 
         inner_ir = af.trace(inner_program)("seed")
 
@@ -497,7 +497,7 @@ class TestTags:
 class TestRunIR:
     def test_walk_yields_eqn_inputs_and_return_final_output(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("hello")
         gen = ir.walk("world")
@@ -512,7 +512,7 @@ class TestRunIR:
 
     def test_walk_allows_external_step_execution(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("hello")
         gen = ir.walk("world")
@@ -528,7 +528,7 @@ class TestRunIR:
 
     def test_basic_execution(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("hello")
         result = ir.call("world")
@@ -537,7 +537,7 @@ class TestRunIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_basic_execution_async(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("hello")
         result = await ir.acall("world")
@@ -545,8 +545,8 @@ class TestRunIR:
 
     def test_chained_operations(self):
         def program(x):
-            step1 = af.concat(x, x)
-            step2 = af.format("[{}]", step1)
+            step1 = af.string.concat(x, x)
+            step2 = af.string.format("[{}]", step1)
             return step2
 
         ir = af.trace(program)("A")
@@ -556,8 +556,8 @@ class TestRunIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_chained_operations_async(self):
         def program(x):
-            step1 = af.concat(x, x)
-            step2 = af.format("[{}]", step1)
+            step1 = af.string.concat(x, x)
+            step2 = af.string.format("[{}]", step1)
             return step2
 
         ir = af.trace(program)("A")
@@ -566,7 +566,7 @@ class TestRunIR:
 
     def test_multiple_args(self):
         def program(a, b):
-            return af.format("{} + {}", a, b)
+            return af.string.format("{} + {}", a, b)
 
         ir = af.trace(program)("x", "y")
         result = ir.call("1", "2")
@@ -575,7 +575,7 @@ class TestRunIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_multiple_args_async(self):
         def program(a, b):
-            return af.format("{} + {}", a, b)
+            return af.string.format("{} + {}", a, b)
 
         ir = af.trace(program)("x", "y")
         result = await ir.acall("1", "2")

@@ -1,6 +1,6 @@
 # Primitives
 
-A primitive is a named operation that the [IR](the-ir.md) records instead of executing inline during [tracing](tracing-semantics.md). Examples include {py:func}`format <autoform.format>`, {py:func}`concat <autoform.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
+A primitive is a named operation that the [IR](the-ir.md) records instead of executing inline during [tracing](tracing-semantics.md). Examples include {py:func}`format <autoform.string.format>`, {py:func}`concat <autoform.string.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
 
 The name matters because [transforms](transforms.md) dispatch on primitive identity. {py:func}`pullback <autoform.pullback>` knows how to route feedback through the {py:func}`lm_call <autoform.lm_call>` primitive because a rule is registered for it. Plain Python operations do not have those rules, so they either run at trace time or fail when they need a concrete runtime value.
 
@@ -21,9 +21,9 @@ The split pullback rules matter: the forward sweep records the values needed lat
 
 **String**
 
-- {py:func}`format <autoform.format>`: traceable string formatting.
-- {py:func}`concat <autoform.concat>`: traceable string concatenation.
-- {py:func}`match <autoform.match>`: traceable string equality.
+- {py:func}`format <autoform.string.format>`: traceable string formatting.
+- {py:func}`concat <autoform.string.concat>`: traceable string concatenation.
+- {py:func}`match <autoform.string.match>`: traceable string equality.
 
 **LM**
 

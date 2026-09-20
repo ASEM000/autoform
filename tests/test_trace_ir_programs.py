@@ -20,7 +20,7 @@ import autoform as af
 class TestTraceRunIR:
     def test_trace_run_ir_inlines_operations(self):
         def inner_program(x):
-            return af.format("Hello, {}!", x)
+            return af.string.format("Hello, {}!", x)
 
         inner_ir = af.trace(inner_program)("world")
 
@@ -35,8 +35,8 @@ class TestTraceRunIR:
 
     def test_trace_run_ir_multiple_operations(self):
         def inner_program(x):
-            y = af.format("[{}]", x)
-            return af.concat(y, "!")
+            y = af.string.format("[{}]", x)
+            return af.string.concat(y, "!")
 
         inner_ir = af.trace(inner_program)("x")
 
@@ -52,7 +52,7 @@ class TestTraceRunIR:
 class TestTraceBatchIR:
     def test_trace_batch_creates_batch_call(self):
         def inner_program(x):
-            return af.format("Item: {}", x)
+            return af.string.format("Item: {}", x)
 
         inner_ir = af.trace(inner_program)("x")
         batched_inner_ir = af.batch(inner_ir, in_axes=True)
@@ -70,7 +70,7 @@ class TestTraceBatchIR:
 class TestTracePushforwardIR:
     def test_trace_pushforward_creates_pushforward_call(self):
         def inner_program(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         inner_ir = af.trace(inner_program)("x")
         pf_ir = af.pushforward(inner_ir)
@@ -87,7 +87,7 @@ class TestTracePushforwardIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_trace_pushforward_async(self):
         def inner_program(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         inner_ir = af.trace(inner_program)("x")
         pf_ir = af.pushforward(inner_ir)
@@ -103,7 +103,7 @@ class TestTracePushforwardIR:
 class TestTracePullbackIR:
     def test_trace_pullback_creates_pullback_call(self):
         def inner_program(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         inner_ir = af.trace(inner_program)("x")
         pb_ir = af.pullback(inner_ir)
@@ -120,7 +120,7 @@ class TestTracePullbackIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_trace_pullback_async(self):
         def inner_program(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         inner_ir = af.trace(inner_program)("x")
         pb_ir = af.pullback(inner_ir)
@@ -136,7 +136,7 @@ class TestTracePullbackIR:
 class TestMultiLevelTracing:
     def test_double_trace_flattens_operations(self):
         def base_program(x):
-            return af.format("({})", x)
+            return af.string.format("({})", x)
 
         base_ir = af.trace(base_program)("x")
 
@@ -156,7 +156,7 @@ class TestMultiLevelTracing:
 
     def test_triple_trace_flattens_operations(self):
         def base_program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         base_ir = af.trace(base_program)("x")
 
@@ -182,7 +182,7 @@ class TestMultiLevelTracing:
 class TestTransformOfTracedRunIR:
     def test_pushforward_of_traced_run_ir(self):
         def inner_program(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         inner_ir = af.trace(inner_program)("x")
 
@@ -197,7 +197,7 @@ class TestTransformOfTracedRunIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_of_traced_run_ir_async(self):
         def inner_program(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         inner_ir = af.trace(inner_program)("x")
 
@@ -211,7 +211,7 @@ class TestTransformOfTracedRunIR:
 
     def test_batch_of_traced_run_ir(self):
         def inner_program(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         inner_ir = af.trace(inner_program)("x")
 
@@ -226,7 +226,7 @@ class TestTransformOfTracedRunIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_traced_run_ir_async(self):
         def inner_program(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         inner_ir = af.trace(inner_program)("x")
 
@@ -240,7 +240,7 @@ class TestTransformOfTracedRunIR:
 
     def test_pullback_of_traced_run_ir(self):
         def inner_program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         inner_ir = af.trace(inner_program)("x")
 
@@ -255,7 +255,7 @@ class TestTransformOfTracedRunIR:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_traced_run_ir_async(self):
         def inner_program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         inner_ir = af.trace(inner_program)("x")
 

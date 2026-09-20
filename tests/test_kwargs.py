@@ -100,7 +100,7 @@ class TestKeywordArgumentBoundary:
 
     def test_call_rejects_kwargs(self):
         def program(name, punctuation):
-            return af.format("Hello, {}{}", name, punctuation)
+            return af.string.format("Hello, {}{}", name, punctuation)
 
         ir = af.trace(program)("World", "!")
         with pytest.raises(TypeError, match="unexpected keyword argument"):
@@ -109,14 +109,14 @@ class TestKeywordArgumentBoundary:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_acall_rejects_kwargs(self):
         def program(name, punctuation):
-            return af.format("Hello, {}{}", name, punctuation)
+            return af.string.format("Hello, {}{}", name, punctuation)
 
         ir = af.trace(program)("World", "!")
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await ir.acall("World", punctuation="?")
 
     def test_switch_rejects_kwargs(self):
-        branches = {"a": af.trace(lambda x: af.concat("A:", x))("X")}
+        branches = {"a": af.trace(lambda x: af.string.concat("A:", x))("X")}
 
         with pytest.raises(AssertionError, match="switch.*keyword arguments"):
             af.switch("a", branches, x="test")
