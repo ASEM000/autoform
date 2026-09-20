@@ -218,7 +218,7 @@ class TestMatchComposition:
     def test_match_in_larger_program(self):
         def process(status, text):
             is_active = af.string.match(status, "active")
-            formatted = af.string.format("Status check: {}", text)
+            formatted = af.string.concat("Status check: ", text)
             return is_active, formatted
 
         ir = trace(process)("status", "text")
@@ -231,10 +231,10 @@ class TestMatchComposition:
         assert is_active is False
         assert formatted == "Status check: hello"
 
-    def test_batch_match_with_format(self):
+    def test_batch_match_with_concat(self):
         def process(status):
             is_yes = af.string.match(status, "yes")
-            msg = af.string.format("Input was: {}", status)
+            msg = af.string.concat("Input was: ", status)
             return is_yes, msg
 
         ir = trace(process)("status")

@@ -48,15 +48,17 @@ class TestEqnMatch:
 
     def test_match_keyword_destructuring(self):
         def func(x):
-            return af.string.format("Value: {}", x)
+            return af.string.concat("Value: ", x)
 
         ir = af.trace(func)("test")
         eqn = ir.eqns[0]
 
         match eqn:
             case af.core.Eqn(prim=prim, in_tree=in_tree, out_tree=out_tree, params=params):
-                assert prim == af.string.format_p
-                assert params["template"] == "Value: {}"
+                assert prim == af.string.concat_p
+                assert in_tree[0] == "Value: "
+                assert isinstance(in_tree[1], af.core.Var)
+                assert params == {}
 
     def test_match_in_loop(self):
         def func(x):
@@ -197,14 +199,14 @@ class TestIRMatch:
 
     def test_match_multiple_equations(self):
         def program(x, y):
-            formatted = af.string.format("Hello {}", x)
+            formatted = af.string.concat("Hello ", x)
             return af.string.concat(formatted, y)
 
         ir = af.trace(program)("World", "!")
 
         match ir:
             case af.core.IR(eqns=[af.core.Eqn(prim=p1), af.core.Eqn(prim=p2)]):
-                assert p1.name == "format"
+                assert p1.name == "concat"
                 assert p2.name == "concat"
             case _:
                 assert False, "Pattern should match two equations"
@@ -267,13 +269,13 @@ class TestIRMatch:
 
     def test_match_all_expected_primitives(self):
         def program(x, y):
-            a = af.string.format("Hello {}", x)
+            a = af.string.concat("Hello ", x)
             return af.string.concat(a, y)
 
         ir = af.trace(program)("World", "!")
 
         match ir:
-            case af.core.IR(eqns=eqns) if all(e.prim.name in {"format", "concat"} for e in eqns):
+            case af.core.IR(eqns=eqns) if all(e.prim is af.string.concat_p for e in eqns):
                 all_expected = True
             case _:
                 all_expected = False

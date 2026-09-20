@@ -29,7 +29,7 @@ tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
 class TestBatchBasic:
     def test_single_arg(self):
         def shout(text):
-            return af.string.format("{}!", text)
+            return af.string.concat(text, "!")
 
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
@@ -38,7 +38,7 @@ class TestBatchBasic:
 
     def test_single_arg_tuple_batch_container(self):
         def shout(text):
-            return af.string.format("{}!", text)
+            return af.string.concat(text, "!")
 
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
@@ -48,7 +48,7 @@ class TestBatchBasic:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_single_arg_async(self):
         def shout(text):
-            return af.string.format("{}!", text)
+            return af.string.concat(text, "!")
 
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
@@ -57,7 +57,7 @@ class TestBatchBasic:
 
     def test_two_args(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
@@ -67,7 +67,7 @@ class TestBatchBasic:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_two_args_async(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
@@ -95,7 +95,7 @@ class TestBatchBasic:
 
     def test_chained(self):
         def process(x):
-            step1 = af.string.format("[{}]", x)
+            step1 = af.string.concat("[", x, "]")
             step2 = af.string.concat(step1, "!")
             return step2
 
@@ -107,7 +107,7 @@ class TestBatchBasic:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_chained_async(self):
         def process(x):
-            step1 = af.string.format("[{}]", x)
+            step1 = af.string.concat("[", x, "]")
             step2 = af.string.concat(step1, "!")
             return step2
 
@@ -116,10 +116,10 @@ class TestBatchBasic:
         result = await batched_ir.acall(["a", "b", "c"])
         assert result == ["[a]!", "[b]!", "[c]!"]
 
-    def test_nested_format(self):
+    def test_nested_concat(self):
         def template(name, value):
-            inner = af.string.format("{} units", value)
-            return af.string.format("{}: {}", name, inner)
+            inner = af.string.concat(value, " units")
+            return af.string.concat(name, ": ", inner)
 
         ir = af.trace(template)("temp", "25")
         batched_ir = af.batch(ir)
@@ -127,10 +127,10 @@ class TestBatchBasic:
         assert result == ["temp: 25 units", "pressure: 101 units"]
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_nested_format_async(self):
+    async def test_nested_concat_async(self):
         def template(name, value):
-            inner = af.string.format("{} units", value)
-            return af.string.format("{}: {}", name, inner)
+            inner = af.string.concat(value, " units")
+            return af.string.concat(name, ": ", inner)
 
         ir = af.trace(template)("temp", "25")
         batched_ir = af.batch(ir)
@@ -139,7 +139,7 @@ class TestBatchBasic:
 
     def test_empty_batch(self):
         def f(x):
-            return af.string.format("{}!", x)
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("a")
         batched_ir = af.batch(ir)
@@ -261,7 +261,7 @@ class TestBatchIRStructure:
 class TestNestedBatch:
     def test_batch_of_batch(self):
         def shout(text):
-            return af.string.format("{}!", text)
+            return af.string.concat(text, "!")
 
         ir = af.trace(shout)("hello")
         batched_ir = af.batch(ir)
@@ -273,7 +273,7 @@ class TestNestedBatch:
 
     def test_batch_of_batch_two_args(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
@@ -288,7 +288,7 @@ class TestNestedBatch:
 class TestBatchInAxes:
     def test_broadcast_second_arg(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(True, False))
@@ -297,7 +297,7 @@ class TestBatchInAxes:
 
     def test_broadcast_first_arg(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(False, True))
@@ -306,7 +306,7 @@ class TestBatchInAxes:
 
     def test_default_all_batched(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir)
@@ -315,7 +315,7 @@ class TestBatchInAxes:
 
     def test_explicit_all_batched(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(True, True))
@@ -324,7 +324,7 @@ class TestBatchInAxes:
 
     def test_all_broadcast(self):
         def greet(name, greeting):
-            return af.string.format("{}: {}", greeting, name)
+            return af.string.concat(greeting, ": ", name)
 
         ir = af.trace(greet)("x0", "Hi")
         batched_ir = af.batch(ir, in_axes=(False, False))
@@ -371,16 +371,6 @@ class TestBatchUtils:
 
 
 class TestBatchRuleOutBatched:
-    def test_format_out_batched_is_scalar(self):
-        batch_size = 2
-        in_batched = ((True,), ())
-        in_values = ((["a", "b"],), ())
-        out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
-            (batch_size, in_batched, in_values), template="{}", keys=()
-        )
-        assert out_batched
-        assert out_vals == ["a", "b"]
-
     def test_concat_out_batched_is_scalar(self):
         batch_size = 2
         in_batched = (True, True)
@@ -461,16 +451,6 @@ class TestBatchBroadcasting:
             in_values,
         ))
         assert out_vals == ["a!", "b!", "c!"]
-        assert out_batched
-
-    def test_format_mixed_batched(self):
-        batch_size = 2
-        in_batched = ((True, False), ())
-        in_values = ((["x0", "x1"], "Hello"), ())
-        out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
-            (batch_size, in_batched, in_values), template="{1}, {0}!", keys=()
-        )
-        assert out_vals == ["Hello, x0!", "Hello, x1!"]
         assert out_batched
 
     def test_all_unbatched(self):
@@ -749,16 +729,6 @@ class TestBatchSpec:
 
 
 class TestBatchRuleAllUnbatched:
-    def test_format_all_unbatched(self):
-        batch_size = 3
-        in_batched = ((False, False), ())
-        in_values = (("hello", "world"), ())
-        out_vals, out_batched = af.core.batch_rules.get(af.string.format_p)(
-            (batch_size, in_batched, in_values), template="{} {}", keys=()
-        )
-        assert out_vals == "hello world"
-        assert out_batched is False
-
     def test_concat_all_unbatched(self):
         batch_size = 3
         in_batched = (False, False)
@@ -799,7 +769,7 @@ class TestBatchRuleAllUnbatched:
 class TestBatchWithMixedAxes:
     def test_two_outputs_mixed_batching(self):
         def program(x, y):
-            return af.string.format("x={}", x), af.string.format("y={}", y)
+            return af.string.concat("x=", x), af.string.concat("y=", y)
 
         ir = af.trace(program)("...", "...")
         batched_ir = af.batch(ir, in_axes=(True, False))
@@ -809,7 +779,7 @@ class TestBatchWithMixedAxes:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_two_outputs_mixed_batching_async(self):
         def program(x, y):
-            return af.string.format("x={}", x), af.string.format("y={}", y)
+            return af.string.concat("x=", x), af.string.concat("y=", y)
 
         ir = af.trace(program)("...", "...")
         batched_ir = af.batch(ir, in_axes=(True, False))
@@ -819,7 +789,7 @@ class TestBatchWithMixedAxes:
     def test_chained_with_broadcast(self):
         def program(x, prefix):
             prefixed = af.string.concat(prefix, x)
-            return af.string.format("[{}]", prefixed)
+            return af.string.concat("[", prefixed, "]")
 
         ir = af.trace(program)("...", "...")
         batched_ir = af.batch(ir, in_axes=(True, False))
@@ -836,10 +806,10 @@ class TestBatchWithMixedAxes:
         assert result == ["a-a", "b-b"]
 
 
-def scheduled_parallel_formats():
+def scheduled_parallel_concats():
     def program(x):
-        a = af.string.format("[{}]", x)
-        b = af.string.format("<{}>", x)
+        a = af.string.concat("[", x, "]")
+        b = af.string.concat("<", x, ">")
         return a, b
 
     return af.sched(af.trace(program)("a"))
@@ -847,7 +817,7 @@ def scheduled_parallel_formats():
 
 class TestInternalFanoutViaSched:
     def test_two_independent_ops(self):
-        scheduled = scheduled_parallel_formats()
+        scheduled = scheduled_parallel_concats()
 
         prim_names = [e.prim.name for e in scheduled.eqns]
         assert prim_names == ["fanout"]
@@ -855,7 +825,7 @@ class TestInternalFanoutViaSched:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_two_independent_ops_async(self):
-        scheduled = scheduled_parallel_formats()
+        scheduled = scheduled_parallel_concats()
 
         result = await scheduled.acall("A")
         assert result == ("[A]", "<A>")
@@ -872,7 +842,7 @@ class TestInternalFanoutViaSched:
             raise ValueError("intentional error")
 
         def program(x):
-            ok = af.string.format("[{}]", x)
+            ok = af.string.concat("[", x, "]")
             err = error_p.bind(x)
             return ok, err
 
@@ -884,27 +854,27 @@ class TestInternalFanoutViaSched:
 
 class TestFanoutWithTransforms:
     def test_pushforward(self):
-        pf_ir = af.pushforward(scheduled_parallel_formats())
+        pf_ir = af.pushforward(scheduled_parallel_concats())
         (p_out, t_out) = pf_ir.call(("primal",), ("tangent",))
         assert p_out == ("[primal]", "<primal>")
-        assert t_out == ("[tangent]", "<tangent>")
+        assert t_out == ("tangent", "tangent")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_async(self):
-        pf_ir = af.pushforward(scheduled_parallel_formats())
+        pf_ir = af.pushforward(scheduled_parallel_concats())
         (p_out, t_out) = await pf_ir.acall(("primal",), ("tangent",))
         assert p_out == ("[primal]", "<primal>")
-        assert t_out == ("[tangent]", "<tangent>")
+        assert t_out == ("tangent", "tangent")
 
     def test_pullback(self):
-        pb_ir = af.pullback(scheduled_parallel_formats())
+        pb_ir = af.pullback(scheduled_parallel_concats())
         out, cotangent = pb_ir.call(("primal",), ("grad1", "grad2"))
         assert out == ("[primal]", "<primal>")
         assert cotangent == ("grad1grad2",)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_async(self):
-        pb_ir = af.pullback(scheduled_parallel_formats())
+        pb_ir = af.pullback(scheduled_parallel_concats())
         out, cotangent = await pb_ir.acall(("primal",), ("grad1", "grad2"))
         assert out == ("[primal]", "<primal>")
         assert cotangent == ("grad1grad2",)
@@ -912,20 +882,20 @@ class TestFanoutWithTransforms:
 
 class TestFanoutWithBatch:
     def test_batch_fanout(self):
-        batched_ir = af.batch(scheduled_parallel_formats())
+        batched_ir = af.batch(scheduled_parallel_concats())
         result = batched_ir.call(["A", "B", "C"])
         assert result == (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"])
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_fanout_async(self):
-        batched_ir = af.batch(scheduled_parallel_formats())
+        batched_ir = af.batch(scheduled_parallel_concats())
         result = await batched_ir.acall(["A", "B", "C"])
         assert result == (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"])
 
     def test_batch_fanout_mixed_axes(self):
         def program(x, y):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", y)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", y, ">")
             return a, b
 
         scheduled = af.sched(af.trace(program)("x", "y"))
@@ -936,8 +906,8 @@ class TestFanoutWithBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_fanout_mixed_axes_async(self):
         def program(x, y):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", y)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", y, ">")
             return a, b
 
         scheduled = af.sched(af.trace(program)("x", "y"))
@@ -948,27 +918,29 @@ class TestFanoutWithBatch:
 
 class TestFanoutWithDCE:
     def test_fanout_kept_when_used(self):
-        dce_ir = af.dce(scheduled_parallel_formats())
+        dce_ir = af.dce(scheduled_parallel_concats())
 
         assert len(dce_ir.eqns) == 1
         assert dce_ir.eqns[0].prim.name == "fanout"
 
     def test_fanout_removed_when_unused(self):
         def program(x):
-            _ = af.string.format("[{}]", x)
-            _ = af.string.format("<{}>", x)
+            _ = af.string.concat("[", x, "]")
+            _ = af.string.concat("<", x, ">")
             return af.string.concat(x, "!")
 
         ir = af.trace(program)("a")
-        scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
+        scheduled = af.sched(
+            ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3
+        )
         dce_ir = af.dce(scheduled)
 
         assert all(eqn.prim.name != "fanout" for eqn in dce_ir.eqns)
 
     def test_fanout_dce_propagates_to_branches(self):
         def program(x):
-            live = af.string.format("[{}]", x)
-            dead = af.string.format("<{}>", x)
+            live = af.string.concat("[", x, "]")
+            dead = af.string.concat("<", x, ">")
             return live
 
         scheduled = af.sched(af.trace(program)("a"))
@@ -981,8 +953,8 @@ class TestFanoutWithDCE:
 
     def test_fanout_partial_output_used(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            _ = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            _ = af.string.concat("<", x, ">")
             return a
 
         scheduled = af.sched(af.trace(program)("a"))
@@ -1038,8 +1010,8 @@ class TestFanoutContextPreservation:
 
     def test_preserves_inject(self):
         def program(a, b):
-            x = af.checkpoint(af.string.format("[{}]", a), key="val", collection="cache")
-            y = af.checkpoint(af.string.format("<{}>", b), key="val", collection="cache")
+            x = af.checkpoint(af.string.concat("[", a, "]"), key="val", collection="cache")
+            y = af.checkpoint(af.string.concat("<", b, ">"), key="val", collection="cache")
             return x, y
 
         scheduled = af.sched(af.trace(program)("a", "b"))
@@ -1075,8 +1047,8 @@ class TestFanoutContextPreservation:
 class TestSched:
     def test_parallel_equations_fused(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
             c = af.string.concat(a, b)
             return c
 
@@ -1091,31 +1063,33 @@ class TestSched:
 
     def test_single_equation_not_wrapped(self):
         def program(x):
-            return af.string.format("[{}]", x)
+            return af.string.concat("[", x, "]")
 
         ir = af.trace(program)("x")
         scheduled = af.sched(ir)
 
         prim_names = [e.prim.name for e in scheduled.eqns]
-        assert prim_names == ["format"]
+        assert prim_names == ["concat"]
 
     def test_with_cond_filter(self):
         def program(x):
-            a = af.string.format("[{}]", x)
+            a = af.string.concat("[", x, "]")
             b = af.string.concat(x, "!")
             return a, b
 
         ir = af.trace(program)("x")
 
-        scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
+        scheduled = af.sched(
+            ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3
+        )
 
-        prim_names = {e.prim.name for e in scheduled.eqns}
-        assert prim_names == {"format", "concat"}
+        assert [e.prim.name for e in scheduled.eqns] == ["concat", "concat"]
+        assert scheduled.call("test") == ("[test]", "test!")
 
     def test_checkpoints_can_be_parallelized(self):
         def program(a, b):
-            x = af.checkpoint(af.string.format("{}", a), key="x")
-            y = af.checkpoint(af.string.format("{}", b), key="y")
+            x = af.checkpoint(af.string.concat(a), key="x")
+            y = af.checkpoint(af.string.concat(b), key="y")
             return x, y
 
         ir = af.trace(program)("a", "b")
@@ -1126,8 +1100,8 @@ class TestSched:
 
     def test_checkpoint_ordering_via_depends(self):
         def program(a, b):
-            x = af.checkpoint(af.string.format("{}", a), key="x")
-            y = af.checkpoint(af.string.format("{}", b), key="y")
+            x = af.checkpoint(af.string.concat(a), key="x")
+            y = af.checkpoint(af.string.concat(b), key="y")
             return af.depends(y, x)
 
         ir = af.trace(program)("a", "b")
@@ -1138,9 +1112,9 @@ class TestSched:
 
     def test_mixed_pure_and_checkpoints(self):
         def program(a, b, c):
-            x = af.string.format("[{}]", a)
-            y = af.string.format("<{}>", b)
-            z = af.checkpoint(af.string.format("{{{}}}", c), key="z")
+            x = af.string.concat("[", a, "]")
+            y = af.string.concat("<", b, ">")
+            z = af.checkpoint(af.string.concat("{", c, "}"), key="z")
             return x, y, z
 
         ir = af.trace(program)("a", "b", "c")
@@ -1157,9 +1131,11 @@ class TestSchedRecursive:
     def test_sched_switch_branches(self):
         branches = {
             "a": af.trace(
-                lambda x: af.string.concat(af.string.format("[{}]", x), af.string.format("<{}>", x))
+                lambda x: af.string.concat(
+                    af.string.concat("[", x, "]"), af.string.concat("<", x, ">")
+                )
             )("x"),
-            "b": af.trace(lambda x: af.string.format("({})", x))("x"),
+            "b": af.trace(lambda x: af.string.concat("(", x, ")"))("x"),
         }
 
         def program(key, x):
@@ -1178,9 +1154,11 @@ class TestSchedRecursive:
     def test_sched_nested_switch(self):
         inner_branches = {
             "x": af.trace(
-                lambda a: af.string.concat(af.string.format("[{}]", a), af.string.format("<{}>", a))
+                lambda a: af.string.concat(
+                    af.string.concat("[", a, "]"), af.string.concat("<", a, ">")
+                )
             )("a"),
-            "y": af.trace(lambda a: af.string.format("({})", a))("a"),
+            "y": af.trace(lambda a: af.string.concat("(", a, ")"))("a"),
         }
 
         def inner_program(key, inp):
@@ -1190,7 +1168,7 @@ class TestSchedRecursive:
 
         outer_branches = {
             "A": inner_ir,
-            "B": af.trace(lambda key, inp: af.string.format("{} {}", key, inp))("k", "i"),
+            "B": af.trace(lambda key, inp: af.string.concat(key, " ", inp))("k", "i"),
         }
 
         def outer_program(outer_key, inner_key, x):
@@ -1211,13 +1189,15 @@ class TestSchedRecursive:
     def test_sched_fanout_nested_irs(self):
         branches1 = {
             "a": af.trace(
-                lambda x: af.string.concat(af.string.format("[{}]", x), af.string.format("<{}>", x))
+                lambda x: af.string.concat(
+                    af.string.concat("[", x, "]"), af.string.concat("<", x, ">")
+                )
             )("x")
         }
         branches2 = {
             "a": af.trace(
                 lambda x: af.string.concat(
-                    af.string.format("({})", x), af.string.format("{{{}}}", x)
+                    af.string.concat("(", x, ")"), af.string.concat("{", x, "}")
                 )
             )("x")
         }
@@ -1241,7 +1221,7 @@ class TestSchedRecursive:
 
     def test_sched_with_cond_propagates_to_nested(self):
         branches = {
-            "a": af.trace(lambda x: (af.string.format("[{}]", x), af.string.concat(x, "!")))("x"),
+            "a": af.trace(lambda x: (af.string.concat("[", x, "]"), af.string.concat(x, "!")))("x"),
         }
 
         def program(key, x):
@@ -1249,7 +1229,9 @@ class TestSchedRecursive:
 
         ir = af.trace(program)("a", "x")
 
-        scheduled = af.sched(ir, cond=lambda e: e.prim.name == "format")
+        scheduled = af.sched(
+            ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3
+        )
 
         switch_eqn = scheduled.eqns[0]
         branch_a = switch_eqn.params["branches"]["a"]
@@ -1261,9 +1243,11 @@ class TestSchedRecursive:
     async def test_sched_recursive_async(self):
         branches = {
             "a": af.trace(
-                lambda x: af.string.concat(af.string.format("[{}]", x), af.string.format("<{}>", x))
+                lambda x: af.string.concat(
+                    af.string.concat("[", x, "]"), af.string.concat("<", x, ">")
+                )
             )("x"),
-            "b": af.trace(lambda x: af.string.format("({})", x))("x"),
+            "b": af.trace(lambda x: af.string.concat("(", x, ")"))("x"),
         }
 
         def program(key, x):
@@ -1277,7 +1261,7 @@ class TestSchedRecursive:
 
     def test_sched_preserves_non_ir_params(self):
         branches = {
-            "a": af.trace(lambda x: af.string.format("[{}]", x))("x"),
+            "a": af.trace(lambda x: af.string.concat("[", x, "]"))("x"),
         }
 
         def program(key, x):
@@ -1296,8 +1280,8 @@ class TestSchedRecursive:
 class TestSchedComposition:
     def test_sched_then_pushforward(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
             return af.string.concat(a, b)
 
         ir = af.trace(program)("x")
@@ -1306,12 +1290,12 @@ class TestSchedComposition:
 
         primals, tangents = pf_ir.call(("test",), ("tangent",))
         assert primals == "[test]<test>"
-        assert tangents == "[tangent]<tangent>"
+        assert tangents == "tangenttangent"
 
     def test_sched_then_pullback(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
             return af.string.concat(a, b)
 
         ir = af.trace(program)("x")
@@ -1324,8 +1308,8 @@ class TestSchedComposition:
 
     def test_sched_then_batch(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
             return af.string.concat(a, b)
 
         ir = af.trace(program)("x")
@@ -1337,10 +1321,10 @@ class TestSchedComposition:
 
     def test_sched_then_dce(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
             c = af.string.concat(a, b)
-            _ = af.string.format("dead: {}", c)
+            _ = af.string.concat("dead: ", c)
             return c
 
         ir = af.trace(program)("x")
@@ -1352,9 +1336,9 @@ class TestSchedComposition:
 
     def test_dce_then_sched(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
-            _ = af.string.format("dead", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
+            _ = af.string.concat("dead: ", x)
             return af.string.concat(a, b)
 
         ir = af.trace(program)("x")
@@ -1369,8 +1353,8 @@ class TestSchedComposition:
 class TestAsyncSched:
     async def test_basic_async_execution(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
             return af.string.concat(a, b)
 
         ir = af.trace(program)("x")
@@ -1381,9 +1365,9 @@ class TestAsyncSched:
 
     async def test_parallel_independent_ops(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
-            c = af.string.format("{{{}}}", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
+            c = af.string.concat("{", x, "}")
             return a, b, c
 
         ir = af.trace(program)("x")
@@ -1394,7 +1378,7 @@ class TestAsyncSched:
 
     async def test_sequential_dependent_ops(self):
         def program(x):
-            a = af.string.format("[{}]", x)
+            a = af.string.concat("[", x, "]")
             b = af.string.concat(a, "!")
             return b
 
@@ -1406,8 +1390,8 @@ class TestAsyncSched:
 
     async def test_mixed_parallel_and_sequential(self):
         def program(x):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", x)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", x, ">")
 
             c = af.string.concat(a, b)
             return c
@@ -1422,14 +1406,14 @@ class TestAsyncSched:
 @pytest.mark.asyncio(loop_scope="function")
 class TestAsyncAcall:
     async def test_basic_acall(self):
-        ir = af.trace(lambda x: af.string.format("[{}]", x))("a")
+        ir = af.trace(lambda x: af.string.concat("[", x, "]"))("a")
         result = await ir.acall("hello")
         assert result == "[hello]"
 
     async def test_acall_with_switch(self):
         branches = {
-            "a": af.trace(lambda x: af.string.format("[{}]", x))("x"),
-            "b": af.trace(lambda x: af.string.format("<{}>", x))("x"),
+            "a": af.trace(lambda x: af.string.concat("[", x, "]"))("x"),
+            "b": af.trace(lambda x: af.string.concat("<", x, ">"))("x"),
         }
 
         def program(key, x):
@@ -1447,8 +1431,8 @@ class TestAsyncAcall:
 class TestDepends:
     def test_basic(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1458,8 +1442,8 @@ class TestDepends:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_basic_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1468,9 +1452,9 @@ class TestDepends:
 
     def test_multiple_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
+            c = af.string.concat("C: ", x)
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
@@ -1479,9 +1463,9 @@ class TestDepends:
 
     def test_chained(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
+            c = af.string.concat("C: ", x)
             b_ordered = af.depends(b, a)
             c_ordered = af.depends(c, b_ordered)
             return c_ordered
@@ -1492,7 +1476,7 @@ class TestDepends:
 
     def test_no_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
+            a = af.string.concat("A: ", x)
             return af.depends(a)
 
         ir = af.trace(program)("x")
@@ -1501,8 +1485,8 @@ class TestDepends:
 
     def test_ir_structure(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1516,8 +1500,8 @@ class TestDepends:
 class TestDependsWithDCE:
     def test_kept_when_used(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1528,10 +1512,10 @@ class TestDependsWithDCE:
 
     def test_removed_when_unused(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             _ = af.depends(b, a)
-            return af.string.format("C: {}", x)
+            return af.string.concat("C: ", x)
 
         ir = af.trace(program)("x")
         dce_ir = af.dce(ir)
@@ -1543,8 +1527,8 @@ class TestDependsWithDCE:
 class TestDependsWithPushforward:
     def test_pushforward(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1552,13 +1536,13 @@ class TestDependsWithPushforward:
 
         primal, tangent = pf_ir.call(("primal",), ("tangent",))
         assert primal == "B: primal"
-        assert tangent == "B: tangent"
+        assert tangent == "tangent"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1566,13 +1550,13 @@ class TestDependsWithPushforward:
 
         primal, tangent = await pf_ir.acall(("primal",), ("tangent",))
         assert primal == "B: primal"
-        assert tangent == "B: tangent"
+        assert tangent == "tangent"
 
     def test_pushforward_multiple_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
+            c = af.string.concat("C: ", x)
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
@@ -1580,13 +1564,13 @@ class TestDependsWithPushforward:
 
         primal, tangent = pf_ir.call(("primal",), ("tangent",))
         assert primal == "C: primal"
-        assert tangent == "C: tangent"
+        assert tangent == "tangent"
 
     def test_pushforward_chained(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.depends(af.string.format("B: {}", x), a)
-            c = af.depends(af.string.format("C: {}", x), b)
+            a = af.string.concat("A: ", x)
+            b = af.depends(af.string.concat("B: ", x), a)
+            c = af.depends(af.string.concat("C: ", x), b)
             return c
 
         ir = af.trace(program)("x")
@@ -1594,14 +1578,14 @@ class TestDependsWithPushforward:
 
         primal, tangent = pf_ir.call(("primal",), ("tangent",))
         assert primal == "C: primal"
-        assert tangent == "C: tangent"
+        assert tangent == "tangent"
 
 
 class TestDependsWithPullback:
     def test_pullback(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1614,8 +1598,8 @@ class TestDependsWithPullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1627,9 +1611,9 @@ class TestDependsWithPullback:
 
     def test_pullback_multiple_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
+            c = af.string.concat("C: ", x)
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
@@ -1641,9 +1625,9 @@ class TestDependsWithPullback:
 
     def test_pullback_chained(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.depends(af.string.format("B: {}", x), a)
-            c = af.depends(af.string.format("C: {}", x), b)
+            a = af.string.concat("A: ", x)
+            b = af.depends(af.string.concat("B: ", x), a)
+            c = af.depends(af.string.concat("C: ", x), b)
             return c
 
         ir = af.trace(program)("x")
@@ -1657,8 +1641,8 @@ class TestDependsWithPullback:
 class TestDependsWithBatch:
     def test_batch(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1670,8 +1654,8 @@ class TestDependsWithBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1682,9 +1666,9 @@ class TestDependsWithBatch:
 
     def test_batch_multiple_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
+            c = af.string.concat("C: ", x)
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
@@ -1695,9 +1679,9 @@ class TestDependsWithBatch:
 
     def test_batch_chained(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.depends(af.string.format("B: {}", x), a)
-            c = af.depends(af.string.format("C: {}", x), b)
+            a = af.string.concat("A: ", x)
+            b = af.depends(af.string.concat("B: ", x), a)
+            c = af.depends(af.string.concat("C: ", x), b)
             return c
 
         ir = af.trace(program)("x")
@@ -1710,8 +1694,8 @@ class TestDependsWithBatch:
 class TestDependsWithSched:
     def test_sched_basic(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1723,8 +1707,8 @@ class TestDependsWithSched:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_sched_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1735,8 +1719,8 @@ class TestDependsWithSched:
 
     def test_sched_preserves_depends(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             b_ordered = af.depends(b, a)
             return af.string.concat(a, b_ordered)
 
@@ -1751,9 +1735,9 @@ class TestDependsWithSched:
 
     def test_sched_data_dependency(self):
         def program(x):
-            a = af.string.format("A: {}", x)
+            a = af.string.concat("A: ", x)
             a_barrier = af.depends(a)
-            b = af.string.format("B: {}", a_barrier)
+            b = af.string.concat("B: ", a_barrier)
             return b
 
         ir = af.trace(program)("x")
@@ -1766,8 +1750,8 @@ class TestDependsWithSched:
 class TestDependsNestedTransforms:
     def test_batch_of_pushforward(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1776,13 +1760,13 @@ class TestDependsNestedTransforms:
 
         primals, tangents = batch_pf_ir.call((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
-        assert tangents == ["B: da", "B: db"]
+        assert tangents == ["da", "db"]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_pushforward_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1791,12 +1775,12 @@ class TestDependsNestedTransforms:
 
         primals, tangents = await batch_pf_ir.acall((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
-        assert tangents == ["B: da", "B: db"]
+        assert tangents == ["da", "db"]
 
     def test_batch_of_pullback(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1810,8 +1794,8 @@ class TestDependsNestedTransforms:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_pullback_async(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1824,8 +1808,8 @@ class TestDependsNestedTransforms:
 
     def test_pushforward_of_batch(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1834,12 +1818,12 @@ class TestDependsNestedTransforms:
 
         primals, tangents = pf_batched_ir.call((["a", "b"],), (["da", "db"],))
         assert primals == ["B: a", "B: b"]
-        assert tangents == ["B: da", "B: db"]
+        assert tangents == ["da", "db"]
 
     def test_pullback_of_batch(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1852,8 +1836,8 @@ class TestDependsNestedTransforms:
 
     def test_sched_of_pushforward(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1862,12 +1846,12 @@ class TestDependsNestedTransforms:
 
         primal, tangent = sched_pf_ir.call(("primal",), ("tangent",))
         assert primal == "B: primal"
-        assert tangent == "B: tangent"
+        assert tangent == "tangent"
 
     def test_sched_of_pullback(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1880,8 +1864,8 @@ class TestDependsNestedTransforms:
 
     def test_sched_of_batch(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.concat("A: ", x)
+            b = af.string.concat("B: ", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -1904,7 +1888,7 @@ class TestToposortLevels:
 
     def test_single_equation(self):
         def program(x):
-            return af.string.format("{}", x)
+            return af.string.concat(x)
 
         ir = af.trace(program)("input")
         levels = toposort_levels(ir)
@@ -1914,8 +1898,8 @@ class TestToposortLevels:
 
     def test_independent_equations(self):
         def program(a, b):
-            x = af.string.format("hello {}", a)
-            y = af.string.format("world {}", b)
+            x = af.string.concat("hello ", a)
+            y = af.string.concat("world ", b)
             return x, y
 
         ir = af.trace(program)("a", "b")
@@ -1926,8 +1910,8 @@ class TestToposortLevels:
 
     def test_dependent_equations(self):
         def program(a, b):
-            x = af.string.format("hello {}", a)
-            y = af.string.format("world {}", b)
+            x = af.string.concat("hello ", a)
+            y = af.string.concat("world ", b)
             z = af.string.concat(x, y)
             return z
 
@@ -1940,7 +1924,7 @@ class TestToposortLevels:
 
     def test_chain_of_equations(self):
         def program(x):
-            a = af.string.format("{}", x)
+            a = af.string.concat(x)
             b = af.string.concat(a, "!")
             c = af.string.concat(b, "?")
             return c
@@ -1957,8 +1941,8 @@ class TestToposortLevels:
 class TestToposortLevelsWithCheckpoints:
     def test_checkpoint_equations_can_parallelize(self):
         def program(a, b):
-            x = af.checkpoint(af.string.format("hello {}", a), key="x")
-            y = af.checkpoint(af.string.format("world {}", b), key="y")
+            x = af.checkpoint(af.string.concat("hello ", a), key="x")
+            y = af.checkpoint(af.string.concat("world ", b), key="y")
             return x, y
 
         ir = af.trace(program)("a", "b")
@@ -1977,8 +1961,8 @@ class TestToposortLevelsWithCheckpoints:
 
     def test_checkpoint_ordering_via_depends(self):
         def program(a, b):
-            x = af.checkpoint(af.string.format("hello {}", a), key="x")
-            y = af.checkpoint(af.string.format("world {}", b), key="y")
+            x = af.checkpoint(af.string.concat("hello ", a), key="x")
+            y = af.checkpoint(af.string.concat("world ", b), key="y")
             return af.depends(y, x)
 
         ir = af.trace(program)("a", "b")
@@ -2002,9 +1986,9 @@ class TestToposortLevelsWithCheckpoints:
 
     def test_pure_equations_parallelize_around_checkpoints(self):
         def program(a, b, c):
-            x = af.string.format("{}", a)
-            y = af.checkpoint(af.string.format("{}", b), key="cp")
-            z = af.string.format("{}", c)
+            x = af.string.concat(a)
+            y = af.checkpoint(af.string.concat(b), key="cp")
+            z = af.string.concat(c)
             return x, y, z
 
         ir = af.trace(program)("a", "b", "c")
@@ -2018,8 +2002,8 @@ class TestToposortLevelsWithCheckpoints:
 
 class TestFanoutBatchAllUnbatched:
     def test_fanout_batch_all_unbatched(self):
-        ir1 = af.trace(lambda x: af.string.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.string.format("<{}>", x))("a")
+        ir1 = af.trace(lambda x: af.string.concat("[", x, "]"))("a")
+        ir2 = af.trace(lambda x: af.string.concat("<", x, ">"))("a")
         irs = [ir1, ir2]
 
         batch_size = 3
@@ -2034,8 +2018,8 @@ class TestFanoutBatchAllUnbatched:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_fanout_batch_all_unbatched_async(self):
-        ir1 = af.trace(lambda x: af.string.format("[{}]", x))("a")
-        ir2 = af.trace(lambda x: af.string.format("<{}>", x))("a")
+        ir1 = af.trace(lambda x: af.string.concat("[", x, "]"))("a")
+        ir2 = af.trace(lambda x: af.string.concat("<", x, ">"))("a")
         irs = [ir1, ir2]
 
         batch_size = 3
@@ -2049,7 +2033,7 @@ class TestFanoutBatchAllUnbatched:
         assert out_batched == [False, False]
 
     def test_fanout_batch_single_ir_unbatched(self):
-        ir = af.trace(lambda x: af.string.format("[{}]", x))("a")
+        ir = af.trace(lambda x: af.string.concat("[", x, "]"))("a")
         irs = [ir]
 
         batch_size = 3
@@ -2064,8 +2048,8 @@ class TestFanoutBatchAllUnbatched:
 
     def test_fanout_integration_mixed_batched(self):
         def program(x, y):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", y)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", y, ">")
             return a, b
 
         scheduled = af.sched(af.trace(program)("a", "b"))
@@ -2076,8 +2060,8 @@ class TestFanoutBatchAllUnbatched:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_fanout_integration_mixed_batched_async(self):
         def program(x, y):
-            a = af.string.format("[{}]", x)
-            b = af.string.format("<{}>", y)
+            a = af.string.concat("[", x, "]")
+            b = af.string.concat("<", y, ">")
             return a, b
 
         scheduled = af.sched(af.trace(program)("a", "b"))

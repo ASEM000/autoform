@@ -131,7 +131,7 @@ class TestSwitchBasic:
     def test_switch_with_multiple_operands(self):
         branches = {
             "concat": af.trace(af.string.concat)("A", "B"),
-            "format": af.trace(lambda a, b: af.string.format("{} - {}", a, b))("A", "B"),
+            "dash": af.trace(lambda a, b: af.string.concat(a, " - ", b))("A", "B"),
         }
 
         def program(key, x, y):
@@ -140,7 +140,7 @@ class TestSwitchBasic:
         ir = af.trace(program)("concat", "Hello", "World")
         result = ir.call("concat", "Hello", "World")
         assert result == "HelloWorld"
-        result = ir.call("format", "Hello", "World")
+        result = ir.call("dash", "Hello", "World")
         assert result == "Hello - World"
 
     def test_switch_direct_call(self):
@@ -434,8 +434,8 @@ class TestSwitchNestedTransforms:
 class TestSwitchWithOperands:
     def test_switch_with_multiple_operands(self):
         branches = {
-            "dash": af.trace(lambda x, y: af.string.format("{}-{}", x, y))("X", "Y"),
-            "plus": af.trace(lambda x, y: af.string.format("{}+{}", x, y))("X", "Y"),
+            "dash": af.trace(lambda x, y: af.string.concat(x, "-", y))("X", "Y"),
+            "plus": af.trace(lambda x, y: af.string.concat(x, "+", y))("X", "Y"),
         }
         result = af.switch("dash", branches, "a", "b")
         assert result == "a-b"
@@ -446,12 +446,12 @@ class TestSwitchWithOperands:
 class TestSwitchComplexBranches:
     def test_branches_with_multiple_ops(self):
         def make_branch0(x):
-            step1 = af.string.format("[{}]", x)
+            step1 = af.string.concat("[", x, "]")
             step2 = af.string.concat(step1, "!")
             return step2
 
         def make_branch1(x):
-            step1 = af.string.format("({})", x)
+            step1 = af.string.concat("(", x, ")")
             step2 = af.string.concat(step1, "?")
             return step2
 
@@ -469,7 +469,7 @@ class TestSwitchComplexBranches:
 
     def test_many_branches(self):
         branches = {
-            f"branch{i}": af.trace(lambda x, i=i: af.string.format("branch{}: {}", str(i), x))("X")
+            f"branch{i}": af.trace(lambda x, i=i: af.string.concat("branch", str(i), ": ", x))("X")
             for i in range(5)
         }
 

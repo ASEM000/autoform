@@ -162,7 +162,7 @@ class TestRunAndReap:
 
     def test_reap_preserves_execution(self):
         def func(x):
-            a = af.checkpoint(af.string.format("Q: {}", x), key="prompt", collection="debug")
+            a = af.checkpoint(af.string.concat("Q: ", x), key="prompt", collection="debug")
             response = af.string.concat(a, " A: 42")
             return af.checkpoint(response, key="response", collection="debug")
 
