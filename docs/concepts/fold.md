@@ -8,17 +8,17 @@ import autoform as af
 
 def program(text: str) -> str:
     with af.fold():
-        prefix = af.concat("hello", " ")
-    return af.concat(prefix, text)
+        prefix = f"v{af.numeric.add(1, 1)}: "
+    return prefix + text
 
 
 ir = af.trace(program)("seed")
 
 assert len(ir.eqns) == 1
-assert ir.call("world") == "hello world"
+assert ir.call("world") == "v2.0: world"
 ```
 
-Without {py:func}`fold <autoform.fold>`, the prefix concat would also be an equation. With {py:func}`fold <autoform.fold>`, it is computed at trace time.
+Without {py:func}`fold <autoform.fold>`, the numeric addition would also be an equation. With {py:func}`fold <autoform.fold>`, it is computed at trace time.
 
 (trace-time-decisions)=
 ## Trace-Time Decisions
@@ -28,10 +28,10 @@ Folded work can choose ordinary Python control flow because it runs while tracin
 ```python
 def route(text: str) -> str:
     with af.fold():
-        label = af.concat("priority", ": high")
-    if label == "priority: high":
-        return af.concat("yes: ", text)
-    return af.concat("no: ", text)
+        label = af.string.match("priority", "priority")
+    if label:
+        return "yes: " + text
+    return "no: " + text
 
 
 ir = af.trace(route)("seed")
@@ -47,7 +47,7 @@ Folded work must not depend on dynamic traced values:
 ```python
 def bad(text: str) -> str:
     with af.fold():
-        prefix = af.concat(text, " ")
+        prefix = text + " "
     return prefix
 ```
 

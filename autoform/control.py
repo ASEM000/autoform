@@ -51,7 +51,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         >>> import autoform as af
         >>> def ir(x, y):
         ...     stopped = af.stop_gradient(x)
-        ...     return af.concat(stopped, y)
+        ...     return stopped + y
         >>> ir = af.trace(ir)("a", "b")
         >>> pb_ir = af.pullback(ir)
         >>> _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
@@ -136,9 +136,9 @@ def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
     Example:
         >>> import autoform as af
         >>> branches = {
-        ...     "zero": af.trace(lambda x: af.concat("zero: ", x))("X"),
-        ...     "one": af.trace(lambda x: af.concat("one: ", x))("X"),
-        ...     "two": af.trace(lambda x: af.concat("two: ", x))("X"),
+        ...     "zero": af.trace(lambda x: ("zero: " + x))("X"),
+        ...     "one": af.trace(lambda x: ("one: " + x))("X"),
+        ...     "two": af.trace(lambda x: ("two: " + x))("X"),
         ... }
         >>> def ir(key, x):
         ...     return af.switch(key, branches, x)
@@ -413,7 +413,7 @@ def abstract_while_loop(
             # NOTE(asem): the key idea here is that in case inital state is a literal
             # and body returns AVal e.g.
             # >>> cond = af.trace(lambda x: False)("x")
-            # >>> body = af.trace(lambda x: af.concat(x, "!"))("x")
+            # >>> body = af.trace(lambda x: (x + "!"))("x")
             # >>> def program():
             # ...   return af.while_loop(cond, body, "hello", max_iters=10)
             # >>> ir = af.trace(program)()

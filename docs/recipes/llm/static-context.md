@@ -63,10 +63,7 @@ def rewrite_for_domain(domain: str, model: str, draft: str) -> dict[str, str]:
         f"Preferred terms: {', '.join(guide['terms'])}\n"
         f"Rule: {guide['rule']}"
     )
-    draft_prompt = af.format(
-        "Apply the topic policy to statement S:\n{}",
-        draft,
-    )
+    draft_prompt = "Apply the topic policy to statement S:\n" + draft
     rewrite_messages = [
         dict(role="system", content=system),
         dict(role="user", content=draft_prompt),

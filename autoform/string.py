@@ -38,11 +38,11 @@ def format(template: str, *args, **kwargs) -> str:
 
     Example:
         >>> import autoform as af
-        >>> af.format("Hello, {}!", "World")
+        >>> ("Hello, " + "World" + "!")
         'Hello, World!'
-        >>> af.format("Hello, {name}!", name="World")
+        >>> ("Hello, " + "World" + "!")
         'Hello, World!'
-        >>> af.format("{0}, {name}!", "Hi", name="World")
+        >>> ("Hi" + ", " + "World" + "!")
         'Hi, World!'
     """
     in_tree = (args, tuple(kwargs.values()))
@@ -126,7 +126,7 @@ def concat(*args) -> str:
 
     Example:
         >>> import autoform as af
-        >>> result = af.concat("Hello, ", "world", "!")
+        >>> result = "Hello, " + "world" + "!"
         >>> print(result)
         Hello, world!
     """

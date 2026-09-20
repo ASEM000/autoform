@@ -24,8 +24,8 @@ Use static inputs when ordinary Python control flow should be selected while tra
 ```python
 def label(kind: str, text: str) -> str:
     if kind == "short":
-        return af.format("Short: {}", text)
-    return af.format("Long: {}", text)
+        return "Short: " + text
+    return "Long: " + text
 
 
 ir = af.trace(label, static=(True, False))("short", "seed")
@@ -39,8 +39,8 @@ The static value is part of the trace. Later calls must pass the same static val
 ```python
 def bad(kind: str, text: str) -> str:
     if kind == "short":  # wrong: kind is dynamic by default
-        return af.format("Short: {}", text)
-    return af.format("Long: {}", text)
+        return "Short: " + text
+    return "Long: " + text
 
 
 ir = af.trace(bad)("short", "seed")
@@ -51,8 +51,8 @@ The comparison would need a concrete value while tracing. A dynamic input only c
 Use {py:func}`switch <autoform.switch>` when the branch is a runtime decision:
 
 ```python
-short = af.trace(lambda text: af.format("Short: {}", text))("seed")
-long = af.trace(lambda text: af.format("Long: {}", text))("seed")
+short = af.trace(lambda text: "Short: " + text)("seed")
+long = af.trace(lambda text: "Long: " + text)("seed")
 branches = {"short": short, "long": long}
 
 
@@ -70,7 +70,7 @@ assert ir.call("long", "DNA") == "Long: DNA"
 def bad_repeat(n: int, text: str) -> str:
     out = text
     for _ in range(n):  # wrong when n is dynamic
-        out = af.concat(out, "!")
+        out = out + "!"
     return out
 ```
 
@@ -86,7 +86,7 @@ def cond(state: tuple[str, str]) -> bool:
 
 def body(state: tuple[str, str]) -> tuple[str, str]:
     text, target = state
-    return af.concat(text, "!"), target
+    return (text + "!"), target
 
 
 cond_ir = af.trace(cond)(("seed", "target"))
@@ -100,7 +100,7 @@ The loop is now one explicit primitive in the surrounding IR.
 
 ```python
 def noisy(text: str) -> str:
-    prompt = af.format("Explain {}", text)
+    prompt = "Explain " + text
     print(prompt)  # prints during tracing, not during every execution
     return prompt
 ```
@@ -109,7 +109,7 @@ Use [checkpoints](intercepts.md) when execution-time diagnostics are needed:
 
 ```python
 def inspectable(text: str) -> str:
-    prompt = af.format("Explain {}", text)
+    prompt = "Explain " + text
     return af.checkpoint(prompt, key="prompt", collection="debug")
 
 

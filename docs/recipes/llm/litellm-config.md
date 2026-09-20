@@ -18,7 +18,7 @@ router = Router(model_list=model_list, num_retries=2)
 
 
 def explain(topic: str) -> str:
-    prompt = af.format("Explain {} in one paragraph.", topic)
+    prompt = "Explain " + topic + " in one paragraph."
     msg = dict(role="user", content=prompt)
     # docs-model is resolved by the active router
     return af.lm_call([msg], model="docs-model")

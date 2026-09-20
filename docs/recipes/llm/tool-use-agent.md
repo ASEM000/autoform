@@ -124,11 +124,13 @@ async def apull_fwd_wikipedia_search(query: str, /):
 # async pullback backward sweep turns output feedback into query feedback
 async def apull_bwd_wikipedia_search(in_tree, /):
     (query, output), feedback = in_tree
-    return af.format(
-        "Improve the Wikipedia search query. Query: {}. Feedback: {}. Result: {}",
-        query,
-        feedback,
-        output,
+    return (
+        "Improve the Wikipedia search query. Query: "
+        + query
+        + ". Feedback: "
+        + feedback
+        + ". Result: "
+        + output
     )
 
 
@@ -141,11 +143,11 @@ afe.pull_bwd_rules.aset(wikipedia_search_p, apull_bwd_wikipedia_search)
 
 def search_tool(query: str, _answer: str, history: str) -> str:
     result = wikipedia_search(query)
-    return af.format("{}\nsearch({}): {}", history, query, result)
+    return history + "\nsearch(" + query + "): " + result
 
 
 def done_tool(_query: str, answer: str, history: str) -> str:
-    return af.format("{}\ndone: {}", history, answer)
+    return history + "\ndone: " + answer
 
 
 # trace each branch once; switch chooses between these at runtime
@@ -160,7 +162,7 @@ def should_continue(state: State) -> bool:
 
 def step(state: State) -> State:
     system = "If the history contains a line that starts with search, choose done. Otherwise choose search."
-    user = af.format("Question and history:\n{}", state.history)
+    user = "Question and history:\n" + state.history
     messages = [dict(role="system", content=system), dict(role="user", content=user)]
     decision = af.lm_schema_call(messages, model="gpt-5.5", schema=decision_schema)
     history = af.switch(decision.tool, tool_branches, decision.args, decision.answer, state.history)
@@ -175,7 +177,7 @@ body_ir = af.trace(step)(example)
 
 
 def agent(question: str) -> str:
-    history = af.format("Question: {}", question)
+    history = "Question: " + question
     init = State(history=history, result="", active=True)
     # max_iters keeps the agent bounded
     final = af.while_loop(cond_ir, body_ir, init, max_iters=4)

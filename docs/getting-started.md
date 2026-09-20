@@ -52,7 +52,7 @@ import autoform as af
 
 def explain(topic: str) -> str:
     # use traceable primitives for values that should enter the ir
-    prompt = af.format("Explain {} in one paragraph.", topic)
+    prompt = "Explain " + topic + " in one paragraph."
     msg = dict(role="user", content=prompt)
     return af.lm_call([msg], model="gpt-5.5")
 ```
@@ -71,7 +71,7 @@ Tracing runs the function once with placeholder values. Calls to [`autoform` pri
 The resulting IR contains:
 
 - one runtime input, `topic`;
-- one {py:func}`format <autoform.format>` equation that builds the prompt;
+- two {py:func}`concat <autoform.concat>` equations that build the prompt, one for each `+`;
 - one {py:func}`lm_call <autoform.lm_call>` equation that records a future provider call with role `user` and model `gpt-5.5`;
 - one string output.
 
@@ -292,7 +292,7 @@ Now write the function normally:
 
 ```python
 def summarize(topic: str) -> Summary:
-    prompt = af.format("Summarize {} for a technical audience.", topic)
+    prompt = "Summarize " + topic + " for a technical audience."
     msg = dict(role="user", content=prompt)
     # return a summary value, not a raw string
     return af.lm_schema_call([msg], model="gpt-5.5", schema=summary_schema)
@@ -348,13 +348,13 @@ import autoform as af
 
 
 def explain_then_rewrite(topic: str) -> str:
-    draft_prompt = af.format("Draft a one-sentence explanation of {}.", topic)
+    draft_prompt = "Draft a one-sentence explanation of " + topic + "."
     draft_msg = dict(role="user", content=draft_prompt)
     step1 = af.lm_call([draft_msg], model="gpt-5.5")
     # mark the intermediate value for runtime inspection
     step1 = af.checkpoint(step1, key="step1", collection="debug")
 
-    rewrite_prompt = af.format("Rewrite for a beginner: {}", step1)
+    rewrite_prompt = "Rewrite for a beginner: " + step1
     rewrite_msg = dict(role="user", content=rewrite_prompt)
     return af.lm_call([rewrite_msg], model="gpt-5.5")
 ```
@@ -418,15 +418,15 @@ import autoform as af
 
 # write the function sequentially; scheduling happens after tracing
 def compare(topic: str) -> str:
-    explain_prompt = af.format("Explain {} in one sentence.", topic)
-    example_prompt = af.format("Give one concrete example of {}.", topic)
+    explain_prompt = "Explain " + topic + " in one sentence."
+    example_prompt = "Give one concrete example of " + topic + "."
     explain_msg = dict(role="user", content=explain_prompt)
     example_msg = dict(role="user", content=example_prompt)
 
     explanation = af.lm_call([explain_msg], model="gpt-5.5")
     example = af.lm_call([example_msg], model="gpt-5.5")
 
-    combine_prompt = af.format("Combine these into a concise answer:\n{}\n{}", explanation, example)
+    combine_prompt = "Combine these into a concise answer:\n" + explanation + "\n" + example
     combine_msg = dict(role="user", content=combine_prompt)
     return af.lm_call([combine_msg], model="gpt-5.5")
 ```

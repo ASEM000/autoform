@@ -14,7 +14,7 @@ import autoform as af
 
 
 def label(topic: str, prefix: str) -> str:
-    return af.format("{}: {}", prefix, topic)
+    return prefix + ": " + topic
 
 
 # topic is batched, prefix is reused for every topic
@@ -36,7 +36,7 @@ import autoform as af
 
 
 def render(request: dict[str, str]) -> str:
-    return af.format("{}: {}", request["system"], request["topic"])
+    return request["system"] + ": " + request["topic"]
 
 
 # the single function argument is a dict, so the axes sit inside a one-item tuple
@@ -60,7 +60,7 @@ import autoform as af
 
 
 def score(answer: str, rubric: str) -> str:
-    return af.format("answer: {}\nrubric: {}", answer, rubric)
+    return "answer: " + answer + "\nrubric: " + rubric
 
 
 # both leaves are batched, so examples are paired by position

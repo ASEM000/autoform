@@ -107,7 +107,7 @@ def pull_fwd_lookup(query: str, /):
 
 def pull_bwd_lookup(in_tree, /):
     (query, output), feedback = in_tree
-    return af.format("Improve query '{}'. Feedback: {}. Result: {}", query, feedback, output)
+    return "Improve query '" + query + "'. Feedback: " + feedback + ". Result: " + output
 
 
 afe.pull_fwd_rules.set(lookup_p, pull_fwd_lookup)

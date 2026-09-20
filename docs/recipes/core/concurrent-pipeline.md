@@ -14,8 +14,8 @@ import autoform as af
 
 
 def research(topic: str) -> str:
-    summary_prompt = af.format("Summarize {} in two sentences.", topic)
-    analogy_prompt = af.format("Give one concrete analogy for {}.", topic)
+    summary_prompt = "Summarize " + topic + " in two sentences."
+    analogy_prompt = "Give one concrete analogy for " + topic + "."
     summary_msg = dict(role="user", content=summary_prompt)
     analogy_msg = dict(role="user", content=analogy_prompt)
 
@@ -23,12 +23,11 @@ def research(topic: str) -> str:
     summary = af.lm_call([summary_msg], model="gpt-5.5")
     analogy = af.lm_call([analogy_msg], model="gpt-5.5")
 
-    join_template = "Combine these notes.\nsummary: {}\nanalogy: {}"
-    join_prompt = af.format(join_template, summary, analogy)
+    join_prompt = "Combine these notes.\nsummary: " + summary + "\nanalogy: " + analogy
     join_msg = dict(role="user", content=join_prompt)
     combined = af.lm_call([join_msg], model="gpt-5.5")
 
-    final_prompt = af.format("Rewrite this as a crisp answer:\n{}", combined)
+    final_prompt = "Rewrite this as a crisp answer:\n" + combined
     final_msg = dict(role="user", content=final_prompt)
     return af.lm_call([final_msg], model="gpt-5.5")
 

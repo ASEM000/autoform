@@ -33,8 +33,8 @@ import autoform as af
 
 
 def program(text: str) -> str:
-    text = af.concat(text, "!")
-    return af.format("[{}]", text)
+    text = text + "!"
+    return "[" + text + "]"
 
 
 ir = af.trace(program)("seed")
@@ -48,7 +48,13 @@ assert in_values == ("world", "!")
 out_values = eqn.bind(in_values, **eqn.params)
 eqn, in_values = gen.send(out_values)
 
-assert eqn.prim.name == "format"
+assert eqn.prim.name == "concat"
+
+out_values = eqn.bind(in_values, **eqn.params)
+eqn, in_values = gen.send(out_values)
+
+assert eqn.prim.name == "concat"
+assert in_values == ("[world!", "]")
 
 out_values = eqn.bind(in_values, **eqn.params)
 eqn, output = gen.send(out_values)

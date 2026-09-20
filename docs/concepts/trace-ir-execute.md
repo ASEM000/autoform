@@ -25,8 +25,8 @@ import autoform as af
 
 
 def label(topic: str) -> str:
-    prompt = af.format("Explain {}.", topic)
-    return af.concat("Prompt: ", prompt)
+    prompt = "Explain " + topic + "."
+    return "Prompt: " + prompt
 
 
 ir = af.trace(label)("DNA")
@@ -51,7 +51,8 @@ The example above records this logical structure:
 ```text
 input: topic
 equations:
-  prompt = format(topic, template="Explain {}.")
+  head = concat("Explain ", topic)
+  prompt = concat(head, ".")
   output = concat("Prompt: ", prompt)
 output: output
 ```
@@ -59,8 +60,8 @@ output: output
 Read it as data flow:
 
 - `topic` is the runtime input;
-- the first equation records the {py:func}`format <autoform.format>` primitive;
-- the second equation records the {py:func}`concat <autoform.concat>` primitive;
+- the first two {py:func}`concat <autoform.concat>` equations build `prompt`;
+- the third adds the `"Prompt: "` prefix;
 - `output` is the returned value.
 
 For a text-space program, the same mechanism records {py:func}`lm_call <autoform.lm_call>` as an equation instead of calling the provider during tracing.

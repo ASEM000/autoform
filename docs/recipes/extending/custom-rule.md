@@ -17,7 +17,7 @@ calls = []
 
 @af.custom
 def bracket(text: str) -> str:
-    return af.format("[{}]", text)
+    return "[" + text + "]"
 
 
 @bracket.set_pushforward
@@ -27,7 +27,7 @@ def pushforward_bracket(in_tree, /, *, call):
 
     # keep the forward value and define the tangent behavior
     output = call(*primals)
-    tangent = af.format("bracket change: {}", text_tangent)
+    tangent = "bracket change: " + text_tangent
     return output, tangent
 
 
@@ -38,7 +38,7 @@ def pullback_bracket(in_tree, /, *, call):
     (text,) = primals
 
     # turn output feedback into feedback for the input text
-    text_feedback = af.format("{} via {} from {}", feedback, output, text)
+    text_feedback = feedback + " via " + output + " from " + text
     return (text_feedback,)
 
 
@@ -56,7 +56,7 @@ def batch_bracket(in_tree, /, *, call):
 
     # batched inputs can use a domain-specific vectorized rule
     calls.append("batch")
-    return [af.format("<{}>", text) for text in texts], True
+    return [("<" + text + ">") for text in texts], True
 
 
 def clean(text: str) -> str:

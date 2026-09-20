@@ -109,7 +109,7 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
     Example:
         >>> import autoform as af
         >>> def greet(greeting, name):
-        ...     return af.concat(greeting, name)
+        ...     return greeting + name
         >>> ir = af.trace(greet)("Hi", "World")
         >>> # Batch over names, broadcast greeting
         >>> batched = af.batch(ir, in_axes=(False, True))
@@ -208,7 +208,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree:
     batch_size = spec.num_children
     # NOTE(asem): this case can be something like
     # >>> def program(v):
-    # ...     return af.format("constant string")
+    # ...     return "constant string"
     # >>> ir = af.trace(program)("input")
     # >>> batched = af.batch(ir, in_axes=True)
     # >>> batched.call([])

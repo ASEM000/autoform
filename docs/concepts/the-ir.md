@@ -32,8 +32,8 @@ import autoform as af
 
 
 def label(topic: str) -> str:
-    prompt = af.format("Explain {}.", topic)
-    return af.concat("Prompt: ", prompt)
+    prompt = "Explain " + topic + "."
+    return "Prompt: " + prompt
 
 
 ir = af.trace(label)("DNA")
@@ -44,7 +44,8 @@ The trace contains this logical equation list:
 ```text
 input: topic
 equations:
-  prompt = format(topic, template="Explain {}.")
+  head = concat("Explain ", topic)
+  prompt = concat(head, ".")
   output = concat("Prompt: ", prompt)
 output: output
 ```
@@ -52,7 +53,7 @@ output: output
 Read it left to right:
 
 - `topic` is the runtime input.
-- {py:func}`format <autoform.format>` produces `prompt`.
+- The first two {py:func}`concat <autoform.concat>` equations build `prompt`, one for each `+`.
 - {py:func}`concat <autoform.concat>` consumes the literal `"Prompt: "` and `prompt`, then produces `output`.
 - `output` is the function output.
 

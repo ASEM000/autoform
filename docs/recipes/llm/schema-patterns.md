@@ -24,7 +24,7 @@ route_schema = Route(tool=af.Enum("search", "done"), answer=af.Str())
 
 
 def choose_route(question: str) -> Route:
-    prompt = af.format("Choose search or done for this question:\n{}", question)
+    prompt = "Choose search or done for this question:\n" + question
     msg = dict(role="user", content=prompt)
     return af.lm_schema_call([msg], model="gpt-5.5", schema=route_schema)
 ```
@@ -57,7 +57,7 @@ decision_schema = SearchDecision(
 
 
 def choose_search(question: str) -> SearchDecision:
-    prompt = af.format("Choose the next tool call for:\n{}", question)
+    prompt = "Choose the next tool call for:\n" + question
     msg = dict(role="user", content=prompt)
     return af.lm_schema_call([msg], model="gpt-5.5", schema=decision_schema)
 ```
@@ -144,7 +144,7 @@ summary_schema = Summary(title=af.Str(max=80), score=af.Float(min=0, max=1))
 
 
 def summarize(topic: str) -> Summary:
-    prompt = af.format("Summarize {}.", topic)
+    prompt = "Summarize " + topic + "."
     msg = dict(role="user", content=prompt)
     return af.lm_schema_call([msg], model="gpt-5.5", schema=summary_schema)
 

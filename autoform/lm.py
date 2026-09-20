@@ -176,7 +176,7 @@ def lm_call(messages: Messages, /, *, model: str) -> str:
     Example:
         >>> import autoform as af
         >>> def program(name: str) -> str:
-        ...     greeting = af.format("Hello, {}!", name)
+        ...     greeting = "Hello, " + name + "!"
         ...     sys = dict(role="system", content="translate the greeting to Korean")
         ...     usr = dict(role="user", content=greeting)
         ...     greeting = af.lm_call([sys, usr], model="gpt-5.5")
@@ -195,9 +195,9 @@ def lm_call(messages: Messages, /, *, model: str) -> str:
         ... ]
         >>> router = Router(model_list=model_list)  # doctest: +SKIP
         >>> def program(text: str, model: str):
-        ...     msg = [{"role": "user", "content": af.format("Explain {} in one line.", text)}]
+        ...     msg = [{"role": "user", "content": ("Explain " + text + " in one line.")}]
         ...     answer = af.lm_call(msg, model=model)
-        ...     return af.concat("Answer: ", answer)
+        ...     return "Answer: " + answer
         >>> ir = af.trace(program)("topic", "model")
         >>> model_names = ["gpt-5.5-1024", "gpt-5.5-512"]
         >>> with af.lm_client(router):  # doctest: +SKIP

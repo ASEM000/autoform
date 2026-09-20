@@ -141,8 +141,8 @@ def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness
         assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
         # NOTE(asem): with a partial output mask, only the selected output Vars are live.
         # >>> def program(x):
-        # ...     a = af.concat(x, "!")
-        # ...     b = af.concat(x, "?")
+        # ...     a = x + "!"
+        # ...     b = x + "?"
         # ...     return a, b
         # >>> ir_liveness(ir, out_used=(True, False))[-1]
         # {a}
