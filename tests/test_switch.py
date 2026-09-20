@@ -131,7 +131,7 @@ class TestSwitchBasic:
     def test_switch_with_multiple_operands(self):
         branches = {
             "concat": af.trace(af.string.concat)("A", "B"),
-            "format": af.trace(lambda a, b: af.string.format("{} - {}", a, b))("A", "B"),
+            "format": af.trace(lambda a, b: af.string.format("{a} - {b}", a=a, b=b))("A", "B"),
         }
 
         def program(key, x, y):
@@ -434,8 +434,8 @@ class TestSwitchNestedTransforms:
 class TestSwitchWithOperands:
     def test_switch_with_multiple_operands(self):
         branches = {
-            "dash": af.trace(lambda x, y: af.string.format("{}-{}", x, y))("X", "Y"),
-            "plus": af.trace(lambda x, y: af.string.format("{}+{}", x, y))("X", "Y"),
+            "dash": af.trace(lambda x, y: af.string.format("{x}-{y}", x=x, y=y))("X", "Y"),
+            "plus": af.trace(lambda x, y: af.string.format("{x}+{y}", x=x, y=y))("X", "Y"),
         }
         result = af.switch("dash", branches, "a", "b")
         assert result == "a-b"
@@ -446,12 +446,12 @@ class TestSwitchWithOperands:
 class TestSwitchComplexBranches:
     def test_branches_with_multiple_ops(self):
         def make_branch0(x):
-            step1 = af.string.format("[{}]", x)
+            step1 = af.string.format("[{x}]", x=x)
             step2 = af.string.concat(step1, "!")
             return step2
 
         def make_branch1(x):
-            step1 = af.string.format("({})", x)
+            step1 = af.string.format("({x})", x=x)
             step2 = af.string.concat(step1, "?")
             return step2
 
@@ -469,7 +469,9 @@ class TestSwitchComplexBranches:
 
     def test_many_branches(self):
         branches = {
-            f"branch{i}": af.trace(lambda x, i=i: af.string.format("branch{}: {}", str(i), x))("X")
+            f"branch{i}": af.trace(
+                lambda x, i=i: af.string.format("branch{value_1}: {x}", value_1=str(i), x=x)
+            )("X")
             for i in range(5)
         }
 

@@ -89,7 +89,6 @@ active_client = lm.active_client
 # PRIMITIVE KEYS
 # ==================================================================================================
 
-format_p = string.format_p
 concat_p = string.concat_p
 match_p = string.match_p
 neg_p = numeric.neg_p
@@ -162,7 +161,6 @@ __all__ = [
     "is_var",
     "aval_if_var",
     "active_client",
-    "format_p",
     "concat_p",
     "match_p",
     "neg_p",

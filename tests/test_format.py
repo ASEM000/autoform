@@ -12,176 +12,140 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import NamedTuple
+
 import pytest
 
 import autoform as af
 
 
-class TestFormatBasic:
-    def test_positional_single(self):
-        result = af.string.format("Hello, {}!", "World")
-        assert result == "Hello, World!"
+@pytest.mark.asyncio
+async def test_format_batch_broadcast():
+    def greet(greeting, name):
+        return af.string.format("{greeting}: {name}", greeting=greeting, name=name)
 
-    def test_positional_multiple(self):
-        result = af.string.format("{} + {} = {}", "1", "2", "3")
-        assert result == "1 + 2 = 3"
-
-    def test_positional_indexed(self):
-        result = af.string.format("{0} {1} {0}", "a", "b")
-        assert result == "a b a"
-
-    def test_kwargs_single(self):
-        result = af.string.format("Hello, {name}!", name="World")
-        assert result == "Hello, World!"
-
-    def test_kwargs_multiple(self):
-        result = af.string.format("{first} {last}", first="x0", last="y0")
-        assert result == "x0 y0"
-
-    def test_mixed_positional_and_kwargs(self):
-        result = af.string.format("{0}, {name}!", "Hi", name="World")
-        assert result == "Hi, World!"
-
-    def test_empty_args_only_kwargs(self):
-        result = af.string.format("{a}{b}{c}", a="x", b="y", c="z")
-        assert result == "xyz"
+    ir = af.trace(greet)("x", "y")
+    batched = af.batch(ir, in_axes=(False, True))
+    expected = ["Hello: x0", "Hello: x1"]
+    assert batched.call("Hello", ["x0", "x1"]) == expected
+    assert await batched.acall("Hello", ["x0", "x1"]) == expected
 
 
-class TestFormatTrace:
-    def test_trace_positional(self):
-        def greet(name):
-            return af.string.format("Hello, {}!", name)
+@pytest.mark.parametrize(
+    "template, values, expected, feedback",
+    [
+        ("Hello {x}/{x}", {"x": "A"}, "AA", {"x": "gg"}),
+        (
+            "{right}/{left}/{right}",
+            {"left": "A", "right": "B"},
+            "BAB",
+            {"left": "g", "right": "gg"},
+        ),
+        ("{a}{b}", {"a": "A", "b": "B"}, "AB", {"a": "g", "b": "g"}),
+        ("{{{name}}}", {"name": "A"}, "A", {"name": "g"}),
+        ("constant", {}, "", {}),
+        ("", {}, "", {}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_format_lowers_to_concat(template, values, expected, feedback):
+    def program(values):
+        return af.string.format(template, **values)
 
-        ir = af.trace(greet)("x")
-        result = ir.call("World")
-        assert result == "Hello, World!"
+    ir = af.trace(program)(values)
+    assert len(ir.eqns) == 1
+    assert ir.eqns[0].prim is af.string.concat_p
+    assert ir.eqns[0].params == {}
+    primal = template.format(**values)
+    assert program(values) == primal
+    assert ir.call(values) == primal
+    assert await ir.acall(values) == primal
 
-    def test_trace_kwargs(self):
-        def greet(name):
-            return af.string.format("Hello, {name}!", name=name)
-
-        ir = af.trace(greet)("x")
-        result = ir.call("World")
-        assert result == "Hello, World!"
-
-    def test_trace_mixed(self):
-        def greet(greeting, name):
-            return af.string.format("{}, {name}!", greeting, name=name)
-
-        ir = af.trace(greet)("x", "y")
-        result = ir.call("Hi", "World")
-        assert result == "Hi, World!"
-
-
-class TestFormatBatch:
-    def test_batch_positional(self):
-        def greet(name):
-            return af.string.format("Hello, {}!", name)
-
-        ir = af.trace(greet)("x")
-        batched = af.batch(ir)
-        result = batched.call(["x0", "x1", "x2"])
-        assert result == ["Hello, x0!", "Hello, x1!", "Hello, x2!"]
-
-    def test_batch_kwargs(self):
-        def greet(name):
-            return af.string.format("Hello, {name}!", name=name)
-
-        ir = af.trace(greet)("x")
-        batched = af.batch(ir)
-        result = batched.call(["x0", "x1", "x2"])
-        assert result == ["Hello, x0!", "Hello, x1!", "Hello, x2!"]
-
-    def test_batch_mixed_args_kwargs(self):
-        def greet(greeting, name):
-            return af.string.format("{0}, {name}!", greeting, name=name)
-
-        ir = af.trace(greet)("x", "y")
-        batched = af.batch(ir)
-        result = batched.call(["Hi", "Hello"], ["x0", "x1"])
-        assert result == ["Hi, x0!", "Hello, x1!"]
-
-    def test_batch_broadcast_positional(self):
-        def greet(greeting, name):
-            return af.string.format("{}: {}", greeting, name)
-
-        ir = af.trace(greet)("x", "y")
-        batched = af.batch(ir, in_axes=(False, True))
-        result = batched.call("Hello", ["x0", "x1"])
-        assert result == ["Hello: x0", "Hello: x1"]
-
-    def test_batch_broadcast_kwargs(self):
-        def greet(greeting, name):
-            return af.string.format("{greeting}: {name}", greeting=greeting, name=name)
-
-        ir = af.trace(greet)("x", "y")
-        batched = af.batch(ir, in_axes=(False, True))
-        result = batched.call("Hello", ["x0", "x1"])
-        assert result == ["Hello: x0", "Hello: x1"]
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_batch_kwargs_async(self):
-        def greet(name):
-            return af.string.format("Hello, {name}!", name=name)
-
-        ir = af.trace(greet)("x")
-        batched = af.batch(ir)
-        result = await batched.acall(["x0", "x1"])
-        assert result == ["Hello, x0!", "Hello, x1!"]
+    pf = af.pushforward(ir)
+    assert af.ad.materialize(pf.call((values,), (values,))) == (primal, expected)
+    assert af.ad.materialize(await pf.acall((values,), (values,))) == (primal, expected)
+    pb = af.pullback(ir)
+    assert af.ad.materialize(pb.call((values,), "g")) == (primal, (feedback,))
+    assert af.ad.materialize(await pb.acall((values,), "g")) == (primal, (feedback,))
 
 
-class TestFormatPushforward:
-    def test_pushforward_positional(self):
-        def greet(name):
-            return af.string.format("Hello, {}!", name)
+@pytest.mark.asyncio
+async def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves():
+    class Record(NamedTuple):
+        name: str
+        items: tuple[str, str]
 
-        ir = af.trace(greet)("x")
-        pf_ir = af.pushforward(ir)
-        primal, tangent = pf_ir.call(("World",), ("Tangent",))
-        assert primal == "Hello, World!"
-        assert tangent == "Hello, Tangent!"
+    def program(row):
+        return af.string.format("{name}/{item}/{name}", name=row.name, item=row.items[0])
 
-    def test_pushforward_kwargs(self):
-        def greet(name):
-            return af.string.format("Hello, {name}!", name=name)
+    row = Record("A", ("B", "C"))
+    ir = af.trace(program)(row)
+    assert ir.eqns[0].prim is af.string.concat_p
+    pf = af.pushforward(ir)
+    direction = Record("da", ("db", "dc"))
+    assert pf.call((row,), (direction,)) == ("A/B/A", "dadbda")
+    assert await pf.acall((row,), (direction,)) == ("A/B/A", "dadbda")
+    pb = af.pullback(ir)
+    expected = ("A/B/A", (Record("gg", ("g", "")),))
+    assert af.ad.materialize(pb.call((row,), "g")) == expected
+    assert af.ad.materialize(await pb.acall((row,), "g")) == expected
 
-        ir = af.trace(greet)("x")
-        pf_ir = af.pushforward(ir)
-        primal, tangent = pf_ir.call(("World",), ("Tangent",))
-        assert primal == "Hello, World!"
-        assert tangent == "Hello, Tangent!"
+
+@pytest.mark.parametrize(
+    "template, unsupported",
+    [
+        ("{x!r}", "conversions"),
+        ("{x!s}", "conversions"),
+        ("{x!a}", "conversions"),
+        ("{x:>8}", "format specifications"),
+    ],
+)
+def test_format_rejects_unsupported_fields(template, unsupported):
+    def program(x):
+        return af.string.format(template, x=x)
+
+    with pytest.raises(AssertionError, match="`format` does not support " + unsupported):
+        program("A")
+    with pytest.raises(AssertionError, match="`format` does not support " + unsupported):
+        af.trace(program)("A")
 
 
-class TestFormatPullback:
-    def test_pullback_positional(self):
-        def greet(name):
-            return af.string.format("Hello, {}!", name)
+@pytest.mark.parametrize("field", ["", "0", "0.real", "0[0]", "x.name", "x[0]"])
+def test_format_does_not_resolve_field_paths(field):
+    def program(x):
+        return af.string.format("{" + field + "}", x=x)
 
-        ir = af.trace(greet)("x")
-        pb_ir = af.pullback(ir)
-        primal, cotangent = pb_ir.call(("World",), "grad")
-        assert primal == "Hello, World!"
+    with pytest.raises(AssertionError, match="Template field name is not found"):
+        program("A")
+    with pytest.raises(AssertionError, match="Template field name is not found"):
+        af.trace(program)("A")
 
-        assert cotangent == ("grad",)
 
-    def test_pullback_kwargs(self):
-        def greet(name):
-            return af.string.format("Hello, {name}!", name=name)
+@pytest.mark.parametrize(
+    "template, values",
+    [
+        ("Hello {x}", {"x": "A", "y": "B"}),
+        ("{x}{x}", {"x": "A", "y": "B"}),
+        ("constant", {"x": "A"}),
+    ],
+)
+def test_format_rejects_unused_arguments(template, values):
+    def program(values):
+        return af.string.format(template, **values)
 
-        ir = af.trace(greet)("x")
-        pb_ir = af.pullback(ir)
-        primal, cotangent = pb_ir.call(("World",), "grad")
-        assert primal == "Hello, World!"
+    with pytest.raises(AssertionError, match="Unused format arguments"):
+        program(values)
+    with pytest.raises(AssertionError, match="Unused format arguments"):
+        af.trace(program)(values)
 
-        assert cotangent == ("grad",)
 
-    def test_pullback_mixed(self):
-        def greet(greeting, name):
-            return af.string.format("{0}, {name}!", greeting, name=name)
+def test_format_requires_keyword_arguments():
+    with pytest.raises(TypeError):
+        af.string.format("{x}", "A")
 
-        ir = af.trace(greet)("x", "y")
-        pb_ir = af.pullback(ir)
-        primal, cotangent = pb_ir.call(("Hi", "World"), "grad")
-        assert primal == "Hi, World!"
 
-        assert cotangent == ("grad", "grad")
+def test_format_requires_string_values():
+    with pytest.raises(TypeError):
+        af.string.format("{value}", value=1)
+    with pytest.raises(AssertionError, match="Expected strings"):
+        af.trace(lambda x: af.string.format("{x}", x=x))(1)

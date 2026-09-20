@@ -81,7 +81,7 @@ class TestIrVarLeaves:
     def test_returns_input_vars_in_leaf_order(self):
         def program(payload):
             head, (left, right) = payload
-            return af.string.format("{} {} {}", head, left, right)
+            return af.string.format("{head} {left} {right}", head=head, left=left, right=right)
 
         ir = af.trace(program)(("head", ("left", "right")))
         (payload,) = ir.in_tree
@@ -91,7 +91,7 @@ class TestIrVarLeaves:
 
     def test_filters_static_input_literals(self):
         def program(prefix, name):
-            return af.string.format("{} {}", prefix, name)
+            return af.string.format("{prefix} {name}", prefix=prefix, name=name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
 
@@ -162,8 +162,8 @@ class TestIrEqnDependencyGraph:
 
     def test_includes_independent_equations_with_empty_children(self):
         def program(a, b):
-            left = af.string.format("{}", a)
-            right = af.string.format("{}", b)
+            left = af.string.format("{a}", a=a)
+            right = af.string.format("{b}", b=b)
             return left, right
 
         ir = af.trace(program)("a", "b")
@@ -173,7 +173,7 @@ class TestIrEqnDependencyGraph:
 
     def test_maps_parent_equations_to_children(self):
         def program(x):
-            a = af.string.format("{}", x)
+            a = af.string.format("{x}", x=x)
             b = af.string.concat(a, "!")
             c = af.string.concat(b, "?")
             return c
@@ -185,7 +185,7 @@ class TestIrEqnDependencyGraph:
 
     def test_dedupes_repeated_input_dependencies(self):
         def program(x):
-            a = af.string.format("{}", x)
+            a = af.string.format("{x}", x=x)
             b = af.string.concat(a, a)
             return b
 
@@ -218,7 +218,7 @@ class TestIrLiveness:
 
     def test_chain_returns_boundary_liveness(self):
         def program(x):
-            a = af.string.format("{}", x)
+            a = af.string.format("{x}", x=x)
             b = af.string.concat(a, "!")
             c = af.string.concat(b, "?")
             return c
@@ -231,8 +231,8 @@ class TestIrLiveness:
 
     def test_parallel_equations_keep_suffix_live_ins(self):
         def program(a, b):
-            left = af.string.format("{}", a)
-            right = af.string.format("{}", b)
+            left = af.string.format("{a}", a=a)
+            right = af.string.format("{b}", b=b)
             return left, right
 
         ir = af.trace(program)("left", "right")
@@ -255,7 +255,7 @@ class TestIrLiveness:
 
     def test_static_inputs_do_not_become_live_vars(self):
         def program(prefix, name):
-            return af.string.format("{} {}", prefix, name)
+            return af.string.format("{prefix} {name}", prefix=prefix, name=name)
 
         ir = af.trace(program, static=(True, False))("Hello", "World")
         out_var = ir.out_tree

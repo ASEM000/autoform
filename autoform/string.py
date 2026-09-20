@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import functools as ft
+import string as stringlib
 
 import autoform.core as core
 import autoform.utils as utils
@@ -25,88 +26,6 @@ __all__ = ["format", "concat", "match"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-
-# ==================================================================================================
-# FORMAT
-# ==================================================================================================
-
-format_p = core.Prim("format")
-
-
-def format(template: str, *args, **kwargs) -> str:
-    """Format a string template with positional and/or keyword arguments.
-
-    Example:
-        >>> import autoform as af
-        >>> ("Hello, " + "World" + "!")
-        'Hello, World!'
-        >>> ("Hello, " + "World" + "!")
-        'Hello, World!'
-        >>> ("Hi" + ", " + "World" + "!")
-        'Hi, World!'
-    """
-    in_tree = (args, tuple(kwargs.values()))
-    return format_p.bind(in_tree, template=template, keys=tuple(kwargs))
-
-
-def impl_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> str:
-    args, kwargs_values = in_tree
-    kwargs = dict(zip(keys, kwargs_values))
-    return template.format(*args, **kwargs)
-
-
-def abstract_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> core.EvalType:
-    return core.StrAVal()
-
-
-def pushforward_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
-    import autoform.ad as ad
-
-    primals, tangents = in_tree
-    p_out = format_p.bind(primals, template=template, keys=keys)
-    tangents = ad.materialize(tangents)
-    t_out = format_p.bind(tangents, template=template, keys=keys)
-    return p_out, t_out
-
-
-def pullback_fwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
-    args, kwargs_values = in_tree
-    out = format_p.bind(in_tree, template=template, keys=keys)
-    residuals = (len(args), len(kwargs_values))
-    return out, residuals
-
-
-def pullback_bwd_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> Tree:
-    del template, keys
-    (n_args, n_kwargs), out_cotangent = in_tree
-    args_cotangent = tuple([out_cotangent] * n_args)
-    kwargs_cotangent = tuple([out_cotangent] * n_kwargs)
-    return (args_cotangent, kwargs_cotangent)
-
-
-def batch_format(in_tree: Tree, /, *, template: str, keys: tuple[str, ...]) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return format_p.bind(in_values, template=template, keys=keys), False
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    bind = ft.partial(format_p.bind, template=template, keys=keys)
-    result = [bind(unbatch(b)) for b in range(batch_size)]
-    return spec.unflatten(result), True
-
-
-core.impl_rules.set(format_p, impl_format)
-core.impl_rules.aset(format_p, utils.asyncify(impl_format))
-core.abstract_rules.set(format_p, abstract_format)
-core.push_rules.set(format_p, pushforward_format)
-core.push_rules.aset(format_p, utils.asyncify(pushforward_format))
-core.pull_fwd_rules.set(format_p, pullback_fwd_format)
-core.pull_fwd_rules.aset(format_p, utils.asyncify(pullback_fwd_format))
-core.pull_bwd_rules.set(format_p, pullback_bwd_format)
-core.pull_bwd_rules.aset(format_p, utils.asyncify(pullback_bwd_format))
-core.batch_rules.set(format_p, batch_format)
-core.batch_rules.aset(format_p, utils.asyncify(batch_format))
 
 # ==================================================================================================
 # CONCAT
@@ -270,3 +189,37 @@ core.batch_rules.aset(match_p, utils.asyncify(batch_match))
 
 
 core.dunder_rules[core.Dunder.EQ, core.StrAVal] = match
+
+
+# ==================================================================================================
+# FORMAT
+# ==================================================================================================
+
+
+def format(template: str, **kwargs) -> str:
+    """Format a string using named keyword arguments.
+
+    Note:
+        - Template fields are keyword only.
+        - Conversion and formatting specs are not allowed.
+
+    Example:
+        >>> import autoform as af
+        >>> af.string.format("Hello {name}!", name="World")
+        'Hello World!'
+    """
+    unused = set(kwargs)
+    parts = []
+    for literal, field, spec, conversion in stringlib.Formatter().parse(template):
+        if literal:
+            parts.append(literal)
+        if field is None:
+            continue
+        assert conversion is None, "`format` does not support conversions."
+        assert not spec, "`format` does not support format specifications."
+        assert field in kwargs, "Template field name is not found in keyword arguments ."
+        parts.append(kwargs[field])
+        # NOTE(asem): in case of multiple ref to same kw discard does not raise error
+        unused.discard(field)
+    assert not unused, f"Unused format arguments: {unused}"
+    return concat(*parts)

@@ -18,7 +18,7 @@ The IR is not Python source and it is not bytecode. It is a small data structure
 
 - input and output trees describe the runtime values entering and leaving the program;
 - equations record one primitive call, its input tree, its output tree, static parameters, and tags;
-- primitive names identify operations such as {py:func}`format <autoform.string.format>`, {py:func}`concat <autoform.string.concat>`, and {py:func}`af.lm.call <autoform.lm.call>`;
+- primitive names identify operations such as {py:func}`concat <autoform.string.concat>` and {py:func}`af.lm.call <autoform.lm.call>`;
 - the whole IR is the input tree, the equation list, and the output tree.
 
 Most code should get an IR from {py:func}`trace <autoform.trace>`, transform it, and run it. Direct construction of the internal IR classes is not needed.
