@@ -128,8 +128,8 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     prompt = af.checkpoint(af.format("Q: {}", x), key="prompt", collection="debug")
-        ...     response = af.concat(prompt, " A: 42")
+        ...     prompt = af.checkpoint(("Q: " + x), key="prompt", collection="debug")
+        ...     response = prompt + " A: 42"
         ...     return af.checkpoint(response, key="response", collection="debug")
         >>> ir = af.trace(program)("test")
         >>> with af.collect(collection="debug") as collected:
@@ -205,9 +205,9 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     normalized = af.format("item: {}", x)
+        ...     normalized = "item: " + x
         ...     normalized = af.checkpoint(normalized, key="normalized", collection="debug")
-        ...     return af.concat(normalized, "!")
+        ...     return normalized + "!"
         >>> ir = af.trace(program)("test")
         >>> with af.collect(collection="debug") as collected:
         ...     result = ir.call("alpha")
@@ -263,9 +263,9 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     normalized = af.format("item: {}", x)
+        ...     normalized = "item: " + x
         ...     normalized = af.checkpoint(normalized, key="normalized", collection="cache")
-        ...     return af.concat(normalized, "!")
+        ...     return normalized + "!"
         >>> ir = af.trace(program)("test")
         >>> with af.inject(collection="cache", values={"normalized": ["cached item"]}):
         ...     ir.call("alpha")
@@ -278,13 +278,13 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
 
     Example:
         >>> def program(x):
-        ...     normalized = af.format("item: {}", x)
+        ...     normalized = "item: " + x
         ...     with af.inject(collection="cache", values={"normalized": ["cached item"]}):
         ...         normalized = af.checkpoint(normalized, key="normalized", collection="cache")
-        ...     return af.concat(normalized, "!")
+        ...     return normalized + "!"
         >>> ir = af.trace(program)("test")
         >>> [eqn.prim.name for eqn in ir.eqns]
-        ['format', 'concat']
+        ['concat']
         >>> ir.call("alpha")
         'cached item!'
         >>> ir.call("beta")

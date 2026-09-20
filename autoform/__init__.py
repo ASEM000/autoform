@@ -69,29 +69,12 @@ weight = path.weight
 # PRIMITIVES
 # ==================================================================================================
 
-format = string.format
-concat = string.concat
-match = string.match
-lm_call = lm.lm_call
-lm_schema_call = lm.lm_schema_call
-lm_client = lm.lm_client
 stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
 fixpoint = control.fixpoint
 depends = order.depends
 factor = path.factor
-neg = numeric.neg
-add = numeric.add
-sub = numeric.sub
-mul = numeric.mul
-div = numeric.div
-eq = numeric.eq
-ne = numeric.ne
-lt = numeric.lt
-le = numeric.le
-gt = numeric.gt
-ge = numeric.ge
 
 # ==================================================================================================
 # SCHEMAS
@@ -108,7 +91,6 @@ Str = schemas.Str
 # TYPES
 # ==================================================================================================
 
-EchoLMClient = lm.EchoLMClient
 PYTREE_NAMESPACE = utils.PYTREE_NAMESPACE
 
 # ==================================================================================================
@@ -121,7 +103,6 @@ __all__ = [
     "trace",
     "fold",
     # execution
-    "lm_client",
     "tag",
     # transformations
     "pushforward",
@@ -135,11 +116,6 @@ __all__ = [
     "memoize",
     "weight",
     # primitives
-    "format",
-    "concat",
-    "match",
-    "lm_call",
-    "lm_schema_call",
     "stop_gradient",
     "checkpoint",
     "switch",
@@ -147,17 +123,6 @@ __all__ = [
     "fixpoint",
     "depends",
     "factor",
-    "neg",
-    "add",
-    "sub",
-    "mul",
-    "div",
-    "eq",
-    "ne",
-    "lt",
-    "le",
-    "gt",
-    "ge",
     # schemas
     "Bool",
     "Doc",
@@ -166,10 +131,11 @@ __all__ = [
     "Int",
     "Str",
     # types
-    "EchoLMClient",
     "PYTREE_NAMESPACE",
     # modules
     "extend",
+    "lm",
     "numeric",
+    "string",
     "path",
 ]

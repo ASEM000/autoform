@@ -33,7 +33,7 @@ class TestFixpointImpl:
     def test_max_iters_bounds_nonconvergent_step(self):
         def step(state, instruction):
             del instruction
-            return af.concat(state, ".")
+            return af.string.concat(state, ".")
 
         step_ir = af.trace(step)("x", "unused")
 
@@ -42,10 +42,10 @@ class TestFixpointImpl:
     def test_custom_equiv_ir(self):
         def step(state, instruction):
             del instruction
-            return af.concat(state, "!")
+            return af.string.concat(state, "!")
 
         step_ir = af.trace(step)("x", "unused")
-        equiv_ir = af.trace(lambda prev, new: af.match(new, "x!!"))("a", "b")
+        equiv_ir = af.trace(lambda prev, new: af.string.match(new, "x!!"))("a", "b")
 
         assert af.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x!!"
 
@@ -124,7 +124,7 @@ class TestFixpointPullback:
 
     def test_adjoint_iterations_accumulate_state_feedback(self):
         def step(state, instruction):
-            return af.concat(state, instruction)
+            return af.string.concat(state, instruction)
 
         step_ir = af.trace(step)("s", "c")
 
@@ -140,7 +140,7 @@ class TestFixpointPullback:
 
     def test_zero_output_cotangent_short_circuits(self):
         def step(state, instruction):
-            return af.concat(state, instruction)
+            return af.string.concat(state, instruction)
 
         step_ir = af.trace(step)("s", "c")
 
@@ -174,7 +174,7 @@ class TestFixpointPullback:
 
     def test_pullback_static_step_literal_is_not_boxed(self):
         def step(state, suffix):
-            return af.concat(state, suffix)
+            return af.string.concat(state, suffix)
 
         step_ir = af.trace(step, static=(False, True))("s", "!")
 
@@ -190,7 +190,7 @@ class TestFixpointPullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_static_step_literal_is_not_boxed_async(self):
         def step(state, suffix):
-            return af.concat(state, suffix)
+            return af.string.concat(state, suffix)
 
         step_ir = af.trace(step, static=(False, True))("s", "!")
 
@@ -257,7 +257,7 @@ class TestFixpointBatch:
     def test_unbatched_fallback_preserves_pytree_out_batched(self):
         def step(state, instruction):
             left, right = state
-            return af.concat(left, instruction), right
+            return af.string.concat(left, instruction), right
 
         step_ir = af.trace(step)(("x", "y"), "!")
 
@@ -273,7 +273,7 @@ class TestFixpointBatch:
     async def test_unbatched_fallback_preserves_pytree_out_batched_async(self):
         def step(state, instruction):
             left, right = state
-            return af.concat(left, instruction), right
+            return af.string.concat(left, instruction), right
 
         step_ir = af.trace(step)(("x", "y"), "!")
 
@@ -294,7 +294,7 @@ class TestFixpointBatch:
 
         def step(state, instruction):
             return State(
-                text=af.concat(state.text, instruction),
+                text=af.string.concat(state.text, instruction),
                 status=state.status,
                 label=state.label,
             )
@@ -321,7 +321,7 @@ class TestFixpointBatch:
 
         def step(state, instruction):
             return State(
-                text=af.concat(state.text, instruction),
+                text=af.string.concat(state.text, instruction),
                 status=state.status,
                 label=state.label,
             )
@@ -347,7 +347,7 @@ class TestEquivIR:
         def step(state, instruction):
             del instruction
             counters["step"] += 1
-            return af.concat(state, ".")
+            return af.string.concat(state, ".")
 
         @af.custom
         def probe(prev, new):
@@ -356,7 +356,7 @@ class TestEquivIR:
             return new
 
         step_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "unused")
-        equiv_ir = af.trace(lambda prev, new: af.match(probe(prev, new), "x.."))("a", "b")
+        equiv_ir = af.trace(lambda prev, new: af.string.match(probe(prev, new), "x.."))("a", "b")
         counters["step"] = counters["judge"] = 0
 
         assert af.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
@@ -365,10 +365,12 @@ class TestEquivIR:
     def test_batched_equiv_ir(self):
         def step(state, instruction):
             del instruction
-            return af.concat(state, "!")
+            return af.string.concat(state, "!")
 
         step_ir = af.trace(step)("x", "unused")
-        equiv_ir = af.trace(lambda prev, new: af.match(new, af.concat(prev, "!")))("a", "b")
+        equiv_ir = af.trace(lambda prev, new: af.string.match(new, af.string.concat(prev, "!")))(
+            "a", "b"
+        )
 
         def program(init, instruction):
             return af.fixpoint(step_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
@@ -385,7 +387,7 @@ class TestEquivIR:
             return instruction
 
         step_ir = af.trace(step)("x", "done")
-        equiv_ir = af.trace(lambda prev, new: af.match(new, prev))("a", "b")
+        equiv_ir = af.trace(lambda prev, new: af.string.match(new, prev))("a", "b")
 
         def program(init, instruction):
             return af.fixpoint(step_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)
@@ -395,13 +397,17 @@ class TestEquivIR:
         assert await ir.acall("x", "done") == "done"
 
     def test_equiv_ir_validation(self):
-        step_ir = af.trace(lambda state, instruction: af.concat(state, instruction))("x", "!")
-        one_arg = af.trace(lambda prev: af.match(prev, "x"))("a")
+        step_ir = af.trace(lambda state, instruction: af.string.concat(state, instruction))(
+            "x", "!"
+        )
+        one_arg = af.trace(lambda prev: af.string.match(prev, "x"))("a")
 
         with pytest.raises(AssertionError, match="two positional"):
             af.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=one_arg)
 
-        wrong_struct = af.trace(lambda prev, new: af.match(prev[0], new[0]))(("a", "b"), ("c", "d"))
+        wrong_struct = af.trace(lambda prev, new: af.string.match(prev[0], new[0]))(
+            ("a", "b"), ("c", "d")
+        )
         with pytest.raises(AssertionError, match="state structure"):
             af.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=wrong_struct)
 
@@ -415,7 +421,7 @@ class TestEquivIR:
             return instruction
 
         step_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "done")
-        equiv_ir = af.trace(lambda prev, new: af.match(new, prev))("a", "b")
+        equiv_ir = af.trace(lambda prev, new: af.string.match(new, prev))("a", "b")
 
         def program(init, instruction):
             return af.fixpoint(step_ir, init, instruction, max_iters=10, equiv_ir=equiv_ir)

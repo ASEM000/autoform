@@ -12,18 +12,18 @@ import autoform as af
 
 
 def draft_answer(topic: str) -> str:
-    outline_msg = dict(role="user", content=af.format("Outline {}.", topic))
-    outline = af.lm_call([outline_msg], model="gpt-5.5")
+    outline_msg = dict(role="user", content=("Outline " + topic + "."))
+    outline = af.lm.call([outline_msg], model="gpt-5.5")
     outline = af.checkpoint(outline, key="outline", collection="debug")
 
-    draft_prompt = af.format("Write a short answer from this outline:\n{}", outline)
+    draft_prompt = "Write a short answer from this outline:\n" + outline
     draft_msg = dict(role="user", content=draft_prompt)
-    draft = af.lm_call([draft_msg], model="gpt-5.5")
+    draft = af.lm.call([draft_msg], model="gpt-5.5")
     draft = af.checkpoint(draft, key="draft", collection="debug")
 
-    final_prompt = af.format("Tighten this answer:\n{}", draft)
+    final_prompt = "Tighten this answer:\n" + draft
     final_msg = dict(role="user", content=final_prompt)
-    return af.lm_call([final_msg], model="gpt-5.5")
+    return af.lm.call([final_msg], model="gpt-5.5")
 
 
 ir = af.trace(draft_answer)("recursion")

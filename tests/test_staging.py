@@ -66,7 +66,7 @@ class TestFold:
 
         with af.core.using_interpreter(counter):
             with af.fold():
-                result = af.concat("A", "B")
+                result = af.string.concat("A", "B")
 
         assert result == "AB"
         assert counter.calls == 1
@@ -74,8 +74,8 @@ class TestFold:
     def test_fold_block_evaluates_literals_during_trace(self):
         def program(x):
             with af.fold():
-                prefix = af.concat("A", "B")
-            return af.concat(prefix, x)
+                prefix = af.string.concat("A", "B")
+            return af.string.concat(prefix, x)
 
         ir = af.trace(program)("seed")
 
@@ -87,8 +87,8 @@ class TestFold:
         def program(x):
             with af.memoize():
                 with af.fold():
-                    prefix = af.concat("A", "B")
-            return af.concat(prefix, x)
+                    prefix = af.string.concat("A", "B")
+            return af.string.concat(prefix, x)
 
         ir = af.trace(program)("seed")
 
@@ -98,7 +98,7 @@ class TestFold:
     def test_fold_block_rejects_dynamic_trace_values(self):
         def program(x):
             with af.fold():
-                return af.concat(x, "!")
+                return af.string.concat(x, "!")
 
         with pytest.raises(AssertionError, match="depends on traced value"):
             af.trace(program)("seed")
@@ -143,8 +143,8 @@ class TestFold:
     def test_static_trace_args_are_available_in_fold_block(self):
         def program(prefix, x):
             with af.fold():
-                header = af.concat(prefix, ": ")
-            return af.concat(header, x)
+                header = af.string.concat(prefix, ": ")
+            return af.string.concat(header, x)
 
         ir = af.trace(program, static=(True, False))("Q", "seed")
 
@@ -155,10 +155,10 @@ class TestFold:
     def test_tracing_resumes_after_static_block(self):
         def program(x):
             with af.fold():
-                prefix = af.concat("a", "b")
-                prefix = af.format("[{}]", prefix)
-            value = af.concat(prefix, x)
-            return af.concat(value, "!")
+                prefix = af.string.concat("a", "b")
+                prefix = af.string.format("[{}]", prefix)
+            value = af.string.concat(prefix, x)
+            return af.string.concat(value, "!")
 
         ir = af.trace(program)("seed")
 
@@ -184,14 +184,14 @@ class TestFold:
 
         def program(question):
             with af.fold():
-                rubric = af.lm_call(
+                rubric = af.lm.call(
                     [{"role": "user", "content": "make a rubric"}],
                     model="test-model",
                 )
-            return af.format("{}: {}", rubric, question)
+            return af.string.format("{}: {}", rubric, question)
 
         client = Client()
-        with af.lm_client(client):
+        with af.lm.client(client):
             ir = af.trace(program)("seed")
 
         assert client.calls == 1
@@ -219,7 +219,7 @@ class TestFold:
         async_probe_p = af.core.Prim("async_fold_probe")
 
         async def aimpl_async_probe(in_tree):
-            return af.concat(in_tree, "!")
+            return af.string.concat(in_tree, "!")
 
         af.core.impl_rules.aset(async_probe_p, aimpl_async_probe)
 

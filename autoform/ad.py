@@ -222,7 +222,7 @@ def pushforward(ir: core.IR, /) -> core.IR:
     Example:
         >>> import autoform as af
         >>> def program(x, y):
-        ...     return af.concat(x, y)
+        ...     return x + y
         >>> ir = af.trace(program)("a", "b")
         >>> pf_ir = af.pushforward(ir)
         >>> p_out, t_out = pf_ir.call(("Hello", " World"), ("dx", "dy"))
@@ -641,7 +641,7 @@ def pullback(ir: core.IR, /) -> core.IR:
     Example:
         >>> import autoform as af
         >>> def program(x, y):
-        ...     return af.concat(x, y)
+        ...     return x + y
         >>> ir = af.trace(program)("a", "b")
         >>> pb_ir = af.pullback(ir)
         >>> outputs, cotangents = pb_ir.call(("Hello", " World"), "feedback")
@@ -859,8 +859,8 @@ def dce_pullback_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResu
     # to DCE on the IR, to avoid pruning paths still needed for cotangents even if
     # the output is not needed. for example
     # >>> def program(x):
-    # ...    a = af.concat(x, "!")
-    # ...    b = af.concat(x, "?")
+    # ...    a = x + "!"
+    # ...    b = x + "?"
     # ...    return a, b
     # >>> pb = af.pullback(af.trace(program)("x"))
     # >>> (a, b), (dx,) = pb.call(("x",), ("g", "h"))

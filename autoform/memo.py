@@ -86,9 +86,9 @@ def memoize() -> Generator[None, None, None]:
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     a = af.concat(x, "!")
-        ...     b = af.concat(x, "!")  # same call, will be cached
-        ...     return af.concat(a, b)
+        ...     a = x + "!"
+        ...     b = x + "!"  # same call, will be cached
+        ...     return a + b
         >>> ir = af.trace(program)("test")
         >>> with af.memoize():
         ...     result = ir.call("hello")
@@ -102,8 +102,8 @@ def memoize() -> Generator[None, None, None]:
     Example:
         >>> def program(x):
         ...     with af.memoize():
-        ...         a = af.concat(x, "!")
-        ...         b = af.concat(x, "!")  # same call, will be cached
+        ...         a = x + "!"
+        ...         b = x + "!"  # same call, will be cached
         ...         return a, b
         >>> ir = af.trace(program)("test")
         >>> len(ir.eqns)

@@ -25,9 +25,9 @@ import autoform as af
 
 
 def pipeline(text: str) -> str:
-    normalized = af.format("item: {}", text)
+    normalized = "item: " + text
     normalized = af.checkpoint(normalized, key="normalized", collection="debug")
-    return af.concat(normalized, "!")
+    return normalized + "!"
 
 
 ir = af.trace(pipeline)("seed")

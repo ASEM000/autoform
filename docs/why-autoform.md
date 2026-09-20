@@ -13,7 +13,7 @@ Each new requirement becomes another version of the same program: batched rewrit
 
 - {py:func}`trace <autoform.trace>` captures the function as an IR.
 - {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>` transform that IR into another IR.
-- {py:func}`collect <autoform.collect>`, {py:func}`inject <autoform.inject>`, and {py:func}`lm_client <autoform.lm_client>` wrap execution without changing the function.
+- {py:func}`collect <autoform.collect>`, {py:func}`inject <autoform.inject>`, and {py:func}`af.lm.client <autoform.lm.client>` wrap execution without changing the function.
 
 The IR transforms compose because their input and output type is the same. The contexts wrap execution without changing the original function.
 

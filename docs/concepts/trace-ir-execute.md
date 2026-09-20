@@ -25,8 +25,8 @@ import autoform as af
 
 
 def label(topic: str) -> str:
-    prompt = af.format("Explain {}.", topic)
-    return af.concat("Prompt: ", prompt)
+    prompt = "Explain " + topic + "."
+    return "Prompt: " + prompt
 
 
 ir = af.trace(label)("DNA")
@@ -36,7 +36,7 @@ The argument `"DNA"` is not the real input for later runs. It is a shape/type wi
 
 During that run:
 
-- calls to `autoform` primitives such as {py:func}`format <autoform.format>`, {py:func}`concat <autoform.concat>`, {py:func}`lm_call <autoform.lm_call>`, {py:func}`switch <autoform.switch>`, and {py:func}`while_loop <autoform.while_loop>` become IR equations;
+- calls to `autoform` primitives such as {py:func}`format <autoform.string.format>`, {py:func}`concat <autoform.string.concat>`, {py:func}`af.lm.call <autoform.lm.call>`, {py:func}`switch <autoform.switch>`, and {py:func}`while_loop <autoform.while_loop>` become IR equations;
 - ordinary Python that depends only on concrete or static values runs immediately and is baked into the trace;
 - Python control flow that depends on a traced value is not available as a normal `if` or variable-length loop.
 
@@ -51,7 +51,8 @@ The example above records this logical structure:
 ```text
 input: topic
 equations:
-  prompt = format(topic, template="Explain {}.")
+  head = concat("Explain ", topic)
+  prompt = concat(head, ".")
   output = concat("Prompt: ", prompt)
 output: output
 ```
@@ -59,11 +60,11 @@ output: output
 Read it as data flow:
 
 - `topic` is the runtime input;
-- the first equation records the {py:func}`format <autoform.format>` primitive;
-- the second equation records the {py:func}`concat <autoform.concat>` primitive;
+- the first two {py:func}`concat <autoform.string.concat>` equations build `prompt`;
+- the third adds the `"Prompt: "` prefix;
 - `output` is the returned value.
 
-For a text-space program, the same mechanism records {py:func}`lm_call <autoform.lm_call>` as an equation instead of calling the provider during tracing.
+For a text-space program, the same mechanism records {py:func}`af.lm.call <autoform.lm.call>` as an equation instead of calling the provider during tracing.
 
 ## Execute
 

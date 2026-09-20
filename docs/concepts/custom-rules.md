@@ -26,7 +26,7 @@ import autoform as af
 
 @af.custom
 def bracket(text: str) -> str:
-    return af.format("[{}]", text)
+    return "[" + text + "]"
 ```
 
 With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform to override.
@@ -39,7 +39,7 @@ def bracket_pushforward(in_tree, /, *, call):
     primals, tangents = in_tree
     (text_tangent,) = tangents
     output = call(*primals)
-    tangent = af.format("bracket change: {}", text_tangent)
+    tangent = "bracket change: " + text_tangent
     return output, tangent
 
 
@@ -61,7 +61,7 @@ def bracket_pullback(in_tree, /, *, call):
     del call
     (primals, output), feedback = in_tree
     (text,) = primals
-    text_feedback = af.format("{} via {} from {}", feedback, output, text)
+    text_feedback = feedback + " via " + output + " from " + text
     return (text_feedback,)
 
 
@@ -88,7 +88,7 @@ def bracket_batch(in_tree, /, *, call):
     assert text_axis is True
     assert batch_size == len(texts)
 
-    return [af.format("<{}>", text) for text in texts], True
+    return [("<" + text + ">") for text in texts], True
 
 
 ir = af.trace(lambda text: bracket(text))("seed")

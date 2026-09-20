@@ -143,7 +143,7 @@ class Explainer:
     style: str
 
     def __call__(self, topic: str) -> str:
-        return af.format("{}\nstyle: {}\ntopic: {}", self.instruction, self.style, topic)
+        return self.instruction + "\nstyle: " + self.style + "\ntopic: " + topic
 ```
 
 The placement of the object matters:

@@ -29,15 +29,15 @@ class Explainer:
     model: str = optree.dataclasses.field(pytree_node=False)
 
     def prompt(self, topic: str) -> str:
-        return af.format("{}\nstyle: {}\ntopic: {}", self.instruction, self.style, topic)
+        return self.instruction + "\nstyle: " + self.style + "\ntopic: " + topic
 
     def __call__(self, topic: str) -> str:
         msg = dict(role="user", content=self.prompt(topic))
-        return af.lm_call([msg], model=self.model)
+        return af.lm.call([msg], model=self.model)
 ```
 
-The methods can call traceable primitives such as {py:func}`format <autoform.format>`
-and {py:func}`lm_call <autoform.lm_call>`. The fields remain visible as pytree
+The methods can call traceable primitives such as {py:func}`format <autoform.string.format>`
+and {py:func}`af.lm.call <autoform.lm.call>`. The fields remain visible as pytree
 leaves because the class is registered under
 {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`.
 

@@ -29,7 +29,7 @@ import autoform as af
 
 # smoke test the provider before tracing
 messages = [dict(role="user", content="Say hello in five words.")]
-response = af.lm_call(messages, model="gpt-5.5")
+response = af.lm.call(messages, model="gpt-5.5")
 print(response)
 ```
 
@@ -52,9 +52,9 @@ import autoform as af
 
 def explain(topic: str) -> str:
     # use traceable primitives for values that should enter the ir
-    prompt = af.format("Explain {} in one paragraph.", topic)
+    prompt = "Explain " + topic + " in one paragraph."
     msg = dict(role="user", content=prompt)
-    return af.lm_call([msg], model="gpt-5.5")
+    return af.lm.call([msg], model="gpt-5.5")
 ```
 
 Trace it with an example argument:
@@ -66,13 +66,13 @@ ir = af.trace(explain)("placeholder topic")
 
 The string `"placeholder topic"` is a shape/type witness. It tells {py:func}`trace <autoform.trace>` that `topic` is a string. It is not sent to the model. See [Tracing Semantics](concepts/tracing-semantics.md) for the static/dynamic input rules.
 
-Tracing runs the function once with placeholder values. Calls to [`autoform` primitives](concepts/primitives.md) are recorded as [IR equations](concepts/the-ir.md). The {py:func}`lm_call <autoform.lm_call>` is recorded, not executed.
+Tracing runs the function once with placeholder values. Calls to [`autoform` primitives](concepts/primitives.md) are recorded as [IR equations](concepts/the-ir.md). The {py:func}`af.lm.call <autoform.lm.call>` is recorded, not executed.
 
 The resulting IR contains:
 
 - one runtime input, `topic`;
-- one {py:func}`format <autoform.format>` equation that builds the prompt;
-- one {py:func}`lm_call <autoform.lm_call>` equation that records a future provider call with role `user` and model `gpt-5.5`;
+- two {py:func}`concat <autoform.string.concat>` equations that build the prompt, one for each `+`;
+- one {py:func}`af.lm.call <autoform.lm.call>` equation that records a future provider call with role `user` and model `gpt-5.5`;
 - one string output.
 
 The result, `ir`, is the object every [transform](concepts/transforms.md) consumes.
@@ -89,7 +89,7 @@ output = ir.call("quantum entanglement")
 print(output)
 ```
 
-This does hit the active LM provider. The runtime input replaces the placeholder string used during tracing, and the recorded {py:func}`lm_call <autoform.lm_call>` equation executes.
+This does hit the active LM provider. The runtime input replaces the placeholder string used during tracing, and the recorded {py:func}`af.lm.call <autoform.lm.call>` equation executes.
 
 Calling the IR again calls the provider again:
 
@@ -195,7 +195,7 @@ The result has the same structure:
 - `output` is the model output from the forward run;
 - `grad` is a one-item tuple containing text feedback for `topic`.
 
-For example, `grad` might suggest narrowing the topic, asking for less jargon, or adding an audience constraint. The exact text depends on the active model, because the backward pass through {py:func}`lm_call <autoform.lm_call>` is itself an LM call.
+For example, `grad` might suggest narrowing the topic, asking for less jargon, or adding an audience constraint. The exact text depends on the active model, because the backward pass through {py:func}`af.lm.call <autoform.lm.call>` is itself an LM call.
 
 Pullback becomes more useful as the program grows. If the IR has several LM calls, the output feedback flows backward through every recorded step. Each [primitive rule](concepts/primitives.md) decides how to translate feedback for its output into feedback for its inputs.
 
@@ -260,9 +260,9 @@ Every other IR transform composes the same way. `sched(batch(pullback(ir)))` is 
 
 ## Return Structured Results
 
-Plain {py:func}`lm_call <autoform.lm_call>` returns text. That is fine for prose, but many text-space programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
+Plain {py:func}`af.lm.call <autoform.lm.call>` returns text. That is fine for prose, but many text-space programs need a value the rest of Python can use without another parsing step: a label, a score, a route decision, or a short extracted field.
 
-Use {py:func}`lm_schema_call <autoform.lm_schema_call>` when the LM output should have a known shape.
+Use {py:func}`af.lm.schema_call <autoform.lm.schema_call>` when the LM output should have a known shape.
 
 ```python
 import optree
@@ -292,10 +292,10 @@ Now write the function normally:
 
 ```python
 def summarize(topic: str) -> Summary:
-    prompt = af.format("Summarize {} for a technical audience.", topic)
+    prompt = "Summarize " + topic + " for a technical audience."
     msg = dict(role="user", content=prompt)
     # return a summary value, not a raw string
-    return af.lm_schema_call([msg], model="gpt-5.5", schema=summary_schema)
+    return af.lm.schema_call([msg], model="gpt-5.5", schema=summary_schema)
 ```
 
 Trace it:
@@ -305,7 +305,7 @@ Trace it:
 ir = af.trace(summarize)("placeholder topic")
 ```
 
-The schema is a static parameter of the recorded {py:func}`lm_schema_call <autoform.lm_schema_call>`. The returned fields are still part of the [IR](concepts/the-ir.md) output tree, so transforms can walk them like ordinary Python structure.
+The schema is a static parameter of the recorded {py:func}`af.lm.schema_call <autoform.lm.schema_call>`. The returned fields are still part of the [IR](concepts/the-ir.md) output tree, so transforms can walk them like ordinary Python structure.
 
 Execute it with a configured provider:
 
@@ -348,15 +348,15 @@ import autoform as af
 
 
 def explain_then_rewrite(topic: str) -> str:
-    draft_prompt = af.format("Draft a one-sentence explanation of {}.", topic)
+    draft_prompt = "Draft a one-sentence explanation of " + topic + "."
     draft_msg = dict(role="user", content=draft_prompt)
-    step1 = af.lm_call([draft_msg], model="gpt-5.5")
+    step1 = af.lm.call([draft_msg], model="gpt-5.5")
     # mark the intermediate value for runtime inspection
     step1 = af.checkpoint(step1, key="step1", collection="debug")
 
-    rewrite_prompt = af.format("Rewrite for a beginner: {}", step1)
+    rewrite_prompt = "Rewrite for a beginner: " + step1
     rewrite_msg = dict(role="user", content=rewrite_prompt)
-    return af.lm_call([rewrite_msg], model="gpt-5.5")
+    return af.lm.call([rewrite_msg], model="gpt-5.5")
 ```
 
 Trace once:
@@ -418,17 +418,17 @@ import autoform as af
 
 # write the function sequentially; scheduling happens after tracing
 def compare(topic: str) -> str:
-    explain_prompt = af.format("Explain {} in one sentence.", topic)
-    example_prompt = af.format("Give one concrete example of {}.", topic)
+    explain_prompt = "Explain " + topic + " in one sentence."
+    example_prompt = "Give one concrete example of " + topic + "."
     explain_msg = dict(role="user", content=explain_prompt)
     example_msg = dict(role="user", content=example_prompt)
 
-    explanation = af.lm_call([explain_msg], model="gpt-5.5")
-    example = af.lm_call([example_msg], model="gpt-5.5")
+    explanation = af.lm.call([explain_msg], model="gpt-5.5")
+    example = af.lm.call([example_msg], model="gpt-5.5")
 
-    combine_prompt = af.format("Combine these into a concise answer:\n{}\n{}", explanation, example)
+    combine_prompt = "Combine these into a concise answer:\n" + explanation + "\n" + example
     combine_msg = dict(role="user", content=combine_prompt)
-    return af.lm_call([combine_msg], model="gpt-5.5")
+    return af.lm.call([combine_msg], model="gpt-5.5")
 ```
 
 There is no `async def` in `compare`. The first two calls read only `topic`, so they are independent. The final call depends on both results.
@@ -508,7 +508,7 @@ The core loop is now visible:
 - execute the IR with real inputs;
 - transform the IR with {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>`;
 - inspect or replace intermediates with {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`;
-- return structured values with {py:func}`lm_schema_call <autoform.lm_schema_call>`.
+- return structured values with {py:func}`af.lm.schema_call <autoform.lm.schema_call>`.
 
 [^litellm-model-names]: Use the model name expected by LiteLLM, not necessarily the provider's direct API model string. For example, an OpenRouter model uses an `openrouter/...` prefix when called through LiteLLM.
 

@@ -54,7 +54,7 @@ def is_non_dce(eqn: core.Eqn, /) -> bool:
     # for example
     # >>> branch = af.trace(lambda x: af.checkpoint(x, key="save"))("x")
     # >>> def program(x):
-    # ...     value = af.concat(x, "!")
+    # ...     value = x + "!"
     # ...     af.switch("a", {"a": branch}, value)
     # ...     return x
     # the switch result is unused, but dropping it would also drop the checkpoint.
@@ -69,7 +69,7 @@ def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
     # NOTE(asem): an inner IR may lose outputs while its wrapper still runs.
     # >>> def save(x):
     # ...     af.checkpoint(x, key="save")
-    # ...     return af.concat(x, "!")
+    # ...     return x + "!"
     # >>> ir = af.batch(af.trace(save)("x"))
     # >>> dced = af.dce(ir, out_used=False)
     # the DCE pass removes concat but ir.out_tree needs to be updated
@@ -94,8 +94,8 @@ def sanitize_out(ir: core.IR, eqns: list[core.Eqn], out_used: UsedTree, /) -> Tr
     # defined ("dangling"), which would crash at runtime when the interpreter tries to
     # read them.
     # >>> def program(x):
-    # ...     a = af.concat(x, "!")
-    # ...     b = af.concat(x, "?")
+    # ...     a = x + "!"
+    # ...     b = x + "?"
     # ...     return x, a, b
     # >>> ir = af.trace(program)("x")
     # >>> af.dce(ir, out_used=(True, True, False)).call("x")
@@ -117,15 +117,15 @@ def sanitize_out(ir: core.IR, eqns: list[core.Eqn], out_used: UsedTree, /) -> Tr
         if atom in defined_vars:
             # NOTE(asem): defined output var (either an input var or produced by a kept eqn).
             # >>> def program(x):
-            # ...     y = af.concat(x, "!")
+            # ...     y = x + "!"
             # ...     return y
             # y's Var is in `defined_vars` and stays as-is.
             return atom
         if not used:
             # NOTE(asem): unused-but-dangling output slot (typically from partial `out_used`).
             # >>> def program(x):
-            # ...   a=af.concat(x,"a")
-            # ...   b=af.concat(x,"b")
+            # ...   a=(x + "a")
+            # ...   b=(x + "b")
             # ...   return (a, b)
             # >>> af.dce(ir, out_used=(True, False))
             # drops eqn for b, but keeps a 2-tuple output.
@@ -152,8 +152,8 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
     Example:
         >>> import autoform as af
         >>> def program(x):
-        ...     dead = af.concat(x, " dead")  # unused
-        ...     live = af.concat(x, " live")  # returned
+        ...     dead = x + " dead"  # unused
+        ...     live = x + " live"  # returned
         ...     return live
         >>> ir = af.trace(program)("test")
         >>> len(ir.eqns)

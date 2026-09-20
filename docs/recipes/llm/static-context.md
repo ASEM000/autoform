@@ -51,7 +51,7 @@ def rewrite_for_domain(domain: str, model: str, draft: str) -> dict[str, str]:
             dict(role="system", content="Derive a formal policy for the selected topic."),
             dict(role="user", content=domain),
         ]
-        guide = af.lm_schema_call(
+        guide = af.lm.schema_call(
             guide_messages,
             model=model,
             schema=guide_schema,
@@ -63,15 +63,12 @@ def rewrite_for_domain(domain: str, model: str, draft: str) -> dict[str, str]:
         f"Preferred terms: {', '.join(guide['terms'])}\n"
         f"Rule: {guide['rule']}"
     )
-    draft_prompt = af.format(
-        "Apply the topic policy to statement S:\n{}",
-        draft,
-    )
+    draft_prompt = "Apply the topic policy to statement S:\n" + draft
     rewrite_messages = [
         dict(role="system", content=system),
         dict(role="user", content=draft_prompt),
     ]
-    return af.lm_schema_call(
+    return af.lm.schema_call(
         rewrite_messages,
         model=model,
         schema=rewrite_schema,

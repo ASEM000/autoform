@@ -1,6 +1,6 @@
 # Use Schema Patterns
 
-{py:func}`lm_schema_call <autoform.lm_schema_call>` returns a structured value whose
+{py:func}`af.lm.schema_call <autoform.lm.schema_call>` returns a structured value whose
 shape can be transformed like any other [pytree](../../concepts/pytrees.md). Dataclass examples use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ```{admonition} Concept
@@ -24,9 +24,9 @@ route_schema = Route(tool=af.Enum("search", "done"), answer=af.Str())
 
 
 def choose_route(question: str) -> Route:
-    prompt = af.format("Choose search or done for this question:\n{}", question)
+    prompt = "Choose search or done for this question:\n" + question
     msg = dict(role="user", content=prompt)
-    return af.lm_schema_call([msg], model="gpt-5.5", schema=route_schema)
+    return af.lm.schema_call([msg], model="gpt-5.5", schema=route_schema)
 ```
 
 Use {py:class}`Enum <autoform.Enum>` for finite decisions that should feed {py:func}`switch <autoform.switch>`, status fields, or
@@ -57,9 +57,9 @@ decision_schema = SearchDecision(
 
 
 def choose_search(question: str) -> SearchDecision:
-    prompt = af.format("Choose the next tool call for:\n{}", question)
+    prompt = "Choose the next tool call for:\n" + question
     msg = dict(role="user", content=prompt)
-    return af.lm_schema_call([msg], model="gpt-5.5", schema=decision_schema)
+    return af.lm.schema_call([msg], model="gpt-5.5", schema=decision_schema)
 ```
 
 Nested dataclasses keep related fields together and still register as one
@@ -95,7 +95,7 @@ For a one-off call, the schema can stay inline:
 
 ```python
 messages = [dict(role="user", content="Classify this request.")]
-result = af.lm_schema_call(
+result = af.lm.schema_call(
     messages,
     model="gpt-5.5",
     schema={
@@ -144,9 +144,9 @@ summary_schema = Summary(title=af.Str(max=80), score=af.Float(min=0, max=1))
 
 
 def summarize(topic: str) -> Summary:
-    prompt = af.format("Summarize {}.", topic)
+    prompt = "Summarize " + topic + "."
     msg = dict(role="user", content=prompt)
-    return af.lm_schema_call([msg], model="gpt-5.5", schema=summary_schema)
+    return af.lm.schema_call([msg], model="gpt-5.5", schema=summary_schema)
 
 
 ir = af.trace(summarize)("recursion")

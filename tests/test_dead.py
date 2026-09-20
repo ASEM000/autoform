@@ -20,15 +20,15 @@ from autoform.core import IR, Var
 
 class TestDCE:
     def test_keeps_used_equation_without_inputs(self):
-        ir = af.trace(lambda: af.concat())()
+        ir = af.trace(lambda: af.string.concat())()
 
         assert af.dce(ir).call() == ""
         assert not af.dce(ir, out_used=False).eqns
 
     def test_removes_unused_equation(self):
         def program(x):
-            dead = af.concat(x, "dead")
-            live = af.concat(x, "live")
+            dead = af.string.concat(x, "dead")
+            live = af.string.concat(x, "live")
             return live
 
         ir = af.trace(program)("x")
@@ -40,8 +40,8 @@ class TestDCE:
 
     def test_keeps_chained_dependencies(self):
         def program(x):
-            y = af.concat(x, "a")
-            z = af.concat(y, "b")
+            y = af.string.concat(x, "a")
+            z = af.string.concat(y, "b")
             return z
 
         ir = af.trace(program)("x")
@@ -52,9 +52,9 @@ class TestDCE:
 
     def test_preserves_equation_order(self):
         def program(x):
-            y = af.concat(x, "a")
-            z = af.concat(y, "b")
-            w = af.concat(z, "c")
+            y = af.string.concat(x, "a")
+            z = af.string.concat(y, "b")
+            w = af.string.concat(z, "c")
             return w
 
         ir = af.trace(program)("x")
@@ -76,7 +76,7 @@ class TestDCE:
 
     def test_keeps_all_if_all_used(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         dce = af.dce(ir)
@@ -85,9 +85,9 @@ class TestDCE:
 
     def test_multiple_outputs_partial_use(self):
         def program(x):
-            a = af.concat(x, "a")
-            b = af.concat(x, "b")
-            c = af.concat(a, "c")
+            a = af.string.concat(x, "a")
+            b = af.string.concat(x, "b")
+            c = af.string.concat(a, "c")
             return c
 
         ir = af.trace(program)("x")
@@ -101,7 +101,7 @@ class TestDCE:
 
 class TestDCEWithHigherOrderPrimitives:
     def test_run_ir_inlines_for_dce(self):
-        inner_ir = af.trace(lambda x: af.concat(x, "!"))("x")
+        inner_ir = af.trace(lambda x: af.string.concat(x, "!"))("x")
 
         def program(x):
             return inner_ir.call(x)
@@ -114,8 +114,8 @@ class TestDCEWithHigherOrderPrimitives:
 
     def test_inlined_dead_code_removed(self):
         def inner(x):
-            dead = af.concat(x, "dead")
-            live = af.concat(x, "live")
+            dead = af.string.concat(x, "dead")
+            live = af.string.concat(x, "live")
             return live
 
         inner_ir = af.trace(inner)("x")
@@ -132,8 +132,8 @@ class TestDCEWithHigherOrderPrimitives:
 
     def test_switch_kept_when_used(self):
         branches = {
-            "a": af.trace(lambda x: af.concat(x, " A"))("x"),
-            "b": af.trace(lambda x: af.concat(x, " B"))("x"),
+            "a": af.trace(lambda x: af.string.concat(x, " A"))("x"),
+            "b": af.trace(lambda x: af.string.concat(x, " B"))("x"),
         }
 
         def program(key, x):
@@ -147,13 +147,13 @@ class TestDCEWithHigherOrderPrimitives:
 
     def test_switch_removed_when_unused(self):
         branches = {
-            "a": af.trace(lambda x: af.concat(x, " A"))("x"),
-            "b": af.trace(lambda x: af.concat(x, " B"))("x"),
+            "a": af.trace(lambda x: af.string.concat(x, " A"))("x"),
+            "b": af.trace(lambda x: af.string.concat(x, " B"))("x"),
         }
 
         def program(key, x):
             dead = af.switch(key, branches, x)
-            live = af.concat(x, "live")
+            live = af.string.concat(x, "live")
             return live
 
         ir = af.trace(program)("a", "input")
@@ -167,7 +167,7 @@ class TestDCEWithHigherOrderPrimitives:
 class TestDCEWithTransformedIR:
     @pytest.mark.asyncio
     async def test_partial_pullback_preserves_cotangent_structure(self):
-        ir = af.trace(lambda x: (af.concat(x, "!"), af.concat(x, "?")))("x")
+        ir = af.trace(lambda x: (af.string.concat(x, "!"), af.string.concat(x, "?")))("x")
         pb = af.pullback(ir)
         dced = af.dce(pb, out_used=((True, False), (False,)))
         args = (("x",), ("g", "h"))
@@ -179,8 +179,8 @@ class TestDCEWithTransformedIR:
 
     def test_dce_on_pushforward(self):
         def program(x):
-            y = af.concat(x, "a")
-            dead = af.concat(x, "dead")
+            y = af.string.concat(x, "a")
+            dead = af.string.concat(x, "dead")
             return y
 
         ir = af.trace(program)("x")
@@ -191,8 +191,8 @@ class TestDCEWithTransformedIR:
 
     def test_dce_on_pullback(self):
         def program(x):
-            y = af.concat(x, "a")
-            dead = af.concat(x, "dead")
+            y = af.string.concat(x, "a")
+            dead = af.string.concat(x, "dead")
             return y
 
         ir = af.trace(program)("x")
@@ -203,8 +203,8 @@ class TestDCEWithTransformedIR:
 
     def test_dce_on_batch(self):
         def program(x):
-            y = af.concat(x, "a")
-            dead = af.concat(x, "dead")
+            y = af.string.concat(x, "a")
+            dead = af.string.concat(x, "dead")
             return y
 
         ir = af.trace(program)("x")
@@ -227,8 +227,8 @@ class TestDCEEdgeCases:
 
     def test_all_dead(self):
         def program(x):
-            dead1 = af.concat(x, "dead1")
-            dead2 = af.concat(x, "dead2")
+            dead1 = af.string.concat(x, "dead1")
+            dead2 = af.string.concat(x, "dead2")
             return x
 
         ir = af.trace(program)("x")
@@ -239,10 +239,10 @@ class TestDCEEdgeCases:
 
     def test_diamond_dependency(self):
         def program(x):
-            a = af.concat(x, "a")
-            b = af.concat(a, "b")
-            c = af.concat(a, "c")
-            d = af.concat(b, c)
+            a = af.string.concat(x, "a")
+            b = af.string.concat(a, "b")
+            c = af.string.concat(a, "c")
+            d = af.string.concat(b, c)
             return d
 
         ir = af.trace(program)("x")
@@ -254,7 +254,7 @@ class TestDCEEdgeCases:
     def test_stop_gradient_kept(self):
         def program(x):
             y = af.stop_gradient(x)
-            z = af.concat(y, "!")
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -268,12 +268,12 @@ class TestDCEEdgeCases:
 class TestNestedDCE:
     def test_switch_dces_inner_branches(self):
         def branch_a_fn(x):
-            dead = af.concat(x, " DEAD")
-            live = af.concat(x, " LIVE")
+            dead = af.string.concat(x, " DEAD")
+            live = af.string.concat(x, " LIVE")
             return live
 
         branch_a = af.trace(branch_a_fn)("test")
-        branch_b = af.trace(lambda x: af.concat(x, " B"))("test")
+        branch_b = af.trace(lambda x: af.string.concat(x, " B"))("test")
 
         assert len(branch_a.eqns) == 2
 
@@ -291,8 +291,8 @@ class TestNestedDCE:
 
     def test_batch_call_dces_inner_ir(self):
         def inner_fn(x):
-            dead = af.concat(x, " DEAD")
-            live = af.concat(x, " LIVE")
+            dead = af.string.concat(x, " DEAD")
+            live = af.string.concat(x, " LIVE")
             return live
 
         inner_ir = af.trace(inner_fn)("test")
@@ -306,8 +306,8 @@ class TestNestedDCE:
 
     def test_pushforward_call_dces_inner_ir(self):
         def inner_fn(x):
-            dead = af.concat(x, " DEAD")
-            live = af.concat(x, " LIVE")
+            dead = af.string.concat(x, " DEAD")
+            live = af.string.concat(x, " LIVE")
             return live
 
         inner_ir = af.trace(inner_fn)("test")
@@ -321,8 +321,8 @@ class TestNestedDCE:
 
     def test_pullback_call_dces_inner_ir(self):
         def inner_fn(x):
-            dead = af.concat(x, " DEAD")
-            live = af.concat(x, " LIVE")
+            dead = af.string.concat(x, " DEAD")
+            live = af.string.concat(x, " LIVE")
             return live
 
         inner_ir = af.trace(inner_fn)("test")
@@ -336,8 +336,8 @@ class TestNestedDCE:
 
     def test_pullback_call_keeps_inner_ir_when_cotangent_is_used(self):
         def inner_fn(x):
-            dead = af.concat(x, " DEAD")
-            live = af.concat(x, " LIVE")
+            dead = af.string.concat(x, " DEAD")
+            live = af.string.concat(x, " LIVE")
             return live
 
         inner_ir = af.trace(inner_fn)("test")
@@ -352,8 +352,8 @@ class TestNestedDCE:
 
     def test_deeply_nested_dce(self):
         def branch_fn(x):
-            dead = af.concat(x, " DEAD")
-            live = af.concat(x, " LIVE")
+            dead = af.string.concat(x, " DEAD")
+            live = af.string.concat(x, " LIVE")
             return live
 
         branch = af.trace(branch_fn)("test")
@@ -374,11 +374,11 @@ class TestNestedDCE:
 
     def test_while_loop_dces_inner_body_ir(self):
         def cond(state):
-            return af.match(state, "go")
+            return af.string.match(state, "go")
 
         def body(state):
-            dead = af.concat(state, " DEAD")
-            live = af.concat(state, "!")
+            dead = af.string.concat(state, " DEAD")
+            live = af.string.concat(state, "!")
             del dead
             return live
 
@@ -398,12 +398,12 @@ class TestNestedDCE:
 
     def test_while_loop_dces_inner_cond_ir(self):
         def cond(state):
-            dead = af.concat(state, " DEAD")
+            dead = af.string.concat(state, " DEAD")
             del dead
-            return af.match(state, "go")
+            return af.string.match(state, "go")
 
         def body(state):
-            return af.concat(state, "!")
+            return af.string.concat(state, "!")
 
         cond_ir = af.trace(cond)("go")
         body_ir = af.trace(body)("go")
@@ -423,12 +423,12 @@ class TestNestedDCE:
         def cond(state):
             visible, hidden = state
             del hidden
-            return af.match(visible, "v")
+            return af.string.match(visible, "v")
 
         def body(state):
             visible, hidden = state
-            next_visible = af.concat(visible, hidden)
-            next_hidden = af.concat(hidden, "!")
+            next_visible = af.string.concat(visible, hidden)
+            next_hidden = af.string.concat(hidden, "!")
             return next_visible, next_hidden
 
         cond_ir = af.trace(cond)(("v", "h"))
@@ -446,8 +446,8 @@ class TestNestedDCE:
 
     def test_fixpoint_dces_inner_step_ir(self):
         def step(state, theta):
-            dead = af.concat(theta, " DEAD")
-            live = af.concat(state, theta)
+            dead = af.string.concat(theta, " DEAD")
+            live = af.string.concat(state, theta)
             del dead
             return live
 
@@ -466,12 +466,12 @@ class TestNestedDCE:
 
     def test_fixpoint_dces_inner_equiv_ir(self):
         def step(state, theta):
-            return af.concat(state, theta)
+            return af.string.concat(state, theta)
 
         def stable(prev, new):
-            dead = af.concat(prev, " DEAD")
+            dead = af.string.concat(prev, " DEAD")
             del dead
-            return af.match(new, "x!")
+            return af.string.match(new, "x!")
 
         step_ir = af.trace(step)("x", "!")
         equiv_ir = af.trace(stable)("x", "x!")
@@ -490,8 +490,8 @@ class TestNestedDCE:
     def test_fixpoint_dce_preserves_loop_carried_state(self):
         def step(state, theta):
             visible, hidden = state
-            next_visible = af.concat(visible, hidden)
-            next_hidden = af.concat(hidden, theta)
+            next_visible = af.string.concat(visible, hidden)
+            next_hidden = af.string.concat(hidden, theta)
             return next_visible, next_hidden
 
         step_ir = af.trace(step)(("v", "h"), "!")
@@ -510,7 +510,7 @@ class TestNestedDCE:
 class TestDCEWithOutUsed:
     @pytest.mark.asyncio
     async def test_partial_fanout_composes_with_dce_and_batch(self):
-        ir = af.sched(af.trace(lambda x: (af.concat(x, "!"), af.concat(x, "?")))("x"))
+        ir = af.sched(af.trace(lambda x: (af.string.concat(x, "!"), af.string.concat(x, "?")))("x"))
         dced = af.dce(ir, out_used=(True, False))
 
         assert dced.call("x") == ("x!", None)
@@ -521,7 +521,7 @@ class TestDCEWithOutUsed:
         assert ir.call("x") == ("x!", "x?")
 
     def test_partial_fanout_masks_nested_outputs(self):
-        inner = af.trace(lambda x: (x, af.concat(x, "!")))("x")
+        inner = af.trace(lambda x: (x, af.string.concat(x, "!")))("x")
         ir = af.trace(lambda x: af.order.fanout_p.bind([(x,)], irs=[inner]))("x")
         dced = af.dce(ir, out_used=[(False, True)])
 
@@ -530,8 +530,8 @@ class TestDCEWithOutUsed:
     @pytest.mark.asyncio
     async def test_partial_switch_keeps_branch_outputs_consistent(self):
         branches = {
-            "a": af.trace(lambda x: (af.concat(x, "!"), x))("x"),
-            "b": af.trace(lambda x: (af.concat(x, "?"), af.concat(x, ".")))("x"),
+            "a": af.trace(lambda x: (af.string.concat(x, "!"), x))("x"),
+            "b": af.trace(lambda x: (af.string.concat(x, "?"), af.string.concat(x, ".")))("x"),
         }
         ir = af.trace(lambda key, x: af.switch(key, branches, x))("a", "x")
         dced = af.dce(ir, out_used=(True, False))
@@ -545,8 +545,8 @@ class TestDCEWithOutUsed:
 
     def test_partial_switch_keeps_shared_dependencies(self):
         def branch(x):
-            shared = af.concat(x, "!")
-            return af.concat(shared, "?"), shared
+            shared = af.string.concat(x, "!")
+            return af.string.concat(shared, "?"), shared
 
         branch_ir = af.trace(branch)("x")
         ir = af.trace(lambda x: af.switch("a", {"a": branch_ir}, x))("x")
@@ -556,7 +556,7 @@ class TestDCEWithOutUsed:
 
     def test_out_used_single_output_true_keeps_deps(self):
         def program(x):
-            y = af.concat(x, "a")
+            y = af.string.concat(x, "a")
             return y
 
         ir = af.trace(program)("x")
@@ -566,7 +566,7 @@ class TestDCEWithOutUsed:
 
     def test_out_used_single_output_false_removes_all(self):
         def program(x):
-            y = af.concat(x, "a")
+            y = af.string.concat(x, "a")
             return y
 
         ir = af.trace(program)("x")
@@ -576,8 +576,8 @@ class TestDCEWithOutUsed:
 
     def test_out_used_tuple_partial(self):
         def program(x):
-            a = af.concat(x, "a")
-            b = af.concat(x, "b")
+            a = af.string.concat(x, "a")
+            b = af.string.concat(x, "b")
             return (a, b)
 
         ir = af.trace(program)("x")
@@ -596,8 +596,8 @@ class TestDCEWithOutUsed:
 
     def test_out_used_partial_is_callable_and_fills_none(self):
         def program(x):
-            a = af.concat(x, "a")
-            b = af.concat(x, "b")
+            a = af.string.concat(x, "a")
+            b = af.string.concat(x, "b")
             return (a, b)
 
         ir = af.trace(program)("x")
@@ -606,9 +606,9 @@ class TestDCEWithOutUsed:
 
     def test_out_used_with_shared_dependency(self):
         def program(x):
-            shared = af.concat(x, "shared")
-            a = af.concat(shared, "a")
-            b = af.concat(shared, "b")
+            shared = af.string.concat(x, "shared")
+            a = af.string.concat(shared, "a")
+            b = af.string.concat(shared, "b")
             return (a, b)
 
         ir = af.trace(program)("x")
@@ -620,9 +620,9 @@ class TestDCEWithOutUsed:
 
     def test_out_used_propagates_to_batch(self):
         def inner(x):
-            a = af.concat(x, "a")
-            b = af.concat(x, "b")
-            dead = af.concat(x, "dead")
+            a = af.string.concat(x, "a")
+            b = af.string.concat(x, "b")
+            dead = af.string.concat(x, "dead")
             return (a, b)
 
         inner_ir = af.trace(inner)("x")
@@ -637,9 +637,9 @@ class TestDCEWithOutUsed:
 
     def test_out_used_propagates_to_switch(self):
         def branch_fn(x):
-            a = af.concat(x, "a")
-            b = af.concat(x, "b")
-            dead = af.concat(x, "dead")
+            a = af.string.concat(x, "a")
+            b = af.string.concat(x, "b")
+            dead = af.string.concat(x, "dead")
             return (a, b)
 
         branch = af.trace(branch_fn)("x")
@@ -672,7 +672,7 @@ class TestDCEWithCheckpoints:
     async def test_unused_wrapper_keeps_checkpoint(self, transform, args):
         def save(x):
             x = af.checkpoint(x, key="save", collection="cache")
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         wrapped = transform(af.trace(save)("x"))
 
@@ -699,7 +699,7 @@ class TestDCEWithCheckpoints:
     async def test_partial_batch_keeps_checkpoint_and_live_output(self):
         def save(x):
             af.checkpoint(x, key="save", collection="cache")
-            return af.concat(x, "!"), af.concat(x, "?")
+            return af.string.concat(x, "!"), af.string.concat(x, "?")
 
         ir = af.batch(af.trace(save)("x"))
         dced = af.dce(ir, out_used=(True, False))
@@ -715,13 +715,13 @@ class TestDCEWithCheckpoints:
     @pytest.mark.parametrize("scheduled", [False, True])
     async def test_unused_switch_keeps_checkpoint(self, scheduled):
         def save(x):
-            af.concat(x, "dead")
+            af.string.concat(x, "dead")
             return af.checkpoint(x, key="save", collection="cache")
 
         branch = af.trace(save)("x")
 
         def program(x):
-            af.switch("a", {"a": branch}, af.concat(x, "!"))
+            af.switch("a", {"a": branch}, af.string.concat(x, "!"))
             return x
 
         ir = af.trace(program)("x")
@@ -749,7 +749,7 @@ class TestDCEWithCheckpoints:
 
     def test_checkpoint_inputs_remain_active(self):
         def program(x):
-            computed = af.concat(x, "!")
+            computed = af.string.concat(x, "!")
             saved = af.checkpoint(computed, key="save", collection="cache")
             return x
 
@@ -761,7 +761,7 @@ class TestDCEWithCheckpoints:
 
     def test_mixed_checkpoint_and_dead(self):
         def program(x):
-            dead = af.concat(x, "dead")
+            dead = af.string.concat(x, "dead")
             saved = af.checkpoint(x, key="save", collection="cache")
             return x
 
@@ -777,8 +777,8 @@ class TestDCEWithCheckpoints:
 class TestDCEWithDepends:
     def test_depends_kept_when_output_used(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -789,10 +789,10 @@ class TestDCEWithDepends:
 
     def test_depends_removed_when_output_unused(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
             _ = af.depends(b, a)
-            return af.format("C: {}", x)
+            return af.string.format("C: {}", x)
 
         ir = af.trace(program)("x")
         dce = af.dce(ir)
@@ -802,8 +802,8 @@ class TestDCEWithDepends:
 
     def test_depends_keeps_its_deps_alive(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -814,8 +814,8 @@ class TestDCEWithDepends:
 
     def test_depends_deps_removed_when_depends_unused(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
             _ = af.depends(b, a)
             return x
 
@@ -826,9 +826,9 @@ class TestDCEWithDepends:
 
     def test_depends_chained(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
-            c = af.format("C: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
+            c = af.string.format("C: {}", x)
             b_ord = af.depends(b, a)
             c_ord = af.depends(c, b_ord)
             return c_ord
@@ -843,9 +843,9 @@ class TestDCEWithDepends:
 
     def test_depends_partial_chain_kept(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
-            c = af.format("C: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
+            c = af.string.format("C: {}", x)
             b_ord = af.depends(b, a)
             _ = af.depends(c, b_ord)
             return b_ord
@@ -860,9 +860,9 @@ class TestDCEWithDepends:
 
     def test_depends_multiple_deps(self):
         def program(x):
-            a = af.format("A: {}", x)
-            b = af.format("B: {}", x)
-            c = af.format("C: {}", x)
+            a = af.string.format("A: {}", x)
+            b = af.string.format("B: {}", x)
+            c = af.string.format("C: {}", x)
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
@@ -873,7 +873,7 @@ class TestDCEWithDepends:
 
     def test_depends_no_deps(self):
         def program(x):
-            a = af.format("A: {}", x)
+            a = af.string.format("A: {}", x)
             return af.depends(a)
 
         ir = af.trace(program)("x")
@@ -887,7 +887,7 @@ class TestDCEWithDepends:
     def test_depends_with_checkpoint(self):
         def program(x):
             a = af.checkpoint(x, key="a")
-            b = af.format("B: {}", x)
+            b = af.string.format("B: {}", x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")

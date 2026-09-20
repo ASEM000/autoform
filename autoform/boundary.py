@@ -193,13 +193,13 @@ class CustomFunc:
             >>> import autoform as af
             >>> @af.custom
             ... def bracket_push_example(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> @bracket_push_example.set_pushforward
             ... def bracket_push_rule(in_tree, /, *, call):
             ...     primals, tangents = in_tree
             ...     (dx,) = tangents
             ...     p_out = call(*primals)
-            ...     t_out = af.format("delta {}", af.ad.materialize(dx))
+            ...     t_out = "delta " + af.ad.materialize(dx)
             ...     return p_out, t_out
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
             >>> af.pushforward(ir).call(("hello",), ("change",))
@@ -217,13 +217,13 @@ class CustomFunc:
             >>> import autoform as af
             >>> @af.custom
             ... def bracket_apush_example(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> @bracket_apush_example.aset_pushforward
             ... async def bracket_apush_rule(in_tree, /, *, call):
             ...     primals, tangents = in_tree
             ...     (dx,) = tangents
             ...     p_out = call(*primals)
-            ...     t_out = af.format("async delta {}", af.ad.materialize(dx))
+            ...     t_out = "async delta " + af.ad.materialize(dx)
             ...     return p_out, t_out
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
             >>> asyncio.run(af.pushforward(ir).acall(("hello",), ("change",)))
@@ -240,13 +240,13 @@ class CustomFunc:
             >>> import autoform as af
             >>> @af.custom
             ... def bracket_pull_example(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> @bracket_pull_example.set_pullback
             ... def bracket_pull_rule(in_tree, /, *, call):
             ...     del call
             ...     (primals, output), cotangent = in_tree
             ...     del primals
-            ...     return (af.format("{} via {}", cotangent, output),)
+            ...     return (cotangent + " via " + output),
             >>> ir = af.trace(lambda x: bracket_pull_example(x))("seed")
             >>> af.pullback(ir).call(("hello",), "feedback")
             ('[hello]', ('feedback via [hello]',))
@@ -263,13 +263,13 @@ class CustomFunc:
             >>> import autoform as af
             >>> @af.custom
             ... def bracket_apull_example(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> @bracket_apull_example.aset_pullback
             ... async def bracket_apull_rule(in_tree, /, *, call):
             ...     del call
             ...     (primals, output), cotangent = in_tree
             ...     del primals
-            ...     return (af.format("async {} via {}", cotangent, output),)
+            ...     return ("async " + cotangent + " via " + output),
             >>> ir = af.trace(lambda x: bracket_apull_example(x))("seed")
             >>> asyncio.run(af.pullback(ir).acall(("hello",), "feedback"))
             ('[hello]', ('async feedback via [hello]',))
@@ -285,7 +285,7 @@ class CustomFunc:
             >>> import autoform as af
             >>> @af.custom
             ... def bracket_batch_example(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> @bracket_batch_example.set_batch
             ... def bracket_batch_rule(in_tree, /, *, call):
             ...     del call
@@ -294,7 +294,7 @@ class CustomFunc:
             ...     (xs,) = values
             ...     (x_axis,) = axes
             ...     assert x_axis is True
-            ...     return [af.format("<{}>", x) for x in xs], True
+            ...     return [("<" + x + ">") for x in xs], True
             >>> ir = af.trace(lambda x: bracket_batch_example(x))("seed")
             >>> af.batch(ir).call(["a", "b"])
             ['<a>', '<b>']
@@ -311,7 +311,7 @@ class CustomFunc:
             >>> import autoform as af
             >>> @af.custom
             ... def bracket_abatch_example(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> @bracket_abatch_example.aset_batch
             ... async def bracket_abatch_rule(in_tree, /, *, call):
             ...     del call
@@ -320,7 +320,7 @@ class CustomFunc:
             ...     (xs,) = values
             ...     (x_axis,) = axes
             ...     assert x_axis is True
-            ...     return [af.format("async <{}>", x) for x in xs], True
+            ...     return [("async <" + x + ">") for x in xs], True
             >>> ir = af.trace(lambda x: bracket_abatch_example(x))("seed")
             >>> asyncio.run(af.batch(ir).acall(["a", "b"]))
             ['async <a>', 'async <b>']
@@ -378,7 +378,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         >>> import autoform as af
         >>> @af.custom
         ... def bracket(x):
-        ...     return af.format("[{}]", x)
+        ...     return "[" + x + "]"
         >>> bracket("hello")
         '[hello]'
 
@@ -387,7 +387,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> base = af.trace(lambda x: bracket(x))("seed")
         >>> af.pushforward(base).call(("hello",), ("change",))
-        ('[hello]', '[change]')
+        ('[hello]', 'change')
         >>> af.pullback(base).call(("hello",), "feedback")
         ('[hello]', ('feedback',))
         >>> af.batch(base).call(["a", "b"])
@@ -400,7 +400,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     primals, tangents = in_tree
         ...     (dx,) = tangents
         ...     p_out = call(*primals)
-        ...     t_out = af.format("delta: {}", af.ad.materialize(dx))
+        ...     t_out = "delta: " + af.ad.materialize(dx)
         ...     return p_out, t_out
         >>> af.pushforward(base).call(("hello",), ("change",))
         ('[hello]', 'delta: change')
@@ -412,7 +412,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     del call
         ...     (primals, output), cotangent = in_tree
         ...     (x,) = primals
-        ...     return (af.format("{} via {} from {}", cotangent, output, x),)
+        ...     return (cotangent + " via " + output + " from " + x),
         >>> af.pullback(base).call(("hello",), "feedback")
         ('[hello]', ('feedback via [hello] from hello',))
 
@@ -424,7 +424,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     (xs,) = values
         ...     (x_axis,) = axes
         ...     assert x_axis is True
-        ...     return [af.format("<{}>", x) for x in xs], True
+        ...     return [("<" + x + ">") for x in xs], True
         >>> af.batch(base).call(["a", "b"])
         ['<a>', '<b>']
 
@@ -434,8 +434,8 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         >>> from autoform.ad import materialize
         >>> @af.custom
         ... def summarize(text, model):
-        ...     message = af.format("Summarize this in one sentence: {}", text)
-        ...     return af.lm_call([{"role": "user", "content": message}], model=model)
+        ...     message = "Summarize this in one sentence: " + text
+        ...     return af.lm.call([{"role": "user", "content": message}], model=model)
 
         The custom pushforward rule can ask the model how the output should
         change under an input edit.
@@ -446,13 +446,12 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     text, model = primals
         ...     text_tangent, _ = tangents
         ...     p_out = call(*primals)
-        ...     prompt = af.format(
-        ...         "Original input:\\n{}\\n\\nInput edit:\\n{}\\n\\n"
-        ...         "Describe how the summary should change.",
-        ...         text,
-        ...         materialize(text_tangent),
+        ...     prompt = (
+        ...         "Original input:\\n" + text
+        ...         + "\\n\\nInput edit:\\n" + materialize(text_tangent)
+        ...         + "\\n\\nDescribe how the summary should change."
         ...     )
-        ...     t_out = af.lm_call([{"role": "user", "content": prompt}], model=model)
+        ...     t_out = af.lm.call([{"role": "user", "content": prompt}], model=model)
         ...     return p_out, t_out
 
         The custom pullback rule can replace the default backward LM prompt with
@@ -463,15 +462,13 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     del call
         ...     (primals, output), cotangent = in_tree
         ...     text, model = primals
-        ...     prompt = af.format(
-        ...         "Original input:\\n{}\\n\\nLM output:\\n{}\\n\\n"
-        ...         "Downstream feedback:\\n{}\\n\\n"
-        ...         "Return feedback for improving the original input.",
-        ...         text,
-        ...         output,
-        ...         materialize(cotangent),
+        ...     prompt = (
+        ...         "Original input:\\n" + text
+        ...         + "\\n\\nLM output:\\n" + output
+        ...         + "\\n\\nDownstream feedback:\\n" + materialize(cotangent)
+        ...         + "\\n\\nReturn feedback for improving the original input."
         ...     )
-        ...     text_cotangent = af.lm_call([{"role": "user", "content": prompt}], model=model)
+        ...     text_cotangent = af.lm.call([{"role": "user", "content": prompt}], model=model)
         ...     return text_cotangent, ""
 
         >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model")

@@ -33,8 +33,8 @@ step_ir = af.trace(rewrite_step)(example_state, "polished draft")
 ```
 
 This step is deterministic so the example can run without an LM provider. In a
-real refinement program, `rewrite_step` can call {py:func}`lm_call <autoform.lm_call>`,
-{py:func}`lm_schema_call <autoform.lm_schema_call>`, custom tools, or any other
+real refinement program, `rewrite_step` can call {py:func}`af.lm.call <autoform.lm.call>`,
+{py:func}`af.lm.schema_call <autoform.lm.schema_call>`, custom tools, or any other
 traceable `autoform` code.
 
 ## Use The Step In A Program
@@ -62,7 +62,7 @@ When stability is semantic, compare only the fields that matter:
 ```python
 def is_stable(prev: RewriteState, new: RewriteState) -> bool:
     del prev
-    return af.match(new.status, "stable")
+    return new.status == "stable"
 
 
 equiv_ir = af.trace(is_stable)(example_state, example_state)

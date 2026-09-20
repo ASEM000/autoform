@@ -18,7 +18,7 @@ The IR is not Python source and it is not bytecode. It is a small data structure
 
 - input and output trees describe the runtime values entering and leaving the program;
 - equations record one primitive call, its input tree, its output tree, static parameters, and tags;
-- primitive names identify operations such as {py:func}`format <autoform.format>`, {py:func}`concat <autoform.concat>`, and {py:func}`lm_call <autoform.lm_call>`;
+- primitive names identify operations such as {py:func}`format <autoform.string.format>`, {py:func}`concat <autoform.string.concat>`, and {py:func}`af.lm.call <autoform.lm.call>`;
 - the whole IR is the input tree, the equation list, and the output tree.
 
 Most code should get an IR from {py:func}`trace <autoform.trace>`, transform it, and run it. Direct construction of the internal IR classes is not needed.
@@ -32,8 +32,8 @@ import autoform as af
 
 
 def label(topic: str) -> str:
-    prompt = af.format("Explain {}.", topic)
-    return af.concat("Prompt: ", prompt)
+    prompt = "Explain " + topic + "."
+    return "Prompt: " + prompt
 
 
 ir = af.trace(label)("DNA")
@@ -44,7 +44,8 @@ The trace contains this logical equation list:
 ```text
 input: topic
 equations:
-  prompt = format(topic, template="Explain {}.")
+  head = concat("Explain ", topic)
+  prompt = concat(head, ".")
   output = concat("Prompt: ", prompt)
 output: output
 ```
@@ -52,8 +53,8 @@ output: output
 Read it left to right:
 
 - `topic` is the runtime input.
-- {py:func}`format <autoform.format>` produces `prompt`.
-- {py:func}`concat <autoform.concat>` consumes the literal `"Prompt: "` and `prompt`, then produces `output`.
+- The first two {py:func}`concat <autoform.string.concat>` equations build `prompt`, one for each `+`.
+- {py:func}`concat <autoform.string.concat>` consumes the literal `"Prompt: "` and `prompt`, then produces `output`.
 - `output` is the function output.
 
 Literal values can appear directly in an equation. Runtime values are represented
@@ -72,7 +73,7 @@ That is why the trace/transform/execute split matters. A transform does not need
 
 - It is not a graph database. The main representation is an ordered equation list.
 - It is not Python source. Recovering arbitrary Python syntax from it is not supported.
-- It is not a provider call log. An {py:func}`lm_call <autoform.lm_call>` is one equation whose implementation runs later.
+- It is not a provider call log. An {py:func}`af.lm.call <autoform.lm.call>` is one equation whose implementation runs later.
 - It is not the usual [public API](../api/index.md) for application code. It is the substrate that makes the public transforms compose.
 
 ## IR Inspection

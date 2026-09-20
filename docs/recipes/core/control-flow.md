@@ -16,11 +16,11 @@ import autoform as af
 
 
 def brief(text: str) -> str:
-    return af.format("brief: {}", text)
+    return "brief: " + text
 
 
 def detailed(text: str) -> str:
-    return af.format("detailed: {}", text)
+    return "detailed: " + text
 
 
 branches = {
@@ -55,7 +55,7 @@ def keep_going(state: State) -> bool:
 
 
 def add_step(state: State) -> State:
-    text = af.concat(state.text, "!")
+    text = state.text + "!"
     return State(text=text, status="done")
 
 
@@ -77,7 +77,7 @@ import autoform as af
 
 def combine(locked: str, editable: str) -> str:
     locked = af.stop_gradient(locked)
-    return af.format("{}\n{}", locked, editable)
+    return locked + "\n" + editable
 
 
 ir = af.trace(combine)("terms:", "draft answer")
@@ -98,8 +98,8 @@ import autoform as af
 
 
 def ordered(topic: str) -> str:
-    audit = af.format("audit {}", topic)
-    answer = af.format("answer {}", topic)
+    audit = "audit " + topic
+    answer = "answer " + topic
     # return answer through a barrier that also waits for audit
     return af.depends(answer, audit)
 

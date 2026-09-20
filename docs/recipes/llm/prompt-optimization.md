@@ -13,10 +13,10 @@ import autoform as af
 
 
 def answer_with_instruction(instruction: str, topic: str) -> str:
-    prompt = af.format("{}\n\nTopic: {}", instruction, topic)
+    prompt = instruction + "\n\nTopic: " + topic
     msg = dict(role="user", content=prompt)
     # use any model configured for the active lm client
-    return af.lm_call([msg], model="gpt-5.5")
+    return af.lm.call([msg], model="gpt-5.5")
 
 
 # trace with placeholder values

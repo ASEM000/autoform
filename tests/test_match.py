@@ -18,7 +18,7 @@ import autoform as af
 class TestEqnMatch:
     def test_match_by_primitive(self):
         def func(x):
-            return af.concat("Hello, ", x)
+            return af.string.concat("Hello, ", x)
 
         ir = af.trace(func)("world")
         eqn = ir.eqns[0]
@@ -48,7 +48,7 @@ class TestEqnMatch:
 
     def test_match_keyword_destructuring(self):
         def func(x):
-            return af.format("Value: {}", x)
+            return af.string.format("Value: {}", x)
 
         ir = af.trace(func)("test")
         eqn = ir.eqns[0]
@@ -61,7 +61,7 @@ class TestEqnMatch:
     def test_match_in_loop(self):
         def func(x):
             a = af.checkpoint(x, key="a", collection="step1")
-            b = af.concat(a, "!")
+            b = af.string.concat(a, "!")
             c = af.checkpoint(b, key="c", collection="step2")
             return c
 
@@ -78,7 +78,7 @@ class TestEqnMatch:
     def test_match_and_transform(self):
         def func(x):
             a = af.checkpoint(x, key="a", collection="old_tag")
-            return af.concat(a, "!")
+            return af.string.concat(a, "!")
 
         ir = af.trace(func)("test")
 
@@ -136,7 +136,7 @@ class TestInsertAfterPattern:
     def test_insert_equation_after_match(self):
         def func(x):
             a = af.checkpoint(x, key="a", collection="insert_here")
-            return af.concat(a, "!")
+            return af.string.concat(a, "!")
 
         ir = af.trace(func)("test")
         assert len(ir.eqns) == 2
@@ -163,7 +163,7 @@ class TestInsertAfterPattern:
 
 class TestIRMatch:
     def test_match_ir_keyword(self):
-        ir = af.trace(lambda x: af.concat("a", x))("b")
+        ir = af.trace(lambda x: af.string.concat("a", x))("b")
 
         match ir:
             case af.core.IR(eqns=eqns, in_tree=in_tree, out_tree=out_tree):
@@ -176,7 +176,7 @@ class TestIRMatch:
                 assert False, "Pattern should match"
 
     def test_match_ir_with_nested_eqns(self):
-        ir = af.trace(lambda x: af.concat("a", x))("b")
+        ir = af.trace(lambda x: af.string.concat("a", x))("b")
 
         match ir:
             case af.core.IR(
@@ -197,8 +197,8 @@ class TestIRMatch:
 
     def test_match_multiple_equations(self):
         def program(x, y):
-            formatted = af.format("Hello {}", x)
-            return af.concat(formatted, y)
+            formatted = af.string.format("Hello {}", x)
+            return af.string.concat(formatted, y)
 
         ir = af.trace(program)("World", "!")
 
@@ -210,7 +210,7 @@ class TestIRMatch:
                 assert False, "Pattern should match two equations"
 
     def test_match_by_primitive_name(self):
-        ir = af.trace(lambda x: af.concat("a", x))("b")
+        ir = af.trace(lambda x: af.string.concat("a", x))("b")
 
         match ir:
             case af.core.IR(eqns=[af.core.Eqn(prim=af.core.Prim(name=name))]):
@@ -219,7 +219,7 @@ class TestIRMatch:
                 assert False, "Pattern should match primitive name"
 
     def test_match_higher_order_primitive_with_nested_ir(self):
-        inner_ir = af.trace(lambda x: af.concat("a", x))("b")
+        inner_ir = af.trace(lambda x: af.string.concat("a", x))("b")
         pf_ir = af.pushforward(inner_ir)
 
         match pf_ir:
@@ -234,8 +234,8 @@ class TestIRMatch:
 
     def test_match_switch_branches(self):
         branches = {
-            "a": af.trace(lambda x: af.concat("A: ", x))("X"),
-            "b": af.trace(lambda x: af.concat("B: ", x))("X"),
+            "a": af.trace(lambda x: af.string.concat("A: ", x))("X"),
+            "b": af.trace(lambda x: af.string.concat("B: ", x))("X"),
         }
 
         def program(key, x):
@@ -253,7 +253,7 @@ class TestIRMatch:
                 assert False, "Pattern should match switch"
 
     def test_match_ir_guard(self):
-        ir = af.trace(lambda x: af.concat("a", x))("b")
+        ir = af.trace(lambda x: af.string.concat("a", x))("b")
 
         match ir:
             case af.core.IR(eqns=eqns) if len(eqns) == 1:
@@ -267,8 +267,8 @@ class TestIRMatch:
 
     def test_match_all_expected_primitives(self):
         def program(x, y):
-            a = af.format("Hello {}", x)
-            return af.concat(a, y)
+            a = af.string.format("Hello {}", x)
+            return af.string.concat(a, y)
 
         ir = af.trace(program)("World", "!")
 

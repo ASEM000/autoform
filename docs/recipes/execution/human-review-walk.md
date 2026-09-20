@@ -27,10 +27,11 @@ review = "human-review"
 
 
 def draft_then_finalize(topic: str) -> str:
+    draft = "draft for " + topic + ": method A maps x to y."
     with af.tag(review):
-        draft = af.format("draft for {}: method A maps x to y.", topic)
+        draft = af.checkpoint(draft, key="draft", collection="review")
 
-    return af.format("final answer:\n{}", draft)
+    return "final answer:\n" + draft
 
 
 ir = af.trace(draft_then_finalize)("topic x")

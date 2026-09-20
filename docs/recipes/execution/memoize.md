@@ -15,22 +15,21 @@ import autoform as af
 
 
 def program(text: str) -> str:
-    left = af.format("<{}>", text)
-    right = af.format("<{}>", text)
-    return af.concat(left, right)
+    left = "<" + text + ">"
+    right = "<" + text + ">"
+    return left + right
 
 
 ir = af.trace(program)("seed")
 
-# both format calls have the same primitive and inputs
+# building right repeats the two concat operations used for left
 with af.memoize():
     result = ir.call("alpha")
 
 print(result)
 ```
 
-The two {py:func}`format <autoform.format>` calls are the same primitive call, so the
-second one reads the cached result.
+Each `+` records a {py:func}`concat <autoform.string.concat>` equation. The two equations that build `right` repeat the inputs used to build `left`, so both read cached results.
 
 ## Deduplicate During Tracing
 
@@ -43,8 +42,8 @@ import autoform as af
 
 def duplicated(text: str) -> tuple[str, str]:
     with af.memoize():
-        first = af.concat(text, "!")
-        second = af.concat(text, "!")
+        first = text + "!"
+        second = text + "!"
         return first, second
 
 
@@ -52,7 +51,7 @@ ir = af.trace(duplicated)("seed")
 print(ir.call("alpha"))
 ```
 
-The repeated {py:func}`concat <autoform.concat>` call is cached while the trace is being built. {py:func}`checkpoint <autoform.checkpoint>`
+The repeated {py:func}`concat <autoform.string.concat>` call is cached while the trace is being built. {py:func}`checkpoint <autoform.checkpoint>`
 is not memoized because repeated checkpoints are meant to remain visible to
 {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`. For other primitives, use {py:func}`memoize <autoform.memoize>` when the same inputs
 really should mean the same result.

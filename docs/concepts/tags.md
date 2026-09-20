@@ -13,8 +13,8 @@ draft = "draft"
 
 def program(text: str) -> str:
     with af.tag(draft):
-        text = af.concat(text, "!")
-    return af.format("[{}]", text)
+        text = text + "!"
+    return "[" + text + "]"
 
 
 ir = af.trace(program)("seed")

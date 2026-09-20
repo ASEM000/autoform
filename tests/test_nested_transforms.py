@@ -20,8 +20,8 @@ import autoform as af
 class TestBatchOfPushforward:
     def test_batch_of_pushforward(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -39,8 +39,8 @@ class TestBatchOfPushforward:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_pushforward_async(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -57,7 +57,7 @@ class TestBatchOfPushforward:
 
     def test_batch_of_pushforward_single_element(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
@@ -70,8 +70,8 @@ class TestBatchOfPushforward:
 class TestBatchOfPullback:
     def test_batch_of_pullback(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -88,8 +88,8 @@ class TestBatchOfPullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_pullback_async(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -105,7 +105,7 @@ class TestBatchOfPullback:
 
     def test_batch_of_pullback_single_element(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
@@ -117,8 +117,8 @@ class TestBatchOfPullback:
 class TestPushforwardOfBatch:
     def test_pushforward_of_batch(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -136,8 +136,8 @@ class TestPushforwardOfBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_of_batch_async(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -154,7 +154,7 @@ class TestPushforwardOfBatch:
 
     def test_pushforward_of_batch_single_element(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         batch_obj = af.batch(ir)
@@ -167,8 +167,8 @@ class TestPushforwardOfBatch:
 class TestPullbackOfBatch:
     def test_pullback_of_batch(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -185,8 +185,8 @@ class TestPullbackOfBatch:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_batch_async(self):
         def program(x):
-            y = af.format("Value: {}", x)
-            z = af.concat(y, "!")
+            y = af.string.format("Value: {}", x)
+            z = af.string.concat(y, "!")
             return z
 
         ir = af.trace(program)("x")
@@ -202,7 +202,7 @@ class TestPullbackOfBatch:
 
     def test_pullback_of_batch_single_element(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         batch_obj = af.batch(ir)
@@ -214,7 +214,7 @@ class TestPullbackOfBatch:
 class TestTripleNesting:
     def test_batch_of_batch(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         batch1 = af.batch(ir)
@@ -226,7 +226,7 @@ class TestTripleNesting:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_of_batch_async(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         batch1 = af.batch(ir)
@@ -237,7 +237,7 @@ class TestTripleNesting:
 
     def test_pushforward_of_pushforward_of_batch(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         batch_obj = af.batch(ir)
@@ -257,7 +257,7 @@ class TestTripleNesting:
 class TestTripleBatch:
     def test_triple_batch(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         b1 = af.batch(ir)
@@ -269,7 +269,7 @@ class TestTripleBatch:
 
     def test_quadruple_batch(self):
         def f(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(f)("x")
         b1 = af.batch(ir)
@@ -284,7 +284,7 @@ class TestTripleBatch:
 class TestTriplePushforward:
     def test_triple_pushforward(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pf1 = af.pushforward(ir)
@@ -304,7 +304,7 @@ class TestTriplePushforward:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_triple_pushforward_async(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pf1 = af.pushforward(ir)
@@ -323,7 +323,7 @@ class TestTriplePushforward:
 
     def test_quadruple_pushforward(self):
         def f(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(f)("x")
         pf1 = af.pushforward(ir)
@@ -346,7 +346,7 @@ class TestTriplePushforward:
 class TestTriplePullback:
     def test_triple_pullback(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pb1 = af.pullback(ir)
@@ -364,7 +364,7 @@ class TestTriplePullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_triple_pullback_async(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pb1 = af.pullback(ir)
@@ -383,7 +383,7 @@ class TestTriplePullback:
 class TestMixedDeepNesting:
     def test_batch_pushforward_pullback(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pb = af.pullback(ir)
@@ -399,7 +399,7 @@ class TestMixedDeepNesting:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_batch_pushforward_pullback_async(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pb = af.pullback(ir)
@@ -414,7 +414,7 @@ class TestMixedDeepNesting:
 
     def test_pushforward_batch_pullback(self):
         def f(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(f)("x")
         pb = af.pullback(ir)
@@ -432,7 +432,7 @@ class TestMixedDeepNesting:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_batch_pullback_async(self):
         def f(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(f)("x")
         pb = af.pullback(ir)
@@ -449,7 +449,7 @@ class TestMixedDeepNesting:
 
     def test_pullback_pushforward_batch(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         b = af.batch(ir)
@@ -466,7 +466,7 @@ class TestMixedDeepNesting:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_pushforward_batch_async(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         b = af.batch(ir)
@@ -482,7 +482,7 @@ class TestMixedDeepNesting:
 
     def test_batch_batch_pushforward(self):
         def f(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         ir = af.trace(f)("x")
         pf = af.pushforward(ir)
@@ -498,7 +498,7 @@ class TestMixedDeepNesting:
 
     def test_pushforward_pushforward_batch(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         b = af.batch(ir)
@@ -518,7 +518,7 @@ class TestMixedDeepNesting:
 class TestAlternatingTransforms:
     def test_pf_pb_pf_pb(self):
         def f(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(f)("x")
         pb1 = af.pullback(ir)
@@ -531,7 +531,7 @@ class TestAlternatingTransforms:
 
     def test_batch_pf_batch_pf(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pf1 = af.pushforward(ir)
@@ -569,7 +569,7 @@ class TestAlternatingTransforms:
 class TestDeepWithMultipleArgs:
     def test_double_batch_two_args(self):
         def f(a, b):
-            return af.concat(a, b)
+            return af.string.concat(a, b)
 
         ir = af.trace(f)("a", "b")
         b1 = af.batch(ir)
@@ -581,7 +581,7 @@ class TestDeepWithMultipleArgs:
 
     def test_pushforward_batch_two_args(self):
         def f(a, b):
-            return af.format("{}-{}", a, b)
+            return af.string.format("{}-{}", a, b)
 
         ir = af.trace(f)("a", "b")
         b = af.batch(ir)
@@ -598,7 +598,7 @@ class TestDeepWithMultipleArgs:
 
     def test_pullback_double_batch_two_args(self):
         def f(a, b):
-            return af.concat(a, b)
+            return af.string.concat(a, b)
 
         ir = af.trace(f)("a", "b")
         b1 = af.batch(ir)
@@ -615,7 +615,7 @@ class TestDeepWithMultipleArgs:
 class TestEdgeCasesDeepNesting:
     def test_empty_at_deepest_level(self):
         def f(x):
-            return af.format("{}!", x)
+            return af.string.format("{}!", x)
 
         ir = af.trace(f)("x")
         b1 = af.batch(ir)
@@ -627,7 +627,7 @@ class TestEdgeCasesDeepNesting:
 
     def test_single_element_deep(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         b1 = af.batch(ir)
@@ -642,7 +642,7 @@ class TestEdgeCasesDeepNesting:
 
     def test_mixed_empty_nonempty(self):
         def f(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         ir = af.trace(f)("x")
         b1 = af.batch(ir)
@@ -655,8 +655,8 @@ class TestEdgeCasesDeepNesting:
 class TestChainedOperations:
     def test_format_concat_deep_batch(self):
         def f(x):
-            step1 = af.format("[{}]", x)
-            step2 = af.concat(step1, "!")
+            step1 = af.string.format("[{}]", x)
+            step2 = af.string.concat(step1, "!")
             return step2
 
         ir = af.trace(f)("x")
@@ -674,8 +674,8 @@ class TestChainedOperations:
 
     def test_multi_step_all_transforms(self):
         def f(x):
-            a = af.format("({}", x)
-            b = af.concat(a, ")")
+            a = af.string.format("({}", x)
+            b = af.string.concat(a, ")")
             return b
 
         ir = af.trace(f)("x")
@@ -694,7 +694,7 @@ class TestChainedOperations:
 class TestBatchOfPushforwardAllUnbatched:
     def test_pushforward_batch_all_unbatched(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
@@ -712,7 +712,7 @@ class TestBatchOfPushforwardAllUnbatched:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pushforward_batch_all_unbatched_async(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
 
@@ -728,7 +728,7 @@ class TestBatchOfPushforwardAllUnbatched:
 
     def test_pushforward_batch_primals_batched_tangents_unbatched(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         pf_ir = af.pushforward(ir)
@@ -740,7 +740,7 @@ class TestBatchOfPushforwardAllUnbatched:
 class TestBatchOfPullbackAllUnbatched:
     def test_pullback_batch_all_unbatched(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
 
@@ -757,7 +757,7 @@ class TestBatchOfPullbackAllUnbatched:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_batch_all_unbatched_async(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
 
@@ -773,7 +773,7 @@ class TestBatchOfPullbackAllUnbatched:
 
     def test_pullback_batch_primals_batched_cotangents_unbatched(self):
         def program(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(program)("x")
         pb_ir = af.pullback(ir)
@@ -785,7 +785,7 @@ class TestBatchOfPullbackAllUnbatched:
 class TestPullbackOfPushforward:
     def test_pullback_of_pushforward(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pf_ir = af.pushforward(ir)
@@ -805,7 +805,7 @@ class TestPullbackOfPushforward:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_pushforward_async(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pf_ir = af.pushforward(ir)
@@ -824,7 +824,7 @@ class TestPullbackOfPushforward:
 
     def test_pullback_of_pushforward_format(self):
         def f(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(f)("x")
         pf_ir = af.pushforward(ir)
@@ -839,7 +839,7 @@ class TestPullbackOfPushforward:
 
     def test_pullback_of_pushforward_two_args(self):
         def f(x, y):
-            return af.concat(x, y)
+            return af.string.concat(x, y)
 
         ir = af.trace(f)("a", "b")
         pf_ir = af.pushforward(ir)
@@ -858,7 +858,7 @@ class TestPullbackOfPushforward:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_pushforward_two_args_async(self):
         def f(x, y):
-            return af.concat(x, y)
+            return af.string.concat(x, y)
 
         ir = af.trace(f)("a", "b")
         pf_ir = af.pushforward(ir)
@@ -878,7 +878,7 @@ class TestPullbackOfPushforward:
 class TestPullbackOfPullback:
     def test_pullback_of_pullback(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pb_ir = af.pullback(ir)
@@ -898,7 +898,7 @@ class TestPullbackOfPullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_pullback_async(self):
         def f(x):
-            return af.concat(x, "!")
+            return af.string.concat(x, "!")
 
         ir = af.trace(f)("x")
         pb_ir = af.pullback(ir)
@@ -917,7 +917,7 @@ class TestPullbackOfPullback:
 
     def test_pullback_of_pullback_format(self):
         def f(x):
-            return af.format("<{}>", x)
+            return af.string.format("<{}>", x)
 
         ir = af.trace(f)("x")
         pb_ir = af.pullback(ir)
@@ -932,7 +932,7 @@ class TestPullbackOfPullback:
 
     def test_pullback_of_pullback_two_args(self):
         def f(x, y):
-            return af.concat(x, y)
+            return af.string.concat(x, y)
 
         ir = af.trace(f)("a", "b")
         pb_ir = af.pullback(ir)
@@ -952,7 +952,7 @@ class TestPullbackOfPullback:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_pullback_of_pullback_two_args_async(self):
         def f(x, y):
-            return af.concat(x, y)
+            return af.string.concat(x, y)
 
         ir = af.trace(f)("a", "b")
         pb_ir = af.pullback(ir)

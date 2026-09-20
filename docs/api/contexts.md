@@ -8,5 +8,5 @@ These context managers wrap trace-time or execution-time behavior without transf
 .. autofunction:: autoform.memoize
 .. autofunction:: autoform.collect
 .. autofunction:: autoform.inject
-.. autofunction:: autoform.lm_client
+.. autofunction:: autoform.lm.client
 ```

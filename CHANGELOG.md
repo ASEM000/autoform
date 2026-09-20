@@ -4,6 +4,22 @@
 
 ### Breaking Changes
 
+  - Moved string, numeric, and LM operations into their own modules. The
+    top-level API keeps shared types and operations that work across spaces.
+
+    | Before | Now |
+    | --- | --- |
+    | `af.format`, `af.concat`, `af.match` | `af.string.format`, `af.string.concat`, `af.string.match` |
+    | `af.add`, `af.sub`, and other numeric operations | `af.numeric.add`, `af.numeric.sub`, etc. |
+    | `af.lm_call` | `af.lm.call` |
+    | `af.lm_schema_call` | `af.lm.schema_call` |
+    | `af.lm_client` | `af.lm.client` |
+    | `af.EchoLMClient` | `af.lm.EchoClient` |
+    | `af.lm.LMClient` | `af.lm.Client` |
+
+    Examples now use Python operators such
+    as `+` and `==` where supported.
+
   - Replaced the operator-specific `autoform.extend` helpers `register_add`,
     `register_sub`, `register_mul`, `register_div`, `register_matmul`, and
     `register_eq` with {py:func}`register_dunder <autoform.extend.register_dunder>`.

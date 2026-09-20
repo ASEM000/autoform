@@ -30,9 +30,9 @@ class TestCustomFunction:
     def test_call_stages_custom_call_with_python_function(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
-        ir = af.trace(lambda x: af.concat(bracket(x), "!"))("seed")
+        ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
         custom_eqn = ir.eqns[0]
 
         assert ir.eqns[0].prim.name.startswith("custom_call_p<bracket-")
@@ -51,7 +51,7 @@ class TestCustomFunction:
         def make_custom():
             @af.custom
             def duplicate(x):
-                return af.format("[{}]", x)
+                return af.string.format("[{}]", x)
 
             return duplicate
 
@@ -65,7 +65,7 @@ class TestCustomFunction:
     def test_rules_are_stored_in_rule_mappings(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
@@ -81,14 +81,14 @@ class TestCustomFunction:
     def test_direct_call_behaves_like_function(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         assert bracket("hello") == "[hello]"
 
     def test_undefined_pushforward_falls_back_to_body_ir(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         out, tangent = af.pushforward(ir).call(("hello",), ("change",))
@@ -99,7 +99,7 @@ class TestCustomFunction:
     def test_undefined_pullback_falls_back_to_body_ir(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         out, cotangent = af.pullback(ir).call(("hello",), "feedback")
@@ -110,7 +110,7 @@ class TestCustomFunction:
     def test_undefined_batch_falls_back_to_body_ir(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
@@ -128,8 +128,8 @@ class TestCustomPushforward:
 
         @af.custom
         def pair_program(x, y):
-            left = af.format("left {}", x)
-            right = af.concat(y, "!")
+            left = af.string.format("left {}", x)
+            right = af.string.concat(y, "!")
             return left, right
 
         @pair_program.set_pushforward
@@ -155,15 +155,15 @@ class TestCustomPushforward:
     def test_custom_pushforward_rule_matches_mapping_signature(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
             primals, tangents = in_tree
             (dx,) = tangents
-            return call(*primals), af.format("custom delta: {}", af.ad.materialize(dx))
+            return call(*primals), af.string.format("custom delta: {}", af.ad.materialize(dx))
 
-        ir = af.trace(lambda x: af.concat(bracket(x), "!"))("seed")
+        ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
         out, tangent = af.pushforward(ir).call(("hello",), ("small change",))
 
         assert out == "[hello]!"
@@ -173,13 +173,13 @@ class TestCustomPushforward:
     async def test_custom_pushforward_async(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.aset_pushforward
         async def bracket_pushforward(in_tree, /, *, call):
             primals, tangents = in_tree
             (dx,) = tangents
-            return call(*primals), af.format("async delta: {}", af.ad.materialize(dx))
+            return call(*primals), af.string.format("async delta: {}", af.ad.materialize(dx))
 
         ir = af.trace(lambda x: bracket(x))("seed")
         out, tangent = await af.pushforward(ir).acall(("hello",), ("change",))
@@ -190,13 +190,13 @@ class TestCustomPushforward:
     def test_set_pushforward_replaces_default_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
             primals, tangents = in_tree
             (dx,) = tangents
-            return call(*primals), af.format("push {}", af.ad.materialize(dx))
+            return call(*primals), af.string.format("push {}", af.ad.materialize(dx))
 
         ir = af.trace(lambda x: bracket(x))("seed")
         _, tangent = af.pushforward(ir).call(("hello",), ("change",))
@@ -207,13 +207,13 @@ class TestCustomPushforward:
     async def test_set_pushforward_does_not_replace_async_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
             primals, tangents = in_tree
             (dx,) = tangents
-            return call(*primals), af.format("sync push {}", af.ad.materialize(dx))
+            return call(*primals), af.string.format("sync push {}", af.ad.materialize(dx))
 
         ir = af.trace(lambda x: bracket(x))("seed")
         _, tangent = await af.pushforward(ir).acall(("hello",), ("change",))
@@ -231,8 +231,8 @@ class TestCustomPullback:
 
         @af.custom
         def pair_program(x, y):
-            left = af.format("left {}", x)
-            right = af.concat(y, "!")
+            left = af.string.format("left {}", x)
+            right = af.string.concat(y, "!")
             return left, right
 
         @pair_program.set_pullback
@@ -256,16 +256,16 @@ class TestCustomPullback:
     def test_custom_pullback_rule_uses_mlx_argument_order(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
             (primals, output), cotangent = in_tree
             (x,) = primals
-            return (af.format("{} via {} from {}", cotangent, output, x),)
+            return (af.string.format("{} via {} from {}", cotangent, output, x),)
 
-        ir = af.trace(lambda x: af.concat(bracket(x), "!"))("seed")
+        ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
         out, cotangent = af.pullback(ir).call(("hello",), "feedback")
 
         assert out == "[hello]!"
@@ -275,14 +275,14 @@ class TestCustomPullback:
     async def test_custom_pullback_async(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.aset_pullback
         async def bracket_pullback(in_tree, /, *, call):
             del call
             (primals, output), cotangent = in_tree
             del primals
-            return (af.format("async {} via {}", cotangent, output),)
+            return (af.string.format("async {} via {}", cotangent, output),)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         out, cotangent = await af.pullback(ir).acall(("hello",), "feedback")
@@ -293,14 +293,14 @@ class TestCustomPullback:
     def test_set_pullback_replaces_default_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
             (primals, output), cotangent = in_tree
             del primals
-            return (af.format("pull {} {}", output, cotangent),)
+            return (af.string.format("pull {} {}", output, cotangent),)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         _, cotangent = af.pullback(ir).call(("hello",), "feedback")
@@ -311,14 +311,14 @@ class TestCustomPullback:
     async def test_set_pullback_does_not_replace_async_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
             (primals, output), cotangent = in_tree
             del primals
-            return (af.format("sync pull {} {}", output, cotangent),)
+            return (af.string.format("sync pull {} {}", output, cotangent),)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         _, cotangent = await af.pullback(ir).acall(("hello",), "feedback")
@@ -336,8 +336,8 @@ class TestCustomBatch:
 
         @af.custom
         def pair_program(x, y):
-            left = af.format("left {}", x)
-            right = af.concat(y, "!")
+            left = af.string.format("left {}", x)
+            right = af.string.concat(y, "!")
             return left, right
 
         @pair_program.set_batch
@@ -365,7 +365,7 @@ class TestCustomBatch:
     def test_custom_batch_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_batch
         def bracket_batch(in_tree, /, *, call):
@@ -375,7 +375,7 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.format("<{}>", x) for x in xs], True
+            return [af.string.format("<{}>", x) for x in xs], True
 
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
@@ -386,7 +386,7 @@ class TestCustomBatch:
     async def test_custom_batch_async(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.aset_batch
         async def bracket_batch(in_tree, /, *, call):
@@ -396,7 +396,7 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.format("async <{}>", x) for x in xs], True
+            return [af.string.format("async <{}>", x) for x in xs], True
 
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
@@ -406,7 +406,7 @@ class TestCustomBatch:
     def test_set_batch_replaces_default_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_batch
         def bracket_batch(in_tree, /, *, call):
@@ -416,7 +416,7 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.format("batch <{}>", x) for x in xs], True
+            return [af.string.format("batch <{}>", x) for x in xs], True
 
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
@@ -427,7 +427,7 @@ class TestCustomBatch:
     async def test_set_batch_does_not_replace_async_rule(self):
         @af.custom
         def bracket(x):
-            return af.format("[{}]", x)
+            return af.string.format("[{}]", x)
 
         @bracket.set_batch
         def bracket_batch(in_tree, /, *, call):
@@ -437,7 +437,7 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.format("sync batch <{}>", x) for x in xs], True
+            return [af.string.format("sync batch <{}>", x) for x in xs], True
 
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)

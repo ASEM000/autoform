@@ -367,9 +367,9 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
         >>> import autoform as af
         >>> def program(x):
         ...     with af.tag("outer"):
-        ...         head = af.concat(x, "!")
+        ...         head = x + "!"
         ...         with af.tag("inner"):
-        ...             return af.concat(head, "?")
+        ...             return head + "?"
         >>> ir = af.trace(program)("seed")
         >>> ir.eqns[0].tags == frozenset({"outer"})
         True
@@ -477,7 +477,7 @@ class IR[*A, R]:
         Example:
             >>> import autoform as af
             >>> def wrap(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> ir = af.trace(wrap)("x")
             >>> ir.call("y")
             '[y]'
@@ -495,7 +495,7 @@ class IR[*A, R]:
             >>> import autoform as af
             >>> import asyncio
             >>> def wrap(x):
-            ...     return af.format("[{}]", x)
+            ...     return "[" + x + "]"
             >>> ir = af.trace(wrap)("x")
             >>> asyncio.run(ir.acall("y"))
             '[y]'
@@ -514,8 +514,8 @@ class IR[*A, R]:
         Example:
             >>> import autoform as af
             >>> def wrap(x):
-            ...     punctuated = af.concat(x, "!")
-            ...     return af.format("[{}]", punctuated)
+            ...     punctuated = x + "!"
+            ...     return "[" + punctuated + "]"
             >>> ir = af.trace(wrap)("x")
             >>> gen = ir.walk("y")
             >>> eqn, in_values = next(gen)
@@ -524,7 +524,8 @@ class IR[*A, R]:
             >>> step = gen.send(eqn.bind(in_values, **eqn.params))
             >>> eqn, in_values = step
             >>> eqn.prim.name
-            'format'
+            'concat'
+            >>> eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
             >>> done, out = gen.send(eqn.bind(in_values, **eqn.params))
             >>> done is None, out
             (True, '[y!]')
@@ -671,15 +672,16 @@ def fold() -> Generator[None, None, None]:
 
     Example:
         >>> import autoform as af
+        >>> increment = af.trace(lambda value: value + 1)(1.0)
         >>> def program(x):
         ...     with af.fold():
-        ...         prefix = af.concat("hello", " ")
-        ...     return af.concat(prefix, x)
+        ...         prefix = f"v{increment.call(1.0)}: "
+        ...     return prefix + x
         >>> ir = af.trace(program)("seed")
         >>> len(ir.eqns)
         1
         >>> ir.call("world")
-        'hello world'
+        'v2.0: world'
 
     Fold is useful when a trace-time computation should decide ordinary Python
     control flow. Autoform cannot stage Python branches whose conditions depend
@@ -690,10 +692,10 @@ def fold() -> Generator[None, None, None]:
     Example:
         >>> def program(x):
         ...     with af.fold():
-        ...         route = af.concat("priority", ": high")
-        ...     if route == "priority: high":
-        ...         return af.concat("yes: ", x)
-        ...     return af.concat("no: ", x)
+        ...         route = increment.call(1.0)
+        ...     if route == 2:
+        ...         return "yes: " + x
+        ...     return "no: " + x
         >>> ir = af.trace(program)("seed")
         >>> ir.call("answer")
         'yes: answer'

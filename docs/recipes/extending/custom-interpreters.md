@@ -33,8 +33,8 @@ import autoform.extend as afe
 
 def program(topic: str) -> str:
     with af.tag("draft"):
-        draft = af.format("draft for {}", topic)
-    return af.concat(draft, ".")
+        draft = "draft for " + topic
+    return draft + "."
 
 
 ir = af.trace(program)("topic x")
@@ -133,7 +133,7 @@ Expected result:
 
 ```text
 draft for topic y.
-[CallRecord(prim_name='format', tags=frozenset({'draft'}), output='draft for topic y'), CallRecord(prim_name='concat', tags=frozenset(), output='draft for topic y.')]
+[CallRecord(prim_name='concat', tags=frozenset({'draft'}), output='draft for topic y'), CallRecord(prim_name='concat', tags=frozenset(), output='draft for topic y.')]
 ```
 
 The traced function does not change. The IR does not change. Only the execution

@@ -50,19 +50,19 @@ fit_schema = {
 
 
 def judge_tool(tool: str, description: str, request: str, history: str):
-    prompt = af.format(
-        "Tool: {0}\n"
-        "Description: {1}\n\n"
-        "User request: {2}\n\n"
-        "Conversation history: {3}\n\n"
-        "Rate how well this tool fits the request and history.",
-        tool,
-        description,
-        request,
-        history,
+    prompt = (
+        "Tool: "
+        + tool
+        + "\nDescription: "
+        + description
+        + "\n\nUser request: "
+        + request
+        + "\n\nConversation history: "
+        + history
+        + "\n\nRate how well this tool fits the request and history."
     )
     msg = dict(role="user", content=prompt)
-    judgment = af.lm_schema_call([msg], model=MODEL, schema=fit_schema)
+    judgment = af.lm.schema_call([msg], model=MODEL, schema=fit_schema)
 
     af.factor(judgment["request_fit"], name="request")
     af.factor(judgment["history_fit"], name="history")

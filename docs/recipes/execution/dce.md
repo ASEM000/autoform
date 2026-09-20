@@ -12,8 +12,8 @@ import autoform as af
 
 
 def program(text: str) -> str:
-    unused = af.format("unused: {}", text)
-    used = af.format("used: {}", text)
+    unused = "unused: " + text
+    used = "used: " + text
     del unused
     return used
 
@@ -24,7 +24,7 @@ cleaned = af.dce(ir)
 print(cleaned.call("alpha"))
 ```
 
-{py:func}`dce <autoform.dce>` walks backward from the output [pytree](../../concepts/pytrees.md). The unused {py:func}`format <autoform.format>` call is not on
+{py:func}`dce <autoform.dce>` walks backward from the output [pytree](../../concepts/pytrees.md). The unused {py:func}`concat <autoform.string.concat>` operation is not on
 that path, so the cleaned IR can drop it.
 
 ## Keep Part of an Output
@@ -36,8 +36,8 @@ import autoform as af
 
 
 def pair(text: str) -> tuple[str, str]:
-    left = af.format("left: {}", text)
-    right = af.format("right: {}", text)
+    left = "left: " + text
+    right = "right: " + text
     return left, right
 
 
