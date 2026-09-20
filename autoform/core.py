@@ -672,9 +672,10 @@ def fold() -> Generator[None, None, None]:
 
     Example:
         >>> import autoform as af
+        >>> increment = af.trace(lambda value: value + 1)(1.0)
         >>> def program(x):
         ...     with af.fold():
-        ...         prefix = f"v{af.numeric.add(1, 1)}: "
+        ...         prefix = f"v{increment.call(1.0)}: "
         ...     return prefix + x
         >>> ir = af.trace(program)("seed")
         >>> len(ir.eqns)
@@ -691,7 +692,7 @@ def fold() -> Generator[None, None, None]:
     Example:
         >>> def program(x):
         ...     with af.fold():
-        ...         route = af.numeric.add(1, 1)
+        ...         route = increment.call(1.0)
         ...     if route == 2:
         ...         return "yes: " + x
         ...     return "no: " + x
