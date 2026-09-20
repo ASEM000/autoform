@@ -926,7 +926,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make this text more professional."},
                 {"role": "user", "content": text},
             ]
-            refined = af.lm_call(msgs, model=TEST_MODEL)
+            refined = af.lm.call(msgs, model=TEST_MODEL)
             return af.checkpoint(refined, key="step", collection="refinements")
 
         cond_ir = trace(cond)("x")
@@ -955,7 +955,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make this text more professional."},
                 {"role": "user", "content": text},
             ]
-            return af.lm_call(msgs, model=TEST_MODEL)
+            return af.lm.call(msgs, model=TEST_MODEL)
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("text")
@@ -982,7 +982,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Translate to French. Return ONLY the translation."},
                 {"role": "user", "content": text},
             ]
-            return af.lm_call(msgs, model=TEST_MODEL)
+            return af.lm.call(msgs, model=TEST_MODEL)
 
         translate_ir = trace(translate)("text")
         batched_ir = af.batch(translate_ir, in_axes=True)
@@ -1011,7 +1011,7 @@ class TestWhileLoopWithLLM:
 
         def analyze(text):
             msgs = [{"role": "user", "content": af.string.format("Analyze sentiment: {}", text)}]
-            return af.lm_schema_call(msgs, model=TEST_MODEL, schema=sentiment_schema)
+            return af.lm.schema_call(msgs, model=TEST_MODEL, schema=sentiment_schema)
 
         analyze_ir = trace(analyze)("text")
         result = analyze_ir.call("I love this product! It's amazing!")
@@ -1028,7 +1028,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make more professional."},
                 {"role": "user", "content": text},
             ]
-            return af.lm_call(msgs, model=TEST_MODEL)
+            return af.lm.call(msgs, model=TEST_MODEL)
 
         improve_ir = trace(improve)("text")
         pf_ir = af.pushforward(improve_ir)
@@ -1045,13 +1045,13 @@ class TestWhileLoopWithLLM:
     @requires_llm
     def test_collect_lm_marks(self):
         def process(text):
-            step1 = af.lm_call(
+            step1 = af.lm.call(
                 [{"role": "user", "content": af.string.format("Summarize: {}", text)}],
                 model=TEST_MODEL,
             )
             step1 = af.checkpoint(step1, key="summary", collection="steps")
 
-            step2 = af.lm_call(
+            step2 = af.lm.call(
                 [{"role": "user", "content": af.string.format("Translate to Spanish: {}", step1)}],
                 model=TEST_MODEL,
             )
@@ -1080,7 +1080,7 @@ class TestWhileLoopWithLLM:
         )
 
         def cond(text):
-            verdict = af.lm_schema_call(
+            verdict = af.lm.schema_call(
                 [
                     {
                         "role": "user",
@@ -1096,7 +1096,7 @@ class TestWhileLoopWithLLM:
             return verdict.needs_improvement
 
         def body(text):
-            refined = af.lm_call(
+            refined = af.lm.call(
                 [
                     {"role": "system", "content": "Make more professional and formal."},
                     {"role": "user", "content": text},

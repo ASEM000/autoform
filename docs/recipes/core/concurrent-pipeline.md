@@ -20,16 +20,16 @@ def research(topic: str) -> str:
     analogy_msg = dict(role="user", content=analogy_prompt)
 
     # these two calls only depend on topic
-    summary = af.lm_call([summary_msg], model="gpt-5.5")
-    analogy = af.lm_call([analogy_msg], model="gpt-5.5")
+    summary = af.lm.call([summary_msg], model="gpt-5.5")
+    analogy = af.lm.call([analogy_msg], model="gpt-5.5")
 
     join_prompt = "Combine these notes.\nsummary: " + summary + "\nanalogy: " + analogy
     join_msg = dict(role="user", content=join_prompt)
-    combined = af.lm_call([join_msg], model="gpt-5.5")
+    combined = af.lm.call([join_msg], model="gpt-5.5")
 
     final_prompt = "Rewrite this as a crisp answer:\n" + combined
     final_msg = dict(role="user", content=final_prompt)
-    return af.lm_call([final_msg], model="gpt-5.5")
+    return af.lm.call([final_msg], model="gpt-5.5")
 
 
 # trace once, then choose the execution form

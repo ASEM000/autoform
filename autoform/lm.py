@@ -33,12 +33,12 @@ import autoform.schemas as schemas
 import autoform.utils as utils
 
 __all__ = [
-    "LMClient",
+    "Client",
     "LiteLLMClient",
-    "EchoLMClient",
-    "lm_client",
-    "lm_call",
-    "lm_schema_call",
+    "EchoClient",
+    "client",
+    "call",
+    "schema_call",
     "emit_json_schema",
     "parse_json",
 ]
@@ -54,7 +54,7 @@ type ClientType = ModelResponse
 
 
 @runtime_checkable
-class LMClient(Protocol):
+class Client(Protocol):
     def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType: ...
     async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType: ...
 
@@ -73,8 +73,8 @@ def echo_messages(messages: Messages) -> str:
     return "\n".join(f"<{message['role']}> {message['content']}" for message in messages)
 
 
-class EchoLMClient:
-    """Render messages locally
+class EchoClient:
+    """Echoes messages passed to lm calls without provider calls.
 
     Mainly for debugging and demonstration.
 
@@ -83,17 +83,17 @@ class EchoLMClient:
 
     Example:
         >>> import autoform as af
-        >>> with af.lm_client(af.EchoLMClient()):
+        >>> with af.lm.client(af.lm.EchoClient()):
         ...     msg1 = dict(role="system", content="Translate to Korean.")
         ...     msg2 = dict(role="user", content="Hello!")
-        ...     print(af.lm_call([msg1, msg2], model="echo"))
+        ...     print(af.lm.call([msg1, msg2], model="echo"))
         <system> Translate to Korean.
         <user> Hello!
 
     Example with a custom renderer:
-        >>> client = af.EchoLMClient(render=lambda messages: messages[-1]["content"])
-        >>> with af.lm_client(client):
-        ...     af.lm_call([dict(role="user", content="Hello!")], model="echo")
+        >>> client = af.lm.EchoClient(render=lambda messages: messages[-1]["content"])
+        >>> with af.lm.client(client):
+        ...     af.lm.call([dict(role="user", content="Hello!")], model="echo")
         'Hello!'
     """
 
@@ -104,18 +104,18 @@ class EchoLMClient:
 
     def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
         content = self.render(messages)
-        assert isinstance(content, str), f"`EchoLMClient` renderer must return strings."
+        assert isinstance(content, str), f"`EchoClient` renderer must return strings."
         return ModelResponse(choices=[dict(message=dict(role="assistant", content=content))])
 
     async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
         return self.completion(messages=messages, model=model, **kwargs)
 
 
-active_client: ContextVar[LMClient] = ContextVar("active_client", default=LiteLLMClient())
+active_client: ContextVar[Client] = ContextVar("active_client", default=LiteLLMClient())
 
 
 @contextmanager
-def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
+def client(client: Client) -> Generator[Client, None, None]:
     """Set the LM client for all lm primitives.
 
     The client must expose ``.completion()`` and ``.acompletion()`` matching
@@ -134,10 +134,10 @@ def lm_client(client: LMClient) -> Generator[LMClient, None, None]:
         ...     ],
         ...     max_parallel_requests=10,
         ... )
-        >>> with af.lm_client(client):  # doctest: +SKIP
+        >>> with af.lm.client(client):  # doctest: +SKIP
         ...     ir.call(inputs)
     """
-    assert isinstance(client, LMClient), f"Expected LMClient instance, got {type(client)}"
+    assert isinstance(client, Client), f"Expected LMClient instance, got {type(client)}"
     token = active_client.set(client)
     try:
         yield client
@@ -161,7 +161,7 @@ FEEDBACK ON OUTPUT: {out_cotangent}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
 
 
-def lm_call(messages: Messages, /, *, model: str) -> str:
+def call(messages: Messages, /, *, model: str) -> str:
     """Calls a language model with the given messages and model name using LiteLLM.
 
     Args:
@@ -171,7 +171,7 @@ def lm_call(messages: Messages, /, *, model: str) -> str:
     Returns:
         The content of the model's response as a string.
 
-    Use :func:`lm_client` to configure provider-specific settings like ``max_tokens``.
+    Use :func:`client` to configure provider-specific settings like ``max_tokens``.
 
     Example:
         >>> import autoform as af
@@ -179,12 +179,12 @@ def lm_call(messages: Messages, /, *, model: str) -> str:
         ...     greeting = "Hello, " + name + "!"
         ...     sys = dict(role="system", content="translate the greeting to Korean")
         ...     usr = dict(role="user", content=greeting)
-        ...     greeting = af.lm_call([sys, usr], model="gpt-5.5")
+        ...     greeting = af.lm.call([sys, usr], model="gpt-5.5")
         ...     return greeting
         >>> ir = af.trace(program)("World") # doctest: +SKIP
         >>> result = ir.call("x0") # doctest: +SKIP
 
-    Example with :func:`lm_client`:
+    Example with :func:`client`:
         >>> import autoform as af
         >>> from litellm import Router  # doctest: +SKIP
         >>> params_1024 = dict(model="gpt-5.5", max_tokens=1024)
@@ -196,11 +196,11 @@ def lm_call(messages: Messages, /, *, model: str) -> str:
         >>> router = Router(model_list=model_list)  # doctest: +SKIP
         >>> def program(text: str, model: str):
         ...     msg = [{"role": "user", "content": ("Explain " + text + " in one line.")}]
-        ...     answer = af.lm_call(msg, model=model)
+        ...     answer = af.lm.call(msg, model=model)
         ...     return "Answer: " + answer
         >>> ir = af.trace(program)("topic", "model")
         >>> model_names = ["gpt-5.5-1024", "gpt-5.5-512"]
-        >>> with af.lm_client(router):  # doctest: +SKIP
+        >>> with af.lm.client(router):  # doctest: +SKIP
         ...     result = af.batch(ir, in_axes=(False, True)).call("AI", model_names)
     """
     assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
@@ -363,7 +363,7 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 """
 
 
-def lm_schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
+def schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
     """Calls a language model with an autoform schema response format.
 
     The schema tree is built from nodes such as :class:`autoform.Int`,
@@ -389,7 +389,7 @@ def lm_schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
         ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
         ... )
         >>> msgs = [dict(role="user", content="1 + 1?")]
-        >>> output = af.lm_schema_call(  # doctest: +SKIP
+        >>> output = af.lm.schema_call(  # doctest: +SKIP
         ...     msgs,
         ...     model="openai/gpt-5.5",
         ...     schema=schema,

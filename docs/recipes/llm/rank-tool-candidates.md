@@ -62,7 +62,7 @@ def judge_tool(tool: str, description: str, request: str, history: str):
         + "\n\nRate how well this tool fits the request and history."
     )
     msg = dict(role="user", content=prompt)
-    judgment = af.lm_schema_call([msg], model=MODEL, schema=fit_schema)
+    judgment = af.lm.schema_call([msg], model=MODEL, schema=fit_schema)
 
     af.factor(judgment["request_fit"], name="request")
     af.factor(judgment["history_fit"], name="history")

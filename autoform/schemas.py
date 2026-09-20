@@ -59,7 +59,7 @@ Any registered pytree can carry the schema:
     ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
     ... )
     >>> msgs = [dict(role="user", content="1 + 1?")]
-    >>> output = af.lm_schema_call(  # doctest: +SKIP
+    >>> output = af.lm.schema_call(  # doctest: +SKIP
     ...     msgs,
     ...     model="openai/gpt-5.5",
     ...     schema=schema,
@@ -107,7 +107,7 @@ class Spec(Hashable):
 class Str(Spec):
     """String schema node with optional length and pattern constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+    Use this node in schema trees passed to :func:`autoform.lm.schema_call`.
 
     Args:
         min: Optional minimum length of the string.
@@ -150,7 +150,7 @@ class Str(Spec):
 class Int(Spec):
     """Integer schema node with optional range constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+    Use this node in schema trees passed to :func:`autoform.lm.schema_call`.
 
     Args:
         min: Optional minimum value.
@@ -177,7 +177,7 @@ class Int(Spec):
 class Float(Spec):
     """Number schema node with optional range constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+    Use this node in schema trees passed to :func:`autoform.lm.schema_call`.
 
     Args:
         min: Optional minimum value.
@@ -209,7 +209,7 @@ class Float(Spec):
 class Bool(Spec):
     """Boolean schema node.
 
-    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+    Use this node in schema trees passed to :func:`autoform.lm.schema_call`.
 
     Example:
         >>> import autoform as af
@@ -222,7 +222,7 @@ class Bool(Spec):
 class Enum(Spec):
     """Enum schema node with a fixed set of allowed values.
 
-    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+    Use this node in schema trees passed to :func:`autoform.lm.schema_call`.
 
     Args:
         *values: Allowed values. Values must be non-empty and share one type.
@@ -267,7 +267,7 @@ class Docd[T]:
 class Doc:
     """Description node for attaching schema descriptions.
 
-    Use this node in schema trees passed to :func:`autoform.lm_schema_call`.
+    Use this node in schema trees passed to :func:`autoform.lm.schema_call`.
 
     Args:
         text: Description text.

@@ -164,7 +164,7 @@ def step(state: State) -> State:
     system = "If the history contains a line that starts with search, choose done. Otherwise choose search."
     user = "Question and history:\n" + state.history
     messages = [dict(role="system", content=system), dict(role="user", content=user)]
-    decision = af.lm_schema_call(messages, model="gpt-5.5", schema=decision_schema)
+    decision = af.lm.schema_call(messages, model="gpt-5.5", schema=decision_schema)
     history = af.switch(decision.tool, tool_branches, decision.args, decision.answer, state.history)
     return State(history=history, result=decision.answer, active=decision.tool == "search")
 

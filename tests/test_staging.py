@@ -184,14 +184,14 @@ class TestFold:
 
         def program(question):
             with af.fold():
-                rubric = af.lm_call(
+                rubric = af.lm.call(
                     [{"role": "user", "content": "make a rubric"}],
                     model="test-model",
                 )
             return af.string.format("{}: {}", rubric, question)
 
         client = Client()
-        with af.lm_client(client):
+        with af.lm.client(client):
             ir = af.trace(program)("seed")
 
         assert client.calls == 1

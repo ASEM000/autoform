@@ -5,8 +5,8 @@ Primitives are operations that tracing records as IR equations.
 ## LM
 
 ```{eval-rst}
-.. autofunction:: autoform.lm_call
-.. autofunction:: autoform.lm_schema_call
+.. autofunction:: autoform.lm.call
+.. autofunction:: autoform.lm.schema_call
 ```
 
 ## String

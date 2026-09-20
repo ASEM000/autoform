@@ -1,7 +1,7 @@
 # Configure LiteLLM Routing
 
 `autoform` uses the active LM client at execution time. By default that client
-calls [LiteLLM](https://docs.litellm.ai/) directly. Use {py:func}`lm_client <autoform.lm_client>` for a
+calls [LiteLLM](https://docs.litellm.ai/) directly. Use {py:func}`af.lm.client <autoform.lm.client>` for a
 configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) with retries, aliases, or provider fallback.
 
 ```{admonition} Concept
@@ -21,13 +21,13 @@ def explain(topic: str) -> str:
     prompt = "Explain " + topic + " in one paragraph."
     msg = dict(role="user", content=prompt)
     # docs-model is resolved by the active router
-    return af.lm_call([msg], model="docs-model")
+    return af.lm.call([msg], model="docs-model")
 
 
 ir = af.trace(explain)("recursion")
 
 # credentials are still provider credentials, such as openai_api_key or env vars
-with af.lm_client(router):
+with af.lm.client(router):
     print(ir.call("recursion"))
 ```
 
@@ -36,7 +36,7 @@ same IR can run with different routers:
 
 ```python
 # run the same ir with a different execution context
-with af.lm_client(router):
+with af.lm.client(router):
     answer = ir.call("memoization")
 
 print(answer)

@@ -69,9 +69,6 @@ weight = path.weight
 # PRIMITIVES
 # ==================================================================================================
 
-lm_call = lm.lm_call
-lm_schema_call = lm.lm_schema_call
-lm_client = lm.lm_client
 stop_gradient = control.stop_gradient
 switch = control.switch
 while_loop = control.while_loop
@@ -94,7 +91,6 @@ Str = schemas.Str
 # TYPES
 # ==================================================================================================
 
-EchoLMClient = lm.EchoLMClient
 PYTREE_NAMESPACE = utils.PYTREE_NAMESPACE
 
 # ==================================================================================================
@@ -107,7 +103,6 @@ __all__ = [
     "trace",
     "fold",
     # execution
-    "lm_client",
     "tag",
     # transformations
     "pushforward",
@@ -121,8 +116,6 @@ __all__ = [
     "memoize",
     "weight",
     # primitives
-    "lm_call",
-    "lm_schema_call",
     "stop_gradient",
     "checkpoint",
     "switch",
@@ -138,10 +131,10 @@ __all__ = [
     "Int",
     "Str",
     # types
-    "EchoLMClient",
     "PYTREE_NAMESPACE",
     # modules
     "extend",
+    "lm",
     "numeric",
     "string",
     "path",
