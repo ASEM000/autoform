@@ -1010,7 +1010,12 @@ class TestWhileLoopWithLLM:
         )
 
         def analyze(text):
-            msgs = [{"role": "user", "content": af.string.format("Analyze sentiment: {}", text)}]
+            msgs = [
+                {
+                    "role": "user",
+                    "content": af.string.format("Analyze sentiment: {text}", text=text),
+                }
+            ]
             return af.lm.schema_call(msgs, model=TEST_MODEL, schema=sentiment_schema)
 
         analyze_ir = trace(analyze)("text")
@@ -1046,13 +1051,18 @@ class TestWhileLoopWithLLM:
     def test_collect_lm_marks(self):
         def process(text):
             step1 = af.lm.call(
-                [{"role": "user", "content": af.string.format("Summarize: {}", text)}],
+                [{"role": "user", "content": af.string.format("Summarize: {text}", text=text)}],
                 model=TEST_MODEL,
             )
             step1 = af.checkpoint(step1, key="summary", collection="steps")
 
             step2 = af.lm.call(
-                [{"role": "user", "content": af.string.format("Translate to Spanish: {}", step1)}],
+                [
+                    {
+                        "role": "user",
+                        "content": af.string.format("Translate to Spanish: {step1}", step1=step1),
+                    }
+                ],
                 model=TEST_MODEL,
             )
             step2 = af.checkpoint(step2, key="translation", collection="steps")
@@ -1085,8 +1095,8 @@ class TestWhileLoopWithLLM:
                     {
                         "role": "user",
                         "content": af.string.format(
-                            "Does this text need improvement to be more professional? Text: '{}'",
-                            text,
+                            "Does this text need improvement to be more professional? Text: '{text}'",
+                            text=text,
                         ),
                     }
                 ],

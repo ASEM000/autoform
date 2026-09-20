@@ -1,7 +1,6 @@
 # Primitive Keys
 
 ```{eval-rst}
-.. autodata:: autoform.extend.format_p
 .. autodata:: autoform.extend.concat_p
 .. autodata:: autoform.extend.match_p
 .. autodata:: autoform.extend.neg_p

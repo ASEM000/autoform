@@ -156,7 +156,7 @@ class TestFold:
         def program(x):
             with af.fold():
                 prefix = af.string.concat("a", "b")
-                prefix = af.string.format("[{}]", prefix)
+                prefix = af.string.format("[{prefix}]", prefix=prefix)
             value = af.string.concat(prefix, x)
             return af.string.concat(value, "!")
 
@@ -188,14 +188,14 @@ class TestFold:
                     [{"role": "user", "content": "make a rubric"}],
                     model="test-model",
                 )
-            return af.string.format("{}: {}", rubric, question)
+            return af.string.format("{rubric}: {question}", rubric=rubric, question=question)
 
         client = Client()
         with af.lm.client(client):
             ir = af.trace(program)("seed")
 
         assert client.calls == 1
-        assert [eqn.prim.name for eqn in ir.eqns] == ["format"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
         assert ir.call("question") == "rubric: question"
 
     @pytest.mark.asyncio(loop_scope="function")

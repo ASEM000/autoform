@@ -777,8 +777,8 @@ class TestDCEWithCheckpoints:
 class TestDCEWithDepends:
     def test_depends_kept_when_output_used(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
@@ -789,10 +789,10 @@ class TestDCEWithDepends:
 
     def test_depends_removed_when_output_unused(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
             _ = af.depends(b, a)
-            return af.string.format("C: {}", x)
+            return af.string.format("C: {x}", x=x)
 
         ir = af.trace(program)("x")
         dce = af.dce(ir)
@@ -802,20 +802,20 @@ class TestDCEWithDepends:
 
     def test_depends_keeps_its_deps_alive(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
-        assert len(format_eqns) == 2
+        concat_eqns = [e for e in dce.eqns if e.prim.name == "concat"]
+        assert len(concat_eqns) == 2
 
     def test_depends_deps_removed_when_depends_unused(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
             _ = af.depends(b, a)
             return x
 
@@ -826,9 +826,9 @@ class TestDCEWithDepends:
 
     def test_depends_chained(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
+            c = af.string.format("C: {x}", x=x)
             b_ord = af.depends(b, a)
             c_ord = af.depends(c, b_ord)
             return c_ord
@@ -836,16 +836,16 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
+        concat_eqns = [e for e in dce.eqns if e.prim.name == "concat"]
         depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
-        assert len(format_eqns) == 3
+        assert len(concat_eqns) == 3
         assert len(depends_eqns) == 2
 
     def test_depends_partial_chain_kept(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
+            c = af.string.format("C: {x}", x=x)
             b_ord = af.depends(b, a)
             _ = af.depends(c, b_ord)
             return b_ord
@@ -853,41 +853,41 @@ class TestDCEWithDepends:
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
+        concat_eqns = [e for e in dce.eqns if e.prim.name == "concat"]
         depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
-        assert len(format_eqns) == 2
+        assert len(concat_eqns) == 2
         assert len(depends_eqns) == 1
 
     def test_depends_multiple_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
-            b = af.string.format("B: {}", x)
-            c = af.string.format("C: {}", x)
+            a = af.string.format("A: {x}", x=x)
+            b = af.string.format("B: {x}", x=x)
+            c = af.string.format("C: {x}", x=x)
             return af.depends(c, a, b)
 
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
-        assert len(format_eqns) == 3
+        concat_eqns = [e for e in dce.eqns if e.prim.name == "concat"]
+        assert len(concat_eqns) == 3
 
     def test_depends_no_deps(self):
         def program(x):
-            a = af.string.format("A: {}", x)
+            a = af.string.format("A: {x}", x=x)
             return af.depends(a)
 
         ir = af.trace(program)("x")
         dce = af.dce(ir)
 
-        format_eqns = [e for e in dce.eqns if e.prim.name == "format"]
+        concat_eqns = [e for e in dce.eqns if e.prim.name == "concat"]
         depends_eqns = [e for e in dce.eqns if e.prim.name == "depends"]
-        assert len(format_eqns) == 1
+        assert len(concat_eqns) == 1
         assert len(depends_eqns) == 1
 
     def test_depends_with_checkpoint(self):
         def program(x):
             a = af.checkpoint(x, key="a")
-            b = af.string.format("B: {}", x)
+            b = af.string.format("B: {x}", x=x)
             return af.depends(b, a)
 
         ir = af.trace(program)("x")

@@ -4,6 +4,8 @@
 
 ### Breaking Changes
 
+  - `af.string.format` now lowers to `concat`.
+
   - Moved string, numeric, and LM operations into their own modules. The
     top-level API keeps shared types and operations that work across spaces.
 

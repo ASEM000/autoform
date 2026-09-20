@@ -128,27 +128,29 @@ class TestVar:
         assert not af.core.is_var("hello")
 
 
-class TestFormatPrimitive:
+class TestFormat:
     def test_basic_format(self):
-        result = af.string.format("Hello, {}!", "World")
+        result = af.string.format("Hello, {value}!", value="World")
         assert result == "Hello, World!"
 
     def test_multiple_placeholders(self):
-        result = af.string.format("{} + {} = {}", "1", "2", "3")
+        result = af.string.format(
+            "{value_1} + {value_2} = {value_3}", value_1="1", value_2="2", value_3="3"
+        )
         assert result == "1 + 2 = 3"
 
     def test_format_ir(self):
         def func(x):
-            return af.string.format("Value: {}", x)
+            return af.string.format("Value: {x}", x=x)
 
         ir = af.trace(func)("test")
         assert len(ir.eqns) == 1
-        assert ir.eqns[0].prim.name == "format"
+        assert ir.eqns[0].prim.name == "concat"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_format_ir_async(self):
         def func(x):
-            return af.string.format("Value: {}", x)
+            return af.string.format("Value: {x}", x=x)
 
         ir = af.trace(func)("test")
         result = await ir.acall("hello")
@@ -344,7 +346,7 @@ class TestEchoLMClient:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_traced_and_batched_execution(self):
         def program(text):
-            prompt = af.string.format("Hello, {}!", text)
+            prompt = af.string.format("Hello, {text}!", text=text)
             return af.lm.call(
                 [
                     dict(role="system", content="Translate to Korean."),
@@ -453,7 +455,7 @@ class TestInterpreter:
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer) as t:
             assert t is tracer
-            af.string.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
+            af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.core.StrAVal()))
             assert len(tracer.eqns) == 1
         result = af.string.concat("a", "b")
         assert result == "ab"
@@ -461,7 +463,7 @@ class TestInterpreter:
     def test_tracing_interpreter_creates_eqns(self):
         tracer = af.core.TraceInterpreter()
         with af.core.using_interpreter(tracer):
-            af.string.format("Hello, {}!", af.core.Var.fresh(aval=af.core.StrAVal()))
+            af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.core.StrAVal()))
         assert len(tracer.eqns) == 1
 
 
@@ -538,7 +540,7 @@ class TestStopGradient:
     def test_chained_with_format(self):
         def func(x):
             stopped = af.stop_gradient(x)
-            return af.string.format("[{}]", stopped)
+            return af.string.format("[{stopped}]", stopped=stopped)
 
         ir = af.trace(func)("test")
         result = ir.call("hello")
@@ -568,7 +570,7 @@ class TestRunIRInline:
 
     def test_run_ir_inlines_operations(self):
         """run_ir inside a traced function inlines the inner IR's operations."""
-        inner_ir = af.trace(lambda x: af.string.format("[{}]", x))("X")
+        inner_ir = af.trace(lambda x: af.string.format("[{x}]", x=x))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -576,11 +578,11 @@ class TestRunIRInline:
         outer_ir = af.trace(outer)("X")
 
         assert len(outer_ir.eqns) == 1
-        assert outer_ir.eqns[0].prim.name == "format"
+        assert outer_ir.eqns[0].prim.name == "concat"
 
     def test_run_ir_inline_executes_correctly(self):
         """Inlined run_ir produces correct output."""
-        inner_ir = af.trace(lambda x: af.string.format("<{}>", x))("X")
+        inner_ir = af.trace(lambda x: af.string.format("<{x}>", x=x))("X")
 
         def outer(x):
             return inner_ir.call(x)
@@ -594,7 +596,7 @@ class TestRunIRInline:
 
         def inner(x):
             a = af.string.concat(x, "!")
-            b = af.string.format("[{}]", a)
+            b = af.string.format("[{a}]", a=a)
             return b
 
         inner_ir = af.trace(inner)("X")
@@ -649,7 +651,7 @@ class TestRunIRInline:
 
     def test_batch_on_inlined_run_ir(self):
         """Batch works on inlined run_ir."""
-        inner_ir = af.trace(lambda x: af.string.format("[{}]", x))("X")
+        inner_ir = af.trace(lambda x: af.string.format("[{x}]", x=x))("X")
 
         def outer(x):
             return inner_ir.call(x)

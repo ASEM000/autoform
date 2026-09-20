@@ -36,7 +36,7 @@ class Explainer:
         return af.lm.call([msg], model=self.model)
 ```
 
-The methods can call traceable primitives such as {py:func}`format <autoform.string.format>`
+The methods can call traceable primitives such as {py:func}`concat <autoform.string.concat>`
 and {py:func}`af.lm.call <autoform.lm.call>`. The fields remain visible as pytree
 leaves because the class is registered under
 {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`.
