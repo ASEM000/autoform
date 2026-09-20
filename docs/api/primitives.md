@@ -20,17 +20,17 @@ Primitives are operations that tracing records as IR equations.
 ## Numeric
 
 ```{eval-rst}
-.. autofunction:: autoform.neg
-.. autofunction:: autoform.add
-.. autofunction:: autoform.sub
-.. autofunction:: autoform.mul
-.. autofunction:: autoform.div
-.. autofunction:: autoform.eq
-.. autofunction:: autoform.ne
-.. autofunction:: autoform.lt
-.. autofunction:: autoform.le
-.. autofunction:: autoform.gt
-.. autofunction:: autoform.ge
+.. autofunction:: autoform.numeric.neg
+.. autofunction:: autoform.numeric.add
+.. autofunction:: autoform.numeric.sub
+.. autofunction:: autoform.numeric.mul
+.. autofunction:: autoform.numeric.div
+.. autofunction:: autoform.numeric.eq
+.. autofunction:: autoform.numeric.ne
+.. autofunction:: autoform.numeric.lt
+.. autofunction:: autoform.numeric.le
+.. autofunction:: autoform.numeric.gt
+.. autofunction:: autoform.numeric.ge
 ```
 
 ## Control Flow

@@ -81,17 +81,6 @@ while_loop = control.while_loop
 fixpoint = control.fixpoint
 depends = order.depends
 factor = path.factor
-neg = numeric.neg
-add = numeric.add
-sub = numeric.sub
-mul = numeric.mul
-div = numeric.div
-eq = numeric.eq
-ne = numeric.ne
-lt = numeric.lt
-le = numeric.le
-gt = numeric.gt
-ge = numeric.ge
 
 # ==================================================================================================
 # SCHEMAS
@@ -147,17 +136,6 @@ __all__ = [
     "fixpoint",
     "depends",
     "factor",
-    "neg",
-    "add",
-    "sub",
-    "mul",
-    "div",
-    "eq",
-    "ne",
-    "lt",
-    "le",
-    "gt",
-    "ge",
     # schemas
     "Bool",
     "Doc",
