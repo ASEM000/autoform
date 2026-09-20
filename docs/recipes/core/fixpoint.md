@@ -62,7 +62,7 @@ When stability is semantic, compare only the fields that matter:
 ```python
 def is_stable(prev: RewriteState, new: RewriteState) -> bool:
     del prev
-    return af.match(new.status, "stable")
+    return new.status == "stable"
 
 
 equiv_ir = af.trace(is_stable)(example_state, example_state)

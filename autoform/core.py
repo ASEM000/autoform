@@ -691,8 +691,8 @@ def fold() -> Generator[None, None, None]:
     Example:
         >>> def program(x):
         ...     with af.fold():
-        ...         route = af.string.match("priority", "priority")
-        ...     if route:
+        ...         route = af.numeric.add(1, 1)
+        ...     if route == 2:
         ...         return "yes: " + x
         ...     return "no: " + x
         >>> ir = af.trace(program)("seed")

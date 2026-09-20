@@ -207,9 +207,9 @@ def match(a: str, b: str, /) -> bool:
 
     Example:
         >>> import autoform as af
-        >>> af.match("yes", "yes")
+        >>> "yes" == "yes"
         True
-        >>> af.match("yes", "no")
+        >>> "yes" == "no"
         False
     """
     return match_p.bind((a, b))

@@ -28,8 +28,8 @@ Folded work can choose ordinary Python control flow because it runs while tracin
 ```python
 def route(text: str) -> str:
     with af.fold():
-        label = af.string.match("priority", "priority")
-    if label:
+        label = af.numeric.add(1, 1)
+    if label == 2:
         return "yes: " + text
     return "no: " + text
 

@@ -331,7 +331,7 @@ def while_loop(cond_ir: core.IR, body_ir: core.IR, init_val: Tree, *, max_iters:
     Example:
         >>> import autoform as af
         >>> def cond(x):
-        ...     return af.match(x, "go")
+        ...     return x == "go"
         >>> def body(x):
         ...     return "stop"
         >>> cond_ir = af.trace(cond)("...")
