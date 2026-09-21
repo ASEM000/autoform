@@ -142,6 +142,36 @@ def test_generate_executes_with_response_format():
     ]
 
 
+@pytest.mark.parametrize(
+    ("schema", "value"),
+    [
+        (af.Str(), 'Hello "world"!'),
+        (af.Str(min=1) @ af.Doc("Answer text."), "hello"),
+        (af.Int(), 2),
+        (af.Float(), 0.5),
+        (af.Bool(), True),
+        (af.Enum("yes", "no"), "yes"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_generate_passes_scalar_schemas_to_client(schema, value):
+    class ScalarClient(af.lm.EchoClient):
+        def completion(self, *, response_format, **kwargs):
+            assert response_format["json_schema"]["schema"] == emit_json_schema(schema)
+            return super().completion(**kwargs)
+
+    def program(prompt):
+        return af.lm.generate([dict(role="user", content=prompt)], model="echo", schema=schema)
+
+    ir = af.trace(program)("seed")
+    assert emit_json_schema(ir.eqns[0].params["schema"]) == emit_json_schema(schema)
+    assert isinstance(ir.eqns[0].out_tree, af.core.Var)
+    with af.lm.client(ScalarClient(render=lambda _: json.dumps(value))):
+        assert program("hello") == value
+        assert ir.call("hello") == value
+        assert await ir.acall("hello") == value
+
+
 def test_generate_traces_schema_as_static_param():
     answer = {
         "text": af.Str() @ af.Doc("Short text."),
