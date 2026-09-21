@@ -102,8 +102,8 @@ lt_p = numeric.lt_p
 le_p = numeric.le_p
 gt_p = numeric.gt_p
 ge_p = numeric.ge_p
-lm_call_p = lm.lm_call_p
-lm_schema_call_p = lm.lm_schema_call_p
+complete_p = lm.complete_p
+generate_p = lm.generate_p
 factor_p = path.factor_p
 weight_call_p = path.weight_call_p
 checkpoint_p = intercept.checkpoint_p
@@ -174,8 +174,8 @@ __all__ = [
     "le_p",
     "gt_p",
     "ge_p",
-    "lm_call_p",
-    "lm_schema_call_p",
+    "complete_p",
+    "generate_p",
     "factor_p",
     "weight_call_p",
     "checkpoint_p",

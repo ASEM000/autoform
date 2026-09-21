@@ -926,7 +926,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make this text more professional."},
                 {"role": "user", "content": text},
             ]
-            refined = af.lm.call(msgs, model=TEST_MODEL)
+            refined = af.lm.complete(msgs, model=TEST_MODEL)
             return af.checkpoint(refined, key="step", collection="refinements")
 
         cond_ir = trace(cond)("x")
@@ -955,7 +955,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make this text more professional."},
                 {"role": "user", "content": text},
             ]
-            return af.lm.call(msgs, model=TEST_MODEL)
+            return af.lm.complete(msgs, model=TEST_MODEL)
 
         cond_ir = trace(cond)("x")
         body_ir = trace(body)("text")
@@ -982,7 +982,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Translate to French. Return ONLY the translation."},
                 {"role": "user", "content": text},
             ]
-            return af.lm.call(msgs, model=TEST_MODEL)
+            return af.lm.complete(msgs, model=TEST_MODEL)
 
         translate_ir = trace(translate)("text")
         batched_ir = af.batch(translate_ir, in_axes=True)
@@ -996,7 +996,7 @@ class TestWhileLoopWithLLM:
             assert len(r) > 0
 
     @requires_llm
-    def test_lm_schema_call_with_pytree(self):
+    def test_generate_with_pytree(self):
         @tree.dataclasses.dataclass
         class Sentiment:
             positive: bool
@@ -1016,7 +1016,7 @@ class TestWhileLoopWithLLM:
                     "content": af.string.format("Analyze sentiment: {text}", text=text),
                 }
             ]
-            return af.lm.schema_call(msgs, model=TEST_MODEL, schema=sentiment_schema)
+            return af.lm.generate(msgs, model=TEST_MODEL, schema=sentiment_schema)
 
         analyze_ir = trace(analyze)("text")
         result = analyze_ir.call("I love this product! It's amazing!")
@@ -1033,7 +1033,7 @@ class TestWhileLoopWithLLM:
                 {"role": "system", "content": "Make more professional."},
                 {"role": "user", "content": text},
             ]
-            return af.lm.call(msgs, model=TEST_MODEL)
+            return af.lm.complete(msgs, model=TEST_MODEL)
 
         improve_ir = trace(improve)("text")
         pf_ir = af.pushforward(improve_ir)
@@ -1050,13 +1050,13 @@ class TestWhileLoopWithLLM:
     @requires_llm
     def test_collect_lm_marks(self):
         def process(text):
-            step1 = af.lm.call(
+            step1 = af.lm.complete(
                 [{"role": "user", "content": af.string.format("Summarize: {text}", text=text)}],
                 model=TEST_MODEL,
             )
             step1 = af.checkpoint(step1, key="summary", collection="steps")
 
-            step2 = af.lm.call(
+            step2 = af.lm.complete(
                 [
                     {
                         "role": "user",
@@ -1090,7 +1090,7 @@ class TestWhileLoopWithLLM:
         )
 
         def cond(text):
-            verdict = af.lm.schema_call(
+            verdict = af.lm.generate(
                 [
                     {
                         "role": "user",
@@ -1106,7 +1106,7 @@ class TestWhileLoopWithLLM:
             return verdict.needs_improvement
 
         def body(text):
-            refined = af.lm.call(
+            refined = af.lm.complete(
                 [
                     {"role": "system", "content": "Make more professional and formal."},
                     {"role": "user", "content": text},

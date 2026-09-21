@@ -16,7 +16,7 @@ def answer_with_instruction(instruction: str, topic: str) -> str:
     prompt = instruction + "\n\nTopic: " + topic
     msg = dict(role="user", content=prompt)
     # use any model configured for the active lm client
-    return af.lm.call([msg], model="gpt-5.5")
+    return af.lm.complete([msg], model="gpt-5.5")
 
 
 # trace with placeholder values

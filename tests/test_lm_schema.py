@@ -20,6 +20,24 @@ import autoform as af
 from autoform.lm import emit_json_schema
 
 
+@pytest.mark.asyncio
+async def test_complete_and_generate_use_distinct_primitives():
+    def program(prompt):
+        messages = [dict(role="user", content=prompt)]
+        return (
+            af.lm.complete(messages, model="echo"),
+            af.lm.generate(messages, model="echo", schema=None),
+        )
+
+    ir = af.trace(program)("seed")
+    assert [eqn.prim for eqn in ir.eqns] == [af.lm.complete_p, af.lm.generate_p]
+    assert ir.eqns[1].params["schema"] is None
+    with af.lm.client(af.lm.EchoClient()):
+        assert program("hello") == ("<user> hello", None)
+        assert ir.call("hello") == ("<user> hello", None)
+        assert await ir.acall("hello") == ("<user> hello", None)
+
+
 class FakeMessage:
     def __init__(self, content: str):
         self.content = content
@@ -84,7 +102,7 @@ class SchemaGradientRouter:
         )
 
 
-def test_lm_schema_call_executes_with_response_format():
+def test_generate_executes_with_response_format():
     router = SchemaRouter()
     answer = {
         "text": af.Str(min=1, max=80),
@@ -93,7 +111,7 @@ def test_lm_schema_call_executes_with_response_format():
     }
 
     with af.lm.client(router):
-        result = af.lm.schema_call(
+        result = af.lm.generate(
             [dict(role="user", content="hello")],
             model="m1",
             schema=answer,
@@ -124,14 +142,44 @@ def test_lm_schema_call_executes_with_response_format():
     ]
 
 
-def test_lm_schema_call_traces_schema_as_static_param():
+@pytest.mark.parametrize(
+    ("schema", "value"),
+    [
+        (af.Str(), 'Hello "world"!'),
+        (af.Str(min=1) @ af.Doc("Answer text."), "hello"),
+        (af.Int(), 2),
+        (af.Float(), 0.5),
+        (af.Bool(), True),
+        (af.Enum("yes", "no"), "yes"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_generate_passes_scalar_schemas_to_client(schema, value):
+    class ScalarClient(af.lm.EchoClient):
+        def completion(self, *, response_format, **kwargs):
+            assert response_format["json_schema"]["schema"] == emit_json_schema(schema)
+            return super().completion(**kwargs)
+
+    def program(prompt):
+        return af.lm.generate([dict(role="user", content=prompt)], model="echo", schema=schema)
+
+    ir = af.trace(program)("seed")
+    assert emit_json_schema(ir.eqns[0].params["schema"]) == emit_json_schema(schema)
+    assert isinstance(ir.eqns[0].out_tree, af.core.Var)
+    with af.lm.client(ScalarClient(render=lambda _: json.dumps(value))):
+        assert program("hello") == value
+        assert ir.call("hello") == value
+        assert await ir.acall("hello") == value
+
+
+def test_generate_traces_schema_as_static_param():
     answer = {
         "text": af.Str() @ af.Doc("Short text."),
         "score": af.Float(),
     } @ af.Doc("Answer object.")
 
     def program(prompt: str, model: str):
-        result = af.lm.schema_call(
+        result = af.lm.generate(
             [dict(role="user", content=prompt)],
             model=model,
             schema=answer,
@@ -139,7 +187,7 @@ def test_lm_schema_call_traces_schema_as_static_param():
         return af.string.format("{text}", text=result["text"])
 
     ir = af.trace(program)("test", "gpt-5.5")
-    assert [eqn.prim.name for eqn in ir.eqns] == ["lm_schema_call", "concat"]
+    assert [eqn.prim.name for eqn in ir.eqns] == ["generate", "concat"]
     assert emit_json_schema(ir.eqns[0].params["schema"]) == emit_json_schema(answer)
     assert "model" not in ir.eqns[0].params
     assert isinstance(ir.eqns[0].in_tree[1], af.core.Var)
@@ -157,14 +205,14 @@ def test_emit_json_schema_rejects_non_json_enum_values():
         emit_json_schema({"kind": enum})
 
 
-def test_batch_lm_schema_call_supports_variable_models():
+def test_batch_generate_supports_variable_models():
     answer = {
         "text": af.Str(),
         "score": af.Float(),
     }
 
     def program(prompt: str, model: str):
-        return af.lm.schema_call(
+        return af.lm.generate(
             [dict(role="user", content=prompt)],
             model=model,
             schema=answer,
@@ -182,7 +230,7 @@ def test_batch_lm_schema_call_supports_variable_models():
     }
 
 
-def test_lm_schema_call_pullback_uses_schema_cotangent():
+def test_generate_pullback_uses_schema_cotangent():
     router = SchemaGradientRouter()
     answer = {
         "text": af.Str(min=1, max=80),
@@ -190,7 +238,7 @@ def test_lm_schema_call_pullback_uses_schema_cotangent():
     }
 
     def program(prompt: str):
-        return af.lm.schema_call(
+        return af.lm.generate(
             [dict(role="user", content=prompt)],
             model="m1",
             schema=answer,
@@ -220,7 +268,7 @@ def test_lm_schema_call_pullback_uses_schema_cotangent():
     assert "feedback: 'overconfident'" in prompt
 
 
-def test_lm_schema_call_pullback_treats_zero_as_no_feedback():
+def test_generate_pullback_treats_zero_as_no_feedback():
     router = SchemaGradientRouter()
     answer = {
         "text": af.Str(),
@@ -228,7 +276,7 @@ def test_lm_schema_call_pullback_treats_zero_as_no_feedback():
     }
 
     def program(prompt: str):
-        result = af.lm.schema_call(
+        result = af.lm.generate(
             [dict(role="user", content=prompt)],
             model="m1",
             schema=answer,
@@ -249,7 +297,7 @@ def test_lm_schema_call_pullback_treats_zero_as_no_feedback():
     assert "feedback: 'No feedback'" in prompt
 
 
-def test_lm_schema_call_pullback_rejects_non_text_schema_cotangent():
+def test_generate_pullback_rejects_non_text_schema_cotangent():
     router = SchemaGradientRouter()
     answer = {
         "text": af.Str(),
@@ -257,7 +305,7 @@ def test_lm_schema_call_pullback_rejects_non_text_schema_cotangent():
     }
 
     def program(prompt: str):
-        return af.lm.schema_call(
+        return af.lm.generate(
             [dict(role="user", content=prompt)],
             model="m1",
             schema=answer,

@@ -18,7 +18,7 @@ The IR is not Python source and it is not bytecode. It is a small data structure
 
 - input and output trees describe the runtime values entering and leaving the program;
 - equations record one primitive call, its input tree, its output tree, static parameters, and tags;
-- primitive names identify operations such as {py:func}`concat <autoform.string.concat>` and {py:func}`af.lm.call <autoform.lm.call>`;
+- primitive names identify operations such as {py:func}`concat <autoform.string.concat>` and {py:func}`af.lm.complete <autoform.lm.complete>`;
 - the whole IR is the input tree, the equation list, and the output tree.
 
 Most code should get an IR from {py:func}`trace <autoform.trace>`, transform it, and run it. Direct construction of the internal IR classes is not needed.
@@ -73,7 +73,7 @@ That is why the trace/transform/execute split matters. A transform does not need
 
 - It is not a graph database. The main representation is an ordered equation list.
 - It is not Python source. Recovering arbitrary Python syntax from it is not supported.
-- It is not a provider call log. An {py:func}`af.lm.call <autoform.lm.call>` is one equation whose implementation runs later.
+- It is not a provider call log. An {py:func}`af.lm.complete <autoform.lm.complete>` is one equation whose implementation runs later.
 - It is not the usual [public API](../api/index.md) for application code. It is the substrate that makes the public transforms compose.
 
 ## IR Inspection

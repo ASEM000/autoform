@@ -37,19 +37,20 @@ __all__ = [
     "LiteLLMClient",
     "EchoClient",
     "client",
-    "call",
-    "schema_call",
+    "complete",
+    "generate",
     "emit_json_schema",
-    "parse_json",
+    "parse_json_value",
 ]
+
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Messages = list[dict[str, str]]
 type Roles = list[str]
 type JsonSchema = dict[str, Any]
-type JsonSchemaRule = Callable[[Any], JsonSchema | None]
-type JsonValueRule = Callable[[Any, Any], Any]
+type EmitJsonSchemaRule = Callable[[Any], JsonSchema | None]
+type ParseJsonValueRule = Callable[[Any, Any], Any]
 type ClientType = ModelResponse
 
 
@@ -86,14 +87,14 @@ class EchoClient:
         >>> with af.lm.client(af.lm.EchoClient()):
         ...     msg1 = dict(role="system", content="Translate to Korean.")
         ...     msg2 = dict(role="user", content="Hello!")
-        ...     print(af.lm.call([msg1, msg2], model="echo"))
+        ...     print(af.lm.complete([msg1, msg2], model="echo"))
         <system> Translate to Korean.
         <user> Hello!
 
     Example with a custom renderer:
         >>> client = af.lm.EchoClient(render=lambda messages: messages[-1]["content"])
         >>> with af.lm.client(client):
-        ...     af.lm.call([dict(role="user", content="Hello!")], model="echo")
+        ...     af.lm.complete([dict(role="user", content="Hello!")], model="echo")
         'Hello!'
     """
 
@@ -146,30 +147,21 @@ def client(client: Client) -> Generator[Client, None, None]:
 
 
 # ==================================================================================================
-# LM CALL
+# COMPLETE
 # ==================================================================================================
 
-lm_call_p = core.Prim("lm_call")
-
-# TODO(asem): take a look into this
-GRAD_PROMPT = """Given this LLM interaction:
-
-INPUT: {content}
-OUTPUT: {out}
-FEEDBACK ON OUTPUT: {out_cotangent}
-
-Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
+complete_p = core.Prim("complete")
 
 
-def call(messages: Messages, /, *, model: str) -> str:
-    """Calls a language model with the given messages and model name using LiteLLM.
+def complete(messages: Messages, /, *, model: str) -> str:
+    """Complete a conversation with text.
 
     Args:
         messages: A list of message dictionaries, each containing 'role' and 'content' keys.
         model: The model name or active client model alias to use (e.g., "gpt-5.5").
 
     Returns:
-        The content of the model's response as a string.
+        The response text.
 
     Use :func:`client` to configure provider-specific settings like ``max_tokens``.
 
@@ -179,7 +171,7 @@ def call(messages: Messages, /, *, model: str) -> str:
         ...     greeting = "Hello, " + name + "!"
         ...     sys = dict(role="system", content="translate the greeting to Korean")
         ...     usr = dict(role="user", content=greeting)
-        ...     greeting = af.lm.call([sys, usr], model="gpt-5.5")
+        ...     greeting = af.lm.complete([sys, usr], model="gpt-5.5")
         ...     return greeting
         >>> ir = af.trace(program)("World") # doctest: +SKIP
         >>> result = ir.call("x0") # doctest: +SKIP
@@ -196,7 +188,7 @@ def call(messages: Messages, /, *, model: str) -> str:
         >>> router = Router(model_list=model_list)  # doctest: +SKIP
         >>> def program(text: str, model: str):
         ...     msg = [{"role": "user", "content": ("Explain " + text + " in one line.")}]
-        ...     answer = af.lm.call(msg, model=model)
+        ...     answer = af.lm.complete(msg, model=model)
         ...     return "Answer: " + answer
         >>> ir = af.trace(program)("topic", "model")
         >>> model_names = ["gpt-5.5-1024", "gpt-5.5-512"]
@@ -209,73 +201,82 @@ def call(messages: Messages, /, *, model: str) -> str:
         assert "role" in m, f"message must have a 'role' key, got {m=}"
         assert "content" in m, f"message must have a 'content' key, got {m=}"
 
-    roles = [m["role"] for m in messages]
-    contents = [m["content"] for m in messages]
-    return lm_call_p.bind((contents, model), roles=roles)
+    roles, contents = [m["role"] for m in messages], [m["content"] for m in messages]
+    return complete_p.bind((contents, model), roles=roles)
 
 
-def impl_lm_call(in_tree: Tree, /, *, roles: Roles) -> str:
+# TODO(asem): take a look into this
+GRAD_PROMPT = """Given this LLM interaction:
+
+INPUT: {content}
+OUTPUT: {out}
+FEEDBACK ON OUTPUT: {out_cotangent}
+
+Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
+
+
+def impl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     response = active_client.get().completion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
-async def aimpl_lm_call(in_tree: Tree, /, *, roles: Roles) -> str:
+async def aimpl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     response = await active_client.get().acompletion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
-def abstract_lm_call(in_tree: Tree, /, *, roles: Roles) -> core.EvalType:
+def abstract_complete(in_tree: Tree, /, *, roles: Roles) -> core.EvalType:
     contents, model = in_tree
     assert all(type(x) in (str, core.StrAVal) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, core.StrAVal), f"Expected string model: {model!r}"
     return core.StrAVal()
 
 
-def pushforward_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+def pushforward_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     import autoform.ad as ad
 
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
-    p_resp = lm_call_p.bind(p_tree, roles=roles)
+    p_resp = complete_p.bind(p_tree, roles=roles)
     t_tree = (ad.materialize(tangent_contents), primal_model)
-    t_resp = lm_call_p.bind(t_tree, roles=roles)
+    t_resp = complete_p.bind(t_tree, roles=roles)
     return p_resp, t_resp
 
 
-async def apush_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+async def apush_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     import autoform.ad as ad
 
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
-    abind = ft.partial(lm_call_p.abind, roles=roles)
+    abind = ft.partial(complete_p.abind, roles=roles)
     p_tree = (primal_contents, primal_model)
     t_tree = (ad.materialize(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+def pullback_fwd_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     contents, model = in_tree
-    out = lm_call_p.bind((contents, model), roles=roles)
+    out = complete_p.bind((contents, model), roles=roles)
     residuals = (contents, model, out)
     return out, residuals
 
 
-async def apull_fwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+async def apull_fwd_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     contents, model = in_tree
-    out = await lm_call_p.abind((contents, model), roles=roles)
+    out = await complete_p.abind((contents, model), roles=roles)
     residuals = (contents, model, out)
     return out, residuals
 
 
-def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
+def pullback_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
     import autoform.ad as ad
 
     residuals, out_cotangent = in_tree
@@ -284,12 +285,12 @@ def pullback_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
+        grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
     return grads, ad.cotangent_zeroof(model)
 
 
-async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
+async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
     import autoform.ad as ad
 
     residuals, out_cotangent = in_tree
@@ -298,54 +299,98 @@ async def apull_bwd_lm_call(in_tree: Tree, /, *, roles: Roles) -> Tree:
 
     async def grad(c):
         prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
+        grad_out = complete_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
     return (await asyncio.gather(*[grad(c) for c in contents]), ad.cotangent_zeroof(model))
 
 
-def batch_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+def batch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return lm_call_p.bind(in_values, roles=roles), False
+        return complete_p.bind(in_values, roles=roles), False
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    results = [lm_call_p.bind(unbatch(b), roles=roles) for b in range(batch_size)]
+    results = [complete_p.bind(unbatch(b), roles=roles) for b in range(batch_size)]
     out_tree = spec.unflatten(results)
     return out_tree, True
 
 
-async def abatch_lm_call(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+async def abatch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return await lm_call_p.abind(in_values, roles=roles), False
+        return await complete_p.abind(in_values, roles=roles), False
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    abind = ft.partial(lm_call_p.abind, roles=roles)
+    abind = ft.partial(complete_p.abind, roles=roles)
     results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
     out_tree = spec.unflatten(results)
     return out_tree, True
 
 
-core.impl_rules.set(lm_call_p, impl_lm_call)
-core.impl_rules.aset(lm_call_p, aimpl_lm_call)
-core.abstract_rules.set(lm_call_p, abstract_lm_call)
-core.push_rules.set(lm_call_p, pushforward_lm_call)
-core.push_rules.aset(lm_call_p, apush_lm_call)
-core.pull_fwd_rules.set(lm_call_p, pullback_fwd_lm_call)
-core.pull_fwd_rules.aset(lm_call_p, apull_fwd_lm_call)
-core.pull_bwd_rules.set(lm_call_p, pullback_bwd_lm_call)
-core.pull_bwd_rules.aset(lm_call_p, apull_bwd_lm_call)
-core.batch_rules.set(lm_call_p, batch_lm_call)
-core.batch_rules.aset(lm_call_p, abatch_lm_call)
+core.impl_rules.set(complete_p, impl_complete)
+core.impl_rules.aset(complete_p, aimpl_complete)
+core.abstract_rules.set(complete_p, abstract_complete)
+core.push_rules.set(complete_p, pushforward_complete)
+core.push_rules.aset(complete_p, apush_complete)
+core.pull_fwd_rules.set(complete_p, pullback_fwd_complete)
+core.pull_fwd_rules.aset(complete_p, apull_fwd_complete)
+core.pull_bwd_rules.set(complete_p, pullback_bwd_complete)
+core.pull_bwd_rules.aset(complete_p, apull_bwd_complete)
+core.batch_rules.set(complete_p, batch_complete)
+core.batch_rules.aset(complete_p, abatch_complete)
 
 # ==================================================================================================
-# LM SCHEMA CALL
+# GENERATE
 # ==================================================================================================
 
-lm_schema_call_p = core.Prim("lm_schema_call")
+generate_p = core.Prim("generate")
+
+
+def generate(messages: Messages, /, *, model: str, schema: Any) -> Any:
+    """Generate a value matching the supplied schema.
+
+    Args:
+        messages: A list of message dictionaries, each containing 'role' and 'content' keys.
+        model: The model name or active client model alias to use (e.g., "gpt-5.5").
+        schema: An autoform schema tree describing the output.
+
+    Returns:
+        A value with the same pytree structure as the schema.
+
+    Use :func:`client` to configure provider-specific settings like ``max_tokens``.
+
+    Example with a registered pytree:
+        >>> import optree
+        >>> import autoform as af
+        >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+        ... class Answer:
+        ...     answer: float
+        ...     reasoning: str
+        >>> schema = Answer(
+        ...     answer=af.Float() @ af.Doc("The numeric answer."),
+        ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
+        ... )
+        >>> msgs = [dict(role="user", content="1 + 1?")]
+        >>> output = af.lm.generate(  # doctest: +SKIP
+        ...     msgs,
+        ...     model="openai/gpt-5.5",
+        ...     schema=schema,
+        ... )
+        >>> output  # doctest: +SKIP
+        Answer(answer=2.0, reasoning='Adding 1 and 1 gives 2.')
+    """
+    assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
+    for m in messages:
+        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
+        assert "role" in m, f"message must have a 'role' key, got {m=}"
+        assert "content" in m, f"message must have a 'content' key, got {m=}"
+
+    roles, contents = [m["role"] for m in messages], [m["content"] for m in messages]
+
+    return generate_p.bind((contents, model), roles=roles, schema=schema)
 
 
 SCHEMA_GRAD_PROMPT = """Given this LLM interaction:
@@ -363,116 +408,101 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 """
 
 
-def schema_call(messages: Messages, /, *, model: str, schema: Any) -> Any:
-    """Calls a language model with an autoform schema response format.
-
-    The schema tree is built from nodes such as :class:`autoform.Int`,
-    :class:`autoform.Enum`, and the other schema nodes exported by autoform.
-
-    Example:
-        >>> import autoform as af
-        >>> answer = {
-        ...     "name": af.Str() @ af.Doc("Subject name."),
-        ...     "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
-        ...     "score": af.Float(min=0, max=1) @ af.Doc("Confidence score."),
-        ... } @ af.Doc("Answer object.")
-
-    Example with a registered pytree:
-        >>> import optree
-        >>> import autoform as af
-        >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
-        ... class Answer:
-        ...     answer: float
-        ...     reasoning: str
-        >>> schema = Answer(
-        ...     answer=af.Float() @ af.Doc("The numeric answer."),
-        ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
-        ... )
-        >>> msgs = [dict(role="user", content="1 + 1?")]
-        >>> output = af.lm.schema_call(  # doctest: +SKIP
-        ...     msgs,
-        ...     model="openai/gpt-5.5",
-        ...     schema=schema,
-        ... )
-        >>> output  # doctest: +SKIP
-        Answer(answer=2.0, reasoning='Adding 1 and 1 gives 2.')
-    """
-    for m in messages:
-        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
-        assert "role" in m, f"message must have a 'role' key, got {m=}"
-        assert "content" in m, f"message must have a 'content' key, got {m=}"
-
-    roles = [m["role"] for m in messages]
-    contents = [m["content"] for m in messages]
-    return lm_schema_call_p.bind((contents, model), roles=roles, schema=schema)
-
-
 json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
-json_schema_rules: dict[type[Any], JsonSchemaRule] = {}
+emit_json_schema_rules: dict[type[Any], EmitJsonSchemaRule] = {}
 
 
-def string_json_schema(s: schemas.Str) -> JsonSchema:
-    schema: JsonSchema = dict(type="string")
-    if s.min is not None:
-        schema["minLength"] = s.min
-    if s.max is not None:
-        schema["maxLength"] = s.max
-    if s.pattern is not None:
-        schema["pattern"] = s.pattern
-    return schema
+def emit_string_json_schema(schema: schemas.Str) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="string")
+    if schema.min is not None:
+        json_schema["minLength"] = schema.min
+    if schema.max is not None:
+        json_schema["maxLength"] = schema.max
+    if schema.pattern is not None:
+        json_schema["pattern"] = schema.pattern
+    return json_schema
 
 
-def integer_json_schema(s: schemas.Int) -> JsonSchema:
-    schema: JsonSchema = dict(type="integer")
-    if s.min is not None:
-        schema["minimum"] = s.min
-    if s.max is not None:
-        schema["maximum"] = s.max
-    return schema
+def emit_integer_json_schema(schema: schemas.Int) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="integer")
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return json_schema
 
 
-def number_json_schema(s: schemas.Float) -> JsonSchema:
-    schema: JsonSchema = dict(type="number")
-    if s.min is not None:
-        schema["minimum"] = s.min
-    if s.max is not None:
-        schema["maximum"] = s.max
-    return schema
+def emit_number_json_schema(schema: schemas.Float) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="number")
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return json_schema
 
 
-def boolean_json_schema(_: schemas.Bool) -> JsonSchema:
+def emit_boolean_json_schema(schema: schemas.Bool) -> JsonSchema:
     return dict(type="boolean")
 
 
-def enum_json_schema(s: schemas.Enum) -> JsonSchema:
-    value_type = type(s.values[0])
+def emit_enum_json_schema(schema: schemas.Enum) -> JsonSchema:
+    value_type = type(schema.values[0])
     if value_type not in json_types:
         raise TypeError("Enum values must be str, int, float, or bool")
-    return dict(type=json_types[value_type], enum=list(s.values))
+    return dict(type=json_types[value_type], enum=list(schema.values))
 
 
-def docd_json_schema(docd: schemas.Docd[Any]) -> JsonSchema | None:
-    if (schema := emit_json_schema(docd.value)) is None:
+def emit_docd_json_schema(schema: schemas.Docd[Any]) -> JsonSchema | None:
+    if (json_schema := emit_json_schema(schema.value)) is None:
         return None
-    return schema | dict(description=docd.text)
+    return json_schema | dict(description=schema.text)
 
 
-json_schema_rules[schemas.Str] = string_json_schema
-json_schema_rules[schemas.Int] = integer_json_schema
-json_schema_rules[schemas.Float] = number_json_schema
-json_schema_rules[schemas.Bool] = boolean_json_schema
-json_schema_rules[schemas.Enum] = enum_json_schema
-json_schema_rules[schemas.Docd] = docd_json_schema
+emit_json_schema_rules[schemas.Str] = emit_string_json_schema
+emit_json_schema_rules[schemas.Int] = emit_integer_json_schema
+emit_json_schema_rules[schemas.Float] = emit_number_json_schema
+emit_json_schema_rules[schemas.Bool] = emit_boolean_json_schema
+emit_json_schema_rules[schemas.Enum] = emit_enum_json_schema
+emit_json_schema_rules[schemas.Docd] = emit_docd_json_schema
 
 
-def emit_json_schema(node: Any) -> JsonSchema | None:
-    if rule := json_schema_rules.get(type(node)):
-        return rule(node)
-    if type(node) not in json_schema_rules and utils.tree.is_leaf(node):
+def emit_json_schema(schema: Any) -> JsonSchema | None:
+    # NOTE(asem): internal function to emit json based on the following rules
+    # - A literal in the schema will not be generated in the schema.
+    # - Emission rules use rules registry that can be extended.
+
+    # Example:
+    #     >>> import json
+    #     >>> import autoform as af
+    #     >>> schema = {
+    #     ...     "name": af.Str(min=1) @ af.Doc("Name slot."),
+    #     ...     "source": "fixed",
+    #     ... }
+    #     >>> print(json.dumps(af.lm.emit_json_schema(schema), indent=2))
+    #     {
+    #       "type": "object",
+    #       "properties": {
+    #         "name": {
+    #           "type": "string",
+    #           "minLength": 1,
+    #           "description": "Name slot."
+    #         }
+    #       },
+    #       "required": [
+    #         "name"
+    #       ],
+    #       "additionalProperties": false
+    #     }
+    # here only name is emitted, while literal value fixed is omitted.
+    if rule := emit_json_schema_rules.get(type(schema)):
+        return rule(schema)
+
+    # NOTE(asem): literal leaf case
+    if type(schema) not in emit_json_schema_rules and utils.tree.is_leaf(schema):
         return None
 
-    children, spec = utils.tree.flatten(node, is_leaf=lambda x: id(x) != id(node))
+    children, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
     properties = OrderedDict()
     for entry, child in zip(spec.entries(), children, strict=True):
         property_name = str(entry)
@@ -482,6 +512,8 @@ def emit_json_schema(node: Any) -> JsonSchema | None:
             properties[property_name] = child_schema
 
     if not properties:
+        # NOTE(asem): all tree is literals
+        # >>> dict(key="k", value=1)
         return None
 
     return dict(
@@ -492,94 +524,121 @@ def emit_json_schema(node: Any) -> JsonSchema | None:
     )
 
 
-json_value_rules: dict[type[Any], JsonValueRule] = {}
+parse_json_value_rules: dict[type[Any], ParseJsonValueRule] = {}
 
 
-def string_json_value(s: schemas.Str, value: str) -> str:
+def parse_string_json_value(schema: schemas.Str, value: Any) -> str:
     if type(value) is not str:
         raise ValueError("Expected string")
-    if s.min is not None and len(value) < s.min:
-        raise ValueError(f"Expected string with length >= {s.min}")
-    if s.max is not None and len(value) > s.max:
-        raise ValueError(f"Expected string with length <= {s.max}")
-    if s.pattern is not None and not re.search(s.pattern, value):
-        raise ValueError(f"Expected string matching {s.pattern!r}")
+    if schema.min is not None and len(value) < schema.min:
+        raise ValueError(f"Expected string with length >= {schema.min}")
+    if schema.max is not None and len(value) > schema.max:
+        raise ValueError(f"Expected string with length <= {schema.max}")
+    if schema.pattern is not None and not re.search(schema.pattern, value):
+        raise ValueError(f"Expected string matching {schema.pattern!r}")
     return value
 
 
-def integer_json_value(s: schemas.Int, value: int) -> int:
+def parse_integer_json_value(schema: schemas.Int, value: Any) -> int:
     if type(value) is not int:
         raise ValueError("Expected integer")
-    if s.min is not None and value < s.min:
-        raise ValueError(f"Expected integer >= {s.min}")
-    if s.max is not None and value > s.max:
-        raise ValueError(f"Expected integer <= {s.max}")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected integer >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected integer <= {schema.max}")
     return value
 
 
-def number_json_value(s: schemas.Float, value: int | float) -> float:
+def parse_number_json_value(schema: schemas.Float, value: Any) -> float:
     if type(value) not in (int, float):
         raise ValueError("Expected number")
-    if s.min is not None and value < s.min:
-        raise ValueError(f"Expected number >= {s.min}")
-    if s.max is not None and value > s.max:
-        raise ValueError(f"Expected number <= {s.max}")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected number >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected number <= {schema.max}")
     return float(value)
 
 
-def boolean_json_value(_: schemas.Bool, value: Any) -> bool:
+def parse_boolean_json_value(schema: schemas.Bool, value: Any) -> bool:
     if type(value) is not bool:
         raise ValueError("Expected boolean")
     return value
 
 
-def enum_json_value(s: schemas.Enum, value: Any) -> Any:
-    if value not in s:
-        raise ValueError(f"Expected one of {s.values!r}")
+def parse_enum_json_value(schema: schemas.Enum, value: Any) -> Any:
+    if value not in schema:
+        raise ValueError(f"Expected one of {schema.values!r}")
     return value
 
 
-def docd_json_value(s: schemas.Docd[Any], value: Any) -> Any:
-    return parse_json(s.value, value)
+def parse_docd_json_value(schema: schemas.Docd[Any], value: Any) -> Any:
+    return parse_json_value(schema.value, value)
 
 
-json_value_rules[schemas.Str] = string_json_value
-json_value_rules[schemas.Int] = integer_json_value
-json_value_rules[schemas.Float] = number_json_value
-json_value_rules[schemas.Bool] = boolean_json_value
-json_value_rules[schemas.Enum] = enum_json_value
-json_value_rules[schemas.Docd] = docd_json_value
+parse_json_value_rules[schemas.Str] = parse_string_json_value
+parse_json_value_rules[schemas.Int] = parse_integer_json_value
+parse_json_value_rules[schemas.Float] = parse_number_json_value
+parse_json_value_rules[schemas.Bool] = parse_boolean_json_value
+parse_json_value_rules[schemas.Enum] = parse_enum_json_value
+parse_json_value_rules[schemas.Docd] = parse_docd_json_value
 
 
-def parse_json(schema: Any, value: Any) -> Any:
-    if rule := json_value_rules.get(type(schema)):
+def parse_json_value(schema: Any, value: Any) -> Any:
+    # NOTE(asem): internal function to
+    # 1. Rebuild json to original tree .
+    # 2. Validate its values.
+    # Here this function needs the original schema tree formed by schema nodes and/or literals
+    # and the output json value dict. The dict is being rebuilt and validated against the schema
+    # tree. For example
+    # >>> class Struct(NamedTuple):
+    # ...
+    # >>> reference_schema = {
+    # ...     "name": af.Str(min=1),
+    # ...     "source": "literal",
+    # ...     "details": None,
+    # ... }
+    # >>> model_json_output = {"name": "x"}
+    # >>> parse_json_value(reference_schema, model_json_output)
+    # {"name": "x", "source": "literal", "details": None}
+    # 3 cases are handled here
+    # 1. Registered schema type with parsing rule (e.g. af.Str())
+    # 2. Literal leaf (e.g. "literal")
+    # 3. Pytree of made of registred schema nodes or literals.
+
+    # NOTE(asem): case 1: in case a parsing rule exists use it.
+    if rule := parse_json_value_rules.get(type(schema)):
         return rule(schema, value)
-    if type(schema) not in json_schema_rules and utils.tree.is_leaf(schema):
+
+    # NOTE(asem): case 2: literal node case.
+    if type(schema) not in emit_json_schema_rules and utils.tree.is_leaf(schema):
         return schema
 
+    # NOTE(asem): case 3 a container case.
+    # first flatten one level for the reference schema and the input value
     flat_schemas, spec_schema = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
     flat_values, spec_value = utils.tree.flatten(value, is_leaf=lambda x: id(x) != id(value))
+
     schema_keys = [str(entry) for entry in spec_schema.entries()]
-    emitted = [emit_json_schema(child) is not None for child in flat_schemas]
-    expected_keys = [k for k, e in zip(schema_keys, emitted, strict=True) if e]
+    is_emitted: list[bool] = [emit_json_schema(child) is not None for child in flat_schemas]
+    expected_keys = [k for k, e in zip(schema_keys, is_emitted, strict=True) if e]
     value_keys = [str(entry) for entry in spec_value.entries()]
 
     if len(expected_keys) != len(value_keys) or set(expected_keys) != set(value_keys):
         raise ValueError(f"Key mismatch: expected entries {expected_keys!r}, got {value_keys!r}")
 
     out_pos = {k: i for i, k in enumerate(value_keys)}
-    values = (
-        parse_json(child, flat_values[out_pos[key]] if emit else None)
-        for key, child, emit in zip(schema_keys, flat_schemas, emitted, strict=True)
+
+    return spec_schema.unflatten(
+        parse_json_value(child, flat_values[out_pos[key]] if emit else None)
+        for key, child, emit in zip(schema_keys, flat_schemas, is_emitted, strict=True)
     )
-    return spec_schema.unflatten(values)
 
 
-def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
+def impl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
     json_schema = emit_json_schema(schema)
     if json_schema is None:
-        return parse_json(schema, None)
+        return parse_json_value(schema, None)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = active_client.get().completion(
         messages=messages,
@@ -593,14 +652,14 @@ def impl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
             ),
         ),
     )
-    return parse_json(schema, json.loads(resp.choices[0].message.content))
+    return parse_json_value(schema, json.loads(resp.choices[0].message.content))
 
 
-async def aimpl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
+async def aimpl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     contents, model = in_tree
     json_schema = emit_json_schema(schema)
     if json_schema is None:
-        return parse_json(schema, None)
+        return parse_json_value(schema, None)
     messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
     resp = await active_client.get().acompletion(
         messages=messages,
@@ -614,7 +673,7 @@ async def aimpl_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -
             ),
         ),
     )
-    return parse_json(schema, json.loads(resp.choices[0].message.content))
+    return parse_json_value(schema, json.loads(resp.choices[0].message.content))
 
 
 def string_schema_abstract(_: schemas.Str) -> core.StrAVal:
@@ -661,14 +720,14 @@ def schema_abstract_tree(schema: Any) -> Tree:
     return utils.tree.map(abstract, schema, is_leaf=lambda x: type(x) in schema_abstract_rules)
 
 
-def abstract_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
+def abstract_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     contents, model = in_tree
     assert all(type(x) in (str, core.StrAVal) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, core.StrAVal), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
 
 
-def pushforward_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+def pushforward_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     import autoform.ad as ad
 
     primals, tangents = in_tree
@@ -676,34 +735,34 @@ def pushforward_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
     t_tree = (ad.materialize(tangent_contents), primal_model)
-    p_resp = lm_schema_call_p.bind(p_tree, roles=roles, schema=schema)
-    t_resp = lm_schema_call_p.bind(t_tree, roles=roles, schema=schema)
+    p_resp = generate_p.bind(p_tree, roles=roles, schema=schema)
+    t_resp = generate_p.bind(t_tree, roles=roles, schema=schema)
     return p_resp, t_resp
 
 
-async def apush_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+async def apush_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     import autoform.ad as ad
 
     primals, tangents = in_tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
-    abind = ft.partial(lm_schema_call_p.abind, roles=roles, schema=schema)
+    abind = ft.partial(generate_p.abind, roles=roles, schema=schema)
     p_tree = (primal_contents, primal_model)
     t_tree = (ad.materialize(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+def pullback_fwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     contents, model = in_tree
-    out = lm_schema_call_p.bind(in_tree, roles=roles, schema=schema)
+    out = generate_p.bind(in_tree, roles=roles, schema=schema)
     residuals = (contents, model, out)
     return out, residuals
 
 
-async def apull_fwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+async def apull_fwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     contents, model = in_tree
-    out = await lm_schema_call_p.abind(in_tree, roles=roles, schema=schema)
+    out = await generate_p.abind(in_tree, roles=roles, schema=schema)
     residuals = (contents, model, out)
     return out, residuals
 
@@ -730,7 +789,7 @@ def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
     return "\n".join(lines).expandtabs(2)
 
 
-def pullback_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
+def pullback_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     import autoform.ad as ad
 
     residuals, out_cotangent = in_tree
@@ -739,12 +798,12 @@ def pullback_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) 
     grads = []
     for content in contents:
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
-        grad_out = lm_call_p.bind(([grad_prompt], model), roles=["user"])
+        grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
     return grads, ad.cotangent_zeroof(model)
 
 
-async def apull_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
+async def apull_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     import autoform.ad as ad
 
     residuals, out_cotangent = in_tree
@@ -753,52 +812,52 @@ async def apull_bwd_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: An
 
     async def grad(c):
         prompt = SCHEMA_GRAD_PROMPT.format(content=c, feedback=feedback)
-        grad_out = lm_call_p.abind(([prompt], model), roles=["user"])
+        grad_out = complete_p.abind(([prompt], model), roles=["user"])
         return await grad_out
 
     return (await asyncio.gather(*[grad(c) for c in contents]), ad.cotangent_zeroof(model))
 
 
-def batch_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+def batch_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
-        result = lm_schema_call_p.bind(in_values, roles=roles, schema=schema)
+        result = generate_p.bind(in_values, roles=roles, schema=schema)
         out_batched = utils.tree.map(lambda _: False, result)
         return result, out_batched
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    bind = ft.partial(lm_schema_call_p.bind, roles=roles, schema=schema)
+    bind = ft.partial(generate_p.bind, roles=roles, schema=schema)
     results = [bind(unbatch(b)) for b in range(batch_size)]
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, results)
     return out_ib, out_batched
 
 
-async def abatch_lm_schema_call(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> TreePair:
+async def abatch_generate(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
-        result = await lm_schema_call_p.abind(in_values, roles=roles, schema=schema)
+        result = await generate_p.abind(in_values, roles=roles, schema=schema)
         out_batched = utils.tree.map(lambda _: False, result)
         return result, out_batched
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    abind = ft.partial(lm_schema_call_p.abind, roles=roles, schema=schema)
+    abind = ft.partial(generate_p.abind, roles=roles, schema=schema)
     results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, list(results))
     return out_ib, out_batched
 
 
-core.impl_rules.set(lm_schema_call_p, impl_lm_schema_call)
-core.impl_rules.aset(lm_schema_call_p, aimpl_lm_schema_call)
-core.abstract_rules.set(lm_schema_call_p, abstract_lm_schema_call)
-core.push_rules.set(lm_schema_call_p, pushforward_lm_schema_call)
-core.push_rules.aset(lm_schema_call_p, apush_lm_schema_call)
-core.pull_fwd_rules.set(lm_schema_call_p, pullback_fwd_lm_schema_call)
-core.pull_fwd_rules.aset(lm_schema_call_p, apull_fwd_lm_schema_call)
-core.pull_bwd_rules.set(lm_schema_call_p, pullback_bwd_lm_schema_call)
-core.pull_bwd_rules.aset(lm_schema_call_p, apull_bwd_lm_schema_call)
-core.batch_rules.set(lm_schema_call_p, batch_lm_schema_call)
-core.batch_rules.aset(lm_schema_call_p, abatch_lm_schema_call)
+core.impl_rules.set(generate_p, impl_generate)
+core.impl_rules.aset(generate_p, aimpl_generate)
+core.abstract_rules.set(generate_p, abstract_generate)
+core.push_rules.set(generate_p, pushforward_generate)
+core.push_rules.aset(generate_p, apush_generate)
+core.pull_fwd_rules.set(generate_p, pullback_fwd_generate)
+core.pull_fwd_rules.aset(generate_p, apull_fwd_generate)
+core.pull_bwd_rules.set(generate_p, pullback_bwd_generate)
+core.pull_bwd_rules.aset(generate_p, apull_bwd_generate)
+core.batch_rules.set(generate_p, batch_generate)
+core.batch_rules.aset(generate_p, abatch_generate)

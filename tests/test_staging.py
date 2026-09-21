@@ -165,7 +165,7 @@ class TestFold:
         assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "concat"]
         assert ir.call("c") == "[ab]c!"
 
-    def test_fold_block_evaluates_lm_call_during_trace(self):
+    def test_fold_block_evaluates_complete_during_trace(self):
         class Response:
             def __init__(self):
                 self.choices = [SimpleNamespace(message=SimpleNamespace(content="rubric"))]
@@ -184,7 +184,7 @@ class TestFold:
 
         def program(question):
             with af.fold():
-                rubric = af.lm.call(
+                rubric = af.lm.complete(
                     [{"role": "user", "content": "make a rubric"}],
                     model="test-model",
                 )
