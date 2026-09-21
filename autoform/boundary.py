@@ -435,7 +435,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         >>> @af.custom
         ... def summarize(text, model):
         ...     message = "Summarize this in one sentence: " + text
-        ...     return af.lm.call([{"role": "user", "content": message}], model=model)
+        ...     return af.lm.complete([{"role": "user", "content": message}], model=model)
 
         The custom pushforward rule can ask the model how the output should
         change under an input edit.
@@ -451,7 +451,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...         + "\\n\\nInput edit:\\n" + materialize(text_tangent)
         ...         + "\\n\\nDescribe how the summary should change."
         ...     )
-        ...     t_out = af.lm.call([{"role": "user", "content": prompt}], model=model)
+        ...     t_out = af.lm.complete([{"role": "user", "content": prompt}], model=model)
         ...     return p_out, t_out
 
         The custom pullback rule can replace the default backward LM prompt with
@@ -468,7 +468,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...         + "\\n\\nDownstream feedback:\\n" + materialize(cotangent)
         ...         + "\\n\\nReturn feedback for improving the original input."
         ...     )
-        ...     text_cotangent = af.lm.call([{"role": "user", "content": prompt}], model=model)
+        ...     text_cotangent = af.lm.complete([{"role": "user", "content": prompt}], model=model)
         ...     return text_cotangent, ""
 
         >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model")

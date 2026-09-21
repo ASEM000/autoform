@@ -4,59 +4,62 @@
 
 ### Breaking Changes
 
-  - `af.string.format` now lowers to `concat`.
+  - Moved string and LM operations out of the top-level API.
 
-  - Moved string, numeric, and LM operations into their own modules. The
-    top-level API keeps shared types and operations that work across spaces.
-
-    | Before | Now |
+    | v0.3.0 | Now |
     | --- | --- |
     | `af.format`, `af.concat`, `af.match` | `af.string.format`, `af.string.concat`, `af.string.match` |
-    | `af.add`, `af.sub`, and other numeric operations | `af.numeric.add`, `af.numeric.sub`, etc. |
-    | `af.lm_call` | `af.lm.call` |
-    | `af.lm_schema_call` | `af.lm.schema_call` |
+    | `af.lm_call` | `af.lm.complete` |
+    | `af.lm_schema_call` | `af.lm.generate` |
     | `af.lm_client` | `af.lm.client` |
-    | `af.EchoLMClient` | `af.lm.EchoClient` |
     | `af.lm.LMClient` | `af.lm.Client` |
 
-    Examples now use Python operators such
-    as `+` and `==` where supported.
+    The extension primitives `lm_call_p` and `lm_schema_call_p` are now
+    `complete_p` and `generate_p`.
+
+  - Formatting now lowers to `concat`; `format_p` is removed.
+
+  - Renamed modules: `batch` to `axis`, `checkpoint` to `intercept`,
+    `custom` to `boundary`, `dce` to `dead`, `memoize` to `memo`,
+    `scheduling` to `order`, and `prob` to `path`. The corresponding
+    top-level functions remain available.
 
   - Replaced the operator-specific `autoform.extend` helpers `register_add`,
     `register_sub`, `register_mul`, `register_div`, `register_matmul`, and
     `register_eq` with {py:func}`register_dunder <autoform.extend.register_dunder>`.
-    Pass the corresponding {py:class}`Dunder <autoform.extend.Dunder>` member,
-    abstract value type, and rule, for example
-    `register_dunder(Dunder.ADD, ArrayAVal, array_add)`. The separate
-    `core.trace_*_rules` registries are replaced by one internal dunder rule table.
+    For example, use `register_dunder(Dunder.ADD, ArrayAVal, array_add)`.
+    The separate `core.trace_*_rules` registries are replaced by `core.dunder_rules`.
 
-  - Renamed the path-weight transform from `weighted` to {py:func}`weight
-    <autoform.weight>`. The associated extension primitive is now
-    `weight_call_p`, and the internal interpreter is `WeightInterpreter`.
+  - Renamed `af.weighted` to `af.weight` and the extension primitive
+    `weighted_call_p` to `weight_call_p`.
 
-  - Renamed IR internals to remove redundant `IR` prefixes. `IRVar` is now
-    `Var`, `IREqn` is now `Eqn`, `IR.ir_eqns` is now `IR.eqns`, and equation
-    tree fields are now `in_tree` and `out_tree` instead of `in_ir_tree` and
-    `out_ir_tree`. The same shorter names are used throughout local variables
-    and pattern matching examples, so `ir_eqn` is now usually just `eqn`.
+  - Renamed `IRVar` to `Var`, `IREqn` to `Eqn`, and `IR.ir_eqns` to `IR.eqns`.
+    IR and equation fields `in_ir_tree` and `out_ir_tree` are now `in_tree`
+    and `out_tree`.
 
-  - Renamed the abstract-value helper `ir_aval` to `aval_if_var` to make its
-    behavior explicit: it returns the aval for a `Var` and leaves concrete
-    literals unchanged.
+  - Renamed `ir_aval` to `aval_if_var`. It returns the aval for a `Var`
+    and leaves concrete values unchanged.
 
 ### New Features
 
+  - Added `af.numeric` with scalar arithmetic and comparisons, including
+    dispatch through Python operators such as `+`, `*`, and `<`.
+
+  - Added `af.lm.EchoClient` for running examples and debugging without a provider.
+
   - Added {py:func}`fixpoint <autoform.fixpoint>`, a bounded control-flow
-    primitive for iterating ``(State, Theta) -> State`` step functions to
-    structural convergence, with implicit pullback support.
+    primitive for iterating `(State, Theta) -> State` to structural convergence,
+    with implicit pullback support.
 
 ### Fixed
 
-  - Fixed boxed transforms over IRs with static input literals. {py:func}`batch
-    <autoform.batch>`, {py:func}`pushforward <autoform.pushforward>`,
-    {py:func}`pullback <autoform.pullback>`, and fixpoint pullbacks now preserve
-    traced static-input checks at the public call boundary while allowing
-    transform-internal IR walks to seed boxed dynamic values.
+  - Fixed boxed transforms over IRs with static input literals. `batch`,
+    `pushforward`, and `pullback` preserve static-input checks while allowing
+    internal IR walks to use boxed dynamic values.
+
+### Documentation
+
+  - Examples use Python operators such as `+` and `==` where supported.
 
 ## v0.3.0 (May 30, 2026)
 

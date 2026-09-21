@@ -21,7 +21,7 @@ def explain(topic: str) -> str:
     prompt = "Explain " + topic + " in one paragraph."
     msg = dict(role="user", content=prompt)
     # docs-model is resolved by the active router
-    return af.lm.call([msg], model="docs-model")
+    return af.lm.complete([msg], model="docs-model")
 
 
 ir = af.trace(explain)("recursion")

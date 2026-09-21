@@ -247,21 +247,21 @@ class TestConcatPrimitive:
 
 
 class TestLMPrimitive:
-    def test_lm_call_model_is_traced_as_input(self):
+    def test_complete_model_is_traced_as_input(self):
         def program(prompt: str, model: str):
-            return af.lm.call([{"role": "user", "content": prompt}], model=model)
+            return af.lm.complete([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.eqns[0]
 
-        assert eqn.prim.name == "lm_call"
+        assert eqn.prim.name == "complete"
         assert eqn.params == {"roles": ["user"]}
         assert isinstance(eqn.in_tree[0][0], af.core.Var)
         assert isinstance(eqn.in_tree[1], af.core.Var)
 
-    def test_lm_call_only_traces_messages_and_model(self):
+    def test_complete_only_traces_messages_and_model(self):
         def program(prompt: str, model: str):
-            return af.lm.call([{"role": "user", "content": prompt}], model=model)
+            return af.lm.complete([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
         eqn = ir.eqns[0]
@@ -271,7 +271,7 @@ class TestLMPrimitive:
         assert isinstance(eqn.in_tree[0][0], af.core.Var)
         assert isinstance(eqn.in_tree[1], af.core.Var)
 
-    def test_lm_call_leaves_litellm_params_to_active_client(self):
+    def test_complete_leaves_litellm_params_to_active_client(self):
         class ConfiguredRouter:
             def __init__(self):
                 self.litellm_params = {"m1": {"temperature": 0.7, "max_tokens": 128}}
@@ -288,7 +288,7 @@ class TestLMPrimitive:
                 return self.completion(messages=messages, model=model, **kwargs)
 
         def program(prompt: str, model: str):
-            return af.lm.call([{"role": "user", "content": prompt}], model=model)
+            return af.lm.complete([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
 
@@ -297,9 +297,9 @@ class TestLMPrimitive:
 
         assert result == "m1|0.7|128|hello"
 
-    def test_batch_lm_call_supports_variable_models(self):
+    def test_batch_complete_supports_variable_models(self):
         def program(prompt: str, model: str):
-            return af.lm.call([{"role": "user", "content": prompt}], model=model)
+            return af.lm.complete([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
         batched_ir = af.batch(ir, in_axes=(True, True))
@@ -309,9 +309,9 @@ class TestLMPrimitive:
 
         assert result == ["m1|hello", "m2|goodbye"]
 
-    def test_pullback_lm_call_zeroes_model_cotangent(self):
+    def test_pullback_complete_zeroes_model_cotangent(self):
         def program(prompt: str, model: str):
-            return af.lm.call([{"role": "user", "content": prompt}], model=model)
+            return af.lm.complete([{"role": "user", "content": prompt}], model=model)
 
         ir = af.trace(program)("test", "gpt-5.5")
         pb_ir = af.pullback(ir)
@@ -341,13 +341,13 @@ class TestEchoLMClient:
     def test_direct_call(self, entries, expected):
         messages = [dict(role=role, content=content) for role, content in entries]
         with af.lm.client(af.lm.EchoClient()):
-            assert af.lm.call(messages, model="any-model") == expected
+            assert af.lm.complete(messages, model="any-model") == expected
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_traced_and_batched_execution(self):
         def program(text):
             prompt = af.string.format("Hello, {text}!", text=text)
-            return af.lm.call(
+            return af.lm.complete(
                 [
                     dict(role="system", content="Translate to Korean."),
                     dict(role="user", content=prompt),
@@ -372,9 +372,9 @@ class TestEchoLMClient:
         with af.lm.client(EchoRouter()):
             with pytest.raises(ValueError, match="stop"):
                 with af.lm.client(af.lm.EchoClient()):
-                    assert af.lm.call(messages, model="m1") == "<user> hello"
+                    assert af.lm.complete(messages, model="m1") == "<user> hello"
                     raise ValueError("stop")
-            assert af.lm.call(messages, model="m1") == "m1|hello"
+            assert af.lm.complete(messages, model="m1") == "m1|hello"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_custom_renderer_receives_all_messages(self):
@@ -382,7 +382,7 @@ class TestEchoLMClient:
             return " | ".join(message["content"] for message in messages)
 
         def program(text):
-            return af.lm.call(
+            return af.lm.complete(
                 [dict(role="system", content="Translate."), dict(role="user", content=text)],
                 model="echo",
             )
@@ -401,7 +401,7 @@ class TestEchoLMClient:
             return json.dumps({"text": messages[-1]["content"]})
 
         def program(text):
-            return af.lm.schema_call(
+            return af.lm.generate(
                 [dict(role="user", content=text)], model="echo", schema={"text": af.Str()}
             )
 
@@ -413,7 +413,7 @@ class TestEchoLMClient:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_schema_call_rejects_role_prefixed_text(self):
         def program(text):
-            return af.lm.schema_call(
+            return af.lm.generate(
                 [dict(role="user", content=text)], model="echo", schema={"text": af.Str()}
             )
 

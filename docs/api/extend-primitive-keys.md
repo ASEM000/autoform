@@ -14,8 +14,8 @@
 .. autodata:: autoform.extend.le_p
 .. autodata:: autoform.extend.gt_p
 .. autodata:: autoform.extend.ge_p
-.. autodata:: autoform.extend.lm_call_p
-.. autodata:: autoform.extend.lm_schema_call_p
+.. autodata:: autoform.extend.complete_p
+.. autodata:: autoform.extend.generate_p
 .. autodata:: autoform.extend.checkpoint_p
 .. autodata:: autoform.extend.stop_gradient_p
 .. autodata:: autoform.extend.switch_p

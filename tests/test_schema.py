@@ -103,7 +103,7 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
     assert parsed == expected
 
     def program(prompt: str):
-        return af.lm.schema_call(
+        return af.lm.generate(
             [dict(role="user", content=prompt)],
             model="m1",
             schema=answer,
@@ -143,7 +143,7 @@ def test_lm_schema_trace_rejects_untraceable_static_leaf():
     metadata = object()
 
     def program(prompt: str):
-        return af.lm.schema_call(
+        return af.lm.generate(
             [dict(role="user", content=prompt)],
             model="m1",
             schema={"decision": af.Str(), "metadata": metadata},
