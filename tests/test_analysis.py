@@ -19,9 +19,135 @@ from autoform.analysis import (
     eqn_graph,
     ir_liveness,
     is_same_stucture,
+    toposort_levels,
     var_leaves,
     var_producers,
 )
+from tests import prefix_name
+
+
+class TestToposortLevels:
+    def test_empty_ir(self):
+        def program(x):
+            return x
+
+        ir = af.trace(program)("input")
+        levels = toposort_levels(ir)
+
+        assert levels == []
+
+    def test_single_equation(self):
+        def program(x):
+            return af.string.format("{x}", x=x)
+
+        ir = af.trace(program)("input")
+        levels = toposort_levels(ir)
+
+        assert len(levels) == 1
+        assert len(levels[0]) == 1
+
+    def test_independent_equations(self):
+        def program(a, b):
+            x = af.string.format("hello {a}", a=a)
+            y = af.string.format("world {b}", b=b)
+            return x, y
+
+        ir = af.trace(program)("a", "b")
+        levels = toposort_levels(ir)
+
+        assert len(levels) == 1
+        assert len(levels[0]) == 2
+
+    def test_dependent_equations(self):
+        def program(a, b):
+            x = af.string.format("hello {a}", a=a)
+            y = af.string.format("world {b}", b=b)
+            z = af.string.concat(x, y)
+            return z
+
+        ir = af.trace(program)("a", "b")
+        levels = toposort_levels(ir)
+
+        assert len(levels) == 2
+        assert len(levels[0]) == 2
+        assert len(levels[1]) == 1
+
+    def test_chain_of_equations(self):
+        def program(x):
+            a = af.string.format("{x}", x=x)
+            b = af.string.concat(a, "!")
+            c = af.string.concat(b, "?")
+            return c
+
+        ir = af.trace(program)("input")
+        levels = toposort_levels(ir)
+
+        assert len(levels) == 3
+        assert len(levels[0]) == 1
+        assert len(levels[1]) == 1
+        assert len(levels[2]) == 1
+
+
+class TestToposortLevelsWithCheckpoints:
+    def test_checkpoint_equations_can_parallelize(self):
+        def program(a, b):
+            x = af.checkpoint(af.string.format("hello {a}", a=a), key="x")
+            y = af.checkpoint(af.string.format("world {b}", b=b), key="y")
+            return x, y
+
+        ir = af.trace(program)("a", "b")
+        levels = toposort_levels(ir)
+
+        checkpoint_eqns = [e for lvl in levels for e in lvl if e.prim.name == "checkpoint"]
+        assert len(checkpoint_eqns) == 2
+
+        checkpoint_levels = []
+        for i, lvl in enumerate(levels):
+            for e in lvl:
+                if e.prim.name == "checkpoint":
+                    checkpoint_levels.append(i)
+
+        assert checkpoint_levels[0] == checkpoint_levels[1]
+
+    def test_checkpoint_ordering_via_depends(self):
+        def program(a, b):
+            x = af.checkpoint(af.string.format("hello {a}", a=a), key="x")
+            y = af.checkpoint(af.string.format("world {b}", b=b), key="y")
+            return af.depends(y, x)
+
+        ir = af.trace(program)("a", "b")
+        levels = toposort_levels(ir)
+
+        checkpoint_levels = []
+        for i, lvl in enumerate(levels):
+            for e in lvl:
+                if e.prim.name == "checkpoint":
+                    checkpoint_levels.append(i)
+
+        assert checkpoint_levels[0] == checkpoint_levels[1]
+
+        depends_level = None
+        for i, lvl in enumerate(levels):
+            for e in lvl:
+                if e.prim.name == "depends":
+                    depends_level = i
+
+        assert depends_level > checkpoint_levels[0]
+
+    def test_pure_equations_parallelize_around_checkpoints(self):
+        def program(a, b, c):
+            x = af.string.format("{a}", a=a)
+            y = af.checkpoint(af.string.format("{b}", b=b), key="cp")
+            z = af.string.format("{c}", c=c)
+            return x, y, z
+
+        ir = af.trace(program)("a", "b", "c")
+        levels = toposort_levels(ir)
+
+        has_parallel = any(len(lvl) > 1 for lvl in levels)
+
+        assert len(levels) == 2
+        assert has_parallel
 
 
 class TestIrStructure:
@@ -90,10 +216,7 @@ class TestIrVarLeaves:
         assert var_leaves(ir.in_tree) == [head, pair[0], pair[1]]
 
     def test_filters_static_input_literals(self):
-        def program(prefix, name):
-            return af.string.format("{prefix} {name}", prefix=prefix, name=name)
-
-        ir = af.trace(program, static=(True, False))("Hello", "World")
+        ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
 
         assert var_leaves(ir.in_tree) == [ir.in_tree[1]]
 
@@ -254,10 +377,7 @@ class TestIrLiveness:
         assert ir_liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
 
     def test_static_inputs_do_not_become_live_vars(self):
-        def program(prefix, name):
-            return af.string.format("{prefix} {name}", prefix=prefix, name=name)
-
-        ir = af.trace(program, static=(True, False))("Hello", "World")
+        ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
         out_var = ir.out_tree
 
         assert ir_liveness(ir) == [{ir.in_tree[1]}, {out_var}]

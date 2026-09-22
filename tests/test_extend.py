@@ -53,16 +53,6 @@ def test_register_trace_type():
     assert ir.in_tree[0].aval == BoxAVal()
 
 
-def test_scalar_aval_reexports():
-    assert afe.StrAVal is af.core.StrAVal
-    assert afe.IntAVal is af.core.IntAVal
-    assert afe.FloatAVal is af.core.FloatAVal
-    assert afe.BoolAVal is af.core.BoolAVal
-    assert afe.Space is af.core.Space
-    assert afe.primal_s is af.core.primal_s
-    assert afe.tangent_zeroof is af.ad.tangent_zeroof
-
-
 def test_register_zero_and_cotangent_accumulator():
     Box, BoxAVal = make_box_domain()
     afe.register_trace_type(Box, lambda value: BoxAVal())
@@ -77,7 +67,6 @@ def test_register_zero_and_cotangent_accumulator():
 
 def test_register_dunder_with_primitive_rules():
     Box, BoxAVal = make_box_domain()
-    box_add_p = afe.Prim("test_box_add")
 
     def box_add(x, y):
         return box_add_p.bind((x, y))
@@ -92,8 +81,9 @@ def test_register_dunder_with_primitive_rules():
 
     afe.register_trace_type(Box, lambda value: BoxAVal())
     afe.register_dunder(afe.Dunder.ADD, BoxAVal, box_add)
-    afe.impl_rules.set(box_add_p, impl_add)
-    afe.abstract_rules.set(box_add_p, abstract_add)
+    box_add_p = af.core.Prim("test_box_add")
+    af.core.impl_rules.set(box_add_p, impl_add)
+    af.core.abstract_rules.set(box_add_p, abstract_add)
 
     ir = af.trace(lambda x, y: x + y)(Box(1), Box(2))
 

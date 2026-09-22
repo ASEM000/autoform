@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
 import autoform as af
+from tests import aexecute, execute, trace_ir
 
 
 def test_numeric_dunders_form_one_scalar_program():
@@ -43,36 +46,100 @@ def test_reverse_numeric_dunders_promote_integer_literals():
     assert ir.call(4.0) == (6.0, -2.0, 8.0, 2.0)
 
 
-def test_arithmetic_composes_under_ad():
-    ir = af.trace(lambda x: x * x + x / 2)(2.0)
-
-    primal, tangent = af.pushforward(ir).call((2.0,), (1.0,))
-    assert primal == 5.0
-    assert tangent == 4.5
-
-    primal, (cotangent,) = af.pullback(ir).call((2.0,), 1.0)
-    assert primal == 5.0
-    assert cotangent == 4.5
-
-
-def test_numeric_batching_composes_unary_and_binary_primitives():
-    ir = af.trace(lambda x, scale: x * x + x * scale)(1.0, 1.0)
-    batched_ir = af.batch(ir, in_axes=(True, False))
-
-    result = batched_ir.call([1.0, 2.0, 3.0], 2.0)
-
-    assert result == [3.0, 8.0, 15.0]
-
-
-def test_comparison_blocks_derivatives():
-    ir = af.trace(lambda x: x >= 0)(1.0)
-
-    primal, tangent = af.pushforward(ir).call((1.0,), (1.0,))
+def test_comparison_blocks_pushforward():
+    ir = af.pushforward(trace_ir(lambda x: x >= 0, 1.0))
+    primal, derivative = ir.call((1.0,), (1.0,))
     assert primal is True
-    assert af.ad.is_zero(tangent)
-    assert tangent.aval == af.core.BoolAVal()
+    assert af.ad.is_zero(derivative)
+    assert derivative.aval == af.core.BoolAVal()
 
-    primal, (cotangent,) = af.pullback(ir).call((1.0,), True)
+
+def test_comparison_blocks_pullback():
+    ir = af.pullback(trace_ir(lambda x: x >= 0, 1.0))
+    primal, (derivative,) = ir.call((1.0,), True)
     assert primal is True
-    assert af.ad.is_zero(cotangent)
-    assert cotangent.aval == af.core.FloatAVal()
+    assert af.ad.is_zero(derivative)
+    assert derivative.aval == af.core.FloatAVal()
+
+
+@pytest.mark.parametrize(
+    "operation, primal, tangent",
+    [
+        pytest.param(af.numeric.add, 3.0, 3.0, id="add"),
+        pytest.param(af.numeric.sub, 1.0, -1.0, id="sub"),
+        pytest.param(af.numeric.mul, 2.0, 5.0, id="mul"),
+        pytest.param(af.numeric.div, 2.0, -3.0, id="div"),
+    ],
+)
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_binary_pushforward(operation, primal, tangent, executor):
+    ir = af.pushforward(trace_ir(operation, 2.0, 1.0))
+    actual = executor(ir, (2.0, 1.0), (1.0, 2.0))
+    assert actual == (primal, tangent)
+
+
+@pytest.mark.parametrize(
+    "operation, primal, cotangents",
+    [
+        pytest.param(af.numeric.add, 3.0, (1.0, 1.0), id="add"),
+        pytest.param(af.numeric.sub, 1.0, (1.0, -1.0), id="sub"),
+        pytest.param(af.numeric.mul, 2.0, (1.0, 2.0), id="mul"),
+        pytest.param(af.numeric.div, 2.0, (1.0, -2.0), id="div"),
+    ],
+)
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_binary_pullback(operation, primal, cotangents, executor):
+    ir = af.pullback(trace_ir(operation, 2.0, 1.0))
+    actual = executor(ir, (2.0, 1.0), 1.0)
+    assert actual == (primal, cotangents)
+
+
+@pytest.mark.parametrize(
+    "operation, expected",
+    [
+        pytest.param(af.numeric.add, 3.0, id="add"),
+        pytest.param(af.numeric.sub, 1.0, id="sub"),
+        pytest.param(af.numeric.mul, 2.0, id="mul"),
+        pytest.param(af.numeric.div, 2.0, id="div"),
+        pytest.param(af.numeric.eq, False, id="eq"),
+        pytest.param(af.numeric.ne, True, id="ne"),
+        pytest.param(af.numeric.lt, False, id="lt"),
+        pytest.param(af.numeric.le, False, id="le"),
+        pytest.param(af.numeric.gt, True, id="gt"),
+        pytest.param(af.numeric.ge, True, id="ge"),
+    ],
+)
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_binary_promotion_and_batching(operation, expected, executor):
+    assert operation(2, 1) == expected
+    ir = af.batch(trace_ir(operation, 2.0, 1.0), in_axes=(True, False))
+    args = ([2.0], 1.0)
+    actual = executor(ir, *args)
+    assert actual == [expected]
+
+
+@pytest.mark.parametrize(
+    "transform, args, expected",
+    [
+        pytest.param(af.pushforward, ((2.0,), (1.0,)), (-2.0, -1.0), id="pushforward"),
+        pytest.param(af.pullback, ((2.0,), 1.0), (-2.0, (-1.0,)), id="pullback"),
+        pytest.param(af.batch, ([1.0, 2.0, 3.0],), [-1.0, -2.0, -3.0], id="batch"),
+    ],
+)
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_negation(transform, args, expected, executor):
+    assert af.numeric.neg(2) == -2.0
+    ir = transform(trace_ir(af.numeric.neg, 2.0))
+    actual = executor(ir, *args)
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "prim, values, expected",
+    [
+        pytest.param(af.numeric.neg_p, 2.0, -2.0, id="unary"),
+        pytest.param(af.numeric.add_p, (2.0, 1.0), 3.0, id="binary"),
+    ],
+)
+def test_batch_rule_without_mapped_inputs(prim, values, expected):
+    assert af.core.batch_rules.get(prim)((3, False, values)) == (expected, False)
