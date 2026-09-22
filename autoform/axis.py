@@ -25,6 +25,8 @@ import autoform.utils as utils
 
 __all__ = ["batch"]
 
+zip = utils.strict_zip
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 
@@ -165,7 +167,7 @@ class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
         spec = utils.tree.structure(b, is_leaf=is_axis_spec)
         v = spec.flatten_up_to(v)
         b = utils.tree.leaves(b, is_leaf=is_axis_spec)
-        return spec.unflatten(BatchBox(self, v, b) for v, b in zip(v, b, strict=True))
+        return spec.unflatten(BatchBox(self, v, b) for v, b in zip(v, b))
 
     def unbox(self, v: Tree, /) -> TreePair:
         def value(v):

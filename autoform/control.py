@@ -27,6 +27,8 @@ import autoform.utils as utils
 
 __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
 
+zip = utils.strict_zip
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Branches = dict[Hashable, core.IR]
@@ -598,7 +600,7 @@ def batch_while_loop(
         cond_at = ft.partial(utils.batch_index, conds_result, out_batched_cond)
         conds = [cond_at(b) for b in range(n_alive)]
         # NOTE(asem): mark items as dead if cond returned False
-        for idx, c in zip(alive_idx, conds, strict=True):
+        for idx, c in zip(alive_idx, conds):
             alive[idx] = c
         # NOTE(asem): run body ONLY on still-alive items
         still_alive = [i for i in alive_idx if alive[i]]
@@ -659,7 +661,7 @@ async def abatch_while_loop(
         cond_at = ft.partial(utils.batch_index, conds_result, out_batched_cond)
         conds = [cond_at(b) for b in range(n_alive)]
 
-        for idx, c in zip(alive_idx, conds, strict=True):
+        for idx, c in zip(alive_idx, conds):
             alive[idx] = c
 
         if still_alive := [i for i in alive_idx if alive[i]]:
@@ -1035,15 +1037,13 @@ def batch_fixpoint(
 
         new_states = [out_at(i) for i in range(n_alive)]
         if equiv_ir is None:
-            flags = [
-                utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)
-            ]
+            flags = [utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states)]
         else:
-            pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)]
+            pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states)]
             equiv_in = utils.batch_transpose(n_alive, equiv_axes, pairs)
             flags = batched_equiv.call(*equiv_in)
 
-        for flag, batch_idx, new_state in zip(flags, alive_idx, new_states, strict=True):
+        for flag, batch_idx, new_state in zip(flags, alive_idx, new_states):
             if flag:
                 alive[batch_idx] = False
             states[batch_idx] = new_state
@@ -1102,15 +1102,13 @@ async def abatch_fixpoint(
 
         new_states = [out_at(i) for i in range(n_alive)]
         if equiv_ir is None:
-            flags = [
-                utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)
-            ]
+            flags = [utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states)]
         else:
-            pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states, strict=True)]
+            pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states)]
             equiv_in = utils.batch_transpose(n_alive, equiv_axes, pairs)
             flags = await batched_equiv.acall(*equiv_in)
 
-        for flag, batch_idx, new_state in zip(flags, alive_idx, new_states, strict=True):
+        for flag, batch_idx, new_state in zip(flags, alive_idx, new_states):
             if flag:
                 alive[batch_idx] = False
             states[batch_idx] = new_state

@@ -44,6 +44,8 @@ __all__ = [
 ]
 
 
+zip = utils.strict_zip
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Messages = list[dict[str, str]]
@@ -217,14 +219,14 @@ Provide specific, actionable feedback on how to improve the INPUT to address the
 
 def impl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     response = active_client.get().completion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
 async def aimpl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
     contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     response = await active_client.get().acompletion(messages=messages, model=model)
     return response.choices[0].message.content
 
@@ -504,7 +506,7 @@ def emit_json_schema(schema: Any) -> JsonSchema | None:
 
     children, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
     properties = OrderedDict()
-    for entry, child in zip(spec.entries(), children, strict=True):
+    for entry, child in zip(spec.entries(), children):
         property_name = str(entry)
         if (child_schema := emit_json_schema(child)) is not None:
             if property_name in properties:
@@ -620,7 +622,7 @@ def parse_json_value(schema: Any, value: Any) -> Any:
 
     schema_keys = [str(entry) for entry in spec_schema.entries()]
     is_emitted: list[bool] = [emit_json_schema(child) is not None for child in flat_schemas]
-    expected_keys = [k for k, e in zip(schema_keys, is_emitted, strict=True) if e]
+    expected_keys = [k for k, e in zip(schema_keys, is_emitted) if e]
     value_keys = [str(entry) for entry in spec_value.entries()]
 
     if len(expected_keys) != len(value_keys) or set(expected_keys) != set(value_keys):
@@ -630,7 +632,7 @@ def parse_json_value(schema: Any, value: Any) -> Any:
 
     return spec_schema.unflatten(
         parse_json_value(child, flat_values[out_pos[key]] if emit else None)
-        for key, child, emit in zip(schema_keys, flat_schemas, is_emitted, strict=True)
+        for key, child, emit in zip(schema_keys, flat_schemas, is_emitted)
     )
 
 
@@ -639,7 +641,7 @@ def impl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     json_schema = emit_json_schema(schema)
     if json_schema is None:
         return parse_json_value(schema, None)
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = active_client.get().completion(
         messages=messages,
         model=model,
@@ -660,7 +662,7 @@ async def aimpl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     json_schema = emit_json_schema(schema)
     if json_schema is None:
         return parse_json_value(schema, None)
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents, strict=True)]
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await active_client.get().acompletion(
         messages=messages,
         model=model,
@@ -781,7 +783,7 @@ def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
     cotangents = out_spec.flatten_up_to(cotangent)
     lines = ["Fields:"]
 
-    for accessor, value, feedback in zip(out_spec.accessors(), out_leaves, cotangents, strict=True):
+    for accessor, value, feedback in zip(out_spec.accessors(), out_leaves, cotangents):
         feedback = validate_schema_feedback(accessor.codify("$"), feedback)
         lines.append(accessor.codify("$"))
         lines.append(f"\tvalue: {value!r}")
