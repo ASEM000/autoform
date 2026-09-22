@@ -221,7 +221,10 @@ dead.dce_rules[fanout_p] = dce_fanout
 
 @ft.partial(utils.lru_cache, maxsize=256)
 def sched[*A, R](
-    ir: core.IR[*A, R], /, *, cond: Callable[[core.Eqn], bool] | None = None
+    ir: core.IR[*A, R],
+    /,
+    *,
+    cond: Callable[[core.Eqn], bool] | None = None,
 ) -> core.IR[*A, R]:
     """Schedule independent operations for parallel execution.
 
@@ -262,10 +265,15 @@ def sched[*A, R](
         return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
 
     def make_fanout(eqns: list[core.Eqn]) -> core.Eqn:
-        irs = [core.IR([eqn], (eqn.in_tree,), eqn.out_tree) for eqn in eqns]
-        in_tree = [(eqn.in_tree,) for eqn in eqns]
-        out_tree = [eqn.out_tree for eqn in eqns]
-        return core.Eqn(fanout_p, in_tree, out_tree, dict(irs=irs))
+        # NOTE(asem): the created IR input must have non-repeated vars to avoid multiple
+        # cotangent contribution, for example taking the pullback of
+        # >>> func = lambda x: (x * x, x + 1)
+        # simply copying the vars of multiply eqn then (e.g. [v0, v0]) incorrectly returns
+        # (2 * x, 2 * x) that will get summed upstream.
+        in_trees = [(tuple(dict.fromkeys(analysis.var_leaves(eqn.in_tree))),) for eqn in eqns]
+        irs = [core.IR([eqn], inputs, eqn.out_tree) for eqn, inputs in zip(eqns, in_trees)]
+        out_trees = [eqn.out_tree for eqn in eqns]
+        return core.Eqn(fanout_p, in_trees, out_trees, dict(irs=irs))
 
     for level in levels:
         eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
