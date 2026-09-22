@@ -897,6 +897,19 @@ class TestInternalFanoutViaSched:
 
 
 class TestFanoutWithTransforms:
+    @pytest.mark.asyncio(loop_scope="function")
+    @pytest.mark.parametrize("c_out", [(1.0, 0.0), (2.0, 3.0)])
+    async def test_pullback_repeated_operand(self, c_out):
+        ir = af.trace(lambda x: (x * x, x + 1.0))(3.0)
+        scheduled = af.sched(ir)
+        assert [eqn.prim for eqn in scheduled.eqns] == [fanout_p]
+
+        expected = ((9.0, 4.0), (6.0 * c_out[0] + c_out[1],))
+        assert af.pullback(ir).call((3.0,), c_out) == expected
+        pb_ir = af.pullback(scheduled)
+        assert pb_ir.call((3.0,), c_out) == expected
+        assert await pb_ir.acall((3.0,), c_out) == expected
+
     def test_pushforward(self):
         pf_ir = af.pushforward(scheduled_parallel_formats())
         (p_out, t_out) = pf_ir.call(("primal",), ("tangent",))
