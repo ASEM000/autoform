@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import builtins
 import functools as ft
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
@@ -24,6 +25,13 @@ import optree.pytree
 from optree import PyTreeSpec
 
 __all__ = ["PYTREE_NAMESPACE", "tree", "tree_equal", "batch_index", "batch_spec", "batch_transpose"]
+
+
+def strict_zip(*iterables):
+    return builtins.zip(*iterables, strict=True)
+
+
+zip = strict_zip
 
 # ==================================================================================================
 # ASYNC UTILITIES
@@ -72,9 +80,7 @@ def tree_equal(lhs: Tree, rhs: Tree, /) -> bool:
         return False
     lhs_leaves = tree.leaves(lhs)
     rhs_leaves = tree.leaves(rhs)
-    return all(
-        lhs_leaf == rhs_leaf for lhs_leaf, rhs_leaf in zip(lhs_leaves, rhs_leaves, strict=True)
-    )
+    return all(lhs_leaf == rhs_leaf for lhs_leaf, rhs_leaf in zip(lhs_leaves, rhs_leaves))
 
 
 # ==================================================================================================
@@ -123,7 +129,7 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     flat_in_batched = tree.leaves(in_batched)
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
-    zipped = zip(flat_in_tree, flat_in_batched, strict=True)
+    zipped = zip(flat_in_tree, flat_in_batched)
     leaves_i = (index(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
@@ -162,7 +168,7 @@ def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
     batched_leaves = tree.leaves(in_batched, is_leaf=is_axis_spec)
     tree_leaves = spec.flatten_up_to(in_tree)
     specs = []
-    for v, b in zip(tree_leaves, batched_leaves, strict=True):
+    for v, b in zip(tree_leaves, batched_leaves):
         b and specs.append(tree.structure(v, is_leaf=lambda x: x is not v))
     if not specs:
         return None

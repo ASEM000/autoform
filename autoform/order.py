@@ -29,6 +29,8 @@ import autoform.utils as utils
 
 __all__ = ["depends", "sched", "serial_fanout"]
 
+zip = utils.strict_zip
+
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type IRList = list[core.IR]
@@ -67,7 +69,7 @@ fanout_p = core.Prim("fanout")
 
 def impl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
     assert len(in_tree) == len(irs)
-    return [ir.call(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
+    return [ir.call(*inp) for ir, inp in zip(irs, in_tree)]
 
 
 async def aimpl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
@@ -76,8 +78,8 @@ async def aimpl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
         [ir], [inp] = irs, in_tree
         return [await ir.acall(*inp)]
     if serial_fanout_flag.get():
-        return [await ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)]
-    return await asyncio.gather(*[ir.acall(*inp) for ir, inp in zip(irs, in_tree, strict=True)])
+        return [await ir.acall(*inp) for ir, inp in zip(irs, in_tree)]
+    return await asyncio.gather(*[ir.acall(*inp) for ir, inp in zip(irs, in_tree)])
 
 
 def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
@@ -89,7 +91,7 @@ def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
-    pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
+    pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
     results = fanout_p.bind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
@@ -100,7 +102,7 @@ async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
-    pf_inputs = [(p, t) for p, t in zip(primals, tangents, strict=True)]
+    pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
     results = await fanout_p.abind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
@@ -124,7 +126,7 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
-    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
+    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent)]
     results = fanout_p.bind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
@@ -135,7 +137,7 @@ async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
-    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent, strict=True)]
+    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent)]
     results = await fanout_p.abind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
@@ -148,7 +150,7 @@ def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOut
     results: list[Tree] = []
     out_batched: list[Tree[bool]] = []
 
-    for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
+    for ir, inp, inp_batched in zip(irs, inputs, in_batched):
         if utils.batch_spec(inp, inp_batched) is None:
             results.append(ir.call(*inp))
             out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
@@ -168,7 +170,7 @@ async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFa
     results: list[Tree] = []
     out_batched: list[Tree[bool]] = []
 
-    for ir, inp, inp_batched in zip(irs, inputs, in_batched, strict=True):
+    for ir, inp, inp_batched in zip(irs, inputs, in_batched):
         if utils.batch_spec(inp, inp_batched) is None:
             results.append(await ir.acall(*inp))
             out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
