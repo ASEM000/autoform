@@ -16,7 +16,7 @@ import pytest
 
 import autoform as af
 from autoform.intercept import checkpoint
-from tests import aexecute, append_bang, execute, trace_ir
+from tests import aexecute, append_bang, execute
 
 
 def checkpoint_chain(marks):
@@ -45,7 +45,7 @@ def expensive_checkpoint(x):
 def test_checkpoint_identity_and_collection(key, collection):
     program = checkpoint_chain([(key, collection)])
     assert program("hello") == "hello"
-    ir = trace_ir(program, "test")
+    ir = af.trace(program)("test")
     with af.collect(collection=collection) as collected:
         assert ir.call("hello") == "hello"
     assert collected == {key: ["hello"]}
@@ -74,7 +74,7 @@ def test_checkpoint_identity_and_collection(key, collection):
     ],
 )
 def test_collect_transforms(executor, transform, args, expected, captured):
-    ir = transform(trace_ir(checkpoint_chain([("val", "debug")]), "test"))
+    ir = transform(af.trace(checkpoint_chain([("val", "debug")]))("test"))
     with af.collect(collection="debug") as collected:
         actual = executor(ir, *args)
         assert actual == expected
@@ -106,14 +106,14 @@ def test_collect_transforms(executor, transform, args, expected, captured):
     ],
 )
 def test_collect_filter(marks, collection, expected):
-    ir = trace_ir(checkpoint_chain(marks), "test")
+    ir = af.trace(checkpoint_chain(marks))("test")
     with af.collect(collection=collection) as collected:
         assert ir.call("hello") == "hello"
     assert collected == expected
 
 
 def test_collect_without_checkpoints():
-    ir = trace_ir(append_bang, "test")
+    ir = af.trace(append_bang)("test")
     with af.collect(collection="debug") as collected:
         assert ir.call("hello") == "hello!"
     assert collected == {}
@@ -147,14 +147,14 @@ def test_collect_computed_values(prefix, suffix, keys, arg, expected, captured):
         a = checkpoint(af.string.concat(prefix, x), key=keys[0], collection="debug")
         return checkpoint(af.string.concat(a, suffix), key=keys[1], collection="debug")
 
-    ir = trace_ir(program, "test")
+    ir = af.trace(program)("test")
     with af.collect(collection="debug") as collected:
         assert ir.call(arg) == expected
     assert collected == captured
 
 
 def test_nested_collectors():
-    ir = trace_ir(checkpoint_chain([("debug", "debug"), ("cache", "cache")]), "test")
+    ir = af.trace(checkpoint_chain([("debug", "debug"), ("cache", "cache")]))("test")
     with af.collect(collection="debug") as debug, af.collect(collection="cache") as cache:
         assert ir.call("hello") == "hello"
     assert debug == {"debug": ["hello"]}
@@ -163,13 +163,12 @@ def test_nested_collectors():
 
 def test_collect_switch_branch():
     branches = {
-        key: trace_ir(
+        key: af.trace(
             lambda x: checkpoint(af.string.concat(key + ": ", x), key="result", collection="debug"),
-            "x",
-        )
+        )("x")
         for key in ("a", "b")
     }
-    ir = trace_ir(lambda x: af.switch("a", branches, x), "input")
+    ir = af.trace(lambda x: af.switch("a", branches, x))("input")
     with af.collect(collection="debug") as collected:
         assert ir.call("hello") == "a: hello"
     assert collected == {"result": ["a: hello"]}
@@ -177,10 +176,9 @@ def test_collect_switch_branch():
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_inject_replaces_value_and_restores_context(executor):
-    ir = trace_ir(
+    ir = af.trace(
         lambda x: checkpoint(af.string.concat("Hello, ", x), key="greeting", collection="cache"),
-        "test",
-    )
+    )("test")
     with af.inject(collection="cache", values={"greeting": ["CACHED"]}):
         actual = executor(ir, "World")
         assert actual == "CACHED"
@@ -192,7 +190,7 @@ def test_inject_partial():
         a = checkpoint(x, key="first", collection="cache")
         return checkpoint(af.string.concat(a, "!"), key="second", collection="cache")
 
-    ir = trace_ir(program, "test")
+    ir = af.trace(program)("test")
     with af.inject(collection="cache", values={"first": ["INJECTED"]}):
         assert ir.call("ignored") == "INJECTED!"
 
@@ -218,20 +216,20 @@ def test_inject_partial():
     ],
 )
 def test_inject_filter(marks, values, arg, expected):
-    ir = trace_ir(checkpoint_chain(marks), "test")
+    ir = af.trace(checkpoint_chain(marks))("test")
     with af.inject(collection="cache", values=values):
         assert ir.call(arg) == expected
 
 
 def test_inject_trace_specializes_and_dce_removes_dead_input():
-    ir = trace_ir(expensive_checkpoint, "test")
+    ir = af.trace(expensive_checkpoint)("test")
     assert len(ir.eqns) == 3
 
     def wrapped(x):
         with af.inject(collection="cache", values={"result": ["CACHED"]}):
             return ir.call("ignored")
 
-    specialized = trace_ir(wrapped, "example")
+    specialized = af.trace(wrapped)("example")
     assert [eqn.prim for eqn in specialized.eqns] == [af.string.concat_p] * 2
     optimized = af.dce(specialized)
     assert len(optimized.eqns) == 1
@@ -244,18 +242,18 @@ def test_inject_dce_preserves_remaining_checkpoint():
         second = checkpoint(af.string.concat("step2:", first), key="second", collection="cache")
         return af.string.concat("final:", second)
 
-    ir = trace_ir(program, "test")
+    ir = af.trace(program)("test")
     assert len(ir.eqns) == 5
 
     def wrapped(x):
         with af.inject(collection="cache", values={"first": ["CACHED1"]}):
             return ir.call(x)
 
-    optimized = af.dce(trace_ir(wrapped, "example"))
+    optimized = af.dce(af.trace(wrapped)("example"))
     assert optimized.call("input") == "final:step2:CACHED1"
 
 
 def test_inject_batch_encounter_order():
-    ir = af.batch(trace_ir(expensive_checkpoint, "test"))
+    ir = af.batch(af.trace(expensive_checkpoint)("test"))
     with af.inject(collection="cache", values={"result": ["A", "B"]}):
         assert ir.call(["x", "y"]) == ["Got: A", "Got: B"]

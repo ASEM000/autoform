@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from tests import aexecute, execute, trace_ir
+from tests import aexecute, execute
 
 
 def test_numeric_dunders_form_one_scalar_program():
@@ -47,7 +47,7 @@ def test_reverse_numeric_dunders_promote_integer_literals():
 
 
 def test_comparison_blocks_pushforward():
-    ir = af.pushforward(trace_ir(lambda x: x >= 0, 1.0))
+    ir = af.pushforward(af.trace(lambda x: x >= 0)(1.0))
     primal, derivative = ir.call((1.0,), (1.0,))
     assert primal is True
     assert af.ad.is_zero(derivative)
@@ -55,7 +55,7 @@ def test_comparison_blocks_pushforward():
 
 
 def test_comparison_blocks_pullback():
-    ir = af.pullback(trace_ir(lambda x: x >= 0, 1.0))
+    ir = af.pullback(af.trace(lambda x: x >= 0)(1.0))
     primal, (derivative,) = ir.call((1.0,), True)
     assert primal is True
     assert af.ad.is_zero(derivative)
@@ -73,7 +73,7 @@ def test_comparison_blocks_pullback():
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_binary_pushforward(operation, primal, tangent, executor):
-    ir = af.pushforward(trace_ir(operation, 2.0, 1.0))
+    ir = af.pushforward(af.trace(operation)(2.0, 1.0))
     actual = executor(ir, (2.0, 1.0), (1.0, 2.0))
     assert actual == (primal, tangent)
 
@@ -89,7 +89,7 @@ def test_binary_pushforward(operation, primal, tangent, executor):
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_binary_pullback(operation, primal, cotangents, executor):
-    ir = af.pullback(trace_ir(operation, 2.0, 1.0))
+    ir = af.pullback(af.trace(operation)(2.0, 1.0))
     actual = executor(ir, (2.0, 1.0), 1.0)
     assert actual == (primal, cotangents)
 
@@ -112,7 +112,7 @@ def test_binary_pullback(operation, primal, cotangents, executor):
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_binary_promotion_and_batching(operation, expected, executor):
     assert operation(2, 1) == expected
-    ir = af.batch(trace_ir(operation, 2.0, 1.0), in_axes=(True, False))
+    ir = af.batch(af.trace(operation)(2.0, 1.0), in_axes=(True, False))
     args = ([2.0], 1.0)
     actual = executor(ir, *args)
     assert actual == [expected]
@@ -129,7 +129,7 @@ def test_binary_promotion_and_batching(operation, expected, executor):
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_negation(transform, args, expected, executor):
     assert af.numeric.neg(2) == -2.0
-    ir = transform(trace_ir(af.numeric.neg, 2.0))
+    ir = transform(af.trace(af.numeric.neg)(2.0))
     actual = executor(ir, *args)
     assert actual == expected
 

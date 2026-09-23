@@ -17,13 +17,13 @@ import pytest
 import autoform as af
 from autoform.core import using_interpreter
 from autoform.intercept import checkpoint, checkpoint_p
-from tests import CountingInterpreter, aexecute, append_bang, execute, trace_ir
+from tests import CountingInterpreter, aexecute, append_bang, execute
 
 
 @pytest.fixture
 def checkpoint_switch():
-    branch = trace_ir(lambda x: checkpoint(x, key="save", collection="cache"), "x")
-    return trace_ir(lambda x: af.switch("a", {"a": branch}, x), "x")
+    branch = af.trace(lambda x: checkpoint(x, key="save", collection="cache"))("x")
+    return af.trace(lambda x: af.switch("a", {"a": branch}, x))("x")
 
 
 def distinct_checkpoints(x):
@@ -41,7 +41,7 @@ def test_memoize_duplicate_primitives(executor):
         b = af.string.concat(x, "!")
         return af.string.concat(a, b)
 
-    ir = trace_ir(program, "test")
+    ir = af.trace(program)("test")
     with using_interpreter(counter), af.memoize():
         actual = executor(ir, "hello")
         assert actual == "hello!hello!"
@@ -50,7 +50,7 @@ def test_memoize_duplicate_primitives(executor):
 
 def test_memoize_scope():
     counter = CountingInterpreter()
-    ir = trace_ir(append_bang, "test")
+    ir = af.trace(append_bang)("test")
     with using_interpreter(counter):
         for _ in range(2):
             with af.memoize():
@@ -73,14 +73,14 @@ def test_memoize_trace_preserves_nested_checkpoints(checkpoint_switch):
         with af.memoize():
             return checkpoint_switch.call(x), checkpoint_switch.call(x)
 
-    ir = trace_ir(program, "x")
+    ir = af.trace(program)("x")
     with af.collect(collection="cache") as saved:
         assert ir.call("x") == ("x", "x")
     assert saved == {"save": ["x", "x"]}
 
 
 def test_memoize_preserves_distinct_checkpoints():
-    ir = trace_ir(distinct_checkpoints, "test")
+    ir = af.trace(distinct_checkpoints)("test")
     assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is checkpoint_p] == ["first", "second"]
     with af.collect(collection="debug") as saved, af.memoize():
         assert ir.call("hi") == "hihi"
@@ -89,7 +89,7 @@ def test_memoize_preserves_distinct_checkpoints():
 
 def test_memoize_trace_preserves_distinct_checkpoints():
     with af.memoize():
-        ir = trace_ir(distinct_checkpoints, "test")
+        ir = af.trace(distinct_checkpoints)("test")
     assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is checkpoint_p] == ["first", "second"]
     with af.collect(collection="debug") as saved:
         assert ir.call("hi") == "hihi"
@@ -97,7 +97,7 @@ def test_memoize_trace_preserves_distinct_checkpoints():
 
 
 def test_memoize_preserves_repeated_checkpoint():
-    ir = trace_ir(lambda x: checkpoint(x, key="val", collection="debug"), "test")
+    ir = af.trace(lambda x: checkpoint(x, key="val", collection="debug"))("test")
     with af.collect(collection="debug") as saved, af.memoize():
         assert ir.call("hello") == ir.call("hello") == "hello"
     assert saved == {"val": ["hello", "hello"]}
@@ -158,7 +158,7 @@ def test_memoize_preserves_repeated_checkpoint():
 )
 def test_memoize_transformed_ir(transform, first_args, second_args, expected, misses):
     counter = CountingInterpreter()
-    ir = transform(trace_ir(append_bang, "test"))
+    ir = transform(af.trace(append_bang)("test"))
     with using_interpreter(counter), af.memoize():
         results = ir.call(*first_args), ir.call(*second_args)
     assert results == expected

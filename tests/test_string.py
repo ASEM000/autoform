@@ -19,7 +19,7 @@ import pytest
 import autoform as af
 from autoform.core import BoolAVal, StrAVal
 from autoform.string import abstract_match
-from tests import aexecute, execute, trace_ir
+from tests import aexecute, execute
 
 
 def match_yes(x):
@@ -78,7 +78,7 @@ def test_match(left, right, expected):
 @pytest.mark.parametrize("expected", [True, False], ids=["equal", "unequal"])
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_match_lowering(program, traced, equal, unequal, expected, executor):
-    ir = trace_ir(program, *traced)
+    ir = af.trace(program)(*traced)
     assert [eqn.prim for eqn in ir.eqns] == [af.string.match_p]
     args = equal if expected else unequal
     actual = executor(ir, *args)
@@ -109,7 +109,7 @@ def test_match_lowering(program, traced, equal, unequal, expected, executor):
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_concat_lowering(program, traced, args, expected, executor):
-    ir = trace_ir(program, *traced)
+    ir = af.trace(program)(*traced)
     assert [eqn.prim for eqn in ir.eqns] == [af.string.concat_p]
     actual = executor(ir, *args)
     assert actual == expected
@@ -153,7 +153,7 @@ def test_concat_lowering(program, traced, args, expected, executor):
 )
 def test_invalid_traced_operands(program, args, error, message):
     with pytest.raises(error, match=message):
-        trace_ir(program, *args)
+        af.trace(program)(*args)
 
 
 @pytest.mark.parametrize(
@@ -189,7 +189,7 @@ def test_invalid_traced_operands(program, args, error, message):
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_match_transforms(transform, args, expected, executor):
-    ir = transform(trace_ir(match_yes, "dummy"))
+    ir = transform(af.trace(match_yes)("dummy"))
     actual = executor(ir, *args)
     assert actual == expected
 
@@ -202,7 +202,7 @@ def test_match_transforms(transform, args, expected, executor):
     ],
 )
 def test_match_batch_axes(axes, args):
-    ir = af.batch(trace_ir(af.string.match, "a", "b"), in_axes=axes)
+    ir = af.batch(af.trace(af.string.match)("a", "b"), in_axes=axes)
     assert ir.call(*args) == [True, False, True]
 
 
@@ -233,7 +233,7 @@ def test_match_in_larger_program(status, expected):
             text=text,
         )
 
-    assert trace_ir(process, "status", "text").call(status, "hello") == (
+    assert af.trace(process)("status", "text").call(status, "hello") == (
         expected,
         "Status check: hello",
     )
@@ -246,7 +246,7 @@ def test_batch_match_with_format():
             status=status,
         )
 
-    ir = af.batch(trace_ir(process, "status"))
+    ir = af.batch(af.trace(process)("status"))
     assert ir.call(["yes", "no", "yes"]) == (
         [True, False, True],
         ["Input was: yes", "Input was: no", "Input was: yes"],

@@ -17,7 +17,7 @@ import asyncio
 import pytest
 
 import autoform as af
-from tests import aexecute, angle_text, append_bang, bracket_text, execute, trace_ir
+from tests import aexecute, angle_text, append_bang, bracket_text, execute
 
 
 @pytest.mark.parametrize(
@@ -27,7 +27,7 @@ from tests import aexecute, angle_text, append_bang, bracket_text, execute, trac
 )
 def test_int_input_is_not_differentiable(transform):
     with pytest.raises(TypeError):
-        transform(trace_ir(lambda x: x, 1))
+        transform(af.trace(lambda x: x)(1))
 
 
 @pytest.mark.parametrize(
@@ -269,7 +269,7 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_static_input_literal_is_not_boxed(transform, feedback, expected, executor):
-    ir = transform(trace_ir(af.string.concat, "Q", "x", static=(True, False)))
+    ir = transform(af.trace(af.string.concat, static=(True, False))("Q", "x"))
     args = (("Q", "x"), feedback)
     actual = executor(ir, *args)
     assert actual == ("Qx", expected)
@@ -299,7 +299,7 @@ def test_static_input_literal_is_not_boxed(transform, feedback, expected, execut
 )
 @pytest.mark.parametrize("mode", ["sync", "async"])
 def test_batch_rule_without_mapped_inputs(primitive, values, expected, out_axes, mode):
-    ir = trace_ir(append_bang, "x")
+    ir = af.trace(append_bang)("x")
     args = (3, (False, False), values)
     match mode:
         case "sync":
@@ -631,6 +631,6 @@ def test_alternating_pushforward_pullback():
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_composition(program, transform, trace_args, args, expected, executor):
-    ir = transform(trace_ir(program, *trace_args))
+    ir = transform(af.trace(program)(*trace_args))
     result = executor(ir, *args)
     assert result == expected

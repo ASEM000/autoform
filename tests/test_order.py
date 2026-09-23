@@ -25,7 +25,6 @@ from tests import (
     dependent_formats,
     execute,
     switch_program,
-    trace_ir,
 )
 
 
@@ -40,10 +39,10 @@ def parallel_formats(*, joined=False):
 
 def format_switch_ir():
     branches = {
-        "x": trace_ir(parallel_formats(joined=True), "x"),
-        "y": trace_ir(lambda x: af.string.format("({x})", x=x), "x"),
+        "x": af.trace(parallel_formats(joined=True))("x"),
+        "y": af.trace(lambda x: af.string.format("({x})", x=x))("x"),
     }
-    return trace_ir(switch_program(branches), "x", "inp")
+    return af.trace(switch_program(branches))("x", "inp")
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -97,7 +96,7 @@ def format_switch_ir():
     ],
 )
 def test_fanout_transforms(joined, transform, args, expected, executor):
-    scheduled = af.sched(trace_ir(parallel_formats(joined=joined), "a"))
+    scheduled = af.sched(af.trace(parallel_formats(joined=joined))("a"))
     assert [e.prim for e in scheduled.eqns] == [fanout_p] + ([af.string.concat_p] if joined else [])
     ir = transform(scheduled)
     actual = executor(ir, *args)
@@ -107,7 +106,7 @@ def test_fanout_transforms(joined, transform, args, expected, executor):
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("c_out", [(1.0, 0.0), (2.0, 3.0)], ids=["one-live", "both-live"])
 def test_fanout_pullback_repeated_operand(c_out, executor):
-    ir = trace_ir(lambda x: (x * x, x + 1.0), 3.0)
+    ir = af.trace(lambda x: (x * x, x + 1.0))(3.0)
     scheduled = af.sched(ir)
     assert [e.prim for e in scheduled.eqns] == [fanout_p]
     expected = ((9.0, 4.0), (6.0 * c_out[0] + c_out[1],))
@@ -126,7 +125,7 @@ def test_fanout_exception(executor):
     af.core.impl_rules.set(error_p, impl_error)
     af.core.abstract_rules.set(error_p, lambda x: af.core.StrAVal())
     af.core.impl_rules.aset(error_p, af.utils.asyncify(impl_error))
-    ir = af.sched(trace_ir(lambda x: (af.string.format("[{x}]", x=x), error_p.bind(x)), "a"))
+    ir = af.sched(af.trace(lambda x: (af.string.format("[{x}]", x=x), error_p.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):
         executor(ir, "A")
 
@@ -139,8 +138,7 @@ def test_fanout_exception(executor):
     ],
 )
 def test_fanout_mixed_axes(executor, values, expected):
-    ir = trace_ir(
-        lambda x, y: (af.string.format("[{x}]", x=x), af.string.format("<{y}>", y=y)),
+    ir = af.trace(lambda x, y: (af.string.format("[{x}]", x=x), af.string.format("<{y}>", y=y)))(
         "x",
         "y",
     )
@@ -151,7 +149,7 @@ def test_fanout_mixed_axes(executor, values, expected):
 
 @pytest.mark.parametrize("mode, count", [("sync", 1), ("sync", 2), ("async", 2)])
 def test_fanout_batch_unbatched(mode, count):
-    irs = [trace_ir(program, "a") for program in (bracket_text, angle_text)][:count]
+    irs = [af.trace(program)("a") for program in (bracket_text, angle_text)][:count]
     args = (3, [False] * count, [("hello",), ("world",)][:count])
     match mode:
         case "sync":
@@ -186,22 +184,22 @@ def test_fanout_batch_unbatched(mode, count):
     ],
 )
 def test_sched_levels(program, prims, expected, executor):
-    ir = af.sched(trace_ir(program, "x"))
+    ir = af.sched(af.trace(program)("x"))
     assert [e.prim for e in ir.eqns] == prims
     actual = executor(ir, "test")
     assert actual == expected
 
 
 def test_sched_filter():
-    ir = trace_ir(lambda x: (af.string.format("[{x}]", x=x), af.string.concat(x, "!")), "x")
+    ir = af.trace(lambda x: (af.string.format("[{x}]", x=x), af.string.concat(x, "!")))("x")
     scheduled = af.sched(ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3)
     assert [e.prim for e in scheduled.eqns] == [af.string.concat_p] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
 def test_sched_filter_propagates_into_switch():
-    inner = trace_ir(lambda x: (af.string.format("[{x}]", x=x), af.string.concat(x, "!")), "x")
-    ir = trace_ir(lambda x: af.switch("a", {"a": inner}, x), "x")
+    inner = af.trace(lambda x: (af.string.format("[{x}]", x=x), af.string.concat(x, "!")))("x")
+    ir = af.trace(lambda x: af.switch("a", {"a": inner}, x))("x")
     scheduled = af.sched(ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3)
     checked = scheduled.eqns[0].params["branches"]["a"]
     assert [e.prim for e in checked.eqns] == [af.string.concat_p] * 2
@@ -214,7 +212,7 @@ def test_sched_parallel_checkpoints():
         y = af.checkpoint(af.string.format("{b}", b=b), key="y")
         return x, y
 
-    ir = af.sched(trace_ir(program, "a", "b"))
+    ir = af.sched(af.trace(program)("a", "b"))
     assert sum(e.prim is fanout_p for e in ir.eqns) == 2
     assert ir.call("hello", "world") == ("hello", "world")
 
@@ -225,7 +223,7 @@ def test_sched_dependent_checkpoints():
         y = af.checkpoint(af.string.format("{b}", b=b), key="y")
         return af.depends(y, x)
 
-    ir = af.sched(trace_ir(program, "a", "b"))
+    ir = af.sched(af.trace(program)("a", "b"))
     assert sum(e.prim is fanout_p for e in ir.eqns) == 2
     assert ir.call("hello", "world") == "world"
 
@@ -237,7 +235,7 @@ def test_sched_mixed_checkpoint():
         z = af.checkpoint(af.string.format("{{{c}}}", c=c), key="z")
         return x, y, z
 
-    ir = af.sched(trace_ir(program, "a", "b", "c"))
+    ir = af.sched(af.trace(program)("a", "b", "c"))
     assert sum(e.prim is fanout_p for e in ir.eqns) == 1
     assert ir.call("a", "b", "c") == ("[a]", "<b>", "{c}")
 
@@ -249,7 +247,7 @@ def test_fanout_collect():
             af.checkpoint(b, key="val", collection="debug"),
         )
 
-    ir = af.sched(trace_ir(program, "a", "b"))
+    ir = af.sched(af.trace(program)("a", "b"))
     with af.collect(collection="debug") as collected:
         assert ir.call("A", "B") == ("A", "B")
     assert set(collected["val"]) == {"A", "B"}
@@ -261,7 +259,7 @@ def test_fanout_inject():
         y = af.checkpoint(af.string.format("<{b}>", b=b), key="val", collection="cache")
         return x, y
 
-    ir = af.sched(trace_ir(program, "a", "b"))
+    ir = af.sched(af.trace(program)("a", "b"))
     with af.inject(collection="cache", values={"val": ["CACHED1", "CACHED2"]}):
         assert ir.call("A", "B") == ("CACHED1", "CACHED2")
 
@@ -270,13 +268,13 @@ def test_nested_fanout_collect():
     def inner(x):
         return af.checkpoint(x, key="inner", collection="debug")
 
-    branches = {key: af.sched(trace_ir(lambda x: (inner(x), inner(x)), "x")) for key in ("a", "b")}
+    branches = {key: af.sched(af.trace(lambda x: (inner(x), inner(x)))("x")) for key in ("a", "b")}
 
     def outer(key, x):
         left, right = af.switch(key, branches, x)
         return af.string.concat(left, right)
 
-    ir = af.sched(trace_ir(outer, "a", "x"))
+    ir = af.sched(af.trace(outer)("a", "x"))
     with af.collect(collection="debug") as collected:
         assert ir.call("a", "A") == "AA"
     assert collected == {"inner": ["A", "A"]}
@@ -296,10 +294,9 @@ def test_sched_switch(executor):
 def test_sched_nested_switch(executor):
     branches = {
         "A": format_switch_ir(),
-        "B": trace_ir(lambda key, inp: af.string.format("{key} {inp}", key=key, inp=inp), "k", "i"),
+        "B": af.trace(lambda key, inp: af.string.format("{key} {inp}", key=key, inp=inp))("k", "i"),
     }
-    ir = trace_ir(
-        lambda key, inner_key, x: af.switch(key, branches, inner_key, x),
+    ir = af.trace(lambda key, inner_key, x: af.switch(key, branches, inner_key, x))(
         "A",
         "x",
         "test",
@@ -318,18 +315,16 @@ def test_sched_nested_switch(executor):
 
 
 def test_sched_nested_fanout():
-    branches1 = {"a": trace_ir(parallel_formats(joined=True), "x")}
+    branches1 = {"a": af.trace(parallel_formats(joined=True))("x")}
     branches2 = {
-        "a": trace_ir(
+        "a": af.trace(
             lambda x: af.string.concat(
                 af.string.format("({x})", x=x),
                 af.string.format("{{{x}}}", x=x),
             ),
-            "x",
-        )
+        )("x")
     }
-    ir = trace_ir(
-        lambda key, a, b: (af.switch(key, branches1, a), af.switch(key, branches2, b)),
+    ir = af.trace(lambda key, a, b: (af.switch(key, branches1, a), af.switch(key, branches2, b)))(
         "a",
         "hello",
         "world",
@@ -418,7 +413,7 @@ def multiple_dependencies(x):
     ],
 )
 def test_depends_transforms(transform, args, expected, executor):
-    ir = trace_ir(dependent_formats, "x")
+    ir = af.trace(dependent_formats)("x")
     [barrier] = [e for e in ir.eqns if e.prim is depends_p]
     assert len(af.utils.tree.leaves(barrier.in_tree)) == 2
     ir = transform(ir)
@@ -477,7 +472,7 @@ def test_depends_transforms(transform, args, expected, executor):
     ],
 )
 def test_depends_shapes(program, transform, args, expected):
-    assert transform(trace_ir(program, "x")).call(*args) == expected
+    assert transform(af.trace(program)("x")).call(*args) == expected
 
 
 def test_sched_data_dependency():
@@ -485,7 +480,7 @@ def test_sched_data_dependency():
         a = af.string.format("A: {x}", x=x)
         return af.string.format("B: {a_barrier}", a_barrier=af.depends(a))
 
-    ir = af.sched(trace_ir(program, "x"))
+    ir = af.sched(af.trace(program)("x"))
     assert sum(e.prim is depends_p for e in ir.eqns) == 1
     assert ir.call("hello") == "B: A: hello"
 
@@ -496,6 +491,6 @@ def test_sched_shared_dependency():
         b = af.string.format("B: {x}", x=x)
         return af.string.concat(a, af.depends(b, a))
 
-    ir = af.sched(trace_ir(program, "x"))
+    ir = af.sched(af.trace(program)("x"))
     assert sum(e.prim is depends_p for e in ir.eqns) == 1
     assert ir.call("hello") == "A: helloB: hello"

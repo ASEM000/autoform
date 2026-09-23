@@ -16,7 +16,7 @@ import pytest
 
 import autoform as af
 from autoform.axis import BatchAVal
-from tests import aexecute, angle_text, append_bang, bracket_text, execute, trace_ir
+from tests import aexecute, angle_text, append_bang, bracket_text, execute
 
 
 def greet(name, greeting):
@@ -223,13 +223,13 @@ def test_nested_batch_two_inputs(program, traced, args, expected):
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_batch_axes(in_axes, args, expected, executor):
-    ir = af.batch(trace_ir(greet, "x0", "Hi"), in_axes=in_axes)
+    ir = af.batch(af.trace(greet)("x0", "Hi"), in_axes=in_axes)
     actual = executor(ir, *args)
     assert actual == expected
 
 
 def test_numeric_program_with_broadcast_input():
-    ir = trace_ir(lambda x, scale: x * x + x * scale, 1.0, 1.0)
+    ir = af.trace(lambda x, scale: x * x + x * scale)(1.0, 1.0)
     assert af.batch(ir, in_axes=(True, False)).call([1.0, 2.0, 3.0], 2.0) == [3.0, 8.0, 15.0]
 
 

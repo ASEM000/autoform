@@ -22,10 +22,6 @@ import autoform as af
 execute = af.core.IR.call
 
 
-def trace_ir(program, *args, **kwargs):
-    return af.trace(program, **kwargs)(*args)
-
-
 def aexecute(ir, *args, **kwargs):
     return asyncio.run(ir.acall(*args, **kwargs))
 

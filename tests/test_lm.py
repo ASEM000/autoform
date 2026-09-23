@@ -22,7 +22,7 @@ import pytest
 import autoform as af
 from autoform.lm import emit_json_schema, parse_json_value
 from autoform.utils import tree
-from tests import aexecute, execute, trace_ir
+from tests import aexecute, execute
 
 
 @pytest.fixture
@@ -644,7 +644,7 @@ def lm_client(request):
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_pushforward(primitive, params, lm_client, expected, executor):
-    ir = af.pushforward(trace_ir(lm_program(primitive, **params), "test", "gpt-5.5"))
+    ir = af.pushforward(af.trace(lm_program(primitive, **params))("test", "gpt-5.5"))
     args = (("hello", "m1"), ("tangent", "ignored model tangent"))
     actual = executor(ir, *args)
     assert actual == expected
