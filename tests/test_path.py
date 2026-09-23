@@ -226,9 +226,7 @@ class TestWeight:
         priors = [0.5, 0.5]
         unnormalized = [prior * path_weight for prior, path_weight in zip(priors, path_weights)]
         total = sum(unnormalized)
-        posterior = {
-            output: weight / total for output, weight in zip(outputs, unnormalized, strict=True)
-        }
+        posterior = {out: weight / total for out, weight in zip(outputs, unnormalized, strict=True)}
 
         assert posterior == pytest.approx({"x1": 0.45 / 0.55, "x2": 0.10 / 0.55})
 

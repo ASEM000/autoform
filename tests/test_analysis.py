@@ -120,7 +120,9 @@ class TestToposortLevelsWithCheckpoints:
         ]
         assert checkpoint_levels[0] == checkpoint_levels[1]
         depends_level = next(
-            index for index, level in enumerate(levels) for eqn in level if eqn.prim is depends_p
+            index
+            for index, level in enumerate(levels)
+            if any(eqn.prim is depends_p for eqn in level)
         )
         assert depends_level > checkpoint_levels[0]
 
