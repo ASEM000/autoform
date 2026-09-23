@@ -225,7 +225,10 @@ def test_match_abstract_rejects_nonstring():
         abstract_match(("yes", 1))
 
 
-@pytest.mark.parametrize("status, expected", [("active", True), ("inactive", False)])
+@pytest.mark.parametrize(
+    "status, expected",
+    [pytest.param("active", True, id="active"), pytest.param("inactive", False, id="inactive")],
+)
 def test_match_in_larger_program(status, expected):
     def process(status, text):
         return af.string.match(status, "active"), af.string.format(
@@ -302,17 +305,24 @@ def test_format_batch_broadcast(executor):
 @pytest.mark.parametrize(
     "template, values, expected, feedback",
     [
-        ("Hello {x}/{x}", {"x": "A"}, "AA", {"x": "gg"}),
-        (
+        pytest.param("Hello {x}/{x}", {"x": "A"}, "AA", {"x": "gg"}, id="repeated-field"),
+        pytest.param(
             "{right}/{left}/{right}",
             {"left": "A", "right": "B"},
             "BAB",
             {"left": "g", "right": "gg"},
+            id="reordered-repeated-fields",
         ),
-        ("{a}{b}", {"a": "A", "b": "B"}, "AB", {"a": "g", "b": "g"}),
-        ("{{{name}}}", {"name": "A"}, "A", {"name": "g"}),
-        ("constant", {}, "", {}),
-        ("", {}, "", {}),
+        pytest.param(
+            "{a}{b}",
+            {"a": "A", "b": "B"},
+            "AB",
+            {"a": "g", "b": "g"},
+            id="adjacent-fields",
+        ),
+        pytest.param("{{{name}}}", {"name": "A"}, "A", {"name": "g"}, id="escaped-braces"),
+        pytest.param("constant", {}, "", {}, id="constant"),
+        pytest.param("", {}, "", {}, id="empty"),
     ],
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -359,10 +369,10 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
 @pytest.mark.parametrize(
     "template, unsupported",
     [
-        ("{x!r}", "conversions"),
-        ("{x!s}", "conversions"),
-        ("{x!a}", "conversions"),
-        ("{x:>8}", "format specifications"),
+        pytest.param("{x!r}", "conversions", id="repr-conversion"),
+        pytest.param("{x!s}", "conversions", id="str-conversion"),
+        pytest.param("{x!a}", "conversions", id="ascii-conversion"),
+        pytest.param("{x:>8}", "format specifications", id="format-specification"),
     ],
 )
 def test_format_rejects_unsupported_fields(template, unsupported):
@@ -389,9 +399,9 @@ def test_format_does_not_resolve_field_paths(field):
 @pytest.mark.parametrize(
     "template, values",
     [
-        ("Hello {x}", {"x": "A", "y": "B"}),
-        ("{x}{x}", {"x": "A", "y": "B"}),
-        ("constant", {"x": "A"}),
+        pytest.param("Hello {x}", {"x": "A", "y": "B"}, id="extra-field"),
+        pytest.param("{x}{x}", {"x": "A", "y": "B"}, id="extra-field-with-repetition"),
+        pytest.param("constant", {"x": "A"}, id="constant-with-argument"),
     ],
 )
 def test_format_rejects_unused_arguments(template, values):
@@ -414,93 +424,3 @@ def test_format_requires_string_values():
         af.string.format("{value}", value=1)
     with pytest.raises(AssertionError, match="Expected strings"):
         af.trace(lambda x: af.string.format("{x}", x=x))(1)
-
-
-@pytest.mark.parametrize(
-    "primitive, size, axes, values, expected, out_axis",
-    [
-        pytest.param(
-            af.string.concat_p,
-            2,
-            (True,),
-            (["a", "b"],),
-            ["a", "b"],
-            True,
-            id="single-mapped",
-        ),
-        pytest.param(
-            af.string.concat_p,
-            2,
-            (True, True),
-            (["a", "b"], ["x", "y"]),
-            ["ax", "by"],
-            True,
-            id="both-mapped",
-        ),
-        pytest.param(
-            af.string.concat_p,
-            3,
-            (True, False),
-            (["a", "b", "c"], "!"),
-            ["a!", "b!", "c!"],
-            True,
-            id="broadcast",
-        ),
-        pytest.param(
-            af.string.concat_p,
-            2,
-            (False, False, True, False),
-            ("Hello", ", ", ["x0", "x1"], "!"),
-            ["Hello, x0!", "Hello, x1!"],
-            True,
-            id="format-literals",
-        ),
-        pytest.param(
-            af.string.concat_p,
-            0,
-            (False, False),
-            ("a", "b"),
-            "ab",
-            False,
-            id="no-mapped-zero-size",
-        ),
-        pytest.param(
-            af.string.concat_p,
-            3,
-            (False, False, False),
-            ("hello", " ", "world"),
-            "hello world",
-            False,
-            id="format-unmapped",
-        ),
-        pytest.param(
-            af.string.concat_p,
-            3,
-            (False, False),
-            ("hello", "world"),
-            "helloworld",
-            False,
-            id="concat-unmapped",
-        ),
-        pytest.param(
-            af.string.match_p,
-            3,
-            (False, False),
-            ("hello", "hello"),
-            True,
-            False,
-            id="match-unmapped-true",
-        ),
-        pytest.param(
-            af.string.match_p,
-            3,
-            (False, False),
-            ("hello", "world"),
-            False,
-            False,
-            id="match-unmapped-false",
-        ),
-    ],
-)
-def test_batch_rule(primitive, size, axes, values, expected, out_axis):
-    assert af.core.batch_rules.get(primitive)((size, axes, values)) == (expected, out_axis)

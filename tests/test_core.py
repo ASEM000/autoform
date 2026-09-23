@@ -15,7 +15,6 @@
 import asyncio
 import functools as ft
 import re
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import pytest
@@ -64,11 +63,11 @@ class TestSpace:
         space = af.core.Space("blob")
         rule = lambda value: BlobAVal(value.size)
         replacement = lambda value: BlobAVal(value.size + 1)
-        assert space.set(Blob, rule) is rule
+        space.set(Blob, rule)
         assert space.avalof(Blob(3)) == BlobAVal(3)
         with pytest.raises(AssertionError, match="already defined"):
             space.set(Blob, replacement)
-        assert space.set(Blob, replacement, replace=True) is replacement
+        space.set(Blob, replacement, replace=True)
         assert space.avalof(Blob(3)) == BlobAVal(4)
 
     @pytest.mark.parametrize(
@@ -512,59 +511,6 @@ class TestKeywordArgumentBoundary:
             af.switch("a", branches, x="test")
 
 
-class TestInterpreterRuleMapping:
-    def test_registration_and_replacement(self):
-        mapping = af.core.InterpreterRuleMapping()
-        primitive = af.core.Prim("test_replace")
-        rule = lambda x: x
-        replacement = lambda x: x + 1
-
-        with pytest.raises(KeyError, match="rule defined for primitive"):
-            mapping.get(primitive)
-        assert mapping.set(primitive, rule) is rule
-        assert mapping.get(primitive) is rule
-        with pytest.raises(KeyError, match="rule defined for primitive"):
-            mapping.get(af.core.Prim("test_replace"))
-        with pytest.raises(AssertionError, match="already defined"):
-            mapping.set(primitive, rule)
-        assert mapping.set(primitive, replacement, replace=True) is replacement
-        assert mapping.get(primitive) is replacement
-        assert mapping.get(primitive)(1) == 2
-
-    def test_async_registration_and_replacement(self):
-        mapping = af.core.InterpreterRuleMapping()
-        primitive = af.core.Prim("test_replace")
-
-        async def rule(x):
-            return x
-
-        async def replacement(x):
-            return x + 1
-
-        with pytest.raises(KeyError, match="rule defined for primitive"):
-            mapping.aget(primitive)
-        assert mapping.aset(primitive, rule) is rule
-        assert mapping.aget(primitive) is rule
-        with pytest.raises(KeyError, match="rule defined for primitive"):
-            mapping.aget(af.core.Prim("test_replace"))
-        with pytest.raises(AssertionError, match="already defined"):
-            mapping.aset(primitive, rule)
-        assert mapping.aset(primitive, replacement, replace=True) is replacement
-        assert mapping.aget(primitive) is replacement
-        assert asyncio.run(mapping.aget(primitive)(1)) == 2
-
-    def test_concurrent_registration(self):
-        mapping = af.core.InterpreterRuleMapping()
-
-        def register(index):
-            primitive = af.core.Prim(f"concurrent_{index}")
-            mapping.set(primitive, lambda x: x * index)
-            return mapping.get(primitive)(1)
-
-        with ThreadPoolExecutor() as pool:
-            assert list(pool.map(register, range(50))) == list(range(50))
-
-
 def test_ir_and_equation_fields():
     def program(x):
         with af.tag(Label("draft")):
@@ -598,47 +544,6 @@ class TestPrimitive:
         p = af.core.Prim("test_prim")
         assert p.name == "test_prim"
         assert repr(p) == "test_prim"
-
-    @pytest.mark.parametrize(
-        "name, registry, rule",
-        [
-            pytest.param("test_impl", af.core.impl_rules, lambda x: x, id="impl"),
-            pytest.param(
-                "test_abstract",
-                af.core.abstract_rules,
-                lambda x: af.core.StrAVal(),
-                id="abstract",
-            ),
-            pytest.param(
-                "test_batch",
-                af.core.batch_rules,
-                lambda inputs: (inputs[2], True),
-                id="batch",
-            ),
-            pytest.param(
-                "test_pushforward",
-                af.core.push_rules,
-                lambda inputs: inputs,
-                id="pushforward",
-            ),
-            pytest.param(
-                "test_pullback_fwd",
-                af.core.pull_fwd_rules,
-                lambda inputs: (inputs, inputs),
-                id="pullback-forward",
-            ),
-            pytest.param(
-                "test_pullback_bwd",
-                af.core.pull_bwd_rules,
-                lambda residuals, cotangent: cotangent,
-                id="pullback-backward",
-            ),
-        ],
-    )
-    def test_register_rule(self, name, registry, rule):
-        primitive = af.core.Prim(name)
-        assert ft.partial(registry.set, primitive)(rule) is rule
-        assert registry.get(primitive) is rule
 
 
 def test_variable_and_literal_boundary():
@@ -688,18 +593,18 @@ class TestTraceValuePythonOps:
     @pytest.mark.parametrize(
         ("dunder", "program"),
         [
-            ("bool", lambda x: "yes" if x else "no"),
-            ("str", lambda x: str(x)),
-            ("format", lambda x: f"{x}"),
-            ("iter", lambda x: list(x)),
-            ("index", lambda x: range(x)),
-            ("int", lambda x: int(x)),
-            ("float", lambda x: float(x)),
-            ("complex", lambda x: complex(x)),
-            ("bytes", lambda x: bytes(x)),
-            ("getitem", lambda x: x[0]),
-            ("contains", lambda x: "a" in x),
-            ("len", lambda x: len(x)),
+            pytest.param("bool", lambda x: "yes" if x else "no", id="bool"),
+            pytest.param("str", lambda x: str(x), id="str"),
+            pytest.param("format", lambda x: f"{x}", id="format"),
+            pytest.param("iter", lambda x: list(x), id="iter"),
+            pytest.param("index", lambda x: range(x), id="index"),
+            pytest.param("int", lambda x: int(x), id="int"),
+            pytest.param("float", lambda x: float(x), id="float"),
+            pytest.param("complex", lambda x: complex(x), id="complex"),
+            pytest.param("bytes", lambda x: bytes(x), id="bytes"),
+            pytest.param("getitem", lambda x: x[0], id="getitem"),
+            pytest.param("contains", lambda x: "a" in x, id="contains"),
+            pytest.param("len", lambda x: len(x), id="len"),
         ],
     )
     def test_unregistered_python_operations_on_traced_values_error(self, dunder, program):

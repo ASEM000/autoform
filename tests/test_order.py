@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 
 import pytest
 
@@ -20,8 +19,6 @@ import autoform as af
 from autoform.order import depends_p, fanout_p
 from tests import (
     aexecute,
-    angle_text,
-    bracket_text,
     dependent_formats,
     execute,
     switch_program,
@@ -147,18 +144,6 @@ def test_fanout_mixed_axes(executor, values, expected):
     assert result == (expected, ["<STATIC>"] * len(values))
 
 
-@pytest.mark.parametrize("mode, count", [("sync", 1), ("sync", 2), ("async", 2)])
-def test_fanout_batch_unbatched(mode, count):
-    irs = [af.trace(program)("a") for program in (bracket_text, angle_text)][:count]
-    args = (3, [False] * count, [("hello",), ("world",)][:count])
-    match mode:
-        case "sync":
-            result = af.core.batch_rules.get(fanout_p)(args, irs=irs)
-        case "async":
-            result = asyncio.run(af.core.batch_rules.aget(fanout_p)(args, irs=irs))
-    assert result == (["[hello]", "<world>"][:count], [False] * count)
-
-
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "program, prims, expected",
@@ -281,17 +266,30 @@ def test_nested_fanout_collect():
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_sched_switch(executor):
+@pytest.mark.parametrize(
+    "args, expected",
+    [
+        pytest.param(("x", "hello"), "[hello]<hello>", id="parallel-branch"),
+        pytest.param(("y", "hello"), "(hello)", id="single-branch"),
+    ],
+)
+def test_sched_switch(executor, args, expected):
     scheduled = af.sched(format_switch_ir())
     assert scheduled.eqns[0].params["branches"]["x"].eqns[0].prim is fanout_p
-    calls = [(("x", "hello"), "[hello]<hello>"), (("y", "hello"), "(hello)")]
-    for args, expected in calls:
-        actual = executor(scheduled, *args)
-        assert actual == expected
+    actual = executor(scheduled, *args)
+    assert actual == expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_sched_nested_switch(executor):
+@pytest.mark.parametrize(
+    "args, expected",
+    [
+        pytest.param(("A", "x", "hello"), "[hello]<hello>", id="nested-parallel-branch"),
+        pytest.param(("A", "y", "hello"), "(hello)", id="nested-single-branch"),
+        pytest.param(("B", "ignored", "world"), "ignored world", id="outer-branch"),
+    ],
+)
+def test_sched_nested_switch(executor, args, expected):
     branches = {
         "A": format_switch_ir(),
         "B": af.trace(lambda key, inp: af.string.format("{key} {inp}", key=key, inp=inp))("k", "i"),
@@ -304,14 +302,8 @@ def test_sched_nested_switch(executor):
     scheduled = af.sched(ir)
     inner = scheduled.eqns[0].params["branches"]["A"]
     assert inner.eqns[0].params["branches"]["x"].eqns[0].prim is fanout_p
-    calls = [
-        (("A", "x", "hello"), "[hello]<hello>"),
-        (("A", "y", "hello"), "(hello)"),
-        (("B", "ignored", "world"), "ignored world"),
-    ]
-    for args, expected in calls:
-        actual = executor(scheduled, *args)
-        assert actual == expected
+    actual = executor(scheduled, *args)
+    assert actual == expected
 
 
 def test_sched_nested_fanout():

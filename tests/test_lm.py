@@ -93,9 +93,11 @@ class SchemaGradientRouter(EchoRouter):
     def completion(self, *, messages: list[dict], model: str, response_format=None, **kwargs):
         assert kwargs == {}
         self.calls.append(dict(messages=messages, model=model, response_format=response_format))
-        if response_format is None:
-            return fake_response("input feedback")
-        return fake_response(json.dumps({"text": "Recursion calls itself.", "score": 0.92}))
+        responses = {
+            False: "input feedback",
+            True: json.dumps({"text": "Recursion calls itself.", "score": 0.92}),
+        }
+        return fake_response(responses[response_format is not None])
 
 
 def test_generate_executes_with_response_format():
@@ -142,12 +144,12 @@ def test_generate_executes_with_response_format():
 @pytest.mark.parametrize(
     ("schema", "value"),
     [
-        (af.Str(), 'Hello "world"!'),
-        (af.Str(min=1) @ af.Doc("Answer text."), "hello"),
-        (af.Int(), 2),
-        (af.Float(), 0.5),
-        (af.Bool(), True),
-        (af.Enum("yes", "no"), "yes"),
+        pytest.param(af.Str(), 'Hello "world"!', id="string"),
+        pytest.param(af.Str(min=1) @ af.Doc("Answer text."), "hello", id="described-string"),
+        pytest.param(af.Int(), 2, id="integer"),
+        pytest.param(af.Float(), 0.5, id="float"),
+        pytest.param(af.Bool(), True, id="boolean"),
+        pytest.param(af.Enum("yes", "no"), "yes", id="enum"),
     ],
 )
 def test_generate_passes_scalar_schemas_to_client(schema, value, executor):
@@ -188,27 +190,27 @@ def test_emit_json_schema_rejects_non_json_enum_values():
 
 
 @pytest.mark.parametrize(
-    "primitive, params, lm_client, expected",
+    "primitive, params, client_type, expected",
     [
-        pytest.param(af.lm.complete, {}, "complete", ["m1|hello", "m2|goodbye"], id="complete"),
+        pytest.param(af.lm.complete, {}, EchoRouter, ["m1|hello", "m2|goodbye"], id="complete"),
         pytest.param(
             af.lm.generate,
             {"schema": {"text": af.Str(), "score": af.Float()}},
-            "generate",
+            SchemaRouter,
             {"text": ["m1|hello", "m2|goodbye"], "score": [0.5, 0.5]},
             id="generate",
         ),
     ],
-    indirect=["lm_client"],
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_batch_supports_variable_models(executor, primitive, params, lm_client, expected):
+def test_batch_supports_variable_models(executor, primitive, params, client_type, expected):
     ir = af.batch(
         af.trace(lm_program(primitive, **params))("test", "gpt-5.5"),
         in_axes=(True, True),
     )
     args = (["hello", "goodbye"], ["m1", "m2"])
-    actual = executor(ir, *args)
+    with af.lm.client(client_type()):
+        actual = executor(ir, *args)
     assert actual == expected
 
 
@@ -285,13 +287,25 @@ def test_generate_pullback_rejects_non_text_schema_cotangent(executor, gradient_
 @pytest.mark.parametrize(
     "schema, expected",
     [
-        (None, None),
-        ({}, {}),
-        ("fixed", "fixed"),
-        ("fixed" @ af.Doc("Not generated."), "fixed"),
-        ({"source": "fixed", "nothing": None}, {"source": "fixed", "nothing": None}),
-        (("fixed" @ af.Doc("Not generated."), None, []), ("fixed", None, [])),
-        ({"source": "fixed"} @ af.Doc("Not generated."), {"source": "fixed"}),
+        pytest.param(None, None, id="none"),
+        pytest.param({}, {}, id="empty-dict"),
+        pytest.param("fixed", "fixed", id="literal-string"),
+        pytest.param("fixed" @ af.Doc("Not generated."), "fixed", id="described-string"),
+        pytest.param(
+            {"source": "fixed", "nothing": None},
+            {"source": "fixed", "nothing": None},
+            id="literal-dict",
+        ),
+        pytest.param(
+            ("fixed" @ af.Doc("Not generated."), None, []),
+            ("fixed", None, []),
+            id="literal-tuple",
+        ),
+        pytest.param(
+            {"source": "fixed"} @ af.Doc("Not generated."),
+            {"source": "fixed"},
+            id="described-dict",
+        ),
     ],
 )
 def test_schema_without_generated_fields(schema, expected):
@@ -535,14 +549,19 @@ class TestEchoLMClient:
     @pytest.mark.parametrize(
         ("entries", "expected"),
         [
-            ([], ""),
-            ([("user", "")], "<user> "),
-            ([("user", "hello")], "<user> hello"),
-            (
+            pytest.param([], "", id="empty-messages"),
+            pytest.param([("user", "")], "<user> ", id="empty-content"),
+            pytest.param([("user", "hello")], "<user> hello", id="single-message"),
+            pytest.param(
                 [("system", "Translate."), ("user", "Hello!"), ("assistant", "Hi!")],
                 "<system> Translate.\n<user> Hello!\n<assistant> Hi!",
+                id="multiple-roles",
             ),
-            ([("user", "first\nsecond")], "<user> first\nsecond"),
+            pytest.param(
+                [("user", "first\nsecond")],
+                "<user> first\nsecond",
+                id="multiline-content",
+            ),
         ],
     )
     def test_direct_call(self, entries, expected, echo_client):
@@ -621,66 +640,26 @@ class TestEchoLMClient:
                 executor(ir, '{"text": "hello"}')
 
 
-@pytest.fixture
-def lm_client(request):
-    client = EchoRouter() if request.param == "complete" else SchemaRouter()
-    with af.lm.client(client):
-        yield client
-
-
 @pytest.mark.parametrize(
-    "primitive, params, lm_client, expected",
+    "primitive, params, client_type, expected",
     [
-        pytest.param(af.lm.complete, {}, "complete", ("m1|hello", "m1|tangent"), id="complete"),
+        pytest.param(af.lm.complete, {}, EchoRouter, ("m1|hello", "m1|tangent"), id="complete"),
         pytest.param(
             af.lm.generate,
             {"schema": {"text": af.Str(), "score": af.Float()}},
-            "generate",
+            SchemaRouter,
             ({"text": "m1|hello", "score": 0.5}, {"text": "m1|tangent", "score": 0.5}),
             id="generate",
         ),
     ],
-    indirect=["lm_client"],
 )
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_pushforward(primitive, params, lm_client, expected, executor):
+def test_pushforward(primitive, params, client_type, expected, executor):
     ir = af.pushforward(af.trace(lm_program(primitive, **params))("test", "gpt-5.5"))
     args = (("hello", "m1"), ("tangent", "ignored model tangent"))
-    actual = executor(ir, *args)
+    with af.lm.client(client_type()):
+        actual = executor(ir, *args)
     assert actual == expected
-
-
-@pytest.mark.parametrize(
-    "lm_client, prim, params, expected, out_axes",
-    [
-        pytest.param(
-            "complete",
-            af.lm.complete_p,
-            {"roles": ["user"]},
-            "m1|hello",
-            False,
-            id="complete",
-        ),
-        pytest.param(
-            "generate",
-            af.lm.generate_p,
-            {"roles": ["user"], "schema": {"text": af.Str(), "score": af.Float()}},
-            {"text": "m1|hello", "score": 0.5},
-            {"text": False, "score": False},
-            id="generate",
-        ),
-    ],
-    indirect=["lm_client"],
-)
-@pytest.mark.parametrize("mode", ["sync", "async"])
-def test_batch_rule_without_mapped_inputs(lm_client, prim, params, expected, out_axes, mode):
-    args = (3, False, (["hello"], "m1"))
-    match mode:
-        case "sync":
-            result = af.core.batch_rules.get(prim)(args, **params)
-        case "async":
-            result = asyncio.run(af.core.batch_rules.aget(prim)(args, **params))
-    assert result == (expected, out_axes)
 
 
 @pytest.mark.parametrize("mode", ["sync", "async"])

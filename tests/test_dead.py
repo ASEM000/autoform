@@ -613,9 +613,9 @@ def test_partial_switch_keeps_shared_dependencies():
 @pytest.mark.parametrize(
     "transform, args",
     [
-        (af.batch, (["x"],)),
-        (af.pushforward, (("x",), ("t",))),
-        (af.weight, ("x",)),
+        pytest.param(af.batch, (["x"],), id="batch"),
+        pytest.param(af.pushforward, (("x",), ("t",)), id="pushforward"),
+        pytest.param(af.weight, ("x",), id="weight"),
     ],
 )
 def test_unused_wrapper_keeps_checkpoint(transform, args, executor):

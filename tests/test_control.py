@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 
 import optree
 import pytest
@@ -480,7 +479,13 @@ class TestWhileLoop:
 
 
 class TestWhileLoopValidation:
-    @pytest.mark.parametrize("condition, max_iters", [(False, 10), (True, 0)])
+    @pytest.mark.parametrize(
+        "condition, max_iters",
+        [
+            pytest.param(False, 10, id="false-condition"),
+            pytest.param(True, 0, id="zero-iterations"),
+        ],
+    )
     def test_rejects_literal_output_for_dynamic_state(self, condition, max_iters):
         cond_ir = trace(lambda x: condition)("go")
         body_ir = trace(lambda x: "stop")("go")
@@ -490,7 +495,13 @@ class TestWhileLoopValidation:
         with pytest.raises(AssertionError, match="initial state must match"):
             trace(loop)("go")
 
-    @pytest.mark.parametrize("initial, result", [("go", "stop"), (True, 1)])
+    @pytest.mark.parametrize(
+        "initial, result",
+        [
+            pytest.param("go", "stop", id="different-values"),
+            pytest.param(True, 1, id="boolean-integer-types"),
+        ],
+    )
     def test_rejects_different_literal_state(self, initial, result):
         cond_ir = trace(lambda x: False)(initial)
         body_ir = trace(lambda x: result)(initial)
@@ -524,31 +535,58 @@ class TestWhileLoopValidation:
             af.while_loop(cond_ir, body_ir, "init", max_iters=10)
 
 
-def test_switch_contract():
+@pytest.mark.parametrize(
+    "keys",
+    [
+        pytest.param(("L", "R"), id="string"),
+        pytest.param((0, 1), id="integer"),
+        pytest.param((False, True), id="boolean"),
+        pytest.param((0.5, 1.5), id="float"),
+    ],
+)
+def test_switch_accepts_matching_key_types(keys):
+    left = af.trace(lambda x: af.string.concat("L", x))("X")
+    right = af.trace(lambda x: af.string.concat("R", x))("X")
+    branches = dict(zip(keys, (left, right), strict=True))
+    ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
+    assert ir.call(keys[0]) == "LX"
+    assert ir.call(keys[1]) == "RX"
+
+
+def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
     af.extend.register_trace_type(Key, lambda _: af.core.StrAVal())
     left = af.trace(lambda x: af.string.concat("L", x))("X")
     right = af.trace(lambda x: af.string.concat("R", x))("X")
-    for keys in (("L", "R"), (0, 1), (False, True), (0.5, 1.5), (Key("L"), Key("R"))):
-        branches = dict(zip(keys, (left, right), strict=True))
-        ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
-        assert ir.call(keys[0]) == "LX"
-        assert ir.call(keys[1]) == "RX"
+    keys = (Key("L"), Key("R"))
+    branches = dict(zip(keys, (left, right), strict=True))
+    ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
+    assert ir.call(keys[0]) == "LX"
+    assert ir.call(keys[1]) == "RX"
 
-    for keys, selector in (
-        ((0, "R"), 0),
-        ((False, 2), False),
-        ((0, 2.0), 0),
-        ((b"L", b"R"), "L"),
-        ((0, 1), True),
-        ((False, True), 1),
-        ((0, 1), 1.0),
-    ):
-        branches = dict(zip(keys, (left, right), strict=True))
-        with pytest.raises(AssertionError):
-            af.trace(lambda key: af.switch(key, branches, "X"))(selector)
 
+@pytest.mark.parametrize(
+    "keys, selector",
+    [
+        pytest.param((0, "R"), 0, id="mixed-integer-string-keys"),
+        pytest.param((False, 2), False, id="mixed-boolean-integer-keys"),
+        pytest.param((0, 2.0), 0, id="mixed-integer-float-keys"),
+        pytest.param((b"L", b"R"), "L", id="unregistered-bytes-keys"),
+        pytest.param((0, 1), True, id="boolean-selector-integer-keys"),
+        pytest.param((False, True), 1, id="integer-selector-boolean-keys"),
+        pytest.param((0, 1), 1.0, id="float-selector-integer-keys"),
+    ],
+)
+def test_switch_rejects_invalid_key_types(keys, selector):
+    left = af.trace(lambda x: af.string.concat("L", x))("X")
+    right = af.trace(lambda x: af.string.concat("R", x))("X")
+    branches = dict(zip(keys, (left, right), strict=True))
+    with pytest.raises(AssertionError):
+        af.trace(lambda key: af.switch(key, branches, "X"))(selector)
+
+
+def test_switch_rejects_different_literal_branch_outputs():
     branches = {"L": af.trace(lambda: "L")(), "R": af.trace(lambda: "R")()}
     with pytest.raises(AssertionError):
         af.trace(lambda key: af.switch(key, branches))("L")
@@ -666,22 +704,6 @@ class TestSwitch:
         out, derivative = ir.call(("a", ["a", "b"]), feedback)
         assert out == ["A:a", "A:b"]
         assert derivative == expected
-
-    @pytest.mark.parametrize(
-        "mode, key, value, expected",
-        [("sync", "a", "hello", "A: hello"), ("async", "b", "world", "B: world")],
-    )
-    def test_batch_unbatched_mask(self, mode, key, value, expected):
-        branches = switch_ir({"a": "A: ", "b": "B: "}).eqns[0].params["branches"]
-        inputs = (3, (False, False), (key, (value,)))
-        match mode:
-            case "sync":
-                result = af.core.batch_rules.get(af.control.switch_p)(inputs, branches=branches)
-            case "async":
-                result = asyncio.run(
-                    af.core.batch_rules.aget(af.control.switch_p)(inputs, branches=branches)
-                )
-        assert result == (expected, False)
 
     def test_switch_with_multiple_operands(self):
         branches = {

@@ -157,14 +157,26 @@ class TestIrStructure:
 
         assert is_same_stucture(lhs, rhs)
 
-    @pytest.mark.parametrize("left, right", [("L", "R"), (1, True)])
+    @pytest.mark.parametrize(
+        "left, right",
+        [
+            pytest.param("L", "R", id="different-values"),
+            pytest.param(1, True, id="integer-boolean-types"),
+        ],
+    )
     def test_rejects_different_literal_outputs(self, left, right):
         lhs = af.trace(lambda: left)()
         rhs = af.trace(lambda: right)()
 
         assert not is_same_stucture(lhs, rhs)
 
-    @pytest.mark.parametrize("left, right", [("X", 1), ("X", ["X"])])
+    @pytest.mark.parametrize(
+        "left, right",
+        [
+            pytest.param("X", 1, id="different-types"),
+            pytest.param("X", ["X"], id="different-structures"),
+        ],
+    )
     def test_rejects_different_inputs(self, left, right):
         lhs = af.trace(lambda x: "same")(left)
         rhs = af.trace(lambda x: "same")(right)

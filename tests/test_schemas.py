@@ -99,17 +99,30 @@ def test_schema_dsl_rejects_invalid_forms(construct, error, message):
         construct()
 
 
-def test_schema_dsl_nodes_compare_by_value():
-    pairs = [
-        (af.Str(min=1, max=3, pattern="x"), af.Str(min=1, max=3, pattern="x")),
-        (af.Int(min=0, max=10), af.Int(min=0, max=10)),
-        (af.Float(min=0, max=1), af.Float(min=0, max=1)),
-        (af.Bool(), af.Bool()),
-        (af.Enum("summary", "definition"), af.Enum("summary", "definition")),
-        (af.Doc("Subject name."), af.Doc("Subject name.")),
-        (af.Str() @ af.Doc("Subject name."), af.Str() @ af.Doc("Subject name.")),
-    ]
-
-    for left, right in pairs:
-        assert left == right
-        assert hash(left) == hash(right)
+@pytest.mark.parametrize(
+    "left, right",
+    [
+        pytest.param(
+            af.Str(min=1, max=3, pattern="x"),
+            af.Str(min=1, max=3, pattern="x"),
+            id="string",
+        ),
+        pytest.param(af.Int(min=0, max=10), af.Int(min=0, max=10), id="integer"),
+        pytest.param(af.Float(min=0, max=1), af.Float(min=0, max=1), id="float"),
+        pytest.param(af.Bool(), af.Bool(), id="boolean"),
+        pytest.param(
+            af.Enum("summary", "definition"),
+            af.Enum("summary", "definition"),
+            id="enum",
+        ),
+        pytest.param(af.Doc("Subject name."), af.Doc("Subject name."), id="description"),
+        pytest.param(
+            af.Str() @ af.Doc("Subject name."),
+            af.Str() @ af.Doc("Subject name."),
+            id="described-string",
+        ),
+    ],
+)
+def test_schema_dsl_nodes_compare_by_value(left, right):
+    assert left == right
+    assert hash(left) == hash(right)
