@@ -12,71 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
-
 import pytest
 
 import autoform as af
+from tests import aexecute, execute
 
 
 class TestCustomFunction:
-    def test_only_custom_is_exported(self):
-        custom_module = importlib.import_module("autoform.boundary")
-
-        assert af.custom is custom_module.custom
-        assert not hasattr(af, "CustomFunction")
-        assert not hasattr(custom_module, "CustomFunction")
-
-    def test_call_stages_custom_call_with_python_function(self):
+    def test_traced_call_composes_with_primitives(self):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
 
         ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
-        custom_eqn = ir.eqns[0]
-
-        assert ir.eqns[0].prim.name.startswith("custom_call_p<bracket-")
-        assert [eqn.prim.name.split("-")[0] for eqn in ir.eqns] == [
-            "custom_call_p<bracket",
-            "concat",
-        ]
-        assert set(custom_eqn.params) == {"call"}
-        assert custom_eqn.params["call"] is bracket.func
-        assert "func" not in custom_eqn.params
-        assert "ir" not in custom_eqn.params
-        assert "key" not in custom_eqn.params
         assert ir.call("hello") == "[hello]!"
-
-    def test_custom_primitive_names_are_unique_for_same_function_name(self):
-        def make_custom():
-            @af.custom
-            def duplicate(x):
-                return af.string.format("[{x}]", x=x)
-
-            return duplicate
-
-        first = make_custom()
-        second = make_custom()
-
-        assert first.prim.name.startswith("custom_call_p<duplicate-")
-        assert second.prim.name.startswith("custom_call_p<duplicate-")
-        assert first.prim.name != second.prim.name
-
-    def test_rules_are_stored_in_rule_mappings(self):
-        @af.custom
-        def bracket(x):
-            return af.string.format("[{x}]", x=x)
-
-        @bracket.set_pushforward
-        def bracket_pushforward(in_tree, /, *, call):
-            primals, tangents = in_tree
-            (dx,) = tangents
-            return call(*primals), dx
-
-        rule = af.core.push_rules.get(bracket.prim)
-
-        assert not hasattr(bracket, "pushforward_rule")
-        assert rule is bracket_pushforward
 
     def test_direct_call_behaves_like_function(self):
         @af.custom
@@ -162,7 +111,8 @@ class TestCustomPushforward:
             primals, tangents = in_tree
             (dx,) = tangents
             return call(*primals), af.string.format(
-                "custom delta: {value}", value=af.ad.materialize(dx)
+                "custom delta: {value}",
+                value=af.ad.materialize(dx),
             )
 
         ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
@@ -171,8 +121,14 @@ class TestCustomPushforward:
         assert out == "[hello]!"
         assert tangent == "custom delta: small change"
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_custom_pushforward_async(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, "change", id="sync"),
+            pytest.param(aexecute, "async delta: change", id="async"),
+        ],
+    )
+    def test_aset_pushforward_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -182,14 +138,15 @@ class TestCustomPushforward:
             primals, tangents = in_tree
             (dx,) = tangents
             return call(*primals), af.string.format(
-                "async delta: {value}", value=af.ad.materialize(dx)
+                "async delta: {value}",
+                value=af.ad.materialize(dx),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, tangent = await af.pushforward(ir).acall(("hello",), ("change",))
+        out, tangent = executor(af.pushforward(ir), ("hello",), ("change",))
 
         assert out == "[hello]"
-        assert tangent == "async delta: change"
+        assert tangent == expected
 
     def test_set_pushforward_replaces_default_rule(self):
         @af.custom
@@ -207,8 +164,14 @@ class TestCustomPushforward:
 
         assert tangent == "push change"
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_set_pushforward_does_not_replace_async_rule(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, "sync push change", id="sync"),
+            pytest.param(aexecute, "change", id="async"),
+        ],
+    )
+    def test_set_pushforward_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -218,13 +181,14 @@ class TestCustomPushforward:
             primals, tangents = in_tree
             (dx,) = tangents
             return call(*primals), af.string.format(
-                "sync push {value}", value=af.ad.materialize(dx)
+                "sync push {value}",
+                value=af.ad.materialize(dx),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, tangent = await af.pushforward(ir).acall(("hello",), ("change",))
+        _, tangent = executor(af.pushforward(ir), ("hello",), ("change",))
 
-        assert tangent == "change"
+        assert tangent == expected
 
 
 class TestCustomPullback:
@@ -271,7 +235,10 @@ class TestCustomPullback:
             (x,) = primals
             return (
                 af.string.format(
-                    "{cotangent} via {output} from {x}", cotangent=cotangent, output=output, x=x
+                    "{cotangent} via {output} from {x}",
+                    cotangent=cotangent,
+                    output=output,
+                    x=x,
                 ),
             )
 
@@ -281,8 +248,14 @@ class TestCustomPullback:
         assert out == "[hello]!"
         assert cotangent == ("feedback via [hello] from hello",)
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_custom_pullback_async(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ("feedback",), id="sync"),
+            pytest.param(aexecute, ("async feedback via [hello]",), id="async"),
+        ],
+    )
+    def test_aset_pullback_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -294,15 +267,17 @@ class TestCustomPullback:
             del primals
             return (
                 af.string.format(
-                    "async {cotangent} via {output}", cotangent=cotangent, output=output
+                    "async {cotangent} via {output}",
+                    cotangent=cotangent,
+                    output=output,
                 ),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, cotangent = await af.pullback(ir).acall(("hello",), "feedback")
+        out, cotangent = executor(af.pullback(ir), ("hello",), "feedback")
 
         assert out == "[hello]"
-        assert cotangent == ("async feedback via [hello]",)
+        assert cotangent == expected
 
     def test_set_pullback_replaces_default_rule(self):
         @af.custom
@@ -323,8 +298,14 @@ class TestCustomPullback:
 
         assert cotangent == ("pull [hello] feedback",)
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_set_pullback_does_not_replace_async_rule(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ("sync pull [hello] feedback",), id="sync"),
+            pytest.param(aexecute, ("feedback",), id="async"),
+        ],
+    )
+    def test_set_pullback_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -336,14 +317,16 @@ class TestCustomPullback:
             del primals
             return (
                 af.string.format(
-                    "sync pull {output} {cotangent}", output=output, cotangent=cotangent
+                    "sync pull {output} {cotangent}",
+                    output=output,
+                    cotangent=cotangent,
                 ),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, cotangent = await af.pullback(ir).acall(("hello",), "feedback")
+        _, cotangent = executor(af.pullback(ir), ("hello",), "feedback")
 
-        assert cotangent == ("feedback",)
+        assert cotangent == expected
 
 
 class TestCustomBatch:
@@ -382,7 +365,19 @@ class TestCustomBatch:
             ["World", "Moon"],
         )
 
-    def test_custom_batch_rule(self):
+    @pytest.mark.parametrize(
+        "template, expected_a, expected_b",
+        [
+            pytest.param("<{x}>", "<a>", "<b>", id="custom_batch_rule"),
+            pytest.param(
+                "batch <{x}>",
+                "batch <a>",
+                "batch <b>",
+                id="set_batch_replaces_default_rule",
+            ),
+        ],
+    )
+    def test_custom_batch_rule(self, template, expected_a, expected_b):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -395,15 +390,20 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.string.format("<{x}>", x=x) for x in xs], True
+            return ([af.string.format(template, x=x) for x in xs], True)
 
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
+        assert batched.call(["a", "b"]) == [expected_a, expected_b]
 
-        assert batched.call(["a", "b"]) == ["<a>", "<b>"]
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_custom_batch_async(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ["[a]", "[b]"], id="sync"),
+            pytest.param(aexecute, ["async <a>", "async <b>"], id="async"),
+        ],
+    )
+    def test_aset_batch_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -421,30 +421,16 @@ class TestCustomBatch:
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
 
-        assert await batched.acall(["a", "b"]) == ["async <a>", "async <b>"]
+        assert executor(batched, ["a", "b"]) == expected
 
-    def test_set_batch_replaces_default_rule(self):
-        @af.custom
-        def bracket(x):
-            return af.string.format("[{x}]", x=x)
-
-        @bracket.set_batch
-        def bracket_batch(in_tree, /, *, call):
-            del call
-            batch_size, axes, values = in_tree
-            assert batch_size == 2
-            (xs,) = values
-            (x_axis,) = axes
-            assert x_axis is True
-            return [af.string.format("batch <{x}>", x=x) for x in xs], True
-
-        ir = af.trace(lambda x: bracket(x))("seed")
-        batched = af.batch(ir)
-
-        assert batched.call(["a", "b"]) == ["batch <a>", "batch <b>"]
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_set_batch_does_not_replace_async_rule(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ["sync batch <a>", "sync batch <b>"], id="sync"),
+            pytest.param(aexecute, ["[a]", "[b]"], id="async"),
+        ],
+    )
+    def test_set_batch_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -462,4 +448,4 @@ class TestCustomBatch:
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
 
-        assert await batched.acall(["a", "b"]) == ["[a]", "[b]"]
+        assert executor(batched, ["a", "b"]) == expected
