@@ -15,7 +15,7 @@
 import pytest
 
 import autoform as af
-from tests import aexecute
+from tests import aexecute, execute
 
 
 class TestCustomFunction:
@@ -121,7 +121,14 @@ class TestCustomPushforward:
         assert out == "[hello]!"
         assert tangent == "custom delta: small change"
 
-    def test_custom_pushforward_async(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, "change", id="sync"),
+            pytest.param(aexecute, "async delta: change", id="async"),
+        ],
+    )
+    def test_aset_pushforward_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -136,10 +143,10 @@ class TestCustomPushforward:
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, tangent = aexecute(af.pushforward(ir), ("hello",), ("change",))
+        out, tangent = executor(af.pushforward(ir), ("hello",), ("change",))
 
         assert out == "[hello]"
-        assert tangent == "async delta: change"
+        assert tangent == expected
 
     def test_set_pushforward_replaces_default_rule(self):
         @af.custom
@@ -157,7 +164,14 @@ class TestCustomPushforward:
 
         assert tangent == "push change"
 
-    def test_set_pushforward_does_not_replace_async_rule(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, "sync push change", id="sync"),
+            pytest.param(aexecute, "change", id="async"),
+        ],
+    )
+    def test_set_pushforward_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -172,9 +186,9 @@ class TestCustomPushforward:
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, tangent = aexecute(af.pushforward(ir), ("hello",), ("change",))
+        _, tangent = executor(af.pushforward(ir), ("hello",), ("change",))
 
-        assert tangent == "change"
+        assert tangent == expected
 
 
 class TestCustomPullback:
@@ -234,7 +248,14 @@ class TestCustomPullback:
         assert out == "[hello]!"
         assert cotangent == ("feedback via [hello] from hello",)
 
-    def test_custom_pullback_async(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ("feedback",), id="sync"),
+            pytest.param(aexecute, ("async feedback via [hello]",), id="async"),
+        ],
+    )
+    def test_aset_pullback_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -253,10 +274,10 @@ class TestCustomPullback:
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, cotangent = aexecute(af.pullback(ir), ("hello",), "feedback")
+        out, cotangent = executor(af.pullback(ir), ("hello",), "feedback")
 
         assert out == "[hello]"
-        assert cotangent == ("async feedback via [hello]",)
+        assert cotangent == expected
 
     def test_set_pullback_replaces_default_rule(self):
         @af.custom
@@ -277,7 +298,14 @@ class TestCustomPullback:
 
         assert cotangent == ("pull [hello] feedback",)
 
-    def test_set_pullback_does_not_replace_async_rule(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ("sync pull [hello] feedback",), id="sync"),
+            pytest.param(aexecute, ("feedback",), id="async"),
+        ],
+    )
+    def test_set_pullback_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -296,9 +324,9 @@ class TestCustomPullback:
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, cotangent = aexecute(af.pullback(ir), ("hello",), "feedback")
+        _, cotangent = executor(af.pullback(ir), ("hello",), "feedback")
 
-        assert cotangent == ("feedback",)
+        assert cotangent == expected
 
 
 class TestCustomBatch:
@@ -368,7 +396,14 @@ class TestCustomBatch:
         batched = af.batch(ir)
         assert batched.call(["a", "b"]) == [expected_a, expected_b]
 
-    def test_custom_batch_async(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ["[a]", "[b]"], id="sync"),
+            pytest.param(aexecute, ["async <a>", "async <b>"], id="async"),
+        ],
+    )
+    def test_aset_batch_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -386,9 +421,16 @@ class TestCustomBatch:
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
 
-        assert aexecute(batched, ["a", "b"]) == ["async <a>", "async <b>"]
+        assert executor(batched, ["a", "b"]) == expected
 
-    def test_set_batch_does_not_replace_async_rule(self):
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [
+            pytest.param(execute, ["sync batch <a>", "sync batch <b>"], id="sync"),
+            pytest.param(aexecute, ["[a]", "[b]"], id="async"),
+        ],
+    )
+    def test_set_batch_dispatches_by_executor(self, executor, expected):
         @af.custom
         def bracket(x):
             return af.string.format("[{x}]", x=x)
@@ -406,4 +448,4 @@ class TestCustomBatch:
         ir = af.trace(lambda x: bracket(x))("seed")
         batched = af.batch(ir)
 
-        assert aexecute(batched, ["a", "b"]) == ["[a]", "[b]"]
+        assert executor(batched, ["a", "b"]) == expected
