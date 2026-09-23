@@ -88,7 +88,13 @@ class TestBatchBasic:
 
 
 class TestBatchIRStructure:
-    @pytest.mark.parametrize("space", [af.core.tangent_s, af.core.cotangent_s])
+    @pytest.mark.parametrize(
+        "space",
+        [
+            pytest.param(af.core.tangent_s, id="tangent"),
+            pytest.param(af.core.cotangent_s, id="cotangent"),
+        ],
+    )
     def test_batch_aval_ad_space(self, space):
         aval = BatchAVal(af.core.StrAVal())
         assert space.avalof(aval) == BatchAVal(af.core.StrAVal())

@@ -662,8 +662,17 @@ def test_pushforward(executor, primitive, params, client_type, expected):
     assert actual == expected
 
 
-@pytest.mark.parametrize("mode", ["sync", "async"])
-def test_litellm_client_forwards_request(monkeypatch, mode):
+@pytest.mark.parametrize(
+    "executor",
+    [
+        pytest.param(af.lm.LiteLLMClient.completion, id="sync"),
+        pytest.param(
+            lambda client, **kwargs: asyncio.run(client.acompletion(**kwargs)),
+            id="async",
+        ),
+    ],
+)
+def test_litellm_client_forwards_request(executor, monkeypatch):
     calls = []
     response = fake_response("hello")
 
@@ -683,10 +692,6 @@ def test_litellm_client_forwards_request(monkeypatch, mode):
         temperature=0.7,
         max_tokens=128,
     )
-    match mode:
-        case "sync":
-            result = client.completion(**kwargs)
-        case "async":
-            result = asyncio.run(client.acompletion(**kwargs))
+    result = executor(client, **kwargs)
     assert result is response
     assert calls == [kwargs]

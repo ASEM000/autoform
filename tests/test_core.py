@@ -87,15 +87,18 @@ class TestSpace:
             af.core.Space("empty").avalof(Blob(3))
 
     @pytest.mark.parametrize(
-        ("space", "aval"),
+        "space",
         [
-            (space, aval)
-            for space in (af.core.tangent_s, af.core.cotangent_s)
-            for aval in (
-                af.core.StrAVal(),
-                af.core.FloatAVal(),
-                af.core.BoolAVal(),
-            )
+            pytest.param(af.core.tangent_s, id="tangent"),
+            pytest.param(af.core.cotangent_s, id="cotangent"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "aval",
+        [
+            pytest.param(af.core.StrAVal(), id="string"),
+            pytest.param(af.core.FloatAVal(), id="float"),
+            pytest.param(af.core.BoolAVal(), id="boolean"),
         ],
     )
     def test_builtin_ad_spaces_preserve_aval(self, space, aval):
@@ -123,7 +126,13 @@ class TestSpace:
         assert tangent_s.avalof(tangent) is tangent
         assert cotangent_s.avalof(cotangent) is cotangent
 
-    @pytest.mark.parametrize("space", [af.core.tangent_s, af.core.cotangent_s])
+    @pytest.mark.parametrize(
+        "space",
+        [
+            pytest.param(af.core.tangent_s, id="tangent"),
+            pytest.param(af.core.cotangent_s, id="cotangent"),
+        ],
+    )
     def test_missing_ad_space_rule(self, space):
         class UnknownAVal(af.core.AVal): ...
 
@@ -854,14 +863,30 @@ def test_inline_calls_preserve_dataflow():
         ),
     ],
 )
-@pytest.mark.parametrize("order", ["trace-transform", "transform-trace"])
-def test_trace_transform_boundary(executor, program, transform, args, expected, primitive, order):
+@pytest.mark.parametrize(
+    "build_ir",
+    [
+        pytest.param(
+            lambda ir, transform, args: transform(af.trace(ir.call)("test")),
+            id="trace-transform",
+        ),
+        pytest.param(
+            lambda ir, transform, args: af.trace(transform(ir).call)(*args),
+            id="transform-trace",
+        ),
+    ],
+)
+def test_trace_transform_boundary(
+    executor,
+    program,
+    transform,
+    args,
+    expected,
+    primitive,
+    build_ir,
+):
     inner = af.trace(program)("x")
-    match order:
-        case "trace-transform":
-            ir = transform(af.trace(inner.call)("test"))
-        case "transform-trace":
-            ir = af.trace(transform(inner).call)(*args)
+    ir = build_ir(inner, transform, args)
     assert len(ir.eqns) == 1
     assert ir.eqns[0].prim.name == primitive
     result = executor(ir, *args)

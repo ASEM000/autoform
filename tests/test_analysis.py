@@ -23,6 +23,8 @@ from autoform.analysis import (
     var_leaves,
     var_producers,
 )
+from autoform.intercept import checkpoint_p
+from autoform.order import depends_p
 from tests import prefix_name
 
 
@@ -98,15 +100,10 @@ class TestToposortLevelsWithCheckpoints:
         ir = af.trace(program)("a", "b")
         levels = toposort_levels(ir)
 
-        checkpoint_eqns = [e for lvl in levels for e in lvl if e.prim.name == "checkpoint"]
-        assert len(checkpoint_eqns) == 2
-
-        checkpoint_levels = []
-        for i, lvl in enumerate(levels):
-            for e in lvl:
-                if e.prim.name == "checkpoint":
-                    checkpoint_levels.append(i)
-
+        checkpoint_levels = [
+            index for index, level in enumerate(levels) for eqn in level if eqn.prim is checkpoint_p
+        ]
+        assert len(checkpoint_levels) == 2
         assert checkpoint_levels[0] == checkpoint_levels[1]
 
     def test_checkpoint_ordering_via_depends(self):
@@ -118,20 +115,13 @@ class TestToposortLevelsWithCheckpoints:
         ir = af.trace(program)("a", "b")
         levels = toposort_levels(ir)
 
-        checkpoint_levels = []
-        for i, lvl in enumerate(levels):
-            for e in lvl:
-                if e.prim.name == "checkpoint":
-                    checkpoint_levels.append(i)
-
+        checkpoint_levels = [
+            index for index, level in enumerate(levels) for eqn in level if eqn.prim is checkpoint_p
+        ]
         assert checkpoint_levels[0] == checkpoint_levels[1]
-
-        depends_level = None
-        for i, lvl in enumerate(levels):
-            for e in lvl:
-                if e.prim.name == "depends":
-                    depends_level = i
-
+        depends_level = next(
+            index for index, level in enumerate(levels) for eqn in level if eqn.prim is depends_p
+        )
         assert depends_level > checkpoint_levels[0]
 
     def test_pure_equations_parallelize_around_checkpoints(self):
