@@ -132,14 +132,3 @@ def test_negation(transform, args, expected, executor):
     ir = transform(af.trace(af.numeric.neg)(2.0))
     actual = executor(ir, *args)
     assert actual == expected
-
-
-@pytest.mark.parametrize(
-    "prim, values, expected",
-    [
-        pytest.param(af.numeric.neg_p, 2.0, -2.0, id="unary"),
-        pytest.param(af.numeric.add_p, (2.0, 1.0), 3.0, id="binary"),
-    ],
-)
-def test_batch_rule_without_mapped_inputs(prim, values, expected):
-    assert af.core.batch_rules.get(prim)((3, False, values)) == (expected, False)

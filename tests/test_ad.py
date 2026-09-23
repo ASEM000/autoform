@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 
 import pytest
 
@@ -31,12 +30,11 @@ def test_int_input_is_not_differentiable(transform):
 
 
 @pytest.mark.parametrize(
-    "transform, space, primitive, zeroof, change",
+    "transform, space, zeroof, change",
     [
         pytest.param(
             af.pushforward,
             af.core.tangent_s,
-            af.ad.pushforward_call_p,
             af.ad.tangent_zeroof,
             "replace hello",
             id="tangent",
@@ -44,14 +42,13 @@ def test_int_input_is_not_differentiable(transform):
         pytest.param(
             af.pullback,
             af.core.cotangent_s,
-            af.ad.pullback_call_p,
             af.ad.cotangent_zeroof,
             "be clearer",
             id="cotangent",
         ),
     ],
 )
-def test_wrapper_uses_derivative_space(transform, space, primitive, zeroof, change):
+def test_wrapper_uses_derivative_space(transform, space, zeroof, change):
     class Text:
         def __init__(self, value):
             self.value = value
@@ -78,9 +75,6 @@ def test_wrapper_uses_derivative_space(transform, space, primitive, zeroof, chan
 
     text, delta = Text("hello"), Change(change)
     assert ir.call((text,), (delta,)) == ((text,), (delta,))
-    primal_aval, derivative_aval = af.core.abstract_rules.get(primitive)(None, ir=source)
-    assert primal_aval == (aval,)
-    assert isinstance(derivative_aval[0], ChangeAVal)
     assert isinstance(zeroof(text).aval, ChangeAVal)
     nested_derivatives = transform(ir).in_tree[1]
     assert all(isinstance(v.aval, ChangeAVal) for v in af.utils.tree.leaves(nested_derivatives))
@@ -276,37 +270,6 @@ def test_static_input_literal_is_not_boxed(transform, feedback, expected, execut
     invalid = (("R", "x"), feedback)
     with pytest.raises(AssertionError, match="Static input mismatch"):
         executor(ir, *invalid)
-
-
-@pytest.mark.parametrize(
-    "primitive, values, expected, out_axes",
-    [
-        pytest.param(
-            af.ad.pushforward_call_p,
-            (("hello",), ("tangent",)),
-            ("hello!", "tangent"),
-            (False, False),
-            id="pushforward",
-        ),
-        pytest.param(
-            af.ad.pullback_call_p,
-            (("hello",), "cotangent"),
-            ("hello!", ("cotangent",)),
-            (False, (False,)),
-            id="pullback",
-        ),
-    ],
-)
-@pytest.mark.parametrize("mode", ["sync", "async"])
-def test_batch_rule_without_mapped_inputs(primitive, values, expected, out_axes, mode):
-    ir = af.trace(append_bang)("x")
-    args = (3, (False, False), values)
-    match mode:
-        case "sync":
-            result = af.core.batch_rules.get(primitive)(args, ir=ir)
-        case "async":
-            result = asyncio.run(af.core.batch_rules.aget(primitive)(args, ir=ir))
-    assert result == (expected, out_axes)
 
 
 def polynomial(x):

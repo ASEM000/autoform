@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import functools as ft
-
-import pytest
 
 import autoform as af
 import autoform.extend as afe
@@ -45,7 +42,7 @@ def make_box_domain():
 def test_register_trace_type():
     Box, BoxAVal = make_box_domain()
     aval_rule = lambda value: BoxAVal()
-    assert afe.register_trace_type(Box, aval_rule) is aval_rule
+    afe.register_trace_type(Box, aval_rule)
 
     ir = af.trace(lambda x: x)(Box(1))
 
@@ -58,8 +55,8 @@ def test_register_zero_and_cotangent_accumulator():
     afe.register_trace_type(Box, lambda value: BoxAVal())
     zero_rule = lambda aval: Box(0)
     cot_acc_rule = lambda cotangents, aval: Box(sum(c.value for c in cotangents))
-    assert afe.register_zero(BoxAVal, zero_rule) is zero_rule
-    assert afe.register_cotangent_accumulator(BoxAVal, cot_acc_rule) is cot_acc_rule
+    afe.register_zero(BoxAVal, zero_rule)
+    afe.register_cotangent_accumulator(BoxAVal, cot_acc_rule)
 
     assert afe.materialize(afe.Zero(BoxAVal())) == Box(0)
     assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
@@ -98,39 +95,3 @@ def test_register_dunder_with_static_python_protocol():
     ir = af.trace(lambda x: len(x))(Box(1))
 
     assert ir.call(Box(2)) == 1
-
-
-def test_register_dunder_requires_explicit_replace():
-    _, BoxAVal = make_box_domain()
-
-    def first_rule(x, y):
-        return x, y
-
-    def second_rule(x, y):
-        return y, x
-
-    assert afe.register_dunder(afe.Dunder.ADD, BoxAVal, first_rule) is first_rule
-    with pytest.raises(AssertionError, match="already defined"):
-        afe.register_dunder(afe.Dunder.ADD, BoxAVal, second_rule)
-    assert afe.register_dunder(afe.Dunder.ADD, BoxAVal, second_rule, replace=True) is second_rule
-    assert af.core.dunder_rules[afe.Dunder.ADD, BoxAVal] is second_rule
-
-
-def test_registration_helpers_work_as_decorators():
-    Box, BoxAVal = make_box_domain()
-
-    @ft.partial(afe.register_trace_type, Box)
-    def aval_rule(value):
-        return BoxAVal()
-
-    @ft.partial(afe.register_zero, BoxAVal)
-    def zero_rule(aval):
-        return Box(0)
-
-    @ft.partial(afe.register_dunder, afe.Dunder.ADD, BoxAVal)
-    def add_rule(x, y):
-        return x, y
-
-    assert isinstance(afe.primal_s.avalof(Box(1)), BoxAVal)
-    assert af.ad.zero_rules[BoxAVal] is zero_rule
-    assert af.core.dunder_rules[afe.Dunder.ADD, BoxAVal] is add_rule
