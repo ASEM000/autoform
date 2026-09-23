@@ -424,6 +424,7 @@ class TestRunIR:
         output = eqn.bind(("there", "!"), **eqn.params)
         assert gen.send(output) == (None, "there!")
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "program, traced, runtime, expected, equations",
         [
@@ -453,8 +454,7 @@ class TestRunIR:
             ),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_execution(self, program, traced, runtime, expected, equations, executor):
+    def test_execution(self, executor, program, traced, runtime, expected, equations):
         ir = af.trace(program)(*traced)
         assert len(ir.in_tree) == len(traced)
         assert all((isinstance(v, af.core.Var) for v in ir.in_tree))
@@ -824,6 +824,7 @@ def test_inline_calls_preserve_dataflow():
     assert ir.call("start") == "start12"
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "program, transform, args, expected, primitive",
     [
@@ -854,8 +855,7 @@ def test_inline_calls_preserve_dataflow():
     ],
 )
 @pytest.mark.parametrize("order", ["trace-transform", "transform-trace"])
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_trace_transform_boundary(program, transform, args, expected, primitive, order, executor):
+def test_trace_transform_boundary(executor, program, transform, args, expected, primitive, order):
     inner = af.trace(program)("x")
     match order:
         case "trace-transform":

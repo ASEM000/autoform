@@ -152,7 +152,7 @@ def test_generate_executes_with_response_format():
         pytest.param(af.Enum("yes", "no"), "yes", id="enum"),
     ],
 )
-def test_generate_passes_scalar_schemas_to_client(schema, value, executor):
+def test_generate_passes_scalar_schemas_to_client(executor, schema, value):
     class ScalarClient(af.lm.EchoClient):
         def completion(self, *, response_format, **kwargs):
             assert response_format["json_schema"]["schema"] == emit_json_schema(schema)
@@ -189,6 +189,7 @@ def test_emit_json_schema_rejects_non_json_enum_values():
         emit_json_schema({"kind": enum})
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "primitive, params, client_type, expected",
     [
@@ -202,7 +203,6 @@ def test_emit_json_schema_rejects_non_json_enum_values():
         ),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_batch_supports_variable_models(executor, primitive, params, client_type, expected):
     ir = af.batch(
         af.trace(lm_program(primitive, **params))("test", "gpt-5.5"),
@@ -640,6 +640,7 @@ class TestEchoLMClient:
                 executor(ir, '{"text": "hello"}')
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "primitive, params, client_type, expected",
     [
@@ -653,8 +654,7 @@ class TestEchoLMClient:
         ),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_pushforward(primitive, params, client_type, expected, executor):
+def test_pushforward(executor, primitive, params, client_type, expected):
     ir = af.pushforward(af.trace(lm_program(primitive, **params))("test", "gpt-5.5"))
     args = (("hello", "m1"), ("tangent", "ignored model tangent"))
     with af.lm.client(client_type()):

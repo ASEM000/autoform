@@ -62,6 +62,7 @@ def test_comparison_blocks_pullback():
     assert derivative.aval == af.core.FloatAVal()
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "operation, primal, tangent",
     [
@@ -71,13 +72,13 @@ def test_comparison_blocks_pullback():
         pytest.param(af.numeric.div, 2.0, -3.0, id="div"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_binary_pushforward(operation, primal, tangent, executor):
+def test_binary_pushforward(executor, operation, primal, tangent):
     ir = af.pushforward(af.trace(operation)(2.0, 1.0))
     actual = executor(ir, (2.0, 1.0), (1.0, 2.0))
     assert actual == (primal, tangent)
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "operation, primal, cotangents",
     [
@@ -87,13 +88,13 @@ def test_binary_pushforward(operation, primal, tangent, executor):
         pytest.param(af.numeric.div, 2.0, (1.0, -2.0), id="div"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_binary_pullback(operation, primal, cotangents, executor):
+def test_binary_pullback(executor, operation, primal, cotangents):
     ir = af.pullback(af.trace(operation)(2.0, 1.0))
     actual = executor(ir, (2.0, 1.0), 1.0)
     assert actual == (primal, cotangents)
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "operation, expected",
     [
@@ -109,8 +110,7 @@ def test_binary_pullback(operation, primal, cotangents, executor):
         pytest.param(af.numeric.ge, True, id="ge"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_binary_promotion_and_batching(operation, expected, executor):
+def test_binary_promotion_and_batching(executor, operation, expected):
     assert operation(2, 1) == expected
     ir = af.batch(af.trace(operation)(2.0, 1.0), in_axes=(True, False))
     args = ([2.0], 1.0)
@@ -118,6 +118,7 @@ def test_binary_promotion_and_batching(operation, expected, executor):
     assert actual == [expected]
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "transform, args, expected",
     [
@@ -126,8 +127,7 @@ def test_binary_promotion_and_batching(operation, expected, executor):
         pytest.param(af.batch, ([1.0, 2.0, 3.0],), [-1.0, -2.0, -3.0], id="batch"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_negation(transform, args, expected, executor):
+def test_negation(executor, transform, args, expected):
     assert af.numeric.neg(2) == -2.0
     ir = transform(af.trace(af.numeric.neg)(2.0))
     actual = executor(ir, *args)

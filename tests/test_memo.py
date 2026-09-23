@@ -58,9 +58,9 @@ def test_memoize_scope():
     assert counter.calls == 2
 
 
-@pytest.mark.parametrize("transform", [lambda ir: ir, af.sched], ids=["switch", "scheduled-switch"])
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_memoize_preserves_nested_checkpoints(checkpoint_switch, transform, executor):
+@pytest.mark.parametrize("transform", [lambda ir: ir, af.sched], ids=["switch", "scheduled-switch"])
+def test_memoize_preserves_nested_checkpoints(executor, checkpoint_switch, transform):
     ir = transform(checkpoint_switch)
     with af.collect(collection="cache") as saved, af.memoize():
         for _ in range(4):

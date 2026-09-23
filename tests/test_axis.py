@@ -29,14 +29,15 @@ class TaggedAVal(af.core.AVal):
 
 
 class TestBatchBasic:
-    @pytest.mark.parametrize("container", [list, tuple], ids=["list", "tuple"])
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_single_arg(self, container, executor):
+    @pytest.mark.parametrize("container", [list, tuple], ids=["list", "tuple"])
+    def test_single_arg(self, executor, container):
         ir = af.batch(af.trace(append_bang)("hello"))
         values = container(("hello", "world"))
         result = executor(ir, values)
         assert result == container(("hello!", "world!"))
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "program, traced, args, expected",
         [
@@ -67,8 +68,7 @@ class TestBatchBasic:
             ),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_dataflow(self, program, traced, args, expected, executor):
+    def test_dataflow(self, executor, program, traced, args, expected):
         ir = af.batch(af.trace(program)(*traced))
         actual = executor(ir, *args)
         assert actual == expected
@@ -119,6 +119,7 @@ class TestBatchIRStructure:
         assert ir.call("a") == "c"
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "program, depth, values, expected",
     [
@@ -139,8 +140,7 @@ class TestBatchIRStructure:
         pytest.param(bracket_text, 4, [[[["a"]]]], [[[["[a]"]]]], id="quadruple-single"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_nested_batch(program, depth, values, expected, executor):
+def test_nested_batch(executor, program, depth, values, expected):
     ir = af.trace(program)("hello")
     aval = af.core.StrAVal()
     for _ in range(depth):
@@ -196,6 +196,7 @@ def test_nested_batch_two_inputs(program, traced, args, expected):
     assert ir.call(*args) == expected
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "in_axes, args, expected",
     [
@@ -221,8 +222,7 @@ def test_nested_batch_two_inputs(program, traced, args, expected):
         pytest.param((False, False), ("x0", "Hi"), "Hi: x0", id="both-broadcast"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_batch_axes(in_axes, args, expected, executor):
+def test_batch_axes(executor, in_axes, args, expected):
     ir = af.batch(af.trace(greet)("x0", "Hi"), in_axes=in_axes)
     actual = executor(ir, *args)
     assert actual == expected

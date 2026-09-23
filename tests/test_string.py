@@ -40,6 +40,7 @@ def test_match(left, right, expected):
     assert af.string.match(left, right) is expected
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "program, traced, equal, unequal",
     [
@@ -76,8 +77,7 @@ def test_match(left, right, expected):
     ],
 )
 @pytest.mark.parametrize("expected", [True, False], ids=["equal", "unequal"])
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_match_lowering(program, traced, equal, unequal, expected, executor):
+def test_match_lowering(executor, program, traced, equal, unequal, expected):
     ir = af.trace(program)(*traced)
     assert [eqn.prim for eqn in ir.eqns] == [af.string.match_p]
     args = equal if expected else unequal
@@ -85,6 +85,7 @@ def test_match_lowering(program, traced, equal, unequal, expected, executor):
     assert actual is expected
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "program, traced, args, expected",
     [
@@ -107,8 +108,7 @@ def test_match_lowering(program, traced, equal, unequal, expected, executor):
         ),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_concat_lowering(program, traced, args, expected, executor):
+def test_concat_lowering(executor, program, traced, args, expected):
     ir = af.trace(program)(*traced)
     assert [eqn.prim for eqn in ir.eqns] == [af.string.concat_p]
     actual = executor(ir, *args)
@@ -156,6 +156,7 @@ def test_invalid_traced_operands(program, args, error, message):
         af.trace(program)(*args)
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "transform, args, expected",
     [
@@ -187,8 +188,7 @@ def test_invalid_traced_operands(program, args, error, message):
         ),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_match_transforms(transform, args, expected, executor):
+def test_match_transforms(executor, transform, args, expected):
     ir = transform(af.trace(match_yes)("dummy"))
     actual = executor(ir, *args)
     assert actual == expected
@@ -302,6 +302,7 @@ def test_format_batch_broadcast(executor):
     assert actual == expected
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "template, values, expected, feedback",
     [
@@ -325,8 +326,7 @@ def test_format_batch_broadcast(executor):
         pytest.param("", {}, "", {}, id="empty"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_format_lowers_to_concat(template, values, expected, feedback, executor):
+def test_format_lowers_to_concat(executor, template, values, expected, feedback):
 
     def program(values):
         return af.string.format(template, **values)

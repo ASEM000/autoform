@@ -92,7 +92,7 @@ def format_switch_ir():
         ),
     ],
 )
-def test_fanout_transforms(joined, transform, args, expected, executor):
+def test_fanout_transforms(executor, joined, transform, args, expected):
     scheduled = af.sched(af.trace(parallel_formats(joined=joined))("a"))
     assert [e.prim for e in scheduled.eqns] == [fanout_p] + ([af.string.concat_p] if joined else [])
     ir = transform(scheduled)
@@ -102,7 +102,7 @@ def test_fanout_transforms(joined, transform, args, expected, executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("c_out", [(1.0, 0.0), (2.0, 3.0)], ids=["one-live", "both-live"])
-def test_fanout_pullback_repeated_operand(c_out, executor):
+def test_fanout_pullback_repeated_operand(executor, c_out):
     ir = af.trace(lambda x: (x * x, x + 1.0))(3.0)
     scheduled = af.sched(ir)
     assert [e.prim for e in scheduled.eqns] == [fanout_p]
@@ -168,7 +168,7 @@ def test_fanout_mixed_axes(executor, values, expected):
         ),
     ],
 )
-def test_sched_levels(program, prims, expected, executor):
+def test_sched_levels(executor, program, prims, expected):
     ir = af.sched(af.trace(program)("x"))
     assert [e.prim for e in ir.eqns] == prims
     actual = executor(ir, "test")
@@ -404,7 +404,7 @@ def multiple_dependencies(x):
         ),
     ],
 )
-def test_depends_transforms(transform, args, expected, executor):
+def test_depends_transforms(executor, transform, args, expected):
     ir = af.trace(dependent_formats)("x")
     [barrier] = [e for e in ir.eqns if e.prim is depends_p]
     assert len(af.utils.tree.leaves(barrier.in_tree)) == 2

@@ -618,7 +618,7 @@ def test_partial_switch_keeps_shared_dependencies():
         pytest.param(af.weight, ("x",), id="weight"),
     ],
 )
-def test_unused_wrapper_keeps_checkpoint(transform, args, executor):
+def test_unused_wrapper_keeps_checkpoint(executor, transform, args):
     wrapped = transform(af.trace(checkpoint_then_bang)("x"))
 
     def program(*xs):

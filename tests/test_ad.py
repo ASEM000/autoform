@@ -138,6 +138,7 @@ class TestCotangentHelpers:
     def test_cotangent_accumulation(self, values, expected):
         assert af.ad.cot_acc(values) == expected
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "transform, args, expected",
         [
@@ -152,8 +153,7 @@ class TestCotangentHelpers:
             pytest.param(af.batch, (["a", "b"], ["c", "d"]), ["ac", "bd"], id="batch"),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_cot_acc_transforms(self, transform, args, expected, executor):
+    def test_cot_acc_transforms(self, executor, transform, args, expected):
         source = af.trace(lambda x, y: af.ad.cot_acc([x, y]))("a", "b")
         assert [eqn.prim for eqn in source.eqns] == [af.ad.cot_acc_p]
         ir = transform(source)
@@ -254,6 +254,7 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
     assert isinstance(variable, af.core.Var)
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "transform, feedback, expected",
     [
@@ -261,8 +262,7 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
         pytest.param(af.pullback, "g", (af.ad.zeroof("Q"), "g"), id="pullback"),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_static_input_literal_is_not_boxed(transform, feedback, expected, executor):
+def test_static_input_literal_is_not_boxed(executor, transform, feedback, expected):
     ir = transform(af.trace(af.string.concat, static=(True, False))("Q", "x"))
     args = (("Q", "x"), feedback)
     actual = executor(ir, *args)
@@ -294,6 +294,7 @@ def test_alternating_pushforward_pullback():
     assert ir.call(*args) == expected
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "program, transform, trace_args, args, expected",
     [
@@ -592,8 +593,7 @@ def test_alternating_pushforward_pullback():
         ),
     ],
 )
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_composition(program, transform, trace_args, args, expected, executor):
+def test_composition(executor, program, transform, trace_args, args, expected):
     ir = transform(af.trace(program)(*trace_args))
     result = executor(ir, *args)
     assert result == expected

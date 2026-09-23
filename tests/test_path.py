@@ -177,7 +177,7 @@ class TestWeight:
         assert weights == pytest.approx([0.9, 0.2])
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_batch_over_weight_collects_in_batch_order(self, delay, executor):
+    def test_batch_over_weight_collects_in_batch_order(self, executor, delay):
         def program(seconds: float):
             value = delay(seconds)
             value = af.checkpoint(value, key="seen", collection="debug")
@@ -195,7 +195,7 @@ class TestWeight:
         assert collected == {"seen": [0.03, 0.01, 0.02]}
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_batch_over_weight_injects_in_batch_order(self, delay, executor):
+    def test_batch_over_weight_injects_in_batch_order(self, executor, delay):
         def program(seconds: float):
             value = delay(seconds)
             value = af.checkpoint(value, key="seen", collection="cache")

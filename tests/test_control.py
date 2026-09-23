@@ -306,6 +306,7 @@ class TestEquivIR:
 
 
 class TestStopGradient:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "sample, value",
         [
@@ -313,7 +314,6 @@ class TestStopGradient:
             pytest.param(("a", "b"), ("hello", "world"), id="tree"),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_identity(self, executor, sample, value):
         ir = af.trace(stop_gradient)(sample)
         assert [eqn.prim for eqn in ir.eqns] == [af.control.stop_gradient_p]
@@ -357,6 +357,7 @@ def loop_ir(cond, suffix, max_iters):
 
 
 class TestWhileLoop:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "condition, suffix, max_iters, value, expected",
         [
@@ -367,12 +368,12 @@ class TestWhileLoop:
             pytest.param(lambda x: True, ".", 20, "a", "a" + "." * 20, id="many-iterations"),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_execution(self, executor, condition, suffix, max_iters, value, expected):
         ir = loop_ir(condition, suffix, max_iters)
         result = executor(ir, value)
         assert result == expected
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "condition, suffix, max_iters, values, expected",
         [
@@ -404,13 +405,13 @@ class TestWhileLoop:
             ),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch(self, executor, condition, suffix, max_iters, values, expected):
         ir = af.batch(loop_ir(condition, suffix, max_iters), in_axes=True)
         result = executor(ir, values)
         assert type(result) is type(values)
         assert result == expected
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "condition, suffix, max_iters, primal, cotangent, expected",
         [
@@ -426,7 +427,6 @@ class TestWhileLoop:
             pytest.param(lambda x: True, ".", 2, "a", "g", "a..", id="iterations"),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_pullback(self, executor, condition, suffix, max_iters, primal, cotangent, expected):
         ir = af.pullback(loop_ir(condition, suffix, max_iters))
         args = ((primal,), cotangent)
@@ -655,6 +655,7 @@ class TestSwitch:
         assert af.ad.is_zero(c_key)
         assert c_x == "grad"
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "axes, key, value, expected",
         [
@@ -681,7 +682,6 @@ class TestSwitch:
             ),
         ],
     )
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch(self, executor, axes, key, value, expected, numbered_switch):
         ir = af.batch(numbered_switch, in_axes=axes)
         result = executor(ir, key, value)
