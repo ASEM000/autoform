@@ -19,11 +19,13 @@ os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 import autoform as af
 
-execute = af.core.IR.call
+
+def execute(ir, *args):
+    return ir.call(*args)
 
 
-def aexecute(ir, *args, **kwargs):
-    return asyncio.run(ir.acall(*args, **kwargs))
+def aexecute(ir, *args):
+    return asyncio.run(ir.acall(*args))
 
 
 def prefix_name(prefix, name):
