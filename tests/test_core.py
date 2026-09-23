@@ -499,7 +499,13 @@ class TestKeywordArgumentBoundary:
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             af.trace(program)("A", repeat=3)
 
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
+        "executor",
+        [
+            pytest.param(af.core.IR.call, id="sync"),
+            pytest.param(af.core.IR.acall, id="async"),
+        ],
+    )
     def test_call_rejects_kwargs(self, executor):
 
         def program(name, punctuation):
