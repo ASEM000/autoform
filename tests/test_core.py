@@ -133,23 +133,24 @@ class TestSpace:
 
 
 class TestBuildIR:
-    def test_trace_scalar_input_is_dynamic(self):
+    @pytest.mark.parametrize(
+        "traced, runtime, expected, aval",
+        [
+            pytest.param(1, 2, 2, af.core.IntAVal(), id="integer"),
+            pytest.param(1.5, 2.5, 2.5, af.core.FloatAVal(), id="float"),
+            pytest.param(True, False, False, af.core.BoolAVal(), id="boolean"),
+        ],
+    )
+    def test_trace_scalar_input_is_dynamic(self, traced, runtime, expected, aval):
         def program(x):
             return x
 
-        cases = [
-            (1, 2, 2, af.core.IntAVal()),
-            (1.5, 2.5, 2.5, af.core.FloatAVal()),
-            (True, False, False, af.core.BoolAVal()),
-        ]
-
-        for traced, runtime, expected, aval in cases:
-            ir = af.trace(program)(traced)
-            assert isinstance(ir.in_tree, tuple)
-            assert len(ir.in_tree) == 1
-            assert isinstance(ir.in_tree[0], af.core.Var)
-            assert ir.in_tree[0].aval == aval
-            assert ir.call(runtime) == expected
+        ir = af.trace(program)(traced)
+        assert isinstance(ir.in_tree, tuple)
+        assert len(ir.in_tree) == 1
+        assert isinstance(ir.in_tree[0], af.core.Var)
+        assert ir.in_tree[0].aval == aval
+        assert ir.call(runtime) == expected
 
     def test_trace_dict_input_with_scalar_leaves(self):
         def program(payload):
