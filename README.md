@@ -168,7 +168,7 @@ print(candidate)
 
 </details>
 
-## Walkthrough
+## More
 
 To learn more about `autoform`'s building blocks: types, operations, transformations, and execution model, see [concepts](https://autoform.readthedocs.io/en/latest/concepts/index.html).
 
