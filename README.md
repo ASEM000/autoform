@@ -41,8 +41,7 @@ The examples below compose `batch` and `pullback` over numerical and text progra
 The same transformation interfaces apply to both, with each operation supplying
 its own rules.
 
-<details>
-<summary>Numerical example</summary>
+### Numerical example
 
 The numerical example uses $f(x, y) = xy$, where $x, y \in \mathbb{R}$ are represented by
 Python `float`. `pullback` computes gradients, and `batch` composed with
@@ -91,10 +90,7 @@ candidate = x - 0.1 * feedback
 print(scalar_ir.call(candidate, 2.0))  # 5.2
 ```
 
-</details>
-
-<details>
-<summary>Text example</summary>
+### Text example
 
 The text example uses $f(x) = \mathrm{LM}(p(x))$, where $x \in \Sigma^*$
 is an instruction represented by Python `str`, and $p$ concatenates it with a
@@ -165,8 +161,6 @@ candidate = af.lm.complete([dict(role="user", content=revision_request)], model=
 
 print(candidate)
 ```
-
-</details>
 
 ## More
 
