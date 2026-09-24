@@ -132,11 +132,11 @@ def explain(instruction: str) -> str:
 # --- trace ---
 text_ir = af.trace(explain)("...")  # supply example argument
 text_feedback_ir = af.pullback(text_ir)
-instruction = "Explain the following topic briefly."
-critique = "Provide formal explanation."
+instruction = "explain the following topic briefly."
+critique = "provide formal explanation."
 
 # --- batch ---
-instructions = ["Explain in 200 words.", "Explain in 50 words."]
+instructions = ["explain in 200 words.", "explain in 50 words."]
 print(af.batch(text_ir).call(instructions))
 
 # --- pullback ---
@@ -147,16 +147,13 @@ answer, (feedback,) = text_feedback_ir.call((instruction,), critique)
 batched_text_feedback_ir = af.batch(af.pullback(text_ir))
 answers, (feedbacks,) = batched_text_feedback_ir.call(
     (instructions,),
-    ["Provide formal explanation.", "Provide simple example."],
+    ["provide formal explanation.", "provide simple example."],
 )
 print(feedbacks)
 
 # --- optimization ---
 # ask a model to revise the instruction (the program argument) using backward feedback.
-revision_request = (
-    "Revise the instruction based on the current intstruction and the feedback.\n"
-    "<instruction>:\n" + instruction + "\n<feedback>:\n" + feedback
-)
+revision_request = "revise \n<instruction>:\n" + instruction + "\n<feedback>:\n" + feedback
 candidate = af.lm.complete([dict(role="user", content=revision_request)], model=model)
 
 print(candidate)
