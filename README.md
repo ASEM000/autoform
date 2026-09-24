@@ -94,7 +94,7 @@ print(scalar_ir.call(candidate, 2.0))  # 5.2
 
 The text example uses $f(x) = \mathrm{LM}(p(x))$, where $x \in \Sigma^*$
 is an instruction represented by Python `str`, and $p$ concatenates it with a
-topic. `pullback` propagates textual feedback to the instruction; composing it
+topic. `pullback` propagates textual feedback to the instruction then composing it
 with `batch` computes feedback for multiple instructions.
 
 <details>
