@@ -36,15 +36,6 @@ type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 
 # ==================================================================================================
-# ZERO
-# ==================================================================================================
-
-
-def all_zero(x: Tree, /) -> bool:
-    return all(isinstance(leaf, core.Zero) for leaf in utils.tree.leaves(x))
-
-
-# ==================================================================================================
 # PUSHFORWARD
 # ==================================================================================================
 
@@ -155,7 +146,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
         def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
             p_in, t_in = pusher.unbox(boxed_in)
-            if not all_zero(t_in):
+            if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
                 return eqn.bind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = eqn.bind(p_in, **eqn.params)
@@ -179,7 +170,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
         async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
             p_in, t_in = pusher.unbox(boxed_in)
-            if not all_zero(t_in):
+            if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
                 return await eqn.abind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = await eqn.abind(p_in, **eqn.params)
