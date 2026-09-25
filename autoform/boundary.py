@@ -199,7 +199,7 @@ class CustomFunc:
             ...     primals, tangents = in_tree
             ...     (dx,) = tangents
             ...     p_out = call(*primals)
-            ...     t_out = "delta " + af.ad.materialize(dx)
+            ...     t_out = "delta " + af.core.materialize_zeros(dx)
             ...     return p_out, t_out
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
             >>> af.pushforward(ir).call(("hello",), ("change",))
@@ -223,7 +223,7 @@ class CustomFunc:
             ...     primals, tangents = in_tree
             ...     (dx,) = tangents
             ...     p_out = call(*primals)
-            ...     t_out = "async delta " + af.ad.materialize(dx)
+            ...     t_out = "async delta " + af.core.materialize_zeros(dx)
             ...     return p_out, t_out
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
             >>> asyncio.run(af.pushforward(ir).acall(("hello",), ("change",)))
@@ -400,7 +400,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     primals, tangents = in_tree
         ...     (dx,) = tangents
         ...     p_out = call(*primals)
-        ...     t_out = "delta: " + af.ad.materialize(dx)
+        ...     t_out = "delta: " + af.core.materialize_zeros(dx)
         ...     return p_out, t_out
         >>> af.pushforward(base).call(("hello",), ("change",))
         ('[hello]', 'delta: change')
@@ -431,7 +431,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         A common use is wrapping an LM call so the forward call remains normal,
         while pushforward and pullback use prompts written for that application.
 
-        >>> from autoform.ad import materialize
+        >>> from autoform.core import materialize_zeros
         >>> @af.custom
         ... def summarize(text, model):
         ...     message = "Summarize this in one sentence: " + text
@@ -448,7 +448,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     p_out = call(*primals)
         ...     prompt = (
         ...         "Original input:\\n" + text
-        ...         + "\\n\\nInput edit:\\n" + materialize(text_tangent)
+        ...         + "\\n\\nInput edit:\\n" + materialize_zeros(text_tangent)
         ...         + "\\n\\nDescribe how the summary should change."
         ...     )
         ...     t_out = af.lm.complete([{"role": "user", "content": prompt}], model=model)
@@ -465,7 +465,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     prompt = (
         ...         "Original input:\\n" + text
         ...         + "\\n\\nLM output:\\n" + output
-        ...         + "\\n\\nDownstream feedback:\\n" + materialize(cotangent)
+        ...         + "\\n\\nDownstream feedback:\\n" + materialize_zeros(cotangent)
         ...         + "\\n\\nReturn feedback for improving the original input."
         ...     )
         ...     text_cotangent = af.lm.complete([{"role": "user", "content": prompt}], model=model)
