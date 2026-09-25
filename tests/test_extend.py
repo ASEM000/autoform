@@ -14,7 +14,6 @@
 
 
 import autoform as af
-import autoform.extend as afe
 
 
 def make_box_domain():
@@ -27,7 +26,7 @@ def make_box_domain():
         def __eq__(self, other):
             return type(self) is type(other) and self.value == other.value
 
-    class BoxAVal(afe.AVal):
+    class BoxAVal(af.core.AVal):
         __slots__ = []
 
         def __eq__(self, other):
@@ -36,29 +35,33 @@ def make_box_domain():
         def __hash__(self):
             return hash(type(self))
 
+        def zero(self):
+            return Box(0)
+
+        def accumulate(self, cotangents):
+            return Box(sum(c.value for c in cotangents))
+
     return Box, BoxAVal
 
 
 def test_register_trace_type():
     Box, BoxAVal = make_box_domain()
     aval_rule = lambda value: BoxAVal()
-    afe.register_trace_type(Box, aval_rule)
+    af.core.trace_types.add(Box)
+    af.core.primal_s.set(Box, aval_rule)
 
     ir = af.trace(lambda x: x)(Box(1))
 
-    assert afe.primal_s.avalof(Box(1)) == BoxAVal()
+    assert af.core.primal_s.avalof(Box(1)) == BoxAVal()
     assert ir.in_tree[0].aval == BoxAVal()
 
 
-def test_register_zero_and_cotangent_accumulator():
+def test_aval_zero_and_accumulation():
     Box, BoxAVal = make_box_domain()
-    afe.register_trace_type(Box, lambda value: BoxAVal())
-    zero_rule = lambda aval: Box(0)
-    cot_acc_rule = lambda cotangents, aval: Box(sum(c.value for c in cotangents))
-    afe.register_zero(BoxAVal, zero_rule)
-    afe.register_cotangent_accumulator(BoxAVal, cot_acc_rule)
+    af.core.trace_types.add(Box)
+    af.core.primal_s.set(Box, lambda value: BoxAVal())
 
-    assert afe.materialize(afe.Zero(BoxAVal())) == Box(0)
+    assert af.core.materialize_zeros(af.core.Zero(BoxAVal())) == Box(0)
     assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
 
 
@@ -76,8 +79,9 @@ def test_register_dunder_with_primitive_rules():
         del in_tree
         return BoxAVal()
 
-    afe.register_trace_type(Box, lambda value: BoxAVal())
-    afe.register_dunder(afe.Dunder.ADD, BoxAVal, box_add)
+    af.core.trace_types.add(Box)
+    af.core.primal_s.set(Box, lambda value: BoxAVal())
+    af.core.dunder_rules[af.core.Dunder.ADD, BoxAVal] = box_add
     box_add_p = af.core.Prim("test_box_add")
     af.core.impl_rules.set(box_add_p, impl_add)
     af.core.abstract_rules.set(box_add_p, abstract_add)
@@ -89,8 +93,9 @@ def test_register_dunder_with_primitive_rules():
 
 def test_register_dunder_with_static_python_protocol():
     Box, BoxAVal = make_box_domain()
-    afe.register_trace_type(Box, lambda value: BoxAVal())
-    afe.register_dunder(afe.Dunder.LEN, BoxAVal, lambda value: 1)
+    af.core.trace_types.add(Box)
+    af.core.primal_s.set(Box, lambda value: BoxAVal())
+    af.core.dunder_rules[af.core.Dunder.LEN, BoxAVal] = lambda value: 1
 
     ir = af.trace(lambda x: len(x))(Box(1))
 

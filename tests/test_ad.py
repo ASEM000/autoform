@@ -30,25 +30,23 @@ def test_int_input_is_not_differentiable(transform):
 
 
 @pytest.mark.parametrize(
-    "transform, space, zeroof, change",
+    "transform, space, change",
     [
         pytest.param(
             af.pushforward,
             af.core.tangent_s,
-            af.ad.tangent_zeroof,
             "replace hello",
             id="tangent",
         ),
         pytest.param(
             af.pullback,
             af.core.cotangent_s,
-            af.ad.cotangent_zeroof,
             "be clearer",
             id="cotangent",
         ),
     ],
 )
-def test_wrapper_uses_derivative_space(transform, space, zeroof, change):
+def test_wrapper_uses_derivative_space(transform, space, change):
     class Text:
         def __init__(self, value):
             self.value = value
@@ -75,44 +73,45 @@ def test_wrapper_uses_derivative_space(transform, space, zeroof, change):
 
     text, delta = Text("hello"), Change(change)
     assert ir.call((text,), (delta,)) == ((text,), (delta,))
-    assert isinstance(zeroof(text).aval, ChangeAVal)
+    assert isinstance(space.zeroof(af.core.primal_s.avalof(text)).aval, ChangeAVal)
     nested_derivatives = transform(ir).in_tree[1]
     assert all(isinstance(v.aval, ChangeAVal) for v in af.utils.tree.leaves(nested_derivatives))
 
 
 class TestCotangentHelpers:
     def test_zero_string_contract(self):
-        z = af.ad.Zero(af.core.StrAVal())
-        assert af.ad.is_zero(z)
-        assert z.aval == af.core.StrAVal()
-        assert z == af.ad.Zero(af.core.StrAVal())
-        assert z != af.ad.Zero(af.core.BoolAVal())
-        assert af.ad.zeroof(z) is z
-        assert af.ad.materialize(z) == ""
-        assert af.core.primal_s.avalof(z) == af.core.StrAVal()
+        z = af.core.Zero(af.string.StrAVal())
+        assert isinstance(z, af.core.Zero)
+        assert z.aval == af.string.StrAVal()
+        assert z == af.core.Zero(af.string.StrAVal())
+        assert z != af.core.Zero(af.numeric.BoolAVal())
+        assert af.core.primal_s.zeroof(z) == z
+        assert af.core.materialize_zeros(z) == ""
+        assert af.core.primal_s.avalof(z) == af.string.StrAVal()
         assert not af.core.is_traceable(z)
 
     def test_zero_requires_aval(self):
         with pytest.raises(AssertionError, match="Expected AVal"):
-            af.ad.Zero(str)
+            af.core.Zero(str)
 
     def test_zero_non_differentiable_type(self):
-        z = af.ad.Zero(af.core.BoolAVal())
-        assert af.ad.is_zero(z)
-        assert z.aval == af.core.BoolAVal()
-        with pytest.raises(TypeError):
-            af.ad.materialize(z)
+        z = af.core.Zero(af.numeric.BoolAVal())
+        assert isinstance(z, af.core.Zero)
+        assert z.aval == af.numeric.BoolAVal()
+        with pytest.raises(AssertionError, match="No concrete zero defined"):
+            af.core.materialize_zeros(z)
 
-    def test_zero_materializes_with_registered_aval_rule(self):
+    def test_zero_materializes_with_aval_metadata(self):
         class BlobAVal(af.core.AVal):
             __slots__ = ["size"]
 
             def __init__(self, size):
                 self.size = size
 
-        af.ad.zero_rules[BlobAVal] = lambda aval: ("zero", aval.size)
+            def zero(self):
+                return "zero", self.size
 
-        assert af.ad.materialize(af.ad.Zero(BlobAVal(3))) == ("zero", 3)
+        assert af.core.materialize_zeros(af.core.Zero(BlobAVal(3))) == ("zero", 3)
 
     @pytest.mark.parametrize(
         "values, expected",
@@ -122,15 +121,15 @@ class TestCotangentHelpers:
             pytest.param([["a", "b"], ["c", "d"]], ["ac", "bd"], id="lists"),
             pytest.param(
                 [
-                    {"x": ["1", af.ad.Zero(af.core.StrAVal())], "y": "a"},
+                    {"x": ["1", af.core.Zero(af.string.StrAVal())], "y": "a"},
                     {"x": ["2", "b"], "y": "c"},
                 ],
                 {"x": ["12", "b"], "y": "ac"},
                 id="nested-with-zero",
             ),
             pytest.param(
-                [af.ad.Zero(af.core.StrAVal()), af.ad.Zero(af.core.StrAVal())],
-                af.ad.Zero(af.core.StrAVal()),
+                [af.core.Zero(af.string.StrAVal()), af.core.Zero(af.string.StrAVal())],
+                af.core.Zero(af.string.StrAVal()),
                 id="all-zero",
             ),
         ],
@@ -163,16 +162,19 @@ class TestCotangentHelpers:
     def test_cot_acc_all_zeros_must_match_aval(self):
         with pytest.raises(AssertionError):
             af.ad.cot_acc([
-                af.ad.Zero(af.core.StrAVal()),
-                af.ad.Zero(af.core.IntAVal()),
+                af.core.Zero(af.string.StrAVal()),
+                af.core.Zero(af.numeric.IntAVal()),
             ])
 
-    def test_cot_acc_registered_val_without_rule_raises(self):
+    def test_cot_acc_unsupported_type_raises(self):
         with pytest.raises(
-            TypeError,
-            match=r"No cotangent accumulator registered for BoolAVal\(\)",
+            AssertionError,
+            match=r"No cotangent accumulation defined for BoolAVal\(\)",
         ):
             af.ad.cot_acc([True, False])
+        ir = af.trace(lambda x, y: af.ad.cot_acc([x, y]))(True, False)
+        with pytest.raises(AssertionError, match="No cotangent accumulation defined"):
+            ir.call(True, False)
 
     def test_cot_acc_unregistered_leaf_raises(self):
         class Blob: ...
@@ -180,20 +182,22 @@ class TestCotangentHelpers:
         with pytest.raises(TypeError, match="No primal aval rule registered"):
             af.ad.cot_acc([Blob(), Blob()])
 
-    def test_cot_acc_uses_registered_aval_rule(self):
+    def test_cot_acc_uses_aval_method(self):
         class Text:
             def __init__(self, value):
                 self.value = value
 
-        class TextAVal(af.core.AVal): ...
+        class TextAVal(af.core.AVal):
+            def accumulate(self, cotangents):
+                return Text("|".join(c.value for c in cotangents))
 
         af.core.primal_s.set(Text, lambda _: TextAVal())
-        af.ad.cot_acc_rules[TextAVal] = lambda cs, aval: Text("|".join(c.value for c in cs))
         result = af.ad.cot_acc([Text("a"), Text("b")])
         assert isinstance(result, Text)
         assert result.value == "a|b"
 
-    def test_pullback_accumulates_custom_cotangent_space(self):
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_pullback_accumulates_custom_cotangent_space(self, executor):
         class Text:
             def __init__(self, value):
                 self.value = value
@@ -204,23 +208,29 @@ class TestCotangentHelpers:
 
         class TextAVal(af.core.AVal): ...
 
-        class TextFeedbackAVal(af.core.AVal): ...
+        class TextFeedbackAVal(af.core.AVal):
+            def zero(self):
+                return TextFeedback("")
+
+            def accumulate(self, cotangents):
+                return TextFeedback(" | ".join(c.value for c in cotangents))
+
+        class DerivedFeedbackAVal(TextFeedbackAVal): ...
 
         af.core.primal_s.set(Text, lambda _: TextAVal())
-        af.core.primal_s.set(TextFeedback, lambda _: TextFeedbackAVal())
-        af.core.cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
-        af.ad.zero_rules[TextFeedbackAVal] = lambda _: TextFeedback("")
-        af.ad.cot_acc_rules[TextFeedbackAVal] = lambda cs, _: TextFeedback(
-            " | ".join(c.value for c in cs)
-        )
+        af.core.primal_s.set(TextFeedback, lambda _: DerivedFeedbackAVal())
+        af.core.cotangent_s.set(TextAVal, lambda _: DerivedFeedbackAVal())
         var = af.core.Var(aval=TextAVal())
         ir = af.core.IR([], (var,), (var, var))
         text = Text("hello")
-        p_out, c_in = af.pullback(ir).call((text,), (TextFeedback("left"), TextFeedback("right")))
+        p_out, c_in = executor(
+            af.pullback(ir), (text,), (TextFeedback("left"), TextFeedback("right"))
+        )
         assert p_out == (text, text)
         assert isinstance(c_in[0], TextFeedback)
         assert c_in[0].value == "left | right"
-        assert af.ad.materialize(af.ad.cotangent_zeroof(text)).value == ""
+        zero = af.core.cotangent_s.zeroof(af.core.primal_s.avalof(text))
+        assert af.core.materialize_zeros(zero).value == ""
 
 
 @pytest.mark.parametrize(
@@ -231,11 +241,11 @@ class TestCotangentHelpers:
     ],
 )
 def test_literal_input_derivatives_are_zero(transform, literal, derivative_side):
-    var = af.core.Var(aval=af.core.StrAVal())
+    var = af.core.Var(aval=af.string.StrAVal())
     ir = af.core.IR([], (literal, var), (var,))
     zero, variable = getattr(transform(ir), derivative_side)[1]
-    assert af.ad.is_zero(zero)
-    assert zero.aval == af.core.StrAVal()
+    assert isinstance(zero, af.core.Zero)
+    assert zero.aval == af.string.StrAVal()
     assert isinstance(variable, af.core.Var)
 
 
@@ -249,8 +259,8 @@ def test_literal_input_derivatives_are_zero(transform, literal, derivative_side)
 def test_literal_output_derivatives_are_zero(transform, derivative_side):
     ir = af.trace(lambda x: (x, "constant_output"))("input")
     variable, zero = getattr(transform(ir), derivative_side)[1]
-    assert af.ad.is_zero(zero)
-    assert zero.aval == af.core.StrAVal()
+    assert isinstance(zero, af.core.Zero)
+    assert zero.aval == af.string.StrAVal()
     assert isinstance(variable, af.core.Var)
 
 
@@ -258,8 +268,8 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
 @pytest.mark.parametrize(
     "transform, feedback, expected",
     [
-        pytest.param(af.pushforward, (af.ad.zeroof("Q"), "dx"), "dx", id="pushforward"),
-        pytest.param(af.pullback, "g", (af.ad.zeroof("Q"), "g"), id="pullback"),
+        pytest.param(af.pushforward, (af.core.primal_s.zeroof("Q"), "dx"), "dx", id="pushforward"),
+        pytest.param(af.pullback, "g", (af.core.primal_s.zeroof("Q"), "g"), id="pullback"),
     ],
 )
 def test_static_input_literal_is_not_boxed(executor, transform, feedback, expected):

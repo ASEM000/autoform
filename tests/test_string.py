@@ -17,8 +17,8 @@ from typing import NamedTuple
 import pytest
 
 import autoform as af
-from autoform.core import BoolAVal, StrAVal
-from autoform.string import abstract_match
+from autoform.numeric import BoolAVal
+from autoform.string import StrAVal, abstract_match
 from tests import aexecute, execute
 
 
@@ -165,25 +165,25 @@ def test_invalid_traced_operands(program, args, error, message):
         pytest.param(
             af.pushforward,
             (("yes",), ("tangent_input",)),
-            (True, af.ad.Zero(BoolAVal())),
+            (True, af.core.Zero(BoolAVal())),
             id="pushforward-true",
         ),
         pytest.param(
             af.pushforward,
             (("no",), ("tangent_input",)),
-            (False, af.ad.Zero(BoolAVal())),
+            (False, af.core.Zero(BoolAVal())),
             id="pushforward-false",
         ),
         pytest.param(
             af.pullback,
             (("yes",), "feedback"),
-            (True, (af.ad.Zero(StrAVal()),)),
+            (True, (af.core.Zero(StrAVal()),)),
             id="pullback-true",
         ),
         pytest.param(
             af.pullback,
             (("no",), "feedback"),
-            (False, (af.ad.Zero(StrAVal()),)),
+            (False, (af.core.Zero(StrAVal()),)),
             id="pullback-false",
         ),
     ],
@@ -340,10 +340,10 @@ def test_format_lowers_to_concat(executor, template, values, expected, feedback)
     assert actual == primal
     pf = af.pushforward(ir)
     result = executor(pf, (values,), (values,))
-    assert af.ad.materialize(result) == (primal, expected)
+    assert af.core.materialize_zeros(result) == (primal, expected)
     pb = af.pullback(ir)
     result = executor(pb, (values,), "g")
-    assert af.ad.materialize(result) == (primal, (feedback,))
+    assert af.core.materialize_zeros(result) == (primal, (feedback,))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -363,7 +363,7 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")
     pb = af.pullback(ir)
     expected = ("A/B/A", (Record("gg", ("g", "")),))
-    assert af.ad.materialize(executor(pb, (row,), "g")) == expected
+    assert af.core.materialize_zeros(executor(pb, (row,), "g")) == expected
 
 
 @pytest.mark.parametrize(

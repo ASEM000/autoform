@@ -69,6 +69,11 @@ class TestSpace:
             space.set(Blob, replacement)
         space.set(Blob, replacement, replace=True)
         assert space.avalof(Blob(3)) == BlobAVal(4)
+        zero = space.zeroof(Blob(3))
+        assert isinstance(zero, af.core.Zero)
+        assert zero.aval == BlobAVal(4)
+        with pytest.raises(AssertionError, match="No concrete zero defined"):
+            af.core.materialize_zeros(zero)
 
     @pytest.mark.parametrize(
         "value_type, rule, replace, message",
@@ -96,9 +101,9 @@ class TestSpace:
     @pytest.mark.parametrize(
         "aval",
         [
-            pytest.param(af.core.StrAVal(), id="string"),
-            pytest.param(af.core.FloatAVal(), id="float"),
-            pytest.param(af.core.BoolAVal(), id="boolean"),
+            pytest.param(af.string.StrAVal(), id="string"),
+            pytest.param(af.numeric.FloatAVal(), id="float"),
+            pytest.param(af.numeric.BoolAVal(), id="boolean"),
         ],
     )
     def test_builtin_ad_spaces_preserve_aval(self, space, aval):
@@ -125,6 +130,8 @@ class TestSpace:
         assert isinstance(cotangent, TextFeedbackAVal)
         assert tangent_s.avalof(tangent) is tangent
         assert cotangent_s.avalof(cotangent) is cotangent
+        assert isinstance(tangent_s.zeroof(TextAVal()).aval, TextEditAVal)
+        assert isinstance(cotangent_s.zeroof(TextAVal()).aval, TextFeedbackAVal)
 
     @pytest.mark.parametrize(
         "space",
@@ -138,15 +145,17 @@ class TestSpace:
 
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
             space.avalof(UnknownAVal())
+        with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
+            space.zeroof(UnknownAVal())
 
 
 class TestBuildIR:
     @pytest.mark.parametrize(
         "traced, runtime, expected, aval",
         [
-            pytest.param(1, 2, 2, af.core.IntAVal(), id="integer"),
-            pytest.param(1.5, 2.5, 2.5, af.core.FloatAVal(), id="float"),
-            pytest.param(True, False, False, af.core.BoolAVal(), id="boolean"),
+            pytest.param(1, 2, 2, af.numeric.IntAVal(), id="integer"),
+            pytest.param(1.5, 2.5, 2.5, af.numeric.FloatAVal(), id="float"),
+            pytest.param(True, False, False, af.numeric.BoolAVal(), id="boolean"),
         ],
     )
     def test_trace_scalar_input_is_dynamic(self, traced, runtime, expected, aval):
@@ -367,7 +376,7 @@ class TestTags:
     def test_bind_reinstalls_equation_tags(self):
         def abstract_probe(x):
             del x
-            return af.core.StrAVal()
+            return af.string.StrAVal()
 
         def impl_probe(x):
             names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))
@@ -479,7 +488,7 @@ def test_nested_primitive_inputs():
 
     primitive = af.core.Prim("greet")
     af.core.impl_rules.set(primitive, impl)
-    af.core.abstract_rules.set(primitive, lambda inputs: af.core.StrAVal())
+    af.core.abstract_rules.set(primitive, lambda inputs: af.string.StrAVal())
     greeting_ir = af.trace(
         lambda name: primitive.bind((name, dict(greeting="Hi", punctuation="?")))
     )("World")
@@ -536,7 +545,7 @@ def test_ir_and_equation_fields():
         case af.core.IR(
             eqns=[af.core.Eqn(prim=prim, in_tree=inputs, out_tree=output, params=params)]
         ):
-            assert prim is af.extend.checkpoint_p
+            assert prim is af.intercept.checkpoint_p
             assert inputs is ir.in_tree[0]
             assert output is ir.out_tree
             assert params == {"key": "x", "collection": "old"}
@@ -562,9 +571,9 @@ class TestPrimitive:
 
 
 def test_variable_and_literal_boundary():
-    var = af.core.Var(aval=af.core.StrAVal())
+    var = af.core.Var(aval=af.string.StrAVal())
     assert af.core.is_var(var)
-    assert var.aval == af.core.StrAVal()
+    assert var.aval == af.string.StrAVal()
     assert af.core.primal_s.avalof(var) is var.aval
     assert not af.core.is_traceable(var)
     assert not af.core.is_var("hello")
@@ -583,7 +592,7 @@ class TestBind:
 
         @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
-            return af.core.StrAVal()
+            return af.string.StrAVal()
 
         def func(x):
             return p.bind(x, multiplier=3)
@@ -598,7 +607,7 @@ def test_interpreter_context_restores_default():
     tracer = af.core.TraceInterpreter()
     with af.core.using_interpreter(tracer) as active:
         assert active is tracer
-        af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.core.StrAVal()))
+        af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.string.StrAVal()))
         assert len(tracer.eqns) == 1
     assert isinstance(af.core.active_interpreter.get(), af.core.EvalInterpreter)
     assert af.string.concat("a", "b") == "ab"
@@ -759,7 +768,7 @@ class TestFold:
     def test_async_dynamic_trace_dispatch_stages_primitive(self):
         def abstract_async_probe(in_tree):
             del in_tree
-            return af.core.StrAVal()
+            return af.string.StrAVal()
 
         async_probe_p = af.core.Prim("async_dynamic_fold_probe")
         af.core.abstract_rules.set(async_probe_p, abstract_async_probe)

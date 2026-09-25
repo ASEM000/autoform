@@ -269,7 +269,7 @@ class TestIrVarProducers:
         assert producers == {produced: ir.eqns[0]}
 
     def test_errors_if_same_var_is_produced_twice(self):
-        shared = af.core.Var.fresh(aval=af.core.StrAVal())
+        shared = af.core.Var.fresh(aval=af.string.StrAVal())
         eqn_a = af.core.Eqn(af.core.Prim("a"), (), shared, {})
         eqn_b = af.core.Eqn(af.core.Prim("b"), (), shared, {})
         ir = af.core.IR([eqn_a, eqn_b], in_tree=(), out_tree=shared)
