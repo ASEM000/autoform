@@ -4,6 +4,7 @@
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal
+   :members: zero, accumulate
 .. autoclass:: autoform.extend.StrAVal
 .. autoclass:: autoform.extend.IntAVal
 .. autoclass:: autoform.extend.FloatAVal

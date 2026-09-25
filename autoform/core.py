@@ -34,10 +34,8 @@ type Tree[T] = utils.Tree[T]
 __all__ = [
     # base types
     "AVal",
-    "StrAVal",
-    "IntAVal",
-    "FloatAVal",
-    "BoolAVal",
+    "Zero",
+    "materialize_zeros",
     "Val",
     "trace_types",
     "is_traceable",
@@ -117,6 +115,14 @@ class AVal:
 
     __slots__ = []
 
+    def zero(self):
+        """Construct a concrete zero with this abstract value."""
+        assert False, f"No concrete zero defined for {self!r}"
+
+    def accumulate(self, cotangents: Tree, /):
+        """Combine nonzero cotangent contributions with this abstract value."""
+        assert False, f"No cotangent accumulation defined for {self!r}"
+
 
 class ScalarAVal(AVal):
     __slots__ = []
@@ -131,60 +137,50 @@ class ScalarAVal(AVal):
         return hash(type(self))
 
 
-class StrAVal(ScalarAVal):
-    """Abstract value for ``str`` leaves.
+class Zero[T: AVal]:
+    """Symbolic zero for an abstract value."""
 
-    Example:
-        >>> import autoform as af
-        >>> ir = af.trace(lambda x: x)("x")
-        >>> (x,) = ir.in_tree
-        >>> x.aval
-        StrAVal()
+    __slots__ = ["aval"]
+
+    def __init__(self, aval: T, /):
+        assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
+        self.aval = aval
+
+    def __repr__(self):
+        return f"Zero({self.aval!r})"
+
+    def __eq__(self, other):
+        return isinstance(other, Zero) and self.aval == other.aval
+
+    def __hash__(self):
+        return hash((type(self), self.aval))
+
+
+def materialize_zeros(x: Tree, /) -> Tree:
+    """Replace each Zero leaf in a pytree with its concrete zero value.
+
+    ``materialize_zeros`` is useful inside transform rules before calling primitives
+    that expect real runtime values instead of symbolic zeros.
+
+    Args:
+        x: Pytree that may contain ``Zero`` leaves.
+
+    Returns:
+        A pytree with the same structure as ``x`` where each symbolic zero has
+        been replaced by the concrete zero returned by its AVal.
+
+    Raises:
+        AssertionError: If a ``Zero`` has a type with no concrete
+            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
+            path through a non-differentiable type.
     """
 
-    __slots__ = []
+    def map_func(x):
+        if not isinstance(x, Zero):
+            return x
+        return x.aval.zero()
 
-
-class IntAVal(ScalarAVal):
-    """Abstract value for ``int`` leaves.
-
-    Example:
-        >>> import autoform as af
-        >>> ir = af.trace(lambda x: x)(1)
-        >>> (x,) = ir.in_tree
-        >>> x.aval
-        IntAVal()
-    """
-
-    __slots__ = []
-
-
-class FloatAVal(ScalarAVal):
-    """Abstract value for ``float`` leaves.
-
-    Example:
-        >>> import autoform as af
-        >>> ir = af.trace(lambda x: x)(1.0)
-        >>> (x,) = ir.in_tree
-        >>> x.aval
-        FloatAVal()
-    """
-
-    __slots__ = []
-
-
-class BoolAVal(ScalarAVal):
-    """Abstract value for ``bool`` leaves.
-
-    Example:
-        >>> import autoform as af
-        >>> ir = af.trace(lambda x: x)(True)
-        >>> (x,) = ir.in_tree
-        >>> x.aval
-        BoolAVal()
-    """
-
-    __slots__ = []
+    return utils.tree.map(map_func, x)
 
 
 type Val = str | int | float | bool
@@ -223,24 +219,19 @@ class Space:
         assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
         return aval
 
+    def zeroof(self, value, /) -> Zero:
+        """Return a symbolic zero carrying ``self.avalof(value)``."""
+        return Zero(self.avalof(value))
+
 
 primal_s = Space("primal")
-primal_s.set(str, lambda _: StrAVal())
-primal_s.set(int, lambda _: IntAVal())
-primal_s.set(float, lambda _: FloatAVal())
-primal_s.set(bool, lambda _: BoolAVal())
-
 tangent_s = Space("tangent")
-tangent_s.set(StrAVal, lambda aval: aval)
-tangent_s.set(FloatAVal, lambda aval: aval)
-tangent_s.set(BoolAVal, lambda aval: aval)
-
 cotangent_s = Space("cotangent")
-cotangent_s.set(StrAVal, lambda aval: aval)
-cotangent_s.set(FloatAVal, lambda aval: aval)
-cotangent_s.set(BoolAVal, lambda aval: aval)
 
-trace_types: set[type] = {str, int, float, bool}
+trace_types: set[type] = set()
+
+
+primal_s.set(Zero, lambda z: z.aval)
 
 
 def is_traceable(x) -> TypeGuard[Val]:

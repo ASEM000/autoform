@@ -50,16 +50,16 @@ def test_comparison_blocks_pushforward():
     ir = af.pushforward(af.trace(lambda x: x >= 0)(1.0))
     primal, derivative = ir.call((1.0,), (1.0,))
     assert primal is True
-    assert af.ad.is_zero(derivative)
-    assert derivative.aval == af.core.BoolAVal()
+    assert isinstance(derivative, af.core.Zero)
+    assert derivative.aval == af.numeric.BoolAVal()
 
 
 def test_comparison_blocks_pullback():
     ir = af.pullback(af.trace(lambda x: x >= 0)(1.0))
     primal, (derivative,) = ir.call((1.0,), True)
     assert primal is True
-    assert af.ad.is_zero(derivative)
-    assert derivative.aval == af.core.FloatAVal()
+    assert isinstance(derivative, af.core.Zero)
+    assert derivative.aval == af.numeric.FloatAVal()
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

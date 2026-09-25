@@ -280,7 +280,7 @@ class TestWeight:
 
         assert output == "hello!"
         assert cotangents[0] == "feedback"
-        assert af.ad.is_zero(cotangents[1])
+        assert isinstance(cotangents[1], af.core.Zero)
         assert path_weight == 0.5
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

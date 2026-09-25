@@ -96,8 +96,8 @@ class TestBatchIRStructure:
         ],
     )
     def test_batch_aval_ad_space(self, space):
-        aval = BatchAVal(af.core.StrAVal())
-        assert space.avalof(aval) == BatchAVal(af.core.StrAVal())
+        aval = BatchAVal(af.string.StrAVal())
+        assert space.avalof(aval) == BatchAVal(af.string.StrAVal())
 
     def test_mapped_wrapper_aval(self):
         aval = TaggedAVal("input")
@@ -116,7 +116,7 @@ class TestBatchIRStructure:
     def test_mapped_constant_output(self):
         ir = af.batch(af.trace(lambda x: "c")("x"), in_axes=True)
         assert isinstance(ir.out_tree, af.core.Var)
-        assert ir.out_tree.aval == BatchAVal(af.core.StrAVal())
+        assert ir.out_tree.aval == BatchAVal(af.string.StrAVal())
         assert ir.call(["a", "b"]) == ["c", "c"]
 
     def test_broadcast_constant_output(self):
@@ -148,7 +148,7 @@ class TestBatchIRStructure:
 )
 def test_nested_batch(executor, program, depth, values, expected):
     ir = af.trace(program)("hello")
-    aval = af.core.StrAVal()
+    aval = af.string.StrAVal()
     for _ in range(depth):
         ir = af.batch(ir)
         aval = BatchAVal(aval)

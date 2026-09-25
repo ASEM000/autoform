@@ -128,9 +128,9 @@ class TestFixpointPullback:
                 af.string.concat,
                 ("s", "c"),
                 {"max_iters": 2},
-                af.ad.zeroof("g"),
+                af.core.primal_s.zeroof("g"),
                 "scc",
-                af.ad.zeroof("c"),
+                af.core.primal_s.zeroof("c"),
                 id="zero-cotangent",
             ),
         ],
@@ -139,7 +139,7 @@ class TestFixpointPullback:
         ir = af.pullback(fixpoint_ir(step, args, **options))
         out, (c_init, actual_theta) = executor(ir, args, cotangent)
         assert out == expected
-        assert af.ad.is_zero(c_init)
+        assert isinstance(c_init, af.core.Zero)
         assert actual_theta == c_theta
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -156,7 +156,7 @@ class TestFixpointPullback:
         ir = af.trace(program)("s")
         out, (c_init,) = executor(af.pullback(ir), ("s",), "g")
         assert out == "s!!"
-        assert af.ad.is_zero(c_init)
+        assert isinstance(c_init, af.core.Zero)
 
 
 class TestFixpointBatch:
@@ -173,7 +173,7 @@ class TestFixpointBatch:
         out, (c_init, c_theta) = composed.call((["a", "b"], "done"), ["g1", "g2"])
 
         assert out == ["done", "done"]
-        assert all(af.ad.is_zero(c) for c in c_init)
+        assert all(isinstance(c, af.core.Zero) for c in c_init)
         assert c_theta == ["g1", "g2"]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -332,7 +332,7 @@ class TestStopGradient:
         ir = af.trace(stop_gradient)(*primals)
         primal, derivative = transform(ir).call(primals, feedback)
         assert primal == expected
-        assert all(af.ad.is_zero(leaf) for leaf in tree.leaves(derivative))
+        assert all(isinstance(leaf, af.core.Zero) for leaf in tree.leaves(derivative))
 
     def test_batch(self):
         ir = af.trace(stop_gradient)("a")
@@ -346,7 +346,7 @@ class TestStopGradient:
         ir = af.trace(func)("a", "b")
         pb_ir = af.pullback(ir)
         _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
-        assert af.ad.is_zero(cotangent_x)
+        assert isinstance(cotangent_x, af.core.Zero)
         assert cotangent_y == "grad"
 
 
@@ -556,7 +556,8 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
-    af.extend.register_trace_type(Key, lambda _: af.core.StrAVal())
+    af.core.trace_types.add(Key)
+    af.core.primal_s.set(Key, lambda _: af.string.StrAVal())
     left = af.trace(lambda x: af.string.concat("L", x))("X")
     right = af.trace(lambda x: af.string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))
@@ -652,7 +653,7 @@ class TestSwitch:
         ir = af.pullback(numbered_switch)
         args = ((key, "hello"), "grad")
         _, (c_key, c_x) = executor(ir, *args)
-        assert af.ad.is_zero(c_key)
+        assert isinstance(c_key, af.core.Zero)
         assert c_x == "grad"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -694,7 +695,7 @@ class TestSwitch:
             pytest.param(
                 af.pullback,
                 ["grad1", "grad2"],
-                ([af.ad.zeroof("a"), af.ad.zeroof("a")], ["grad1", "grad2"]),
+                ([af.core.primal_s.zeroof("a"), af.core.primal_s.zeroof("a")], ["grad1", "grad2"]),
                 id="pull",
             ),
         ],

@@ -120,7 +120,7 @@ def test_fanout_exception(executor):
 
     error_p = af.core.Prim("error")
     af.core.impl_rules.set(error_p, impl_error)
-    af.core.abstract_rules.set(error_p, lambda x: af.core.StrAVal())
+    af.core.abstract_rules.set(error_p, lambda x: af.string.StrAVal())
     af.core.impl_rules.aset(error_p, af.utils.asyncify(impl_error))
     ir = af.sched(af.trace(lambda x: (af.string.format("[{x}]", x=x), error_p.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):

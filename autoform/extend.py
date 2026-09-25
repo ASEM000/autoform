@@ -38,17 +38,17 @@ import autoform.utils as utils
 # ==================================================================================================
 
 AVal = core.AVal
-StrAVal = core.StrAVal
-IntAVal = core.IntAVal
-FloatAVal = core.FloatAVal
-BoolAVal = core.BoolAVal
+StrAVal = string.StrAVal
+IntAVal = numeric.IntAVal
+FloatAVal = numeric.FloatAVal
+BoolAVal = numeric.BoolAVal
 Space = core.Space
 primal_s = core.primal_s
 tangent_s = core.tangent_s
 cotangent_s = core.cotangent_s
 Prim = core.Prim
 Dunder = core.Dunder
-Zero = ad.Zero
+Zero = core.Zero
 Interpreter = core.Interpreter
 IR = core.IR
 Eqn = core.Eqn
@@ -69,11 +69,7 @@ batch_rules = core.batch_rules
 # HELPERS
 # ==================================================================================================
 
-zeroof = ad.zeroof
-tangent_zeroof = ad.tangent_zeroof
-cotangent_zeroof = ad.cotangent_zeroof
-materialize = ad.materialize
-is_zero = ad.is_zero
+materialize_zeros = core.materialize_zeros
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
@@ -135,8 +131,6 @@ __all__ = [
     "Eqn",
     "Var",
     "register_trace_type",
-    "register_zero",
-    "register_cotangent_accumulator",
     "register_non_dce",
     "register_non_memoizable",
     "register_dunder",
@@ -146,11 +140,7 @@ __all__ = [
     "pull_fwd_rules",
     "pull_bwd_rules",
     "batch_rules",
-    "zeroof",
-    "tangent_zeroof",
-    "cotangent_zeroof",
-    "materialize",
-    "is_zero",
+    "materialize_zeros",
     "batch_index",
     "batch_spec",
     "batch_transpose",
@@ -191,8 +181,6 @@ __all__ = [
 ]
 
 type AValRule = Callable[[Any], AVal]
-type ZeroRule = Callable[[AVal], Any]
-type CotAccRule = Callable[[list[Any], AVal], Any]
 
 # ==================================================================================================
 # REGISTRATION
@@ -225,65 +213,6 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
     core.trace_types.add(type)
     core.primal_s.set(type, aval_rule)
     return aval_rule
-
-
-def register_zero[T: ZeroRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register the concrete zero value for an abstract value type.
-
-    Differentiation transforms use :class:`Zero` to represent a missing or blocked
-    tangent or cotangent. :func:`autoform.extend.materialize` later turns that
-    symbolic zero into a concrete runtime value by looking up this rule.
-
-    Register this for differentiable value domains whose tangents or cotangents may
-    need to flow through primitives that materialize zeros, such as custom
-    pushforward or pullback rules.
-
-    Args:
-        aval_type: Abstract value type this zero rule handles.
-        rule: Function from an abstract value instance to a concrete zero.
-
-    Returns:
-        The registered rule.
-
-    Example:
-        >>> import functools as ft
-        >>> import autoform.extend as afe
-        >>> class TokenAVal(afe.AVal): ...
-        >>> @ft.partial(afe.register_zero, TokenAVal)
-        ... def zero_token(aval):
-        ...     return ""
-    """
-    ad.zero_rules[aval_type] = rule
-    return rule
-
-
-def register_cotangent_accumulator[T: CotAccRule](aval_type: type[AVal], rule: T, /) -> T:
-    """Register how to combine cotangents for an abstract value type.
-
-    :func:`autoform.pullback` can produce multiple cotangent contributions for the same input.
-    AutoForm groups those contributions and calls the accumulator for the
-    corresponding leaf :class:`AVal`.
-
-    The rule receives the non-zero cotangents and the abstract value of the
-    leaf being accumulated. Zeros are filtered before the rule is called.
-
-    Args:
-        aval_type: Abstract value type this accumulator handles.
-        rule: Function of ``(cotangents, aval)`` returning one cotangent.
-
-    Returns:
-        The registered rule.
-
-    Example:
-        >>> import functools as ft
-        >>> import autoform.extend as afe
-        >>> class ScoreAVal(afe.AVal): ...
-        >>> @ft.partial(afe.register_cotangent_accumulator, ScoreAVal)
-        ... def add_scores(cotangents, aval):
-        ...     return sum(cotangents)
-    """
-    ad.cot_acc_rules[aval_type] = rule
-    return rule
 
 
 def register_non_dce[T: Prim](prim: T, /) -> T:

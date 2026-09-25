@@ -22,10 +22,41 @@ import string as stringlib
 import autoform.core as core
 import autoform.utils as utils
 
-__all__ = ["format", "concat", "match"]
+__all__ = ["StrAVal", "format", "concat", "match"]
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
+
+
+# ==================================================================================================
+# TYPES
+# ==================================================================================================
+
+
+class StrAVal(core.ScalarAVal):
+    """Abstract value for ``str`` leaves.
+
+    Example:
+        >>> import autoform as af
+        >>> ir = af.trace(lambda x: x)("x")
+        >>> (x,) = ir.in_tree
+        >>> x.aval
+        StrAVal()
+    """
+
+    __slots__ = []
+
+    def zero(self) -> str:
+        return ""
+
+    def accumulate(self, cotangents: list[str], /) -> str:
+        return "".join(cotangents)
+
+
+core.trace_types.add(str)
+core.primal_s.set(str, lambda _: StrAVal())
+core.tangent_s.set(StrAVal, lambda aval: aval)
+core.cotangent_s.set(StrAVal, lambda aval: aval)
 
 # ==================================================================================================
 # CONCAT
@@ -57,15 +88,13 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 
 def abstract_concat(in_tree: Tree, /) -> core.EvalType:
-    assert all(type(x) in (str, core.StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return core.StrAVal()
+    assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
+    return StrAVal()
 
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
-    tangents = ad.materialize(tangents)
+    tangents = core.materialize_zeros(tangents)
     return concat_p.bind(primals), concat_p.bind(tangents)
 
 
@@ -102,7 +131,7 @@ core.batch_rules.set(concat_p, batch_concat)
 core.batch_rules.aset(concat_p, utils.asyncify(batch_concat))
 
 
-core.dunder_rules[core.Dunder.ADD, core.StrAVal] = concat
+core.dunder_rules[core.Dunder.ADD, StrAVal] = concat
 
 
 # ==================================================================================================
@@ -140,16 +169,14 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 
 def abstract_match(in_tree: Tree, /) -> core.EvalType:
-    assert all(type(x) in (str, core.StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return core.BoolAVal()
+    assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
+    return core.primal_s.avalof(False)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, ad.tangent_zeroof(core.BoolAVal())
+    return out_primal, core.tangent_s.zeroof(core.primal_s.avalof(False))
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -159,11 +186,14 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 
 
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
-    import autoform.ad as ad
+    def make_c(x):
+        if isinstance(x, core.Zero):
+            return x
+        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
 
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return utils.tree.map(lambda r: r if ad.is_zero(r) else ad.cotangent_zeroof(r), residuals)
+    return utils.tree.map(make_c, residuals)
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
@@ -188,7 +218,7 @@ core.batch_rules.set(match_p, batch_match)
 core.batch_rules.aset(match_p, utils.asyncify(batch_match))
 
 
-core.dunder_rules[core.Dunder.EQ, core.StrAVal] = match
+core.dunder_rules[core.Dunder.EQ, StrAVal] = match
 
 
 # ==================================================================================================
