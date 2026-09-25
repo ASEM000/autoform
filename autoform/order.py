@@ -340,12 +340,13 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
 
 
 def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
-    import autoform.ad as ad
+    def make_c(x):
+        if isinstance(x, core.Zero):
+            return x
+        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
 
     (_, deps), out_cotangent = in_tree
-    return out_cotangent, utils.tree.map(
-        lambda d: d if ad.is_zero(d) else ad.cotangent_zeroof(d), deps
-    )
+    return out_cotangent, utils.tree.map(make_c, deps)
 
 
 def batch_depends(in_tree: BatchDependsInput, /) -> core.BatchRuleResult:
