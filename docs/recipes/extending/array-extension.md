@@ -53,19 +53,26 @@ class ArrayAVal(afe.AVal):
     def __hash__(self):
         return hash((type(self), self.shape, self.dtype.str))
 
+    def zero(self):
+        return np.zeros(self.shape, dtype=self.dtype)
+
+    def accumulate(self, cotangents):
+        return sum(cotangents[1:], cotangents[0])
+
 
 def aval_rule(value):
     return ArrayAVal(value.shape, value.dtype)
 
 
 afe.register_trace_type(np.ndarray, aval_rule)
-afe.register_zero(ArrayAVal, lambda aval: np.zeros(aval.shape, dtype=aval.dtype))
-afe.register_cotangent_accumulator(ArrayAVal, lambda cs, aval: sum(cs[1:], cs[0]))
+afe.tangent_s.set(ArrayAVal, lambda aval: aval)
+afe.cotangent_s.set(ArrayAVal, lambda aval: aval)
 ```
 
 `ArrayAVal` is the trace-time description. It carries only the information the
-primitive rules need: shape and dtype. The zero and cotangent accumulator rules
-make reverse-mode feedback concrete for array leaves.
+primitive rules need: shape and dtype. The `zero()` method constructs a zero
+array with that shape and dtype. The `accumulate()` method combines feedback
+contributions for array leaves.
 
 ## Register Binary Array Primitives
 
@@ -98,7 +105,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def push(in_tree):
         (x, y), (tx, ty) = in_tree
-        tx, ty = afe.materialize((tx, ty))
+        tx, ty = afe.materialize_zeros((tx, ty))
         return bind(x, y), push_rule(x, y, tx, ty)
 
     def pull_fwd(in_tree):
@@ -107,7 +114,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def pull_bwd(in_tree):
         (x, y), g = in_tree
-        return pull_rule(x, y, afe.materialize(g))
+        return pull_rule(x, y, afe.materialize_zeros(g))
 
     def batch_rule(in_tree):
         batch_size, in_batched, in_values = in_tree
