@@ -113,9 +113,10 @@ core.cotangent_s.set(BoolAVal, lambda aval: aval)
 
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, in_value = in_tree
-    if not in_batched:
+    if (spec := utils.batch_spec(in_value, in_batched)) is None:
         return prim.bind(in_value), False
-    return [prim.bind(utils.batch_index(in_value, True, b)) for b in range(batch_size)], True
+    result = [prim.bind(utils.batch_index(in_value, True, b)) for b in range(batch_size)]
+    return spec.unflatten(result), True
 
 
 def batch_binary(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:

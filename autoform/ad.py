@@ -246,7 +246,7 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     batch_size, in_batched, in_values = in_tree
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
 
-    if utils.batch_spec(in_values, in_batched) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         pf_ir = pushforward(ir)
         result = pf_ir.call(*in_values)
         out_batched = utils.tree.map(lambda _: False, result)
@@ -257,7 +257,7 @@ def batch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     pf_ir = pushforward(ir)
     out_bi = [pf_ir.call(unbatch_p(b), unbatch_t(b)) for b in range(batch_size)]
     out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
-    out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(out_bi))
     return out_ib, out_batched
 
 
@@ -265,7 +265,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     bs, in_batched, in_values = in_tree
     (p_cols, t_cols), (p_batched, t_batched) = in_values, in_batched
 
-    if utils.batch_spec(in_values, in_batched) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         pf_ir = pushforward(ir)
         result = await pf_ir.acall(*in_values)
         out_batched = utils.tree.map(lambda _: False, result)
@@ -278,7 +278,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     inputs = [(unbatch_p(b), unbatch_t(b)) for b in range(bs)]
     out_bi = await order.fanout_p.abind(inputs, irs=[pf_ir] * bs)
     out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
-    out_ib = utils.batch_transpose(bs, out_batched, list(out_bi))
+    out_ib = utils.batch_transpose(bs, out_batched, spec.unflatten(out_bi))
     return out_ib, out_batched
 
 
@@ -685,7 +685,7 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     (p_cols, c_cols) = in_values
     (p_batched, c_batched) = in_batched
 
-    if utils.batch_spec(in_values, in_batched) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         pb_ir = pullback(ir)
         result = pb_ir.call(*in_values)
         out_batched = utils.tree.map(lambda _: False, result)
@@ -696,7 +696,7 @@ def batch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     pb_ir = pullback(ir)
     out_bi = [pb_ir.call(unbatch_p(b), unbatch_c(b)) for b in range(size)]
     out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
-    out_ib = utils.batch_transpose(size, out_batched, out_bi)
+    out_ib = utils.batch_transpose(size, out_batched, spec.unflatten(out_bi))
     return out_ib, out_batched
 
 
@@ -705,7 +705,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     (p_cols, c_cols) = in_values
     (p_batched, c_batched) = in_batched
 
-    if utils.batch_spec(in_values, in_batched) is None:
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
         pb_ir = pullback(ir)
         result = await pb_ir.acall(*in_values)
         out_batched = utils.tree.map(lambda _: False, result)
@@ -718,7 +718,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     inputs = [(unbatch_p(b), unbatch_c(b)) for b in range(size)]
     out_bi = await order.fanout_p.abind(inputs, irs=[pb_ir] * size)
     out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
-    out_ib = utils.batch_transpose(size, out_batched, list(out_bi))
+    out_ib = utils.batch_transpose(size, out_batched, spec.unflatten(out_bi))
     return out_ib, out_batched
 
 
