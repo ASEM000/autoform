@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import namedtuple
+
 import pytest
 
 import autoform as af
@@ -132,3 +134,20 @@ def test_negation(executor, transform, args, expected):
     ir = transform(af.trace(af.numeric.neg)(2.0))
     actual = executor(ir, *args)
     assert actual == expected
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "container",
+    [list, tuple, namedtuple("Batch", ["x", "y"])._make, lambda xs: dict(zip(("x", "y"), xs))],
+    ids=["list", "tuple", "namedtuple", "dict"],
+)
+def test_negation_batch_container(executor, container):
+    ir = af.trace(af.numeric.neg)(0.0)
+    xs, coefficients = container([1.0, 2.0]), container([3.0, 4.0])
+    values, gradients = container([-1.0, -2.0]), container([-3.0, -4.0])
+    assert executor(af.batch(ir), xs) == values
+    assert executor(af.batch(af.pullback(ir)), (xs,), coefficients) == (values, (gradients,))
+    assert executor(af.batch(af.pushforward(ir)), (xs,), (coefficients,)) == (values, gradients)
+    assert executor(af.pullback(af.batch(ir)), (xs,), coefficients) == (values, (gradients,))
+    assert executor(af.pushforward(af.batch(ir)), (xs,), (coefficients,)) == (values, gradients)
