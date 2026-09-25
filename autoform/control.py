@@ -74,10 +74,11 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
-    import autoform.ad as ad
+    def make_t(x):
+        return core.tangent_s.zeroof(core.primal_s.avalof(x))
 
     primal, tangent = in_tree
-    zero_t = utils.tree.map(ad.tangent_zeroof, primal)
+    zero_t = utils.tree.map(make_t, primal)
     return primal, zero_t
 
 
@@ -87,11 +88,14 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
 
 
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
-    import autoform.ad as ad
+    def make_c(x):
+        if isinstance(x, core.Zero):
+            return x
+        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
 
     residuals, out_cotangent = in_tree
     del out_cotangent
-    return utils.tree.map(lambda r: r if ad.is_zero(r) else ad.cotangent_zeroof(r), residuals)
+    return utils.tree.map(make_c, residuals)
 
 
 def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
@@ -220,7 +224,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = pb_ir.call(operands, out_cotangent)
-    return (ad.cotangent_zeroof(key), c_operands)
+    return (core.cotangent_s.zeroof(core.primal_s.avalof(key)), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
@@ -230,7 +234,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = await pb_ir.acall(operands, out_cotangent)
-    return (ad.cotangent_zeroof(key), c_operands)
+    return (core.cotangent_s.zeroof(core.primal_s.avalof(key)), c_operands)
 
 
 def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
@@ -719,7 +723,7 @@ fixpoint_p = core.Prim("fixpoint")
 def cot_tree_acc(lhs: Tree, rhs: Tree, /) -> Tree:
     import autoform.ad as ad
 
-    return utils.tree.map(lambda l, r: ad.cot_acc([l, r]), lhs, rhs, is_leaf=ad.is_zero)
+    return utils.tree.map(lambda l, r: ad.cot_acc([l, r]), lhs, rhs)
 
 
 def fixpoint(
@@ -873,13 +877,16 @@ def pullback_bwd_fixpoint(
 ) -> Tree:
     import autoform.ad as ad
 
+    def make_c(x):
+        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
-    dx0 = utils.tree.map(ad.cotangent_zeroof, x_star)
+    dx0 = utils.tree.map(make_c, x_star)
 
-    if ad.all_zero(g):
-        return dx0, utils.tree.map(ad.cotangent_zeroof, theta)
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
+        return dx0, utils.tree.map(make_c, theta)
 
     res: dict[core.Eqn, Tree] = {}
     parent = core.active_interpreter.get()
@@ -937,13 +944,16 @@ async def apull_bwd_fixpoint(
 ) -> Tree:
     import autoform.ad as ad
 
+    def make_c(x):
+        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
-    dx0 = utils.tree.map(ad.cotangent_zeroof, x_star)
+    dx0 = utils.tree.map(make_c, x_star)
 
-    if ad.all_zero(g):
-        return dx0, utils.tree.map(ad.cotangent_zeroof, theta)
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
+        return dx0, utils.tree.map(make_c, theta)
 
     res: dict[core.Eqn, Tree] = {}
     parent = core.active_interpreter.get()
