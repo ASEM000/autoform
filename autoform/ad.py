@@ -26,7 +26,6 @@ import autoform.order as order
 import autoform.utils as utils
 
 __all__ = [
-    "materialize",
     "cot_acc",
     "pushforward",
     "pullback",
@@ -39,33 +38,6 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 # ZERO
 # ==================================================================================================
-
-
-def materialize(x: Tree, /) -> Tree:
-    """Replace each Zero leaf in a pytree with its concrete zero value.
-
-    ``materialize`` is useful inside transform rules before calling primitives
-    that expect real runtime values instead of symbolic zeros.
-
-    Args:
-        x: Pytree that may contain ``Zero`` leaves.
-
-    Returns:
-        A pytree with the same structure as ``x`` where each symbolic zero has
-        been replaced by the concrete zero returned by its AVal.
-
-    Raises:
-        AssertionError: If a ``Zero`` has a type with no concrete
-            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
-            path through a non-differentiable type.
-    """
-
-    def map_func(x):
-        if not isinstance(x, core.Zero):
-            return x
-        return x.aval.zero()
-
-    return utils.tree.map(map_func, x)
 
 
 def all_zero(x: Tree, /) -> bool:

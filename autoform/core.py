@@ -35,6 +35,7 @@ __all__ = [
     # base types
     "AVal",
     "Zero",
+    "materialize_zeros",
     "Val",
     "trace_types",
     "is_traceable",
@@ -153,6 +154,33 @@ class Zero[T: AVal]:
 
     def __hash__(self):
         return hash((type(self), self.aval))
+
+
+def materialize_zeros(x: Tree, /) -> Tree:
+    """Replace each Zero leaf in a pytree with its concrete zero value.
+
+    ``materialize_zeros`` is useful inside transform rules before calling primitives
+    that expect real runtime values instead of symbolic zeros.
+
+    Args:
+        x: Pytree that may contain ``Zero`` leaves.
+
+    Returns:
+        A pytree with the same structure as ``x`` where each symbolic zero has
+        been replaced by the concrete zero returned by its AVal.
+
+    Raises:
+        AssertionError: If a ``Zero`` has a type with no concrete
+            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
+            path through a non-differentiable type.
+    """
+
+    def map_func(x):
+        if not isinstance(x, Zero):
+            return x
+        return x.aval.zero()
+
+    return utils.tree.map(map_func, x)
 
 
 type Val = str | int | float | bool
