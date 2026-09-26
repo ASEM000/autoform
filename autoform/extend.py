@@ -19,7 +19,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import autoform.abstract as abstract
 import autoform.ad as ad
 import autoform.axis as axis
 import autoform.control as control
@@ -31,32 +30,32 @@ import autoform.memo as memo
 import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
+import autoform.stage as stage
 import autoform.string as string
-import autoform.tracer as tracer
 import autoform.utils as utils
 
 # ==================================================================================================
 # TYPES
 # ==================================================================================================
 
-AVal = abstract.AVal
+AVal = core.AVal
 StrAVal = string.StrAVal
 IntAVal = numeric.IntAVal
 FloatAVal = numeric.FloatAVal
 BoolAVal = numeric.BoolAVal
-Space = abstract.Space
-avalof = abstract.avalof
-primal_s = abstract.primal_s
-tangent_s = abstract.tangent_s
-cotangent_s = abstract.cotangent_s
+Space = core.Space
+avalof = core.avalof
+primal_s = core.primal_s
+tangent_s = core.tangent_s
+cotangent_s = core.cotangent_s
 Prim = core.Prim
-Dunder = tracer.Dunder
-Zero = abstract.Zero
+Dunder = stage.Dunder
+Zero = core.Zero
 Interpreter = core.Interpreter
 Box = core.Box
-IR = core.IR
-Eqn = core.Eqn
-Var = core.Var
+IR = stage.IR
+Eqn = stage.Eqn
+Var = stage.Var
 
 # ==================================================================================================
 # RULE REGISTRIES
@@ -78,7 +77,7 @@ abatch_rules = core.abatch_rules
 # HELPERS
 # ==================================================================================================
 
-materialize_zeros = abstract.materialize_zeros
+materialize_zeros = core.materialize_zeros
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
@@ -86,8 +85,8 @@ using_interpreter = core.using_interpreter
 serial_fanout = order.serial_fanout
 active_interpreter = core.active_interpreter
 active_tags = core.active_tags
-is_var = core.is_var
-aval_if_var = core.aval_if_var
+is_var = stage.is_var
+aval_if_var = stage.aval_if_var
 active_client = lm.active_client
 
 # ==================================================================================================
@@ -226,8 +225,8 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ... def token_aval(value):
         ...     return TokenAVal()
     """
-    abstract.aval_types[type] = aval_rule
-    tracer.trace_types.add(type)
+    core.aval_types[type] = aval_rule
+    stage.trace_types.add(type)
     return aval_rule
 
 
@@ -296,6 +295,6 @@ def register_dunder[T: Callable[..., Any]](
     assert callable(rule), f"Expected callable, got {rule!r}"
     assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
     key = dunder, aval_type
-    assert replace or key not in tracer.dunder_rules, f"Dunder rule is already defined"
-    tracer.dunder_rules[key] = rule
+    assert replace or key not in stage.dunder_rules, f"Dunder rule is already defined"
+    stage.dunder_rules[key] = rule
     return rule

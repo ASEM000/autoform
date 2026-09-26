@@ -28,10 +28,9 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import ModelResponse, acompletion, completion
 
-import autoform.abstract as abstract
 import autoform.core as core
 import autoform.schemas as schemas
-import autoform.tracer as tracer
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = [
@@ -235,7 +234,7 @@ async def aimpl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
 
 def abstract_complete(in_tree: Tree, /, *, roles: Roles) -> Any:
     contents, model = in_tree
-    aval = abstract.avalof("")
+    aval = core.avalof("")
     assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return aval
@@ -247,7 +246,7 @@ def pushforward_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
     p_resp = complete_p.bind(p_tree, roles=roles)
-    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
     t_resp = complete_p.bind(t_tree, roles=roles)
     return p_resp, t_resp
 
@@ -258,7 +257,7 @@ async def apush_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     tangent_contents, *_ = tangents
     abind = ft.partial(complete_p.abind, roles=roles)
     p_tree = (primal_contents, primal_model)
-    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
@@ -279,20 +278,20 @@ async def apull_fwd_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
 
 def pullback_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = abstract.materialize_zeros(out_cotangent)
+    out_cotangent = core.materialize_zeros(out_cotangent)
     contents, model, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
         grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 
 async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = abstract.materialize_zeros(out_cotangent)
+    out_cotangent = core.materialize_zeros(out_cotangent)
     contents, model, out = residuals
 
     async def grad(c):
@@ -301,7 +300,7 @@ async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
         return await grad_out
 
     grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 
@@ -676,24 +675,24 @@ async def aimpl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     return parse_json_value(schema, json.loads(resp.choices[0].message.content))
 
 
-def string_schema_abstract(_: schemas.Str) -> abstract.AVal:
-    return abstract.avalof("")
+def string_schema_abstract(_: schemas.Str) -> core.AVal:
+    return core.avalof("")
 
 
-def integer_schema_abstract(_: schemas.Int) -> abstract.AVal:
-    return abstract.avalof(0)
+def integer_schema_abstract(_: schemas.Int) -> core.AVal:
+    return core.avalof(0)
 
 
-def number_schema_abstract(_: schemas.Float) -> abstract.AVal:
-    return abstract.avalof(0.0)
+def number_schema_abstract(_: schemas.Float) -> core.AVal:
+    return core.avalof(0.0)
 
 
-def boolean_schema_abstract(_: schemas.Bool) -> abstract.AVal:
-    return abstract.avalof(False)
+def boolean_schema_abstract(_: schemas.Bool) -> core.AVal:
+    return core.avalof(False)
 
 
-def enum_schema_abstract(s: schemas.Enum) -> abstract.AVal:
-    return abstract.avalof(s.values[0])
+def enum_schema_abstract(s: schemas.Enum) -> core.AVal:
+    return core.avalof(s.values[0])
 
 
 def docd_schema_abstract(s: schemas.Docd[Any]) -> Tree:
@@ -713,7 +712,7 @@ def schema_abstract_tree(schema: Any) -> Tree:
     def abstract(x: Any) -> Any:
         if rule := schema_abstract_rules.get(type(x)):
             return rule(x)
-        if not tracer.is_traceable(x):
+        if not stage.is_traceable(x):
             raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
         return x
 
@@ -722,7 +721,7 @@ def schema_abstract_tree(schema: Any) -> Tree:
 
 def abstract_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     contents, model = in_tree
-    aval = abstract.avalof("")
+    aval = core.avalof("")
     assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
@@ -733,7 +732,7 @@ def pushforward_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
-    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
     p_resp = generate_p.bind(p_tree, roles=roles, schema=schema)
     t_resp = generate_p.bind(t_tree, roles=roles, schema=schema)
     return p_resp, t_resp
@@ -745,7 +744,7 @@ async def apush_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree
     tangent_contents, *_ = tangents
     abind = ft.partial(generate_p.abind, roles=roles, schema=schema)
     p_tree = (primal_contents, primal_model)
-    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
@@ -766,7 +765,7 @@ async def apull_fwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> 
 
 def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
     def validate_schema_feedback(path: str, feedback: Any) -> str:
-        if isinstance(feedback, abstract.Zero):
+        if isinstance(feedback, core.Zero):
             return "No feedback"
         if type(feedback) is str:
             return feedback
@@ -793,7 +792,7 @@ def pullback_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tre
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 
@@ -808,7 +807,7 @@ async def apull_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> 
         return await grad_out
 
     grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 

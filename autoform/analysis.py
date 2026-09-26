@@ -20,12 +20,12 @@ import functools as ft
 from collections import defaultdict, deque
 from typing import cast
 
-import autoform.core as core
+import autoform.stage as stage
 import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]
-type LiveSet = set[core.Var]
+type LiveSet = set[stage.Var]
 type Liveness = list[LiveSet]
 
 __all__ = [
@@ -38,14 +38,14 @@ __all__ = [
 ]
 
 
-def is_same_stucture(lhs: core.IR, rhs: core.IR, /) -> bool:
+def is_same_stucture(lhs: stage.IR, rhs: stage.IR, /) -> bool:
     """Compare IR input/output structures"""
 
-    assert isinstance(lhs, core.IR)
-    assert isinstance(rhs, core.IR)
+    assert isinstance(lhs, stage.IR)
+    assert isinstance(rhs, stage.IR)
 
     def same_atom(x, y):
-        if core.is_var(x) and core.is_var(y):
+        if stage.is_var(x) and stage.is_var(y):
             return x.aval == y.aval
         # NOTE(asem): check for literals.
         return type(x) is type(y) and x == y
@@ -56,16 +56,16 @@ def is_same_stucture(lhs: core.IR, rhs: core.IR, /) -> bool:
     return utils.tree.all(utils.tree.map(same_atom, left, right))
 
 
-def var_leaves(tree: Tree, /) -> list[core.Var]:
+def var_leaves(tree: Tree, /) -> list[stage.Var]:
     """Return Vars from an IR tree in leaf order."""
 
-    return [cast(core.Var, x) for x in utils.tree.leaves(tree) if core.is_var(x)]
+    return [cast(stage.Var, x) for x in utils.tree.leaves(tree) if stage.is_var(x)]
 
 
-def var_producers(ir: core.IR, /) -> dict[core.Var, core.Eqn]:
+def var_producers(ir: stage.IR, /) -> dict[stage.Var, stage.Eqn]:
     """Return the top-level producer equation for each Var defined by ``ir``."""
 
-    producers: dict[core.Var, core.Eqn] = {}
+    producers: dict[stage.Var, stage.Eqn] = {}
     for eqn in ir.eqns:
         for var in var_leaves(eqn.out_tree):
             assert producers.get(var) is None
@@ -73,13 +73,13 @@ def var_producers(ir: core.IR, /) -> dict[core.Var, core.Eqn]:
     return producers
 
 
-def eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
+def eqn_graph(ir: stage.IR, /) -> dict[stage.Eqn, list[stage.Eqn]]:
     """Return top-level equation dependencies as parent -> children adjacency."""
 
     var_to_parent = var_producers(ir)
-    adjacency_list: dict[core.Eqn, list[core.Eqn]] = {eqn: [] for eqn in ir.eqns}
+    adjacency_list: dict[stage.Eqn, list[stage.Eqn]] = {eqn: [] for eqn in ir.eqns}
     for eqn in ir.eqns:
-        seen_parents: set[core.Eqn] = set()
+        seen_parents: set[stage.Eqn] = set()
         for in_var in var_leaves(eqn.in_tree):
             if (p := var_to_parent.get(in_var)) is not None and p not in seen_parents:
                 adjacency_list[p].append(eqn)
@@ -89,7 +89,7 @@ def eqn_graph(ir: core.IR, /) -> dict[core.Eqn, list[core.Eqn]]:
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
-def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
+def toposort_levels(ir: stage.IR, /) -> list[list[stage.Eqn]]:
     """Group IR equations into dependency levels."""
 
     # NOTE(asem): equations form a dag where edges are defined by shared irvars.
@@ -127,7 +127,7 @@ def toposort_levels(ir: core.IR, /) -> list[list[core.Eqn]]:
     return levels
 
 
-def ir_liveness(ir: core.IR, /, *, out_used: UsedTree | None = None) -> Liveness:
+def ir_liveness(ir: stage.IR, /, *, out_used: UsedTree | None = None) -> Liveness:
     """Return live Vars at each IR boundary."""
 
     # NOTE(asem): liveness is a backward dataflow analysis that computes Vars live

@@ -19,12 +19,11 @@ from __future__ import annotations
 import functools as ft
 from collections.abc import Hashable
 
-import autoform.abstract as abstract
 import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
-import autoform.tracer as tracer
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
@@ -33,7 +32,7 @@ zip = utils.strict_zip
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type Branches = dict[Hashable, core.IR]
+type Branches = dict[Hashable, stage.IR]
 
 # ==================================================================================================
 # STOP GRADIENT
@@ -77,7 +76,7 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
     def make_t(x):
-        return abstract.Zero(abstract.tangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.tangent_s.map(core.avalof(x)))
 
     primal, tangent = in_tree
     zero_t = utils.tree.map(make_t, primal)
@@ -91,9 +90,9 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
 
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
     def make_c(x):
-        if isinstance(x, abstract.Zero):
+        if isinstance(x, core.Zero):
             return x
-        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     residuals, out_cotangent = in_tree
     del out_cotangent
@@ -157,12 +156,12 @@ def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
         'zero: hello'
     """
     assert not kwargs, "`switch` does not support keyword arguments"
-    assert all(isinstance(branches[k], core.IR) for k in branches)
+    assert all(isinstance(branches[k], stage.IR) for k in branches)
     key0 = next(iter(branches))
-    assert tracer.is_traceable(key0)
+    assert stage.is_traceable(key0)
     assert all(type(k) is type(key0) for k in branches)
-    key_aval = abstract.avalof(key0)
-    assert all(abstract.avalof(k) == key_aval for k in branches)
+    key_aval = core.avalof(key0)
+    assert all(core.avalof(k) == key_aval for k in branches)
     branch0 = branches[key0]
     assert all(analysis.is_same_stucture(branch0, branch) for branch in branches.values())
     return switch_p.bind((key, args), branches=branches)
@@ -181,10 +180,10 @@ async def aimpl_switch(in_tree, /, *, branches: Branches):
 def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     key, _ = in_tree
     key0 = next(iter(branches))
-    key_aval = key if isinstance(key, abstract.AVal) else abstract.avalof(key)
-    assert key_aval == abstract.avalof(key0)
+    key_aval = key if isinstance(key, core.AVal) else core.avalof(key)
+    assert key_aval == core.avalof(key0)
     branch0 = branches[key0]
-    return utils.tree.map(core.aval_if_var, branch0.out_tree)
+    return utils.tree.map(stage.aval_if_var, branch0.out_tree)
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
@@ -226,7 +225,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = pb_ir.call(operands, out_cotangent)
-    return (abstract.Zero(abstract.cotangent_s.map(abstract.avalof(key))), c_operands)
+    return (core.Zero(core.cotangent_s.map(core.avalof(key))), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
@@ -236,7 +235,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = await pb_ir.acall(operands, out_cotangent)
-    return (abstract.Zero(abstract.cotangent_s.map(abstract.avalof(key))), c_operands)
+    return (core.Zero(core.cotangent_s.map(core.avalof(key))), c_operands)
 
 
 def batch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
@@ -289,7 +288,7 @@ core.batch_rules[switch_p] = batch_switch
 core.abatch_rules[switch_p] = abatch_switch
 
 
-def dce_switch(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+def dce_switch(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     branches: Branches = eqn.params["branches"]
 
     # NOTE(asem): a bit more care here, simply map DCE to each branch would not work
@@ -301,8 +300,8 @@ def dce_switch(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     # dce(b(x)) = (x, None)
     # here, the two branches disagree on the output structure and shall fail.
     # the fix is to enforce the mask on each of IR's out_tree
-    def func(ir: core.IR):
-        ir = core.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, out_used))
+    def func(ir: stage.IR):
+        ir = stage.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, out_used))
         return dead.dce(ir)
 
     new_eqn = eqn.using(branches=utils.tree.map(func, branches))
@@ -320,7 +319,7 @@ dead.dce_rules[switch_p] = dce_switch
 while_loop_p = core.Prim("while_loop")
 
 
-def while_loop(cond_ir: core.IR, body_ir: core.IR, init_val: Tree, *, max_iters: int) -> Tree:
+def while_loop(cond_ir: stage.IR, body_ir: stage.IR, init_val: Tree, *, max_iters: int) -> Tree:
     """Repeatedly apply ``body_ir`` while ``cond_ir`` returns True.
 
     - Loop continues while cond_ir(state) returns True
@@ -348,8 +347,8 @@ def while_loop(cond_ir: core.IR, body_ir: core.IR, init_val: Tree, *, max_iters:
         >>> result
         'stop'
     """
-    assert isinstance(cond_ir, core.IR), f"cond_ir must be an IR, got {type(cond_ir)}"
-    assert isinstance(body_ir, core.IR), f"body_ir must be an IR, got {type(body_ir)}"
+    assert isinstance(cond_ir, stage.IR), f"cond_ir must be an IR, got {type(cond_ir)}"
+    assert isinstance(body_ir, stage.IR), f"body_ir must be an IR, got {type(body_ir)}"
     assert len(cond_ir.in_tree) == 1, "cond_ir must take exactly one positional argument"
     assert len(body_ir.in_tree) == 1, "body_ir must take exactly one positional argument"
 
@@ -372,8 +371,8 @@ def impl_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
     state = (in_tree,)
@@ -390,8 +389,8 @@ async def aimpl_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
     state = (in_tree,)
@@ -408,16 +407,16 @@ def abstract_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
     del cond_ir, max_iters
-    out_tree = utils.tree.map(core.aval_if_var, body_ir.out_tree)
+    out_tree = utils.tree.map(stage.aval_if_var, body_ir.out_tree)
     assert utils.tree.structure(in_tree) == utils.tree.structure(out_tree)
 
     def same_state(x, y):
-        if isinstance(y, abstract.AVal) and not isinstance(x, abstract.AVal):
+        if isinstance(y, core.AVal) and not isinstance(x, core.AVal):
             # NOTE(asem): the key idea here is that in case inital state is a literal
             # and body returns AVal e.g.
             # >>> cond = af.trace(lambda x: False)("x")
@@ -427,7 +426,7 @@ def abstract_while_loop(
             # >>> ir = af.trace(program)()
             # >>> ir.call()  # "hello"
             # in here same_state normalizes hello -> StrAval
-            x = abstract.avalof(x)
+            x = core.avalof(x)
         return type(x) is type(y) and x == y
 
     assert utils.tree.all(utils.tree.map(same_state, in_tree, out_tree)), (
@@ -441,8 +440,8 @@ def pullback_fwd_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
     state = (in_tree,)
@@ -464,8 +463,8 @@ async def apull_fwd_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
     state = (in_tree,)
@@ -487,8 +486,8 @@ def pullback_bwd_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
     import autoform.ad as ad
@@ -513,8 +512,8 @@ async def apull_bwd_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
     import autoform.ad as ad
@@ -539,8 +538,8 @@ def batch_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
     import autoform.axis as axis
@@ -616,14 +615,14 @@ def batch_while_loop(
             b_body = state_in_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = batched_body.call(*in_transposed)
-            out_batched = utils.tree.map(core.is_var, body_ir.out_tree)
+            out_batched = utils.tree.map(stage.is_var, body_ir.out_tree)
             out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     # only Var positions are batched; literal positions stay scalar
-    out_batched = utils.tree.map(core.is_var, body_ir.out_tree)
+    out_batched = utils.tree.map(stage.is_var, body_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -634,8 +633,8 @@ async def abatch_while_loop(
     in_tree: Tree,
     /,
     *,
-    cond_ir: core.IR,
-    body_ir: core.IR,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
     import autoform.axis as axis
@@ -676,13 +675,13 @@ async def abatch_while_loop(
             b_body = state_in_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = await batched_body.acall(*in_transposed)
-            out_batched_body = utils.tree.map(core.is_var, body_ir.out_tree)
+            out_batched_body = utils.tree.map(stage.is_var, body_ir.out_tree)
             out_at = ft.partial(utils.batch_index, out_transposed, out_batched_body)
 
             for local_idx, batch_idx in enumerate(still_alive):
                 states[batch_idx] = (out_at(local_idx),)
 
-    out_batched = utils.tree.map(core.is_var, body_ir.out_tree)
+    out_batched = utils.tree.map(stage.is_var, body_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -700,7 +699,7 @@ core.batch_rules[while_loop_p] = batch_while_loop
 core.abatch_rules[while_loop_p] = abatch_while_loop
 
 
-def dce_while_loop(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     cond_ir = eqn.params["cond_ir"]
     body_ir = eqn.params["body_ir"]
     # NOTE(asem): every state leaf is loop-carried into later condition/body calls,
@@ -729,13 +728,13 @@ def cot_tree_acc(lhs: Tree, rhs: Tree, /) -> Tree:
 
 
 def fixpoint(
-    step_ir: core.IR,
+    step_ir: stage.IR,
     init_val: Tree,
     theta: Tree = (),
     *,
     max_iters: int,
     adj_iters: int = 1,
-    equiv_ir: core.IR | None = None,
+    equiv_ir: stage.IR | None = None,
 ) -> Tree:
     """Iterate ``step_ir`` until the state reaches a fixed point.
 
@@ -745,7 +744,7 @@ def fixpoint(
     pytree; pass ``equiv_ir`` with shape ``(State, State) -> Bool`` to decide
     stability inside the program.
     """
-    assert isinstance(step_ir, core.IR), f"step_ir must be an IR, got {type(step_ir)}"
+    assert isinstance(step_ir, stage.IR), f"step_ir must be an IR, got {type(step_ir)}"
     assert len(step_ir.in_tree) == 2, "step_ir must take exactly two positional arguments"
 
     in_struct = utils.tree.structure(step_ir.in_tree[0])
@@ -758,7 +757,7 @@ def fixpoint(
     assert isinstance(max_iters, int) and max_iters >= 1, f"max_iters must be >= 1: {max_iters!r}"
     assert isinstance(adj_iters, int) and adj_iters >= 0, f"adj_iters must be >= 0: {adj_iters!r}"
     if equiv_ir is not None:
-        assert isinstance(equiv_ir, core.IR), f"equiv_ir must be an IR, got {type(equiv_ir)}"
+        assert isinstance(equiv_ir, stage.IR), f"equiv_ir must be an IR, got {type(equiv_ir)}"
         assert len(equiv_ir.in_tree) == 2, "equiv_ir must take two positional arguments"
         for side in equiv_ir.in_tree:
             assert utils.tree.structure(side) == in_struct, (
@@ -777,10 +776,10 @@ def impl_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> Tree:
     del adj_iters
     state, theta = in_tree
@@ -802,10 +801,10 @@ async def aimpl_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> Tree:
     del adj_iters
     state, theta = in_tree
@@ -827,23 +826,23 @@ def abstract_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> Tree:
     del in_tree, max_iters, adj_iters, equiv_ir
-    return utils.tree.map(core.aval_if_var, step_ir.out_tree)
+    return utils.tree.map(stage.aval_if_var, step_ir.out_tree)
 
 
 def pullback_fwd_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> TreePair:
     out = fixpoint_p.bind(
         in_tree, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
@@ -856,10 +855,10 @@ async def apull_fwd_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> TreePair:
     out = await fixpoint_p.abind(
         in_tree, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
@@ -872,31 +871,31 @@ def pullback_bwd_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> Tree:
     import autoform.ad as ad
 
     def make_c(x):
-        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
     dx0 = utils.tree.map(make_c, x_star)
 
-    if all(isinstance(x, abstract.Zero) for x in utils.tree.leaves(g)):
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
         return dx0, utils.tree.map(make_c, theta)
 
-    res: dict[core.Eqn, Tree] = {}
+    res: dict[stage.Eqn, Tree] = {}
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
     with core.using_interpreter(fwd):
 
-        def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+        def custom_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
             boxed_out, residuals = eqn.bind(boxed_in, **eqn.params)
             res[eqn] = residuals
             return boxed_out
@@ -908,7 +907,7 @@ def pullback_bwd_fixpoint(
     def transpose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
 
-        def custom_bind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
+        def custom_bind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
             residuals = res[eqn]
             boxed_c_out = bwd.box(c_out)
             with core.using_interpreter(bwd):
@@ -939,31 +938,31 @@ async def apull_bwd_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> Tree:
     import autoform.ad as ad
 
     def make_c(x):
-        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
     dx0 = utils.tree.map(make_c, x_star)
 
-    if all(isinstance(x, abstract.Zero) for x in utils.tree.leaves(g)):
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
         return dx0, utils.tree.map(make_c, theta)
 
-    res: dict[core.Eqn, Tree] = {}
+    res: dict[stage.Eqn, Tree] = {}
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
     with core.using_interpreter(fwd):
 
-        async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
+        async def custom_abind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
             boxed_out, residuals = await eqn.abind(boxed_in, **eqn.params)
             res[eqn] = residuals
             return boxed_out
@@ -975,7 +974,7 @@ async def apull_bwd_fixpoint(
     async def atranspose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
 
-        async def custom_abind(eqn: core.Eqn, c_out: Tree, /) -> Tree:
+        async def custom_abind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
             residuals = res[eqn]
             boxed_c_out = bwd.box(c_out)
             with core.using_interpreter(bwd):
@@ -1006,10 +1005,10 @@ def batch_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> TreePair:
     import autoform.axis as axis
 
@@ -1044,7 +1043,7 @@ def batch_fixpoint(
         n_alive = len(alive_in)
         in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
         out_transposed = batched_step.call(*in_transposed)
-        out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
+        out_batched = utils.tree.map(stage.is_var, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
         new_states = [out_at(i) for i in range(n_alive)]
@@ -1060,7 +1059,7 @@ def batch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
+    out_batched = utils.tree.map(stage.is_var, step_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, states)
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -1071,10 +1070,10 @@ async def abatch_fixpoint(
     in_tree: Tree,
     /,
     *,
-    step_ir: core.IR,
+    step_ir: stage.IR,
     max_iters: int,
     adj_iters: int,
-    equiv_ir: core.IR | None,
+    equiv_ir: stage.IR | None,
 ) -> TreePair:
     import autoform.axis as axis
 
@@ -1109,7 +1108,7 @@ async def abatch_fixpoint(
         n_alive = len(alive_in)
         in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
         out_transposed = await batched_step.acall(*in_transposed)
-        out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
+        out_batched = utils.tree.map(stage.is_var, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
 
         new_states = [out_at(i) for i in range(n_alive)]
@@ -1125,7 +1124,7 @@ async def abatch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = utils.tree.map(core.is_var, step_ir.out_tree)
+    out_batched = utils.tree.map(stage.is_var, step_ir.out_tree)
     out_tree = utils.batch_transpose(b_sz, out_batched, states)
     in_spec = utils.tree.structure(init_val, is_leaf=lambda x: x is not init_val)
     out_tree = in_spec.unflatten(utils.tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
@@ -1143,7 +1142,7 @@ core.batch_rules[fixpoint_p] = batch_fixpoint
 core.abatch_rules[fixpoint_p] = abatch_fixpoint
 
 
-def dce_fixpoint(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     step_ir = eqn.params["step_ir"]
     equiv_ir = eqn.params["equiv_ir"]
     # NOTE(asem): every state leaf is loop-carried into the next step, even if

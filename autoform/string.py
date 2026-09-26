@@ -20,9 +20,8 @@ import functools as ft
 import string as stringlib
 from typing import Any
 
-import autoform.abstract as abstract
 import autoform.core as core
-import autoform.tracer as tracer
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["StrAVal", "format", "concat", "match"]
@@ -36,7 +35,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class StrAVal(abstract.AVal):
+class StrAVal(core.AVal):
     """Abstract value for ``str`` leaves.
 
     Example:
@@ -65,11 +64,11 @@ class StrAVal(abstract.AVal):
         return "".join(cotangents)
 
 
-abstract.aval_types[str] = lambda _: StrAVal()
-tracer.trace_types.add(str)
-abstract.primal_s.set(StrAVal, lambda aval: aval)
-abstract.tangent_s.set(StrAVal, lambda aval: aval)
-abstract.cotangent_s.set(StrAVal, lambda aval: aval)
+core.aval_types[str] = lambda _: StrAVal()
+stage.trace_types.add(str)
+core.primal_s.set(StrAVal, lambda aval: aval)
+core.tangent_s.set(StrAVal, lambda aval: aval)
+core.cotangent_s.set(StrAVal, lambda aval: aval)
 
 # ==================================================================================================
 # CONCAT
@@ -107,7 +106,7 @@ def abstract_concat(in_tree: Tree, /) -> Any:
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = abstract.materialize_zeros(tangents)
+    tangents = core.materialize_zeros(tangents)
     return concat_p.bind(primals), concat_p.bind(tangents)
 
 
@@ -144,7 +143,7 @@ core.batch_rules[concat_p] = batch_concat
 core.abatch_rules[concat_p] = utils.asyncify(batch_concat)
 
 
-tracer.dunder_rules[tracer.Dunder.ADD, StrAVal] = concat
+stage.dunder_rules[stage.Dunder.ADD, StrAVal] = concat
 
 
 # ==================================================================================================
@@ -183,13 +182,13 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 def abstract_match(in_tree: Tree, /) -> Any:
     assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return abstract.avalof(False)
+    return core.avalof(False)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, abstract.Zero(abstract.tangent_s.map(abstract.avalof(False)))
+    return out_primal, core.Zero(core.tangent_s.map(core.avalof(False)))
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -200,9 +199,9 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     def make_c(x):
-        if isinstance(x, abstract.Zero):
+        if isinstance(x, core.Zero):
             return x
-        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     residuals, out_cotangent = in_tree
     del out_cotangent
@@ -231,7 +230,7 @@ core.batch_rules[match_p] = batch_match
 core.abatch_rules[match_p] = utils.asyncify(batch_match)
 
 
-tracer.dunder_rules[tracer.Dunder.EQ, StrAVal] = match
+stage.dunder_rules[stage.Dunder.EQ, StrAVal] = match
 
 
 # ==================================================================================================

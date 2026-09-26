@@ -20,11 +20,11 @@ import asyncio
 import math
 from collections.abc import Hashable
 
-import autoform.abstract as abstract
 import autoform.core as core
 import autoform.dead as dead
 import autoform.memo as memo
 import autoform.order as order
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["factor", "weight"]
@@ -57,7 +57,7 @@ def impl_factor(weight: float, /, *, name: Hashable | None = None) -> None:
 
 def abstract_factor(weight, /, *, name: Hashable | None = None) -> None:
     del name
-    number_type = (int, float, type(abstract.avalof(0)), type(abstract.avalof(0.0)))
+    number_type = (int, float, type(core.avalof(0)), type(core.avalof(0.0)))
     assert type(weight) in number_type, f"Expected number: {weight!r}"
     return ()
 
@@ -76,7 +76,7 @@ def pullback_fwd_factor(weight, /, *, name: Hashable | None = None):
 def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
     del name
     weight, _ = in_tree
-    return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(weight)))
+    return core.Zero(core.cotangent_s.map(core.avalof(weight)))
 
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):
@@ -152,25 +152,25 @@ class WeightInterpreter(core.Interpreter):
         return await self.parent.ainterpret(prim, in_tree, **params)
 
 
-def weight(ir: core.IR, /) -> core.IR:
+def weight(ir: stage.IR, /) -> stage.IR:
     """Transform an IR to return ``(output, path_weight)`` for one path."""
-    assert isinstance(ir, core.IR), f"Expected IR, got {type(ir)}"
+    assert isinstance(ir, stage.IR), f"Expected IR, got {type(ir)}"
 
     def make_out(atom):
-        if core.is_var(atom):
-            return core.Var.fresh(aval=core.aval_if_var(atom), source=atom)
+        if stage.is_var(atom):
+            return stage.Var.fresh(aval=stage.aval_if_var(atom), source=atom)
         return atom
 
     in_tree = ir.in_tree
     out_tree = (
         utils.tree.map(make_out, ir.out_tree),
-        core.Var.fresh(aval=abstract.avalof(0.0)),
+        stage.Var.fresh(aval=core.avalof(0.0)),
     )
-    eqn = core.Eqn(weight_call_p, in_tree, out_tree, dict(ir=ir))
-    return core.IR([eqn], in_tree, out_tree)
+    eqn = stage.Eqn(weight_call_p, in_tree, out_tree, dict(ir=ir))
+    return stage.IR([eqn], in_tree, out_tree)
 
 
-def impl_weight_call(in_tree, /, *, ir: core.IR):
+def impl_weight_call(in_tree, /, *, ir: stage.IR):
     interpreter = WeightInterpreter()
     with core.using_interpreter(interpreter):
         output = ir.call(*in_tree)
@@ -178,7 +178,7 @@ def impl_weight_call(in_tree, /, *, ir: core.IR):
     return output, weight
 
 
-async def aimpl_weight_call(in_tree, /, *, ir: core.IR):
+async def aimpl_weight_call(in_tree, /, *, ir: stage.IR):
     interpreter = WeightInterpreter()
     with core.using_interpreter(interpreter):
         output = await ir.acall(*in_tree)
@@ -186,9 +186,9 @@ async def aimpl_weight_call(in_tree, /, *, ir: core.IR):
     return output, weight
 
 
-def abstract_weight_call(in_tree, /, *, ir: core.IR):
+def abstract_weight_call(in_tree, /, *, ir: stage.IR):
     del in_tree
-    return utils.tree.map(core.aval_if_var, ir.out_tree), abstract.avalof(0.0)
+    return utils.tree.map(stage.aval_if_var, ir.out_tree), core.avalof(0.0)
 
 
 def unsupported_weight_call_transform(transform: str) -> None:
@@ -198,22 +198,22 @@ def unsupported_weight_call_transform(transform: str) -> None:
     )
 
 
-def pushforward_weight_call(in_tree, /, *, ir: core.IR):
+def pushforward_weight_call(in_tree, /, *, ir: stage.IR):
     del in_tree, ir
     unsupported_weight_call_transform("pushforward")
 
 
-def pullback_fwd_weight_call(in_tree, /, *, ir: core.IR):
+def pullback_fwd_weight_call(in_tree, /, *, ir: stage.IR):
     del in_tree, ir
     unsupported_weight_call_transform("pullback")
 
 
-def pullback_bwd_weight_call(in_tree, /, *, ir: core.IR):
+def pullback_bwd_weight_call(in_tree, /, *, ir: stage.IR):
     del in_tree, ir
     unsupported_weight_call_transform("pullback")
 
 
-def batch_weight_call(in_tree, /, *, ir: core.IR):
+def batch_weight_call(in_tree, /, *, ir: stage.IR):
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -227,7 +227,7 @@ def batch_weight_call(in_tree, /, *, ir: core.IR):
     return out_ib, out_batched
 
 
-async def abatch_weight_call(in_tree, /, *, ir: core.IR):
+async def abatch_weight_call(in_tree, /, *, ir: stage.IR):
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
@@ -241,7 +241,7 @@ async def abatch_weight_call(in_tree, /, *, ir: core.IR):
     return out_ib, out_batched
 
 
-def dce_weight_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+def dce_weight_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     output_used, _ = out_used
     new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=output_used))
     return dead.default_dce(new_eqn, out_used)

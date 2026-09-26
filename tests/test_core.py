@@ -45,7 +45,7 @@ class Blob:
         self.size = size
 
 
-class BlobAVal(af.abstract.AVal):
+class BlobAVal(af.core.AVal):
     __slots__ = ["size"]
 
     def __init__(self, size: int):
@@ -60,7 +60,7 @@ class BlobAVal(af.abstract.AVal):
 
 class TestSpace:
     def test_registration_and_replacement(self):
-        space = af.abstract.Space("blob")
+        space = af.core.Space("blob")
         rule = lambda value: BlobAVal(value.size)
         replacement = lambda value: BlobAVal(value.size + 1)
         space.set(BlobAVal, rule)
@@ -69,11 +69,11 @@ class TestSpace:
             space.set(BlobAVal, replacement)
         space.set(BlobAVal, replacement, replace=True)
         assert space.map(BlobAVal(3)) == BlobAVal(4)
-        zero = af.abstract.Zero(space.map(BlobAVal(3)))
-        assert isinstance(zero, af.abstract.Zero)
+        zero = af.core.Zero(space.map(BlobAVal(3)))
+        assert isinstance(zero, af.core.Zero)
         assert zero.aval == BlobAVal(4)
         with pytest.raises(AssertionError, match="No concrete zero defined"):
-            af.abstract.materialize_zeros(zero)
+            af.core.materialize_zeros(zero)
 
     @pytest.mark.parametrize(
         "value_type, rule, replace, message",
@@ -85,18 +85,18 @@ class TestSpace:
     )
     def test_invalid_registration(self, value_type, rule, replace, message):
         with pytest.raises(AssertionError, match=message):
-            af.abstract.Space("blob").set(value_type, rule, replace=replace)
+            af.core.Space("blob").set(value_type, rule, replace=replace)
 
     def test_missing_rule(self):
         with pytest.raises(TypeError, match="No empty aval rule registered"):
-            af.abstract.Space("empty").map(BlobAVal(3))
+            af.core.Space("empty").map(BlobAVal(3))
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.abstract.primal_s, id="primal"),
-            pytest.param(af.abstract.tangent_s, id="tangent"),
-            pytest.param(af.abstract.cotangent_s, id="cotangent"),
+            pytest.param(af.core.primal_s, id="primal"),
+            pytest.param(af.core.tangent_s, id="tangent"),
+            pytest.param(af.core.cotangent_s, id="cotangent"),
         ],
     )
     @pytest.mark.parametrize(
@@ -111,14 +111,14 @@ class TestSpace:
         assert space.map(aval) is aval
 
     def test_custom_ad_spaces(self):
-        class TextAVal(af.abstract.AVal): ...
+        class TextAVal(af.core.AVal): ...
 
-        class TextEditAVal(af.abstract.AVal): ...
+        class TextEditAVal(af.core.AVal): ...
 
-        class TextFeedbackAVal(af.abstract.AVal): ...
+        class TextFeedbackAVal(af.core.AVal): ...
 
-        tangent_s = af.abstract.Space("tangent")
-        cotangent_s = af.abstract.Space("cotangent")
+        tangent_s = af.core.Space("tangent")
+        cotangent_s = af.core.Space("cotangent")
         tangent_s.set(TextAVal, lambda _: TextEditAVal())
         tangent_s.set(TextEditAVal, lambda aval: aval)
         cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
@@ -131,23 +131,23 @@ class TestSpace:
         assert isinstance(cotangent, TextFeedbackAVal)
         assert tangent_s.map(tangent) is tangent
         assert cotangent_s.map(cotangent) is cotangent
-        assert isinstance(af.abstract.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
-        assert isinstance(af.abstract.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
+        assert isinstance(af.core.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
+        assert isinstance(af.core.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.abstract.tangent_s, id="tangent"),
-            pytest.param(af.abstract.cotangent_s, id="cotangent"),
+            pytest.param(af.core.tangent_s, id="tangent"),
+            pytest.param(af.core.cotangent_s, id="cotangent"),
         ],
     )
     def test_missing_ad_space_rule(self, space):
-        class UnknownAVal(af.abstract.AVal): ...
+        class UnknownAVal(af.core.AVal): ...
 
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
             space.map(UnknownAVal())
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
-            af.abstract.Zero(space.map(UnknownAVal()))
+            af.core.Zero(space.map(UnknownAVal()))
 
 
 class TestBuildIR:
@@ -166,7 +166,7 @@ class TestBuildIR:
         ir = af.trace(program)(traced)
         assert isinstance(ir.in_tree, tuple)
         assert len(ir.in_tree) == 1
-        assert isinstance(ir.in_tree[0], af.core.Var)
+        assert isinstance(ir.in_tree[0], af.stage.Var)
         assert ir.in_tree[0].aval == aval
         assert ir.call(runtime) == expected
 
@@ -193,8 +193,8 @@ class TestBuildIR:
         def program(x):
             return x
 
-        af.abstract.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
-        af.tracer.trace_types.add(TraceBlob)
+        af.core.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
+        af.stage.trace_types.add(TraceBlob)
 
         ir = af.trace(program)(TraceBlob(3))
 
@@ -218,12 +218,12 @@ class TestBuildIR:
         assert len(ir.eqns) == 1
         assert isinstance(ir.in_tree, tuple)
         assert len(ir.in_tree) == 1
-        assert isinstance(ir.in_tree[0], af.core.Var)
+        assert isinstance(ir.in_tree[0], af.stage.Var)
         eqn = ir.eqns[0]
         assert len(eqn.in_tree) == 2
         lit_candidate = eqn.in_tree[0]
         assert lit_candidate == "Hello, "
-        assert isinstance(eqn.in_tree[1], af.core.Var)
+        assert isinstance(eqn.in_tree[1], af.stage.Var)
 
     def test_format_lowers_template_and_args_to_concat(self):
         def program(x):
@@ -236,7 +236,7 @@ class TestBuildIR:
         prefix, value, suffix = eqn.in_tree
         assert prefix == "Hello, "
         assert suffix == "!"
-        assert isinstance(value, af.core.Var)
+        assert isinstance(value, af.stage.Var)
         assert ir.call("x0") == "Hello, x0!"
 
     def test_tracing_unhashable_literal_leaf_errors(self):
@@ -277,7 +277,7 @@ class TestTraceStatic:
         ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
 
         assert ir.in_tree[0] == "Hello"
-        assert isinstance(ir.in_tree[1], af.core.Var)
+        assert isinstance(ir.in_tree[1], af.stage.Var)
         assert ir.call("Hello", "x0") == "Hello x0"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -290,7 +290,7 @@ class TestTraceStatic:
         ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            af.core.check_static_inputs(ir.in_tree, ("Hi", "x0"))
+            af.stage.check_static_inputs(ir.in_tree, ("Hi", "x0"))
 
         gen = ir.walk("Hi", "x0")
 
@@ -314,7 +314,7 @@ class TestTraceStatic:
         ir = af.trace(program, static=(True, False))(True, "World")
 
         assert ir.in_tree[0] is True
-        assert isinstance(ir.in_tree[1], af.core.Var)
+        assert isinstance(ir.in_tree[1], af.stage.Var)
         assert ir.call(True, "x0") == "Hello x0"
 
 
@@ -367,12 +367,12 @@ class TestTags:
 
     def test_ireqn_tags_input_is_frozenset(self):
         prim = af.core.Prim("tag_set")
-        eqn = af.core.Eqn(prim, (), (), None, frozenset({Label("draft")}))
+        eqn = af.stage.Eqn(prim, (), (), None, frozenset({Label("draft")}))
 
         assert eqn.tags == frozenset({Label("draft")})
 
         with pytest.raises(AssertionError):
-            af.core.Eqn(prim, (), (), None, (Label("draft"),))
+            af.stage.Eqn(prim, (), (), None, (Label("draft"),))
 
     def test_bind_reinstalls_equation_tags(self):
         def abstract_probe(x):
@@ -476,7 +476,7 @@ class TestRunIR:
     def test_execution(self, executor, program, traced, runtime, expected, equations):
         ir = af.trace(program)(*traced)
         assert len(ir.in_tree) == len(traced)
-        assert all((isinstance(v, af.core.Var) for v in ir.in_tree))
+        assert all((isinstance(v, af.stage.Var) for v in ir.in_tree))
         assert len(ir.eqns) == equations
         result = executor(ir, *runtime)
         assert result == expected
@@ -512,8 +512,8 @@ class TestKeywordArgumentBoundary:
     @pytest.mark.parametrize(
         "executor",
         [
-            pytest.param(af.core.IR.call, id="sync"),
-            pytest.param(af.core.IR.acall, id="async"),
+            pytest.param(af.stage.IR.call, id="sync"),
+            pytest.param(af.stage.IR.acall, id="async"),
         ],
     )
     def test_call_rejects_kwargs(self, executor):
@@ -543,8 +543,8 @@ def test_ir_and_equation_fields():
 
     ir = af.trace(program)("test")
     match ir:
-        case af.core.IR(
-            eqns=[af.core.Eqn(prim=prim, in_tree=inputs, out_tree=output, params=params)]
+        case af.stage.IR(
+            eqns=[af.stage.Eqn(prim=prim, in_tree=inputs, out_tree=output, params=params)]
         ):
             assert prim is af.intercept.checkpoint_p
             assert inputs is ir.in_tree[0]
@@ -560,7 +560,7 @@ def test_ir_and_equation_fields():
     assert updated.in_tree is eqn.in_tree
     assert updated.out_tree is eqn.out_tree
     assert updated.tags == eqn.tags == frozenset({Label("draft")})
-    rebuilt = af.core.IR(eqns=[updated], in_tree=ir.in_tree, out_tree=ir.out_tree)
+    rebuilt = af.stage.IR(eqns=[updated], in_tree=ir.in_tree, out_tree=ir.out_tree)
     assert rebuilt.call("hello") == "hello"
 
 
@@ -572,13 +572,13 @@ class TestPrimitive:
 
 
 def test_variable_and_literal_boundary():
-    var = af.core.Var(aval=af.string.StrAVal())
-    assert af.core.is_var(var)
+    var = af.stage.Var(aval=af.string.StrAVal())
+    assert af.stage.is_var(var)
     assert var.aval == af.string.StrAVal()
-    assert af.abstract.avalof(var) is var.aval
-    assert not af.tracer.is_traceable(var)
-    assert not af.core.is_var("hello")
-    box = af.tracer.TraceBox(owner=af.tracer.TraceInterpreter(), var=var)
+    assert af.core.avalof(var) is var.aval
+    assert not af.stage.is_traceable(var)
+    assert not af.stage.is_var("hello")
+    box = af.stage.TraceBox(owner=af.stage.TraceInterpreter(), var=var)
     assert box.aval is var.aval
     assert {box: var}[box] is var
 
@@ -606,10 +606,10 @@ class TestBind:
 
 def test_interpreter_context_restores_default():
     assert isinstance(af.core.active_interpreter.get(), af.core.EvalInterpreter)
-    tracer = af.tracer.TraceInterpreter()
+    tracer = af.stage.TraceInterpreter()
     with af.core.using_interpreter(tracer) as active:
         assert active is tracer
-        af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.string.StrAVal()))
+        af.string.format("Hello, {value}!", value=af.stage.Var.fresh(aval=af.string.StrAVal()))
         assert len(tracer.eqns) == 1
     assert isinstance(af.core.active_interpreter.get(), af.core.EvalInterpreter)
     assert af.string.concat("a", "b") == "ab"
@@ -775,10 +775,10 @@ class TestFold:
         async_probe_p = af.core.Prim("async_dynamic_fold_probe")
         af.core.abstract_rules[async_probe_p] = abstract_async_probe
 
-        with af.core.using_interpreter(af.tracer.TraceInterpreter()) as tracer:
+        with af.core.using_interpreter(af.stage.TraceInterpreter()) as tracer:
             result = asyncio.run(async_probe_p.abind("literal"))
 
-        assert isinstance(result, af.tracer.TraceBox)
+        assert isinstance(result, af.stage.TraceBox)
         assert [eqn.prim.name for eqn in tracer.eqns] == ["async_dynamic_fold_probe"]
 
     def test_async_fold_trace_dispatch_evaluates_primitive(self):
@@ -788,7 +788,7 @@ class TestFold:
         async_probe_p = af.core.Prim("async_fold_probe")
         af.core.aimpl_rules[async_probe_p] = aimpl_async_probe
 
-        with af.core.using_interpreter(af.tracer.TraceInterpreter()) as tracer:
+        with af.core.using_interpreter(af.stage.TraceInterpreter()) as tracer:
             with af.fold():
                 result = asyncio.run(async_probe_p.abind("literal"))
 

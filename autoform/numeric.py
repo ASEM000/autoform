@@ -18,9 +18,8 @@ from __future__ import annotations
 
 import functools as ft
 
-import autoform.abstract as abstract
 import autoform.core as core
-import autoform.tracer as tracer
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = [
@@ -49,7 +48,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class IntAVal(abstract.AVal):
+class IntAVal(core.AVal):
     """Abstract value for ``int`` leaves.
 
     Example:
@@ -72,12 +71,12 @@ class IntAVal(abstract.AVal):
         return hash(type(self))
 
 
-abstract.aval_types[int] = lambda _: IntAVal()
-tracer.trace_types.add(int)
-abstract.primal_s.set(IntAVal, lambda aval: aval)
+core.aval_types[int] = lambda _: IntAVal()
+stage.trace_types.add(int)
+core.primal_s.set(IntAVal, lambda aval: aval)
 
 
-class FloatAVal(abstract.AVal):
+class FloatAVal(core.AVal):
     """Abstract value for ``float`` leaves.
 
     Example:
@@ -106,14 +105,14 @@ class FloatAVal(abstract.AVal):
         return sum(cotangents)
 
 
-abstract.aval_types[float] = lambda _: FloatAVal()
-tracer.trace_types.add(float)
-abstract.primal_s.set(FloatAVal, lambda aval: aval)
-abstract.tangent_s.set(FloatAVal, lambda aval: aval)
-abstract.cotangent_s.set(FloatAVal, lambda aval: aval)
+core.aval_types[float] = lambda _: FloatAVal()
+stage.trace_types.add(float)
+core.primal_s.set(FloatAVal, lambda aval: aval)
+core.tangent_s.set(FloatAVal, lambda aval: aval)
+core.cotangent_s.set(FloatAVal, lambda aval: aval)
 
 
-class BoolAVal(abstract.AVal):
+class BoolAVal(core.AVal):
     """Abstract value for ``bool`` leaves.
 
     Example:
@@ -136,11 +135,11 @@ class BoolAVal(abstract.AVal):
         return hash(type(self))
 
 
-abstract.aval_types[bool] = lambda _: BoolAVal()
-tracer.trace_types.add(bool)
-abstract.primal_s.set(BoolAVal, lambda aval: aval)
-abstract.tangent_s.set(BoolAVal, lambda aval: aval)
-abstract.cotangent_s.set(BoolAVal, lambda aval: aval)
+core.aval_types[bool] = lambda _: BoolAVal()
+stage.trace_types.add(bool)
+core.primal_s.set(BoolAVal, lambda aval: aval)
+core.tangent_s.set(BoolAVal, lambda aval: aval)
+core.cotangent_s.set(BoolAVal, lambda aval: aval)
 
 
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -185,7 +184,7 @@ def abstract_neg(in_tree: Tree, /) -> FloatAVal:
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
     primal, tangent = in_tree
-    return neg(primal), neg(abstract.materialize_zeros(tangent))
+    return neg(primal), neg(core.materialize_zeros(tangent))
 
 
 def pullback_fwd_neg(in_tree: Tree, /) -> TreePair:
@@ -242,7 +241,7 @@ def abstract_add(in_tree: Tree, /) -> FloatAVal:
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = abstract.materialize_zeros(tangents)
+    tangents = core.materialize_zeros(tangents)
     return add_p.bind(primals), add_p.bind(tangents)
 
 
@@ -300,7 +299,7 @@ def abstract_sub(in_tree: Tree, /) -> FloatAVal:
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = abstract.materialize_zeros(tangents)
+    tangents = core.materialize_zeros(tangents)
     return sub_p.bind(primals), sub_p.bind(tangents)
 
 
@@ -359,7 +358,7 @@ def abstract_mul(in_tree: Tree, /) -> FloatAVal:
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
     a, b = primals
-    da, db = abstract.materialize_zeros(tangents)
+    da, db = core.materialize_zeros(tangents)
     return mul(a, b), add(mul(da, b), mul(a, db))
 
 
@@ -418,7 +417,7 @@ def abstract_div(in_tree: Tree, /) -> FloatAVal:
 def pushforward_div(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
     a, b = primals
-    da, db = abstract.materialize_zeros(tangents)
+    da, db = core.materialize_zeros(tangents)
     return div(a, b), div(sub(mul(da, b), mul(a, db)), mul(b, b))
 
 
@@ -462,7 +461,7 @@ def abstract_compare(in_tree: Tree, /) -> BoolAVal:
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     primals, _ = in_tree
-    return prim.bind(primals), abstract.Zero(abstract.tangent_s.map(BoolAVal()))
+    return prim.bind(primals), core.Zero(core.tangent_s.map(BoolAVal()))
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -471,9 +470,9 @@ def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
 
 def pullback_bwd_compare(in_tree: Tree, /) -> Tree:
     def make_c(x):
-        if isinstance(x, abstract.Zero):
+        if isinstance(x, core.Zero):
             return x
-        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     primals, _ = in_tree
     return utils.tree.map(make_c, primals)
@@ -705,14 +704,14 @@ core.batch_rules[ge_p] = batch_ge
 core.abatch_rules[ge_p] = utils.asyncify(batch_ge)
 
 
-tracer.dunder_rules[tracer.Dunder.NEG, FloatAVal] = neg
-tracer.dunder_rules[tracer.Dunder.ADD, FloatAVal] = add
-tracer.dunder_rules[tracer.Dunder.SUB, FloatAVal] = sub
-tracer.dunder_rules[tracer.Dunder.MUL, FloatAVal] = mul
-tracer.dunder_rules[tracer.Dunder.DIV, FloatAVal] = div
-tracer.dunder_rules[tracer.Dunder.EQ, FloatAVal] = eq
-tracer.dunder_rules[tracer.Dunder.NE, FloatAVal] = ne
-tracer.dunder_rules[tracer.Dunder.LT, FloatAVal] = lt
-tracer.dunder_rules[tracer.Dunder.LE, FloatAVal] = le
-tracer.dunder_rules[tracer.Dunder.GT, FloatAVal] = gt
-tracer.dunder_rules[tracer.Dunder.GE, FloatAVal] = ge
+stage.dunder_rules[stage.Dunder.NEG, FloatAVal] = neg
+stage.dunder_rules[stage.Dunder.ADD, FloatAVal] = add
+stage.dunder_rules[stage.Dunder.SUB, FloatAVal] = sub
+stage.dunder_rules[stage.Dunder.MUL, FloatAVal] = mul
+stage.dunder_rules[stage.Dunder.DIV, FloatAVal] = div
+stage.dunder_rules[stage.Dunder.EQ, FloatAVal] = eq
+stage.dunder_rules[stage.Dunder.NE, FloatAVal] = ne
+stage.dunder_rules[stage.Dunder.LT, FloatAVal] = lt
+stage.dunder_rules[stage.Dunder.LE, FloatAVal] = le
+stage.dunder_rules[stage.Dunder.GT, FloatAVal] = gt
+stage.dunder_rules[stage.Dunder.GE, FloatAVal] = ge
