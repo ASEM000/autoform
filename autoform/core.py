@@ -12,26 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Program construction and execution, independent of tracing."""
+"""Core."""
 
 from __future__ import annotations
 
-import functools as ft
-import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator, Hashable
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from operator import setitem
-from typing import Any, ClassVar, Self, TypeGuard
+from typing import Any
 
-import autoform.abstract as abstract
 import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 
 __all__ = [
-    # rule registries
+    "AVal",
+    "Zero",
+    "materialize_zeros",
+    "Space",
+    "aval_types",
+    "avalof",
+    "primal_s",
+    "tangent_s",
+    "cotangent_s",
+    "Prim",
+    "Rule",
     "impl_rules",
     "aimpl_rules",
     "abstract_rules",
@@ -43,42 +49,140 @@ __all__ = [
     "apull_fwd_rules",
     "pull_bwd_rules",
     "apull_bwd_rules",
-    # primitive dispatch
-    "Prim",
-    "active_tags",
-    "tag",
-    "Box",
     "Interpreter",
     "EvalInterpreter",
     "active_interpreter",
     "using_interpreter",
-    # IR construction and execution
-    "Var",
-    "is_var",
-    "aval_if_var",
-    "Eqn",
-    "IR",
-    "check_static_inputs",
 ]
 
 # ==================================================================================================
-# RULES
+# BASE TYPES
 # ==================================================================================================
 
 
-type RuleMapping[T] = dict[Prim, Callable[..., T]]
+class AVal:
+    """Base class for abstract values used by traced programs.
 
-impl_rules: RuleMapping[Tree] = {}
-aimpl_rules: RuleMapping[Awaitable[Tree]] = {}
-batch_rules: RuleMapping[tuple[Tree, Tree[bool]]] = {}
-abatch_rules: RuleMapping[Awaitable[tuple[Tree, Tree[bool]]]] = {}
-push_rules: RuleMapping[tuple[Tree, Tree]] = {}
-apush_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
-pull_fwd_rules: RuleMapping[tuple[Tree, Tree]] = {}
-apull_fwd_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
-pull_bwd_rules: RuleMapping[Tree] = {}
-apull_bwd_rules: RuleMapping[Awaitable[Tree]] = {}
-abstract_rules: RuleMapping[Tree[Any]] = {}
+    Abstract values carry trace-time information about runtime values. Extension
+    domains subclass ``AVal`` to describe the information primitive abstract
+    rules need, such as shape, dtype, schema, or other static metadata.
+
+    Example:
+        >>> import autoform.extend as afe
+        >>> class ArrayAVal(afe.AVal):
+        ...     def __init__(self, shape, dtype):
+        ...         self.shape = shape
+        ...         self.dtype = dtype
+    """
+
+    __slots__ = []
+
+    def zero(self):
+        """Construct a concrete zero with this abstract value."""
+        assert False, f"No concrete zero defined for {self!r}"
+
+    def accumulate(self, cotangents: Tree, /):
+        """Combine nonzero cotangent contributions with this abstract value."""
+        assert False, f"No cotangent accumulation defined for {self!r}"
+
+
+class Zero[T: AVal]:
+    """Symbolic zero for an abstract value."""
+
+    __slots__ = ["aval"]
+
+    def __init__(self, aval: T, /):
+        assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
+        self.aval = aval
+
+    def __repr__(self):
+        return f"Zero({self.aval!r})"
+
+    def __eq__(self, other):
+        return isinstance(other, Zero) and self.aval == other.aval
+
+    def __hash__(self):
+        return hash((type(self), self.aval))
+
+
+def materialize_zeros(x: Tree, /) -> Tree:
+    """Replace each Zero leaf in a pytree with its concrete zero value.
+
+    ``materialize_zeros`` is useful inside transform rules before calling primitives
+    that expect real runtime values instead of symbolic zeros.
+
+    Args:
+        x: Pytree that may contain ``Zero`` leaves.
+
+    Returns:
+        A pytree with the same structure as ``x`` where each symbolic zero has
+        been replaced by the concrete zero returned by its AVal.
+
+    Raises:
+        AssertionError: If a ``Zero`` has a type with no concrete
+            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
+            path through a non-differentiable type.
+    """
+
+    def map_func(x):
+        if not isinstance(x, Zero):
+            return x
+        return x.aval.zero()
+
+    return utils.tree.map(map_func, x)
+
+
+# ==================================================================================================
+# SPACES
+# ==================================================================================================
+
+
+class Space:
+    __slots__ = ["name", "rules"]
+
+    def __init__(self, name: str, /):
+        assert isinstance(name, str), f"Expected str, got {name!r}"
+        self.name = name
+        self.rules: dict[type[AVal], Callable[[AVal], AVal]] = {}
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name!r})"
+
+    def set[R: Callable[[AVal], AVal]](
+        self, value_type: type[AVal], rule: R, /, *, replace: bool = False
+    ) -> R:
+        assert isinstance(value_type, type), f"Expected type, got {value_type!r}"
+        assert issubclass(value_type, AVal), f"Expected AVal type, got {value_type!r}"
+        assert callable(rule), f"Expected callable, got {rule!r}"
+        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+        assert replace or value_type not in self.rules, f"Rule for {value_type} already defined"
+        self.rules[value_type] = rule
+        return rule
+
+    def map(self, value: AVal, /) -> AVal:
+        """Return the abstract value of ``value`` in this space."""
+        assert isinstance(value, AVal), f"Expected AVal, got {value!r}"
+        if (rule := self.rules.get(type(value))) is None:
+            raise TypeError(f"No {self.name} aval rule registered for {value!r}")
+        aval = rule(value)
+        assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
+        return aval
+
+
+primal_s = Space("primal")
+tangent_s = Space("tangent")
+cotangent_s = Space("cotangent")
+
+aval_types: dict[type, Callable[[Any], AVal]] = {}
+
+
+def avalof(value, /) -> AVal:
+    if (rule := aval_types.get(type(value))) is None:
+        raise TypeError(f"No aval rule registered for {value!r}")
+    aval = rule(value)
+    assert isinstance(aval, AVal), f"Aval rule returned {aval!r}"
+    return aval
+
 
 # ==================================================================================================
 # PRIMITIVE
@@ -116,44 +220,42 @@ class Prim:
 
 
 # ==================================================================================================
-# TAGS
+# RULES
 # ==================================================================================================
 
 
-active_tags: ContextVar[frozenset[Hashable]] = ContextVar("active_tags", default=frozenset())
+class Rule[T]:
+    __slots__ = ["name", "map"]
+
+    def __init__(self, name: str):
+        assert isinstance(name, str), f"Invalid name type: {type(name)=}"
+        self.name = name
+        self.map: dict[Prim, Callable[..., T]] = {}
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name!r})"
+
+    def set[R: Callable[..., T]](self, prim: Prim, rule: R, /) -> R:
+        assert isinstance(prim, Prim)
+        assert callable(rule)
+        self.map[prim] = rule
+        return rule
+
+    def get(self, prim: Prim, /) -> Callable[..., T]:
+        return self.map[prim]
 
 
-@contextmanager
-def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
-    """Attach tags to equations at trace time.
-
-    Equations built inside nested ``tag`` blocks receive the tags from all active
-    blocks. Equations built after a block exits do not receive that block's tags.
-
-    Example:
-        >>> import autoform as af
-        >>> def program(x):
-        ...     with af.tag("outer"):
-        ...         head = x + "!"
-        ...         with af.tag("inner"):
-        ...             return head + "?"
-        >>> ir = af.trace(program)("seed")
-        >>> ir.eqns[0].tags == frozenset({"outer"})
-        True
-        >>> ir.eqns[1].tags == frozenset({"outer", "inner"})
-        True
-    """
-
-    for value in tags:
-        try:
-            hash(value)
-        except TypeError as e:
-            raise TypeError(f"Tags must be hashable, got {value!r}") from e
-    token = active_tags.set(active_tags.get() | frozenset(tags))
-    try:
-        yield tags
-    finally:
-        active_tags.reset(token)
+impl_rules: Rule[Tree] = Rule("impl")
+aimpl_rules: Rule[Awaitable[Tree]] = Rule("aimpl")
+abstract_rules: Rule[Tree] = Rule("abstract")
+batch_rules: Rule[tuple[Tree, Tree[bool]]] = Rule("batch")
+abatch_rules: Rule[Awaitable[tuple[Tree, Tree[bool]]]] = Rule("abatch")
+push_rules: Rule[tuple[Tree, Tree]] = Rule("pushforward")
+apush_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apushforward")
+pull_fwd_rules: Rule[tuple[Tree, Tree]] = Rule("pullback_fwd")
+apull_fwd_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apullback_fwd")
+pull_bwd_rules: Rule[Tree] = Rule("pullback_bwd")
+apull_bwd_rules: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
 
 
 # ==================================================================================================
@@ -161,29 +263,14 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
 # ==================================================================================================
 
 
-class Box:
-    __slots__ = ["owner"]
-
-    def __init__(self, owner):
-        self.owner = owner
-
-
-class Interpreter[T](ABC):
-    """Primitive dispatch and value boxing."""
-
+class Interpreter(ABC):
     __slots__ = []
 
     @abstractmethod
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
 
     @abstractmethod
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
-
-    @abstractmethod
-    def box(self, value, /) -> Tree[T]: ...
-
-    @abstractmethod
-    def unbox(self, value: Tree, /): ...
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
 
 
 @contextmanager
@@ -205,351 +292,14 @@ def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None
 class EvalInterpreter(Interpreter):
     __slots__ = []
 
-    def box(self, value, /):
-        return value
-
-    def unbox(self, value, /):
-        return value
-
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return impl_rules[prim](in_tree, **params)
+        return impl_rules.get(prim)(in_tree, **params)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await aimpl_rules[prim](in_tree, **params)
+        return await aimpl_rules.get(prim)(in_tree, **params)
 
 
 active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
 
 
-# ==================================================================================================
-# IR VARS
-# ==================================================================================================
-
-
-# NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
-# Concrete literals are kept as plain Python values in IR trees.
-class Var:
-    """Symbolic variable stored in IR trees.
-
-    ``Var`` leaves stand for runtime values inside traced programs. Each
-    variable carries an :class:`AVal` describing its abstract value, and an
-    optional source variable used by transforms that create rewritten IR.
-
-    Args:
-        aval: Abstract value for the runtime value represented by this variable.
-        source: Optional original variable this one was derived from.
-    """
-
-    __slots__ = ["id", "source", "aval"]
-    counter: ClassVar[it.count[int]] = it.count(0)
-
-    def __init__(self, /, *, aval: abstract.AVal, source: Var | None = None):
-        self.id = next(self.counter)
-        assert is_var(source) or source is None
-        assert isinstance(aval, abstract.AVal)
-        self.source = source
-        self.aval = aval
-
-    @classmethod
-    def fresh(cls, *, aval: abstract.AVal, source: Var | None = None) -> Self:
-        return cls(source=source, aval=aval)
-
-    def __repr__(self) -> str:
-        source = f", source={self.source!r}" if self.source else ""
-        return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
-
-
-def is_var(x) -> TypeGuard[Var]:
-    """Return ``True`` if input is an :class:`Var`."""
-
-    return isinstance(x, Var)
-
-
-def aval_if_var(x, /):
-    """Return the aval for an IR variable, otherwise return input unchanged.
-
-    This is useful when constructing new IR trees from existing ones: concrete
-    literals stay concrete, while symbolic variables are replaced by the
-    abstract values needed to create fresh variables or abstract outputs.
-    """
-
-    return x.aval if is_var(x) else x
-
-
-# ==================================================================================================
-# IR
-# ==================================================================================================
-
-
-class Eqn:
-    """One primitive application inside an :class:`IR`.
-
-    An equation records the primitive to execute, the IR-shaped input and output
-    trees, static primitive parameters, and the tags active when the equation
-    was traced. Calling :meth:`bind` executes the primitive under those tags.
-
-    Args:
-        prim: Primitive represented by this equation.
-        in_tree: Input tree containing IR variables and concrete literals.
-        out_tree: Output tree containing IR variables and concrete literals.
-        params: Static parameters passed to the primitive rule.
-        tags: Tags associated with this equation.
-    """
-
-    __slots__ = ["prim", "in_tree", "out_tree", "params", "tags"]
-
-    def __init__(
-        self,
-        prim: Prim,
-        in_tree: Tree,
-        out_tree: Tree,
-        params: dict[str, Any] | None = None,
-        tags: frozenset[Hashable] = frozenset(),
-    ):
-        assert isinstance(prim, Prim)
-        assert isinstance(params, dict) or params is None
-        assert isinstance(tags, frozenset)
-        self.prim = prim
-        self.in_tree = in_tree
-        self.out_tree = out_tree
-        self.params = params if params is not None else {}
-        self.tags = tags
-
-    def bind(self, in_tree: Tree, /, **params):
-        with tag(*self.tags):
-            return self.prim.bind(in_tree, **params)
-
-    async def abind(self, in_tree: Tree, /, **params):
-        with tag(*self.tags):
-            return await self.prim.abind(in_tree, **params)
-
-    def using(self, **kwargs) -> Eqn:
-        return Eqn(self.prim, self.in_tree, self.out_tree, self.params | kwargs, self.tags)
-
-
-class IR[*A, R]:
-    """A traced AutoForm program.
-
-    An ``IR`` contains the ordered equations produced by tracing, plus the input
-    and output IR trees that describe how runtime arguments and results are
-    structured. Extension transforms may construct new ``IR`` values when they
-    rewrite or wrap a program.
-
-    Args:
-        eqns: Ordered primitive equations.
-        in_tree: Tree describing the runtime input structure.
-        out_tree: Tree describing the runtime output structure.
-    """
-
-    __slots__ = ["eqns", "in_tree", "out_tree"]
-
-    def __init__(self, eqns: list[Eqn], in_tree: Tree, out_tree: Tree):
-        assert isinstance(eqns, list)
-        eqns = tuple(eqns)
-        assert all(isinstance(eqn, Eqn) for eqn in eqns)
-        self.eqns = eqns
-        self.in_tree = in_tree
-        self.out_tree = out_tree
-
-    def __repr__(self) -> str:
-        return generate_text_code(ir=self, expand_ir=True)
-
-    def call(self, *args: *A) -> R:
-        """Run IR with concrete runtime inputs.
-
-        Use this after `trace(...)` has produced an `IR`. Pass values with the same
-        pytree structure as `in_tree`; the method executes the stored equations
-        in order and returns the final output tree.
-
-        Example:
-            >>> import autoform as af
-            >>> def wrap(x):
-            ...     return "[" + x + "]"
-            >>> ir = af.trace(wrap)("x")
-            >>> ir.call("y")
-            '[y]'
-        """
-        return call(self)(*args)
-
-    async def acall(self, *args: *A) -> R:
-        """Run IR asynchronously with concrete runtime inputs.
-
-        Use this when execution may cross async primitive rules. The inputs follow
-        the same conventions as `IR.call(...)`, but the method returns an awaitable
-        and each equation is driven through `abind(...)`.
-
-        Example:
-            >>> import autoform as af
-            >>> import asyncio
-            >>> def wrap(x):
-            ...     return "[" + x + "]"
-            >>> ir = af.trace(wrap)("x")
-            >>> asyncio.run(ir.acall("y"))
-            '[y]'
-        """
-        return await acall(self)(*args)
-
-    def walk(self, *args: *A) -> Generator[tuple[Eqn | None, Tree], Tree, None]:
-        """Step through this IR one equation at a time.
-
-        Manual control over IR execution. Start with `next(gen)` to receive `(eqn, in_values)`,
-        compute or override the equation output, using `eqn.bind(in_values, **eqn.params)`
-        for synchronous execution or `await eqn.abind(in_values, **eqn.params)` for async
-        execution, and send that output back with `gen.send(...)`. After the last equation,
-        the generator yields `(None, out_tree)`.
-
-        Example:
-            >>> import autoform as af
-            >>> def wrap(x):
-            ...     punctuated = x + "!"
-            ...     return "[" + punctuated + "]"
-            >>> ir = af.trace(wrap)("x")
-            >>> gen = ir.walk("y")
-            >>> eqn, in_values = next(gen)
-            >>> eqn.prim.name
-            'concat'
-            >>> step = gen.send(eqn.bind(in_values, **eqn.params))
-            >>> eqn, in_values = step
-            >>> eqn.prim.name
-            'concat'
-            >>> eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
-            >>> done, out = gen.send(eqn.bind(in_values, **eqn.params))
-            >>> done is None, out
-            (True, '[y!]')
-        """
-        return walk(self)(*args)
-
-
-def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
-    assert isinstance(indent, int) and indent >= 0
-    sp = " " * indent
-
-    def format_ir_val(ir_val) -> str:
-        if is_var(ir_val):
-            var_type = type(ir_val).__name__
-            aval_info = repr(ir_val.aval)
-            type_info = f"[{aval_info}]"
-            return f"%{ir_val.id}:{var_type}{type_info}"
-        val = ir_val
-        if isinstance(val, IR):
-            if expand_ir:
-                sub_code = generate_text_code(val, indent, expand_ir=True)
-                return f"<IR:{{\n{sub_code}\n}}>"
-            else:
-                prim_names = ",".join(e.prim.name for e in val.eqns)
-                if len(prim_names) > 20:
-                    prim_names = prim_names[:17] + "..."
-                return f"<IR:[{prim_names}]>"
-        else:
-            val_repr = repr(val)
-            if len(val_repr) > 30:
-                val_repr = val_repr[:27] + "..."
-            return f"{val_repr}:Lit"
-
-    def format_tree(tree: Tree) -> str:
-        leaves = utils.tree.leaves(tree)
-        return ", ".join(format_ir_val(leaf) for leaf in leaves) if leaves else "()"
-
-    in_sig = format_tree(ir.in_tree)
-    out_sig = format_tree(ir.out_tree)
-
-    header = f"func({in_sig}) -> ({out_sig}) {{"
-    lines = [header]
-
-    for eqn in ir.eqns:
-        lhs = format_tree(eqn.out_tree)
-        rhs = format_tree(eqn.in_tree)
-        eqn_args = [rhs]
-        eqn_args.extend(f"{k}={eqn.params[k]!r}" for k in (eqn.params or {}))
-        if eqn.tags:
-            tags = ", ".join(sorted(repr(tag) for tag in eqn.tags))
-            eqn_args.append(f"tags={{{tags}}}")
-        lines.append(f"{sp}({lhs}) = {eqn.prim.name}({', '.join(eqn_args)})")
-
-    lines.append("}")
-    return "\n".join(lines)
-
-
-# ==================================================================================================
-# WALK
-# ==================================================================================================
-
-type GenStep = tuple[Eqn | None, Tree]
-
-
-def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
-    """Validate runtime inputs against static literals in an IR input tree."""
-
-    def check_input(atom, value: Any):
-        if not is_var(atom):
-            expected = atom
-            msg = f"Static input mismatch: expected {expected!r}, got {value!r}"
-            assert expected == value, msg
-
-    utils.tree.map(check_input, atoms, args)
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
-    """Walk an IR one equation at a time."""
-    # NOTE(asem): the key idea here is to hide the environment management
-    # from the user.
-    # TODO(asem): if user is using bind/abind, walk itself can be traced into another IR. maybe
-    # add it to walk docs to clarify this point.
-
-    def func(*args: *A) -> Generator[GenStep, Tree, None]:
-        assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        env: dict[Var, Any] = {}
-
-        def read(ir_val) -> Any:
-            return env[ir_val] if is_var(ir_val) else ir_val
-
-        def write(ir_val, value: Any):
-            is_var(ir_val) and setitem(env, ir_val, value)
-
-        utils.tree.map(write, ir.in_tree, args)
-
-        for eqn in ir.eqns:
-            in_values = utils.tree.map(read, eqn.in_tree)
-            out_values = yield eqn, in_values
-            utils.tree.map(write, eqn.out_tree, out_values)
-
-        yield None, utils.tree.map(read, ir.out_tree)
-
-    return func
-
-
-# ==================================================================================================
-# CALL
-# ==================================================================================================
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-
-    def func(*args: *A) -> R:
-        check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
-        while eqn:
-            eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
-        return in_values
-
-    return func
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-
-    async def func(*args: *A) -> R:
-        check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
-        while eqn:
-            eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
-        return in_values
-
-    return func
-
-
-abstract.aval_types[Var] = lambda value: value.aval
+aval_types[Zero] = lambda value: value.aval

@@ -6,9 +6,9 @@ The name matters because [transforms](transforms.md) dispatch on primitive ident
 
 ## Rule Registries
 
-Every primitive can have rules for different phases and transforms:
+Named `Rule` instances in `autoform.core` provide `set` and `get`; async rules use separate instances such as `aimpl_rules`. Every primitive can have rules for different phases and transforms:
 
-- `impl_rules`: synchronous execution.
+- `impl_rules`: concrete execution.
 - `abstract_rules`: output-shape and output-type inference while tracing.
 - `batch_rules`: vectorized behavior for {py:func}`batch <autoform.batch>`.
 - `push_rules`: forward-mode behavior for {py:func}`pushforward <autoform.pushforward>`.

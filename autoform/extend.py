@@ -19,7 +19,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import autoform.abstract as abstract
 import autoform.ad as ad
 import autoform.axis as axis
 import autoform.control as control
@@ -31,63 +30,47 @@ import autoform.memo as memo
 import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
+import autoform.stage as stage
 import autoform.string as string
-import autoform.tracer as tracer
 import autoform.utils as utils
 
 # ==================================================================================================
 # TYPES
 # ==================================================================================================
 
-AVal = abstract.AVal
+AVal = core.AVal
 StrAVal = string.StrAVal
 IntAVal = numeric.IntAVal
 FloatAVal = numeric.FloatAVal
 BoolAVal = numeric.BoolAVal
-Space = abstract.Space
-avalof = abstract.avalof
-primal_s = abstract.primal_s
-tangent_s = abstract.tangent_s
-cotangent_s = abstract.cotangent_s
+Space = core.Space
+avalof = core.avalof
+primal_s = core.primal_s
+tangent_s = core.tangent_s
+cotangent_s = core.cotangent_s
 Prim = core.Prim
-Dunder = tracer.Dunder
-Zero = abstract.Zero
+Rule = core.Rule
+Dunder = stage.Dunder
+Zero = core.Zero
 Interpreter = core.Interpreter
-Box = core.Box
-IR = core.IR
-Eqn = core.Eqn
-Var = core.Var
-
-# ==================================================================================================
-# RULE REGISTRIES
-# ==================================================================================================
-
-impl_rules = core.impl_rules
-aimpl_rules = core.aimpl_rules
-abstract_rules = core.abstract_rules
-push_rules = core.push_rules
-apush_rules = core.apush_rules
-pull_fwd_rules = core.pull_fwd_rules
-apull_fwd_rules = core.apull_fwd_rules
-pull_bwd_rules = core.pull_bwd_rules
-apull_bwd_rules = core.apull_bwd_rules
-batch_rules = core.batch_rules
-abatch_rules = core.abatch_rules
+IR = stage.IR
+Eqn = stage.Eqn
+Var = stage.Var
 
 # ==================================================================================================
 # HELPERS
 # ==================================================================================================
 
-materialize_zeros = abstract.materialize_zeros
+materialize_zeros = core.materialize_zeros
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
 using_interpreter = core.using_interpreter
 serial_fanout = order.serial_fanout
 active_interpreter = core.active_interpreter
-active_tags = core.active_tags
-is_var = core.is_var
-aval_if_var = core.aval_if_var
+active_tags = stage.active_tags
+is_var = stage.is_var
+aval_if_var = stage.aval_if_var
 active_client = lm.active_client
 
 # ==================================================================================================
@@ -134,28 +117,29 @@ __all__ = [
     "tangent_s",
     "cotangent_s",
     "Prim",
+    "Rule",
     "Dunder",
     "Zero",
     "Interpreter",
-    "Box",
     "IR",
     "Eqn",
     "Var",
+    "register_impl",
+    "register_aimpl",
+    "register_abstract",
+    "register_batch",
+    "register_abatch",
+    "register_pushforward",
+    "register_apushforward",
+    "register_pullback_fwd",
+    "register_apullback_fwd",
+    "register_pullback_bwd",
+    "register_apullback_bwd",
     "register_trace_type",
+    "register_dce",
     "register_non_dce",
     "register_non_memoizable",
     "register_dunder",
-    "impl_rules",
-    "aimpl_rules",
-    "abstract_rules",
-    "push_rules",
-    "apush_rules",
-    "pull_fwd_rules",
-    "apull_fwd_rules",
-    "pull_bwd_rules",
-    "apull_bwd_rules",
-    "batch_rules",
-    "abatch_rules",
     "materialize_zeros",
     "batch_index",
     "batch_spec",
@@ -203,6 +187,50 @@ type AValRule = Callable[[Any], AVal]
 # ==================================================================================================
 
 
+def register_impl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.impl_rules.set(prim, rule)
+
+
+def register_aimpl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.aimpl_rules.set(prim, rule)
+
+
+def register_abstract[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.abstract_rules.set(prim, rule)
+
+
+def register_batch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.batch_rules.set(prim, rule)
+
+
+def register_abatch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.abatch_rules.set(prim, rule)
+
+
+def register_pushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.push_rules.set(prim, rule)
+
+
+def register_apushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.apush_rules.set(prim, rule)
+
+
+def register_pullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.pull_fwd_rules.set(prim, rule)
+
+
+def register_apullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.apull_fwd_rules.set(prim, rule)
+
+
+def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.pull_bwd_rules.set(prim, rule)
+
+
+def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    return core.apull_bwd_rules.set(prim, rule)
+
+
 def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
     """Register a Python type as a traceable input type.
 
@@ -226,9 +254,16 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ... def token_aval(value):
         ...     return TokenAVal()
     """
-    abstract.aval_types[type] = aval_rule
-    tracer.trace_types.add(type)
+    core.aval_types[type] = aval_rule
+    stage.trace_types.add(type)
     return aval_rule
+
+
+def register_dce[R: dead.DCERule](prim: Prim, rule: R, /) -> R:
+    """Register a dead-code elimination rule for a primitive."""
+    assert isinstance(prim, Prim)
+    dead.dce_rules[prim] = rule
+    return rule
 
 
 def register_non_dce[T: Prim](prim: T, /) -> T:
@@ -243,6 +278,7 @@ def register_non_dce[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
+    assert isinstance(prim, Prim)
     rules = dead.non_dce_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
     rules.add(prim)
@@ -261,6 +297,7 @@ def register_non_memoizable[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
+    assert isinstance(prim, Prim)
     rules = memo.non_memoizable_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
     rules.add(prim)
@@ -296,6 +333,6 @@ def register_dunder[T: Callable[..., Any]](
     assert callable(rule), f"Expected callable, got {rule!r}"
     assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
     key = dunder, aval_type
-    assert replace or key not in tracer.dunder_rules, f"Dunder rule is already defined"
-    tracer.dunder_rules[key] = rule
+    assert replace or key not in stage.dunder_rules, f"Dunder rule is already defined"
+    stage.dunder_rules[key] = rule
     return rule

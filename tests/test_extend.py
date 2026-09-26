@@ -26,7 +26,7 @@ def make_box_domain():
         def __eq__(self, other):
             return type(self) is type(other) and self.value == other.value
 
-    class BoxAVal(af.abstract.AVal):
+    class BoxAVal(af.core.AVal):
         __slots__ = []
 
         def __eq__(self, other):
@@ -46,22 +46,19 @@ def make_box_domain():
 
 def test_register_trace_type():
     Box, BoxAVal = make_box_domain()
-    aval_rule = lambda value: BoxAVal()
-    af.abstract.aval_types[Box] = aval_rule
-    af.tracer.trace_types.add(Box)
+    af.extend.register_trace_type(Box, lambda _: BoxAVal())
 
     ir = af.trace(lambda x: x)(Box(1))
 
-    assert af.abstract.avalof(Box(1)) == BoxAVal()
+    assert af.core.avalof(Box(1)) == BoxAVal()
     assert ir.in_tree[0].aval == BoxAVal()
 
 
 def test_aval_zero_and_accumulation():
     Box, BoxAVal = make_box_domain()
-    af.abstract.aval_types[Box] = lambda value: BoxAVal()
-    af.tracer.trace_types.add(Box)
+    af.extend.register_trace_type(Box, lambda value: BoxAVal())
 
-    assert af.abstract.materialize_zeros(af.abstract.Zero(BoxAVal())) == Box(0)
+    assert af.core.materialize_zeros(af.core.Zero(BoxAVal())) == Box(0)
     assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
 
 
@@ -75,16 +72,11 @@ def test_register_dunder_with_primitive_rules():
         x, y = in_tree
         return Box(x.value + y.value)
 
-    def abstract_add(in_tree):
-        del in_tree
-        return BoxAVal()
-
-    af.abstract.aval_types[Box] = lambda value: BoxAVal()
-    af.tracer.trace_types.add(Box)
-    af.tracer.dunder_rules[af.tracer.Dunder.ADD, BoxAVal] = box_add
+    af.extend.register_trace_type(Box, lambda value: BoxAVal())
+    af.extend.register_dunder(af.extend.Dunder.ADD, BoxAVal, box_add)
     box_add_p = af.core.Prim("test_box_add")
-    af.core.impl_rules[box_add_p] = impl_add
-    af.core.abstract_rules[box_add_p] = abstract_add
+    af.extend.register_impl(box_add_p, impl_add)
+    af.extend.register_abstract(box_add_p, lambda _: BoxAVal())
 
     ir = af.trace(lambda x, y: x + y)(Box(1), Box(2))
 
@@ -93,9 +85,8 @@ def test_register_dunder_with_primitive_rules():
 
 def test_register_dunder_with_static_python_protocol():
     Box, BoxAVal = make_box_domain()
-    af.abstract.aval_types[Box] = lambda value: BoxAVal()
-    af.tracer.trace_types.add(Box)
-    af.tracer.dunder_rules[af.tracer.Dunder.LEN, BoxAVal] = lambda value: 1
+    af.extend.register_trace_type(Box, lambda value: BoxAVal())
+    af.extend.register_dunder(af.extend.Dunder.LEN, BoxAVal, lambda value: 1)
 
     ir = af.trace(lambda x: len(x))(Box(1))
 

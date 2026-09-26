@@ -15,9 +15,9 @@
 import pytest
 
 import autoform as af
-from autoform.core import IR, Var
 from autoform.intercept import checkpoint_p
 from autoform.order import depends_p, fanout_p
+from autoform.stage import IR, Var
 from tests import aexecute, execute, fixpoint_program, switch_program, while_program
 
 

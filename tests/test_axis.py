@@ -23,7 +23,7 @@ def greet(name, greeting):
     return af.string.format("{greeting}: {name}", greeting=greeting, name=name)
 
 
-class TaggedAVal(af.abstract.AVal):
+class TaggedAVal(af.core.AVal):
     def __init__(self, tag):
         self.tag = tag
 
@@ -91,8 +91,8 @@ class TestBatchIRStructure:
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.abstract.tangent_s, id="tangent"),
-            pytest.param(af.abstract.cotangent_s, id="cotangent"),
+            pytest.param(af.core.tangent_s, id="tangent"),
+            pytest.param(af.core.cotangent_s, id="cotangent"),
         ],
     )
     def test_batch_aval_ad_space(self, space):
@@ -101,21 +101,21 @@ class TestBatchIRStructure:
 
     def test_mapped_wrapper_aval(self):
         aval = TaggedAVal("input")
-        var = af.core.Var(aval=aval)
-        ir = af.batch(af.core.IR([], (var,), (var,)), in_axes=True)
+        var = af.stage.Var(aval=aval)
+        ir = af.batch(af.stage.IR([], (var,), (var,)), in_axes=True)
         for wrapped in (ir.in_tree[0].aval, ir.out_tree[0].aval):
             assert wrapped == BatchAVal(aval)
 
     def test_broadcast_wrapper_aval(self):
         aval = TaggedAVal("input")
-        var = af.core.Var(aval=aval)
-        ir = af.batch(af.core.IR([], (var,), (var,)), in_axes=False)
+        var = af.stage.Var(aval=aval)
+        ir = af.batch(af.stage.IR([], (var,), (var,)), in_axes=False)
         for wrapped in (ir.in_tree[0].aval, ir.out_tree[0].aval):
             assert wrapped is aval
 
     def test_mapped_constant_output(self):
         ir = af.batch(af.trace(lambda x: "c")("x"), in_axes=True)
-        assert isinstance(ir.out_tree, af.core.Var)
+        assert isinstance(ir.out_tree, af.stage.Var)
         assert ir.out_tree.aval == BatchAVal(af.string.StrAVal())
         assert ir.call(["a", "b"]) == ["c", "c"]
 
@@ -240,12 +240,10 @@ def test_numeric_program_with_broadcast_input():
 
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
-    primitive = af.core.Prim("batch_output")
-    af.core.abstract_rules[primitive] = lambda _: af.utils.tree.map(
-        af.abstract.avalof, sample_output
-    )
-    af.core.batch_rules[primitive] = batch_rule
-    return af.batch(af.trace(primitive.bind)(traced))
+    prim = af.core.Prim("batch_output")
+    af.extend.register_abstract(prim, lambda _: af.utils.tree.map(af.core.avalof, sample_output))
+    af.extend.register_batch(prim, batch_rule)
+    return af.batch(af.trace(prim.bind)(traced))
 
 
 @pytest.mark.parametrize(

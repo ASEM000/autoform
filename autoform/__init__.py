@@ -18,7 +18,6 @@
 # IMPORTS
 # ==================================================================================================
 
-import autoform.abstract as abstract
 import autoform.ad as ad
 import autoform.axis as axis
 import autoform.boundary as boundary
@@ -33,8 +32,8 @@ import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
 import autoform.schemas as schemas
+import autoform.stage as stage
 import autoform.string as string
-import autoform.tracer as tracer
 import autoform.utils as utils
 
 # ==================================================================================================
@@ -47,9 +46,9 @@ __version__ = "0.3.0"
 # CORE
 # ==================================================================================================
 
-trace = tracer.trace
-fold = tracer.fold
-tag = core.tag
+trace = stage.trace
+fold = stage.fold
+tag = stage.tag
 
 # ==================================================================================================
 # TRANSFORMS
@@ -140,5 +139,6 @@ __all__ = [
     "numeric",
     "string",
     "path",
-    "abstract",
+    "stage",
+    "core",
 ]

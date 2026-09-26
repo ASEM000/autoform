@@ -23,6 +23,7 @@ from optree import PyTreeSpec
 
 import autoform.core as core
 import autoform.intercept as intercept
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["memoize"]
@@ -32,7 +33,7 @@ type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
 non_memoizable_primitives: set[core.Prim] = {intercept.checkpoint_p}
 
 
-def is_non_memo(eqn: core.Eqn, /) -> bool:
+def is_non_memo(eqn: stage.Eqn, /) -> bool:
     # NOTE(asem): input is eqn to match `is_non_dce` signature, even though the
     # memoizing interpreter works on primitve level. The following is an example of
     # nested non-memo prim (checkpoint inside siwtch branch)
@@ -45,7 +46,7 @@ def is_non_memo(eqn: core.Eqn, /) -> bool:
     # without checking nested IR, the second switch would not fire.
     def func(leaf):
         # NOTE(asem): check if any non-memo prim is in nested IR too.
-        return isinstance(leaf, core.IR) and any(is_non_memo(eqn) for eqn in leaf.eqns)
+        return isinstance(leaf, stage.IR) and any(is_non_memo(eqn) for eqn in leaf.eqns)
 
     return eqn.prim in non_memoizable_primitives or utils.tree.any(utils.tree.map(func, eqn.params))
 
@@ -62,23 +63,17 @@ class MemoizingInterpreter(core.Interpreter):
         self.parent = core.active_interpreter.get()
         self.cache: dict[CacheKey, Tree] = {}
 
-    def box(self, value, /):
-        return value
-
-    def unbox(self, value, /):
-        return value
-
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         # NOTE(asem): constructing Eqn here is simply to make is_non_memo accepts Eqn
         # as its counter part in `is_non_dce`. a bit more work but more uniform impl.
-        if is_non_memo(core.Eqn(prim, in_tree, None, params)):
+        if is_non_memo(stage.Eqn(prim, in_tree, None, params)):
             return self.parent.interpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = self.parent.interpret(prim, in_tree, **params)
         return self.cache[key]
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
-        if is_non_memo(core.Eqn(prim, in_tree, None, params)):
+        if is_non_memo(stage.Eqn(prim, in_tree, None, params)):
             return await self.parent.ainterpret(prim, in_tree, **params)
         if (key := make_key(prim, in_tree, **params)) not in self.cache:
             self.cache[key] = await self.parent.ainterpret(prim, in_tree, **params)

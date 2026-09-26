@@ -165,25 +165,25 @@ def test_invalid_traced_operands(program, args, error, message):
         pytest.param(
             af.pushforward,
             (("yes",), ("tangent_input",)),
-            (True, af.abstract.Zero(BoolAVal())),
+            (True, af.core.Zero(BoolAVal())),
             id="pushforward-true",
         ),
         pytest.param(
             af.pushforward,
             (("no",), ("tangent_input",)),
-            (False, af.abstract.Zero(BoolAVal())),
+            (False, af.core.Zero(BoolAVal())),
             id="pushforward-false",
         ),
         pytest.param(
             af.pullback,
             (("yes",), "feedback"),
-            (True, (af.abstract.Zero(StrAVal()),)),
+            (True, (af.core.Zero(StrAVal()),)),
             id="pullback-true",
         ),
         pytest.param(
             af.pullback,
             (("no",), "feedback"),
-            (False, (af.abstract.Zero(StrAVal()),)),
+            (False, (af.core.Zero(StrAVal()),)),
             id="pullback-false",
         ),
     ],
@@ -272,6 +272,21 @@ def test_concat_rejects_nonstring():
         af.string.concat("A", 1)
 
 
+def test_format_lowers_template_and_args_to_concat():
+    def program(x):
+        return af.string.format("Hello, {x}!", x=x)
+
+    ir = af.trace(program)("World")
+    assert len(ir.eqns) == 1
+    eqn = ir.eqns[0]
+    assert eqn.prim is af.string.concat_p
+    prefix, value, suffix = eqn.in_tree
+    assert prefix == "Hello, "
+    assert suffix == "!"
+    assert isinstance(value, af.stage.Var)
+    assert ir.call("x0") == "Hello, x0!"
+
+
 @pytest.mark.parametrize(
     "template, values, expected",
     [
@@ -340,10 +355,10 @@ def test_format_lowers_to_concat(executor, template, values, expected, feedback)
     assert actual == primal
     pf = af.pushforward(ir)
     result = executor(pf, (values,), (values,))
-    assert af.abstract.materialize_zeros(result) == (primal, expected)
+    assert af.core.materialize_zeros(result) == (primal, expected)
     pb = af.pullback(ir)
     result = executor(pb, (values,), "g")
-    assert af.abstract.materialize_zeros(result) == (primal, (feedback,))
+    assert af.core.materialize_zeros(result) == (primal, (feedback,))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -363,7 +378,7 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")
     pb = af.pullback(ir)
     expected = ("A/B/A", (Record("gg", ("g", "")),))
-    assert af.abstract.materialize_zeros(executor(pb, (row,), "g")) == expected
+    assert af.core.materialize_zeros(executor(pb, (row,), "g")) == expected
 
 
 @pytest.mark.parametrize(

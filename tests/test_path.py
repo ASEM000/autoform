@@ -27,9 +27,9 @@ def delay():
         return value
 
     prim = af.core.Prim("test_path_delay")
-    af.core.impl_rules[prim] = lambda value: value
-    af.core.abstract_rules[prim] = lambda value: value
-    af.core.aimpl_rules[prim] = aimpl
+    af.extend.register_impl(prim, lambda value: value)
+    af.extend.register_abstract(prim, lambda value: value)
+    af.extend.register_aimpl(prim, aimpl)
     return prim.bind
 
 
@@ -280,7 +280,7 @@ class TestWeight:
 
         assert output == "hello!"
         assert cotangents[0] == "feedback"
-        assert isinstance(cotangents[1], af.abstract.Zero)
+        assert isinstance(cotangents[1], af.core.Zero)
         assert path_weight == 0.5
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

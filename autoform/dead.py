@@ -19,23 +19,22 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-import autoform.abstract as abstract
-import autoform.analysis as analysis
 import autoform.core as core
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["dce"]
 
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]
-type DCEResult = tuple[core.Eqn, UsedTree]
+type DCEResult = tuple[stage.Eqn, UsedTree]
 
 # ==================================================================================================
 # DEAD CODE ELIMINATION
 # ==================================================================================================
 
 
-def default_dce(eqn: core.Eqn, out_used: UsedTree) -> DCEResult:
+def default_dce(eqn: stage.Eqn, out_used: UsedTree) -> DCEResult:
     # NOTE(asem): out_used is a pytree of bool matching the eqn output pytree that
     # denotes which output is used. the return is a another Eqn (mostly for edited HOP IR)
     # and a out_used
@@ -44,13 +43,13 @@ def default_dce(eqn: core.Eqn, out_used: UsedTree) -> DCEResult:
     return eqn, in_used
 
 
-type DCERule = Callable[[core.Eqn, UsedTree], DCEResult]
+type DCERule = Callable[[stage.Eqn, UsedTree], DCEResult]
 
 dce_rules: dict[core.Prim, DCERule] = {}
 non_dce_primitives: set[core.Prim] = set()
 
 
-def is_non_dce(eqn: core.Eqn, /) -> bool:
+def is_non_dce(eqn: stage.Eqn, /) -> bool:
     # NOTE(asem): recursively check if any nested irs contains non-dce prim
     # for example
     # >>> branch = af.trace(lambda x: af.checkpoint(x, key="save"))("x")
@@ -61,12 +60,12 @@ def is_non_dce(eqn: core.Eqn, /) -> bool:
     # the switch result is unused, but dropping it would also drop the checkpoint.
     # value must stay live because the checkpoint still needs it.
     def func(leaf):
-        return isinstance(leaf, core.IR) and any(is_non_dce(eqn) for eqn in leaf.eqns)
+        return isinstance(leaf, stage.IR) and any(is_non_dce(eqn) for eqn in leaf.eqns)
 
     return eqn.prim in non_dce_primitives or utils.tree.any(utils.tree.map(func, eqn.params))
 
 
-def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
+def update_eqn_out(eqn: stage.Eqn, active_vars: set[stage.Var], /) -> stage.Eqn:
     # NOTE(asem): an inner IR may lose outputs while its wrapper still runs.
     # >>> def save(x):
     # ...     af.checkpoint(x, key="save")
@@ -75,20 +74,20 @@ def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
     # >>> dced = af.dce(ir, out_used=False)
     # the DCE pass removes concat but ir.out_tree needs to be updated
     def keep_var(atom, out):
-        if isinstance(out, abstract.AVal):
+        if isinstance(out, core.AVal):
             # NOTE(asem): assure DCE does not change avals
-            assert core.is_var(atom) and atom.aval == out
+            assert stage.is_var(atom) and atom.aval == out
             return atom
-        assert not (core.is_var(atom) and atom in active_vars)
+        assert not (stage.is_var(atom) and atom in active_vars)
         return out
 
-    in_avals = utils.tree.map(core.aval_if_var, eqn.in_tree)
-    out_avals = core.abstract_rules[eqn.prim](in_avals, **eqn.params)
+    in_avals = utils.tree.map(stage.aval_if_var, eqn.in_tree)
+    out_avals = core.abstract_rules.get(eqn.prim)(in_avals, **eqn.params)
     out_tree = utils.tree.map(keep_var, eqn.out_tree, out_avals)
-    return core.Eqn(eqn.prim, eqn.in_tree, out_tree, eqn.params, eqn.tags)
+    return stage.Eqn(eqn.prim, eqn.in_tree, out_tree, eqn.params, eqn.tags)
 
 
-def sanitize_out(ir: core.IR, eqns: list[core.Eqn], out_used: UsedTree, /) -> Tree:
+def sanitize_out(ir: stage.IR, eqns: list[stage.Eqn], out_used: UsedTree, /) -> Tree:
     # NOTE(asem): output sanitization step
     # `call(ir)` always reads `ir.out_tree`, even if a caller provided an `out_used` mask.
     # so after DCE removes equations, `out_tree` may contain Vars that are no longer
@@ -103,14 +102,14 @@ def sanitize_out(ir: core.IR, eqns: list[core.Eqn], out_used: UsedTree, /) -> Tr
     # ('x', 'x!', None)
     # eqns contains only the kept equations: x is an input, a is still produced,
     # and b has no producer left, so only b's output slot becomes None.
-    in_vars = set(analysis.var_leaves(ir.in_tree))
-    defined_vars: set[core.Var] = set(in_vars)
+    in_vars = set(stage.var_leaves(ir.in_tree))
+    defined_vars: set[stage.Var] = set(in_vars)
     for kept in eqns:
         for atom in utils.tree.leaves(kept.out_tree):
-            core.is_var(atom) and defined_vars.add(atom)
+            stage.is_var(atom) and defined_vars.add(atom)
 
     def sanitize_out_leaf(atom, used: bool):
-        if not core.is_var(atom):
+        if not stage.is_var(atom):
             # NOTE(asem): leaf is already a literal, nothing to sanitize.
             # >>> def program(x):
             # ...     return (x, "const")
@@ -141,7 +140,7 @@ def sanitize_out(ir: core.IR, eqns: list[core.Eqn], out_used: UsedTree, /) -> Tr
     return utils.tree.map(sanitize_out_leaf, ir.out_tree, out_used)
 
 
-def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> core.IR[*A, R]:
+def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> stage.IR[*A, R]:
     """Remove dead code from an IR.
 
     Performs backward pass to identify which equations contribute to output.
@@ -171,12 +170,12 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
         assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
         user_out_used = out_used
 
-    live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
-    active_vars: set[core.Var] = set(live_boundaries[-1])
-    active_eqns: deque[core.Eqn] = deque()
+    live_boundaries: stage.Liveness = stage.liveness(ir, out_used=user_out_used)
+    active_vars: set[stage.Var] = set(live_boundaries[-1])
+    active_eqns: deque[stage.Eqn] = deque()
 
     def is_active_node(node) -> bool:
-        return core.is_var(node) and (node in active_vars)
+        return stage.is_var(node) and (node in active_vars)
 
     for eqn in reversed(ir.eqns):
         # NOTE(asem): walk backwards and feed dce rules the appropriate
@@ -194,12 +193,12 @@ def dce[*A, R](ir: core.IR[*A, R], /, *, out_used: UsedTree | None = None) -> co
 
         if protected:
             active_eqns.appendleft(new_eqn)
-            active_vars |= set(analysis.var_leaves(eqn.in_tree))
+            active_vars |= set(stage.var_leaves(eqn.in_tree))
 
         elif used:
             active_eqns.appendleft(new_eqn)
-            active_vars |= set(analysis.var_leaves(utils.mask(eqn.in_tree, in_used)))
+            active_vars |= set(stage.var_leaves(utils.mask(eqn.in_tree, in_used)))
 
     eqns = list(active_eqns)
     out_tree = sanitize_out(ir, eqns, user_out_used)
-    return core.IR(eqns, in_tree=ir.in_tree, out_tree=out_tree)
+    return stage.IR(eqns, in_tree=ir.in_tree, out_tree=out_tree)

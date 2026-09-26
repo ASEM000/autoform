@@ -28,11 +28,11 @@ def impl_lookup(query: str, /) -> str:
 
 def abstract_lookup(query, /):
     del query
-    return afe.StrAVal()
+    return af.string.StrAVal()
 
 
-afe.impl_rules[lookup_p] = impl_lookup
-afe.abstract_rules[lookup_p] = abstract_lookup
+afe.register_impl(lookup_p, impl_lookup)
+afe.register_abstract(lookup_p, abstract_lookup)
 
 
 ir = af.trace(lookup)("seed")
@@ -41,7 +41,7 @@ assert ir.call("recursion") == "result for recursion"
 
 The wrapper `lookup(...)` is what traced programs call. During tracing, `lookup_p.bind(...)` records one equation. During execution, `impl_lookup(...)` receives the concrete runtime value.
 
-The abstract rule runs at trace time. It must return the output shape and abstract value without calling the runtime implementation. Built-in scalar outputs use explicit avals such as `afe.StrAVal()`, `afe.IntAVal()`, `afe.FloatAVal()`, and `afe.BoolAVal()`.
+The abstract rule runs at trace time. It must return the output shape and abstract value without calling the runtime implementation. Built-in scalar outputs use explicit avals such as `af.string.StrAVal()`, `af.numeric.IntAVal()`, `af.numeric.FloatAVal()`, and `af.numeric.BoolAVal()`.
 
 For new runtime value types, define an `afe.AVal` subclass that carries the abstract metadata you need, then register the trace type:
 
@@ -89,7 +89,7 @@ def batch_lookup(in_tree, /):
     return [lookup_p.bind(query) for query in queries], True
 
 
-afe.batch_rules[lookup_p] = batch_lookup
+afe.register_batch(lookup_p, batch_lookup)
 
 
 assert af.batch(ir).call(["a", "b"]) == ["result for a", "result for b"]
@@ -110,8 +110,8 @@ def pull_bwd_lookup(in_tree, /):
     return "Improve query '" + query + "'. Feedback: " + feedback + ". Result: " + output
 
 
-afe.pull_fwd_rules[lookup_p] = pull_fwd_lookup
-afe.pull_bwd_rules[lookup_p] = pull_bwd_lookup
+afe.register_pullback_fwd(lookup_p, pull_fwd_lookup)
+afe.register_pullback_bwd(lookup_p, pull_bwd_lookup)
 
 
 output, (query_feedback,) = af.pullback(ir).call(("recursion",), "too broad")
@@ -132,7 +132,7 @@ async def aimpl_lookup(query: str, /) -> str:
     return impl_lookup(query)
 
 
-afe.aimpl_rules[lookup_p] = aimpl_lookup
+afe.register_aimpl(lookup_p, aimpl_lookup)
 ```
 
-Async rules use the corresponding dictionary prefixed with `a`, such as `afe.abatch_rules`.
+Register async rules with the corresponding function, such as `afe.register_abatch`.

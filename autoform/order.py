@@ -22,10 +22,11 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-import autoform.abstract as abstract
-import autoform.analysis as analysis
+import autoform.ad as ad
+import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["depends", "sched", "serial_fanout"]
@@ -34,7 +35,7 @@ zip = utils.strict_zip
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type IRList = list[core.IR]
+type IRList = list[stage.IR]
 type FanoutPair = tuple[list[Tree], list[Tree]]
 type FanoutResidual = tuple[list[Tree], IRList]
 type FanoutFwdResult = tuple[list[Tree], FanoutResidual]
@@ -84,12 +85,10 @@ async def aimpl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    return [utils.tree.map(core.aval_if_var, ir.out_tree) for ir in irs]
+    return [utils.tree.map(stage.aval_if_var, ir.out_tree) for ir in irs]
 
 
 def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
@@ -99,8 +98,6 @@ def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
 
 async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
@@ -122,8 +119,6 @@ async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdR
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -133,8 +128,6 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -144,8 +137,6 @@ async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    import autoform.axis as axis
-
     _, in_batched, inputs = in_tree
 
     results: list[Tree] = []
@@ -164,8 +155,6 @@ def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOut
 
 
 async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    import autoform.axis as axis
-
     _, in_batched, inputs = in_tree
 
     results: list[Tree] = []
@@ -183,20 +172,7 @@ async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFa
     return results, out_batched
 
 
-core.impl_rules[fanout_p] = impl_fanout
-core.aimpl_rules[fanout_p] = aimpl_fanout
-core.abstract_rules[fanout_p] = abstract_fanout
-core.push_rules[fanout_p] = push_fanout
-core.apush_rules[fanout_p] = apush_fanout
-core.pull_fwd_rules[fanout_p] = pull_fwd_fanout
-core.apull_fwd_rules[fanout_p] = apull_fwd_fanout
-core.pull_bwd_rules[fanout_p] = pull_bwd_fanout
-core.apull_bwd_rules[fanout_p] = apull_bwd_fanout
-core.batch_rules[fanout_p] = batch_fanout
-core.abatch_rules[fanout_p] = abatch_fanout
-
-
-def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
+def dce_fanout(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     irs = eqn.params["irs"]
 
     # NOTE(asem): pruning each inner IR can change the outputs returned by fanout.
@@ -206,8 +182,8 @@ def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     # after DCE with [True, False] mask
     # fanout returns [a(x), None], but its out_tree still declares [a, b].
     # the fix is to enforce the mask on each IR's out_tree and the parent out_tree.
-    def func(ir: core.IR, used: dead.UsedTree):
-        ir = core.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, used))
+    def func(ir: stage.IR, used: dead.UsedTree):
+        ir = stage.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, used))
         return dead.dce(ir)
 
     new_eqn = eqn.using(irs=utils.tree.map(func, irs, out_used))
@@ -215,7 +191,19 @@ def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
+core.impl_rules.set(fanout_p, impl_fanout)
+core.aimpl_rules.set(fanout_p, aimpl_fanout)
+core.abstract_rules.set(fanout_p, abstract_fanout)
+core.batch_rules.set(fanout_p, batch_fanout)
+core.abatch_rules.set(fanout_p, abatch_fanout)
+core.push_rules.set(fanout_p, push_fanout)
+core.apush_rules.set(fanout_p, apush_fanout)
+core.pull_fwd_rules.set(fanout_p, pull_fwd_fanout)
+core.apull_fwd_rules.set(fanout_p, apull_fwd_fanout)
+core.pull_bwd_rules.set(fanout_p, pull_bwd_fanout)
+core.apull_bwd_rules.set(fanout_p, apull_bwd_fanout)
 dead.dce_rules[fanout_p] = dce_fanout
+
 
 # ==================================================================================================
 # SCHED
@@ -224,11 +212,11 @@ dead.dce_rules[fanout_p] = dce_fanout
 
 @ft.partial(utils.lru_cache, maxsize=256)
 def sched[*A, R](
-    ir: core.IR[*A, R],
+    ir: stage.IR[*A, R],
     /,
     *,
-    cond: Callable[[core.Eqn], bool] | None = None,
-) -> core.IR[*A, R]:
+    cond: Callable[[stage.Eqn], bool] | None = None,
+) -> stage.IR[*A, R]:
     """Schedule independent operations for parallel execution.
 
     Args:
@@ -260,23 +248,23 @@ def sched[*A, R](
         >>> # async execution (concurrent via asyncio.gather)
         >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
-    levels: list[list[core.Eqn]] = analysis.toposort_levels(ir)
-    out_eqns: list[core.Eqn] = []
+    levels: list[list[stage.Eqn]] = stage.toposort_levels(ir)
+    out_eqns: list[stage.Eqn] = []
     cond = (lambda _: True) if cond is None else cond
 
     def recurse(leaf):
-        return sched(leaf, cond=cond) if isinstance(leaf, core.IR) else leaf
+        return sched(leaf, cond=cond) if isinstance(leaf, stage.IR) else leaf
 
-    def make_fanout(eqns: list[core.Eqn]) -> core.Eqn:
+    def make_fanout(eqns: list[stage.Eqn]) -> stage.Eqn:
         # NOTE(asem): the created IR input must have non-repeated vars to avoid multiple
         # cotangent contribution, for example taking the pullback of
         # >>> func = lambda x: (x * x, x + 1)
         # simply copying the vars of multiply eqn then (e.g. [v0, v0]) incorrectly returns
         # (2 * x, 2 * x) that will get summed upstream.
-        in_trees = [(tuple(dict.fromkeys(analysis.var_leaves(eqn.in_tree))),) for eqn in eqns]
-        irs = [core.IR([eqn], inputs, eqn.out_tree) for eqn, inputs in zip(eqns, in_trees)]
+        in_trees = [(tuple(dict.fromkeys(stage.var_leaves(eqn.in_tree))),) for eqn in eqns]
+        irs = [stage.IR([eqn], inputs, eqn.out_tree) for eqn, inputs in zip(eqns, in_trees)]
         out_trees = [eqn.out_tree for eqn in eqns]
-        return core.Eqn(fanout_p, in_trees, out_trees, dict(irs=irs))
+        return stage.Eqn(fanout_p, in_trees, out_trees, dict(irs=irs))
 
     for level in levels:
         eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
@@ -285,7 +273,7 @@ def sched[*A, R](
         out_eqns.extend([make_fanout(par_eqns)] if len(par_eqns) > 1 else par_eqns)
         out_eqns.extend(seq_eqns)
 
-    return core.IR(out_eqns, ir.in_tree, ir.out_tree)
+    return stage.IR(out_eqns, ir.in_tree, ir.out_tree)
 
 
 # ==================================================================================================
@@ -342,9 +330,9 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
 
 def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
     def make_c(x):
-        if isinstance(x, abstract.Zero):
+        if isinstance(x, core.Zero):
             return x
-        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     (_, deps), out_cotangent = in_tree
     return out_cotangent, utils.tree.map(make_c, deps)
@@ -355,14 +343,14 @@ def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:
     return depends_p.bind((value, deps)), value_batched
 
 
-core.impl_rules[depends_p] = impl_depends
-core.aimpl_rules[depends_p] = utils.asyncify(impl_depends)
-core.abstract_rules[depends_p] = abstract_depends
-core.push_rules[depends_p] = push_depends
-core.apush_rules[depends_p] = utils.asyncify(push_depends)
-core.pull_fwd_rules[depends_p] = pull_fwd_depends
-core.apull_fwd_rules[depends_p] = utils.asyncify(pull_fwd_depends)
-core.pull_bwd_rules[depends_p] = pull_bwd_depends
-core.apull_bwd_rules[depends_p] = utils.asyncify(pull_bwd_depends)
-core.batch_rules[depends_p] = batch_depends
-core.abatch_rules[depends_p] = utils.asyncify(batch_depends)
+core.impl_rules.set(depends_p, impl_depends)
+core.aimpl_rules.set(depends_p, utils.asyncify(impl_depends))
+core.abstract_rules.set(depends_p, abstract_depends)
+core.batch_rules.set(depends_p, batch_depends)
+core.abatch_rules.set(depends_p, utils.asyncify(batch_depends))
+core.push_rules.set(depends_p, push_depends)
+core.apush_rules.set(depends_p, utils.asyncify(push_depends))
+core.pull_fwd_rules.set(depends_p, pull_fwd_depends)
+core.apull_fwd_rules.set(depends_p, utils.asyncify(pull_fwd_depends))
+core.pull_bwd_rules.set(depends_p, pull_bwd_depends)
+core.apull_bwd_rules.set(depends_p, utils.asyncify(pull_bwd_depends))

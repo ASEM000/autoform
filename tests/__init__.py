@@ -80,12 +80,6 @@ class CountingInterpreter(af.core.Interpreter):
         self.parent = af.core.active_interpreter.get()
         self.calls = 0
 
-    def box(self, value, /):
-        return value
-
-    def unbox(self, value, /):
-        return value
-
     def interpret(self, prim, in_tree, /, **params):
         self.calls += 1
         return self.parent.interpret(prim, in_tree, **params)
@@ -93,3 +87,21 @@ class CountingInterpreter(af.core.Interpreter):
     async def ainterpret(self, prim, in_tree, /, **params):
         self.calls += 1
         return await self.parent.ainterpret(prim, in_tree, **params)
+
+
+class Blob:
+    def __init__(self, size: int):
+        self.size = size
+
+
+class BlobAVal(af.core.AVal):
+    __slots__ = ["size"]
+
+    def __init__(self, size: int):
+        self.size = size
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.size == other.size
+
+    def __hash__(self):
+        return hash((type(self), self.size))
