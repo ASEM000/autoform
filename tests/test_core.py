@@ -194,7 +194,7 @@ class TestBuildIR:
             return x
 
         af.core.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
-        af.core.trace_types.add(TraceBlob)
+        af.tracer.trace_types.add(TraceBlob)
 
         ir = af.trace(program)(TraceBlob(3))
 
@@ -576,9 +576,9 @@ def test_variable_and_literal_boundary():
     assert af.core.is_var(var)
     assert var.aval == af.string.StrAVal()
     assert af.core.avalof(var) is var.aval
-    assert not af.core.is_traceable(var)
+    assert not af.tracer.is_traceable(var)
     assert not af.core.is_var("hello")
-    box = af.core.TraceBox(owner=af.core.TraceInterpreter(), var=var)
+    box = af.tracer.TraceBox(owner=af.tracer.TraceInterpreter(), var=var)
     assert box.aval is var.aval
     assert {box: var}[box] is var
 
@@ -605,7 +605,7 @@ class TestBind:
 
 def test_interpreter_context_restores_default():
     assert isinstance(af.core.active_interpreter.get(), af.core.EvalInterpreter)
-    tracer = af.core.TraceInterpreter()
+    tracer = af.tracer.TraceInterpreter()
     with af.core.using_interpreter(tracer) as active:
         assert active is tracer
         af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.string.StrAVal()))
@@ -774,10 +774,10 @@ class TestFold:
         async_probe_p = af.core.Prim("async_dynamic_fold_probe")
         af.core.abstract_rules.set(async_probe_p, abstract_async_probe)
 
-        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
+        with af.core.using_interpreter(af.tracer.TraceInterpreter()) as tracer:
             result = asyncio.run(async_probe_p.abind("literal"))
 
-        assert isinstance(result, af.core.TraceBox)
+        assert isinstance(result, af.tracer.TraceBox)
         assert [eqn.prim.name for eqn in tracer.eqns] == ["async_dynamic_fold_probe"]
 
     def test_async_fold_trace_dispatch_evaluates_primitive(self):
@@ -787,7 +787,7 @@ class TestFold:
         async_probe_p = af.core.Prim("async_fold_probe")
         af.core.impl_rules.aset(async_probe_p, aimpl_async_probe)
 
-        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
+        with af.core.using_interpreter(af.tracer.TraceInterpreter()) as tracer:
             with af.fold():
                 result = asyncio.run(async_probe_p.abind("literal"))
 

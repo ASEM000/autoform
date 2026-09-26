@@ -20,6 +20,7 @@ import functools as ft
 import string as stringlib
 
 import autoform.core as core
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 __all__ = ["StrAVal", "format", "concat", "match"]
@@ -63,7 +64,7 @@ class StrAVal(core.AVal):
 
 
 core.aval_types[str] = lambda _: StrAVal()
-core.trace_types.add(str)
+tracer.trace_types.add(str)
 core.primal_s.set(StrAVal, lambda aval: aval)
 core.tangent_s.set(StrAVal, lambda aval: aval)
 core.cotangent_s.set(StrAVal, lambda aval: aval)
@@ -141,7 +142,7 @@ core.batch_rules.set(concat_p, batch_concat)
 core.batch_rules.aset(concat_p, utils.asyncify(batch_concat))
 
 
-core.dunder_rules[core.Dunder.ADD, StrAVal] = concat
+tracer.dunder_rules[tracer.Dunder.ADD, StrAVal] = concat
 
 
 # ==================================================================================================
@@ -228,7 +229,7 @@ core.batch_rules.set(match_p, batch_match)
 core.batch_rules.aset(match_p, utils.asyncify(batch_match))
 
 
-core.dunder_rules[core.Dunder.EQ, StrAVal] = match
+tracer.dunder_rules[tracer.Dunder.EQ, StrAVal] = match
 
 
 # ==================================================================================================

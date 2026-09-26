@@ -60,9 +60,9 @@ def test_wrapper_uses_derivative_space(transform, space, change):
     class ChangeAVal(af.core.AVal): ...
 
     af.core.aval_types[Text] = lambda _: TextAVal()
-    af.core.trace_types.add(Text)
+    af.tracer.trace_types.add(Text)
     af.core.aval_types[Change] = lambda _: ChangeAVal()
-    af.core.trace_types.add(Change)
+    af.tracer.trace_types.add(Change)
     space.set(TextAVal, lambda _: ChangeAVal())
     space.set(ChangeAVal, lambda aval: aval)
     aval = TextAVal()
@@ -90,7 +90,7 @@ class TestCotangentHelpers:
         assert af.core.Zero(af.core.primal_s.map(af.core.avalof(z))) == z
         assert af.core.materialize_zeros(z) == ""
         assert af.core.avalof(z) == af.string.StrAVal()
-        assert not af.core.is_traceable(z)
+        assert not af.tracer.is_traceable(z)
 
     def test_zero_requires_aval(self):
         with pytest.raises(AssertionError, match="Expected AVal"):
@@ -194,7 +194,7 @@ class TestCotangentHelpers:
                 return Text("|".join(c.value for c in cotangents))
 
         af.core.aval_types[Text] = lambda _: TextAVal()
-        af.core.trace_types.add(Text)
+        af.tracer.trace_types.add(Text)
         result = af.ad.cot_acc([Text("a"), Text("b")])
         assert isinstance(result, Text)
         assert result.value == "a|b"
@@ -221,9 +221,9 @@ class TestCotangentHelpers:
         class DerivedFeedbackAVal(TextFeedbackAVal): ...
 
         af.core.aval_types[Text] = lambda _: TextAVal()
-        af.core.trace_types.add(Text)
+        af.tracer.trace_types.add(Text)
         af.core.aval_types[TextFeedback] = lambda _: DerivedFeedbackAVal()
-        af.core.trace_types.add(TextFeedback)
+        af.tracer.trace_types.add(TextFeedback)
         af.core.cotangent_s.set(TextAVal, lambda _: DerivedFeedbackAVal())
         var = af.core.Var(aval=TextAVal())
         ir = af.core.IR([], (var,), (var, var))

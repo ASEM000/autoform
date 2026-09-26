@@ -31,6 +31,7 @@ import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
 import autoform.string as string
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 # ==================================================================================================
@@ -48,7 +49,7 @@ primal_s = core.primal_s
 tangent_s = core.tangent_s
 cotangent_s = core.cotangent_s
 Prim = core.Prim
-Dunder = core.Dunder
+Dunder = tracer.Dunder
 Zero = core.Zero
 Interpreter = core.Interpreter
 Box = core.Box
@@ -215,7 +216,7 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ...     return TokenAVal()
     """
     core.aval_types[type] = aval_rule
-    core.trace_types.add(type)
+    tracer.trace_types.add(type)
     return aval_rule
 
 
@@ -284,6 +285,6 @@ def register_dunder[T: Callable[..., Any]](
     assert callable(rule), f"Expected callable, got {rule!r}"
     assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
     key = dunder, aval_type
-    assert replace or key not in core.dunder_rules, f"Dunder rule is already defined"
-    core.dunder_rules[key] = rule
+    assert replace or key not in tracer.dunder_rules, f"Dunder rule is already defined"
+    tracer.dunder_rules[key] = rule
     return rule

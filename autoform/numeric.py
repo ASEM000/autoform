@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools as ft
 
 import autoform.core as core
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 __all__ = [
@@ -71,7 +72,7 @@ class IntAVal(core.AVal):
 
 
 core.aval_types[int] = lambda _: IntAVal()
-core.trace_types.add(int)
+tracer.trace_types.add(int)
 core.primal_s.set(IntAVal, lambda aval: aval)
 
 
@@ -105,7 +106,7 @@ class FloatAVal(core.AVal):
 
 
 core.aval_types[float] = lambda _: FloatAVal()
-core.trace_types.add(float)
+tracer.trace_types.add(float)
 core.primal_s.set(FloatAVal, lambda aval: aval)
 core.tangent_s.set(FloatAVal, lambda aval: aval)
 core.cotangent_s.set(FloatAVal, lambda aval: aval)
@@ -135,7 +136,7 @@ class BoolAVal(core.AVal):
 
 
 core.aval_types[bool] = lambda _: BoolAVal()
-core.trace_types.add(bool)
+tracer.trace_types.add(bool)
 core.primal_s.set(BoolAVal, lambda aval: aval)
 core.tangent_s.set(BoolAVal, lambda aval: aval)
 core.cotangent_s.set(BoolAVal, lambda aval: aval)
@@ -703,14 +704,14 @@ core.batch_rules.set(ge_p, batch_ge)
 core.batch_rules.aset(ge_p, utils.asyncify(batch_ge))
 
 
-core.dunder_rules[core.Dunder.NEG, FloatAVal] = neg
-core.dunder_rules[core.Dunder.ADD, FloatAVal] = add
-core.dunder_rules[core.Dunder.SUB, FloatAVal] = sub
-core.dunder_rules[core.Dunder.MUL, FloatAVal] = mul
-core.dunder_rules[core.Dunder.DIV, FloatAVal] = div
-core.dunder_rules[core.Dunder.EQ, FloatAVal] = eq
-core.dunder_rules[core.Dunder.NE, FloatAVal] = ne
-core.dunder_rules[core.Dunder.LT, FloatAVal] = lt
-core.dunder_rules[core.Dunder.LE, FloatAVal] = le
-core.dunder_rules[core.Dunder.GT, FloatAVal] = gt
-core.dunder_rules[core.Dunder.GE, FloatAVal] = ge
+tracer.dunder_rules[tracer.Dunder.NEG, FloatAVal] = neg
+tracer.dunder_rules[tracer.Dunder.ADD, FloatAVal] = add
+tracer.dunder_rules[tracer.Dunder.SUB, FloatAVal] = sub
+tracer.dunder_rules[tracer.Dunder.MUL, FloatAVal] = mul
+tracer.dunder_rules[tracer.Dunder.DIV, FloatAVal] = div
+tracer.dunder_rules[tracer.Dunder.EQ, FloatAVal] = eq
+tracer.dunder_rules[tracer.Dunder.NE, FloatAVal] = ne
+tracer.dunder_rules[tracer.Dunder.LT, FloatAVal] = lt
+tracer.dunder_rules[tracer.Dunder.LE, FloatAVal] = le
+tracer.dunder_rules[tracer.Dunder.GT, FloatAVal] = gt
+tracer.dunder_rules[tracer.Dunder.GE, FloatAVal] = ge

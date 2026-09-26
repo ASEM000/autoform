@@ -17,7 +17,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.core import trace
+from autoform.tracer import trace
 from tests import aexecute, always_true, execute, fixpoint_program, switch_program, while_program
 
 tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
@@ -557,7 +557,7 @@ def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
     af.core.aval_types[Key] = lambda _: af.string.StrAVal()
-    af.core.trace_types.add(Key)
+    af.tracer.trace_types.add(Key)
     left = af.trace(lambda x: af.string.concat("L", x))("X")
     right = af.trace(lambda x: af.string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))

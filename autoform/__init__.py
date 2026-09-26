@@ -33,6 +33,7 @@ import autoform.order as order
 import autoform.path as path
 import autoform.schemas as schemas
 import autoform.string as string
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 # ==================================================================================================
@@ -45,8 +46,8 @@ __version__ = "0.3.0"
 # CORE
 # ==================================================================================================
 
-trace = core.trace
-fold = core.fold
+trace = tracer.trace
+fold = tracer.fold
 tag = core.tag
 
 # ==================================================================================================

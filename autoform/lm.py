@@ -30,6 +30,7 @@ from litellm import ModelResponse, acompletion, completion
 
 import autoform.core as core
 import autoform.schemas as schemas
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 __all__ = [
@@ -711,7 +712,7 @@ def schema_abstract_tree(schema: Any) -> Tree:
     def abstract(x: Any) -> Any:
         if rule := schema_abstract_rules.get(type(x)):
             return rule(x)
-        if not core.is_traceable(x):
+        if not tracer.is_traceable(x):
             raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
         return x
 

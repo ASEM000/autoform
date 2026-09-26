@@ -23,6 +23,7 @@ import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
@@ -157,7 +158,7 @@ def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
     assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], core.IR) for k in branches)
     key0 = next(iter(branches))
-    assert core.is_traceable(key0)
+    assert tracer.is_traceable(key0)
     assert all(type(k) is type(key0) for k in branches)
     key_aval = core.avalof(key0)
     assert all(core.avalof(k) == key_aval for k in branches)
