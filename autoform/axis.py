@@ -143,16 +143,16 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
     return core.IR([eqn], v_in_ir, v_out_ir)
 
 
-class BatchBox:
-    __slots__ = ["owner", "value", "batched"]
+class BatchBox(core.Box):
+    __slots__ = ["value", "batched"]
 
     def __init__(self, owner, value, batched):
-        self.owner = owner
+        super().__init__(owner)
         self.value = value
         self.batched = batched
 
 
-class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
+class BatchInterpreter(core.Interpreter[BatchBox]):
     __slots__ = ["parent", "batch_size"]
 
     def __init__(self, *, batch_size: int, parent):

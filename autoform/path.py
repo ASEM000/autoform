@@ -130,6 +130,12 @@ class WeightInterpreter(core.Interpreter):
     def factor(self, weight: float, /) -> None:
         self.log_weight += -math.inf if weight == 0 else math.log(weight)
 
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
     def interpret(self, prim: core.Prim, in_tree, /, **params):
         if prim is factor_p:
             impl_factor(in_tree, **params)

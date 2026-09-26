@@ -50,6 +50,7 @@ Prim = core.Prim
 Dunder = core.Dunder
 Zero = core.Zero
 Interpreter = core.Interpreter
+Box = core.Box
 IR = core.IR
 Eqn = core.Eqn
 Var = core.Var
@@ -127,6 +128,7 @@ __all__ = [
     "Dunder",
     "Zero",
     "Interpreter",
+    "Box",
     "IR",
     "Eqn",
     "Var",

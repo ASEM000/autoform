@@ -42,16 +42,16 @@ type TreePair = tuple[Tree, Tree]
 pushforward_call_p = core.Prim("pushforward_call")
 
 
-class PushforwardBox:
-    __slots__ = ["owner", "primal", "tangent"]
+class PushforwardBox(core.Box):
+    __slots__ = ["primal", "tangent"]
 
     def __init__(self, owner, primal, tangent):
-        self.owner = owner
+        super().__init__(owner)
         self.primal = primal
         self.tangent = tangent
 
 
-class PushforwardInterpreter(core.BoxedInterpreter[PushforwardBox]):
+class PushforwardInterpreter(core.Interpreter[PushforwardBox]):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -400,15 +400,15 @@ core.batch_rules.set(cot_acc_p, batch_cot_acc)
 core.batch_rules.aset(cot_acc_p, utils.asyncify(batch_cot_acc))
 
 
-class PullbackFwdBox:
-    __slots__ = ["owner", "primal"]
+class PullbackFwdBox(core.Box):
+    __slots__ = ["primal"]
 
     def __init__(self, owner, primal):
-        self.owner = owner
+        super().__init__(owner)
         self.primal = primal
 
 
-class PullbackFwdInterpreter(core.BoxedInterpreter[PullbackFwdBox]):
+class PullbackFwdInterpreter(core.Interpreter[PullbackFwdBox]):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -436,11 +436,11 @@ class PullbackFwdInterpreter(core.BoxedInterpreter[PullbackFwdBox]):
         return self.box(p_out), residuals
 
 
-class PullbackBwdBox:
-    __slots__ = ["owner", "cotangent"]
+class PullbackBwdBox(core.Box):
+    __slots__ = ["cotangent"]
 
     def __init__(self, owner, cotangent):
-        self.owner = owner
+        super().__init__(owner)
         self.cotangent = cotangent
 
 
@@ -478,7 +478,7 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
     yield None, utils.tree.map(read_c, ir.in_tree)
 
 
-class PullbackBwdInterpreter(core.BoxedInterpreter[PullbackBwdBox]):
+class PullbackBwdInterpreter(core.Interpreter[PullbackBwdBox]):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):

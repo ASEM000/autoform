@@ -61,9 +61,8 @@ __all__ = [
     "Eqn",
     "IR",
     # interpreters
-    "BaseInterpreter",
-    "BoxedInterpreter",
     "Interpreter",
+    "Box",
     "EvalInterpreter",
     "Dunder",
     "TraceBox",
@@ -561,7 +560,16 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 # ==================================================================================================
 
 
-class BaseInterpreter(ABC):
+class Box:
+    __slots__ = ["owner"]
+
+    def __init__(self, owner):
+        self.owner = owner
+
+
+class Interpreter[T](ABC):
+    """Primitive dispatch and value boxing."""
+
     __slots__ = []
 
     @abstractmethod
@@ -569,25 +577,6 @@ class BaseInterpreter(ABC):
 
     @abstractmethod
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
-
-
-class Interpreter(BaseInterpreter):
-    """Base class for runtime primitive interpreters.
-
-    Subclass ``Interpreter`` to build an execution-time extension context. A
-    custom interpreter usually stores the current :data:`active_interpreter` as
-    its parent, overrides ``interpret`` and ``ainterpret`` to handle new primitives.
-    """
-
-    __slots__ = []
-
-
-class BoxedInterpreter[T](BaseInterpreter):
-    __slots__ = []
-    # NOTE(asem): boxed interpreters own a transform-specific value wrapper.
-    # plain interpreters only override primitive dispatch but boxed interpreters
-    # also define how values are boxed before primitive evaluation and unboxed
-    # when rules need the underlying payload.
 
     @abstractmethod
     def box(self, value, /) -> Tree[T]: ...
@@ -597,7 +586,7 @@ class BoxedInterpreter[T](BaseInterpreter):
 
 
 @contextmanager
-def using_interpreter[T: BaseInterpreter](interpreter: T) -> Generator[T, None, None]:
+def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
     """Run primitive dispatch through an interpreter inside the context."""
 
     token = active_interpreter.set(interpreter)
@@ -615,6 +604,12 @@ def using_interpreter[T: BaseInterpreter](interpreter: T) -> Generator[T, None, 
 class EvalInterpreter(Interpreter):
     __slots__ = []
 
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         return impl_rules.get(prim)(in_tree, **params)
 
@@ -622,7 +617,7 @@ class EvalInterpreter(Interpreter):
         return await impl_rules.aget(prim)(in_tree, **params)
 
 
-active_interpreter = ContextVar[BaseInterpreter]("active_interpreter", default=EvalInterpreter())
+active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
 
 
 # ==================================================================================================
@@ -713,13 +708,13 @@ type DunderRule = Callable[..., Any]
 dunder_rules: dict[tuple[Dunder, type[AVal]], DunderRule] = {}
 
 
-class TraceBox:
-    __slots__ = ["owner", "var"]
+class TraceBox(Box):
+    __slots__ = ["var"]
 
     def __init__(self, /, *, owner: TraceInterpreter, var: Var):
         assert isinstance(owner, TraceInterpreter)
         assert is_var(var)
-        self.owner = owner
+        super().__init__(owner)
         self.var = var
 
     @property
@@ -840,7 +835,7 @@ def assert_foldable(prim: Prim, value: Tree) -> None:
     )
 
 
-class TraceInterpreter(BoxedInterpreter[TraceBox]):
+class TraceInterpreter(Interpreter[TraceBox]):
     __slots__ = ["eqns"]
 
     def __init__(self):
