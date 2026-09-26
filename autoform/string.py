@@ -33,7 +33,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class StrAVal(core.ScalarAVal):
+class StrAVal(core.AVal):
     """Abstract value for ``str`` leaves.
 
     Example:
@@ -45,6 +45,15 @@ class StrAVal(core.ScalarAVal):
     """
 
     __slots__ = []
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
 
     def zero(self) -> str:
         return ""

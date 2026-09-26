@@ -109,19 +109,6 @@ class AVal:
         assert False, f"No cotangent accumulation defined for {self!r}"
 
 
-class ScalarAVal(AVal):
-    __slots__ = []
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}()"
-
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other)
-
-    def __hash__(self) -> int:
-        return hash(type(self))
-
-
 class Zero[T: AVal]:
     """Symbolic zero for an abstract value."""
 

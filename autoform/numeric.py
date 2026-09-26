@@ -47,7 +47,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class IntAVal(core.ScalarAVal):
+class IntAVal(core.AVal):
     """Abstract value for ``int`` leaves.
 
     Example:
@@ -60,12 +60,21 @@ class IntAVal(core.ScalarAVal):
 
     __slots__ = []
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
+
 
 core.trace_types.add(int)
 core.primal_s.set(int, lambda _: IntAVal())
 
 
-class FloatAVal(core.ScalarAVal):
+class FloatAVal(core.AVal):
     """Abstract value for ``float`` leaves.
 
     Example:
@@ -77,6 +86,15 @@ class FloatAVal(core.ScalarAVal):
     """
 
     __slots__ = []
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
 
     def zero(self) -> float:
         return 0.0
@@ -91,7 +109,7 @@ core.tangent_s.set(FloatAVal, lambda aval: aval)
 core.cotangent_s.set(FloatAVal, lambda aval: aval)
 
 
-class BoolAVal(core.ScalarAVal):
+class BoolAVal(core.AVal):
     """Abstract value for ``bool`` leaves.
 
     Example:
@@ -103,6 +121,15 @@ class BoolAVal(core.ScalarAVal):
     """
 
     __slots__ = []
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
 
 
 core.trace_types.add(bool)
