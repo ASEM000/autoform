@@ -48,7 +48,12 @@ def test_complete_and_generate_use_distinct_primitives(executor):
         )
 
     ir = af.trace(program)("seed")
-    assert [eqn.prim for eqn in ir.eqns] == [af.lm.complete_p, af.lm.generate_p]
+    assert [eqn.prim for eqn in ir.eqns] == [
+        af.control.stop_gradient_p,
+        af.lm.complete_p,
+        af.control.stop_gradient_p,
+        af.lm.generate_p,
+    ]
     with af.lm.client(af.lm.EchoClient()):
         assert program("hello") == ("<user> hello", None)
         assert executor(ir, "hello") == ("<user> hello", None)
@@ -380,12 +385,13 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
     assert parsed == expected
 
     ir = af.trace(lm_program(af.lm.generate, schema=answer))("test")
-    assert isinstance(ir.eqns[0].out_tree.decision, af.stage.Var)
-    assert ir.eqns[0].out_tree.details == expected.details
+    assert isinstance(ir.eqns[1].out_tree.decision, af.stage.Var)
+    assert ir.eqns[1].out_tree.details == expected.details
 
     walk = ir.walk("hello")
-    equation, _ = next(walk)
-    assert equation is ir.eqns[0]
+    equation, inputs = next(walk)
+    equation, _ = walk.send(equation.bind(inputs))
+    assert equation is ir.eqns[1]
     done, result = walk.send(parsed)
     assert done is None
     assert result == expected
@@ -520,6 +526,79 @@ def test_schema_dsl_reports_value_errors():
 
 
 class TestLMPrimitive:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
+        "primitive, params",
+        [
+            pytest.param(af.lm.complete, {}, id="complete"),
+            pytest.param(af.lm.generate, {"schema": af.Str()}, id="generate"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "roles",
+        [
+            pytest.param(["assistant", "user"], id="list"),
+            pytest.param(("assistant", "user"), id="tuple"),
+            pytest.param({"x": "assistant", "y": "user"}, id="dict"),
+        ],
+    )
+    def test_traces_and_batches_message_roles(
+        self, executor, primitive, params, roles, echo_client
+    ):
+        def program(messages):
+            return primitive(messages, model="echo", **params)
+
+        if primitive is af.lm.generate:
+            echo_client.render = lambda messages: json.dumps(af.lm.echo_messages(messages))
+
+        messages = [dict(role="user", content="hello"), dict(role="system", content="who is this")]
+        ir = af.trace(program)(messages)
+        stopped, call = ir.eqns
+        assert stopped.prim is af.control.stop_gradient_p
+        assert stopped.in_tree == ([m["role"] for m in ir.in_tree[0]], "echo")
+        stopped_roles, stopped_model = stopped.out_tree
+        assert call.in_tree == (
+            [
+                dict(role=r, content=m["content"])
+                for r, m in zip(stopped_roles, ir.in_tree[0], strict=True)
+            ],
+            stopped_model,
+        )
+        assert executor(ir, messages) == "<user> hello\n<system> who is this"
+
+        messages[0]["role"] = "assistant"
+        assert executor(ir, messages) == "<assistant> hello\n<system> who is this"
+
+        batched = af.batch(ir, in_axes=([dict(role=True, content=False), False],))
+        messages[0]["role"] = roles
+        assert executor(batched, messages) == tree.map(
+            lambda role: f"<{role}> hello\n<system> who is this", roles
+        )
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
+        "primitive, params",
+        [
+            pytest.param(af.lm.complete, {}, id="complete"),
+            pytest.param(af.lm.generate, {"schema": af.Str()}, id="generate"),
+        ],
+    )
+    def test_pushforward_preserves_primal_roles(self, executor, primitive, params, echo_client):
+        def program(messages, model):
+            return primitive(messages, model=model, **params)
+
+        if primitive is af.lm.generate:
+            echo_client.render = lambda messages: json.dumps(af.lm.echo_messages(messages))
+
+        messages = [dict(role="system", content="hello"), dict(role="user", content="world")]
+        ir = af.pushforward(af.trace(program)(messages, "echo"))
+        zero = af.core.Zero(af.string.StrAVal())
+        tangents = [dict(role="ignored", content=zero), dict(role="ignored", content="tangent")]
+        assert executor(ir, (messages, "echo"), (tangents, "ignored")) == (
+            "<system> hello\n<user> world",
+            "<system> \n<user> tangent",
+        )
+
     def test_complete_leaves_litellm_params_to_active_client(self):
         class ConfiguredRouter(EchoRouter):
             def completion(self, *, messages, model, **kwargs):
@@ -535,14 +614,53 @@ class TestLMPrimitive:
             assert ir.call("hello", "m1") == "m1|0.7|128|hello"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_pullback_complete_zeroes_model_cotangent(self, executor):
-        ir = af.pullback(af.trace(lm_program())("test", "gpt-5.5"))
-        with af.lm.client(EchoRouter()):
-            args = (("hello", "m1"), "feedback")
-            out, cotangent = executor(ir, *args)
-        assert out == "m1|hello"
-        assert isinstance(cotangent[0], str)
-        assert cotangent[1] == af.core.Zero(af.string.StrAVal())
+    @pytest.mark.parametrize(
+        "primitive, params, out_cotangent, expected",
+        [
+            pytest.param(af.lm.complete, {}, "feedback", "input feedback", id="complete"),
+            pytest.param(
+                af.lm.generate,
+                {"schema": {"text": af.Str(), "score": af.Float()}},
+                {"text": "feedback", "score": "feedback"},
+                {"text": "Recursion calls itself.", "score": 0.92},
+                id="generate",
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("stopped", [True, False], ids=["stopped", "raw"])
+    def test_pullback_stops_role_and_model_feedback(
+        self, executor, primitive, params, out_cotangent, expected, stopped, gradient_client
+    ):
+        raw = af.lm.complete_p if primitive is af.lm.complete else af.lm.generate_p
+
+        def program(messages, model):
+            if stopped:
+                return primitive(messages, model=model, **params)
+            return raw.bind((messages, model), **params)
+
+        messages = [dict(role="system", content="hello"), dict(role="user", content="world")]
+        ir = af.pullback(af.trace(program)(messages, "m1"))
+        out, cotangent = executor(ir, (messages, "m2"), out_cotangent)
+        zero = af.core.Zero(af.string.StrAVal())
+        stopped_feedback = zero if stopped else "input feedback"
+        assert out == expected
+        assert cotangent == (
+            [dict(role=stopped_feedback, content="input feedback") for _ in messages],
+            stopped_feedback,
+        )
+        forward, *backward = gradient_client.calls
+        assert forward["messages"] == messages
+        assert len(backward) == 5
+        assert all(call["model"] == "m2" for call in gradient_client.calls)
+        for call, content in zip(backward, ("hello", "system", "world", "user", "m2"), strict=True):
+            (message,) = call["messages"]
+            assert message["role"] == "user"
+            assert f"INPUT: {content}" in message["content"]
+            if primitive is af.lm.complete:
+                assert f"OUTPUT: {out}" in message["content"]
+                assert "FEEDBACK ON OUTPUT: feedback" in message["content"]
+            else:
+                assert "STRUCTURED OUTPUT FEEDBACK:" in message["content"]
 
 
 class TestEchoLMClient:

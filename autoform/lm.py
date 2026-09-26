@@ -28,6 +28,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import ModelResponse, acompletion, completion
 
+import autoform.control as control
 import autoform.core as core
 import autoform.schemas as schemas
 import autoform.stage as stage
@@ -50,7 +51,6 @@ zip = utils.strict_zip
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Messages = list[dict[str, str]]
-type Roles = list[str]
 type JsonSchema = dict[str, Any]
 type EmitJsonSchemaRule = Callable[[Any], JsonSchema | None]
 type ParseJsonValueRule = Callable[[Any, Any], Any]
@@ -205,7 +205,10 @@ def complete(messages: Messages, /, *, model: str) -> str:
         assert "content" in m, f"message must have a 'content' key, got {m=}"
 
     roles, contents = [m["role"] for m in messages], [m["content"] for m in messages]
-    return complete_p.bind((contents, model), roles=roles)
+    # NOTE(asem): emit a single stop_gradient not to pollute the IR with sg for each role
+    roles, model = control.stop_gradient((roles, model))
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    return complete_p.bind((messages, model))
 
 
 # TODO(asem): take a look into this
@@ -218,113 +221,110 @@ FEEDBACK ON OUTPUT: {out_cotangent}
 Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
 
 
-def impl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
-    contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+def impl_complete(in_tree: Tree, /) -> str:
+    messages, model = in_tree
     response = active_client.get().completion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
-async def aimpl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
-    contents, model = in_tree
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+async def aimpl_complete(in_tree: Tree, /) -> str:
+    messages, model = in_tree
     response = await active_client.get().acompletion(messages=messages, model=model)
     return response.choices[0].message.content
 
 
-def abstract_complete(in_tree: Tree, /, *, roles: Roles) -> Any:
-    contents, model = in_tree
+def abstract_complete(in_tree: Tree, /) -> Any:
+    messages, model = in_tree
     aval = core.avalof("")
-    assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
+    fields = [m[key] for m in messages for key in ("role", "content")]
+    assert all(type(x) in (str, type(aval)) for x in fields), f"Expected strings: {messages!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return aval
 
 
-def pushforward_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
-    primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, *_ = tangents
-    p_tree = (primal_contents, primal_model)
-    p_resp = complete_p.bind(p_tree, roles=roles)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
-    t_resp = complete_p.bind(t_tree, roles=roles)
+def pushforward_complete(in_tree: Tree, /) -> TreePair:
+    p_in, t_in = in_tree
+    t_in = core.materialize_zeros(t_in)
+    p_messages, p_model = p_in
+    t_messages, *_ = t_in
+    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
+    t_tree = (t_request, p_model)
+    p_resp = complete_p.bind(p_in)
+    t_resp = complete_p.bind(t_tree)
     return p_resp, t_resp
 
 
-async def apush_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
-    primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, *_ = tangents
-    abind = ft.partial(complete_p.abind, roles=roles)
-    p_tree = (primal_contents, primal_model)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
-    p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
+async def apush_complete(in_tree: Tree, /) -> TreePair:
+    p_in, t_in = in_tree
+    t_in = core.materialize_zeros(t_in)
+    p_messages, p_model = p_in
+    t_messages, *_ = t_in
+    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
+    t_tree = (t_request, p_model)
+    p_resp, t_resp = await asyncio.gather(complete_p.abind(p_in), complete_p.abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
-    contents, model = in_tree
-    out = complete_p.bind((contents, model), roles=roles)
-    residuals = (contents, model, out)
+def pullback_fwd_complete(in_tree: Tree, /) -> TreePair:
+    messages, model = in_tree
+    out = complete_p.bind(in_tree)
+    residuals = (messages, model, out)
     return out, residuals
 
 
-async def apull_fwd_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
-    contents, model = in_tree
-    out = await complete_p.abind((contents, model), roles=roles)
-    residuals = (contents, model, out)
+async def apull_fwd_complete(in_tree: Tree, /) -> TreePair:
+    messages, model = in_tree
+    out = await complete_p.abind(in_tree)
+    residuals = (messages, model, out)
     return out, residuals
 
 
-def pullback_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
+def pullback_bwd_complete(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = core.materialize_zeros(out_cotangent)
-    contents, model, out = residuals
-    grads = []
-    for content in contents:
-        grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
-        grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
-        grads.append(grad_out)
-    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
-    return grads, model_cotangent
+    messages, model, out = residuals
+
+    def grad(x):
+        prompt = GRAD_PROMPT.format(content=x, out=out, out_cotangent=out_cotangent)
+        return complete_p.bind(([dict(role="user", content=prompt)], model))
+
+    return utils.tree.map(grad, (messages, model))
 
 
-async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
+async def apull_bwd_complete(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = core.materialize_zeros(out_cotangent)
-    contents, model, out = residuals
+    messages, model, out = residuals
 
-    async def grad(c):
-        prompt = GRAD_PROMPT.format(content=c, out=out, out_cotangent=out_cotangent)
-        grad_out = complete_p.abind(([prompt], model), roles=["user"])
-        return await grad_out
+    async def grad(x):
+        prompt = GRAD_PROMPT.format(content=x, out=out, out_cotangent=out_cotangent)
+        return await complete_p.abind(([dict(role="user", content=prompt)], model))
 
-    grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
-    return grads, model_cotangent
+    leaves, spec = utils.tree.flatten((messages, model))
+    grads = await asyncio.gather(*[grad(x) for x in leaves])
+    return spec.unflatten(grads)
 
 
-def batch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+def batch_complete(in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return complete_p.bind(in_values, roles=roles), False
+        return complete_p.bind(in_values), False
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    results = [complete_p.bind(unbatch(b), roles=roles) for b in range(batch_size)]
+    results = [complete_p.bind(unbatch(b)) for b in range(batch_size)]
     out_tree = spec.unflatten(results)
     return out_tree, True
 
 
-async def abatch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
+async def abatch_complete(in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return await complete_p.abind(in_values, roles=roles), False
+        return await complete_p.abind(in_values), False
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    abind = ft.partial(complete_p.abind, roles=roles)
-    results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
+    results = await asyncio.gather(*[complete_p.abind(unbatch(b)) for b in range(batch_size)])
     out_tree = spec.unflatten(results)
     return out_tree, True
 
@@ -389,8 +389,10 @@ def generate(messages: Messages, /, *, model: str, schema: Any) -> Any:
         assert "content" in m, f"message must have a 'content' key, got {m=}"
 
     roles, contents = [m["role"] for m in messages], [m["content"] for m in messages]
-
-    return generate_p.bind((contents, model), roles=roles, schema=schema)
+    # NOTE(asem): emit a single stop_gradient not to pollute the IR with sg for each role
+    roles, model = control.stop_gradient((roles, model))
+    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
+    return generate_p.bind((messages, model), schema=schema)
 
 
 SCHEMA_GRAD_PROMPT = """Given this LLM interaction:
@@ -634,12 +636,11 @@ def parse_json_value(schema: Any, value: Any) -> Any:
     )
 
 
-def impl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
-    contents, model = in_tree
+def impl_generate(in_tree: Tree, /, *, schema: Any) -> Any:
+    messages, model = in_tree
     json_schema = emit_json_schema(schema)
     if json_schema is None:
         return parse_json_value(schema, None)
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = active_client.get().completion(
         messages=messages,
         model=model,
@@ -655,12 +656,11 @@ def impl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     return parse_json_value(schema, json.loads(resp.choices[0].message.content))
 
 
-async def aimpl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
-    contents, model = in_tree
+async def aimpl_generate(in_tree: Tree, /, *, schema: Any) -> Any:
+    messages, model = in_tree
     json_schema = emit_json_schema(schema)
     if json_schema is None:
         return parse_json_value(schema, None)
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
     resp = await active_client.get().acompletion(
         messages=messages,
         model=model,
@@ -720,47 +720,50 @@ def schema_abstract_tree(schema: Any) -> Tree:
     return utils.tree.map(abstract, schema, is_leaf=lambda x: type(x) in schema_abstract_rules)
 
 
-def abstract_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
-    contents, model = in_tree
+def abstract_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
+    messages, model = in_tree
     aval = core.avalof("")
-    assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
+    fields = [m[key] for m in messages for key in ("role", "content")]
+    assert all(type(x) in (str, type(aval)) for x in fields), f"Expected strings: {messages!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
 
 
-def pushforward_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
-    primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, *_ = tangents
-    p_tree = (primal_contents, primal_model)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
-    p_resp = generate_p.bind(p_tree, roles=roles, schema=schema)
-    t_resp = generate_p.bind(t_tree, roles=roles, schema=schema)
+def pushforward_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
+    p_in, t_in = in_tree
+    t_in = core.materialize_zeros(t_in)
+    p_messages, p_model = p_in
+    t_messages, *_ = t_in
+    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
+    t_tree = (t_request, p_model)
+    p_resp = generate_p.bind(p_in, schema=schema)
+    t_resp = generate_p.bind(t_tree, schema=schema)
     return p_resp, t_resp
 
 
-async def apush_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
-    primals, tangents = in_tree
-    primal_contents, primal_model = primals
-    tangent_contents, *_ = tangents
-    abind = ft.partial(generate_p.abind, roles=roles, schema=schema)
-    p_tree = (primal_contents, primal_model)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
-    p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
+async def apush_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
+    p_in, t_in = in_tree
+    t_in = core.materialize_zeros(t_in)
+    p_messages, p_model = p_in
+    t_messages, *_ = t_in
+    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
+    t_tree = (t_request, p_model)
+    abind = ft.partial(generate_p.abind, schema=schema)
+    p_resp, t_resp = await asyncio.gather(abind(p_in), abind(t_tree))
     return p_resp, t_resp
 
 
-def pullback_fwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
-    contents, model = in_tree
-    out = generate_p.bind(in_tree, roles=roles, schema=schema)
-    residuals = (contents, model, out)
+def pullback_fwd_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
+    messages, model = in_tree
+    out = generate_p.bind(in_tree, schema=schema)
+    residuals = (messages, model, out)
     return out, residuals
 
 
-async def apull_fwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
-    contents, model = in_tree
-    out = await generate_p.abind(in_tree, roles=roles, schema=schema)
-    residuals = (contents, model, out)
+async def apull_fwd_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
+    messages, model = in_tree
+    out = await generate_p.abind(in_tree, schema=schema)
+    residuals = (messages, model, out)
     return out, residuals
 
 
@@ -784,63 +787,61 @@ def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
     return "\n".join(lines).expandtabs(2)
 
 
-def pullback_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
+def pullback_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     residuals, out_cotangent = in_tree
-    contents, model, out = residuals
-    feedback = build_cotangent_schema_summary(out, out_cotangent)
-    grads = []
-    for content in contents:
-        grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
-        grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
-        grads.append(grad_out)
-    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
-    return grads, model_cotangent
-
-
-async def apull_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
-    residuals, out_cotangent = in_tree
-    contents, model, out = residuals
+    messages, model, out = residuals
     feedback = build_cotangent_schema_summary(out, out_cotangent)
 
-    async def grad(c):
-        prompt = SCHEMA_GRAD_PROMPT.format(content=c, feedback=feedback)
-        grad_out = complete_p.abind(([prompt], model), roles=["user"])
-        return await grad_out
+    def grad(x):
+        prompt = SCHEMA_GRAD_PROMPT.format(content=x, feedback=feedback)
+        return complete_p.bind(([dict(role="user", content=prompt)], model))
 
-    grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
-    return grads, model_cotangent
+    return utils.tree.map(grad, (messages, model))
 
 
-def batch_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> TreePair:
+async def apull_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
+    residuals, out_cotangent = in_tree
+    messages, model, out = residuals
+    feedback = build_cotangent_schema_summary(out, out_cotangent)
+
+    async def grad(x):
+        prompt = SCHEMA_GRAD_PROMPT.format(content=x, feedback=feedback)
+        return await complete_p.abind(([dict(role="user", content=prompt)], model))
+
+    leaves, spec = utils.tree.flatten((messages, model))
+    grads = await asyncio.gather(*[grad(x) for x in leaves])
+    return spec.unflatten(grads)
+
+
+def batch_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if utils.batch_spec(in_values, in_batched) is None:
-        result = generate_p.bind(in_values, roles=roles, schema=schema)
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
+        result = generate_p.bind(in_values, schema=schema)
         out_batched = utils.tree.map(lambda _: False, result)
         return result, out_batched
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    bind = ft.partial(generate_p.bind, roles=roles, schema=schema)
+    bind = ft.partial(generate_p.bind, schema=schema)
     results = [bind(unbatch(b)) for b in range(batch_size)]
     out_batched = utils.tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, results)
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
     return out_ib, out_batched
 
 
-async def abatch_generate(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> TreePair:
+async def abatch_generate(in_tree: Tree, /, *, schema: Tree) -> TreePair:
     batch_size, in_batched, in_values = in_tree
 
-    if utils.batch_spec(in_values, in_batched) is None:
-        result = await generate_p.abind(in_values, roles=roles, schema=schema)
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
+        result = await generate_p.abind(in_values, schema=schema)
         out_batched = utils.tree.map(lambda _: False, result)
         return result, out_batched
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    abind = ft.partial(generate_p.abind, roles=roles, schema=schema)
+    abind = ft.partial(generate_p.abind, schema=schema)
     results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
     out_batched = utils.tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, list(results))
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
     return out_ib, out_batched
 
 
