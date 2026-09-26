@@ -72,7 +72,7 @@ class PushforwardInterpreter(core.Interpreter[PushforwardBox]):
         def tangent(v):
             if isinstance(v, PushforwardBox) and v.owner is self:
                 return v.tangent
-            return core.tangent_s.zeroof(core.primal_s.avalof(v))
+            return core.Zero(core.tangent_s.map(core.avalof(v)))
 
         return utils.tree.map(primal, values), utils.tree.map(tangent, values)
 
@@ -123,8 +123,8 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
     def make_t(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.tangent_s.avalof(atom.aval), source=atom)
-        return core.tangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.Var.fresh(aval=core.tangent_s.map(atom.aval), source=atom)
+        return core.Zero(core.tangent_s.map(core.avalof(atom)))
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
     t_in_ir = utils.tree.map(make_t, ir.in_tree)
@@ -138,7 +138,7 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     def make_t(x):
-        return core.tangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.tangent_s.map(core.avalof(x)))
 
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
@@ -162,7 +162,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     def make_t(x):
-        return core.tangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.tangent_s.map(core.avalof(x)))
 
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
@@ -186,8 +186,8 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 def abstract_pushforward_call(_: Tree, /, *, ir: core.IR) -> TreePair:
     def tangent_aval(atom):
         if core.is_var(atom):
-            return core.tangent_s.avalof(atom.aval)
-        return core.tangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.tangent_s.map(atom.aval)
+        return core.Zero(core.tangent_s.map(core.avalof(atom)))
 
     p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
     t_out = utils.tree.map(tangent_aval, ir.out_tree)
@@ -321,18 +321,18 @@ def cot_acc(cots: list[Any | core.Zero]) -> Any:
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.core.primal_s.zeroof("")
+        # >>> z = af.core.Zero(af.core.primal_s.map(af.core.avalof("")))
         # >>> af.pullback(ir).call(("a",), (z, z))
         # (('a', 'a'), (Zero(StrAVal()),))
         first_zero, *rest_zero = cots
-        assert all(core.primal_s.avalof(c) == core.primal_s.avalof(first_zero) for c in rest_zero)
+        assert all(core.avalof(c) == core.avalof(first_zero) for c in rest_zero)
         return first_zero
     if len(non_zero) == 1:
         # NOTE(asem): exactly one output path into the same input is live.
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.core.primal_s.zeroof("")
+        # >>> z = af.core.Zero(af.core.primal_s.map(af.core.avalof("")))
         # >>> af.pullback(ir).call(("a",), ("df", z))
         # (('a', 'a'), ('df',))
         return non_zero[0]
@@ -355,13 +355,13 @@ def cot_acc(cots: list[Any | core.Zero]) -> Any:
 
 
 def impl_cot_acc(cots: list[Any], /) -> Any:
-    aval = core.primal_s.avalof(cots[0])
+    aval = core.avalof(cots[0])
     return aval.accumulate(cots)
 
 
 def abstract_cot_acc(cots: list[core.EvalType], /) -> core.AVal:
     first = cots[0]
-    return first if isinstance(first, core.AVal) else core.primal_s.avalof(first)
+    return first if isinstance(first, core.AVal) else core.avalof(first)
 
 
 def pushforward_cot_acc(in_tree: TreePair, /) -> TreePair:
@@ -465,9 +465,9 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
 
     def read_c(atom) -> Any:
         if not core.is_var(atom):
-            return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.Zero(core.cotangent_s.map(core.avalof(atom)))
         if not (cs := c_env[atom]):
-            return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.Zero(core.cotangent_s.map(core.avalof(atom)))
         return cot_acc(cs)
 
     utils.tree.map(write_c, ir.out_tree, c_out)
@@ -542,8 +542,8 @@ def pullback(ir: core.IR, /) -> core.IR:
 
     def make_c(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.cotangent_s.avalof(atom.aval), source=atom)
-        return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.Var.fresh(aval=core.cotangent_s.map(atom.aval), source=atom)
+        return core.Zero(core.cotangent_s.map(core.avalof(atom)))
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
     c_out_ir = utils.tree.map(make_c, ir.out_tree)
@@ -624,8 +624,8 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 def abstract_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     def cotangent_aval(atom):
         if core.is_var(atom):
-            return core.cotangent_s.avalof(atom.aval)
-        return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.cotangent_s.map(atom.aval)
+        return core.Zero(core.cotangent_s.map(core.avalof(atom)))
 
     p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
     c_in = utils.tree.map(cotangent_aval, ir.in_tree)

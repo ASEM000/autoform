@@ -2,7 +2,7 @@
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.Space
-    :members: avalof, zeroof, set
+    :members: map, set
 
 .. autodata:: autoform.extend.primal_s
 .. autodata:: autoform.extend.tangent_s

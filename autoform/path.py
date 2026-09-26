@@ -56,7 +56,7 @@ def impl_factor(weight: float, /, *, name: Hashable | None = None) -> None:
 
 def abstract_factor(weight, /, *, name: Hashable | None = None) -> None:
     del name
-    number_type = (int, float, type(core.primal_s.avalof(0)), type(core.primal_s.avalof(0.0)))
+    number_type = (int, float, type(core.avalof(0)), type(core.avalof(0.0)))
     assert type(weight) in number_type, f"Expected number: {weight!r}"
     return ()
 
@@ -75,7 +75,7 @@ def pullback_fwd_factor(weight, /, *, name: Hashable | None = None):
 def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
     del name
     weight, _ = in_tree
-    return core.cotangent_s.zeroof(core.primal_s.avalof(weight))
+    return core.Zero(core.cotangent_s.map(core.avalof(weight)))
 
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):
@@ -163,7 +163,7 @@ def weight(ir: core.IR, /) -> core.IR:
     in_tree = ir.in_tree
     out_tree = (
         utils.tree.map(make_out, ir.out_tree),
-        core.Var.fresh(aval=core.primal_s.avalof(0.0)),
+        core.Var.fresh(aval=core.avalof(0.0)),
     )
     eqn = core.Eqn(weight_call_p, in_tree, out_tree, dict(ir=ir))
     return core.IR([eqn], in_tree, out_tree)
@@ -187,7 +187,7 @@ async def aimpl_weight_call(in_tree, /, *, ir: core.IR):
 
 def abstract_weight_call(in_tree, /, *, ir: core.IR):
     del in_tree
-    return utils.tree.map(core.aval_if_var, ir.out_tree), core.primal_s.avalof(0.0)
+    return utils.tree.map(core.aval_if_var, ir.out_tree), core.avalof(0.0)
 
 
 def unsupported_weight_call_transform(transform: str) -> None:

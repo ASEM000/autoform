@@ -81,7 +81,7 @@ reverse-mode AD, and batching.
 
 ```python
 def array_aval(value):
-    return value if isinstance(value, ArrayAVal) else afe.primal_s.avalof(value)
+    return value if isinstance(value, ArrayAVal) else afe.avalof(value)
 
 
 def result_aval(x, y, op):

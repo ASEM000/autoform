@@ -62,8 +62,9 @@ class StrAVal(core.AVal):
         return "".join(cotangents)
 
 
+core.aval_types[str] = lambda _: StrAVal()
 core.trace_types.add(str)
-core.primal_s.set(str, lambda _: StrAVal())
+core.primal_s.set(StrAVal, lambda aval: aval)
 core.tangent_s.set(StrAVal, lambda aval: aval)
 core.cotangent_s.set(StrAVal, lambda aval: aval)
 
@@ -179,13 +180,13 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 def abstract_match(in_tree: Tree, /) -> core.EvalType:
     assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return core.primal_s.avalof(False)
+    return core.avalof(False)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, core.tangent_s.zeroof(core.primal_s.avalof(False))
+    return out_primal, core.Zero(core.tangent_s.map(core.avalof(False)))
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -198,7 +199,7 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     residuals, out_cotangent = in_tree
     del out_cotangent

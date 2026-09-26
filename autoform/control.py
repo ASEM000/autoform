@@ -75,7 +75,7 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
     def make_t(x):
-        return core.tangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.tangent_s.map(core.avalof(x)))
 
     primal, tangent = in_tree
     zero_t = utils.tree.map(make_t, primal)
@@ -91,7 +91,7 @@ def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     residuals, out_cotangent = in_tree
     del out_cotangent
@@ -159,8 +159,8 @@ def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
     key0 = next(iter(branches))
     assert core.is_traceable(key0)
     assert all(type(k) is type(key0) for k in branches)
-    key_aval = core.primal_s.avalof(key0)
-    assert all(core.primal_s.avalof(k) == key_aval for k in branches)
+    key_aval = core.avalof(key0)
+    assert all(core.avalof(k) == key_aval for k in branches)
     branch0 = branches[key0]
     assert all(analysis.is_same_stucture(branch0, branch) for branch in branches.values())
     return switch_p.bind((key, args), branches=branches)
@@ -179,8 +179,8 @@ async def aimpl_switch(in_tree, /, *, branches: Branches):
 def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     key, _ = in_tree
     key0 = next(iter(branches))
-    key_aval = key if isinstance(key, core.AVal) else core.primal_s.avalof(key)
-    assert key_aval == core.primal_s.avalof(key0)
+    key_aval = key if isinstance(key, core.AVal) else core.avalof(key)
+    assert key_aval == core.avalof(key0)
     branch0 = branches[key0]
     return utils.tree.map(core.aval_if_var, branch0.out_tree)
 
@@ -224,7 +224,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = pb_ir.call(operands, out_cotangent)
-    return (core.cotangent_s.zeroof(core.primal_s.avalof(key)), c_operands)
+    return (core.Zero(core.cotangent_s.map(core.avalof(key))), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
@@ -234,7 +234,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = await pb_ir.acall(operands, out_cotangent)
-    return (core.cotangent_s.zeroof(core.primal_s.avalof(key)), c_operands)
+    return (core.Zero(core.cotangent_s.map(core.avalof(key))), c_operands)
 
 
 def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
@@ -425,7 +425,7 @@ def abstract_while_loop(
             # >>> ir = af.trace(program)()
             # >>> ir.call()  # "hello"
             # in here same_state normalizes hello -> StrAval
-            x = core.primal_s.avalof(x)
+            x = core.avalof(x)
         return type(x) is type(y) and x == y
 
     assert utils.tree.all(utils.tree.map(same_state, in_tree, out_tree)), (
@@ -878,7 +878,7 @@ def pullback_bwd_fixpoint(
     import autoform.ad as ad
 
     def make_c(x):
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     del max_iters, equiv_ir
     residuals, g = in_tree
@@ -945,7 +945,7 @@ async def apull_bwd_fixpoint(
     import autoform.ad as ad
 
     def make_c(x):
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     del max_iters, equiv_ir
     residuals, g = in_tree

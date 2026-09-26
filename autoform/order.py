@@ -343,7 +343,7 @@ def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     (_, deps), out_cotangent = in_tree
     return out_cotangent, utils.tree.map(make_c, deps)

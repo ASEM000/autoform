@@ -70,8 +70,9 @@ class IntAVal(core.AVal):
         return hash(type(self))
 
 
+core.aval_types[int] = lambda _: IntAVal()
 core.trace_types.add(int)
-core.primal_s.set(int, lambda _: IntAVal())
+core.primal_s.set(IntAVal, lambda aval: aval)
 
 
 class FloatAVal(core.AVal):
@@ -103,8 +104,9 @@ class FloatAVal(core.AVal):
         return sum(cotangents)
 
 
+core.aval_types[float] = lambda _: FloatAVal()
 core.trace_types.add(float)
-core.primal_s.set(float, lambda _: FloatAVal())
+core.primal_s.set(FloatAVal, lambda aval: aval)
 core.tangent_s.set(FloatAVal, lambda aval: aval)
 core.cotangent_s.set(FloatAVal, lambda aval: aval)
 
@@ -132,8 +134,9 @@ class BoolAVal(core.AVal):
         return hash(type(self))
 
 
+core.aval_types[bool] = lambda _: BoolAVal()
 core.trace_types.add(bool)
-core.primal_s.set(bool, lambda _: BoolAVal())
+core.primal_s.set(BoolAVal, lambda aval: aval)
 core.tangent_s.set(BoolAVal, lambda aval: aval)
 core.cotangent_s.set(BoolAVal, lambda aval: aval)
 
@@ -457,7 +460,7 @@ def abstract_compare(in_tree: Tree, /) -> BoolAVal:
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     primals, _ = in_tree
-    return prim.bind(primals), core.tangent_s.zeroof(BoolAVal())
+    return prim.bind(primals), core.Zero(core.tangent_s.map(BoolAVal()))
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -468,7 +471,7 @@ def pullback_bwd_compare(in_tree: Tree, /) -> Tree:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
     primals, _ = in_tree
     return utils.tree.map(make_c, primals)

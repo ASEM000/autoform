@@ -128,9 +128,9 @@ class TestFixpointPullback:
                 af.string.concat,
                 ("s", "c"),
                 {"max_iters": 2},
-                af.core.primal_s.zeroof("g"),
+                af.core.Zero(af.core.primal_s.map(af.core.avalof("g"))),
                 "scc",
-                af.core.primal_s.zeroof("c"),
+                af.core.Zero(af.core.primal_s.map(af.core.avalof("c"))),
                 id="zero-cotangent",
             ),
         ],
@@ -556,8 +556,8 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
+    af.core.aval_types[Key] = lambda _: af.string.StrAVal()
     af.core.trace_types.add(Key)
-    af.core.primal_s.set(Key, lambda _: af.string.StrAVal())
     left = af.trace(lambda x: af.string.concat("L", x))("X")
     right = af.trace(lambda x: af.string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))
@@ -695,7 +695,13 @@ class TestSwitch:
             pytest.param(
                 af.pullback,
                 ["grad1", "grad2"],
-                ([af.core.primal_s.zeroof("a"), af.core.primal_s.zeroof("a")], ["grad1", "grad2"]),
+                (
+                    [
+                        af.core.Zero(af.core.primal_s.map(af.core.avalof("a"))),
+                        af.core.Zero(af.core.primal_s.map(af.core.avalof("a"))),
+                    ],
+                    ["grad1", "grad2"],
+                ),
                 id="pull",
             ),
         ],

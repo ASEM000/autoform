@@ -43,6 +43,7 @@ IntAVal = numeric.IntAVal
 FloatAVal = numeric.FloatAVal
 BoolAVal = numeric.BoolAVal
 Space = core.Space
+avalof = core.avalof
 primal_s = core.primal_s
 tangent_s = core.tangent_s
 cotangent_s = core.cotangent_s
@@ -121,6 +122,7 @@ __all__ = [
     "FloatAVal",
     "BoolAVal",
     "Space",
+    "avalof",
     "primal_s",
     "tangent_s",
     "cotangent_s",
@@ -212,8 +214,8 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ... def token_aval(value):
         ...     return TokenAVal()
     """
+    core.aval_types[type] = aval_rule
     core.trace_types.add(type)
-    core.primal_s.set(type, aval_rule)
     return aval_rule
 
 

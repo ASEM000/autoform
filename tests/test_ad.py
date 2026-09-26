@@ -59,8 +59,10 @@ def test_wrapper_uses_derivative_space(transform, space, change):
 
     class ChangeAVal(af.core.AVal): ...
 
-    af.core.primal_s.set(Text, lambda _: TextAVal())
-    af.core.primal_s.set(Change, lambda _: ChangeAVal())
+    af.core.aval_types[Text] = lambda _: TextAVal()
+    af.core.trace_types.add(Text)
+    af.core.aval_types[Change] = lambda _: ChangeAVal()
+    af.core.trace_types.add(Change)
     space.set(TextAVal, lambda _: ChangeAVal())
     space.set(ChangeAVal, lambda aval: aval)
     aval = TextAVal()
@@ -73,7 +75,7 @@ def test_wrapper_uses_derivative_space(transform, space, change):
 
     text, delta = Text("hello"), Change(change)
     assert ir.call((text,), (delta,)) == ((text,), (delta,))
-    assert isinstance(space.zeroof(af.core.primal_s.avalof(text)).aval, ChangeAVal)
+    assert isinstance(af.core.Zero(space.map(af.core.avalof(text))).aval, ChangeAVal)
     nested_derivatives = transform(ir).in_tree[1]
     assert all(isinstance(v.aval, ChangeAVal) for v in af.utils.tree.leaves(nested_derivatives))
 
@@ -85,9 +87,9 @@ class TestCotangentHelpers:
         assert z.aval == af.string.StrAVal()
         assert z == af.core.Zero(af.string.StrAVal())
         assert z != af.core.Zero(af.numeric.BoolAVal())
-        assert af.core.primal_s.zeroof(z) == z
+        assert af.core.Zero(af.core.primal_s.map(af.core.avalof(z))) == z
         assert af.core.materialize_zeros(z) == ""
-        assert af.core.primal_s.avalof(z) == af.string.StrAVal()
+        assert af.core.avalof(z) == af.string.StrAVal()
         assert not af.core.is_traceable(z)
 
     def test_zero_requires_aval(self):
@@ -179,7 +181,7 @@ class TestCotangentHelpers:
     def test_cot_acc_unregistered_leaf_raises(self):
         class Blob: ...
 
-        with pytest.raises(TypeError, match="No primal aval rule registered"):
+        with pytest.raises(TypeError, match="No aval rule registered"):
             af.ad.cot_acc([Blob(), Blob()])
 
     def test_cot_acc_uses_aval_method(self):
@@ -191,7 +193,8 @@ class TestCotangentHelpers:
             def accumulate(self, cotangents):
                 return Text("|".join(c.value for c in cotangents))
 
-        af.core.primal_s.set(Text, lambda _: TextAVal())
+        af.core.aval_types[Text] = lambda _: TextAVal()
+        af.core.trace_types.add(Text)
         result = af.ad.cot_acc([Text("a"), Text("b")])
         assert isinstance(result, Text)
         assert result.value == "a|b"
@@ -217,8 +220,10 @@ class TestCotangentHelpers:
 
         class DerivedFeedbackAVal(TextFeedbackAVal): ...
 
-        af.core.primal_s.set(Text, lambda _: TextAVal())
-        af.core.primal_s.set(TextFeedback, lambda _: DerivedFeedbackAVal())
+        af.core.aval_types[Text] = lambda _: TextAVal()
+        af.core.trace_types.add(Text)
+        af.core.aval_types[TextFeedback] = lambda _: DerivedFeedbackAVal()
+        af.core.trace_types.add(TextFeedback)
         af.core.cotangent_s.set(TextAVal, lambda _: DerivedFeedbackAVal())
         var = af.core.Var(aval=TextAVal())
         ir = af.core.IR([], (var,), (var, var))
@@ -229,7 +234,7 @@ class TestCotangentHelpers:
         assert p_out == (text, text)
         assert isinstance(c_in[0], TextFeedback)
         assert c_in[0].value == "left | right"
-        zero = af.core.cotangent_s.zeroof(af.core.primal_s.avalof(text))
+        zero = af.core.Zero(af.core.cotangent_s.map(af.core.avalof(text)))
         assert af.core.materialize_zeros(zero).value == ""
 
 
@@ -268,8 +273,18 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
 @pytest.mark.parametrize(
     "transform, feedback, expected",
     [
-        pytest.param(af.pushforward, (af.core.primal_s.zeroof("Q"), "dx"), "dx", id="pushforward"),
-        pytest.param(af.pullback, "g", (af.core.primal_s.zeroof("Q"), "g"), id="pullback"),
+        pytest.param(
+            af.pushforward,
+            (af.core.Zero(af.core.primal_s.map(af.core.avalof("Q"))), "dx"),
+            "dx",
+            id="pushforward",
+        ),
+        pytest.param(
+            af.pullback,
+            "g",
+            (af.core.Zero(af.core.primal_s.map(af.core.avalof("Q"))), "g"),
+            id="pullback",
+        ),
     ],
 )
 def test_static_input_literal_is_not_boxed(executor, transform, feedback, expected):

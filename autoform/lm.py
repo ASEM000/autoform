@@ -233,7 +233,7 @@ async def aimpl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
 
 def abstract_complete(in_tree: Tree, /, *, roles: Roles) -> core.EvalType:
     contents, model = in_tree
-    aval = core.primal_s.avalof("")
+    aval = core.avalof("")
     assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return aval
@@ -284,7 +284,7 @@ def pullback_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
         grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 
@@ -299,7 +299,7 @@ async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
         return await grad_out
 
     grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 
@@ -675,23 +675,23 @@ async def aimpl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
 
 
 def string_schema_abstract(_: schemas.Str) -> core.AVal:
-    return core.primal_s.avalof("")
+    return core.avalof("")
 
 
 def integer_schema_abstract(_: schemas.Int) -> core.AVal:
-    return core.primal_s.avalof(0)
+    return core.avalof(0)
 
 
 def number_schema_abstract(_: schemas.Float) -> core.AVal:
-    return core.primal_s.avalof(0.0)
+    return core.avalof(0.0)
 
 
 def boolean_schema_abstract(_: schemas.Bool) -> core.AVal:
-    return core.primal_s.avalof(False)
+    return core.avalof(False)
 
 
 def enum_schema_abstract(s: schemas.Enum) -> core.AVal:
-    return core.primal_s.avalof(s.values[0])
+    return core.avalof(s.values[0])
 
 
 def docd_schema_abstract(s: schemas.Docd[Any]) -> Tree:
@@ -720,7 +720,7 @@ def schema_abstract_tree(schema: Any) -> Tree:
 
 def abstract_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     contents, model = in_tree
-    aval = core.primal_s.avalof("")
+    aval = core.avalof("")
     assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
@@ -791,7 +791,7 @@ def pullback_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tre
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 
@@ -806,7 +806,7 @@ async def apull_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> 
         return await grad_out
 
     grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = core.Zero(core.cotangent_s.map(core.avalof(model)))
     return grads, model_cotangent
 
 

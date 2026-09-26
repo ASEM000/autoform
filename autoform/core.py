@@ -38,6 +38,8 @@ __all__ = [
     "materialize_zeros",
     "Val",
     "trace_types",
+    "aval_types",
+    "avalof",
     "is_traceable",
     # spaces
     "Space",
@@ -168,32 +170,30 @@ class Space:
     def __init__(self, name: str, /):
         assert isinstance(name, str), f"Expected str, got {name!r}"
         self.name = name
-        self.rules: dict[type, Callable[[Any], AVal]] = {}
+        self.rules: dict[type[AVal], Callable[[AVal], AVal]] = {}
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
-    def set[R: Callable[[Any], AVal]](
-        self, value_type: type, rule: R, /, *, replace: bool = False
+    def set[R: Callable[[AVal], AVal]](
+        self, value_type: type[AVal], rule: R, /, *, replace: bool = False
     ) -> R:
         assert isinstance(value_type, type), f"Expected type, got {value_type!r}"
+        assert issubclass(value_type, AVal), f"Expected AVal type, got {value_type!r}"
         assert callable(rule), f"Expected callable, got {rule!r}"
         assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
         assert replace or value_type not in self.rules, f"Rule for {value_type} already defined"
         self.rules[value_type] = rule
         return rule
 
-    def avalof(self, value, /) -> AVal:
+    def map(self, value: AVal, /) -> AVal:
         """Return the abstract value of ``value`` in this space."""
+        assert isinstance(value, AVal), f"Expected AVal, got {value!r}"
         if (rule := self.rules.get(type(value))) is None:
             raise TypeError(f"No {self.name} aval rule registered for {value!r}")
         aval = rule(value)
         assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
         return aval
-
-    def zeroof(self, value, /) -> Zero:
-        """Return a symbolic zero carrying ``self.avalof(value)``."""
-        return Zero(self.avalof(value))
 
 
 primal_s = Space("primal")
@@ -201,9 +201,17 @@ tangent_s = Space("tangent")
 cotangent_s = Space("cotangent")
 
 trace_types: set[type] = set()
+aval_types: dict[type, Callable[[Any], AVal]] = {}
+
+aval_types[Zero] = lambda value: value.aval
 
 
-primal_s.set(Zero, lambda z: z.aval)
+def avalof(value, /) -> AVal:
+    if (rule := aval_types.get(type(value))) is None:
+        raise TypeError(f"No aval rule registered for {value!r}")
+    aval = rule(value)
+    assert isinstance(aval, AVal), f"Aval rule returned {aval!r}"
+    return aval
 
 
 def is_traceable(x) -> TypeGuard[Val]:
@@ -270,7 +278,8 @@ def aval_if_var(x, /):
     return x.aval if is_var(x) else x
 
 
-primal_s.set(Var, lambda var: var.aval)
+aval_types[Var] = lambda value: value.aval
+
 
 # ==================================================================================================
 # PRIMITIVE
@@ -949,7 +958,7 @@ def trace[*A, R](
     def to_var(x, /) -> Var:
         assert not is_var(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return Var.fresh(aval=primal_s.avalof(x))
+        return Var.fresh(aval=avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
