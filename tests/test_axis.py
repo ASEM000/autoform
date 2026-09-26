@@ -23,7 +23,7 @@ def greet(name, greeting):
     return af.string.format("{greeting}: {name}", greeting=greeting, name=name)
 
 
-class TaggedAVal(af.core.AVal):
+class TaggedAVal(af.abstract.AVal):
     def __init__(self, tag):
         self.tag = tag
 
@@ -91,13 +91,13 @@ class TestBatchIRStructure:
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(af.abstract.tangent_s, id="tangent"),
+            pytest.param(af.abstract.cotangent_s, id="cotangent"),
         ],
     )
     def test_batch_aval_ad_space(self, space):
         aval = BatchAVal(af.string.StrAVal())
-        assert space.avalof(aval) == BatchAVal(af.string.StrAVal())
+        assert space.map(aval) == BatchAVal(af.string.StrAVal())
 
     def test_mapped_wrapper_aval(self):
         aval = TaggedAVal("input")
@@ -241,11 +241,10 @@ def test_numeric_program_with_broadcast_input():
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
     primitive = af.core.Prim("batch_output")
-    af.core.abstract_rules.set(
-        primitive,
-        lambda _: af.utils.tree.map(af.core.primal_s.avalof, sample_output),
+    af.core.abstract_rules[primitive] = lambda _: af.utils.tree.map(
+        af.abstract.avalof, sample_output
     )
-    af.core.batch_rules.set(primitive, batch_rule)
+    af.core.batch_rules[primitive] = batch_rule
     return af.batch(af.trace(primitive.bind)(traced))
 
 

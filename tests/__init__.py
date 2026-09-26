@@ -80,6 +80,12 @@ class CountingInterpreter(af.core.Interpreter):
         self.parent = af.core.active_interpreter.get()
         self.calls = 0
 
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
     def interpret(self, prim, in_tree, /, **params):
         self.calls += 1
         return self.parent.interpret(prim, in_tree, **params)

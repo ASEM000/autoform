@@ -17,7 +17,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.core import trace
+from autoform.tracer import trace
 from tests import aexecute, always_true, execute, fixpoint_program, switch_program, while_program
 
 tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
@@ -128,9 +128,9 @@ class TestFixpointPullback:
                 af.string.concat,
                 ("s", "c"),
                 {"max_iters": 2},
-                af.core.primal_s.zeroof("g"),
+                af.abstract.Zero(af.abstract.primal_s.map(af.abstract.avalof("g"))),
                 "scc",
-                af.core.primal_s.zeroof("c"),
+                af.abstract.Zero(af.abstract.primal_s.map(af.abstract.avalof("c"))),
                 id="zero-cotangent",
             ),
         ],
@@ -139,7 +139,7 @@ class TestFixpointPullback:
         ir = af.pullback(fixpoint_ir(step, args, **options))
         out, (c_init, actual_theta) = executor(ir, args, cotangent)
         assert out == expected
-        assert isinstance(c_init, af.core.Zero)
+        assert isinstance(c_init, af.abstract.Zero)
         assert actual_theta == c_theta
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -156,7 +156,7 @@ class TestFixpointPullback:
         ir = af.trace(program)("s")
         out, (c_init,) = executor(af.pullback(ir), ("s",), "g")
         assert out == "s!!"
-        assert isinstance(c_init, af.core.Zero)
+        assert isinstance(c_init, af.abstract.Zero)
 
 
 class TestFixpointBatch:
@@ -173,7 +173,7 @@ class TestFixpointBatch:
         out, (c_init, c_theta) = composed.call((["a", "b"], "done"), ["g1", "g2"])
 
         assert out == ["done", "done"]
-        assert all(isinstance(c, af.core.Zero) for c in c_init)
+        assert all(isinstance(c, af.abstract.Zero) for c in c_init)
         assert c_theta == ["g1", "g2"]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -332,7 +332,7 @@ class TestStopGradient:
         ir = af.trace(stop_gradient)(*primals)
         primal, derivative = transform(ir).call(primals, feedback)
         assert primal == expected
-        assert all(isinstance(leaf, af.core.Zero) for leaf in tree.leaves(derivative))
+        assert all(isinstance(leaf, af.abstract.Zero) for leaf in tree.leaves(derivative))
 
     def test_batch(self):
         ir = af.trace(stop_gradient)("a")
@@ -346,7 +346,7 @@ class TestStopGradient:
         ir = af.trace(func)("a", "b")
         pb_ir = af.pullback(ir)
         _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
-        assert isinstance(cotangent_x, af.core.Zero)
+        assert isinstance(cotangent_x, af.abstract.Zero)
         assert cotangent_y == "grad"
 
 
@@ -556,8 +556,8 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
-    af.core.trace_types.add(Key)
-    af.core.primal_s.set(Key, lambda _: af.string.StrAVal())
+    af.abstract.aval_types[Key] = lambda _: af.string.StrAVal()
+    af.tracer.trace_types.add(Key)
     left = af.trace(lambda x: af.string.concat("L", x))("X")
     right = af.trace(lambda x: af.string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))
@@ -653,7 +653,7 @@ class TestSwitch:
         ir = af.pullback(numbered_switch)
         args = ((key, "hello"), "grad")
         _, (c_key, c_x) = executor(ir, *args)
-        assert isinstance(c_key, af.core.Zero)
+        assert isinstance(c_key, af.abstract.Zero)
         assert c_x == "grad"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -695,7 +695,13 @@ class TestSwitch:
             pytest.param(
                 af.pullback,
                 ["grad1", "grad2"],
-                ([af.core.primal_s.zeroof("a"), af.core.primal_s.zeroof("a")], ["grad1", "grad2"]),
+                (
+                    [
+                        af.abstract.Zero(af.abstract.primal_s.map(af.abstract.avalof("a"))),
+                        af.abstract.Zero(af.abstract.primal_s.map(af.abstract.avalof("a"))),
+                    ],
+                    ["grad1", "grad2"],
+                ),
                 id="pull",
             ),
         ],

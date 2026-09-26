@@ -45,7 +45,7 @@ class Blob:
         self.size = size
 
 
-class BlobAVal(af.core.AVal):
+class BlobAVal(af.abstract.AVal):
     __slots__ = ["size"]
 
     def __init__(self, size: int):
@@ -60,42 +60,43 @@ class BlobAVal(af.core.AVal):
 
 class TestSpace:
     def test_registration_and_replacement(self):
-        space = af.core.Space("blob")
+        space = af.abstract.Space("blob")
         rule = lambda value: BlobAVal(value.size)
         replacement = lambda value: BlobAVal(value.size + 1)
-        space.set(Blob, rule)
-        assert space.avalof(Blob(3)) == BlobAVal(3)
+        space.set(BlobAVal, rule)
+        assert space.map(BlobAVal(3)) == BlobAVal(3)
         with pytest.raises(AssertionError, match="already defined"):
-            space.set(Blob, replacement)
-        space.set(Blob, replacement, replace=True)
-        assert space.avalof(Blob(3)) == BlobAVal(4)
-        zero = space.zeroof(Blob(3))
-        assert isinstance(zero, af.core.Zero)
+            space.set(BlobAVal, replacement)
+        space.set(BlobAVal, replacement, replace=True)
+        assert space.map(BlobAVal(3)) == BlobAVal(4)
+        zero = af.abstract.Zero(space.map(BlobAVal(3)))
+        assert isinstance(zero, af.abstract.Zero)
         assert zero.aval == BlobAVal(4)
         with pytest.raises(AssertionError, match="No concrete zero defined"):
-            af.core.materialize_zeros(zero)
+            af.abstract.materialize_zeros(zero)
 
     @pytest.mark.parametrize(
         "value_type, rule, replace, message",
         [
             pytest.param(Blob(3), lambda x: x, False, "Expected type", id="type"),
-            pytest.param(Blob, BlobAVal(3), False, "Expected callable", id="callable"),
-            pytest.param(Blob, lambda x: x, 1, "Expected bool for replace", id="replace"),
+            pytest.param(BlobAVal, BlobAVal(3), False, "Expected callable", id="callable"),
+            pytest.param(BlobAVal, lambda x: x, 1, "Expected bool for replace", id="replace"),
         ],
     )
     def test_invalid_registration(self, value_type, rule, replace, message):
         with pytest.raises(AssertionError, match=message):
-            af.core.Space("blob").set(value_type, rule, replace=replace)
+            af.abstract.Space("blob").set(value_type, rule, replace=replace)
 
     def test_missing_rule(self):
         with pytest.raises(TypeError, match="No empty aval rule registered"):
-            af.core.Space("empty").avalof(Blob(3))
+            af.abstract.Space("empty").map(BlobAVal(3))
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(af.abstract.primal_s, id="primal"),
+            pytest.param(af.abstract.tangent_s, id="tangent"),
+            pytest.param(af.abstract.cotangent_s, id="cotangent"),
         ],
     )
     @pytest.mark.parametrize(
@@ -107,46 +108,46 @@ class TestSpace:
         ],
     )
     def test_builtin_ad_spaces_preserve_aval(self, space, aval):
-        assert space.avalof(aval) is aval
+        assert space.map(aval) is aval
 
     def test_custom_ad_spaces(self):
-        class TextAVal(af.core.AVal): ...
+        class TextAVal(af.abstract.AVal): ...
 
-        class TextEditAVal(af.core.AVal): ...
+        class TextEditAVal(af.abstract.AVal): ...
 
-        class TextFeedbackAVal(af.core.AVal): ...
+        class TextFeedbackAVal(af.abstract.AVal): ...
 
-        tangent_s = af.core.Space("tangent")
-        cotangent_s = af.core.Space("cotangent")
+        tangent_s = af.abstract.Space("tangent")
+        cotangent_s = af.abstract.Space("cotangent")
         tangent_s.set(TextAVal, lambda _: TextEditAVal())
         tangent_s.set(TextEditAVal, lambda aval: aval)
         cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
         cotangent_s.set(TextFeedbackAVal, lambda aval: aval)
 
-        tangent = tangent_s.avalof(TextAVal())
-        cotangent = cotangent_s.avalof(TextAVal())
+        tangent = tangent_s.map(TextAVal())
+        cotangent = cotangent_s.map(TextAVal())
 
         assert isinstance(tangent, TextEditAVal)
         assert isinstance(cotangent, TextFeedbackAVal)
-        assert tangent_s.avalof(tangent) is tangent
-        assert cotangent_s.avalof(cotangent) is cotangent
-        assert isinstance(tangent_s.zeroof(TextAVal()).aval, TextEditAVal)
-        assert isinstance(cotangent_s.zeroof(TextAVal()).aval, TextFeedbackAVal)
+        assert tangent_s.map(tangent) is tangent
+        assert cotangent_s.map(cotangent) is cotangent
+        assert isinstance(af.abstract.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
+        assert isinstance(af.abstract.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(af.abstract.tangent_s, id="tangent"),
+            pytest.param(af.abstract.cotangent_s, id="cotangent"),
         ],
     )
     def test_missing_ad_space_rule(self, space):
-        class UnknownAVal(af.core.AVal): ...
+        class UnknownAVal(af.abstract.AVal): ...
 
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
-            space.avalof(UnknownAVal())
+            space.map(UnknownAVal())
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
-            space.zeroof(UnknownAVal())
+            af.abstract.Zero(space.map(UnknownAVal()))
 
 
 class TestBuildIR:
@@ -192,8 +193,8 @@ class TestBuildIR:
         def program(x):
             return x
 
-        af.core.primal_s.set(TraceBlob, lambda x: BlobAVal(x.size))
-        af.core.trace_types.add(TraceBlob)
+        af.abstract.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
+        af.tracer.trace_types.add(TraceBlob)
 
         ir = af.trace(program)(TraceBlob(3))
 
@@ -383,8 +384,8 @@ class TestTags:
             return f"{','.join(names)}|{x}"
 
         probe_p = af.core.Prim("tag_probe")
-        af.core.impl_rules.set(probe_p, impl_probe)
-        af.core.abstract_rules.set(probe_p, abstract_probe)
+        af.core.impl_rules[probe_p] = impl_probe
+        af.core.abstract_rules[probe_p] = abstract_probe
 
         def program(x):
             with af.tag(Label("draft"), Label("cost")):
@@ -487,8 +488,8 @@ def test_nested_primitive_inputs():
         return f"{options['greeting']}, {name}{options['punctuation']}"
 
     primitive = af.core.Prim("greet")
-    af.core.impl_rules.set(primitive, impl)
-    af.core.abstract_rules.set(primitive, lambda inputs: af.string.StrAVal())
+    af.core.impl_rules[primitive] = impl
+    af.core.abstract_rules[primitive] = lambda inputs: af.string.StrAVal()
     greeting_ir = af.trace(
         lambda name: primitive.bind((name, dict(greeting="Hi", punctuation="?")))
     )("World")
@@ -574,10 +575,10 @@ def test_variable_and_literal_boundary():
     var = af.core.Var(aval=af.string.StrAVal())
     assert af.core.is_var(var)
     assert var.aval == af.string.StrAVal()
-    assert af.core.primal_s.avalof(var) is var.aval
-    assert not af.core.is_traceable(var)
+    assert af.abstract.avalof(var) is var.aval
+    assert not af.tracer.is_traceable(var)
     assert not af.core.is_var("hello")
-    box = af.core.TraceBox(owner=af.core.TraceInterpreter(), var=var)
+    box = af.tracer.TraceBox(owner=af.tracer.TraceInterpreter(), var=var)
     assert box.aval is var.aval
     assert {box: var}[box] is var
 
@@ -586,13 +587,14 @@ class TestBind:
     def test_bind_using(self):
         p = af.core.Prim("custom_bind")
 
-        @ft.partial(af.core.impl_rules.set, p)
         def impl(in_tree, *, multiplier):
             return in_tree * multiplier
 
-        @ft.partial(af.core.abstract_rules.set, p)
         def abstract_rule(in_tree, *, multiplier):
             return af.string.StrAVal()
+
+        af.core.impl_rules[p] = impl
+        af.core.abstract_rules[p] = abstract_rule
 
         def func(x):
             return p.bind(x, multiplier=3)
@@ -604,7 +606,7 @@ class TestBind:
 
 def test_interpreter_context_restores_default():
     assert isinstance(af.core.active_interpreter.get(), af.core.EvalInterpreter)
-    tracer = af.core.TraceInterpreter()
+    tracer = af.tracer.TraceInterpreter()
     with af.core.using_interpreter(tracer) as active:
         assert active is tracer
         af.string.format("Hello, {value}!", value=af.core.Var.fresh(aval=af.string.StrAVal()))
@@ -691,7 +693,7 @@ class TestFold:
             return dynamic
 
         param_probe_p = af.core.Prim("fold_param_probe")
-        af.core.impl_rules.set(param_probe_p, impl_param_probe)
+        af.core.impl_rules[param_probe_p] = impl_param_probe
 
         def program(x):
             with af.fold():
@@ -708,7 +710,7 @@ class TestFold:
             return captured["value"]
 
         output_probe_p = af.core.Prim("fold_output_probe")
-        af.core.impl_rules.set(output_probe_p, impl_output_probe)
+        af.core.impl_rules[output_probe_p] = impl_output_probe
 
         def program(x):
             captured["value"] = x
@@ -771,12 +773,12 @@ class TestFold:
             return af.string.StrAVal()
 
         async_probe_p = af.core.Prim("async_dynamic_fold_probe")
-        af.core.abstract_rules.set(async_probe_p, abstract_async_probe)
+        af.core.abstract_rules[async_probe_p] = abstract_async_probe
 
-        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
+        with af.core.using_interpreter(af.tracer.TraceInterpreter()) as tracer:
             result = asyncio.run(async_probe_p.abind("literal"))
 
-        assert isinstance(result, af.core.TraceBox)
+        assert isinstance(result, af.tracer.TraceBox)
         assert [eqn.prim.name for eqn in tracer.eqns] == ["async_dynamic_fold_probe"]
 
     def test_async_fold_trace_dispatch_evaluates_primitive(self):
@@ -784,9 +786,9 @@ class TestFold:
             return af.string.concat(in_tree, "!")
 
         async_probe_p = af.core.Prim("async_fold_probe")
-        af.core.impl_rules.aset(async_probe_p, aimpl_async_probe)
+        af.core.aimpl_rules[async_probe_p] = aimpl_async_probe
 
-        with af.core.using_interpreter(af.core.TraceInterpreter()) as tracer:
+        with af.core.using_interpreter(af.tracer.TraceInterpreter()) as tracer:
             with af.fold():
                 result = asyncio.run(async_probe_p.abind("literal"))
 

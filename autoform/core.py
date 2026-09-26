@@ -12,297 +12,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""IR data structures, primitives, interpreters, and IR building"""
+"""Program construction and execution, independent of tracing."""
 
 from __future__ import annotations
 
 import functools as ft
 import itertools as it
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator, Hashable, Iterator
+from collections.abc import Awaitable, Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
-from enum import Enum
 from operator import setitem
-from threading import RLock
-from typing import Any, ClassVar, Protocol, Self, TypeGuard, cast
+from typing import Any, ClassVar, Self, TypeGuard
 
+import autoform.abstract as abstract
 import autoform.utils as utils
 
 type Tree[T] = utils.Tree[T]
 
 __all__ = [
-    # base types
-    "AVal",
-    "Zero",
-    "materialize_zeros",
-    "Val",
-    "trace_types",
-    "is_traceable",
-    # spaces
-    "Space",
-    "primal_s",
-    "tangent_s",
-    "cotangent_s",
-    # ir vals
+    # rule registries
+    "impl_rules",
+    "aimpl_rules",
+    "abstract_rules",
+    "batch_rules",
+    "abatch_rules",
+    "push_rules",
+    "apush_rules",
+    "pull_fwd_rules",
+    "apull_fwd_rules",
+    "pull_bwd_rules",
+    "apull_bwd_rules",
+    # primitive dispatch
+    "Prim",
+    "active_tags",
+    "tag",
+    "Box",
+    "Interpreter",
+    "EvalInterpreter",
+    "active_interpreter",
+    "using_interpreter",
+    # IR construction and execution
     "Var",
     "is_var",
     "aval_if_var",
-    # primitive
-    "Prim",
-    # rule registries
-    "impl_rules",
-    "abstract_rules",
-    "batch_rules",
-    "push_rules",
-    "pull_fwd_rules",
-    "pull_bwd_rules",
-    "InterpreterRule",
-    "AsyncInterpreterRule",
-    "ImplRule",
-    "AImplRule",
-    "AbstractRule",
-    "AAbstractRule",
-    "PushforwardRule",
-    "APushforwardRule",
-    "PullbackFwdRule",
-    "APullbackFwdRule",
-    "PullbackBwdRule",
-    "APullbackBwdRule",
-    "BatchRule",
-    "ABatchRule",
-    # ir structures
     "Eqn",
     "IR",
-    # interpreters
-    "BaseInterpreter",
-    "BoxedInterpreter",
-    "Interpreter",
-    "EvalInterpreter",
-    "Dunder",
-    "TraceBox",
-    "TraceInterpreter",
-    "active_interpreter",
-    "using_interpreter",
-    "active_tags",
-    "tag",
-    # ir building and execution
-    "fold",
-    "trace",
     "check_static_inputs",
-    "walk",
 ]
 
 # ==================================================================================================
-# BASE TYPES
+# RULES
 # ==================================================================================================
 
 
-class AVal:
-    """Base class for abstract values used by traced programs.
-
-    Abstract values carry trace-time information about runtime values. Extension
-    domains subclass ``AVal`` to describe the information primitive abstract
-    rules need, such as shape, dtype, schema, or other static metadata.
-
-    Example:
-        >>> import autoform.extend as afe
-        >>> class ArrayAVal(afe.AVal):
-        ...     def __init__(self, shape, dtype):
-        ...         self.shape = shape
-        ...         self.dtype = dtype
-    """
-
-    __slots__ = []
-
-    def zero(self):
-        """Construct a concrete zero with this abstract value."""
-        assert False, f"No concrete zero defined for {self!r}"
-
-    def accumulate(self, cotangents: Tree, /):
-        """Combine nonzero cotangent contributions with this abstract value."""
-        assert False, f"No cotangent accumulation defined for {self!r}"
-
-
-class ScalarAVal(AVal):
-    __slots__ = []
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}()"
-
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other)
-
-    def __hash__(self) -> int:
-        return hash(type(self))
-
-
-class Zero[T: AVal]:
-    """Symbolic zero for an abstract value."""
-
-    __slots__ = ["aval"]
-
-    def __init__(self, aval: T, /):
-        assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
-        self.aval = aval
-
-    def __repr__(self):
-        return f"Zero({self.aval!r})"
-
-    def __eq__(self, other):
-        return isinstance(other, Zero) and self.aval == other.aval
-
-    def __hash__(self):
-        return hash((type(self), self.aval))
-
-
-def materialize_zeros(x: Tree, /) -> Tree:
-    """Replace each Zero leaf in a pytree with its concrete zero value.
-
-    ``materialize_zeros`` is useful inside transform rules before calling primitives
-    that expect real runtime values instead of symbolic zeros.
-
-    Args:
-        x: Pytree that may contain ``Zero`` leaves.
-
-    Returns:
-        A pytree with the same structure as ``x`` where each symbolic zero has
-        been replaced by the concrete zero returned by its AVal.
-
-    Raises:
-        AssertionError: If a ``Zero`` has a type with no concrete
-            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
-            path through a non-differentiable type.
-    """
-
-    def map_func(x):
-        if not isinstance(x, Zero):
-            return x
-        return x.aval.zero()
-
-    return utils.tree.map(map_func, x)
-
-
-type Val = str | int | float | bool
-
-# ==================================================================================================
-# SPACES
-# ==================================================================================================
-
-
-class Space:
-    __slots__ = ["name", "rules"]
-
-    def __init__(self, name: str, /):
-        assert isinstance(name, str), f"Expected str, got {name!r}"
-        self.name = name
-        self.rules: dict[type, Callable[[Any], AVal]] = {}
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.name!r})"
-
-    def set[R: Callable[[Any], AVal]](
-        self, value_type: type, rule: R, /, *, replace: bool = False
-    ) -> R:
-        assert isinstance(value_type, type), f"Expected type, got {value_type!r}"
-        assert callable(rule), f"Expected callable, got {rule!r}"
-        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-        assert replace or value_type not in self.rules, f"Rule for {value_type} already defined"
-        self.rules[value_type] = rule
-        return rule
-
-    def avalof(self, value, /) -> AVal:
-        """Return the abstract value of ``value`` in this space."""
-        if (rule := self.rules.get(type(value))) is None:
-            raise TypeError(f"No {self.name} aval rule registered for {value!r}")
-        aval = rule(value)
-        assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
-        return aval
-
-    def zeroof(self, value, /) -> Zero:
-        """Return a symbolic zero carrying ``self.avalof(value)``."""
-        return Zero(self.avalof(value))
-
-
-primal_s = Space("primal")
-tangent_s = Space("tangent")
-cotangent_s = Space("cotangent")
-
-trace_types: set[type] = set()
-
-
-primal_s.set(Zero, lambda z: z.aval)
-
-
-def is_traceable(x) -> TypeGuard[Val]:
-    return type(x) in trace_types
-
-
-def is_aval(x) -> TypeGuard[AVal]:
-    return isinstance(x, AVal)
-
-
-type EvalType = AVal | Val
-
-
-# ==================================================================================================
-# IR VARS
-# ==================================================================================================
-
-
-# NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
-# Concrete literals are kept as plain Python values in IR trees.
-class Var:
-    """Symbolic variable stored in IR trees.
-
-    ``Var`` leaves stand for runtime values inside traced programs. Each
-    variable carries an :class:`AVal` describing its abstract value, and an
-    optional source variable used by transforms that create rewritten IR.
-
-    Args:
-        aval: Abstract value for the runtime value represented by this variable.
-        source: Optional original variable this one was derived from.
-    """
-
-    __slots__ = ["id", "source", "aval"]
-    counter: ClassVar[it.count[int]] = it.count(0)
-    lock: ClassVar[RLock] = RLock()
-
-    def __init__(self, /, *, aval: AVal, source: Var | None = None):
-        self.id = next(self.counter)
-        assert is_var(source) or source is None
-        assert is_aval(aval)
-        self.source = source
-        self.aval = aval
-
-    @classmethod
-    def fresh(cls, *, aval: AVal, source: Var | None = None) -> Self:
-        with cls.lock:
-            return cls(source=source, aval=aval)
-
-    def __repr__(self) -> str:
-        source = f", source={self.source!r}" if self.source else ""
-        return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
-
-
-def is_var(x) -> TypeGuard[Var]:
-    """Return ``True`` if input is an :class:`Var`."""
-
-    return isinstance(x, Var)
-
-
-def aval_if_var(x, /):
-    """Return the aval for an IR variable, otherwise return input unchanged.
-
-    This is useful when constructing new IR trees from existing ones: concrete
-    literals stay concrete, while symbolic variables are replaced by the
-    abstract values needed to create fresh variables or abstract outputs.
-    """
-
-    return x.aval if is_var(x) else x
-
-
-primal_s.set(Var, lambda var: var.aval)
+type RuleMapping[T] = dict[Prim, Callable[..., T]]
+
+impl_rules: RuleMapping[Tree] = {}
+aimpl_rules: RuleMapping[Awaitable[Tree]] = {}
+batch_rules: RuleMapping[tuple[Tree, Tree[bool]]] = {}
+abatch_rules: RuleMapping[Awaitable[tuple[Tree, Tree[bool]]]] = {}
+push_rules: RuleMapping[tuple[Tree, Tree]] = {}
+apush_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
+pull_fwd_rules: RuleMapping[tuple[Tree, Tree]] = {}
+apull_fwd_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
+pull_bwd_rules: RuleMapping[Tree] = {}
+apull_bwd_rules: RuleMapping[Awaitable[Tree]] = {}
+abstract_rules: RuleMapping[Tree[Any]] = {}
 
 # ==================================================================================================
 # PRIMITIVE
@@ -378,6 +154,126 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
         yield tags
     finally:
         active_tags.reset(token)
+
+
+# ==================================================================================================
+# INTERPRETER
+# ==================================================================================================
+
+
+class Box:
+    __slots__ = ["owner"]
+
+    def __init__(self, owner):
+        self.owner = owner
+
+
+class Interpreter[T](ABC):
+    """Primitive dispatch and value boxing."""
+
+    __slots__ = []
+
+    @abstractmethod
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
+
+    @abstractmethod
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
+
+    @abstractmethod
+    def box(self, value, /) -> Tree[T]: ...
+
+    @abstractmethod
+    def unbox(self, value: Tree, /): ...
+
+
+@contextmanager
+def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
+    """Run primitive dispatch through an interpreter inside the context."""
+
+    token = active_interpreter.set(interpreter)
+    try:
+        yield interpreter
+    finally:
+        active_interpreter.reset(token)
+
+
+# ==================================================================================================
+# EVAL
+# ==================================================================================================
+
+
+class EvalInterpreter(Interpreter):
+    __slots__ = []
+
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        return impl_rules[prim](in_tree, **params)
+
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        return await aimpl_rules[prim](in_tree, **params)
+
+
+active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
+
+
+# ==================================================================================================
+# IR VARS
+# ==================================================================================================
+
+
+# NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
+# Concrete literals are kept as plain Python values in IR trees.
+class Var:
+    """Symbolic variable stored in IR trees.
+
+    ``Var`` leaves stand for runtime values inside traced programs. Each
+    variable carries an :class:`AVal` describing its abstract value, and an
+    optional source variable used by transforms that create rewritten IR.
+
+    Args:
+        aval: Abstract value for the runtime value represented by this variable.
+        source: Optional original variable this one was derived from.
+    """
+
+    __slots__ = ["id", "source", "aval"]
+    counter: ClassVar[it.count[int]] = it.count(0)
+
+    def __init__(self, /, *, aval: abstract.AVal, source: Var | None = None):
+        self.id = next(self.counter)
+        assert is_var(source) or source is None
+        assert isinstance(aval, abstract.AVal)
+        self.source = source
+        self.aval = aval
+
+    @classmethod
+    def fresh(cls, *, aval: abstract.AVal, source: Var | None = None) -> Self:
+        return cls(source=source, aval=aval)
+
+    def __repr__(self) -> str:
+        source = f", source={self.source!r}" if self.source else ""
+        return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
+
+
+def is_var(x) -> TypeGuard[Var]:
+    """Return ``True`` if input is an :class:`Var`."""
+
+    return isinstance(x, Var)
+
+
+def aval_if_var(x, /):
+    """Return the aval for an IR variable, otherwise return input unchanged.
+
+    This is useful when constructing new IR trees from existing ones: concrete
+    literals stay concrete, while symbolic variables are replaced by the
+    abstract values needed to create fresh variables or abstract outputs.
+    """
+
+    return x.aval if is_var(x) else x
 
 
 # ==================================================================================================
@@ -575,432 +471,6 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 
 # ==================================================================================================
-# INTERPRETER
-# ==================================================================================================
-
-
-class BaseInterpreter(ABC):
-    __slots__ = []
-
-    @abstractmethod
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
-
-    @abstractmethod
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
-
-
-class Interpreter(BaseInterpreter):
-    """Base class for runtime primitive interpreters.
-
-    Subclass ``Interpreter`` to build an execution-time extension context. A
-    custom interpreter usually stores the current :data:`active_interpreter` as
-    its parent, overrides ``interpret`` and ``ainterpret`` to handle new primitives.
-    """
-
-    __slots__ = []
-
-
-class BoxedInterpreter[T](BaseInterpreter):
-    __slots__ = []
-    # NOTE(asem): boxed interpreters own a transform-specific value wrapper.
-    # plain interpreters only override primitive dispatch but boxed interpreters
-    # also define how values are boxed before primitive evaluation and unboxed
-    # when rules need the underlying payload.
-
-    @abstractmethod
-    def box(self, value, /) -> Tree[T]: ...
-
-    @abstractmethod
-    def unbox(self, value: Tree, /): ...
-
-
-@contextmanager
-def using_interpreter[T: BaseInterpreter](interpreter: T) -> Generator[T, None, None]:
-    """Run primitive dispatch through an interpreter inside the context."""
-
-    token = active_interpreter.set(interpreter)
-    try:
-        yield interpreter
-    finally:
-        active_interpreter.reset(token)
-
-
-# ==================================================================================================
-# EVAL
-# ==================================================================================================
-
-
-class EvalInterpreter(Interpreter):
-    __slots__ = []
-
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return impl_rules.get(prim)(in_tree, **params)
-
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await impl_rules.aget(prim)(in_tree, **params)
-
-
-active_interpreter = ContextVar[BaseInterpreter]("active_interpreter", default=EvalInterpreter())
-
-
-# ==================================================================================================
-# TRACING
-# ==================================================================================================
-
-
-fold_flag: ContextVar[bool] = ContextVar("fold_mode", default=False)
-
-
-@contextmanager
-def fold() -> Generator[None, None, None]:
-    """Evaluate immediately within the context.
-
-    Inside ``af.trace(...)``, primitive calls normally build IR equations. A
-    ``fold`` block instead runs primitive implementations while tracing and
-    returns concrete values that can be embedded as literals in the surrounding
-    IR. If a primitive inside the block depends on a dynamic traced value, an
-    ``AssertionError`` is raised. Outside tracing, ``fold`` is a no-op.
-
-    Example:
-        >>> import autoform as af
-        >>> increment = af.trace(lambda value: value + 1)(1.0)
-        >>> def program(x):
-        ...     with af.fold():
-        ...         prefix = f"v{increment.call(1.0)}: "
-        ...     return prefix + x
-        >>> ir = af.trace(program)("seed")
-        >>> len(ir.eqns)
-        1
-        >>> ir.call("world")
-        'v2.0: world'
-
-    Fold is useful when a trace-time computation should decide ordinary Python
-    control flow. Autoform cannot stage Python branches whose conditions depend
-    on dynamic IR values; those conditions must be known while tracing. A folded
-    computation runs immediately, so its concrete result can safely choose the
-    branch that is traced into the IR.
-
-    Example:
-        >>> def program(x):
-        ...     with af.fold():
-        ...         route = increment.call(1.0)
-        ...     if route == 2:
-        ...         return "yes: " + x
-        ...     return "no: " + x
-        >>> ir = af.trace(program)("seed")
-        >>> ir.call("answer")
-        'yes: answer'
-    """
-    token = fold_flag.set(True)
-    try:
-        yield
-    finally:
-        fold_flag.reset(token)
-
-
-class Dunder(Enum):
-    NEG = "neg"
-    ADD = "add"
-    SUB = "sub"
-    MUL = "mul"
-    DIV = "div"
-    POW = "pow"
-    MATMUL = "matmul"
-    EQ = "eq"
-    NE = "ne"
-    LT = "lt"
-    LE = "le"
-    GT = "gt"
-    GE = "ge"
-    BOOL = "bool"
-    BYTES = "bytes"
-    COMPLEX = "complex"
-    CONTAINS = "contains"
-    FLOAT = "float"
-    FORMAT = "format"
-    GETITEM = "getitem"
-    INDEX = "index"
-    INT = "int"
-    ITER = "iter"
-    LEN = "len"
-    STR = "str"
-
-
-type DunderRule = Callable[..., Any]
-
-dunder_rules: dict[tuple[Dunder, type[AVal]], DunderRule] = {}
-
-
-class TraceBox:
-    __slots__ = ["owner", "var"]
-
-    def __init__(self, /, *, owner: TraceInterpreter, var: Var):
-        assert isinstance(owner, TraceInterpreter)
-        assert is_var(var)
-        self.owner = owner
-        self.var = var
-
-    @property
-    def aval(self) -> AVal:
-        return self.var.aval
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.var!r})"
-
-    def __hash__(self):
-        return object.__hash__(self)
-
-    def __eq__(self, other) -> Any:
-        return apply_dunder(Dunder.EQ, self, self, other)
-
-    def __ne__(self, other) -> Any:
-        return apply_dunder(Dunder.NE, self, self, other)
-
-    def __lt__(self, other) -> Any:
-        return apply_dunder(Dunder.LT, self, self, other)
-
-    def __le__(self, other) -> Any:
-        return apply_dunder(Dunder.LE, self, self, other)
-
-    def __gt__(self, other) -> Any:
-        return apply_dunder(Dunder.GT, self, self, other)
-
-    def __ge__(self, other) -> Any:
-        return apply_dunder(Dunder.GE, self, self, other)
-
-    def __neg__(self) -> Any:
-        return apply_dunder(Dunder.NEG, self, self)
-
-    def __add__(self, other) -> Any:
-        return apply_dunder(Dunder.ADD, self, self, other)
-
-    def __radd__(self, other) -> Any:
-        return apply_dunder(Dunder.ADD, self, other, self)
-
-    def __sub__(self, other) -> Any:
-        return apply_dunder(Dunder.SUB, self, self, other)
-
-    def __rsub__(self, other) -> Any:
-        return apply_dunder(Dunder.SUB, self, other, self)
-
-    def __mul__(self, other) -> Any:
-        return apply_dunder(Dunder.MUL, self, self, other)
-
-    def __rmul__(self, other) -> Any:
-        return apply_dunder(Dunder.MUL, self, other, self)
-
-    def __truediv__(self, other) -> Any:
-        return apply_dunder(Dunder.DIV, self, self, other)
-
-    def __rtruediv__(self, other) -> Any:
-        return apply_dunder(Dunder.DIV, self, other, self)
-
-    def __pow__(self, other) -> Any:
-        return apply_dunder(Dunder.POW, self, self, other)
-
-    def __rpow__(self, other) -> Any:
-        return apply_dunder(Dunder.POW, self, other, self)
-
-    def __matmul__(self, other) -> Any:
-        return apply_dunder(Dunder.MATMUL, self, self, other)
-
-    def __rmatmul__(self, other) -> Any:
-        return apply_dunder(Dunder.MATMUL, self, other, self)
-
-    def __bool__(self) -> bool:
-        return apply_dunder(Dunder.BOOL, self, self)
-
-    def __bytes__(self) -> bytes:
-        return apply_dunder(Dunder.BYTES, self, self)
-
-    def __complex__(self) -> complex:
-        return apply_dunder(Dunder.COMPLEX, self, self)
-
-    def __contains__(self, item) -> bool:
-        return apply_dunder(Dunder.CONTAINS, self, self, item)
-
-    def __float__(self) -> float:
-        return apply_dunder(Dunder.FLOAT, self, self)
-
-    def __format__(self, format_spec: str) -> str:
-        return apply_dunder(Dunder.FORMAT, self, self, format_spec)
-
-    def __getitem__(self, key) -> Any:
-        return apply_dunder(Dunder.GETITEM, self, self, key)
-
-    def __index__(self) -> int:
-        return apply_dunder(Dunder.INDEX, self, self)
-
-    def __int__(self) -> int:
-        return apply_dunder(Dunder.INT, self, self)
-
-    def __iter__(self) -> Iterator[Any]:
-        return apply_dunder(Dunder.ITER, self, self)
-
-    def __len__(self) -> int:
-        return apply_dunder(Dunder.LEN, self, self)
-
-    def __str__(self) -> str:
-        return apply_dunder(Dunder.STR, self, self)
-
-
-def apply_dunder(dunder: Dunder, box: TraceBox, *operands):
-    if (rule := dunder_rules.get((dunder, type(box.aval)))) is None:
-        raise TypeError(f"No trace rule for {dunder.value} on values of type {box.aval!r}.")
-    return rule(*operands)
-
-
-def assert_foldable(prim: Prim, value: Tree) -> None:
-    traced_values = [x for x in utils.tree.leaves(value) if isinstance(x, TraceBox)]
-    assert not traced_values, (
-        f"Cannot evaluate {prim.name} in af.fold() because it depends on traced values "
-        f"{traced_values!r}. Mark the dependencies static or move this computation outside af.fold()."
-    )
-
-
-class TraceInterpreter(BoxedInterpreter[TraceBox]):
-    __slots__ = ["eqns"]
-
-    def __init__(self):
-        self.eqns: list[Eqn] = []
-
-    def box(self, value, /) -> Tree:
-        return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_var(v) else v, value)
-
-    def unbox(self, value: Tree, /) -> Tree:
-        def func(value, /):
-            if not isinstance(value, TraceBox):
-                # NOTE(asem): basically literals case.
-                return value
-            assert value.owner is self, "Encountered TraceBox from a different tracer."
-            # NOTE(asem): this catches leaked live trace values.
-            # >>> leaked = {}
-            # >>> def first_func(x):
-            # ...     leaked["first"] = x
-            # ...     return x
-            # >>> def second_func(y):
-            # ...     return concat(leaked["first"], y)
-            # >>> ir1 = af.trace(first_func)("input")
-            # >>> ir2 = af.trace(second_func)("input")
-            return value.var
-
-        return utils.tree.map(func, value)
-
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if fold_flag.get():
-            return self.eval(prim, in_tree, **params)
-        return self.stage(prim, in_tree, **params)
-
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        if fold_flag.get():
-            return await self.aeval(prim, in_tree, **params)
-        return self.stage(prim, in_tree, **params)
-
-    def eval(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        assert_foldable(prim, (in_tree, params))
-        with using_interpreter(EvalInterpreter()):
-            out_tree = prim.bind(in_tree, **params)
-        assert_foldable(prim, out_tree)
-        return out_tree
-
-    async def aeval(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        assert_foldable(prim, (in_tree, params))
-        with using_interpreter(EvalInterpreter()):
-            out_tree = await prim.abind(in_tree, **params)
-        assert_foldable(prim, out_tree)
-        return out_tree
-
-    def stage(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        def to_in_ir_atom(value):
-            if not is_var(value):
-                hash(value)
-            return value
-
-        def to_concrete(leaf, value):
-            assert not is_var(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
-            return value
-
-        in_tree = self.unbox(in_tree)
-        params = self.unbox(params)
-        params = utils.tree.map_with_path(to_concrete, params)
-
-        in_tree = utils.tree.map(to_in_ir_atom, in_tree)
-        in_aval_tree = utils.tree.map(aval_if_var, in_tree)
-        out_aval_tree = abstract_rules.get(prim)(in_aval_tree, **params)
-
-        def to_out_ir_atom(x):
-            # NOTE(asem): abstract rules return `AVal`/ python leaves.
-            # `AVal` simply denotes a placeholder for a value that will be computed later
-            # this is basically delegated to the user to handle
-            return Var.fresh(aval=x) if is_aval(x) else x
-
-        out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
-        self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
-        return self.box(out_tree)
-
-
-def trace[*A, R](
-    func: Callable[[*A], R],
-    /,
-    *,
-    static: Tree[bool] = False,
-) -> Callable[[*A], IR[*A, R]]:
-    """Build an IR by tracing a function's execution.
-
-    Args:
-        func: A callable that uses autoform primitives (string.concat, lm.complete, etc.).
-        static: Bool pytree matching the positional input structure.
-            Mark a leaf ``True`` to keep that value fixed at trace time.
-            Mark a leaf ``False`` to keep it as a normal runtime input.
-            This is useful for ordinary Python control flow such as ``if``
-            statements. Later calls must pass the same values for leaves
-            marked static.
-
-    Returns:
-        A tracer callable that takes positional arguments and returns an IR.
-
-    When a flag is marked static, tracing follows only the branch selected by
-    that flag at trace time.
-
-    Example:
-        >>> import autoform as af
-        >>> def label(is_error):
-        ...     if is_error:
-        ...         return "error"
-        ...     return "ok"
-        >>> ir = af.trace(label, static=True)(True)
-        >>> ir.call(True)
-        'error'
-    """
-
-    def is_static_spec(x) -> bool:
-        return isinstance(x, bool)
-
-    def to_in_ir_atom(x, is_static: bool):
-        if is_static:
-            hash(x)
-            return x
-        return to_var(x)
-
-    def to_var(x, /) -> Var:
-        assert not is_var(x), "Inputs to `trace` must be normal python types"
-        assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return Var.fresh(aval=primal_s.avalof(x))
-
-    @ft.wraps(func)
-    def wrapper(*args: *A) -> IR[*A, R]:
-        arg_tree = args
-        in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
-        in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
-        with using_interpreter(TraceInterpreter()) as tracer:
-            out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
-        out_tree = tracer.unbox(out_trace_tree)
-        return IR(eqns=tracer.eqns, in_tree=in_tree, out_tree=out_tree)
-
-    return wrapper
-
-
-# ==================================================================================================
 # WALK
 # ==================================================================================================
 
@@ -1082,76 +552,4 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     return func
 
 
-# ==================================================================================================
-# RULES
-# ==================================================================================================
-
-
-class InterpreterRule[R](Protocol):
-    def __call__(self, in_tree: Tree, /, **params: Any) -> R: ...
-
-
-type TreePair = tuple[Tree, Tree]
-type BatchRuleResult = tuple[Tree, Tree[bool] | bool]
-type AsyncInterpreterRule[R] = InterpreterRule[Awaitable[R]]
-type ImplRule = InterpreterRule[Tree]
-type AImplRule = AsyncInterpreterRule[Tree]
-type AbstractRule = InterpreterRule[Tree[EvalType]]
-type AAbstractRule = AsyncInterpreterRule[Tree[EvalType]]
-type PushforwardRule = InterpreterRule[TreePair]
-type APushforwardRule = AsyncInterpreterRule[TreePair]
-type PullbackFwdRule = InterpreterRule[TreePair]
-type APullbackFwdRule = AsyncInterpreterRule[TreePair]
-type PullbackBwdRule = InterpreterRule[Tree]
-type APullbackBwdRule = AsyncInterpreterRule[Tree]
-type BatchRule = InterpreterRule[BatchRuleResult]
-type ABatchRule = AsyncInterpreterRule[BatchRuleResult]
-
-
-class InterpreterRuleMapping[Rule: InterpreterRule[Any], ARule: AsyncInterpreterRule[Any]]:
-    __slots__ = ["map", "amap", "lock"]
-
-    def __init__(self):
-        self.map: dict[Prim, Rule] = {}
-        self.amap: dict[Prim, ARule] = {}
-        self.lock = RLock()
-
-    def set[R: Rule](self, prim: Prim, rule: R, /, *, replace: bool = False) -> R:
-        assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
-        assert isinstance(rule, Callable), f"Expected callable, got {rule}"
-        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-        assert replace or prim not in self.map, f"Rule for primitive {prim} already defined"
-
-        with self.lock:
-            self.map[prim] = rule
-        return rule
-
-    def aset[AR: ARule](self, prim: Prim, rule: AR, /, *, replace: bool = False) -> AR:
-        assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
-        assert isinstance(rule, Callable), f"Expected callable, got {rule}"
-        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-        assert replace or prim not in self.amap, f"Async rule for primitive {prim} already defined"
-
-        with self.lock:
-            self.amap[prim] = rule
-        return rule
-
-    def get(self, prim: Prim) -> Rule:
-        with self.lock:
-            if prim not in self.map:
-                raise KeyError(f"No {type(self).__name__} rule defined for primitive {prim}")
-            return self.map[prim]
-
-    def aget(self, prim: Prim) -> ARule:
-        with self.lock:
-            if prim not in self.amap:
-                raise KeyError(f"No async {type(self).__name__} rule defined for primitive {prim}")
-            return self.amap[prim]
-
-
-impl_rules = InterpreterRuleMapping[ImplRule, AImplRule]()
-batch_rules = InterpreterRuleMapping[BatchRule, ABatchRule]()
-push_rules = InterpreterRuleMapping[PushforwardRule, APushforwardRule]()
-pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule, APullbackFwdRule]()
-pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule, APullbackBwdRule]()
-abstract_rules = InterpreterRuleMapping[AbstractRule, AAbstractRule]()
+abstract.aval_types[Var] = lambda value: value.aval

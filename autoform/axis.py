@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
@@ -35,14 +36,14 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class BatchAVal(core.AVal):
+class BatchAVal(abstract.AVal):
     # NOTE(asem): unlike atomic AVals(e.g StrAVal), no aval_type rule can be registered
     # as containers are later introduced at the call site. unlike jax the atomic unit is not
     # the array object but any thing really.
-    def __init__(self, base: core.AVal):
+    def __init__(self, base: abstract.AVal):
         # TODO(asem): maybe exapand with useful metadata here
 
-        assert core.is_aval(base), f"Expected AVal, got {base!r}"
+        assert isinstance(base, abstract.AVal), f"Expected AVal, got {base!r}"
         self.base = base
 
     def __repr__(self) -> str:
@@ -55,8 +56,8 @@ class BatchAVal(core.AVal):
         return hash((type(self), self.base))
 
 
-core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.avalof(aval.base)))
-core.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(core.cotangent_s.avalof(aval.base)))
+abstract.tangent_s.set(BatchAVal, lambda aval: BatchAVal(abstract.tangent_s.map(aval.base)))
+abstract.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(abstract.cotangent_s.map(aval.base)))
 
 
 def is_axis_spec(v) -> bool:
@@ -134,7 +135,7 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
         if core.is_var(atom):
             return core.Var.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
-            return core.Var.fresh(aval=maybe_batched(core.primal_s.avalof(atom), True))
+            return core.Var.fresh(aval=maybe_batched(abstract.avalof(atom), True))
         return atom
 
     v_in_ir = utils.tree.map(make_in, ir.in_tree, b_in)
@@ -143,16 +144,16 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
     return core.IR([eqn], v_in_ir, v_out_ir)
 
 
-class BatchBox:
-    __slots__ = ["owner", "value", "batched"]
+class BatchBox(core.Box):
+    __slots__ = ["value", "batched"]
 
     def __init__(self, owner, value, batched):
-        self.owner = owner
+        super().__init__(owner)
         self.value = value
         self.batched = batched
 
 
-class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
+class BatchInterpreter(core.Interpreter[BatchBox]):
     __slots__ = ["parent", "batch_size"]
 
     def __init__(self, *, batch_size: int, parent):
@@ -182,7 +183,7 @@ class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
         v_in, b_in = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            v_out, b_out = core.batch_rules.get(prim)((b_sz, b_in, v_in), **params)
+            v_out, b_out = core.batch_rules[prim]((b_sz, b_in, v_in), **params)
         return self.box((v_out, b_out))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
@@ -190,7 +191,7 @@ class BatchInterpreter(core.BoxedInterpreter[BatchBox]):
         v_in, b_in = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            v_out, b_out = await core.batch_rules.aget(prim)((b_sz, b_in, v_in), **params)
+            v_out, b_out = await core.abatch_rules[prim]((b_sz, b_in, v_in), **params)
         return self.box((v_out, b_out))
 
 
@@ -272,7 +273,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree
         if core.is_var(atom):
             return maybe_batched(atom.aval, has_batched)
         if has_batched:
-            return maybe_batched(core.primal_s.avalof(atom), True)
+            return maybe_batched(abstract.avalof(atom), True)
         return atom
 
     return utils.tree.map(out_aval, ir.out_tree)
@@ -359,17 +360,17 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> 
     return v_out, b_out
 
 
-core.impl_rules.set(batch_call_p, impl_batch_call)
-core.impl_rules.aset(batch_call_p, aimpl_batch_call)
-core.abstract_rules.set(batch_call_p, abstract_batch_call)
-core.push_rules.set(batch_call_p, pushforward_batch_call)
-core.push_rules.aset(batch_call_p, apushforward_batch_call)
-core.pull_fwd_rules.set(batch_call_p, pullback_fwd_batch_call)
-core.pull_fwd_rules.aset(batch_call_p, apullback_fwd_batch_call)
-core.pull_bwd_rules.set(batch_call_p, pullback_bwd_batch_call)
-core.pull_bwd_rules.aset(batch_call_p, apullback_bwd_batch_call)
-core.batch_rules.set(batch_call_p, batch_batch_call)
-core.batch_rules.aset(batch_call_p, abatch_batch_call)
+core.impl_rules[batch_call_p] = impl_batch_call
+core.aimpl_rules[batch_call_p] = aimpl_batch_call
+core.abstract_rules[batch_call_p] = abstract_batch_call
+core.push_rules[batch_call_p] = pushforward_batch_call
+core.apush_rules[batch_call_p] = apushforward_batch_call
+core.pull_fwd_rules[batch_call_p] = pullback_fwd_batch_call
+core.apull_fwd_rules[batch_call_p] = apullback_fwd_batch_call
+core.pull_bwd_rules[batch_call_p] = pullback_bwd_batch_call
+core.apull_bwd_rules[batch_call_p] = apullback_bwd_batch_call
+core.batch_rules[batch_call_p] = batch_batch_call
+core.abatch_rules[batch_call_p] = abatch_batch_call
 
 
 def dce_batch_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
+import autoform.abstract as abstract
 import autoform.analysis as analysis
 import autoform.core as core
 import autoform.utils as utils
@@ -74,7 +75,7 @@ def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
     # >>> dced = af.dce(ir, out_used=False)
     # the DCE pass removes concat but ir.out_tree needs to be updated
     def keep_var(atom, out):
-        if isinstance(out, core.AVal):
+        if isinstance(out, abstract.AVal):
             # NOTE(asem): assure DCE does not change avals
             assert core.is_var(atom) and atom.aval == out
             return atom
@@ -82,7 +83,7 @@ def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
         return out
 
     in_avals = utils.tree.map(core.aval_if_var, eqn.in_tree)
-    out_avals = core.abstract_rules.get(eqn.prim)(in_avals, **eqn.params)
+    out_avals = core.abstract_rules[eqn.prim](in_avals, **eqn.params)
     out_tree = utils.tree.map(keep_var, eqn.out_tree, out_avals)
     return core.Eqn(eqn.prim, eqn.in_tree, out_tree, eqn.params, eqn.tags)
 

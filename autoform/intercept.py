@@ -97,17 +97,17 @@ async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable |
     return out_ib, out_batched
 
 
-core.impl_rules.set(checkpoint_p, impl_checkpoint)
-core.impl_rules.aset(checkpoint_p, utils.asyncify(impl_checkpoint))
-core.abstract_rules.set(checkpoint_p, abstract_checkpoint)
-core.push_rules.set(checkpoint_p, push_checkpoint)
-core.push_rules.aset(checkpoint_p, utils.asyncify(push_checkpoint))
-core.pull_fwd_rules.set(checkpoint_p, pull_fwd_checkpoint)
-core.pull_fwd_rules.aset(checkpoint_p, utils.asyncify(pull_fwd_checkpoint))
-core.pull_bwd_rules.set(checkpoint_p, pull_bwd_checkpoint)
-core.pull_bwd_rules.aset(checkpoint_p, utils.asyncify(pull_bwd_checkpoint))
-core.batch_rules.set(checkpoint_p, batch_checkpoint)
-core.batch_rules.aset(checkpoint_p, abatch_checkpoint)
+core.impl_rules[checkpoint_p] = impl_checkpoint
+core.aimpl_rules[checkpoint_p] = utils.asyncify(impl_checkpoint)
+core.abstract_rules[checkpoint_p] = abstract_checkpoint
+core.push_rules[checkpoint_p] = push_checkpoint
+core.apush_rules[checkpoint_p] = utils.asyncify(push_checkpoint)
+core.pull_fwd_rules[checkpoint_p] = pull_fwd_checkpoint
+core.apull_fwd_rules[checkpoint_p] = utils.asyncify(pull_fwd_checkpoint)
+core.pull_bwd_rules[checkpoint_p] = pull_bwd_checkpoint
+core.apull_bwd_rules[checkpoint_p] = utils.asyncify(pull_bwd_checkpoint)
+core.batch_rules[checkpoint_p] = batch_checkpoint
+core.abatch_rules[checkpoint_p] = abatch_checkpoint
 
 
 def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = None) -> Tree:
@@ -158,6 +158,12 @@ class CollectingInterpreter(core.Interpreter):
         self.collection = collection
         self.collected: Collected = defaultdict(list)
 
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
     def interpret(self, prim: core.Prim, in_tree: Any, /, **params):
         result = self.parent.interpret(prim, in_tree, **params)
         if prim is checkpoint_p:
@@ -180,6 +186,12 @@ class InjectingInterpreter(core.Interpreter):
         self.parent = core.active_interpreter.get()
         self.collection = collection
         self.cache = {k: deque(values[k]) for k in values}
+
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
 
     def interpret(self, prim: core.Prim, in_tree: Any, /, **params):
         if prim is checkpoint_p and params["collection"] == self.collection:

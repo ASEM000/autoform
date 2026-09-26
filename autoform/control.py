@@ -19,10 +19,12 @@ from __future__ import annotations
 import functools as ft
 from collections.abc import Hashable
 
+import autoform.abstract as abstract
 import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 __all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
@@ -75,7 +77,7 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
     def make_t(x):
-        return core.tangent_s.zeroof(core.primal_s.avalof(x))
+        return abstract.Zero(abstract.tangent_s.map(abstract.avalof(x)))
 
     primal, tangent = in_tree
     zero_t = utils.tree.map(make_t, primal)
@@ -89,9 +91,9 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
 
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
     def make_c(x):
-        if isinstance(x, core.Zero):
+        if isinstance(x, abstract.Zero):
             return x
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
 
     residuals, out_cotangent = in_tree
     del out_cotangent
@@ -104,17 +106,17 @@ def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
     return x, in_batched
 
 
-core.impl_rules.set(stop_gradient_p, impl_stop_gradient)
-core.impl_rules.aset(stop_gradient_p, utils.asyncify(impl_stop_gradient))
-core.abstract_rules.set(stop_gradient_p, abstract_stop_gradient)
-core.push_rules.set(stop_gradient_p, pushforward_stop_gradient)
-core.push_rules.aset(stop_gradient_p, utils.asyncify(pushforward_stop_gradient))
-core.pull_fwd_rules.set(stop_gradient_p, pullback_fwd_stop_gradient)
-core.pull_fwd_rules.aset(stop_gradient_p, utils.asyncify(pullback_fwd_stop_gradient))
-core.pull_bwd_rules.set(stop_gradient_p, pullback_bwd_stop_gradient)
-core.pull_bwd_rules.aset(stop_gradient_p, utils.asyncify(pullback_bwd_stop_gradient))
-core.batch_rules.set(stop_gradient_p, batch_stop_gradient)
-core.batch_rules.aset(stop_gradient_p, utils.asyncify(batch_stop_gradient))
+core.impl_rules[stop_gradient_p] = impl_stop_gradient
+core.aimpl_rules[stop_gradient_p] = utils.asyncify(impl_stop_gradient)
+core.abstract_rules[stop_gradient_p] = abstract_stop_gradient
+core.push_rules[stop_gradient_p] = pushforward_stop_gradient
+core.apush_rules[stop_gradient_p] = utils.asyncify(pushforward_stop_gradient)
+core.pull_fwd_rules[stop_gradient_p] = pullback_fwd_stop_gradient
+core.apull_fwd_rules[stop_gradient_p] = utils.asyncify(pullback_fwd_stop_gradient)
+core.pull_bwd_rules[stop_gradient_p] = pullback_bwd_stop_gradient
+core.apull_bwd_rules[stop_gradient_p] = utils.asyncify(pullback_bwd_stop_gradient)
+core.batch_rules[stop_gradient_p] = batch_stop_gradient
+core.abatch_rules[stop_gradient_p] = utils.asyncify(batch_stop_gradient)
 
 
 # ==================================================================================================
@@ -157,10 +159,10 @@ def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
     assert not kwargs, "`switch` does not support keyword arguments"
     assert all(isinstance(branches[k], core.IR) for k in branches)
     key0 = next(iter(branches))
-    assert core.is_traceable(key0)
+    assert tracer.is_traceable(key0)
     assert all(type(k) is type(key0) for k in branches)
-    key_aval = core.primal_s.avalof(key0)
-    assert all(core.primal_s.avalof(k) == key_aval for k in branches)
+    key_aval = abstract.avalof(key0)
+    assert all(abstract.avalof(k) == key_aval for k in branches)
     branch0 = branches[key0]
     assert all(analysis.is_same_stucture(branch0, branch) for branch in branches.values())
     return switch_p.bind((key, args), branches=branches)
@@ -179,8 +181,8 @@ async def aimpl_switch(in_tree, /, *, branches: Branches):
 def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     key, _ = in_tree
     key0 = next(iter(branches))
-    key_aval = key if core.is_aval(key) else core.primal_s.avalof(key)
-    assert key_aval == core.primal_s.avalof(key0)
+    key_aval = key if isinstance(key, abstract.AVal) else abstract.avalof(key)
+    assert key_aval == abstract.avalof(key0)
     branch0 = branches[key0]
     return utils.tree.map(core.aval_if_var, branch0.out_tree)
 
@@ -224,7 +226,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = pb_ir.call(operands, out_cotangent)
-    return (core.cotangent_s.zeroof(core.primal_s.avalof(key)), c_operands)
+    return (abstract.Zero(abstract.cotangent_s.map(abstract.avalof(key))), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
@@ -234,10 +236,10 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = await pb_ir.acall(operands, out_cotangent)
-    return (core.cotangent_s.zeroof(core.primal_s.avalof(key)), c_operands)
+    return (abstract.Zero(abstract.cotangent_s.map(abstract.avalof(key))), c_operands)
 
 
-def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
+def batch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
@@ -256,7 +258,7 @@ def batch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
     return out_tree, out_batched
 
 
-async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResult:
+async def abatch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
     batch_size, in_batched, in_values = in_tree
     key_col, operands_col = in_values
     key_batched, operands_batched = in_batched
@@ -274,17 +276,17 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> core.BatchRuleResu
     return out_tree, out_batched
 
 
-core.impl_rules.set(switch_p, impl_switch)
-core.impl_rules.aset(switch_p, aimpl_switch)
-core.abstract_rules.set(switch_p, abstract_switch)
-core.push_rules.set(switch_p, pushforward_switch)
-core.push_rules.aset(switch_p, apush_switch)
-core.pull_fwd_rules.set(switch_p, pullback_fwd_switch)
-core.pull_fwd_rules.aset(switch_p, apull_fwd_switch)
-core.pull_bwd_rules.set(switch_p, pullback_bwd_switch)
-core.pull_bwd_rules.aset(switch_p, apull_bwd_switch)
-core.batch_rules.set(switch_p, batch_switch)
-core.batch_rules.aset(switch_p, abatch_switch)
+core.impl_rules[switch_p] = impl_switch
+core.aimpl_rules[switch_p] = aimpl_switch
+core.abstract_rules[switch_p] = abstract_switch
+core.push_rules[switch_p] = pushforward_switch
+core.apush_rules[switch_p] = apush_switch
+core.pull_fwd_rules[switch_p] = pullback_fwd_switch
+core.apull_fwd_rules[switch_p] = apull_fwd_switch
+core.pull_bwd_rules[switch_p] = pullback_bwd_switch
+core.apull_bwd_rules[switch_p] = apull_bwd_switch
+core.batch_rules[switch_p] = batch_switch
+core.abatch_rules[switch_p] = abatch_switch
 
 
 def dce_switch(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -415,7 +417,7 @@ def abstract_while_loop(
     assert utils.tree.structure(in_tree) == utils.tree.structure(out_tree)
 
     def same_state(x, y):
-        if core.is_aval(y) and not core.is_aval(x):
+        if isinstance(y, abstract.AVal) and not isinstance(x, abstract.AVal):
             # NOTE(asem): the key idea here is that in case inital state is a literal
             # and body returns AVal e.g.
             # >>> cond = af.trace(lambda x: False)("x")
@@ -425,7 +427,7 @@ def abstract_while_loop(
             # >>> ir = af.trace(program)()
             # >>> ir.call()  # "hello"
             # in here same_state normalizes hello -> StrAval
-            x = core.primal_s.avalof(x)
+            x = abstract.avalof(x)
         return type(x) is type(y) and x == y
 
     assert utils.tree.all(utils.tree.map(same_state, in_tree, out_tree)), (
@@ -687,15 +689,15 @@ async def abatch_while_loop(
     return out_tree, out_batched
 
 
-core.impl_rules.set(while_loop_p, impl_while_loop)
-core.impl_rules.aset(while_loop_p, aimpl_while_loop)
-core.abstract_rules.set(while_loop_p, abstract_while_loop)
-core.pull_fwd_rules.set(while_loop_p, pullback_fwd_while_loop)
-core.pull_fwd_rules.aset(while_loop_p, apull_fwd_while_loop)
-core.pull_bwd_rules.set(while_loop_p, pullback_bwd_while_loop)
-core.pull_bwd_rules.aset(while_loop_p, apull_bwd_while_loop)
-core.batch_rules.set(while_loop_p, batch_while_loop)
-core.batch_rules.aset(while_loop_p, abatch_while_loop)
+core.impl_rules[while_loop_p] = impl_while_loop
+core.aimpl_rules[while_loop_p] = aimpl_while_loop
+core.abstract_rules[while_loop_p] = abstract_while_loop
+core.pull_fwd_rules[while_loop_p] = pullback_fwd_while_loop
+core.apull_fwd_rules[while_loop_p] = apull_fwd_while_loop
+core.pull_bwd_rules[while_loop_p] = pullback_bwd_while_loop
+core.apull_bwd_rules[while_loop_p] = apull_bwd_while_loop
+core.batch_rules[while_loop_p] = batch_while_loop
+core.abatch_rules[while_loop_p] = abatch_while_loop
 
 
 def dce_while_loop(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -878,14 +880,14 @@ def pullback_bwd_fixpoint(
     import autoform.ad as ad
 
     def make_c(x):
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
 
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
     dx0 = utils.tree.map(make_c, x_star)
 
-    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
+    if all(isinstance(x, abstract.Zero) for x in utils.tree.leaves(g)):
         return dx0, utils.tree.map(make_c, theta)
 
     res: dict[core.Eqn, Tree] = {}
@@ -945,14 +947,14 @@ async def apull_bwd_fixpoint(
     import autoform.ad as ad
 
     def make_c(x):
-        return core.cotangent_s.zeroof(core.primal_s.avalof(x))
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
 
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
     dx0 = utils.tree.map(make_c, x_star)
 
-    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
+    if all(isinstance(x, abstract.Zero) for x in utils.tree.leaves(g)):
         return dx0, utils.tree.map(make_c, theta)
 
     res: dict[core.Eqn, Tree] = {}
@@ -1130,15 +1132,15 @@ async def abatch_fixpoint(
     return out_tree, out_batched
 
 
-core.impl_rules.set(fixpoint_p, impl_fixpoint)
-core.impl_rules.aset(fixpoint_p, aimpl_fixpoint)
-core.abstract_rules.set(fixpoint_p, abstract_fixpoint)
-core.pull_fwd_rules.set(fixpoint_p, pullback_fwd_fixpoint)
-core.pull_fwd_rules.aset(fixpoint_p, apull_fwd_fixpoint)
-core.pull_bwd_rules.set(fixpoint_p, pullback_bwd_fixpoint)
-core.pull_bwd_rules.aset(fixpoint_p, apull_bwd_fixpoint)
-core.batch_rules.set(fixpoint_p, batch_fixpoint)
-core.batch_rules.aset(fixpoint_p, abatch_fixpoint)
+core.impl_rules[fixpoint_p] = impl_fixpoint
+core.aimpl_rules[fixpoint_p] = aimpl_fixpoint
+core.abstract_rules[fixpoint_p] = abstract_fixpoint
+core.pull_fwd_rules[fixpoint_p] = pullback_fwd_fixpoint
+core.apull_fwd_rules[fixpoint_p] = apull_fwd_fixpoint
+core.pull_bwd_rules[fixpoint_p] = pullback_bwd_fixpoint
+core.apull_bwd_rules[fixpoint_p] = apull_bwd_fixpoint
+core.batch_rules[fixpoint_p] = batch_fixpoint
+core.abatch_rules[fixpoint_p] = abatch_fixpoint
 
 
 def dce_fixpoint(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

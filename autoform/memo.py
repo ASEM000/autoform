@@ -62,6 +62,12 @@ class MemoizingInterpreter(core.Interpreter):
         self.parent = core.active_interpreter.get()
         self.cache: dict[CacheKey, Tree] = {}
 
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         # NOTE(asem): constructing Eqn here is simply to make is_non_memo accepts Eqn
         # as its counter part in `is_non_dce`. a bit more work but more uniform impl.

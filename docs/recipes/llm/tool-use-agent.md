@@ -134,11 +134,11 @@ async def apull_bwd_wikipedia_search(in_tree, /):
     )
 
 
-afe.impl_rules.aset(wikipedia_search_p, aimpl_wikipedia_search)
-afe.abstract_rules.set(wikipedia_search_p, abstract_wikipedia_search)
-afe.batch_rules.aset(wikipedia_search_p, abatch_wikipedia_search)
-afe.pull_fwd_rules.aset(wikipedia_search_p, apull_fwd_wikipedia_search)
-afe.pull_bwd_rules.aset(wikipedia_search_p, apull_bwd_wikipedia_search)
+afe.aimpl_rules[wikipedia_search_p] = aimpl_wikipedia_search
+afe.abstract_rules[wikipedia_search_p] = abstract_wikipedia_search
+afe.abatch_rules[wikipedia_search_p] = abatch_wikipedia_search
+afe.apull_fwd_rules[wikipedia_search_p] = apull_fwd_wikipedia_search
+afe.apull_bwd_rules[wikipedia_search_p] = apull_bwd_wikipedia_search
 
 
 def search_tool(query: str, _answer: str, history: str) -> str:
@@ -219,10 +219,10 @@ For real tools, keep the branch signature stable: each branch here is `(query, a
 The async and sync registries are independent. To support `.call(...)` for the
 same primitive, add sync counterparts with the same input and output shapes:
 
-- `afe.impl_rules.set(wikipedia_search_p, impl_wikipedia_search)`;
-- `afe.batch_rules.set(wikipedia_search_p, batch_wikipedia_search)`;
-- `afe.pull_fwd_rules.set(wikipedia_search_p, pull_fwd_wikipedia_search)`;
-- `afe.pull_bwd_rules.set(wikipedia_search_p, pull_bwd_wikipedia_search)`.
+- `afe.impl_rules[wikipedia_search_p] = impl_wikipedia_search`;
+- `afe.batch_rules[wikipedia_search_p] = batch_wikipedia_search`;
+- `afe.pull_fwd_rules[wikipedia_search_p] = pull_fwd_wikipedia_search`;
+- `afe.pull_bwd_rules[wikipedia_search_p] = pull_bwd_wikipedia_search`.
 
 The sync HTTP implementation can use `httpx.get(...)` or `httpx.Client`. The
 async implementation above uses `httpx.AsyncClient` so `.acall(...)` can overlap

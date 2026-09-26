@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import autoform.abstract as abstract
 import autoform.ad as ad
 import autoform.axis as axis
 import autoform.control as control
@@ -31,25 +32,28 @@ import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
 import autoform.string as string
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 # ==================================================================================================
 # TYPES
 # ==================================================================================================
 
-AVal = core.AVal
+AVal = abstract.AVal
 StrAVal = string.StrAVal
 IntAVal = numeric.IntAVal
 FloatAVal = numeric.FloatAVal
 BoolAVal = numeric.BoolAVal
-Space = core.Space
-primal_s = core.primal_s
-tangent_s = core.tangent_s
-cotangent_s = core.cotangent_s
+Space = abstract.Space
+avalof = abstract.avalof
+primal_s = abstract.primal_s
+tangent_s = abstract.tangent_s
+cotangent_s = abstract.cotangent_s
 Prim = core.Prim
-Dunder = core.Dunder
-Zero = core.Zero
+Dunder = tracer.Dunder
+Zero = abstract.Zero
 Interpreter = core.Interpreter
+Box = core.Box
 IR = core.IR
 Eqn = core.Eqn
 Var = core.Var
@@ -59,17 +63,22 @@ Var = core.Var
 # ==================================================================================================
 
 impl_rules = core.impl_rules
+aimpl_rules = core.aimpl_rules
 abstract_rules = core.abstract_rules
 push_rules = core.push_rules
+apush_rules = core.apush_rules
 pull_fwd_rules = core.pull_fwd_rules
+apull_fwd_rules = core.apull_fwd_rules
 pull_bwd_rules = core.pull_bwd_rules
+apull_bwd_rules = core.apull_bwd_rules
 batch_rules = core.batch_rules
+abatch_rules = core.abatch_rules
 
 # ==================================================================================================
 # HELPERS
 # ==================================================================================================
 
-materialize_zeros = core.materialize_zeros
+materialize_zeros = abstract.materialize_zeros
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
@@ -120,6 +129,7 @@ __all__ = [
     "FloatAVal",
     "BoolAVal",
     "Space",
+    "avalof",
     "primal_s",
     "tangent_s",
     "cotangent_s",
@@ -127,6 +137,7 @@ __all__ = [
     "Dunder",
     "Zero",
     "Interpreter",
+    "Box",
     "IR",
     "Eqn",
     "Var",
@@ -135,11 +146,16 @@ __all__ = [
     "register_non_memoizable",
     "register_dunder",
     "impl_rules",
+    "aimpl_rules",
     "abstract_rules",
     "push_rules",
+    "apush_rules",
     "pull_fwd_rules",
+    "apull_fwd_rules",
     "pull_bwd_rules",
+    "apull_bwd_rules",
     "batch_rules",
+    "abatch_rules",
     "materialize_zeros",
     "batch_index",
     "batch_spec",
@@ -210,8 +226,8 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ... def token_aval(value):
         ...     return TokenAVal()
     """
-    core.trace_types.add(type)
-    core.primal_s.set(type, aval_rule)
+    abstract.aval_types[type] = aval_rule
+    tracer.trace_types.add(type)
     return aval_rule
 
 
@@ -280,6 +296,6 @@ def register_dunder[T: Callable[..., Any]](
     assert callable(rule), f"Expected callable, got {rule!r}"
     assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
     key = dunder, aval_type
-    assert replace or key not in core.dunder_rules, f"Dunder rule is already defined"
-    core.dunder_rules[key] = rule
+    assert replace or key not in tracer.dunder_rules, f"Dunder rule is already defined"
+    tracer.dunder_rules[key] = rule
     return rule

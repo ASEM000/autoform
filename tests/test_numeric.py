@@ -52,7 +52,7 @@ def test_comparison_blocks_pushforward():
     ir = af.pushforward(af.trace(lambda x: x >= 0)(1.0))
     primal, derivative = ir.call((1.0,), (1.0,))
     assert primal is True
-    assert isinstance(derivative, af.core.Zero)
+    assert isinstance(derivative, af.abstract.Zero)
     assert derivative.aval == af.numeric.BoolAVal()
 
 
@@ -60,7 +60,7 @@ def test_comparison_blocks_pullback():
     ir = af.pullback(af.trace(lambda x: x >= 0)(1.0))
     primal, (derivative,) = ir.call((1.0,), True)
     assert primal is True
-    assert isinstance(derivative, af.core.Zero)
+    assert isinstance(derivative, af.abstract.Zero)
     assert derivative.aval == af.numeric.FloatAVal()
 
 

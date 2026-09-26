@@ -81,6 +81,12 @@ class RecordingInterpreter(afe.Interpreter):
         self.parent = afe.active_interpreter.get()
         self.records: list[CallRecord] = []
 
+    def box(self, value, /):
+        return value
+
+    def unbox(self, value, /):
+        return value
+
     def interpret(self, prim: afe.Prim, in_tree: Any, /, **params):
         output = self.parent.interpret(prim, in_tree, **params)
         self.records.append(

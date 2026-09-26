@@ -31,8 +31,8 @@ def abstract_lookup(query, /):
     return afe.StrAVal()
 
 
-afe.impl_rules.set(lookup_p, impl_lookup)
-afe.abstract_rules.set(lookup_p, abstract_lookup)
+afe.impl_rules[lookup_p] = impl_lookup
+afe.abstract_rules[lookup_p] = abstract_lookup
 
 
 ir = af.trace(lookup)("seed")
@@ -59,7 +59,7 @@ afe.register_trace_type(
 )
 ```
 
-This allows values of the Python type to enter `af.trace` and teaches `primal_s.avalof(...)` how to infer their abstract value.
+This allows values of the Python type to enter `af.trace` and teaches `avalof(...)` how to infer their abstract value.
 
 ## Rules by Phase
 
@@ -89,7 +89,7 @@ def batch_lookup(in_tree, /):
     return [lookup_p.bind(query) for query in queries], True
 
 
-afe.batch_rules.set(lookup_p, batch_lookup)
+afe.batch_rules[lookup_p] = batch_lookup
 
 
 assert af.batch(ir).call(["a", "b"]) == ["result for a", "result for b"]
@@ -110,8 +110,8 @@ def pull_bwd_lookup(in_tree, /):
     return "Improve query '" + query + "'. Feedback: " + feedback + ". Result: " + output
 
 
-afe.pull_fwd_rules.set(lookup_p, pull_fwd_lookup)
-afe.pull_bwd_rules.set(lookup_p, pull_bwd_lookup)
+afe.pull_fwd_rules[lookup_p] = pull_fwd_lookup
+afe.pull_bwd_rules[lookup_p] = pull_bwd_lookup
 
 
 output, (query_feedback,) = af.pullback(ir).call(("recursion",), "too broad")
@@ -132,7 +132,7 @@ async def aimpl_lookup(query: str, /) -> str:
     return impl_lookup(query)
 
 
-afe.impl_rules.aset(lookup_p, aimpl_lookup)
+afe.aimpl_rules[lookup_p] = aimpl_lookup
 ```
 
-Async transform rules use the corresponding `aset(...)` registry method. For example, `afe.batch_rules.aset(...)` registers async {py:func}`batch <autoform.batch>` behavior.
+Async rules use the corresponding dictionary prefixed with `a`, such as `afe.abatch_rules`.

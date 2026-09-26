@@ -20,16 +20,13 @@ import functools as ft
 from collections import defaultdict
 from typing import Any
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
 import autoform.utils as utils
 
-__all__ = [
-    "cot_acc",
-    "pushforward",
-    "pullback",
-]
+__all__ = ["cot_acc", "pushforward", "pullback"]
 
 
 type Tree[T] = utils.Tree[T]
@@ -42,16 +39,16 @@ type TreePair = tuple[Tree, Tree]
 pushforward_call_p = core.Prim("pushforward_call")
 
 
-class PushforwardBox:
-    __slots__ = ["owner", "primal", "tangent"]
+class PushforwardBox(core.Box):
+    __slots__ = ["primal", "tangent"]
 
     def __init__(self, owner, primal, tangent):
-        self.owner = owner
+        super().__init__(owner)
         self.primal = primal
         self.tangent = tangent
 
 
-class PushforwardInterpreter(core.BoxedInterpreter[PushforwardBox]):
+class PushforwardInterpreter(core.Interpreter[PushforwardBox]):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -72,20 +69,20 @@ class PushforwardInterpreter(core.BoxedInterpreter[PushforwardBox]):
         def tangent(v):
             if isinstance(v, PushforwardBox) and v.owner is self:
                 return v.tangent
-            return core.tangent_s.zeroof(core.primal_s.avalof(v))
+            return abstract.Zero(abstract.tangent_s.map(abstract.avalof(v)))
 
         return utils.tree.map(primal, values), utils.tree.map(tangent, values)
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in, t_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, t_out = core.push_rules.get(prim)((p_in, t_in), **params)
+            p_out, t_out = core.push_rules[prim]((p_in, t_in), **params)
         return self.box((p_out, t_out))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in, t_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, t_out = await core.push_rules.aget(prim)((p_in, t_in), **params)
+            p_out, t_out = await core.apush_rules[prim]((p_in, t_in), **params)
         return self.box((p_out, t_out))
 
 
@@ -123,8 +120,8 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
     def make_t(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.tangent_s.avalof(atom.aval), source=atom)
-        return core.tangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.Var.fresh(aval=abstract.tangent_s.map(atom.aval), source=atom)
+        return abstract.Zero(abstract.tangent_s.map(abstract.avalof(atom)))
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
     t_in_ir = utils.tree.map(make_t, ir.in_tree)
@@ -138,7 +135,7 @@ def pushforward(ir: core.IR, /) -> core.IR:
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     def make_t(x):
-        return core.tangent_s.zeroof(core.primal_s.avalof(x))
+        return abstract.Zero(abstract.tangent_s.map(abstract.avalof(x)))
 
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
@@ -146,7 +143,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
         def custom_bind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
             p_in, t_in = pusher.unbox(boxed_in)
-            if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
+            if not all(isinstance(x, abstract.Zero) for x in utils.tree.leaves(t_in)):
                 return eqn.bind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = eqn.bind(p_in, **eqn.params)
@@ -162,7 +159,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     def make_t(x):
-        return core.tangent_s.zeroof(core.primal_s.avalof(x))
+        return abstract.Zero(abstract.tangent_s.map(abstract.avalof(x)))
 
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
@@ -170,7 +167,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 
         async def custom_abind(eqn: core.Eqn, boxed_in: Tree, /) -> Tree:
             p_in, t_in = pusher.unbox(boxed_in)
-            if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
+            if not all(isinstance(x, abstract.Zero) for x in utils.tree.leaves(t_in)):
                 return await eqn.abind(boxed_in, **eqn.params)
             with core.using_interpreter(pusher.parent):
                 p_out = await eqn.abind(p_in, **eqn.params)
@@ -186,8 +183,8 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 def abstract_pushforward_call(_: Tree, /, *, ir: core.IR) -> TreePair:
     def tangent_aval(atom):
         if core.is_var(atom):
-            return core.tangent_s.avalof(atom.aval)
-        return core.tangent_s.zeroof(core.primal_s.avalof(atom))
+            return abstract.tangent_s.map(atom.aval)
+        return abstract.Zero(abstract.tangent_s.map(abstract.avalof(atom)))
 
     p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
     t_out = utils.tree.map(tangent_aval, ir.out_tree)
@@ -282,17 +279,17 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     return out_ib, out_batched
 
 
-core.impl_rules.set(pushforward_call_p, impl_pushforward_call)
-core.impl_rules.aset(pushforward_call_p, aimpl_pushforward_call)
-core.abstract_rules.set(pushforward_call_p, abstract_pushforward_call)
-core.push_rules.set(pushforward_call_p, pushforward_pushforward_call)
-core.push_rules.aset(pushforward_call_p, apushforward_pushforward_call)
-core.pull_fwd_rules.set(pushforward_call_p, pullback_fwd_pushforward_call)
-core.pull_fwd_rules.aset(pushforward_call_p, apullback_fwd_pushforward_call)
-core.pull_bwd_rules.set(pushforward_call_p, pullback_bwd_pushforward_call)
-core.pull_bwd_rules.aset(pushforward_call_p, apullback_bwd_pushforward_call)
-core.batch_rules.set(pushforward_call_p, batch_pushforward_call)
-core.batch_rules.aset(pushforward_call_p, abatch_pushforward_call)
+core.impl_rules[pushforward_call_p] = impl_pushforward_call
+core.aimpl_rules[pushforward_call_p] = aimpl_pushforward_call
+core.abstract_rules[pushforward_call_p] = abstract_pushforward_call
+core.push_rules[pushforward_call_p] = pushforward_pushforward_call
+core.apush_rules[pushforward_call_p] = apushforward_pushforward_call
+core.pull_fwd_rules[pushforward_call_p] = pullback_fwd_pushforward_call
+core.apull_fwd_rules[pushforward_call_p] = apullback_fwd_pushforward_call
+core.pull_bwd_rules[pushforward_call_p] = pullback_bwd_pushforward_call
+core.apull_bwd_rules[pushforward_call_p] = apullback_bwd_pushforward_call
+core.batch_rules[pushforward_call_p] = batch_pushforward_call
+core.abatch_rules[pushforward_call_p] = abatch_pushforward_call
 
 
 def dce_pushforward_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -313,26 +310,26 @@ pullback_call_p = core.Prim("pullback_call")
 cot_acc_p = core.Prim("cot_acc")
 
 
-def cot_acc(cots: list[Any | core.Zero]) -> Any:
+def cot_acc(cots: list[Any | abstract.Zero]) -> Any:
     assert cots
-    non_zero = [c for c in cots if not isinstance(c, core.Zero)]
+    non_zero = [c for c in cots if not isinstance(c, abstract.Zero)]
     if not non_zero:
         # NOTE(asem): all output paths into the same input are zero.
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.core.primal_s.zeroof("")
+        # >>> z = af.abstract.Zero(af.abstract.primal_s.map(af.abstract.avalof("")))
         # >>> af.pullback(ir).call(("a",), (z, z))
         # (('a', 'a'), (Zero(StrAVal()),))
         first_zero, *rest_zero = cots
-        assert all(core.primal_s.avalof(c) == core.primal_s.avalof(first_zero) for c in rest_zero)
+        assert all(abstract.avalof(c) == abstract.avalof(first_zero) for c in rest_zero)
         return first_zero
     if len(non_zero) == 1:
         # NOTE(asem): exactly one output path into the same input is live.
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.core.primal_s.zeroof("")
+        # >>> z = af.abstract.Zero(af.abstract.primal_s.map(af.abstract.avalof("")))
         # >>> af.pullback(ir).call(("a",), ("df", z))
         # (('a', 'a'), ('df',))
         return non_zero[0]
@@ -355,13 +352,13 @@ def cot_acc(cots: list[Any | core.Zero]) -> Any:
 
 
 def impl_cot_acc(cots: list[Any], /) -> Any:
-    aval = core.primal_s.avalof(cots[0])
+    aval = abstract.avalof(cots[0])
     return aval.accumulate(cots)
 
 
-def abstract_cot_acc(cots: list[core.EvalType], /) -> core.AVal:
+def abstract_cot_acc(cots: list[Any], /) -> abstract.AVal:
     first = cots[0]
-    return first if core.is_aval(first) else core.primal_s.avalof(first)
+    return first if isinstance(first, abstract.AVal) else abstract.avalof(first)
 
 
 def pushforward_cot_acc(in_tree: TreePair, /) -> TreePair:
@@ -387,28 +384,28 @@ def batch_cot_acc(in_tree: Tree, /) -> TreePair:
     return spec.unflatten(out_bi), True
 
 
-core.impl_rules.set(cot_acc_p, impl_cot_acc)
-core.impl_rules.aset(cot_acc_p, utils.asyncify(impl_cot_acc))
-core.abstract_rules.set(cot_acc_p, abstract_cot_acc)
-core.push_rules.set(cot_acc_p, pushforward_cot_acc)
-core.push_rules.aset(cot_acc_p, utils.asyncify(pushforward_cot_acc))
-core.pull_fwd_rules.set(cot_acc_p, pullback_fwd_cot_acc)
-core.pull_fwd_rules.aset(cot_acc_p, utils.asyncify(pullback_fwd_cot_acc))
-core.pull_bwd_rules.set(cot_acc_p, pullback_bwd_cot_acc)
-core.pull_bwd_rules.aset(cot_acc_p, utils.asyncify(pullback_bwd_cot_acc))
-core.batch_rules.set(cot_acc_p, batch_cot_acc)
-core.batch_rules.aset(cot_acc_p, utils.asyncify(batch_cot_acc))
+core.impl_rules[cot_acc_p] = impl_cot_acc
+core.aimpl_rules[cot_acc_p] = utils.asyncify(impl_cot_acc)
+core.abstract_rules[cot_acc_p] = abstract_cot_acc
+core.push_rules[cot_acc_p] = pushforward_cot_acc
+core.apush_rules[cot_acc_p] = utils.asyncify(pushforward_cot_acc)
+core.pull_fwd_rules[cot_acc_p] = pullback_fwd_cot_acc
+core.apull_fwd_rules[cot_acc_p] = utils.asyncify(pullback_fwd_cot_acc)
+core.pull_bwd_rules[cot_acc_p] = pullback_bwd_cot_acc
+core.apull_bwd_rules[cot_acc_p] = utils.asyncify(pullback_bwd_cot_acc)
+core.batch_rules[cot_acc_p] = batch_cot_acc
+core.abatch_rules[cot_acc_p] = utils.asyncify(batch_cot_acc)
 
 
-class PullbackFwdBox:
-    __slots__ = ["owner", "primal"]
+class PullbackFwdBox(core.Box):
+    __slots__ = ["primal"]
 
     def __init__(self, owner, primal):
-        self.owner = owner
+        super().__init__(owner)
         self.primal = primal
 
 
-class PullbackFwdInterpreter(core.BoxedInterpreter[PullbackFwdBox]):
+class PullbackFwdInterpreter(core.Interpreter[PullbackFwdBox]):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -426,21 +423,21 @@ class PullbackFwdInterpreter(core.BoxedInterpreter[PullbackFwdBox]):
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, residuals = core.pull_fwd_rules.get(prim)(p_in, **params)
+            p_out, residuals = core.pull_fwd_rules[prim](p_in, **params)
         return self.box(p_out), residuals
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, residuals = await core.pull_fwd_rules.aget(prim)(p_in, **params)
+            p_out, residuals = await core.apull_fwd_rules[prim](p_in, **params)
         return self.box(p_out), residuals
 
 
-class PullbackBwdBox:
-    __slots__ = ["owner", "cotangent"]
+class PullbackBwdBox(core.Box):
+    __slots__ = ["cotangent"]
 
     def __init__(self, owner, cotangent):
-        self.owner = owner
+        super().__init__(owner)
         self.cotangent = cotangent
 
 
@@ -465,9 +462,9 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
 
     def read_c(atom) -> Any:
         if not core.is_var(atom):
-            return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(atom)))
         if not (cs := c_env[atom]):
-            return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(atom)))
         return cot_acc(cs)
 
     utils.tree.map(write_c, ir.out_tree, c_out)
@@ -478,7 +475,7 @@ def transpose_walk(ir: core.IR, c_out: Tree, /):
     yield None, utils.tree.map(read_c, ir.in_tree)
 
 
-class PullbackBwdInterpreter(core.BoxedInterpreter[PullbackBwdBox]):
+class PullbackBwdInterpreter(core.Interpreter[PullbackBwdBox]):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -497,14 +494,14 @@ class PullbackBwdInterpreter(core.BoxedInterpreter[PullbackBwdBox]):
         residuals, c_out = in_tree
         c_out = self.unbox(c_out)
         with core.using_interpreter(self.parent):
-            c_in = core.pull_bwd_rules.get(prim)((residuals, c_out), **params)
+            c_in = core.pull_bwd_rules[prim]((residuals, c_out), **params)
         return self.box(c_in)
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         residuals, c_out = in_tree
         c_out = self.unbox(c_out)
         with core.using_interpreter(self.parent):
-            c_in = await core.pull_bwd_rules.aget(prim)((residuals, c_out), **params)
+            c_in = await core.apull_bwd_rules[prim]((residuals, c_out), **params)
         return self.box(c_in)
 
 
@@ -542,8 +539,8 @@ def pullback(ir: core.IR, /) -> core.IR:
 
     def make_c(atom):
         if core.is_var(atom):
-            return core.Var.fresh(aval=core.cotangent_s.avalof(atom.aval), source=atom)
-        return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return core.Var.fresh(aval=abstract.cotangent_s.map(atom.aval), source=atom)
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(atom)))
 
     p_in_ir = utils.tree.map(make_p, ir.in_tree)
     c_out_ir = utils.tree.map(make_c, ir.out_tree)
@@ -624,8 +621,8 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
 def abstract_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     def cotangent_aval(atom):
         if core.is_var(atom):
-            return core.cotangent_s.avalof(atom.aval)
-        return core.cotangent_s.zeroof(core.primal_s.avalof(atom))
+            return abstract.cotangent_s.map(atom.aval)
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(atom)))
 
     p_out = utils.tree.map(core.aval_if_var, ir.out_tree)
     c_in = utils.tree.map(cotangent_aval, ir.in_tree)
@@ -722,17 +719,17 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     return out_ib, out_batched
 
 
-core.impl_rules.set(pullback_call_p, impl_pullback_call)
-core.impl_rules.aset(pullback_call_p, aimpl_pullback_call)
-core.abstract_rules.set(pullback_call_p, abstract_pullback_call)
-core.push_rules.set(pullback_call_p, pushforward_pullback_call)
-core.push_rules.aset(pullback_call_p, apushforward_pullback_call)
-core.pull_fwd_rules.set(pullback_call_p, pullback_fwd_pullback_call)
-core.pull_fwd_rules.aset(pullback_call_p, apullback_fwd_pullback_call)
-core.pull_bwd_rules.set(pullback_call_p, pullback_bwd_pullback_call)
-core.pull_bwd_rules.aset(pullback_call_p, apullback_bwd_pullback_call)
-core.batch_rules.set(pullback_call_p, batch_pullback_call)
-core.batch_rules.aset(pullback_call_p, abatch_pullback_call)
+core.impl_rules[pullback_call_p] = impl_pullback_call
+core.aimpl_rules[pullback_call_p] = aimpl_pullback_call
+core.abstract_rules[pullback_call_p] = abstract_pullback_call
+core.push_rules[pullback_call_p] = pushforward_pullback_call
+core.apush_rules[pullback_call_p] = apushforward_pullback_call
+core.pull_fwd_rules[pullback_call_p] = pullback_fwd_pullback_call
+core.apull_fwd_rules[pullback_call_p] = apullback_fwd_pullback_call
+core.pull_bwd_rules[pullback_call_p] = pullback_bwd_pullback_call
+core.apull_bwd_rules[pullback_call_p] = apullback_bwd_pullback_call
+core.batch_rules[pullback_call_p] = batch_pullback_call
+core.abatch_rules[pullback_call_p] = abatch_pullback_call
 
 
 def dce_pullback_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

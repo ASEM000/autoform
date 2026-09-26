@@ -81,7 +81,7 @@ reverse-mode AD, and batching.
 
 ```python
 def array_aval(value):
-    return value if isinstance(value, ArrayAVal) else afe.primal_s.avalof(value)
+    return value if isinstance(value, ArrayAVal) else afe.avalof(value)
 
 
 def result_aval(x, y, op):
@@ -127,12 +127,12 @@ def register_binary(name, op, push_rule, pull_rule):
         y_at = ft.partial(afe.batch_index, y, by)
         return [bind(x_at(i), y_at(i)) for i in range(batch_size)], True
 
-    afe.impl_rules.set(prim, impl)
-    afe.abstract_rules.set(prim, abstract)
-    afe.push_rules.set(prim, push)
-    afe.pull_fwd_rules.set(prim, pull_fwd)
-    afe.pull_bwd_rules.set(prim, pull_bwd)
-    afe.batch_rules.set(prim, batch_rule)
+    afe.impl_rules[prim] = impl
+    afe.abstract_rules[prim] = abstract
+    afe.push_rules[prim] = push
+    afe.pull_fwd_rules[prim] = pull_fwd
+    afe.pull_bwd_rules[prim] = pull_bwd
+    afe.batch_rules[prim] = batch_rule
     return bind
 ```
 

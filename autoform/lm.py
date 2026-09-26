@@ -28,8 +28,10 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import ModelResponse, acompletion, completion
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.schemas as schemas
+import autoform.tracer as tracer
 import autoform.utils as utils
 
 __all__ = [
@@ -231,9 +233,9 @@ async def aimpl_complete(in_tree: Tree, /, *, roles: Roles) -> str:
     return response.choices[0].message.content
 
 
-def abstract_complete(in_tree: Tree, /, *, roles: Roles) -> core.EvalType:
+def abstract_complete(in_tree: Tree, /, *, roles: Roles) -> Any:
     contents, model = in_tree
-    aval = core.primal_s.avalof("")
+    aval = abstract.avalof("")
     assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return aval
@@ -245,7 +247,7 @@ def pushforward_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
     p_resp = complete_p.bind(p_tree, roles=roles)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
     t_resp = complete_p.bind(t_tree, roles=roles)
     return p_resp, t_resp
 
@@ -256,7 +258,7 @@ async def apush_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     tangent_contents, *_ = tangents
     abind = ft.partial(complete_p.abind, roles=roles)
     p_tree = (primal_contents, primal_model)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
@@ -277,20 +279,20 @@ async def apull_fwd_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
 
 def pullback_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
+    out_cotangent = abstract.materialize_zeros(out_cotangent)
     contents, model, out = residuals
     grads = []
     for content in contents:
         grad_prompt = GRAD_PROMPT.format(content=content, out=out, out_cotangent=out_cotangent)
         grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
     return grads, model_cotangent
 
 
 async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
     residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
+    out_cotangent = abstract.materialize_zeros(out_cotangent)
     contents, model, out = residuals
 
     async def grad(c):
@@ -299,7 +301,7 @@ async def apull_bwd_complete(in_tree: Tree, /, *, roles: Roles) -> Tree:
         return await grad_out
 
     grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
     return grads, model_cotangent
 
 
@@ -328,17 +330,17 @@ async def abatch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     return out_tree, True
 
 
-core.impl_rules.set(complete_p, impl_complete)
-core.impl_rules.aset(complete_p, aimpl_complete)
-core.abstract_rules.set(complete_p, abstract_complete)
-core.push_rules.set(complete_p, pushforward_complete)
-core.push_rules.aset(complete_p, apush_complete)
-core.pull_fwd_rules.set(complete_p, pullback_fwd_complete)
-core.pull_fwd_rules.aset(complete_p, apull_fwd_complete)
-core.pull_bwd_rules.set(complete_p, pullback_bwd_complete)
-core.pull_bwd_rules.aset(complete_p, apull_bwd_complete)
-core.batch_rules.set(complete_p, batch_complete)
-core.batch_rules.aset(complete_p, abatch_complete)
+core.impl_rules[complete_p] = impl_complete
+core.aimpl_rules[complete_p] = aimpl_complete
+core.abstract_rules[complete_p] = abstract_complete
+core.push_rules[complete_p] = pushforward_complete
+core.apush_rules[complete_p] = apush_complete
+core.pull_fwd_rules[complete_p] = pullback_fwd_complete
+core.apull_fwd_rules[complete_p] = apull_fwd_complete
+core.pull_bwd_rules[complete_p] = pullback_bwd_complete
+core.apull_bwd_rules[complete_p] = apull_bwd_complete
+core.batch_rules[complete_p] = batch_complete
+core.abatch_rules[complete_p] = abatch_complete
 
 # ==================================================================================================
 # GENERATE
@@ -674,24 +676,24 @@ async def aimpl_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Any:
     return parse_json_value(schema, json.loads(resp.choices[0].message.content))
 
 
-def string_schema_abstract(_: schemas.Str) -> core.AVal:
-    return core.primal_s.avalof("")
+def string_schema_abstract(_: schemas.Str) -> abstract.AVal:
+    return abstract.avalof("")
 
 
-def integer_schema_abstract(_: schemas.Int) -> core.AVal:
-    return core.primal_s.avalof(0)
+def integer_schema_abstract(_: schemas.Int) -> abstract.AVal:
+    return abstract.avalof(0)
 
 
-def number_schema_abstract(_: schemas.Float) -> core.AVal:
-    return core.primal_s.avalof(0.0)
+def number_schema_abstract(_: schemas.Float) -> abstract.AVal:
+    return abstract.avalof(0.0)
 
 
-def boolean_schema_abstract(_: schemas.Bool) -> core.AVal:
-    return core.primal_s.avalof(False)
+def boolean_schema_abstract(_: schemas.Bool) -> abstract.AVal:
+    return abstract.avalof(False)
 
 
-def enum_schema_abstract(s: schemas.Enum) -> core.AVal:
-    return core.primal_s.avalof(s.values[0])
+def enum_schema_abstract(s: schemas.Enum) -> abstract.AVal:
+    return abstract.avalof(s.values[0])
 
 
 def docd_schema_abstract(s: schemas.Docd[Any]) -> Tree:
@@ -711,7 +713,7 @@ def schema_abstract_tree(schema: Any) -> Tree:
     def abstract(x: Any) -> Any:
         if rule := schema_abstract_rules.get(type(x)):
             return rule(x)
-        if not core.is_traceable(x):
+        if not tracer.is_traceable(x):
             raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
         return x
 
@@ -720,7 +722,7 @@ def schema_abstract_tree(schema: Any) -> Tree:
 
 def abstract_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree:
     contents, model = in_tree
-    aval = core.primal_s.avalof("")
+    aval = abstract.avalof("")
     assert all(type(x) in (str, type(aval)) for x in contents), f"Expected strings: {contents!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
     return schema_abstract_tree(schema)
@@ -731,7 +733,7 @@ def pushforward_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree
     primal_contents, primal_model = primals
     tangent_contents, *_ = tangents
     p_tree = (primal_contents, primal_model)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
     p_resp = generate_p.bind(p_tree, roles=roles, schema=schema)
     t_resp = generate_p.bind(t_tree, roles=roles, schema=schema)
     return p_resp, t_resp
@@ -743,7 +745,7 @@ async def apush_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tree
     tangent_contents, *_ = tangents
     abind = ft.partial(generate_p.abind, roles=roles, schema=schema)
     p_tree = (primal_contents, primal_model)
-    t_tree = (core.materialize_zeros(tangent_contents), primal_model)
+    t_tree = (abstract.materialize_zeros(tangent_contents), primal_model)
     p_resp, t_resp = await asyncio.gather(abind(p_tree), abind(t_tree))
     return p_resp, t_resp
 
@@ -764,7 +766,7 @@ async def apull_fwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> 
 
 def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
     def validate_schema_feedback(path: str, feedback: Any) -> str:
-        if isinstance(feedback, core.Zero):
+        if isinstance(feedback, abstract.Zero):
             return "No feedback"
         if type(feedback) is str:
             return feedback
@@ -791,7 +793,7 @@ def pullback_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> Tre
         grad_prompt = SCHEMA_GRAD_PROMPT.format(content=content, feedback=feedback)
         grad_out = complete_p.bind(([grad_prompt], model), roles=["user"])
         grads.append(grad_out)
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
     return grads, model_cotangent
 
 
@@ -806,7 +808,7 @@ async def apull_bwd_generate(in_tree: Tree, /, *, roles: Roles, schema: Any) -> 
         return await grad_out
 
     grads = await asyncio.gather(*[grad(c) for c in contents])
-    model_cotangent = core.cotangent_s.zeroof(core.primal_s.avalof(model))
+    model_cotangent = abstract.Zero(abstract.cotangent_s.map(abstract.avalof(model)))
     return grads, model_cotangent
 
 
@@ -842,14 +844,14 @@ async def abatch_generate(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> Tr
     return out_ib, out_batched
 
 
-core.impl_rules.set(generate_p, impl_generate)
-core.impl_rules.aset(generate_p, aimpl_generate)
-core.abstract_rules.set(generate_p, abstract_generate)
-core.push_rules.set(generate_p, pushforward_generate)
-core.push_rules.aset(generate_p, apush_generate)
-core.pull_fwd_rules.set(generate_p, pullback_fwd_generate)
-core.pull_fwd_rules.aset(generate_p, apull_fwd_generate)
-core.pull_bwd_rules.set(generate_p, pullback_bwd_generate)
-core.pull_bwd_rules.aset(generate_p, apull_bwd_generate)
-core.batch_rules.set(generate_p, batch_generate)
-core.batch_rules.aset(generate_p, abatch_generate)
+core.impl_rules[generate_p] = impl_generate
+core.aimpl_rules[generate_p] = aimpl_generate
+core.abstract_rules[generate_p] = abstract_generate
+core.push_rules[generate_p] = pushforward_generate
+core.apush_rules[generate_p] = apush_generate
+core.pull_fwd_rules[generate_p] = pullback_fwd_generate
+core.apull_fwd_rules[generate_p] = apull_fwd_generate
+core.pull_bwd_rules[generate_p] = pullback_bwd_generate
+core.apull_bwd_rules[generate_p] = apull_bwd_generate
+core.batch_rules[generate_p] = batch_generate
+core.abatch_rules[generate_p] = abatch_generate
