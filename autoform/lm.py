@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import functools as ft
 import json
 import re
@@ -30,6 +29,7 @@ from litellm import ModelResponse, acompletion, completion
 
 import autoform.control as control
 import autoform.core as core
+import autoform.order as order
 import autoform.schemas as schemas
 import autoform.stage as stage
 import autoform.utils as utils
@@ -211,16 +211,6 @@ def complete(messages: Messages, /, *, model: str) -> str:
     return complete_p.bind((messages, model))
 
 
-# TODO(asem): take a look into this
-GRAD_PROMPT = """Given this LLM interaction:
-
-INPUT: {content}
-OUTPUT: {out}
-FEEDBACK ON OUTPUT: {out_cotangent}
-
-Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise."""
-
-
 def impl_complete(in_tree: Tree, /) -> str:
     messages, model = in_tree
     response = active_client.get().completion(messages=messages, model=model)
@@ -261,7 +251,8 @@ async def apush_complete(in_tree: Tree, /) -> TreePair:
     t_messages, *_ = t_in
     t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
     t_tree = (t_request, p_model)
-    p_resp, t_resp = await asyncio.gather(complete_p.abind(p_in), complete_p.abind(t_tree))
+    ir = stage.trace(complete_p.bind)(p_in)
+    p_resp, t_resp = await order.fanout_p.abind([(p_in,), (t_tree,)], irs=[ir, ir])
     return p_resp, t_resp
 
 
@@ -279,30 +270,38 @@ async def apull_fwd_complete(in_tree: Tree, /) -> TreePair:
     return out, residuals
 
 
+GRAD_SYSTEM_PROMPT = "Translate output feedback into feedback on the corresponding input fields."
+GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_cotangent}"""
+
+
 def pullback_bwd_complete(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = core.materialize_zeros(out_cotangent)
     messages, model, out = residuals
+    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
-    def grad(x):
-        prompt = GRAD_PROMPT.format(content=x, out=out, out_cotangent=out_cotangent)
-        return complete_p.bind(([dict(role="user", content=prompt)], model))
+    def make_schema(path, value):
+        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
 
-    return utils.tree.map(grad, (messages, model))
+    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
+    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
+    user_request = dict(role="user", content=prompt)
+    return generate_p.bind(([system_request, user_request], model), schema=in_schema)
 
 
 async def apull_bwd_complete(in_tree: Tree, /) -> Tree:
     residuals, out_cotangent = in_tree
     out_cotangent = core.materialize_zeros(out_cotangent)
     messages, model, out = residuals
+    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
-    async def grad(x):
-        prompt = GRAD_PROMPT.format(content=x, out=out, out_cotangent=out_cotangent)
-        return await complete_p.abind(([dict(role="user", content=prompt)], model))
+    def make_schema(path, value):
+        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
 
-    leaves, spec = utils.tree.flatten((messages, model))
-    grads = await asyncio.gather(*[grad(x) for x in leaves])
-    return spec.unflatten(grads)
+    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
+    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
+    user_request = dict(role="user", content=prompt)
+    return await generate_p.abind(([system_request, user_request], model), schema=in_schema)
 
 
 def batch_complete(in_tree: Tree, /) -> TreePair:
@@ -324,7 +323,10 @@ async def abatch_complete(in_tree: Tree, /) -> TreePair:
         return await complete_p.abind(in_values), False
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    results = await asyncio.gather(*[complete_p.abind(unbatch(b)) for b in range(batch_size)])
+    inputs = [(unbatch(b),) for b in range(batch_size)]
+    in0, *_ = inputs
+    ir = stage.trace(complete_p.bind)(*in0)
+    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
     out_tree = spec.unflatten(results)
     return out_tree, True
 
@@ -395,21 +397,6 @@ def generate(messages: Messages, /, *, model: str, schema: Any) -> Any:
     return generate_p.bind((messages, model), schema=schema)
 
 
-SCHEMA_GRAD_PROMPT = """Given this LLM interaction:
-
-INPUT: {content}
-STRUCTURED OUTPUT FEEDBACK:
-{feedback}
-
-Provide specific, actionable feedback on how to improve the INPUT to address the feedback. Be concise.
-
-- Each field is one leaf of the generated output.
-- Path locates the field from the root output object.
-- Value is the generated value.
-- Feedback is natural-language feedback for that field; empty feedback means no change.
-"""
-
-
 json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
 
 emit_json_schema_rules: dict[type[Any], EmitJsonSchemaRule] = {}
@@ -469,10 +456,12 @@ emit_json_schema_rules[schemas.Enum] = emit_enum_json_schema
 emit_json_schema_rules[schemas.Docd] = emit_docd_json_schema
 
 
-def emit_json_schema(schema: Any) -> JsonSchema | None:
+def emit_json_schema(schema: Any, *, value: Any = ...) -> Any:
     # NOTE(asem): internal function to emit json based on the following rules
     # - A literal in the schema will not be generated in the schema.
     # - Emission rules use rules registry that can be extended.
+    # - With value, emit typed JSON data using the same structure. Primal bounds
+    #   and enum choices do not constrain cotangents.
 
     # Example:
     #     >>> import json
@@ -497,18 +486,26 @@ def emit_json_schema(schema: Any) -> JsonSchema | None:
     #       "additionalProperties": false
     #     }
     # here only name is emitted, while literal value fixed is omitted.
+    if value is not ... and isinstance(schema, schemas.Docd):
+        return emit_json_schema(schema.value, value=value)
     if rule := emit_json_schema_rules.get(type(schema)):
-        return rule(schema)
+        if value is ...:
+            return rule(schema)
+        aval = schema_abstract_tree(schema)
+        if core.avalof(value) != aval:
+            raise TypeError(f"Expected {aval!r}, got {value!r}")
+        return value
 
     # NOTE(asem): literal leaf case
     if type(schema) not in emit_json_schema_rules and utils.tree.is_leaf(schema):
         return None
 
     children, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    values = [...] * len(children) if value is ... else spec.flatten_up_to(value)
     properties = OrderedDict()
-    for entry, child in zip(spec.entries(), children):
+    for entry, child, v in zip(spec.entries(), children, values):
         property_name = str(entry)
-        if (child_schema := emit_json_schema(child)) is not None:
+        if (child_schema := emit_json_schema(child, value=v)) is not None:
             if property_name in properties:
                 raise TypeError(f"Duplicate object entries {(property_name,)!r}")
             properties[property_name] = child_schema
@@ -517,6 +514,9 @@ def emit_json_schema(schema: Any) -> JsonSchema | None:
         # NOTE(asem): all tree is literals
         # >>> dict(key="k", value=1)
         return None
+
+    if value is not ...:
+        return properties
 
     return dict(
         type="object",
@@ -748,8 +748,8 @@ async def apush_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
     t_messages, *_ = t_in
     t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
     t_tree = (t_request, p_model)
-    abind = ft.partial(generate_p.abind, schema=schema)
-    p_resp, t_resp = await asyncio.gather(abind(p_in), abind(t_tree))
+    ir = stage.trace(ft.partial(generate_p.bind, schema=schema))(p_in)
+    p_resp, t_resp = await order.fanout_p.abind([(p_in,), (t_tree,)], irs=[ir, ir])
     return p_resp, t_resp
 
 
@@ -767,50 +767,38 @@ async def apull_fwd_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
     return out, residuals
 
 
-def build_cotangent_schema_summary(out: Tree, cotangent: Tree) -> str:
-    def validate_schema_feedback(path: str, feedback: Any) -> str:
-        if isinstance(feedback, core.Zero):
-            return "No feedback"
-        if type(feedback) is str:
-            return feedback
-        raise TypeError(f"{path}: schema output cotangent leaves must be text, got {feedback!r}")
-
-    out_leaves, out_spec = utils.tree.flatten(out)
-    cotangents = out_spec.flatten_up_to(cotangent)
-    lines = ["Fields:"]
-
-    for accessor, value, feedback in zip(out_spec.accessors(), out_leaves, cotangents):
-        feedback = validate_schema_feedback(accessor.codify("$"), feedback)
-        lines.append(accessor.codify("$"))
-        lines.append(f"\tvalue: {value!r}")
-        lines.append(f"\tfeedback: {feedback!r}")
-    return "\n".join(lines).expandtabs(2)
-
-
 def pullback_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     residuals, out_cotangent = in_tree
+    out_cotangent = core.materialize_zeros(out_cotangent)
     messages, model, out = residuals
-    feedback = build_cotangent_schema_summary(out, out_cotangent)
+    out = json.dumps(emit_json_schema(schema, value=out), allow_nan=False)
+    out_cotangent = json.dumps(emit_json_schema(schema, value=out_cotangent), allow_nan=False)
+    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
-    def grad(x):
-        prompt = SCHEMA_GRAD_PROMPT.format(content=x, feedback=feedback)
-        return complete_p.bind(([dict(role="user", content=prompt)], model))
+    def make_schema(path, value):
+        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
 
-    return utils.tree.map(grad, (messages, model))
+    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
+    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
+    user_request = dict(role="user", content=prompt)
+    return generate_p.bind(([system_request, user_request], model), schema=in_schema)
 
 
 async def apull_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     residuals, out_cotangent = in_tree
+    out_cotangent = core.materialize_zeros(out_cotangent)
     messages, model, out = residuals
-    feedback = build_cotangent_schema_summary(out, out_cotangent)
+    out = json.dumps(emit_json_schema(schema, value=out), allow_nan=False)
+    out_cotangent = json.dumps(emit_json_schema(schema, value=out_cotangent), allow_nan=False)
+    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
-    async def grad(x):
-        prompt = SCHEMA_GRAD_PROMPT.format(content=x, feedback=feedback)
-        return await complete_p.abind(([dict(role="user", content=prompt)], model))
+    def make_schema(path, value):
+        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
 
-    leaves, spec = utils.tree.flatten((messages, model))
-    grads = await asyncio.gather(*[grad(x) for x in leaves])
-    return spec.unflatten(grads)
+    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
+    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
+    user_request = dict(role="user", content=prompt)
+    return await generate_p.abind(([system_request, user_request], model), schema=in_schema)
 
 
 def batch_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
@@ -838,8 +826,10 @@ async def abatch_generate(in_tree: Tree, /, *, schema: Tree) -> TreePair:
         return result, out_batched
 
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    abind = ft.partial(generate_p.abind, schema=schema)
-    results = await asyncio.gather(*[abind(unbatch(b)) for b in range(batch_size)])
+    inputs = [(unbatch(b),) for b in range(batch_size)]
+    in0, *_ = inputs
+    ir = stage.trace(ft.partial(generate_p.bind, schema=schema))(*in0)
+    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
     return out_ib, out_batched

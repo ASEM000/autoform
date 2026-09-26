@@ -14,6 +14,7 @@
 
 import asyncio
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import optree
@@ -98,6 +99,16 @@ class SchemaGradientRouter(EchoRouter):
     def completion(self, *, messages: list[dict], model: str, response_format=None, **kwargs):
         assert kwargs == {}
         self.calls.append(dict(messages=messages, model=model, response_format=response_format))
+        if response_format is not None:
+            properties = response_format["json_schema"]["schema"]["properties"]
+            if "1" in properties:
+                feedback = {"1": "model feedback"}
+                if "0" in properties:
+                    feedback["0"] = {
+                        key: dict(role=f"role feedback {key}", content=f"content feedback {key}")
+                        for key in properties["0"]["properties"]
+                    }
+                return fake_response(json.dumps(feedback))
         responses = {
             False: "input feedback",
             True: json.dumps({"text": "Recursion calls itself.", "score": 0.92}),
@@ -226,67 +237,83 @@ def gradient_client():
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_generate_pullback(executor, gradient_client):
-    schema = {"text": af.Str(min=1, max=80), "score": af.Float(min=0, max=1)}
-    program = lm_program(af.lm.generate, schema=schema)
-    ir = af.pullback(af.trace(program)("seed"))
-    args = (("Explain recursion.",), {"text": "too terse", "score": "overconfident"})
-    result = executor(ir, *args)
-    assert result == ({"text": "Recursion calls itself.", "score": 0.92}, ("input feedback",))
-    prompt = gradient_client.calls[-1]["messages"][0]["content"]
-    for fragment in (
-        "STRUCTURED OUTPUT FEEDBACK:",
-        "Each field is one leaf of the generated output.",
-        "Path locates the field from the root output object.",
-        "Value is the generated value.",
-        "empty feedback means no change",
-        "$['text']",
-        "value: 'Recursion calls itself.'",
-        "feedback: 'too terse'",
-        "$['score']",
-        "value: 0.92",
-        "feedback: 'overconfident'",
-    ):
-        assert fragment in prompt
-
-
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_generate_pullback_zero_feedback_for_unused_field(executor, gradient_client):
-    schema = {"text": af.Str(), "score": af.Float(min=0, max=1)}
+@pytest.mark.parametrize(
+    "field, out_cotangent, expected, feedback",
+    [
+        pytest.param(
+            "text",
+            "too terse",
+            "Recursion calls itself.",
+            {"text": "too terse", "score": 0.0},
+            id="unused-float",
+        ),
+        pytest.param(
+            "score",
+            -0.1,
+            1.84,
+            {"text": "", "score": -0.2},
+            id="unused-string",
+        ),
+    ],
+)
+def test_generate_pullback_materializes_unused_fields(
+    executor, field, out_cotangent, expected, feedback, gradient_client
+):
+    schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
     generate = lm_program(af.lm.generate, schema=schema)
 
-    def program(prompt):
-        result = generate(prompt)
-        return af.string.format("{text}", text=result["text"])
+    def program(x):
+        y = generate(x)[field]
+        return y * 2.0 if field == "score" else af.string.format("{text}", text=y)
 
-    ir = af.pullback(af.trace(program)("seed"))
-    args = (("Explain recursion.",), "too terse")
-    result = executor(ir, *args)
-    assert result == ("Recursion calls itself.", ("input feedback",))
-    prompt = gradient_client.calls[-1]["messages"][0]["content"]
-    for fragment in (
-        "STRUCTURED OUTPUT FEEDBACK:",
-        "Each field is one leaf of the generated output.",
-        "Path locates the field from the root output object.",
-        "Value is the generated value.",
-        "empty feedback means no change",
-        "$['text']",
-        "value: 'Recursion calls itself.'",
-        "feedback: 'too terse'",
-        "$['score']",
-        "value: 0.92",
-        "feedback: 'No feedback'",
-    ):
-        assert fragment in prompt
+    ir = af.sched(af.pullback(af.trace(program)("seed")))
+    assert executor(ir, ("Explain recursion.",), out_cotangent) == (
+        expected,
+        ("content feedback 0",),
+    )
+    prompt = gradient_client.calls[-1]["messages"][-1]["content"]
+    assert json.loads(prompt.split(" OUTPUT FEEDBACK: ")[1]) == feedback
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_generate_pullback_rejects_non_text_schema_cotangent(executor, gradient_client):
-    program = lm_program(af.lm.generate, schema={"text": af.Str(), "score": af.Float(min=0, max=1)})
+@pytest.mark.parametrize(
+    "out_cotangent, error",
+    [
+        pytest.param(
+            {"text": "too terse", "score": "overconfident"}, "FloatAVal", id="text-for-float"
+        ),
+        pytest.param({"text": -0.2, "score": -0.2}, "StrAVal", id="float-for-text"),
+    ],
+)
+def test_generate_pullback_rejects_wrong_schema_cotangent_type(
+    executor, out_cotangent, error, gradient_client
+):
+    program = lm_program(af.lm.generate, schema={"text": af.Str(), "score": af.Float()})
     ir = af.pullback(af.trace(program)("seed"))
-    args = (("Explain recursion.",), {"text": "too terse", "score": -0.2})
-    with pytest.raises(TypeError, match="must be text"):
-        executor(ir, *args)
+    with pytest.raises(TypeError, match=f"Expected {error}"):
+        executor(ir, ("Explain recursion.",), out_cotangent)
+    assert len(gradient_client.calls) == 1
+
+
+def test_emit_json_schema_with_value_preserves_generated_structure():
+    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+    class Answer:
+        fields: object
+        metadata: object
+
+    schema = Answer(
+        [
+            af.Float(min=0) @ af.Doc("Score"),
+            (af.Str(min=1), af.Int(), af.Bool(), af.Enum("yes", "no")),
+        ],
+        {"source": "fixed", "nothing": None},
+    ) @ af.Doc("Answer")
+    value = Answer([-0.2, ("", -1, False, "feedback")], {"source": "", "nothing": None})
+    assert emit_json_schema(schema, value=value) == {
+        "fields": {"0": -0.2, "1": {"0": "", "1": -1, "2": False, "3": "feedback"}}
+    }
+    with pytest.raises(ValueError):
+        emit_json_schema(schema, value=Answer([], value.metadata))
 
 
 @pytest.mark.parametrize(
@@ -526,12 +553,70 @@ def test_schema_dsl_reports_value_errors():
 
 
 class TestLMPrimitive:
+    @pytest.mark.parametrize(
+        "primitive, params, out_cotangent",
+        [
+            pytest.param(af.lm.complete, {}, "feedback", id="complete"),
+            pytest.param(
+                af.lm.generate,
+                {"schema": {"text": af.Str(), "score": af.Float()}},
+                {"text": "feedback", "score": -0.2},
+                id="generate",
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "transform, args, count, width",
+        [
+            pytest.param(af.pushforward, (("hello",), ("tangent",)), 2, 2, id="pushforward"),
+            pytest.param(af.pullback, (("hello",), "feedback"), 2, 1, id="pullback"),
+            pytest.param(af.batch, (["hello", "world"],), 2, 2, id="batch"),
+        ],
+    )
+    @pytest.mark.parametrize("serial", [False, True], ids=["concurrent", "serial"])
+    def test_async_transforms_respect_fanout(
+        self, primitive, params, out_cotangent, transform, args, count, width, serial
+    ):
+        events = []
+
+        class Client(SchemaGradientRouter):
+            async def acompletion(self, **kwargs):
+                events.append(1)
+                await asyncio.sleep(0)
+                response = self.completion(**kwargs)
+                events.append(-1)
+                return response
+
+        with af.lm.client(Client()) as client:
+            ir = af.trace(lm_program(primitive, **params))("seed")
+            if transform is af.pullback:
+                args = (args[0], out_cotangent)
+            ir = transform(ir)
+            assert client.calls == []
+            expected = execute(ir, *args)
+            client.calls.clear()
+            with af.order.serial_fanout() if serial else nullcontext():
+                assert aexecute(ir, *args) == expected
+
+        active = peak = 0
+        for event in events:
+            active += event
+            peak = max(peak, active)
+        assert active == 0
+        assert peak == (1 if serial else width)
+        assert len(client.calls) == count
+
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "primitive, params",
+        "primitive, params, render",
         [
-            pytest.param(af.lm.complete, {}, id="complete"),
-            pytest.param(af.lm.generate, {"schema": af.Str()}, id="generate"),
+            pytest.param(af.lm.complete, {}, af.lm.echo_messages, id="complete"),
+            pytest.param(
+                af.lm.generate,
+                {"schema": af.Str()},
+                lambda messages: json.dumps(af.lm.echo_messages(messages)),
+                id="generate",
+            ),
         ],
     )
     @pytest.mark.parametrize(
@@ -543,13 +628,12 @@ class TestLMPrimitive:
         ],
     )
     def test_traces_and_batches_message_roles(
-        self, executor, primitive, params, roles, echo_client
+        self, executor, primitive, params, render, roles, echo_client
     ):
         def program(messages):
             return primitive(messages, model="echo", **params)
 
-        if primitive is af.lm.generate:
-            echo_client.render = lambda messages: json.dumps(af.lm.echo_messages(messages))
+        echo_client.render = render
 
         messages = [dict(role="user", content="hello"), dict(role="system", content="who is this")]
         ir = af.trace(program)(messages)
@@ -577,18 +661,24 @@ class TestLMPrimitive:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "primitive, params",
+        "primitive, params, render",
         [
-            pytest.param(af.lm.complete, {}, id="complete"),
-            pytest.param(af.lm.generate, {"schema": af.Str()}, id="generate"),
+            pytest.param(af.lm.complete, {}, af.lm.echo_messages, id="complete"),
+            pytest.param(
+                af.lm.generate,
+                {"schema": af.Str()},
+                lambda messages: json.dumps(af.lm.echo_messages(messages)),
+                id="generate",
+            ),
         ],
     )
-    def test_pushforward_preserves_primal_roles(self, executor, primitive, params, echo_client):
+    def test_pushforward_preserves_primal_roles(
+        self, executor, primitive, params, render, echo_client
+    ):
         def program(messages, model):
             return primitive(messages, model=model, **params)
 
-        if primitive is af.lm.generate:
-            echo_client.render = lambda messages: json.dumps(af.lm.echo_messages(messages))
+        echo_client.render = render
 
         messages = [dict(role="system", content="hello"), dict(role="user", content="world")]
         ir = af.pushforward(af.trace(program)(messages, "echo"))
@@ -615,52 +705,102 @@ class TestLMPrimitive:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "primitive, params, out_cotangent, expected",
+        "primitive, raw, params, out_cotangent, expected, decode",
         [
-            pytest.param(af.lm.complete, {}, "feedback", "input feedback", id="complete"),
+            pytest.param(
+                af.lm.complete,
+                af.lm.complete_p,
+                {},
+                "feedback",
+                "input feedback",
+                str,
+                id="complete",
+            ),
             pytest.param(
                 af.lm.generate,
-                {"schema": {"text": af.Str(), "score": af.Float()}},
-                {"text": "feedback", "score": "feedback"},
+                af.lm.generate_p,
+                {"schema": {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}},
+                {"text": "feedback", "score": -0.2},
                 {"text": "Recursion calls itself.", "score": 0.92},
+                json.loads,
                 id="generate",
             ),
         ],
     )
     @pytest.mark.parametrize("stopped", [True, False], ids=["stopped", "raw"])
-    def test_pullback_stops_role_and_model_feedback(
-        self, executor, primitive, params, out_cotangent, expected, stopped, gradient_client
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            pytest.param([], id="empty-messages"),
+            pytest.param(
+                [dict(role="system", content="hello"), dict(role="user", content="world")],
+                id="multiple-messages",
+            ),
+        ],
+    )
+    def test_pullback_returns_input_tree_in_one_call(
+        self,
+        executor,
+        primitive,
+        raw,
+        params,
+        out_cotangent,
+        expected,
+        decode,
+        stopped,
+        messages,
+        gradient_client,
     ):
-        raw = af.lm.complete_p if primitive is af.lm.complete else af.lm.generate_p
-
         def program(messages, model):
             if stopped:
                 return primitive(messages, model=model, **params)
             return raw.bind((messages, model), **params)
 
-        messages = [dict(role="system", content="hello"), dict(role="user", content="world")]
         ir = af.pullback(af.trace(program)(messages, "m1"))
         out, cotangent = executor(ir, (messages, "m2"), out_cotangent)
         zero = af.core.Zero(af.string.StrAVal())
-        stopped_feedback = zero if stopped else "input feedback"
         assert out == expected
         assert cotangent == (
-            [dict(role=stopped_feedback, content="input feedback") for _ in messages],
-            stopped_feedback,
+            [
+                dict(
+                    role=zero if stopped else f"role feedback {i}", content=f"content feedback {i}"
+                )
+                for i in range(len(messages))
+            ],
+            zero if stopped else "model feedback",
         )
-        forward, *backward = gradient_client.calls
+        forward, backward = gradient_client.calls
         assert forward["messages"] == messages
-        assert len(backward) == 5
         assert all(call["model"] == "m2" for call in gradient_client.calls)
-        for call, content in zip(backward, ("hello", "system", "world", "user", "m2"), strict=True):
-            (message,) = call["messages"]
-            assert message["role"] == "user"
-            assert f"INPUT: {content}" in message["content"]
-            if primitive is af.lm.complete:
-                assert f"OUTPUT: {out}" in message["content"]
-                assert "FEEDBACK ON OUTPUT: feedback" in message["content"]
-            else:
-                assert "STRUCTURED OUTPUT FEEDBACK:" in message["content"]
+        *context, message = backward["messages"]
+        assert message["role"] == "user"
+        assert f"INPUT: {(messages, 'm2')}" in message["content"]
+        response_format = backward["response_format"]
+        assert response_format["type"] == "json_schema"
+        assert response_format["json_schema"]["strict"] is True
+        properties = response_format["json_schema"]["schema"]["properties"]
+        assert properties["1"] == {
+            "type": "string",
+            "description": "Feedback for input at (1,): 'm2'.",
+        }
+        for i, m in enumerate(messages):
+            fields = properties["0"]["properties"][str(i)]["properties"]
+            assert fields == {
+                key: {
+                    "type": "string",
+                    "description": f"Feedback for input at {(0, i, key)}: {value!r}.",
+                }
+                for key, value in m.items()
+            }
+        assert context == [
+            dict(
+                role="system",
+                content="Translate output feedback into feedback on the corresponding input fields.",
+            )
+        ]
+        output, feedback = message["content"].split("OUTPUT: ", 1)[1].split(" OUTPUT FEEDBACK: ")
+        assert decode(output) == out
+        assert decode(feedback) == out_cotangent
 
 
 class TestEchoLMClient:
