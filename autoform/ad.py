@@ -361,7 +361,7 @@ def impl_cot_acc(cots: list[Any], /) -> Any:
 
 def abstract_cot_acc(cots: list[core.EvalType], /) -> core.AVal:
     first = cots[0]
-    return first if core.is_aval(first) else core.primal_s.avalof(first)
+    return first if isinstance(first, core.AVal) else core.primal_s.avalof(first)
 
 
 def pushforward_cot_acc(in_tree: TreePair, /) -> TreePair:

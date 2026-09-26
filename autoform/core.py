@@ -238,10 +238,6 @@ def is_traceable(x) -> TypeGuard[Val]:
     return type(x) in trace_types
 
 
-def is_aval(x) -> TypeGuard[AVal]:
-    return isinstance(x, AVal)
-
-
 type EvalType = AVal | Val
 
 
@@ -271,7 +267,7 @@ class Var:
     def __init__(self, /, *, aval: AVal, source: Var | None = None):
         self.id = next(self.counter)
         assert is_var(source) or source is None
-        assert is_aval(aval)
+        assert isinstance(aval, AVal)
         self.source = source
         self.aval = aval
 
@@ -932,7 +928,7 @@ class TraceInterpreter(BoxedInterpreter[TraceBox]):
             # NOTE(asem): abstract rules return `AVal`/ python leaves.
             # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
-            return Var.fresh(aval=x) if is_aval(x) else x
+            return Var.fresh(aval=x) if isinstance(x, AVal) else x
 
         out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
         self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))

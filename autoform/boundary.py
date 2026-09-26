@@ -35,7 +35,7 @@ def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> core.IR:
     def to_ir_input(x, /):
         if core.is_var(x):
             return x
-        if core.is_aval(x):
+        if isinstance(x, core.AVal):
             return core.Var.fresh(aval=x)
         assert core.is_traceable(x), f"Unsupported type for custom function: {type(x).__name__}"
         return core.Var.fresh(aval=core.primal_s.avalof(x))

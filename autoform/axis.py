@@ -42,7 +42,7 @@ class BatchAVal(core.AVal):
     def __init__(self, base: core.AVal):
         # TODO(asem): maybe exapand with useful metadata here
 
-        assert core.is_aval(base), f"Expected AVal, got {base!r}"
+        assert isinstance(base, core.AVal), f"Expected AVal, got {base!r}"
         self.base = base
 
     def __repr__(self) -> str:

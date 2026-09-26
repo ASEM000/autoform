@@ -179,7 +179,7 @@ async def aimpl_switch(in_tree, /, *, branches: Branches):
 def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
     key, _ = in_tree
     key0 = next(iter(branches))
-    key_aval = key if core.is_aval(key) else core.primal_s.avalof(key)
+    key_aval = key if isinstance(key, core.AVal) else core.primal_s.avalof(key)
     assert key_aval == core.primal_s.avalof(key0)
     branch0 = branches[key0]
     return utils.tree.map(core.aval_if_var, branch0.out_tree)
@@ -415,7 +415,7 @@ def abstract_while_loop(
     assert utils.tree.structure(in_tree) == utils.tree.structure(out_tree)
 
     def same_state(x, y):
-        if core.is_aval(y) and not core.is_aval(x):
+        if isinstance(y, core.AVal) and not isinstance(x, core.AVal):
             # NOTE(asem): the key idea here is that in case inital state is a literal
             # and body returns AVal e.g.
             # >>> cond = af.trace(lambda x: False)("x")
