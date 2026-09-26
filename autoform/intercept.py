@@ -22,9 +22,12 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
+import autoform.ad as ad
+import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
+import autoform.stage as stage
 import autoform.utils as utils
 
 __all__ = ["checkpoint", "collect", "inject"]
@@ -99,15 +102,15 @@ async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable |
 
 core.impl_rules[checkpoint_p] = impl_checkpoint
 core.aimpl_rules[checkpoint_p] = utils.asyncify(impl_checkpoint)
-core.abstract_rules[checkpoint_p] = abstract_checkpoint
-core.push_rules[checkpoint_p] = push_checkpoint
-core.apush_rules[checkpoint_p] = utils.asyncify(push_checkpoint)
-core.pull_fwd_rules[checkpoint_p] = pull_fwd_checkpoint
-core.apull_fwd_rules[checkpoint_p] = utils.asyncify(pull_fwd_checkpoint)
-core.pull_bwd_rules[checkpoint_p] = pull_bwd_checkpoint
-core.apull_bwd_rules[checkpoint_p] = utils.asyncify(pull_bwd_checkpoint)
-core.batch_rules[checkpoint_p] = batch_checkpoint
-core.abatch_rules[checkpoint_p] = abatch_checkpoint
+stage.abstract_rules[checkpoint_p] = abstract_checkpoint
+axis.batch_rules[checkpoint_p] = batch_checkpoint
+axis.abatch_rules[checkpoint_p] = abatch_checkpoint
+ad.push_rules[checkpoint_p] = push_checkpoint
+ad.apush_rules[checkpoint_p] = utils.asyncify(push_checkpoint)
+ad.pull_fwd_rules[checkpoint_p] = pull_fwd_checkpoint
+ad.apull_fwd_rules[checkpoint_p] = utils.asyncify(pull_fwd_checkpoint)
+ad.pull_bwd_rules[checkpoint_p] = pull_bwd_checkpoint
+ad.apull_bwd_rules[checkpoint_p] = utils.asyncify(pull_bwd_checkpoint)
 
 
 def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = None) -> Tree:

@@ -1,15 +1,16 @@
-# Rule Registries
+# Rule Registration
 
 ```{eval-rst}
-.. autodata:: autoform.extend.impl_rules
-.. autodata:: autoform.extend.aimpl_rules
-.. autodata:: autoform.extend.abstract_rules
-.. autodata:: autoform.extend.push_rules
-.. autodata:: autoform.extend.apush_rules
-.. autodata:: autoform.extend.pull_fwd_rules
-.. autodata:: autoform.extend.apull_fwd_rules
-.. autodata:: autoform.extend.pull_bwd_rules
-.. autodata:: autoform.extend.apull_bwd_rules
-.. autodata:: autoform.extend.batch_rules
-.. autodata:: autoform.extend.abatch_rules
+.. autofunction:: autoform.extend.register_impl
+.. autofunction:: autoform.extend.register_aimpl
+.. autofunction:: autoform.extend.register_abstract
+.. autofunction:: autoform.extend.register_pushforward
+.. autofunction:: autoform.extend.register_apushforward
+.. autofunction:: autoform.extend.register_pullback_fwd
+.. autofunction:: autoform.extend.register_apullback_fwd
+.. autofunction:: autoform.extend.register_pullback_bwd
+.. autofunction:: autoform.extend.register_apullback_bwd
+.. autofunction:: autoform.extend.register_batch
+.. autofunction:: autoform.extend.register_abatch
+.. autofunction:: autoform.extend.register_dce
 ```

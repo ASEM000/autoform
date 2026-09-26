@@ -20,6 +20,8 @@ import functools as ft
 import string as stringlib
 from typing import Any
 
+import autoform.ad as ad
+import autoform.axis as axis
 import autoform.core as core
 import autoform.stage as stage
 import autoform.utils as utils
@@ -132,15 +134,15 @@ def batch_concat(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[concat_p] = impl_concat
 core.aimpl_rules[concat_p] = utils.asyncify(impl_concat)
-core.abstract_rules[concat_p] = abstract_concat
-core.push_rules[concat_p] = pushforward_concat
-core.apush_rules[concat_p] = utils.asyncify(pushforward_concat)
-core.pull_fwd_rules[concat_p] = pullback_fwd_concat
-core.apull_fwd_rules[concat_p] = utils.asyncify(pullback_fwd_concat)
-core.pull_bwd_rules[concat_p] = pullback_bwd_concat
-core.apull_bwd_rules[concat_p] = utils.asyncify(pullback_bwd_concat)
-core.batch_rules[concat_p] = batch_concat
-core.abatch_rules[concat_p] = utils.asyncify(batch_concat)
+stage.abstract_rules[concat_p] = abstract_concat
+axis.batch_rules[concat_p] = batch_concat
+axis.abatch_rules[concat_p] = utils.asyncify(batch_concat)
+ad.push_rules[concat_p] = pushforward_concat
+ad.apush_rules[concat_p] = utils.asyncify(pushforward_concat)
+ad.pull_fwd_rules[concat_p] = pullback_fwd_concat
+ad.apull_fwd_rules[concat_p] = utils.asyncify(pullback_fwd_concat)
+ad.pull_bwd_rules[concat_p] = pullback_bwd_concat
+ad.apull_bwd_rules[concat_p] = utils.asyncify(pullback_bwd_concat)
 
 
 stage.dunder_rules[stage.Dunder.ADD, StrAVal] = concat
@@ -219,15 +221,15 @@ def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
 
 core.impl_rules[match_p] = impl_match
 core.aimpl_rules[match_p] = utils.asyncify(impl_match)
-core.abstract_rules[match_p] = abstract_match
-core.push_rules[match_p] = pushforward_match
-core.apush_rules[match_p] = utils.asyncify(pushforward_match)
-core.pull_fwd_rules[match_p] = pullback_fwd_match
-core.apull_fwd_rules[match_p] = utils.asyncify(pullback_fwd_match)
-core.pull_bwd_rules[match_p] = pullback_bwd_match
-core.apull_bwd_rules[match_p] = utils.asyncify(pullback_bwd_match)
-core.batch_rules[match_p] = batch_match
-core.abatch_rules[match_p] = utils.asyncify(batch_match)
+stage.abstract_rules[match_p] = abstract_match
+axis.batch_rules[match_p] = batch_match
+axis.abatch_rules[match_p] = utils.asyncify(batch_match)
+ad.push_rules[match_p] = pushforward_match
+ad.apush_rules[match_p] = utils.asyncify(pushforward_match)
+ad.pull_fwd_rules[match_p] = pullback_fwd_match
+ad.apull_fwd_rules[match_p] = utils.asyncify(pullback_fwd_match)
+ad.pull_bwd_rules[match_p] = pullback_bwd_match
+ad.apull_bwd_rules[match_p] = utils.asyncify(pullback_bwd_match)
 
 
 stage.dunder_rules[stage.Dunder.EQ, StrAVal] = match

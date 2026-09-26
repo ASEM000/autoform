@@ -5,10 +5,10 @@
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal
    :members: zero, accumulate
-.. autoclass:: autoform.extend.StrAVal
-.. autoclass:: autoform.extend.IntAVal
-.. autoclass:: autoform.extend.FloatAVal
-.. autoclass:: autoform.extend.BoolAVal
+.. autoclass:: autoform.string.StrAVal
+.. autoclass:: autoform.numeric.IntAVal
+.. autoclass:: autoform.numeric.FloatAVal
+.. autoclass:: autoform.numeric.BoolAVal
 ```
 
 ## Primitives

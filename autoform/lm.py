@@ -28,6 +28,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from litellm import ModelResponse, acompletion, completion
 
+import autoform.ad as ad
+import autoform.axis as axis
 import autoform.core as core
 import autoform.schemas as schemas
 import autoform.stage as stage
@@ -331,15 +333,16 @@ async def abatch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
 
 core.impl_rules[complete_p] = impl_complete
 core.aimpl_rules[complete_p] = aimpl_complete
-core.abstract_rules[complete_p] = abstract_complete
-core.push_rules[complete_p] = pushforward_complete
-core.apush_rules[complete_p] = apush_complete
-core.pull_fwd_rules[complete_p] = pullback_fwd_complete
-core.apull_fwd_rules[complete_p] = apull_fwd_complete
-core.pull_bwd_rules[complete_p] = pullback_bwd_complete
-core.apull_bwd_rules[complete_p] = apull_bwd_complete
-core.batch_rules[complete_p] = batch_complete
-core.abatch_rules[complete_p] = abatch_complete
+stage.abstract_rules[complete_p] = abstract_complete
+axis.batch_rules[complete_p] = batch_complete
+axis.abatch_rules[complete_p] = abatch_complete
+ad.push_rules[complete_p] = pushforward_complete
+ad.apush_rules[complete_p] = apush_complete
+ad.pull_fwd_rules[complete_p] = pullback_fwd_complete
+ad.apull_fwd_rules[complete_p] = apull_fwd_complete
+ad.pull_bwd_rules[complete_p] = pullback_bwd_complete
+ad.apull_bwd_rules[complete_p] = apull_bwd_complete
+
 
 # ==================================================================================================
 # GENERATE
@@ -845,12 +848,12 @@ async def abatch_generate(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> Tr
 
 core.impl_rules[generate_p] = impl_generate
 core.aimpl_rules[generate_p] = aimpl_generate
-core.abstract_rules[generate_p] = abstract_generate
-core.push_rules[generate_p] = pushforward_generate
-core.apush_rules[generate_p] = apush_generate
-core.pull_fwd_rules[generate_p] = pullback_fwd_generate
-core.apull_fwd_rules[generate_p] = apull_fwd_generate
-core.pull_bwd_rules[generate_p] = pullback_bwd_generate
-core.apull_bwd_rules[generate_p] = apull_bwd_generate
-core.batch_rules[generate_p] = batch_generate
-core.abatch_rules[generate_p] = abatch_generate
+stage.abstract_rules[generate_p] = abstract_generate
+axis.batch_rules[generate_p] = batch_generate
+axis.abatch_rules[generate_p] = abatch_generate
+ad.push_rules[generate_p] = pushforward_generate
+ad.apush_rules[generate_p] = apush_generate
+ad.pull_fwd_rules[generate_p] = pullback_fwd_generate
+ad.apull_fwd_rules[generate_p] = apull_fwd_generate
+ad.pull_bwd_rules[generate_p] = pullback_bwd_generate
+ad.apull_bwd_rules[generate_p] = apull_bwd_generate

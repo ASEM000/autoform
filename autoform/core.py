@@ -17,10 +17,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Generator, Hashable
+from collections.abc import Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
+
+# ==================================================================================================
+# RULES
+# ==================================================================================================
+
+impl_rules = {}
+aimpl_rules = {}
 
 import autoform.utils as utils
 
@@ -39,15 +46,6 @@ __all__ = [
     # rule registries
     "impl_rules",
     "aimpl_rules",
-    "abstract_rules",
-    "batch_rules",
-    "abatch_rules",
-    "push_rules",
-    "apush_rules",
-    "pull_fwd_rules",
-    "apull_fwd_rules",
-    "pull_bwd_rules",
-    "apull_bwd_rules",
     # primitive dispatch
     "Prim",
     "active_tags",
@@ -58,6 +56,7 @@ __all__ = [
     "active_interpreter",
     "using_interpreter",
 ]
+
 
 # ==================================================================================================
 # BASE TYPES
@@ -136,8 +135,6 @@ def materialize_zeros(x: Tree, /) -> Tree:
     return utils.tree.map(map_func, x)
 
 
-type Val = str | int | float | bool
-
 # ==================================================================================================
 # SPACES
 # ==================================================================================================
@@ -189,25 +186,6 @@ def avalof(value, /) -> AVal:
     assert isinstance(aval, AVal), f"Aval rule returned {aval!r}"
     return aval
 
-
-# ==================================================================================================
-# RULES
-# ==================================================================================================
-
-
-type RuleMapping[T] = dict[Prim, Callable[..., T]]
-
-impl_rules: RuleMapping[Tree] = {}
-aimpl_rules: RuleMapping[Awaitable[Tree]] = {}
-batch_rules: RuleMapping[tuple[Tree, Tree[bool]]] = {}
-abatch_rules: RuleMapping[Awaitable[tuple[Tree, Tree[bool]]]] = {}
-push_rules: RuleMapping[tuple[Tree, Tree]] = {}
-apush_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
-pull_fwd_rules: RuleMapping[tuple[Tree, Tree]] = {}
-apull_fwd_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
-pull_bwd_rules: RuleMapping[Tree] = {}
-apull_bwd_rules: RuleMapping[Awaitable[Tree]] = {}
-abstract_rules: RuleMapping[Tree[Any]] = {}
 
 # ==================================================================================================
 # PRIMITIVE

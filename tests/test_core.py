@@ -384,8 +384,8 @@ class TestTags:
             return f"{','.join(names)}|{x}"
 
         probe_p = af.core.Prim("tag_probe")
-        af.core.impl_rules[probe_p] = impl_probe
-        af.core.abstract_rules[probe_p] = abstract_probe
+        af.extend.impl_rules[probe_p] = impl_probe
+        af.extend.abstract_rules[probe_p] = abstract_probe
 
         def program(x):
             with af.tag(Label("draft"), Label("cost")):
@@ -488,8 +488,8 @@ def test_nested_primitive_inputs():
         return f"{options['greeting']}, {name}{options['punctuation']}"
 
     primitive = af.core.Prim("greet")
-    af.core.impl_rules[primitive] = impl
-    af.core.abstract_rules[primitive] = lambda inputs: af.string.StrAVal()
+    af.extend.impl_rules[primitive] = impl
+    af.extend.abstract_rules[primitive] = lambda inputs: af.string.StrAVal()
     greeting_ir = af.trace(
         lambda name: primitive.bind((name, dict(greeting="Hi", punctuation="?")))
     )("World")
@@ -593,8 +593,8 @@ class TestBind:
         def abstract_rule(in_tree, *, multiplier):
             return af.string.StrAVal()
 
-        af.core.impl_rules[p] = impl
-        af.core.abstract_rules[p] = abstract_rule
+        af.extend.impl_rules[p] = impl
+        af.extend.abstract_rules[p] = abstract_rule
 
         def func(x):
             return p.bind(x, multiplier=3)
@@ -693,7 +693,7 @@ class TestFold:
             return dynamic
 
         param_probe_p = af.core.Prim("fold_param_probe")
-        af.core.impl_rules[param_probe_p] = impl_param_probe
+        af.extend.impl_rules[param_probe_p] = impl_param_probe
 
         def program(x):
             with af.fold():
@@ -710,7 +710,7 @@ class TestFold:
             return captured["value"]
 
         output_probe_p = af.core.Prim("fold_output_probe")
-        af.core.impl_rules[output_probe_p] = impl_output_probe
+        af.extend.impl_rules[output_probe_p] = impl_output_probe
 
         def program(x):
             captured["value"] = x
@@ -773,7 +773,7 @@ class TestFold:
             return af.string.StrAVal()
 
         async_probe_p = af.core.Prim("async_dynamic_fold_probe")
-        af.core.abstract_rules[async_probe_p] = abstract_async_probe
+        af.extend.abstract_rules[async_probe_p] = abstract_async_probe
 
         with af.core.using_interpreter(af.stage.TraceInterpreter()) as tracer:
             result = asyncio.run(async_probe_p.abind("literal"))
@@ -786,7 +786,7 @@ class TestFold:
             return af.string.concat(in_tree, "!")
 
         async_probe_p = af.core.Prim("async_fold_probe")
-        af.core.aimpl_rules[async_probe_p] = aimpl_async_probe
+        af.extend.aimpl_rules[async_probe_p] = aimpl_async_probe
 
         with af.core.using_interpreter(af.stage.TraceInterpreter()) as tracer:
             with af.fold():

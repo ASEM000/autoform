@@ -18,7 +18,6 @@ There are two ways to think about structured output.
 
 The first way is type-first. A class describes what should be generated, and the
 same class is also the return type:
-
     class Answer(BaseModel):
         name: str
         score: float
@@ -29,7 +28,6 @@ annotations and rebuilding the result from that type later.
 
 The second way is instance-first. The schema is already a value with the shape
 we want back:
-
     >>> import autoform as af
     >>> answer = {"name": af.Str(), "score": af.Float(min=0, max=1)}
 
@@ -37,7 +35,6 @@ This fits autoform better. The schema is an ordinary pytree.
 
 Docs attach to the thing they describe and are used to guide the generation process.
 The same form works for a leaf or for arbitrary nested structures:
-
     >>> answer = {
     ...     "name": af.Str() @ af.Doc("Subject name."),
     ...     "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
@@ -45,7 +42,6 @@ The same form works for a leaf or for arbitrary nested structures:
     ... } @ af.Doc("Answer object.")
 
 Any registered pytree can carry the schema:
-
     >>> import optree
     >>> import autoform as af
 

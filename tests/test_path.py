@@ -27,9 +27,9 @@ def delay():
         return value
 
     prim = af.core.Prim("test_path_delay")
-    af.core.impl_rules[prim] = lambda value: value
-    af.core.abstract_rules[prim] = lambda value: value
-    af.core.aimpl_rules[prim] = aimpl
+    af.extend.impl_rules[prim] = lambda value: value
+    af.extend.abstract_rules[prim] = lambda value: value
+    af.extend.aimpl_rules[prim] = aimpl
     return prim.bind
 
 

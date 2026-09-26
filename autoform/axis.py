@@ -18,18 +18,29 @@ from __future__ import annotations
 
 import functools as ft
 
+# ==================================================================================================
+# RULES
+# ==================================================================================================
+
+batch_rules = {}
+abatch_rules = {}
+
+import autoform.ad as ad
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
 import autoform.stage as stage
 import autoform.utils as utils
 
+type Tree[T] = utils.Tree[T]
+
+
 __all__ = ["batch"]
 
 zip = utils.strict_zip
 
-type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
+
 
 # ==================================================================================================
 # BATCH
@@ -183,7 +194,7 @@ class BatchInterpreter(core.Interpreter[BatchBox]):
         v_in, b_in = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            v_out, b_out = core.batch_rules[prim]((b_sz, b_in, v_in), **params)
+            v_out, b_out = batch_rules[prim]((b_sz, b_in, v_in), **params)
         return self.box((v_out, b_out))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
@@ -191,7 +202,7 @@ class BatchInterpreter(core.Interpreter[BatchBox]):
         v_in, b_in = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            v_out, b_out = await core.abatch_rules[prim]((b_sz, b_in, v_in), **params)
+            v_out, b_out = await abatch_rules[prim]((b_sz, b_in, v_in), **params)
         return self.box((v_out, b_out))
 
 
@@ -280,8 +291,6 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tre
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
-    import autoform.ad as ad
-
     p, t = in_tree
     pf_ir = ad.pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -289,8 +298,6 @@ def pushforward_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
 
 
 async def apushforward_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
-    import autoform.ad as ad
-
     p, t = in_tree
     pf_ir = ad.pushforward(ir)
     batch_pf_ir = batch(pf_ir, in_axes=(in_axes, in_axes))
@@ -314,8 +321,6 @@ async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: T
 
 
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
-    import autoform.ad as ad
-
     residuals, c_out = in_tree
     p, _ = residuals
     pb_ir = ad.pullback(ir)
@@ -325,8 +330,6 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
 
 
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
-    import autoform.ad as ad
-
     residuals, c_out = in_tree
     p, _ = residuals
     pb_ir = ad.pullback(ir)
@@ -360,22 +363,20 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
     return v_out, b_out
 
 
-core.impl_rules[batch_call_p] = impl_batch_call
-core.aimpl_rules[batch_call_p] = aimpl_batch_call
-core.abstract_rules[batch_call_p] = abstract_batch_call
-core.push_rules[batch_call_p] = pushforward_batch_call
-core.apush_rules[batch_call_p] = apushforward_batch_call
-core.pull_fwd_rules[batch_call_p] = pullback_fwd_batch_call
-core.apull_fwd_rules[batch_call_p] = apullback_fwd_batch_call
-core.pull_bwd_rules[batch_call_p] = pullback_bwd_batch_call
-core.apull_bwd_rules[batch_call_p] = apullback_bwd_batch_call
-core.batch_rules[batch_call_p] = batch_batch_call
-core.abatch_rules[batch_call_p] = abatch_batch_call
-
-
 def dce_batch_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     new_eqn = eqn.using(ir=dead.dce(eqn.params["ir"], out_used=out_used))
     return dead.default_dce(new_eqn, out_used)
 
 
+core.impl_rules[batch_call_p] = impl_batch_call
+core.aimpl_rules[batch_call_p] = aimpl_batch_call
+stage.abstract_rules[batch_call_p] = abstract_batch_call
+batch_rules[batch_call_p] = batch_batch_call
+abatch_rules[batch_call_p] = abatch_batch_call
+ad.push_rules[batch_call_p] = pushforward_batch_call
+ad.apush_rules[batch_call_p] = apushforward_batch_call
+ad.pull_fwd_rules[batch_call_p] = pullback_fwd_batch_call
+ad.apull_fwd_rules[batch_call_p] = apullback_fwd_batch_call
+ad.pull_bwd_rules[batch_call_p] = pullback_bwd_batch_call
+ad.apull_bwd_rules[batch_call_p] = apullback_bwd_batch_call
 dead.dce_rules[batch_call_p] = dce_batch_call

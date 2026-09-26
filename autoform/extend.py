@@ -63,15 +63,15 @@ Var = stage.Var
 
 impl_rules = core.impl_rules
 aimpl_rules = core.aimpl_rules
-abstract_rules = core.abstract_rules
-push_rules = core.push_rules
-apush_rules = core.apush_rules
-pull_fwd_rules = core.pull_fwd_rules
-apull_fwd_rules = core.apull_fwd_rules
-pull_bwd_rules = core.pull_bwd_rules
-apull_bwd_rules = core.apull_bwd_rules
-batch_rules = core.batch_rules
-abatch_rules = core.abatch_rules
+abstract_rules = stage.abstract_rules
+batch_rules = axis.batch_rules
+abatch_rules = axis.abatch_rules
+push_rules = ad.push_rules
+apush_rules = ad.apush_rules
+pull_fwd_rules = ad.pull_fwd_rules
+apull_fwd_rules = ad.apull_fwd_rules
+pull_bwd_rules = ad.pull_bwd_rules
+apull_bwd_rules = ad.apull_bwd_rules
 
 # ==================================================================================================
 # HELPERS

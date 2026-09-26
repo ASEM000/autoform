@@ -20,6 +20,8 @@ import functools as ft
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import autoform.ad as ad
+import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.stage as stage
@@ -77,8 +79,6 @@ def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     ir, p_out = call_custom_body(call, primals)
     _, t_out = ad.pushforward(ir).call(primals, tangents)
@@ -86,8 +86,6 @@ def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tr
 
 
 async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     ir, p_out = await acall_custom_body(call, primals)
     _, t_out = await ad.pushforward(ir).acall(primals, tangents)
@@ -107,8 +105,6 @@ async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    import autoform.ad as ad
-
     primals, out = in_tree[0]
     cotangent = in_tree[1]
     ir = trace_custom_func(call, primals)
@@ -117,8 +113,6 @@ def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> T
 
 
 async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    import autoform.ad as ad
-
     primals, out = in_tree[0]
     cotangent = in_tree[1]
     ir = trace_custom_func(call, primals)
@@ -127,8 +121,6 @@ async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    import autoform.axis as axis
-
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
         _, out = call_custom_body(call, values)
@@ -141,8 +133,6 @@ def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    import autoform.axis as axis
-
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
         _, out = await acall_custom_body(call, values)
@@ -161,15 +151,15 @@ def dce_custom_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResul
 def install_custom_call_rules(prim: core.Prim, /) -> None:
     core.impl_rules[prim] = impl_custom_call
     core.aimpl_rules[prim] = aimpl_custom_call
-    core.abstract_rules[prim] = abstract_custom_call
-    core.push_rules[prim] = pushforward_custom_call
-    core.apush_rules[prim] = apushforward_custom_call
-    core.pull_fwd_rules[prim] = pullback_fwd_custom_call
-    core.apull_fwd_rules[prim] = apullback_fwd_custom_call
-    core.pull_bwd_rules[prim] = pullback_bwd_custom_call
-    core.apull_bwd_rules[prim] = apullback_bwd_custom_call
-    core.batch_rules[prim] = batch_custom_call
-    core.abatch_rules[prim] = abatch_custom_call
+    stage.abstract_rules[prim] = abstract_custom_call
+    axis.batch_rules[prim] = batch_custom_call
+    axis.abatch_rules[prim] = abatch_custom_call
+    ad.push_rules[prim] = pushforward_custom_call
+    ad.apush_rules[prim] = apushforward_custom_call
+    ad.pull_fwd_rules[prim] = pullback_fwd_custom_call
+    ad.apull_fwd_rules[prim] = apullback_fwd_custom_call
+    ad.pull_bwd_rules[prim] = pullback_bwd_custom_call
+    ad.apull_bwd_rules[prim] = apullback_bwd_custom_call
     dead.dce_rules[prim] = dce_custom_call
 
 
@@ -207,7 +197,7 @@ class CustomFunc:
             ('[hello]', 'delta change')
         """
 
-        core.push_rules[self.prim] = rule
+        ad.push_rules[self.prim] = rule
         return rule
 
     def aset_pushforward[R: Callable[..., Awaitable[tuple[Tree, Tree]]]](self, rule: R, /) -> R:
@@ -231,7 +221,7 @@ class CustomFunc:
             ('[hello]', 'async delta change')
         """
 
-        core.apush_rules[self.prim] = rule
+        ad.apush_rules[self.prim] = rule
         return rule
 
     def set_pullback[R: Callable[..., Tree]](self, rule: R, /) -> R:
@@ -253,7 +243,7 @@ class CustomFunc:
             ('[hello]', ('feedback via [hello]',))
         """
 
-        core.pull_bwd_rules[self.prim] = rule
+        ad.pull_bwd_rules[self.prim] = rule
         return rule
 
     def aset_pullback[R: Callable[..., Awaitable[Tree]]](self, rule: R, /) -> R:
@@ -276,7 +266,7 @@ class CustomFunc:
             ('[hello]', ('async feedback via [hello]',))
         """
 
-        core.apull_bwd_rules[self.prim] = rule
+        ad.apull_bwd_rules[self.prim] = rule
         return rule
 
     def set_batch[R: Callable[..., tuple[Tree, Tree[bool]]]](self, rule: R, /) -> R:
@@ -301,7 +291,7 @@ class CustomFunc:
             ['<a>', '<b>']
         """
 
-        core.batch_rules[self.prim] = rule
+        axis.batch_rules[self.prim] = rule
         return rule
 
     def aset_batch[R: Callable[..., Awaitable[tuple[Tree, Tree[bool]]]]](self, rule: R, /) -> R:
@@ -327,7 +317,7 @@ class CustomFunc:
             ['async <a>', 'async <b>']
         """
 
-        core.abatch_rules[self.prim] = rule
+        axis.abatch_rules[self.prim] = rule
         return rule
 
 
@@ -341,7 +331,6 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     produce the same results as transforming the function body directly.
 
     The returned wrapper supports these rule registration decorators:
-
     - ``set_pushforward(rule)`` for a synchronous pushforward rule.
     - ``aset_pushforward(rule)`` for an asynchronous pushforward rule.
     - ``set_pullback(rule)`` for a synchronous pullback backward rule.
@@ -353,7 +342,6 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     available as the keyword-only ``call`` argument, so a rule can use
     ``call(*primals)`` when it wants to reuse the normal primal behavior.
     The rule signatures are:
-
     - Pushforward: ``rule((primals, tangents), /, *, call) -> (p_out, t_out)``.
     - Pullback backward:
       ``rule(((primals, output), cotangent), /, *, call) -> cotangents``.

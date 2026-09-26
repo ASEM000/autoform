@@ -19,7 +19,9 @@ from __future__ import annotations
 import functools as ft
 from collections.abc import Hashable
 
+import autoform.ad as ad
 import autoform.analysis as analysis
+import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
@@ -107,15 +109,15 @@ def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[stop_gradient_p] = impl_stop_gradient
 core.aimpl_rules[stop_gradient_p] = utils.asyncify(impl_stop_gradient)
-core.abstract_rules[stop_gradient_p] = abstract_stop_gradient
-core.push_rules[stop_gradient_p] = pushforward_stop_gradient
-core.apush_rules[stop_gradient_p] = utils.asyncify(pushforward_stop_gradient)
-core.pull_fwd_rules[stop_gradient_p] = pullback_fwd_stop_gradient
-core.apull_fwd_rules[stop_gradient_p] = utils.asyncify(pullback_fwd_stop_gradient)
-core.pull_bwd_rules[stop_gradient_p] = pullback_bwd_stop_gradient
-core.apull_bwd_rules[stop_gradient_p] = utils.asyncify(pullback_bwd_stop_gradient)
-core.batch_rules[stop_gradient_p] = batch_stop_gradient
-core.abatch_rules[stop_gradient_p] = utils.asyncify(batch_stop_gradient)
+stage.abstract_rules[stop_gradient_p] = abstract_stop_gradient
+axis.batch_rules[stop_gradient_p] = batch_stop_gradient
+axis.abatch_rules[stop_gradient_p] = utils.asyncify(batch_stop_gradient)
+ad.push_rules[stop_gradient_p] = pushforward_stop_gradient
+ad.apush_rules[stop_gradient_p] = utils.asyncify(pushforward_stop_gradient)
+ad.pull_fwd_rules[stop_gradient_p] = pullback_fwd_stop_gradient
+ad.apull_fwd_rules[stop_gradient_p] = utils.asyncify(pullback_fwd_stop_gradient)
+ad.pull_bwd_rules[stop_gradient_p] = pullback_bwd_stop_gradient
+ad.apull_bwd_rules[stop_gradient_p] = utils.asyncify(pullback_bwd_stop_gradient)
 
 
 # ==================================================================================================
@@ -187,8 +189,6 @@ def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -196,8 +196,6 @@ def pushforward_switch(in_tree, /, *, branches: Branches):
 
 
 async def apush_switch(in_tree, /, *, branches: Branches):
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -219,8 +217,6 @@ async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
@@ -229,8 +225,6 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
@@ -275,19 +269,6 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[b
     return out_tree, out_batched
 
 
-core.impl_rules[switch_p] = impl_switch
-core.aimpl_rules[switch_p] = aimpl_switch
-core.abstract_rules[switch_p] = abstract_switch
-core.push_rules[switch_p] = pushforward_switch
-core.apush_rules[switch_p] = apush_switch
-core.pull_fwd_rules[switch_p] = pullback_fwd_switch
-core.apull_fwd_rules[switch_p] = apull_fwd_switch
-core.pull_bwd_rules[switch_p] = pullback_bwd_switch
-core.apull_bwd_rules[switch_p] = apull_bwd_switch
-core.batch_rules[switch_p] = batch_switch
-core.abatch_rules[switch_p] = abatch_switch
-
-
 def dce_switch(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     branches: Branches = eqn.params["branches"]
 
@@ -309,6 +290,17 @@ def dce_switch(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
+core.impl_rules[switch_p] = impl_switch
+core.aimpl_rules[switch_p] = aimpl_switch
+stage.abstract_rules[switch_p] = abstract_switch
+axis.batch_rules[switch_p] = batch_switch
+axis.abatch_rules[switch_p] = abatch_switch
+ad.push_rules[switch_p] = pushforward_switch
+ad.apush_rules[switch_p] = apush_switch
+ad.pull_fwd_rules[switch_p] = pullback_fwd_switch
+ad.apull_fwd_rules[switch_p] = apull_fwd_switch
+ad.pull_bwd_rules[switch_p] = pullback_bwd_switch
+ad.apull_bwd_rules[switch_p] = apull_bwd_switch
 dead.dce_rules[switch_p] = dce_switch
 
 
@@ -490,8 +482,6 @@ def pullback_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
@@ -516,8 +506,6 @@ async def apull_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
@@ -542,8 +530,6 @@ def batch_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    import autoform.axis as axis
-
     b_sz, in_batched, init_val = in_tree
     # NOTE(asem): in_tree is a SoA object, however we need to pass in only parts of the SoA
     # that are alive (:= still needs some work). so we need to convert from SoA to AoS
@@ -637,8 +623,6 @@ async def abatch_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    import autoform.axis as axis
-
     b_sz, in_batched, init_val = in_tree
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
@@ -688,17 +672,6 @@ async def abatch_while_loop(
     return out_tree, out_batched
 
 
-core.impl_rules[while_loop_p] = impl_while_loop
-core.aimpl_rules[while_loop_p] = aimpl_while_loop
-core.abstract_rules[while_loop_p] = abstract_while_loop
-core.pull_fwd_rules[while_loop_p] = pullback_fwd_while_loop
-core.apull_fwd_rules[while_loop_p] = apull_fwd_while_loop
-core.pull_bwd_rules[while_loop_p] = pullback_bwd_while_loop
-core.apull_bwd_rules[while_loop_p] = apull_bwd_while_loop
-core.batch_rules[while_loop_p] = batch_while_loop
-core.abatch_rules[while_loop_p] = abatch_while_loop
-
-
 def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     cond_ir = eqn.params["cond_ir"]
     body_ir = eqn.params["body_ir"]
@@ -711,6 +684,15 @@ def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
+core.impl_rules[while_loop_p] = impl_while_loop
+core.aimpl_rules[while_loop_p] = aimpl_while_loop
+stage.abstract_rules[while_loop_p] = abstract_while_loop
+axis.batch_rules[while_loop_p] = batch_while_loop
+axis.abatch_rules[while_loop_p] = abatch_while_loop
+ad.pull_fwd_rules[while_loop_p] = pullback_fwd_while_loop
+ad.apull_fwd_rules[while_loop_p] = apull_fwd_while_loop
+ad.pull_bwd_rules[while_loop_p] = pullback_bwd_while_loop
+ad.apull_bwd_rules[while_loop_p] = apull_bwd_while_loop
 dead.dce_rules[while_loop_p] = dce_while_loop
 
 
@@ -722,8 +704,6 @@ fixpoint_p = core.Prim("fixpoint")
 
 
 def cot_tree_acc(lhs: Tree, rhs: Tree, /) -> Tree:
-    import autoform.ad as ad
-
     return utils.tree.map(lambda l, r: ad.cot_acc([l, r]), lhs, rhs)
 
 
@@ -876,8 +856,6 @@ def pullback_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> Tree:
-    import autoform.ad as ad
-
     def make_c(x):
         return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
@@ -943,8 +921,6 @@ async def apull_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> Tree:
-    import autoform.ad as ad
-
     def make_c(x):
         return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
@@ -1010,8 +986,6 @@ def batch_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    import autoform.axis as axis
-
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
@@ -1075,8 +1049,6 @@ async def abatch_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    import autoform.axis as axis
-
     b_sz, in_batched, in_values = in_tree
     params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
 
@@ -1131,17 +1103,6 @@ async def abatch_fixpoint(
     return out_tree, out_batched
 
 
-core.impl_rules[fixpoint_p] = impl_fixpoint
-core.aimpl_rules[fixpoint_p] = aimpl_fixpoint
-core.abstract_rules[fixpoint_p] = abstract_fixpoint
-core.pull_fwd_rules[fixpoint_p] = pullback_fwd_fixpoint
-core.apull_fwd_rules[fixpoint_p] = apull_fwd_fixpoint
-core.pull_bwd_rules[fixpoint_p] = pullback_bwd_fixpoint
-core.apull_bwd_rules[fixpoint_p] = apull_bwd_fixpoint
-core.batch_rules[fixpoint_p] = batch_fixpoint
-core.abatch_rules[fixpoint_p] = abatch_fixpoint
-
-
 def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     step_ir = eqn.params["step_ir"]
     equiv_ir = eqn.params["equiv_ir"]
@@ -1154,4 +1115,13 @@ def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
+core.impl_rules[fixpoint_p] = impl_fixpoint
+core.aimpl_rules[fixpoint_p] = aimpl_fixpoint
+stage.abstract_rules[fixpoint_p] = abstract_fixpoint
+axis.batch_rules[fixpoint_p] = batch_fixpoint
+axis.abatch_rules[fixpoint_p] = abatch_fixpoint
+ad.pull_fwd_rules[fixpoint_p] = pullback_fwd_fixpoint
+ad.apull_fwd_rules[fixpoint_p] = apull_fwd_fixpoint
+ad.pull_bwd_rules[fixpoint_p] = pullback_bwd_fixpoint
+ad.apull_bwd_rules[fixpoint_p] = apull_bwd_fixpoint
 dead.dce_rules[fixpoint_p] = dce_fixpoint

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import functools as ft
 
+import autoform.ad as ad
+import autoform.axis as axis
 import autoform.core as core
 import autoform.stage as stage
 import autoform.utils as utils
@@ -202,15 +204,15 @@ def batch_neg(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[neg_p] = impl_neg
 core.aimpl_rules[neg_p] = utils.asyncify(impl_neg)
-core.abstract_rules[neg_p] = abstract_neg
-core.push_rules[neg_p] = pushforward_neg
-core.apush_rules[neg_p] = utils.asyncify(pushforward_neg)
-core.pull_fwd_rules[neg_p] = pullback_fwd_neg
-core.apull_fwd_rules[neg_p] = utils.asyncify(pullback_fwd_neg)
-core.pull_bwd_rules[neg_p] = pullback_bwd_neg
-core.apull_bwd_rules[neg_p] = utils.asyncify(pullback_bwd_neg)
-core.batch_rules[neg_p] = batch_neg
-core.abatch_rules[neg_p] = utils.asyncify(batch_neg)
+stage.abstract_rules[neg_p] = abstract_neg
+axis.batch_rules[neg_p] = batch_neg
+axis.abatch_rules[neg_p] = utils.asyncify(batch_neg)
+ad.push_rules[neg_p] = pushforward_neg
+ad.apush_rules[neg_p] = utils.asyncify(pushforward_neg)
+ad.pull_fwd_rules[neg_p] = pullback_fwd_neg
+ad.apull_fwd_rules[neg_p] = utils.asyncify(pullback_fwd_neg)
+ad.pull_bwd_rules[neg_p] = pullback_bwd_neg
+ad.apull_bwd_rules[neg_p] = utils.asyncify(pullback_bwd_neg)
 
 
 # ==================================================================================================
@@ -260,15 +262,15 @@ def batch_add(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[add_p] = impl_add
 core.aimpl_rules[add_p] = utils.asyncify(impl_add)
-core.abstract_rules[add_p] = abstract_add
-core.push_rules[add_p] = pushforward_add
-core.apush_rules[add_p] = utils.asyncify(pushforward_add)
-core.pull_fwd_rules[add_p] = pullback_fwd_add
-core.apull_fwd_rules[add_p] = utils.asyncify(pullback_fwd_add)
-core.pull_bwd_rules[add_p] = pullback_bwd_add
-core.apull_bwd_rules[add_p] = utils.asyncify(pullback_bwd_add)
-core.batch_rules[add_p] = batch_add
-core.abatch_rules[add_p] = utils.asyncify(batch_add)
+stage.abstract_rules[add_p] = abstract_add
+axis.batch_rules[add_p] = batch_add
+axis.abatch_rules[add_p] = utils.asyncify(batch_add)
+ad.push_rules[add_p] = pushforward_add
+ad.apush_rules[add_p] = utils.asyncify(pushforward_add)
+ad.pull_fwd_rules[add_p] = pullback_fwd_add
+ad.apull_fwd_rules[add_p] = utils.asyncify(pullback_fwd_add)
+ad.pull_bwd_rules[add_p] = pullback_bwd_add
+ad.apull_bwd_rules[add_p] = utils.asyncify(pullback_bwd_add)
 
 
 # ==================================================================================================
@@ -318,15 +320,15 @@ def batch_sub(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[sub_p] = impl_sub
 core.aimpl_rules[sub_p] = utils.asyncify(impl_sub)
-core.abstract_rules[sub_p] = abstract_sub
-core.push_rules[sub_p] = pushforward_sub
-core.apush_rules[sub_p] = utils.asyncify(pushforward_sub)
-core.pull_fwd_rules[sub_p] = pullback_fwd_sub
-core.apull_fwd_rules[sub_p] = utils.asyncify(pullback_fwd_sub)
-core.pull_bwd_rules[sub_p] = pullback_bwd_sub
-core.apull_bwd_rules[sub_p] = utils.asyncify(pullback_bwd_sub)
-core.batch_rules[sub_p] = batch_sub
-core.abatch_rules[sub_p] = utils.asyncify(batch_sub)
+stage.abstract_rules[sub_p] = abstract_sub
+axis.batch_rules[sub_p] = batch_sub
+axis.abatch_rules[sub_p] = utils.asyncify(batch_sub)
+ad.push_rules[sub_p] = pushforward_sub
+ad.apush_rules[sub_p] = utils.asyncify(pushforward_sub)
+ad.pull_fwd_rules[sub_p] = pullback_fwd_sub
+ad.apull_fwd_rules[sub_p] = utils.asyncify(pullback_fwd_sub)
+ad.pull_bwd_rules[sub_p] = pullback_bwd_sub
+ad.apull_bwd_rules[sub_p] = utils.asyncify(pullback_bwd_sub)
 
 
 # ==================================================================================================
@@ -377,15 +379,15 @@ def batch_mul(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[mul_p] = impl_mul
 core.aimpl_rules[mul_p] = utils.asyncify(impl_mul)
-core.abstract_rules[mul_p] = abstract_mul
-core.push_rules[mul_p] = pushforward_mul
-core.apush_rules[mul_p] = utils.asyncify(pushforward_mul)
-core.pull_fwd_rules[mul_p] = pullback_fwd_mul
-core.apull_fwd_rules[mul_p] = utils.asyncify(pullback_fwd_mul)
-core.pull_bwd_rules[mul_p] = pullback_bwd_mul
-core.apull_bwd_rules[mul_p] = utils.asyncify(pullback_bwd_mul)
-core.batch_rules[mul_p] = batch_mul
-core.abatch_rules[mul_p] = utils.asyncify(batch_mul)
+stage.abstract_rules[mul_p] = abstract_mul
+axis.batch_rules[mul_p] = batch_mul
+axis.abatch_rules[mul_p] = utils.asyncify(batch_mul)
+ad.push_rules[mul_p] = pushforward_mul
+ad.apush_rules[mul_p] = utils.asyncify(pushforward_mul)
+ad.pull_fwd_rules[mul_p] = pullback_fwd_mul
+ad.apull_fwd_rules[mul_p] = utils.asyncify(pullback_fwd_mul)
+ad.pull_bwd_rules[mul_p] = pullback_bwd_mul
+ad.apull_bwd_rules[mul_p] = utils.asyncify(pullback_bwd_mul)
 
 
 # ==================================================================================================
@@ -438,15 +440,15 @@ def batch_div(in_tree: Tree, /) -> TreePair:
 
 core.impl_rules[div_p] = impl_div
 core.aimpl_rules[div_p] = utils.asyncify(impl_div)
-core.abstract_rules[div_p] = abstract_div
-core.push_rules[div_p] = pushforward_div
-core.apush_rules[div_p] = utils.asyncify(pushforward_div)
-core.pull_fwd_rules[div_p] = pullback_fwd_div
-core.apull_fwd_rules[div_p] = utils.asyncify(pullback_fwd_div)
-core.pull_bwd_rules[div_p] = pullback_bwd_div
-core.apull_bwd_rules[div_p] = utils.asyncify(pullback_bwd_div)
-core.batch_rules[div_p] = batch_div
-core.abatch_rules[div_p] = utils.asyncify(batch_div)
+stage.abstract_rules[div_p] = abstract_div
+axis.batch_rules[div_p] = batch_div
+axis.abatch_rules[div_p] = utils.asyncify(batch_div)
+ad.push_rules[div_p] = pushforward_div
+ad.apush_rules[div_p] = utils.asyncify(pushforward_div)
+ad.pull_fwd_rules[div_p] = pullback_fwd_div
+ad.apull_fwd_rules[div_p] = utils.asyncify(pullback_fwd_div)
+ad.pull_bwd_rules[div_p] = pullback_bwd_div
+ad.apull_bwd_rules[div_p] = utils.asyncify(pullback_bwd_div)
 
 
 # ==================================================================================================
@@ -506,17 +508,19 @@ def impl_eq(in_tree: Tree, /) -> bool:
 pushforward_eq = ft.partial(pushforward_compare, eq_p)
 pullback_fwd_eq = ft.partial(pullback_fwd_compare, eq_p)
 batch_eq = ft.partial(batch_compare, eq_p)
+
+
 core.impl_rules[eq_p] = impl_eq
 core.aimpl_rules[eq_p] = utils.asyncify(impl_eq)
-core.abstract_rules[eq_p] = abstract_compare
-core.push_rules[eq_p] = pushforward_eq
-core.apush_rules[eq_p] = utils.asyncify(pushforward_eq)
-core.pull_fwd_rules[eq_p] = pullback_fwd_eq
-core.apull_fwd_rules[eq_p] = utils.asyncify(pullback_fwd_eq)
-core.pull_bwd_rules[eq_p] = pullback_bwd_compare
-core.apull_bwd_rules[eq_p] = utils.asyncify(pullback_bwd_compare)
-core.batch_rules[eq_p] = batch_eq
-core.abatch_rules[eq_p] = utils.asyncify(batch_eq)
+stage.abstract_rules[eq_p] = abstract_compare
+axis.batch_rules[eq_p] = batch_eq
+axis.abatch_rules[eq_p] = utils.asyncify(batch_eq)
+ad.push_rules[eq_p] = pushforward_eq
+ad.apush_rules[eq_p] = utils.asyncify(pushforward_eq)
+ad.pull_fwd_rules[eq_p] = pullback_fwd_eq
+ad.apull_fwd_rules[eq_p] = utils.asyncify(pullback_fwd_eq)
+ad.pull_bwd_rules[eq_p] = pullback_bwd_compare
+ad.apull_bwd_rules[eq_p] = utils.asyncify(pullback_bwd_compare)
 
 
 # ==================================================================================================
@@ -543,17 +547,19 @@ def impl_ne(in_tree: Tree, /) -> bool:
 pushforward_ne = ft.partial(pushforward_compare, ne_p)
 pullback_fwd_ne = ft.partial(pullback_fwd_compare, ne_p)
 batch_ne = ft.partial(batch_compare, ne_p)
+
+
 core.impl_rules[ne_p] = impl_ne
 core.aimpl_rules[ne_p] = utils.asyncify(impl_ne)
-core.abstract_rules[ne_p] = abstract_compare
-core.push_rules[ne_p] = pushforward_ne
-core.apush_rules[ne_p] = utils.asyncify(pushforward_ne)
-core.pull_fwd_rules[ne_p] = pullback_fwd_ne
-core.apull_fwd_rules[ne_p] = utils.asyncify(pullback_fwd_ne)
-core.pull_bwd_rules[ne_p] = pullback_bwd_compare
-core.apull_bwd_rules[ne_p] = utils.asyncify(pullback_bwd_compare)
-core.batch_rules[ne_p] = batch_ne
-core.abatch_rules[ne_p] = utils.asyncify(batch_ne)
+stage.abstract_rules[ne_p] = abstract_compare
+axis.batch_rules[ne_p] = batch_ne
+axis.abatch_rules[ne_p] = utils.asyncify(batch_ne)
+ad.push_rules[ne_p] = pushforward_ne
+ad.apush_rules[ne_p] = utils.asyncify(pushforward_ne)
+ad.pull_fwd_rules[ne_p] = pullback_fwd_ne
+ad.apull_fwd_rules[ne_p] = utils.asyncify(pullback_fwd_ne)
+ad.pull_bwd_rules[ne_p] = pullback_bwd_compare
+ad.apull_bwd_rules[ne_p] = utils.asyncify(pullback_bwd_compare)
 
 
 # ==================================================================================================
@@ -580,17 +586,19 @@ def impl_lt(in_tree: Tree, /) -> bool:
 pushforward_lt = ft.partial(pushforward_compare, lt_p)
 pullback_fwd_lt = ft.partial(pullback_fwd_compare, lt_p)
 batch_lt = ft.partial(batch_compare, lt_p)
+
+
 core.impl_rules[lt_p] = impl_lt
 core.aimpl_rules[lt_p] = utils.asyncify(impl_lt)
-core.abstract_rules[lt_p] = abstract_compare
-core.push_rules[lt_p] = pushforward_lt
-core.apush_rules[lt_p] = utils.asyncify(pushforward_lt)
-core.pull_fwd_rules[lt_p] = pullback_fwd_lt
-core.apull_fwd_rules[lt_p] = utils.asyncify(pullback_fwd_lt)
-core.pull_bwd_rules[lt_p] = pullback_bwd_compare
-core.apull_bwd_rules[lt_p] = utils.asyncify(pullback_bwd_compare)
-core.batch_rules[lt_p] = batch_lt
-core.abatch_rules[lt_p] = utils.asyncify(batch_lt)
+stage.abstract_rules[lt_p] = abstract_compare
+axis.batch_rules[lt_p] = batch_lt
+axis.abatch_rules[lt_p] = utils.asyncify(batch_lt)
+ad.push_rules[lt_p] = pushforward_lt
+ad.apush_rules[lt_p] = utils.asyncify(pushforward_lt)
+ad.pull_fwd_rules[lt_p] = pullback_fwd_lt
+ad.apull_fwd_rules[lt_p] = utils.asyncify(pullback_fwd_lt)
+ad.pull_bwd_rules[lt_p] = pullback_bwd_compare
+ad.apull_bwd_rules[lt_p] = utils.asyncify(pullback_bwd_compare)
 
 
 # ==================================================================================================
@@ -617,17 +625,19 @@ def impl_le(in_tree: Tree, /) -> bool:
 pushforward_le = ft.partial(pushforward_compare, le_p)
 pullback_fwd_le = ft.partial(pullback_fwd_compare, le_p)
 batch_le = ft.partial(batch_compare, le_p)
+
+
 core.impl_rules[le_p] = impl_le
 core.aimpl_rules[le_p] = utils.asyncify(impl_le)
-core.abstract_rules[le_p] = abstract_compare
-core.push_rules[le_p] = pushforward_le
-core.apush_rules[le_p] = utils.asyncify(pushforward_le)
-core.pull_fwd_rules[le_p] = pullback_fwd_le
-core.apull_fwd_rules[le_p] = utils.asyncify(pullback_fwd_le)
-core.pull_bwd_rules[le_p] = pullback_bwd_compare
-core.apull_bwd_rules[le_p] = utils.asyncify(pullback_bwd_compare)
-core.batch_rules[le_p] = batch_le
-core.abatch_rules[le_p] = utils.asyncify(batch_le)
+stage.abstract_rules[le_p] = abstract_compare
+axis.batch_rules[le_p] = batch_le
+axis.abatch_rules[le_p] = utils.asyncify(batch_le)
+ad.push_rules[le_p] = pushforward_le
+ad.apush_rules[le_p] = utils.asyncify(pushforward_le)
+ad.pull_fwd_rules[le_p] = pullback_fwd_le
+ad.apull_fwd_rules[le_p] = utils.asyncify(pullback_fwd_le)
+ad.pull_bwd_rules[le_p] = pullback_bwd_compare
+ad.apull_bwd_rules[le_p] = utils.asyncify(pullback_bwd_compare)
 
 
 # ==================================================================================================
@@ -654,17 +664,19 @@ def impl_gt(in_tree: Tree, /) -> bool:
 pushforward_gt = ft.partial(pushforward_compare, gt_p)
 pullback_fwd_gt = ft.partial(pullback_fwd_compare, gt_p)
 batch_gt = ft.partial(batch_compare, gt_p)
+
+
 core.impl_rules[gt_p] = impl_gt
 core.aimpl_rules[gt_p] = utils.asyncify(impl_gt)
-core.abstract_rules[gt_p] = abstract_compare
-core.push_rules[gt_p] = pushforward_gt
-core.apush_rules[gt_p] = utils.asyncify(pushforward_gt)
-core.pull_fwd_rules[gt_p] = pullback_fwd_gt
-core.apull_fwd_rules[gt_p] = utils.asyncify(pullback_fwd_gt)
-core.pull_bwd_rules[gt_p] = pullback_bwd_compare
-core.apull_bwd_rules[gt_p] = utils.asyncify(pullback_bwd_compare)
-core.batch_rules[gt_p] = batch_gt
-core.abatch_rules[gt_p] = utils.asyncify(batch_gt)
+stage.abstract_rules[gt_p] = abstract_compare
+axis.batch_rules[gt_p] = batch_gt
+axis.abatch_rules[gt_p] = utils.asyncify(batch_gt)
+ad.push_rules[gt_p] = pushforward_gt
+ad.apush_rules[gt_p] = utils.asyncify(pushforward_gt)
+ad.pull_fwd_rules[gt_p] = pullback_fwd_gt
+ad.apull_fwd_rules[gt_p] = utils.asyncify(pullback_fwd_gt)
+ad.pull_bwd_rules[gt_p] = pullback_bwd_compare
+ad.apull_bwd_rules[gt_p] = utils.asyncify(pullback_bwd_compare)
 
 
 # ==================================================================================================
@@ -691,17 +703,19 @@ def impl_ge(in_tree: Tree, /) -> bool:
 pushforward_ge = ft.partial(pushforward_compare, ge_p)
 pullback_fwd_ge = ft.partial(pullback_fwd_compare, ge_p)
 batch_ge = ft.partial(batch_compare, ge_p)
+
+
 core.impl_rules[ge_p] = impl_ge
 core.aimpl_rules[ge_p] = utils.asyncify(impl_ge)
-core.abstract_rules[ge_p] = abstract_compare
-core.push_rules[ge_p] = pushforward_ge
-core.apush_rules[ge_p] = utils.asyncify(pushforward_ge)
-core.pull_fwd_rules[ge_p] = pullback_fwd_ge
-core.apull_fwd_rules[ge_p] = utils.asyncify(pullback_fwd_ge)
-core.pull_bwd_rules[ge_p] = pullback_bwd_compare
-core.apull_bwd_rules[ge_p] = utils.asyncify(pullback_bwd_compare)
-core.batch_rules[ge_p] = batch_ge
-core.abatch_rules[ge_p] = utils.asyncify(batch_ge)
+stage.abstract_rules[ge_p] = abstract_compare
+axis.batch_rules[ge_p] = batch_ge
+axis.abatch_rules[ge_p] = utils.asyncify(batch_ge)
+ad.push_rules[ge_p] = pushforward_ge
+ad.apush_rules[ge_p] = utils.asyncify(pushforward_ge)
+ad.pull_fwd_rules[ge_p] = pullback_fwd_ge
+ad.apull_fwd_rules[ge_p] = utils.asyncify(pullback_fwd_ge)
+ad.pull_bwd_rules[ge_p] = pullback_bwd_compare
+ad.apull_bwd_rules[ge_p] = utils.asyncify(pullback_bwd_compare)
 
 
 stage.dunder_rules[stage.Dunder.NEG, FloatAVal] = neg

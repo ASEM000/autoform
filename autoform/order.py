@@ -22,7 +22,9 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+import autoform.ad as ad
 import autoform.analysis as analysis
+import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
 import autoform.stage as stage
@@ -88,8 +90,6 @@ def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
@@ -99,8 +99,6 @@ def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
 
 async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    import autoform.ad as ad
-
     primals, tangents = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
@@ -122,8 +120,6 @@ async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdR
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -133,8 +129,6 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    import autoform.ad as ad
-
     residuals, out_cotangent = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
@@ -144,8 +138,6 @@ async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    import autoform.axis as axis
-
     _, in_batched, inputs = in_tree
 
     results: list[Tree] = []
@@ -164,8 +156,6 @@ def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOut
 
 
 async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    import autoform.axis as axis
-
     _, in_batched, inputs = in_tree
 
     results: list[Tree] = []
@@ -181,19 +171,6 @@ async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFa
             out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
 
     return results, out_batched
-
-
-core.impl_rules[fanout_p] = impl_fanout
-core.aimpl_rules[fanout_p] = aimpl_fanout
-core.abstract_rules[fanout_p] = abstract_fanout
-core.push_rules[fanout_p] = push_fanout
-core.apush_rules[fanout_p] = apush_fanout
-core.pull_fwd_rules[fanout_p] = pull_fwd_fanout
-core.apull_fwd_rules[fanout_p] = apull_fwd_fanout
-core.pull_bwd_rules[fanout_p] = pull_bwd_fanout
-core.apull_bwd_rules[fanout_p] = apull_bwd_fanout
-core.batch_rules[fanout_p] = batch_fanout
-core.abatch_rules[fanout_p] = abatch_fanout
 
 
 def dce_fanout(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -215,7 +192,19 @@ def dce_fanout(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
+core.impl_rules[fanout_p] = impl_fanout
+core.aimpl_rules[fanout_p] = aimpl_fanout
+stage.abstract_rules[fanout_p] = abstract_fanout
+axis.batch_rules[fanout_p] = batch_fanout
+axis.abatch_rules[fanout_p] = abatch_fanout
+ad.push_rules[fanout_p] = push_fanout
+ad.apush_rules[fanout_p] = apush_fanout
+ad.pull_fwd_rules[fanout_p] = pull_fwd_fanout
+ad.apull_fwd_rules[fanout_p] = apull_fwd_fanout
+ad.pull_bwd_rules[fanout_p] = pull_bwd_fanout
+ad.apull_bwd_rules[fanout_p] = apull_bwd_fanout
 dead.dce_rules[fanout_p] = dce_fanout
+
 
 # ==================================================================================================
 # SCHED
@@ -357,12 +346,12 @@ def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:
 
 core.impl_rules[depends_p] = impl_depends
 core.aimpl_rules[depends_p] = utils.asyncify(impl_depends)
-core.abstract_rules[depends_p] = abstract_depends
-core.push_rules[depends_p] = push_depends
-core.apush_rules[depends_p] = utils.asyncify(push_depends)
-core.pull_fwd_rules[depends_p] = pull_fwd_depends
-core.apull_fwd_rules[depends_p] = utils.asyncify(pull_fwd_depends)
-core.pull_bwd_rules[depends_p] = pull_bwd_depends
-core.apull_bwd_rules[depends_p] = utils.asyncify(pull_bwd_depends)
-core.batch_rules[depends_p] = batch_depends
-core.abatch_rules[depends_p] = utils.asyncify(batch_depends)
+stage.abstract_rules[depends_p] = abstract_depends
+axis.batch_rules[depends_p] = batch_depends
+axis.abatch_rules[depends_p] = utils.asyncify(batch_depends)
+ad.push_rules[depends_p] = push_depends
+ad.apush_rules[depends_p] = utils.asyncify(push_depends)
+ad.pull_fwd_rules[depends_p] = pull_fwd_depends
+ad.apull_fwd_rules[depends_p] = utils.asyncify(pull_fwd_depends)
+ad.pull_bwd_rules[depends_p] = pull_bwd_depends
+ad.apull_bwd_rules[depends_p] = utils.asyncify(pull_bwd_depends)
