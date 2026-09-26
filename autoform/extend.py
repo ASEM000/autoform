@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import autoform.abstract as abstract
 import autoform.ad as ad
 import autoform.axis as axis
 import autoform.control as control
@@ -38,19 +39,19 @@ import autoform.utils as utils
 # TYPES
 # ==================================================================================================
 
-AVal = core.AVal
+AVal = abstract.AVal
 StrAVal = string.StrAVal
 IntAVal = numeric.IntAVal
 FloatAVal = numeric.FloatAVal
 BoolAVal = numeric.BoolAVal
-Space = core.Space
-avalof = core.avalof
-primal_s = core.primal_s
-tangent_s = core.tangent_s
-cotangent_s = core.cotangent_s
+Space = abstract.Space
+avalof = abstract.avalof
+primal_s = abstract.primal_s
+tangent_s = abstract.tangent_s
+cotangent_s = abstract.cotangent_s
 Prim = core.Prim
 Dunder = tracer.Dunder
-Zero = core.Zero
+Zero = abstract.Zero
 Interpreter = core.Interpreter
 Box = core.Box
 IR = core.IR
@@ -72,7 +73,7 @@ batch_rules = core.batch_rules
 # HELPERS
 # ==================================================================================================
 
-materialize_zeros = core.materialize_zeros
+materialize_zeros = abstract.materialize_zeros
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
@@ -215,7 +216,7 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         ... def token_aval(value):
         ...     return TokenAVal()
     """
-    core.aval_types[type] = aval_rule
+    abstract.aval_types[type] = aval_rule
     tracer.trace_types.add(type)
     return aval_rule
 

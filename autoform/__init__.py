@@ -18,6 +18,7 @@
 # IMPORTS
 # ==================================================================================================
 
+import autoform.abstract as abstract
 import autoform.ad as ad
 import autoform.axis as axis
 import autoform.boundary as boundary
@@ -139,4 +140,5 @@ __all__ = [
     "numeric",
     "string",
     "path",
+    "abstract",
 ]

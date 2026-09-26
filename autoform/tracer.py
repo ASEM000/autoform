@@ -23,6 +23,7 @@ from contextvars import ContextVar
 from enum import Enum
 from typing import Any, TypeGuard, cast
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.utils as utils
 
@@ -31,7 +32,7 @@ type Tree[T] = utils.Tree[T]
 trace_types: set[type] = set()
 
 
-def is_traceable(x) -> TypeGuard[core.Val]:
+def is_traceable(x) -> TypeGuard[str | int | float | bool]:
     return type(x) in trace_types
 
 
@@ -115,7 +116,7 @@ class Dunder(Enum):
 
 type DunderRule = Callable[..., Any]
 
-dunder_rules: dict[tuple[Dunder, type[core.AVal]], DunderRule] = {}
+dunder_rules: dict[tuple[Dunder, type[abstract.AVal]], DunderRule] = {}
 
 
 class TraceBox(core.Box):
@@ -128,7 +129,7 @@ class TraceBox(core.Box):
         self.var = var
 
     @property
-    def aval(self) -> core.AVal:
+    def aval(self) -> abstract.AVal:
         return self.var.aval
 
     def __repr__(self) -> str:
@@ -319,7 +320,7 @@ class TraceInterpreter(core.Interpreter[TraceBox]):
             # NOTE(asem): abstract rules return `AVal`/ python leaves.
             # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
-            return core.Var.fresh(aval=x) if isinstance(x, core.AVal) else x
+            return core.Var.fresh(aval=x) if isinstance(x, abstract.AVal) else x
 
         out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
         self.eqns.append(core.Eqn(prim, in_tree, out_tree, params, core.active_tags.get()))
@@ -372,7 +373,7 @@ def trace[*A, R](
     def to_var(x, /) -> core.Var:
         assert not core.is_var(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
-        return core.Var.fresh(aval=core.avalof(x))
+        return core.Var.fresh(aval=abstract.avalof(x))
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> core.IR[*A, R]:

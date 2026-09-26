@@ -45,7 +45,7 @@ class Blob:
         self.size = size
 
 
-class BlobAVal(af.core.AVal):
+class BlobAVal(af.abstract.AVal):
     __slots__ = ["size"]
 
     def __init__(self, size: int):
@@ -60,7 +60,7 @@ class BlobAVal(af.core.AVal):
 
 class TestSpace:
     def test_registration_and_replacement(self):
-        space = af.core.Space("blob")
+        space = af.abstract.Space("blob")
         rule = lambda value: BlobAVal(value.size)
         replacement = lambda value: BlobAVal(value.size + 1)
         space.set(BlobAVal, rule)
@@ -69,11 +69,11 @@ class TestSpace:
             space.set(BlobAVal, replacement)
         space.set(BlobAVal, replacement, replace=True)
         assert space.map(BlobAVal(3)) == BlobAVal(4)
-        zero = af.core.Zero(space.map(BlobAVal(3)))
-        assert isinstance(zero, af.core.Zero)
+        zero = af.abstract.Zero(space.map(BlobAVal(3)))
+        assert isinstance(zero, af.abstract.Zero)
         assert zero.aval == BlobAVal(4)
         with pytest.raises(AssertionError, match="No concrete zero defined"):
-            af.core.materialize_zeros(zero)
+            af.abstract.materialize_zeros(zero)
 
     @pytest.mark.parametrize(
         "value_type, rule, replace, message",
@@ -85,18 +85,18 @@ class TestSpace:
     )
     def test_invalid_registration(self, value_type, rule, replace, message):
         with pytest.raises(AssertionError, match=message):
-            af.core.Space("blob").set(value_type, rule, replace=replace)
+            af.abstract.Space("blob").set(value_type, rule, replace=replace)
 
     def test_missing_rule(self):
         with pytest.raises(TypeError, match="No empty aval rule registered"):
-            af.core.Space("empty").map(BlobAVal(3))
+            af.abstract.Space("empty").map(BlobAVal(3))
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.primal_s, id="primal"),
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(af.abstract.primal_s, id="primal"),
+            pytest.param(af.abstract.tangent_s, id="tangent"),
+            pytest.param(af.abstract.cotangent_s, id="cotangent"),
         ],
     )
     @pytest.mark.parametrize(
@@ -111,14 +111,14 @@ class TestSpace:
         assert space.map(aval) is aval
 
     def test_custom_ad_spaces(self):
-        class TextAVal(af.core.AVal): ...
+        class TextAVal(af.abstract.AVal): ...
 
-        class TextEditAVal(af.core.AVal): ...
+        class TextEditAVal(af.abstract.AVal): ...
 
-        class TextFeedbackAVal(af.core.AVal): ...
+        class TextFeedbackAVal(af.abstract.AVal): ...
 
-        tangent_s = af.core.Space("tangent")
-        cotangent_s = af.core.Space("cotangent")
+        tangent_s = af.abstract.Space("tangent")
+        cotangent_s = af.abstract.Space("cotangent")
         tangent_s.set(TextAVal, lambda _: TextEditAVal())
         tangent_s.set(TextEditAVal, lambda aval: aval)
         cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
@@ -131,23 +131,23 @@ class TestSpace:
         assert isinstance(cotangent, TextFeedbackAVal)
         assert tangent_s.map(tangent) is tangent
         assert cotangent_s.map(cotangent) is cotangent
-        assert isinstance(af.core.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
-        assert isinstance(af.core.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
+        assert isinstance(af.abstract.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
+        assert isinstance(af.abstract.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(af.abstract.tangent_s, id="tangent"),
+            pytest.param(af.abstract.cotangent_s, id="cotangent"),
         ],
     )
     def test_missing_ad_space_rule(self, space):
-        class UnknownAVal(af.core.AVal): ...
+        class UnknownAVal(af.abstract.AVal): ...
 
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
             space.map(UnknownAVal())
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
-            af.core.Zero(space.map(UnknownAVal()))
+            af.abstract.Zero(space.map(UnknownAVal()))
 
 
 class TestBuildIR:
@@ -193,7 +193,7 @@ class TestBuildIR:
         def program(x):
             return x
 
-        af.core.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
+        af.abstract.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
         af.tracer.trace_types.add(TraceBlob)
 
         ir = af.trace(program)(TraceBlob(3))
@@ -575,7 +575,7 @@ def test_variable_and_literal_boundary():
     var = af.core.Var(aval=af.string.StrAVal())
     assert af.core.is_var(var)
     assert var.aval == af.string.StrAVal()
-    assert af.core.avalof(var) is var.aval
+    assert af.abstract.avalof(var) is var.aval
     assert not af.tracer.is_traceable(var)
     assert not af.core.is_var("hello")
     box = af.tracer.TraceBox(owner=af.tracer.TraceInterpreter(), var=var)

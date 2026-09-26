@@ -112,7 +112,7 @@ class TestCustomPushforward:
             (dx,) = tangents
             return call(*primals), af.string.format(
                 "custom delta: {value}",
-                value=af.core.materialize_zeros(dx),
+                value=af.abstract.materialize_zeros(dx),
             )
 
         ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
@@ -139,7 +139,7 @@ class TestCustomPushforward:
             (dx,) = tangents
             return call(*primals), af.string.format(
                 "async delta: {value}",
-                value=af.core.materialize_zeros(dx),
+                value=af.abstract.materialize_zeros(dx),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
@@ -158,7 +158,7 @@ class TestCustomPushforward:
             primals, tangents = in_tree
             (dx,) = tangents
             return call(*primals), af.string.format(
-                "push {value}", value=af.core.materialize_zeros(dx)
+                "push {value}", value=af.abstract.materialize_zeros(dx)
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
@@ -184,7 +184,7 @@ class TestCustomPushforward:
             (dx,) = tangents
             return call(*primals), af.string.format(
                 "sync push {value}",
-                value=af.core.materialize_zeros(dx),
+                value=af.abstract.materialize_zeros(dx),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")

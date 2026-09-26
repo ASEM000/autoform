@@ -22,6 +22,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+import autoform.abstract as abstract
 import autoform.analysis as analysis
 import autoform.core as core
 import autoform.dead as dead
@@ -341,9 +342,9 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
 
 def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
     def make_c(x):
-        if isinstance(x, core.Zero):
+        if isinstance(x, abstract.Zero):
             return x
-        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
 
     (_, deps), out_cotangent = in_tree
     return out_cotangent, utils.tree.map(make_c, deps)

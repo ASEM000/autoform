@@ -542,7 +542,7 @@ class TestLMPrimitive:
             out, cotangent = executor(ir, *args)
         assert out == "m1|hello"
         assert isinstance(cotangent[0], str)
-        assert cotangent[1] == af.core.Zero(af.string.StrAVal())
+        assert cotangent[1] == af.abstract.Zero(af.string.StrAVal())
 
 
 class TestEchoLMClient:

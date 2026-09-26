@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import functools as ft
 import string as stringlib
+from typing import Any
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.tracer as tracer
 import autoform.utils as utils
@@ -34,7 +36,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class StrAVal(core.AVal):
+class StrAVal(abstract.AVal):
     """Abstract value for ``str`` leaves.
 
     Example:
@@ -63,11 +65,11 @@ class StrAVal(core.AVal):
         return "".join(cotangents)
 
 
-core.aval_types[str] = lambda _: StrAVal()
+abstract.aval_types[str] = lambda _: StrAVal()
 tracer.trace_types.add(str)
-core.primal_s.set(StrAVal, lambda aval: aval)
-core.tangent_s.set(StrAVal, lambda aval: aval)
-core.cotangent_s.set(StrAVal, lambda aval: aval)
+abstract.primal_s.set(StrAVal, lambda aval: aval)
+abstract.tangent_s.set(StrAVal, lambda aval: aval)
+abstract.cotangent_s.set(StrAVal, lambda aval: aval)
 
 # ==================================================================================================
 # CONCAT
@@ -98,14 +100,14 @@ def impl_concat(in_tree: Tree, /) -> str:
     return "".join(in_tree)
 
 
-def abstract_concat(in_tree: Tree, /) -> core.EvalType:
+def abstract_concat(in_tree: Tree, /) -> Any:
     assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
     return StrAVal()
 
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = core.materialize_zeros(tangents)
+    tangents = abstract.materialize_zeros(tangents)
     return concat_p.bind(primals), concat_p.bind(tangents)
 
 
@@ -179,15 +181,15 @@ def impl_match(in_tree: Tree, /) -> bool:
     return a == b
 
 
-def abstract_match(in_tree: Tree, /) -> core.EvalType:
+def abstract_match(in_tree: Tree, /) -> Any:
     assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return core.avalof(False)
+    return abstract.avalof(False)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     primals, tangents = in_tree
     out_primal = match_p.bind(primals)
-    return out_primal, core.Zero(core.tangent_s.map(core.avalof(False)))
+    return out_primal, abstract.Zero(abstract.tangent_s.map(abstract.avalof(False)))
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -198,9 +200,9 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     def make_c(x):
-        if isinstance(x, core.Zero):
+        if isinstance(x, abstract.Zero):
             return x
-        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
 
     residuals, out_cotangent = in_tree
     del out_cotangent

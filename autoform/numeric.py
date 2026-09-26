@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.tracer as tracer
 import autoform.utils as utils
@@ -48,7 +49,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class IntAVal(core.AVal):
+class IntAVal(abstract.AVal):
     """Abstract value for ``int`` leaves.
 
     Example:
@@ -71,12 +72,12 @@ class IntAVal(core.AVal):
         return hash(type(self))
 
 
-core.aval_types[int] = lambda _: IntAVal()
+abstract.aval_types[int] = lambda _: IntAVal()
 tracer.trace_types.add(int)
-core.primal_s.set(IntAVal, lambda aval: aval)
+abstract.primal_s.set(IntAVal, lambda aval: aval)
 
 
-class FloatAVal(core.AVal):
+class FloatAVal(abstract.AVal):
     """Abstract value for ``float`` leaves.
 
     Example:
@@ -105,14 +106,14 @@ class FloatAVal(core.AVal):
         return sum(cotangents)
 
 
-core.aval_types[float] = lambda _: FloatAVal()
+abstract.aval_types[float] = lambda _: FloatAVal()
 tracer.trace_types.add(float)
-core.primal_s.set(FloatAVal, lambda aval: aval)
-core.tangent_s.set(FloatAVal, lambda aval: aval)
-core.cotangent_s.set(FloatAVal, lambda aval: aval)
+abstract.primal_s.set(FloatAVal, lambda aval: aval)
+abstract.tangent_s.set(FloatAVal, lambda aval: aval)
+abstract.cotangent_s.set(FloatAVal, lambda aval: aval)
 
 
-class BoolAVal(core.AVal):
+class BoolAVal(abstract.AVal):
     """Abstract value for ``bool`` leaves.
 
     Example:
@@ -135,11 +136,11 @@ class BoolAVal(core.AVal):
         return hash(type(self))
 
 
-core.aval_types[bool] = lambda _: BoolAVal()
+abstract.aval_types[bool] = lambda _: BoolAVal()
 tracer.trace_types.add(bool)
-core.primal_s.set(BoolAVal, lambda aval: aval)
-core.tangent_s.set(BoolAVal, lambda aval: aval)
-core.cotangent_s.set(BoolAVal, lambda aval: aval)
+abstract.primal_s.set(BoolAVal, lambda aval: aval)
+abstract.tangent_s.set(BoolAVal, lambda aval: aval)
+abstract.cotangent_s.set(BoolAVal, lambda aval: aval)
 
 
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -184,7 +185,7 @@ def abstract_neg(in_tree: Tree, /) -> FloatAVal:
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
     primal, tangent = in_tree
-    return neg(primal), neg(core.materialize_zeros(tangent))
+    return neg(primal), neg(abstract.materialize_zeros(tangent))
 
 
 def pullback_fwd_neg(in_tree: Tree, /) -> TreePair:
@@ -241,7 +242,7 @@ def abstract_add(in_tree: Tree, /) -> FloatAVal:
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = core.materialize_zeros(tangents)
+    tangents = abstract.materialize_zeros(tangents)
     return add_p.bind(primals), add_p.bind(tangents)
 
 
@@ -299,7 +300,7 @@ def abstract_sub(in_tree: Tree, /) -> FloatAVal:
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
-    tangents = core.materialize_zeros(tangents)
+    tangents = abstract.materialize_zeros(tangents)
     return sub_p.bind(primals), sub_p.bind(tangents)
 
 
@@ -358,7 +359,7 @@ def abstract_mul(in_tree: Tree, /) -> FloatAVal:
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
     a, b = primals
-    da, db = core.materialize_zeros(tangents)
+    da, db = abstract.materialize_zeros(tangents)
     return mul(a, b), add(mul(da, b), mul(a, db))
 
 
@@ -417,7 +418,7 @@ def abstract_div(in_tree: Tree, /) -> FloatAVal:
 def pushforward_div(in_tree: Tree, /) -> TreePair:
     primals, tangents = in_tree
     a, b = primals
-    da, db = core.materialize_zeros(tangents)
+    da, db = abstract.materialize_zeros(tangents)
     return div(a, b), div(sub(mul(da, b), mul(a, db)), mul(b, b))
 
 
@@ -461,7 +462,7 @@ def abstract_compare(in_tree: Tree, /) -> BoolAVal:
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     primals, _ = in_tree
-    return prim.bind(primals), core.Zero(core.tangent_s.map(BoolAVal()))
+    return prim.bind(primals), abstract.Zero(abstract.tangent_s.map(BoolAVal()))
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -470,9 +471,9 @@ def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
 
 def pullback_bwd_compare(in_tree: Tree, /) -> Tree:
     def make_c(x):
-        if isinstance(x, core.Zero):
+        if isinstance(x, abstract.Zero):
             return x
-        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+        return abstract.Zero(abstract.cotangent_s.map(abstract.avalof(x)))
 
     primals, _ = in_tree
     return utils.tree.map(make_c, primals)

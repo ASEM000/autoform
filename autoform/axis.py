@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.dead as dead
 import autoform.order as order
@@ -35,14 +36,14 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class BatchAVal(core.AVal):
+class BatchAVal(abstract.AVal):
     # NOTE(asem): unlike atomic AVals(e.g StrAVal), no aval_type rule can be registered
     # as containers are later introduced at the call site. unlike jax the atomic unit is not
     # the array object but any thing really.
-    def __init__(self, base: core.AVal):
+    def __init__(self, base: abstract.AVal):
         # TODO(asem): maybe exapand with useful metadata here
 
-        assert isinstance(base, core.AVal), f"Expected AVal, got {base!r}"
+        assert isinstance(base, abstract.AVal), f"Expected AVal, got {base!r}"
         self.base = base
 
     def __repr__(self) -> str:
@@ -55,8 +56,8 @@ class BatchAVal(core.AVal):
         return hash((type(self), self.base))
 
 
-core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.map(aval.base)))
-core.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(core.cotangent_s.map(aval.base)))
+abstract.tangent_s.set(BatchAVal, lambda aval: BatchAVal(abstract.tangent_s.map(aval.base)))
+abstract.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(abstract.cotangent_s.map(aval.base)))
 
 
 def is_axis_spec(v) -> bool:
@@ -134,7 +135,7 @@ def batch(ir: core.IR, /, *, in_axes: Tree[bool] = True) -> core.IR:
         if core.is_var(atom):
             return core.Var.fresh(aval=maybe_batched(atom.aval, has_batched), source=atom)
         if has_batched:
-            return core.Var.fresh(aval=maybe_batched(core.avalof(atom), True))
+            return core.Var.fresh(aval=maybe_batched(abstract.avalof(atom), True))
         return atom
 
     v_in_ir = utils.tree.map(make_in, ir.in_tree, b_in)
@@ -272,7 +273,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: core.IR, in_axes: Tree) -> Tree
         if core.is_var(atom):
             return maybe_batched(atom.aval, has_batched)
         if has_batched:
-            return maybe_batched(core.avalof(atom), True)
+            return maybe_batched(abstract.avalof(atom), True)
         return atom
 
     return utils.tree.map(out_aval, ir.out_tree)

@@ -20,6 +20,7 @@ import functools as ft
 from collections.abc import Callable
 from typing import Any
 
+import autoform.abstract as abstract
 import autoform.core as core
 import autoform.dead as dead
 import autoform.tracer as tracer
@@ -36,10 +37,10 @@ def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> core.IR:
     def to_ir_input(x, /):
         if core.is_var(x):
             return x
-        if isinstance(x, core.AVal):
+        if isinstance(x, abstract.AVal):
             return core.Var.fresh(aval=x)
         assert tracer.is_traceable(x), f"Unsupported type for custom function: {type(x).__name__}"
-        return core.Var.fresh(aval=core.avalof(x))
+        return core.Var.fresh(aval=abstract.avalof(x))
 
     in_tree = utils.tree.map(to_ir_input, in_tree)
     with core.using_interpreter(tracer.TraceInterpreter()) as trace_interpreter:
@@ -200,7 +201,7 @@ class CustomFunc:
             ...     primals, tangents = in_tree
             ...     (dx,) = tangents
             ...     p_out = call(*primals)
-            ...     t_out = "delta " + af.core.materialize_zeros(dx)
+            ...     t_out = "delta " + af.abstract.materialize_zeros(dx)
             ...     return p_out, t_out
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
             >>> af.pushforward(ir).call(("hello",), ("change",))
@@ -224,7 +225,7 @@ class CustomFunc:
             ...     primals, tangents = in_tree
             ...     (dx,) = tangents
             ...     p_out = call(*primals)
-            ...     t_out = "async delta " + af.core.materialize_zeros(dx)
+            ...     t_out = "async delta " + af.abstract.materialize_zeros(dx)
             ...     return p_out, t_out
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
             >>> asyncio.run(af.pushforward(ir).acall(("hello",), ("change",)))
@@ -401,7 +402,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     primals, tangents = in_tree
         ...     (dx,) = tangents
         ...     p_out = call(*primals)
-        ...     t_out = "delta: " + af.core.materialize_zeros(dx)
+        ...     t_out = "delta: " + af.abstract.materialize_zeros(dx)
         ...     return p_out, t_out
         >>> af.pushforward(base).call(("hello",), ("change",))
         ('[hello]', 'delta: change')
@@ -432,7 +433,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         A common use is wrapping an LM call so the forward call remains normal,
         while pushforward and pullback use prompts written for that application.
 
-        >>> from autoform.core import materialize_zeros
+        >>> from autoform.abstract import materialize_zeros
         >>> @af.custom
         ... def summarize(text, model):
         ...     message = "Summarize this in one sentence: " + text
