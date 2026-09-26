@@ -23,7 +23,6 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 import autoform.ad as ad
-import autoform.analysis as analysis
 import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
@@ -249,7 +248,7 @@ def sched[*A, R](
         >>> # async execution (concurrent via asyncio.gather)
         >>> result = asyncio.run(scheduled.acall("hello")) # doctest: +SKIP
     """
-    levels: list[list[stage.Eqn]] = analysis.toposort_levels(ir)
+    levels: list[list[stage.Eqn]] = stage.toposort_levels(ir)
     out_eqns: list[stage.Eqn] = []
     cond = (lambda _: True) if cond is None else cond
 
@@ -262,7 +261,7 @@ def sched[*A, R](
         # >>> func = lambda x: (x * x, x + 1)
         # simply copying the vars of multiply eqn then (e.g. [v0, v0]) incorrectly returns
         # (2 * x, 2 * x) that will get summed upstream.
-        in_trees = [(tuple(dict.fromkeys(analysis.var_leaves(eqn.in_tree))),) for eqn in eqns]
+        in_trees = [(tuple(dict.fromkeys(stage.var_leaves(eqn.in_tree))),) for eqn in eqns]
         irs = [stage.IR([eqn], inputs, eqn.out_tree) for eqn, inputs in zip(eqns, in_trees)]
         out_trees = [eqn.out_tree for eqn in eqns]
         return stage.Eqn(fanout_p, in_trees, out_trees, dict(irs=irs))

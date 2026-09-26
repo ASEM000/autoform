@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""IR construction, tracing, and execution."""
+"""IR construction, analysis, tracing, and execution."""
 
 from __future__ import annotations
 
 import functools as ft
 import itertools as it
+from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable, Generator, Hashable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -366,6 +367,141 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
         return in_values
 
     return func
+
+
+# ==================================================================================================
+# ANALYSIS
+# ==================================================================================================
+
+type UsedTree = Tree[bool]
+type LiveSet = set[Var]
+type Liveness = list[LiveSet]
+
+
+def is_same_stucture(lhs: IR, rhs: IR, /) -> bool:
+    """Compare IR input/output structures"""
+
+    assert isinstance(lhs, IR)
+    assert isinstance(rhs, IR)
+
+    def same_atom(x, y):
+        if is_var(x) and is_var(y):
+            return x.aval == y.aval
+        # NOTE(asem): check for literals.
+        return type(x) is type(y) and x == y
+
+    left, right = (lhs.in_tree, lhs.out_tree), (rhs.in_tree, rhs.out_tree)
+    if utils.tree.structure(left) != utils.tree.structure(right):
+        return False
+    return utils.tree.all(utils.tree.map(same_atom, left, right))
+
+
+def var_leaves(tree: Tree, /) -> list[Var]:
+    """Return Vars from an IR tree in leaf order."""
+
+    return [cast(Var, x) for x in utils.tree.leaves(tree) if is_var(x)]
+
+
+def var_producers(ir: IR, /) -> dict[Var, Eqn]:
+    """Return the top-level producer equation for each Var defined by ``ir``."""
+
+    producers: dict[Var, Eqn] = {}
+    for eqn in ir.eqns:
+        for var in var_leaves(eqn.out_tree):
+            assert producers.get(var) is None
+            producers[var] = eqn
+    return producers
+
+
+def eqn_graph(ir: IR, /) -> dict[Eqn, list[Eqn]]:
+    """Return top-level equation dependencies as parent -> children adjacency."""
+
+    var_to_parent = var_producers(ir)
+    adjacency_list: dict[Eqn, list[Eqn]] = {eqn: [] for eqn in ir.eqns}
+    for eqn in ir.eqns:
+        seen_parents: set[Eqn] = set()
+        for in_var in var_leaves(eqn.in_tree):
+            if (p := var_to_parent.get(in_var)) is not None and p not in seen_parents:
+                adjacency_list[p].append(eqn)
+                seen_parents.add(p)
+
+    return adjacency_list
+
+
+@ft.partial(utils.lru_cache, maxsize=256)
+def toposort_levels(ir: IR, /) -> list[list[Eqn]]:
+    """Group IR equations into dependency levels."""
+
+    # NOTE(asem): equations form a dag where edges are defined by shared irvars.
+    # if equation a produces $x and equation b uses $x, then a -> b.
+    # this function groups equations into levels where:
+    # 1. equations in the same level are independent (can run in parallel)
+    # 2. level n must complete before level n+1 starts
+
+    # NOTE(asem): three-step process:
+    # 1. map each var to its creator equation
+    # 2. build adjacency list (parent -> children) from var flow
+    # 3. topological sort into levels using kahn's algorithm
+
+    # NOTE(asem): step 1/2: build adjacency list (parent -> children) from var flow
+    adjacency_list = eqn_graph(ir)
+    in_degree = defaultdict(lambda: 0)
+    for children in adjacency_list.values():
+        for child in children:
+            in_degree[child] += 1
+
+    # NOTE(asem): step 3: kahn's algorithm
+    # basically prune nodes with 0 indegree then update the children indegree
+    queue = deque(eqn for eqn in ir.eqns if in_degree[eqn] == 0)
+    levels = []
+
+    while queue:
+        level = []
+        for _ in range(len(queue)):
+            node = queue.popleft()
+            level.append(node)
+            for child in adjacency_list[node]:
+                in_degree[child] -= 1
+                in_degree[child] == 0 and queue.append(child)
+        levels.append(level)
+    return levels
+
+
+def liveness(ir: IR, /, *, out_used: UsedTree | None = None) -> Liveness:
+    """Return live Vars at each IR boundary."""
+
+    # NOTE(asem): liveness is a backward dataflow analysis that computes Vars live
+    # at each boundary. The result length is len(ir.eqns) + 1: the first item is
+    # the live input boundary, and the last item is the selected output boundary.
+
+    if out_used is None:
+        live_after = set(var_leaves(ir.out_tree))
+    else:
+        assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
+        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
+        # NOTE(asem): with a partial output mask, only the selected output Vars are live.
+        # >>> def program(x):
+        # ...     a = x + "!"
+        # ...     b = x + "?"
+        # ...     return a, b
+        # >>> liveness(ir, out_used=(True, False))[-1]
+        # {a}
+        live_after = set(var_leaves(utils.mask(ir.out_tree, out_used)))
+
+    liveness: Liveness = [set() for _ in range(len(ir.eqns) + 1)]
+    liveness[-1] = live_after
+
+    for i, eqn in reversed(tuple(enumerate(ir.eqns))):
+        # NOTE(asem): move in reversed order of equation list starting from the output Vars
+        # with each step up the live before is basically all the live Vars used + live after
+        # without the Vars defined by the current equation.
+        uses: LiveSet = set(var_leaves(eqn.in_tree))
+        defs: LiveSet = set(var_leaves(eqn.out_tree))
+        live_before = uses | (live_after - defs)
+        liveness[i] = live_before
+        live_after = live_before
+
+    return liveness
 
 
 # ==================================================================================================

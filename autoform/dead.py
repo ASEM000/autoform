@@ -19,7 +19,6 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-import autoform.analysis as analysis
 import autoform.core as core
 import autoform.stage as stage
 import autoform.utils as utils
@@ -103,7 +102,7 @@ def sanitize_out(ir: stage.IR, eqns: list[stage.Eqn], out_used: UsedTree, /) -> 
     # ('x', 'x!', None)
     # eqns contains only the kept equations: x is an input, a is still produced,
     # and b has no producer left, so only b's output slot becomes None.
-    in_vars = set(analysis.var_leaves(ir.in_tree))
+    in_vars = set(stage.var_leaves(ir.in_tree))
     defined_vars: set[stage.Var] = set(in_vars)
     for kept in eqns:
         for atom in utils.tree.leaves(kept.out_tree):
@@ -171,7 +170,7 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
         assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
         user_out_used = out_used
 
-    live_boundaries: analysis.Liveness = analysis.ir_liveness(ir, out_used=user_out_used)
+    live_boundaries: stage.Liveness = stage.liveness(ir, out_used=user_out_used)
     active_vars: set[stage.Var] = set(live_boundaries[-1])
     active_eqns: deque[stage.Eqn] = deque()
 
@@ -194,11 +193,11 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
 
         if protected:
             active_eqns.appendleft(new_eqn)
-            active_vars |= set(analysis.var_leaves(eqn.in_tree))
+            active_vars |= set(stage.var_leaves(eqn.in_tree))
 
         elif used:
             active_eqns.appendleft(new_eqn)
-            active_vars |= set(analysis.var_leaves(utils.mask(eqn.in_tree, in_used)))
+            active_vars |= set(stage.var_leaves(utils.mask(eqn.in_tree, in_used)))
 
     eqns = list(active_eqns)
     out_tree = sanitize_out(ir, eqns, user_out_used)

@@ -20,7 +20,6 @@ import functools as ft
 from collections.abc import Hashable
 
 import autoform.ad as ad
-import autoform.analysis as analysis
 import autoform.axis as axis
 import autoform.core as core
 import autoform.dead as dead
@@ -165,7 +164,7 @@ def switch(key: Hashable, branches: Branches, *args, **kwargs) -> Tree:
     key_aval = core.avalof(key0)
     assert all(core.avalof(k) == key_aval for k in branches)
     branch0 = branches[key0]
-    assert all(analysis.is_same_stucture(branch0, branch) for branch in branches.values())
+    assert all(stage.is_same_stucture(branch0, branch) for branch in branches.values())
     return switch_p.bind((key, args), branches=branches)
 
 

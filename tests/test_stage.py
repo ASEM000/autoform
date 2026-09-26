@@ -15,16 +15,16 @@
 import pytest
 
 import autoform as af
-from autoform.analysis import (
+from autoform.intercept import checkpoint_p
+from autoform.order import depends_p
+from autoform.stage import (
     eqn_graph,
-    ir_liveness,
     is_same_stucture,
+    liveness,
     toposort_levels,
     var_leaves,
     var_producers,
 )
-from autoform.intercept import checkpoint_p
-from autoform.order import depends_p
 from tests import prefix_name
 
 
@@ -330,7 +330,7 @@ class TestIrLiveness:
         ir = af.trace(program)("seed")
         (x,) = ir.in_tree
 
-        assert ir_liveness(ir) == [{x}]
+        assert liveness(ir) == [{x}]
 
     def test_empty_ir_respects_partial_output_mask(self):
         def program(x, y):
@@ -339,9 +339,9 @@ class TestIrLiveness:
         ir = af.trace(program)("x", "y")
         x, y = ir.in_tree
 
-        assert ir_liveness(ir, out_used=(True, False)) == [{x}]
-        assert ir_liveness(ir, out_used=(False, True)) == [{y}]
-        assert ir_liveness(ir, out_used=(False, False)) == [set()]
+        assert liveness(ir, out_used=(True, False)) == [{x}]
+        assert liveness(ir, out_used=(False, True)) == [{y}]
+        assert liveness(ir, out_used=(False, False)) == [set()]
 
     def test_chain_returns_boundary_liveness(self):
         def program(x):
@@ -354,7 +354,7 @@ class TestIrLiveness:
         (x,) = ir.in_tree
         a, b, c = (eqn.out_tree for eqn in ir.eqns)
 
-        assert ir_liveness(ir) == [{x}, {a}, {b}, {c}]
+        assert liveness(ir) == [{x}, {a}, {b}, {c}]
 
     def test_parallel_equations_keep_suffix_live_ins(self):
         def program(a, b):
@@ -366,7 +366,7 @@ class TestIrLiveness:
         a, b = ir.in_tree
         left, right = (eqn.out_tree for eqn in ir.eqns)
 
-        assert ir_liveness(ir) == [{a, b}, {b, left}, {left, right}]
+        assert liveness(ir) == [{a, b}, {b, left}, {left, right}]
 
     def test_partial_output_mask_reduces_output_boundary_liveness(self):
         def program(x):
@@ -378,10 +378,10 @@ class TestIrLiveness:
         (x,) = ir.in_tree
         a, b = (eqn.out_tree for eqn in ir.eqns)
 
-        assert ir_liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
+        assert liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
 
     def test_static_inputs_do_not_become_live_vars(self):
         ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
         out_var = ir.out_tree
 
-        assert ir_liveness(ir) == [{ir.in_tree[1]}, {out_var}]
+        assert liveness(ir) == [{ir.in_tree[1]}, {out_var}]
