@@ -208,7 +208,7 @@ class CustomFunc:
             ('[hello]', 'delta change')
         """
 
-        core.push_rules.set(self.prim, rule, replace=True)
+        core.push_rules.set(self.prim, rule)
         return rule
 
     def aset_pushforward[R: core.APushforwardRule](self, rule: R, /) -> R:
@@ -232,7 +232,7 @@ class CustomFunc:
             ('[hello]', 'async delta change')
         """
 
-        core.push_rules.aset(self.prim, rule, replace=True)
+        core.push_rules.aset(self.prim, rule)
         return rule
 
     def set_pullback[R: core.PullbackBwdRule](self, rule: R, /) -> R:
@@ -254,7 +254,7 @@ class CustomFunc:
             ('[hello]', ('feedback via [hello]',))
         """
 
-        core.pull_bwd_rules.set(self.prim, rule, replace=True)
+        core.pull_bwd_rules.set(self.prim, rule)
         return rule
 
     def aset_pullback[R: core.APullbackBwdRule](self, rule: R, /) -> R:
@@ -277,7 +277,7 @@ class CustomFunc:
             ('[hello]', ('async feedback via [hello]',))
         """
 
-        core.pull_bwd_rules.aset(self.prim, rule, replace=True)
+        core.pull_bwd_rules.aset(self.prim, rule)
         return rule
 
     def set_batch[R: core.BatchRule](self, rule: R, /) -> R:
@@ -302,7 +302,7 @@ class CustomFunc:
             ['<a>', '<b>']
         """
 
-        core.batch_rules.set(self.prim, rule, replace=True)
+        core.batch_rules.set(self.prim, rule)
         return rule
 
     def aset_batch[R: core.ABatchRule](self, rule: R, /) -> R:
@@ -328,7 +328,7 @@ class CustomFunc:
             ['async <a>', 'async <b>']
         """
 
-        core.batch_rules.aset(self.prim, rule, replace=True)
+        core.batch_rules.aset(self.prim, rule)
         return rule
 
 

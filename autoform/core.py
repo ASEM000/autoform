@@ -23,8 +23,7 @@ from collections.abc import Awaitable, Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from operator import setitem
-from threading import RLock
-from typing import Any, ClassVar, Protocol, Self, TypeGuard
+from typing import Any, ClassVar, Self, TypeGuard
 
 import autoform.abstract as abstract
 import autoform.utils as utils
@@ -81,7 +80,6 @@ class Var:
 
     __slots__ = ["id", "source", "aval"]
     counter: ClassVar[it.count[int]] = it.count(0)
-    lock: ClassVar[RLock] = RLock()
 
     def __init__(self, /, *, aval: abstract.AVal, source: Var | None = None):
         self.id = next(self.counter)
@@ -92,8 +90,7 @@ class Var:
 
     @classmethod
     def fresh(cls, *, aval: abstract.AVal, source: Var | None = None) -> Self:
-        with cls.lock:
-            return cls(source=source, aval=aval)
+        return cls(source=source, aval=aval)
 
     def __repr__(self) -> str:
         source = f", source={self.source!r}" if self.source else ""
@@ -539,8 +536,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 # ==================================================================================================
 
 
-class InterpreterRule[R](Protocol):
-    def __call__(self, in_tree: Tree, /, **params: Any) -> R: ...
+type InterpreterRule[R] = Callable[..., R]
 
 
 type TreePair = tuple[Tree, Tree]
@@ -561,44 +557,25 @@ type ABatchRule = AsyncInterpreterRule[BatchRuleResult]
 
 
 class InterpreterRuleMapping[Rule: InterpreterRule[Any], ARule: AsyncInterpreterRule[Any]]:
-    __slots__ = ["map", "amap", "lock"]
+    __slots__ = ["map", "amap"]
 
     def __init__(self):
         self.map: dict[Prim, Rule] = {}
         self.amap: dict[Prim, ARule] = {}
-        self.lock = RLock()
 
-    def set[R: Rule](self, prim: Prim, rule: R, /, *, replace: bool = False) -> R:
-        assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
-        assert isinstance(rule, Callable), f"Expected callable, got {rule}"
-        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-        assert replace or prim not in self.map, f"Rule for primitive {prim} already defined"
-
-        with self.lock:
-            self.map[prim] = rule
+    def set[R: Rule](self, prim: Prim, rule: R, /) -> R:
+        self.map[prim] = rule
         return rule
 
-    def aset[AR: ARule](self, prim: Prim, rule: AR, /, *, replace: bool = False) -> AR:
-        assert isinstance(prim, Prim), f"Expected primitive, got {prim}"
-        assert isinstance(rule, Callable), f"Expected callable, got {rule}"
-        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-        assert replace or prim not in self.amap, f"Async rule for primitive {prim} already defined"
-
-        with self.lock:
-            self.amap[prim] = rule
+    def aset[AR: ARule](self, prim: Prim, rule: AR, /) -> AR:
+        self.amap[prim] = rule
         return rule
 
     def get(self, prim: Prim) -> Rule:
-        with self.lock:
-            if prim not in self.map:
-                raise KeyError(f"No {type(self).__name__} rule defined for primitive {prim}")
-            return self.map[prim]
+        return self.map[prim]
 
     def aget(self, prim: Prim) -> ARule:
-        with self.lock:
-            if prim not in self.amap:
-                raise KeyError(f"No async {type(self).__name__} rule defined for primitive {prim}")
-            return self.amap[prim]
+        return self.amap[prim]
 
 
 impl_rules = InterpreterRuleMapping[ImplRule, AImplRule]()
