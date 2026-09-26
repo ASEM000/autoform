@@ -240,10 +240,10 @@ def test_numeric_program_with_broadcast_input():
 
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
-    primitive = af.core.Prim("batch_output")
-    af.extend.abstract_rules[primitive] = lambda _: af.utils.tree.map(af.core.avalof, sample_output)
-    af.extend.batch_rules[primitive] = batch_rule
-    return af.batch(af.trace(primitive.bind)(traced))
+    prim = af.core.Prim("batch_output")
+    af.extend.register_abstract(prim, lambda _: af.utils.tree.map(af.core.avalof, sample_output))
+    af.extend.register_batch(prim, batch_rule)
+    return af.batch(af.trace(prim.bind)(traced))
 
 
 @pytest.mark.parametrize(

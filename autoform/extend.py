@@ -58,22 +58,6 @@ Eqn = stage.Eqn
 Var = stage.Var
 
 # ==================================================================================================
-# RULE REGISTRIES
-# ==================================================================================================
-
-impl_rules = core.impl_rules
-aimpl_rules = core.aimpl_rules
-abstract_rules = stage.abstract_rules
-batch_rules = axis.batch_rules
-abatch_rules = axis.abatch_rules
-push_rules = ad.push_rules
-apush_rules = ad.apush_rules
-pull_fwd_rules = ad.pull_fwd_rules
-apull_fwd_rules = ad.apull_fwd_rules
-pull_bwd_rules = ad.pull_bwd_rules
-apull_bwd_rules = ad.apull_bwd_rules
-
-# ==================================================================================================
 # HELPERS
 # ==================================================================================================
 
@@ -140,21 +124,22 @@ __all__ = [
     "IR",
     "Eqn",
     "Var",
+    "register_impl",
+    "register_aimpl",
+    "register_abstract",
+    "register_batch",
+    "register_abatch",
+    "register_pushforward",
+    "register_apushforward",
+    "register_pullback_fwd",
+    "register_apullback_fwd",
+    "register_pullback_bwd",
+    "register_apullback_bwd",
     "register_trace_type",
+    "register_dce",
     "register_non_dce",
     "register_non_memoizable",
     "register_dunder",
-    "impl_rules",
-    "aimpl_rules",
-    "abstract_rules",
-    "push_rules",
-    "apush_rules",
-    "pull_fwd_rules",
-    "apull_fwd_rules",
-    "pull_bwd_rules",
-    "apull_bwd_rules",
-    "batch_rules",
-    "abatch_rules",
     "materialize_zeros",
     "batch_index",
     "batch_spec",
@@ -202,6 +187,61 @@ type AValRule = Callable[[Any], AVal]
 # ==================================================================================================
 
 
+def register_impl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    core.impl_rules[prim] = rule
+    return rule
+
+
+def register_aimpl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    core.aimpl_rules[prim] = rule
+    return rule
+
+
+def register_abstract[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    stage.abstract_rules[prim] = rule
+    return rule
+
+
+def register_batch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    axis.batch_rules[prim] = rule
+    return rule
+
+
+def register_abatch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    axis.abatch_rules[prim] = rule
+    return rule
+
+
+def register_pushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    ad.push_rules[prim] = rule
+    return rule
+
+
+def register_apushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    ad.apush_rules[prim] = rule
+    return rule
+
+
+def register_pullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    ad.pull_fwd_rules[prim] = rule
+    return rule
+
+
+def register_apullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    ad.apull_fwd_rules[prim] = rule
+    return rule
+
+
+def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    ad.pull_bwd_rules[prim] = rule
+    return rule
+
+
+def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    ad.apull_bwd_rules[prim] = rule
+    return rule
+
+
 def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
     """Register a Python type as a traceable input type.
 
@@ -228,6 +268,12 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
     core.aval_types[type] = aval_rule
     stage.trace_types.add(type)
     return aval_rule
+
+
+def register_dce[R: dead.DCERule](prim: Prim, rule: R, /) -> R:
+    """Register a dead-code elimination rule for a primitive."""
+    dead.dce_rules[prim] = rule
+    return rule
 
 
 def register_non_dce[T: Prim](prim: T, /) -> T:

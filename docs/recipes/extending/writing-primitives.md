@@ -135,4 +135,4 @@ async def aimpl_lookup(query: str, /) -> str:
 afe.register_aimpl(lookup_p, aimpl_lookup)
 ```
 
-Register async rules with the corresponding helper, such as `afe.register_abatch`.
+Register async rules with the corresponding function, such as `afe.register_abatch`.

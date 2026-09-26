@@ -119,9 +119,9 @@ def test_fanout_exception(executor):
         raise ValueError("intentional error")
 
     error_p = af.core.Prim("error")
-    af.extend.impl_rules[error_p] = impl_error
-    af.extend.abstract_rules[error_p] = lambda x: af.string.StrAVal()
-    af.extend.aimpl_rules[error_p] = af.utils.asyncify(impl_error)
+    af.extend.register_impl(error_p, impl_error)
+    af.extend.register_abstract(error_p, lambda x: af.string.StrAVal())
+    af.extend.register_aimpl(error_p, af.utils.asyncify(impl_error))
     ir = af.sched(af.trace(lambda x: (af.string.format("[{x}]", x=x), error_p.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):
         executor(ir, "A")
