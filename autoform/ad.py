@@ -76,13 +76,13 @@ class PushforwardInterpreter(core.Interpreter[PushforwardBox]):
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in, t_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, t_out = core.push_rules.get(prim)((p_in, t_in), **params)
+            p_out, t_out = core.push_rules[prim]((p_in, t_in), **params)
         return self.box((p_out, t_out))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in, t_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, t_out = await core.push_rules.aget(prim)((p_in, t_in), **params)
+            p_out, t_out = await core.apush_rules[prim]((p_in, t_in), **params)
         return self.box((p_out, t_out))
 
 
@@ -279,17 +279,17 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     return out_ib, out_batched
 
 
-core.impl_rules.set(pushforward_call_p, impl_pushforward_call)
-core.impl_rules.aset(pushforward_call_p, aimpl_pushforward_call)
-core.abstract_rules.set(pushforward_call_p, abstract_pushforward_call)
-core.push_rules.set(pushforward_call_p, pushforward_pushforward_call)
-core.push_rules.aset(pushforward_call_p, apushforward_pushforward_call)
-core.pull_fwd_rules.set(pushforward_call_p, pullback_fwd_pushforward_call)
-core.pull_fwd_rules.aset(pushforward_call_p, apullback_fwd_pushforward_call)
-core.pull_bwd_rules.set(pushforward_call_p, pullback_bwd_pushforward_call)
-core.pull_bwd_rules.aset(pushforward_call_p, apullback_bwd_pushforward_call)
-core.batch_rules.set(pushforward_call_p, batch_pushforward_call)
-core.batch_rules.aset(pushforward_call_p, abatch_pushforward_call)
+core.impl_rules[pushforward_call_p] = impl_pushforward_call
+core.aimpl_rules[pushforward_call_p] = aimpl_pushforward_call
+core.abstract_rules[pushforward_call_p] = abstract_pushforward_call
+core.push_rules[pushforward_call_p] = pushforward_pushforward_call
+core.apush_rules[pushforward_call_p] = apushforward_pushforward_call
+core.pull_fwd_rules[pushforward_call_p] = pullback_fwd_pushforward_call
+core.apull_fwd_rules[pushforward_call_p] = apullback_fwd_pushforward_call
+core.pull_bwd_rules[pushforward_call_p] = pullback_bwd_pushforward_call
+core.apull_bwd_rules[pushforward_call_p] = apullback_bwd_pushforward_call
+core.batch_rules[pushforward_call_p] = batch_pushforward_call
+core.abatch_rules[pushforward_call_p] = abatch_pushforward_call
 
 
 def dce_pushforward_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -384,17 +384,17 @@ def batch_cot_acc(in_tree: Tree, /) -> TreePair:
     return spec.unflatten(out_bi), True
 
 
-core.impl_rules.set(cot_acc_p, impl_cot_acc)
-core.impl_rules.aset(cot_acc_p, utils.asyncify(impl_cot_acc))
-core.abstract_rules.set(cot_acc_p, abstract_cot_acc)
-core.push_rules.set(cot_acc_p, pushforward_cot_acc)
-core.push_rules.aset(cot_acc_p, utils.asyncify(pushforward_cot_acc))
-core.pull_fwd_rules.set(cot_acc_p, pullback_fwd_cot_acc)
-core.pull_fwd_rules.aset(cot_acc_p, utils.asyncify(pullback_fwd_cot_acc))
-core.pull_bwd_rules.set(cot_acc_p, pullback_bwd_cot_acc)
-core.pull_bwd_rules.aset(cot_acc_p, utils.asyncify(pullback_bwd_cot_acc))
-core.batch_rules.set(cot_acc_p, batch_cot_acc)
-core.batch_rules.aset(cot_acc_p, utils.asyncify(batch_cot_acc))
+core.impl_rules[cot_acc_p] = impl_cot_acc
+core.aimpl_rules[cot_acc_p] = utils.asyncify(impl_cot_acc)
+core.abstract_rules[cot_acc_p] = abstract_cot_acc
+core.push_rules[cot_acc_p] = pushforward_cot_acc
+core.apush_rules[cot_acc_p] = utils.asyncify(pushforward_cot_acc)
+core.pull_fwd_rules[cot_acc_p] = pullback_fwd_cot_acc
+core.apull_fwd_rules[cot_acc_p] = utils.asyncify(pullback_fwd_cot_acc)
+core.pull_bwd_rules[cot_acc_p] = pullback_bwd_cot_acc
+core.apull_bwd_rules[cot_acc_p] = utils.asyncify(pullback_bwd_cot_acc)
+core.batch_rules[cot_acc_p] = batch_cot_acc
+core.abatch_rules[cot_acc_p] = utils.asyncify(batch_cot_acc)
 
 
 class PullbackFwdBox(core.Box):
@@ -423,13 +423,13 @@ class PullbackFwdInterpreter(core.Interpreter[PullbackFwdBox]):
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, residuals = core.pull_fwd_rules.get(prim)(p_in, **params)
+            p_out, residuals = core.pull_fwd_rules[prim](p_in, **params)
         return self.box(p_out), residuals
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         p_in = self.unbox(in_tree)
         with core.using_interpreter(self.parent):
-            p_out, residuals = await core.pull_fwd_rules.aget(prim)(p_in, **params)
+            p_out, residuals = await core.apull_fwd_rules[prim](p_in, **params)
         return self.box(p_out), residuals
 
 
@@ -494,14 +494,14 @@ class PullbackBwdInterpreter(core.Interpreter[PullbackBwdBox]):
         residuals, c_out = in_tree
         c_out = self.unbox(c_out)
         with core.using_interpreter(self.parent):
-            c_in = core.pull_bwd_rules.get(prim)((residuals, c_out), **params)
+            c_in = core.pull_bwd_rules[prim]((residuals, c_out), **params)
         return self.box(c_in)
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         residuals, c_out = in_tree
         c_out = self.unbox(c_out)
         with core.using_interpreter(self.parent):
-            c_in = await core.pull_bwd_rules.aget(prim)((residuals, c_out), **params)
+            c_in = await core.apull_bwd_rules[prim]((residuals, c_out), **params)
         return self.box(c_in)
 
 
@@ -719,17 +719,17 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: core.IR) -> TreePair:
     return out_ib, out_batched
 
 
-core.impl_rules.set(pullback_call_p, impl_pullback_call)
-core.impl_rules.aset(pullback_call_p, aimpl_pullback_call)
-core.abstract_rules.set(pullback_call_p, abstract_pullback_call)
-core.push_rules.set(pullback_call_p, pushforward_pullback_call)
-core.push_rules.aset(pullback_call_p, apushforward_pullback_call)
-core.pull_fwd_rules.set(pullback_call_p, pullback_fwd_pullback_call)
-core.pull_fwd_rules.aset(pullback_call_p, apullback_fwd_pullback_call)
-core.pull_bwd_rules.set(pullback_call_p, pullback_bwd_pullback_call)
-core.pull_bwd_rules.aset(pullback_call_p, apullback_bwd_pullback_call)
-core.batch_rules.set(pullback_call_p, batch_pullback_call)
-core.batch_rules.aset(pullback_call_p, abatch_pullback_call)
+core.impl_rules[pullback_call_p] = impl_pullback_call
+core.aimpl_rules[pullback_call_p] = aimpl_pullback_call
+core.abstract_rules[pullback_call_p] = abstract_pullback_call
+core.push_rules[pullback_call_p] = pushforward_pullback_call
+core.apush_rules[pullback_call_p] = apushforward_pullback_call
+core.pull_fwd_rules[pullback_call_p] = pullback_fwd_pullback_call
+core.apull_fwd_rules[pullback_call_p] = apullback_fwd_pullback_call
+core.pull_bwd_rules[pullback_call_p] = pullback_bwd_pullback_call
+core.apull_bwd_rules[pullback_call_p] = apullback_bwd_pullback_call
+core.batch_rules[pullback_call_p] = batch_pullback_call
+core.abatch_rules[pullback_call_p] = abatch_pullback_call
 
 
 def dce_pullback_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

@@ -63,11 +63,16 @@ Var = core.Var
 # ==================================================================================================
 
 impl_rules = core.impl_rules
+aimpl_rules = core.aimpl_rules
 abstract_rules = core.abstract_rules
 push_rules = core.push_rules
+apush_rules = core.apush_rules
 pull_fwd_rules = core.pull_fwd_rules
+apull_fwd_rules = core.apull_fwd_rules
 pull_bwd_rules = core.pull_bwd_rules
+apull_bwd_rules = core.apull_bwd_rules
 batch_rules = core.batch_rules
+abatch_rules = core.abatch_rules
 
 # ==================================================================================================
 # HELPERS
@@ -141,11 +146,16 @@ __all__ = [
     "register_non_memoizable",
     "register_dunder",
     "impl_rules",
+    "aimpl_rules",
     "abstract_rules",
     "push_rules",
+    "apush_rules",
     "pull_fwd_rules",
+    "apull_fwd_rules",
     "pull_bwd_rules",
+    "apull_bwd_rules",
     "batch_rules",
+    "abatch_rules",
     "materialize_zeros",
     "batch_index",
     "batch_spec",

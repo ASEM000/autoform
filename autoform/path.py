@@ -105,17 +105,17 @@ async def abatch_factor(in_tree, /, *, name: Hashable | None = None):
     return (), ()
 
 
-core.impl_rules.set(factor_p, impl_factor)
-core.impl_rules.aset(factor_p, utils.asyncify(impl_factor))
-core.abstract_rules.set(factor_p, abstract_factor)
-core.push_rules.set(factor_p, pushforward_factor)
-core.push_rules.aset(factor_p, utils.asyncify(pushforward_factor))
-core.pull_fwd_rules.set(factor_p, pullback_fwd_factor)
-core.pull_fwd_rules.aset(factor_p, utils.asyncify(pullback_fwd_factor))
-core.pull_bwd_rules.set(factor_p, pullback_bwd_factor)
-core.pull_bwd_rules.aset(factor_p, utils.asyncify(pullback_bwd_factor))
-core.batch_rules.set(factor_p, batch_factor)
-core.batch_rules.aset(factor_p, abatch_factor)
+core.impl_rules[factor_p] = impl_factor
+core.aimpl_rules[factor_p] = utils.asyncify(impl_factor)
+core.abstract_rules[factor_p] = abstract_factor
+core.push_rules[factor_p] = pushforward_factor
+core.apush_rules[factor_p] = utils.asyncify(pushforward_factor)
+core.pull_fwd_rules[factor_p] = pullback_fwd_factor
+core.apull_fwd_rules[factor_p] = utils.asyncify(pullback_fwd_factor)
+core.pull_bwd_rules[factor_p] = pullback_bwd_factor
+core.apull_bwd_rules[factor_p] = utils.asyncify(pullback_bwd_factor)
+core.batch_rules[factor_p] = batch_factor
+core.abatch_rules[factor_p] = abatch_factor
 
 
 weight_call_p = core.Prim("weight_call")
@@ -247,15 +247,15 @@ def dce_weight_call(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(weight_call_p, impl_weight_call)
-core.impl_rules.aset(weight_call_p, aimpl_weight_call)
-core.abstract_rules.set(weight_call_p, abstract_weight_call)
-core.push_rules.set(weight_call_p, pushforward_weight_call)
-core.push_rules.aset(weight_call_p, utils.asyncify(pushforward_weight_call))
-core.pull_fwd_rules.set(weight_call_p, pullback_fwd_weight_call)
-core.pull_fwd_rules.aset(weight_call_p, utils.asyncify(pullback_fwd_weight_call))
-core.pull_bwd_rules.set(weight_call_p, pullback_bwd_weight_call)
-core.pull_bwd_rules.aset(weight_call_p, utils.asyncify(pullback_bwd_weight_call))
-core.batch_rules.set(weight_call_p, batch_weight_call)
-core.batch_rules.aset(weight_call_p, abatch_weight_call)
+core.impl_rules[weight_call_p] = impl_weight_call
+core.aimpl_rules[weight_call_p] = aimpl_weight_call
+core.abstract_rules[weight_call_p] = abstract_weight_call
+core.push_rules[weight_call_p] = pushforward_weight_call
+core.apush_rules[weight_call_p] = utils.asyncify(pushforward_weight_call)
+core.pull_fwd_rules[weight_call_p] = pullback_fwd_weight_call
+core.apull_fwd_rules[weight_call_p] = utils.asyncify(pullback_fwd_weight_call)
+core.pull_bwd_rules[weight_call_p] = pullback_bwd_weight_call
+core.apull_bwd_rules[weight_call_p] = utils.asyncify(pullback_bwd_weight_call)
+core.batch_rules[weight_call_p] = batch_weight_call
+core.abatch_rules[weight_call_p] = abatch_weight_call
 dead.dce_rules[weight_call_p] = dce_weight_call

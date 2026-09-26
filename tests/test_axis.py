@@ -241,11 +241,10 @@ def test_numeric_program_with_broadcast_input():
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
     primitive = af.core.Prim("batch_output")
-    af.core.abstract_rules.set(
-        primitive,
-        lambda _: af.utils.tree.map(af.abstract.avalof, sample_output),
+    af.core.abstract_rules[primitive] = lambda _: af.utils.tree.map(
+        af.abstract.avalof, sample_output
     )
-    af.core.batch_rules.set(primitive, batch_rule)
+    af.core.batch_rules[primitive] = batch_rule
     return af.batch(af.trace(primitive.bind)(traced))
 
 

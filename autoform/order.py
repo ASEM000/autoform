@@ -183,17 +183,17 @@ async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFa
     return results, out_batched
 
 
-core.impl_rules.set(fanout_p, impl_fanout)
-core.impl_rules.aset(fanout_p, aimpl_fanout)
-core.abstract_rules.set(fanout_p, abstract_fanout)
-core.push_rules.set(fanout_p, push_fanout)
-core.push_rules.aset(fanout_p, apush_fanout)
-core.pull_fwd_rules.set(fanout_p, pull_fwd_fanout)
-core.pull_fwd_rules.aset(fanout_p, apull_fwd_fanout)
-core.pull_bwd_rules.set(fanout_p, pull_bwd_fanout)
-core.pull_bwd_rules.aset(fanout_p, apull_bwd_fanout)
-core.batch_rules.set(fanout_p, batch_fanout)
-core.batch_rules.aset(fanout_p, abatch_fanout)
+core.impl_rules[fanout_p] = impl_fanout
+core.aimpl_rules[fanout_p] = aimpl_fanout
+core.abstract_rules[fanout_p] = abstract_fanout
+core.push_rules[fanout_p] = push_fanout
+core.apush_rules[fanout_p] = apush_fanout
+core.pull_fwd_rules[fanout_p] = pull_fwd_fanout
+core.apull_fwd_rules[fanout_p] = apull_fwd_fanout
+core.pull_bwd_rules[fanout_p] = pull_bwd_fanout
+core.apull_bwd_rules[fanout_p] = apull_bwd_fanout
+core.batch_rules[fanout_p] = batch_fanout
+core.abatch_rules[fanout_p] = abatch_fanout
 
 
 def dce_fanout(eqn: core.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -350,19 +350,19 @@ def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
     return out_cotangent, utils.tree.map(make_c, deps)
 
 
-def batch_depends(in_tree: BatchDependsInput, /) -> core.BatchRuleResult:
+def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:
     _, (value_batched, _), (value, deps) = in_tree
     return depends_p.bind((value, deps)), value_batched
 
 
-core.impl_rules.set(depends_p, impl_depends)
-core.impl_rules.aset(depends_p, utils.asyncify(impl_depends))
-core.abstract_rules.set(depends_p, abstract_depends)
-core.push_rules.set(depends_p, push_depends)
-core.push_rules.aset(depends_p, utils.asyncify(push_depends))
-core.pull_fwd_rules.set(depends_p, pull_fwd_depends)
-core.pull_fwd_rules.aset(depends_p, utils.asyncify(pull_fwd_depends))
-core.pull_bwd_rules.set(depends_p, pull_bwd_depends)
-core.pull_bwd_rules.aset(depends_p, utils.asyncify(pull_bwd_depends))
-core.batch_rules.set(depends_p, batch_depends)
-core.batch_rules.aset(depends_p, utils.asyncify(batch_depends))
+core.impl_rules[depends_p] = impl_depends
+core.aimpl_rules[depends_p] = utils.asyncify(impl_depends)
+core.abstract_rules[depends_p] = abstract_depends
+core.push_rules[depends_p] = push_depends
+core.apush_rules[depends_p] = utils.asyncify(push_depends)
+core.pull_fwd_rules[depends_p] = pull_fwd_depends
+core.apull_fwd_rules[depends_p] = utils.asyncify(pull_fwd_depends)
+core.pull_bwd_rules[depends_p] = pull_bwd_depends
+core.apull_bwd_rules[depends_p] = utils.asyncify(pull_bwd_depends)
+core.batch_rules[depends_p] = batch_depends
+core.abatch_rules[depends_p] = utils.asyncify(batch_depends)

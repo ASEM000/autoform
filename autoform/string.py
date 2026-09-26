@@ -131,17 +131,17 @@ def batch_concat(in_tree: Tree, /) -> TreePair:
     return spec.unflatten(result), True
 
 
-core.impl_rules.set(concat_p, impl_concat)
-core.impl_rules.aset(concat_p, utils.asyncify(impl_concat))
-core.abstract_rules.set(concat_p, abstract_concat)
-core.push_rules.set(concat_p, pushforward_concat)
-core.push_rules.aset(concat_p, utils.asyncify(pushforward_concat))
-core.pull_fwd_rules.set(concat_p, pullback_fwd_concat)
-core.pull_fwd_rules.aset(concat_p, utils.asyncify(pullback_fwd_concat))
-core.pull_bwd_rules.set(concat_p, pullback_bwd_concat)
-core.pull_bwd_rules.aset(concat_p, utils.asyncify(pullback_bwd_concat))
-core.batch_rules.set(concat_p, batch_concat)
-core.batch_rules.aset(concat_p, utils.asyncify(batch_concat))
+core.impl_rules[concat_p] = impl_concat
+core.aimpl_rules[concat_p] = utils.asyncify(impl_concat)
+core.abstract_rules[concat_p] = abstract_concat
+core.push_rules[concat_p] = pushforward_concat
+core.apush_rules[concat_p] = utils.asyncify(pushforward_concat)
+core.pull_fwd_rules[concat_p] = pullback_fwd_concat
+core.apull_fwd_rules[concat_p] = utils.asyncify(pullback_fwd_concat)
+core.pull_bwd_rules[concat_p] = pullback_bwd_concat
+core.apull_bwd_rules[concat_p] = utils.asyncify(pullback_bwd_concat)
+core.batch_rules[concat_p] = batch_concat
+core.abatch_rules[concat_p] = utils.asyncify(batch_concat)
 
 
 tracer.dunder_rules[tracer.Dunder.ADD, StrAVal] = concat
@@ -218,17 +218,17 @@ def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     return spec.unflatten(result), True
 
 
-core.impl_rules.set(match_p, impl_match)
-core.impl_rules.aset(match_p, utils.asyncify(impl_match))
-core.abstract_rules.set(match_p, abstract_match)
-core.push_rules.set(match_p, pushforward_match)
-core.push_rules.aset(match_p, utils.asyncify(pushforward_match))
-core.pull_fwd_rules.set(match_p, pullback_fwd_match)
-core.pull_fwd_rules.aset(match_p, utils.asyncify(pullback_fwd_match))
-core.pull_bwd_rules.set(match_p, pullback_bwd_match)
-core.pull_bwd_rules.aset(match_p, utils.asyncify(pullback_bwd_match))
-core.batch_rules.set(match_p, batch_match)
-core.batch_rules.aset(match_p, utils.asyncify(batch_match))
+core.impl_rules[match_p] = impl_match
+core.aimpl_rules[match_p] = utils.asyncify(impl_match)
+core.abstract_rules[match_p] = abstract_match
+core.push_rules[match_p] = pushforward_match
+core.apush_rules[match_p] = utils.asyncify(pushforward_match)
+core.pull_fwd_rules[match_p] = pullback_fwd_match
+core.apull_fwd_rules[match_p] = utils.asyncify(pullback_fwd_match)
+core.pull_bwd_rules[match_p] = pullback_bwd_match
+core.apull_bwd_rules[match_p] = utils.asyncify(pullback_bwd_match)
+core.batch_rules[match_p] = batch_match
+core.abatch_rules[match_p] = utils.asyncify(batch_match)
 
 
 tracer.dunder_rules[tracer.Dunder.EQ, StrAVal] = match

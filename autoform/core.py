@@ -39,11 +39,16 @@ __all__ = [
     "Prim",
     # rule registries
     "impl_rules",
+    "aimpl_rules",
     "abstract_rules",
     "batch_rules",
+    "abatch_rules",
     "push_rules",
+    "apush_rules",
     "pull_fwd_rules",
+    "apull_fwd_rules",
     "pull_bwd_rules",
+    "apull_bwd_rules",
     # ir structures
     "Eqn",
     "IR",
@@ -440,10 +445,10 @@ class EvalInterpreter(Interpreter):
         return value
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return impl_rules.get(prim)(in_tree, **params)
+        return impl_rules[prim](in_tree, **params)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await impl_rules.aget(prim)(in_tree, **params)
+        return await aimpl_rules[prim](in_tree, **params)
 
 
 active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
@@ -536,53 +541,18 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 # ==================================================================================================
 
 
-type InterpreterRule[R] = Callable[..., R]
+type RuleMapping[T] = dict[Prim, Callable[..., T]]
 
-
-type TreePair = tuple[Tree, Tree]
-type BatchRuleResult = tuple[Tree, Tree[bool] | bool]
-type AsyncInterpreterRule[R] = InterpreterRule[Awaitable[R]]
-type ImplRule = InterpreterRule[Tree]
-type AImplRule = AsyncInterpreterRule[Tree]
-type AbstractRule = InterpreterRule[Tree[Any]]
-type AAbstractRule = AsyncInterpreterRule[Tree[Any]]
-type PushforwardRule = InterpreterRule[TreePair]
-type APushforwardRule = AsyncInterpreterRule[TreePair]
-type PullbackFwdRule = InterpreterRule[TreePair]
-type APullbackFwdRule = AsyncInterpreterRule[TreePair]
-type PullbackBwdRule = InterpreterRule[Tree]
-type APullbackBwdRule = AsyncInterpreterRule[Tree]
-type BatchRule = InterpreterRule[BatchRuleResult]
-type ABatchRule = AsyncInterpreterRule[BatchRuleResult]
-
-
-class InterpreterRuleMapping[Rule: InterpreterRule[Any], ARule: AsyncInterpreterRule[Any]]:
-    __slots__ = ["map", "amap"]
-
-    def __init__(self):
-        self.map: dict[Prim, Rule] = {}
-        self.amap: dict[Prim, ARule] = {}
-
-    def set[R: Rule](self, prim: Prim, rule: R, /) -> R:
-        self.map[prim] = rule
-        return rule
-
-    def aset[AR: ARule](self, prim: Prim, rule: AR, /) -> AR:
-        self.amap[prim] = rule
-        return rule
-
-    def get(self, prim: Prim) -> Rule:
-        return self.map[prim]
-
-    def aget(self, prim: Prim) -> ARule:
-        return self.amap[prim]
-
-
-impl_rules = InterpreterRuleMapping[ImplRule, AImplRule]()
-batch_rules = InterpreterRuleMapping[BatchRule, ABatchRule]()
-push_rules = InterpreterRuleMapping[PushforwardRule, APushforwardRule]()
-pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule, APullbackFwdRule]()
-pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule, APullbackBwdRule]()
-abstract_rules = InterpreterRuleMapping[AbstractRule, AAbstractRule]()
+impl_rules: RuleMapping[Tree] = {}
+aimpl_rules: RuleMapping[Awaitable[Tree]] = {}
+batch_rules: RuleMapping[tuple[Tree, Tree[bool]]] = {}
+abatch_rules: RuleMapping[Awaitable[tuple[Tree, Tree[bool]]]] = {}
+push_rules: RuleMapping[tuple[Tree, Tree]] = {}
+apush_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
+pull_fwd_rules: RuleMapping[tuple[Tree, Tree]] = {}
+apull_fwd_rules: RuleMapping[Awaitable[tuple[Tree, Tree]]] = {}
+pull_bwd_rules: RuleMapping[Tree] = {}
+apull_bwd_rules: RuleMapping[Awaitable[Tree]] = {}
+abstract_rules: RuleMapping[Tree[Any]] = {}
 
 abstract.aval_types[Var] = lambda value: value.aval

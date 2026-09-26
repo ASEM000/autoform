@@ -330,17 +330,17 @@ async def abatch_complete(in_tree: Tree, /, *, roles: Roles) -> TreePair:
     return out_tree, True
 
 
-core.impl_rules.set(complete_p, impl_complete)
-core.impl_rules.aset(complete_p, aimpl_complete)
-core.abstract_rules.set(complete_p, abstract_complete)
-core.push_rules.set(complete_p, pushforward_complete)
-core.push_rules.aset(complete_p, apush_complete)
-core.pull_fwd_rules.set(complete_p, pullback_fwd_complete)
-core.pull_fwd_rules.aset(complete_p, apull_fwd_complete)
-core.pull_bwd_rules.set(complete_p, pullback_bwd_complete)
-core.pull_bwd_rules.aset(complete_p, apull_bwd_complete)
-core.batch_rules.set(complete_p, batch_complete)
-core.batch_rules.aset(complete_p, abatch_complete)
+core.impl_rules[complete_p] = impl_complete
+core.aimpl_rules[complete_p] = aimpl_complete
+core.abstract_rules[complete_p] = abstract_complete
+core.push_rules[complete_p] = pushforward_complete
+core.apush_rules[complete_p] = apush_complete
+core.pull_fwd_rules[complete_p] = pullback_fwd_complete
+core.apull_fwd_rules[complete_p] = apull_fwd_complete
+core.pull_bwd_rules[complete_p] = pullback_bwd_complete
+core.apull_bwd_rules[complete_p] = apull_bwd_complete
+core.batch_rules[complete_p] = batch_complete
+core.abatch_rules[complete_p] = abatch_complete
 
 # ==================================================================================================
 # GENERATE
@@ -844,14 +844,14 @@ async def abatch_generate(in_tree: Tree, /, *, roles: Roles, schema: Tree) -> Tr
     return out_ib, out_batched
 
 
-core.impl_rules.set(generate_p, impl_generate)
-core.impl_rules.aset(generate_p, aimpl_generate)
-core.abstract_rules.set(generate_p, abstract_generate)
-core.push_rules.set(generate_p, pushforward_generate)
-core.push_rules.aset(generate_p, apush_generate)
-core.pull_fwd_rules.set(generate_p, pullback_fwd_generate)
-core.pull_fwd_rules.aset(generate_p, apull_fwd_generate)
-core.pull_bwd_rules.set(generate_p, pullback_bwd_generate)
-core.pull_bwd_rules.aset(generate_p, apull_bwd_generate)
-core.batch_rules.set(generate_p, batch_generate)
-core.batch_rules.aset(generate_p, abatch_generate)
+core.impl_rules[generate_p] = impl_generate
+core.aimpl_rules[generate_p] = aimpl_generate
+core.abstract_rules[generate_p] = abstract_generate
+core.push_rules[generate_p] = pushforward_generate
+core.apush_rules[generate_p] = apush_generate
+core.pull_fwd_rules[generate_p] = pullback_fwd_generate
+core.apull_fwd_rules[generate_p] = apull_fwd_generate
+core.pull_bwd_rules[generate_p] = pullback_bwd_generate
+core.apull_bwd_rules[generate_p] = apull_bwd_generate
+core.batch_rules[generate_p] = batch_generate
+core.abatch_rules[generate_p] = abatch_generate

@@ -83,8 +83,8 @@ def test_register_dunder_with_primitive_rules():
     af.tracer.trace_types.add(Box)
     af.tracer.dunder_rules[af.tracer.Dunder.ADD, BoxAVal] = box_add
     box_add_p = af.core.Prim("test_box_add")
-    af.core.impl_rules.set(box_add_p, impl_add)
-    af.core.abstract_rules.set(box_add_p, abstract_add)
+    af.core.impl_rules[box_add_p] = impl_add
+    af.core.abstract_rules[box_add_p] = abstract_add
 
     ir = af.trace(lambda x, y: x + y)(Box(1), Box(2))
 

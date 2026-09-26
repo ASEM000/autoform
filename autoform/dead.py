@@ -83,7 +83,7 @@ def update_eqn_out(eqn: core.Eqn, active_vars: set[core.Var], /) -> core.Eqn:
         return out
 
     in_avals = utils.tree.map(core.aval_if_var, eqn.in_tree)
-    out_avals = core.abstract_rules.get(eqn.prim)(in_avals, **eqn.params)
+    out_avals = core.abstract_rules[eqn.prim](in_avals, **eqn.params)
     out_tree = utils.tree.map(keep_var, eqn.out_tree, out_avals)
     return core.Eqn(eqn.prim, eqn.in_tree, out_tree, eqn.params, eqn.tags)
 
