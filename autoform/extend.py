@@ -188,56 +188,67 @@ type AValRule = Callable[[Any], AVal]
 
 
 def register_impl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     core.impl_rules[prim] = rule
     return rule
 
 
 def register_aimpl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     core.aimpl_rules[prim] = rule
     return rule
 
 
 def register_abstract[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     stage.abstract_rules[prim] = rule
     return rule
 
 
 def register_batch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     axis.batch_rules[prim] = rule
     return rule
 
 
 def register_abatch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     axis.abatch_rules[prim] = rule
     return rule
 
 
 def register_pushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     ad.push_rules[prim] = rule
     return rule
 
 
 def register_apushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     ad.apush_rules[prim] = rule
     return rule
 
 
 def register_pullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     ad.pull_fwd_rules[prim] = rule
     return rule
 
 
 def register_apullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     ad.apull_fwd_rules[prim] = rule
     return rule
 
 
 def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     ad.pull_bwd_rules[prim] = rule
     return rule
 
 
 def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
+    assert isinstance(prim, Prim)
     ad.apull_bwd_rules[prim] = rule
     return rule
 
@@ -272,6 +283,7 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
 
 def register_dce[R: dead.DCERule](prim: Prim, rule: R, /) -> R:
     """Register a dead-code elimination rule for a primitive."""
+    assert isinstance(prim, Prim)
     dead.dce_rules[prim] = rule
     return rule
 
@@ -288,6 +300,7 @@ def register_non_dce[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
+    assert isinstance(prim, Prim)
     rules = dead.non_dce_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
     rules.add(prim)
@@ -306,6 +319,7 @@ def register_non_memoizable[T: Prim](prim: T, /) -> T:
     Returns:
         The registered primitive.
     """
+    assert isinstance(prim, Prim)
     rules = memo.non_memoizable_primitives
     assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
     rules.add(prim)
