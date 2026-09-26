@@ -14,6 +14,8 @@
 
 import asyncio
 import functools as ft
+import math
+import operator
 import re
 from dataclasses import dataclass
 
@@ -23,6 +25,7 @@ import autoform as af
 from autoform.intercept import checkpoint_p
 from autoform.order import depends_p
 from autoform.stage import (
+    Dunder,
     eqn_graph,
     is_same_structure,
     liveness,
@@ -818,6 +821,118 @@ class TestIrLiveness:
 
 
 class TestTraceValuePythonOps:
+    @pytest.mark.parametrize(
+        "dunder, program, operation, expected",
+        [
+            pytest.param(Dunder.POS, operator.pos, operator.pos, 7, id="pos"),
+            pytest.param(Dunder.ABS, abs, abs, 7, id="abs"),
+            pytest.param(Dunder.INVERT, operator.invert, operator.invert, -8, id="invert"),
+            pytest.param(Dunder.FLOORDIV, lambda x: x // 3, operator.floordiv, 2, id="floordiv"),
+            pytest.param(Dunder.FLOORDIV, lambda x: 20 // x, operator.floordiv, 2, id="rfloordiv"),
+            pytest.param(Dunder.MOD, lambda x: x % 3, operator.mod, 1, id="mod"),
+            pytest.param(Dunder.MOD, lambda x: 20 % x, operator.mod, 6, id="rmod"),
+            pytest.param(Dunder.DIVMOD, lambda x: divmod(x, 3), divmod, (2, 1), id="divmod"),
+            pytest.param(Dunder.DIVMOD, lambda x: divmod(20, x), divmod, (2, 6), id="rdivmod"),
+            pytest.param(Dunder.AND, lambda x: x & 2, operator.and_, 2, id="and"),
+            pytest.param(Dunder.AND, lambda x: 2 & x, operator.and_, 2, id="rand"),
+            pytest.param(Dunder.OR, lambda x: x | 8, operator.or_, 15, id="or"),
+            pytest.param(Dunder.OR, lambda x: 8 | x, operator.or_, 15, id="ror"),
+            pytest.param(Dunder.XOR, lambda x: x ^ 3, operator.xor, 4, id="xor"),
+            pytest.param(Dunder.XOR, lambda x: 3 ^ x, operator.xor, 4, id="rxor"),
+            pytest.param(Dunder.LSHIFT, lambda x: x << 2, operator.lshift, 28, id="lshift"),
+            pytest.param(Dunder.LSHIFT, lambda x: 2 << x, operator.lshift, 256, id="rlshift"),
+            pytest.param(Dunder.RSHIFT, lambda x: x >> 2, operator.rshift, 1, id="rshift"),
+            pytest.param(Dunder.RSHIFT, lambda x: 256 >> x, operator.rshift, 2, id="rrshift"),
+            pytest.param(Dunder.ROUND, round, round, 7, id="round"),
+            pytest.param(Dunder.ROUND, lambda x: round(x, -1), round, 10, id="round-digits"),
+            pytest.param(Dunder.CEIL, math.ceil, math.ceil, 7, id="ceil"),
+            pytest.param(Dunder.FLOOR, math.floor, math.floor, 7, id="floor"),
+            pytest.param(Dunder.TRUNC, math.trunc, math.trunc, 7, id="trunc"),
+        ],
+    )
+    def test_numeric_operations_stage_registered_primitive(
+        self, dunder, program, operation, expected
+    ):
+        class Value(Blob): ...
+
+        class ValueAVal(af.core.AVal): ...
+
+        prim = af.core.Prim(dunder.value)
+        af.extend.register_trace_type(Value, lambda _: ValueAVal())
+        af.extend.register_impl(
+            prim, lambda inputs: operation(*(x.size if isinstance(x, Value) else x for x in inputs))
+        )
+        af.extend.register_abstract(prim, lambda _: af.utils.tree.map(af.core.avalof, expected))
+        af.extend.register_dunder(dunder, ValueAVal, lambda *inputs: prim.bind(inputs))
+
+        ir = af.trace(program)(Value(5))
+
+        assert [eqn.prim for eqn in ir.eqns] == [prim]
+        assert ir.call(Value(7)) == expected
+
+    def test_call_preserves_positional_and_keyword_inputs(self):
+        class Value(Blob): ...
+
+        class ValueAVal(af.core.AVal): ...
+
+        prim = af.core.Prim("call_value")
+        af.extend.register_trace_type(Value, lambda _: ValueAVal())
+        af.extend.register_impl(
+            prim, lambda inputs: inputs[0].size + sum(inputs[1]) + sum(inputs[2].values())
+        )
+        af.extend.register_abstract(prim, lambda _: af.numeric.IntAVal())
+        af.extend.register_dunder(
+            Dunder.CALL,
+            ValueAVal,
+            lambda value, /, *args, **kwargs: prim.bind((value, args, kwargs)),
+        )
+
+        ir = af.trace(lambda x, y: x(y, self=y, dunder=2, box=3))(Value(5), 1)
+
+        assert [eqn.prim for eqn in ir.eqns] == [prim]
+        assert ir.eqns[0].in_tree == (
+            ir.in_tree[0],
+            (ir.in_tree[1],),
+            {"self": ir.in_tree[1], "dunder": 2, "box": 3},
+        )
+        assert ir.call(Value(7), 4) == 20
+
+    def test_next_stages_iterator_advance(self):
+        class Values:
+            def __init__(self, values):
+                self.values = iter(values)
+
+        class ValuesAVal(af.core.AVal): ...
+
+        prim = af.core.Prim("next_value")
+        af.extend.register_trace_type(Values, lambda _: ValuesAVal())
+        af.extend.register_impl(prim, lambda value: next(value.values))
+        af.extend.register_abstract(prim, lambda _: af.numeric.IntAVal())
+        af.extend.register_dunder(Dunder.NEXT, ValuesAVal, prim.bind)
+
+        ir = af.trace(lambda x: (next(x), next(x)))(Values([1, 2]))
+
+        assert [eqn.prim for eqn in ir.eqns] == [prim, prim]
+        assert ir.call(Values([3, 4])) == (3, 4)
+
+    def test_reversed_iterates_over_staged_elements(self):
+        class Pair:
+            def __init__(self, x, y):
+                self.values = (x, y)
+
+        class PairAVal(af.core.AVal): ...
+
+        prim = af.core.Prim("pair_values")
+        af.extend.register_trace_type(Pair, lambda _: PairAVal())
+        af.extend.register_impl(prim, lambda pair: pair.values)
+        af.extend.register_abstract(prim, lambda _: (af.numeric.IntAVal(), af.numeric.IntAVal()))
+        af.extend.register_dunder(Dunder.REVERSED, PairAVal, lambda pair: reversed(prim.bind(pair)))
+
+        ir = af.trace(lambda x: tuple(reversed(x)))(Pair(1, 2))
+
+        assert [eqn.prim for eqn in ir.eqns] == [prim]
+        assert ir.call(Pair(3, 4)) == (4, 3)
+
     @pytest.mark.parametrize(
         ("dunder", "program"),
         [

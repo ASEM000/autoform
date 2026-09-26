@@ -601,31 +601,19 @@ def fold() -> Generator[None, None, None]:
 
 
 class Dunder(Enum):
-    NEG = "neg"
-    ADD = "add"
-    SUB = "sub"
-    MUL = "mul"
-    DIV = "div"
-    POW = "pow"
-    MATMUL = "matmul"
-    EQ = "eq"
-    NE = "ne"
-    LT = "lt"
-    LE = "le"
-    GT = "gt"
-    GE = "ge"
-    BOOL = "bool"
-    BYTES = "bytes"
-    COMPLEX = "complex"
-    CONTAINS = "contains"
-    FLOAT = "float"
-    FORMAT = "format"
-    GETITEM = "getitem"
-    INDEX = "index"
-    INT = "int"
-    ITER = "iter"
-    LEN = "len"
-    STR = "str"
+    POS, NEG, ABS, INVERT = "pos", "neg", "abs", "invert"
+    ADD, SUB, MUL, DIV = "add", "sub", "mul", "div"
+    FLOORDIV, MOD, DIVMOD = "floordiv", "mod", "divmod"
+    POW, MATMUL = "pow", "matmul"
+    AND, OR, XOR = "and", "or", "xor"
+    LSHIFT, RSHIFT = "lshift", "rshift"
+    EQ, NE, LT, LE, GT, GE = "eq", "ne", "lt", "le", "gt", "ge"
+    BOOL, INT, FLOAT, COMPLEX = "bool", "int", "float", "complex"
+    BYTES, STR, FORMAT = "bytes", "str", "format"
+    CALL, GETITEM = "call", "getitem"
+    CONTAINS, INDEX, LEN = "contains", "index", "len"
+    ITER, NEXT, REVERSED = "iter", "next", "reversed"
+    ROUND, FLOOR, CEIL, TRUNC = "round", "floor", "ceil", "trunc"
 
 
 type DunderRule = Callable[..., Any]
@@ -670,8 +658,17 @@ class TraceBox:
     def __ge__(self, other) -> Any:
         return apply_dunder(Dunder.GE, self, self, other)
 
+    def __pos__(self) -> Any:
+        return apply_dunder(Dunder.POS, self, self)
+
     def __neg__(self) -> Any:
         return apply_dunder(Dunder.NEG, self, self)
+
+    def __abs__(self) -> Any:
+        return apply_dunder(Dunder.ABS, self, self)
+
+    def __invert__(self) -> Any:
+        return apply_dunder(Dunder.INVERT, self, self)
 
     def __add__(self, other) -> Any:
         return apply_dunder(Dunder.ADD, self, self, other)
@@ -697,6 +694,24 @@ class TraceBox:
     def __rtruediv__(self, other) -> Any:
         return apply_dunder(Dunder.DIV, self, other, self)
 
+    def __floordiv__(self, other) -> Any:
+        return apply_dunder(Dunder.FLOORDIV, self, self, other)
+
+    def __rfloordiv__(self, other) -> Any:
+        return apply_dunder(Dunder.FLOORDIV, self, other, self)
+
+    def __mod__(self, other) -> Any:
+        return apply_dunder(Dunder.MOD, self, self, other)
+
+    def __rmod__(self, other) -> Any:
+        return apply_dunder(Dunder.MOD, self, other, self)
+
+    def __divmod__(self, other) -> Any:
+        return apply_dunder(Dunder.DIVMOD, self, self, other)
+
+    def __rdivmod__(self, other) -> Any:
+        return apply_dunder(Dunder.DIVMOD, self, other, self)
+
     def __pow__(self, other) -> Any:
         return apply_dunder(Dunder.POW, self, self, other)
 
@@ -709,11 +724,47 @@ class TraceBox:
     def __rmatmul__(self, other) -> Any:
         return apply_dunder(Dunder.MATMUL, self, other, self)
 
+    def __and__(self, other) -> Any:
+        return apply_dunder(Dunder.AND, self, self, other)
+
+    def __rand__(self, other) -> Any:
+        return apply_dunder(Dunder.AND, self, other, self)
+
+    def __or__(self, other) -> Any:
+        return apply_dunder(Dunder.OR, self, self, other)
+
+    def __ror__(self, other) -> Any:
+        return apply_dunder(Dunder.OR, self, other, self)
+
+    def __xor__(self, other) -> Any:
+        return apply_dunder(Dunder.XOR, self, self, other)
+
+    def __rxor__(self, other) -> Any:
+        return apply_dunder(Dunder.XOR, self, other, self)
+
+    def __lshift__(self, other) -> Any:
+        return apply_dunder(Dunder.LSHIFT, self, self, other)
+
+    def __rlshift__(self, other) -> Any:
+        return apply_dunder(Dunder.LSHIFT, self, other, self)
+
+    def __rshift__(self, other) -> Any:
+        return apply_dunder(Dunder.RSHIFT, self, self, other)
+
+    def __rrshift__(self, other) -> Any:
+        return apply_dunder(Dunder.RSHIFT, self, other, self)
+
     def __bool__(self) -> bool:
         return apply_dunder(Dunder.BOOL, self, self)
 
     def __bytes__(self) -> bytes:
         return apply_dunder(Dunder.BYTES, self, self)
+
+    def __call__(self, /, *args, **kwargs) -> Any:
+        return apply_dunder(Dunder.CALL, self, self, *args, **kwargs)
+
+    def __ceil__(self) -> Any:
+        return apply_dunder(Dunder.CEIL, self, self)
 
     def __complex__(self) -> complex:
         return apply_dunder(Dunder.COMPLEX, self, self)
@@ -723,6 +774,9 @@ class TraceBox:
 
     def __float__(self) -> float:
         return apply_dunder(Dunder.FLOAT, self, self)
+
+    def __floor__(self) -> Any:
+        return apply_dunder(Dunder.FLOOR, self, self)
 
     def __format__(self, format_spec: str) -> str:
         return apply_dunder(Dunder.FORMAT, self, self, format_spec)
@@ -742,14 +796,28 @@ class TraceBox:
     def __len__(self) -> int:
         return apply_dunder(Dunder.LEN, self, self)
 
+    def __next__(self) -> Any:
+        return apply_dunder(Dunder.NEXT, self, self)
+
+    def __reversed__(self) -> Iterator[Any]:
+        return apply_dunder(Dunder.REVERSED, self, self)
+
+    def __round__(self, ndigits: int | None = None) -> Any:
+        if ndigits is None:
+            return apply_dunder(Dunder.ROUND, self, self)
+        return apply_dunder(Dunder.ROUND, self, self, ndigits)
+
     def __str__(self) -> str:
         return apply_dunder(Dunder.STR, self, self)
 
+    def __trunc__(self) -> Any:
+        return apply_dunder(Dunder.TRUNC, self, self)
 
-def apply_dunder(dunder: Dunder, box: TraceBox, *operands):
+
+def apply_dunder(dunder: Dunder, box: TraceBox, /, *operands, **kwargs):
     if (rule := dunder_rules.get((dunder, type(box.aval)))) is None:
         raise TypeError(f"No trace rule for {dunder.value} on values of type {box.aval!r}.")
-    return rule(*operands)
+    return rule(*operands, **kwargs)
 
 
 def assert_foldable(prim: core.Prim, value: Tree) -> None:
