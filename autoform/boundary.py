@@ -149,17 +149,17 @@ def dce_custom_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResul
 
 
 def install_custom_call_rules(prim: core.Prim, /) -> None:
-    core.impl_rules[prim] = impl_custom_call
-    core.aimpl_rules[prim] = aimpl_custom_call
-    stage.abstract_rules[prim] = abstract_custom_call
-    axis.batch_rules[prim] = batch_custom_call
-    axis.abatch_rules[prim] = abatch_custom_call
-    ad.push_rules[prim] = pushforward_custom_call
-    ad.apush_rules[prim] = apushforward_custom_call
-    ad.pull_fwd_rules[prim] = pullback_fwd_custom_call
-    ad.apull_fwd_rules[prim] = apullback_fwd_custom_call
-    ad.pull_bwd_rules[prim] = pullback_bwd_custom_call
-    ad.apull_bwd_rules[prim] = apullback_bwd_custom_call
+    core.impl_rules.set(prim, impl_custom_call)
+    core.aimpl_rules.set(prim, aimpl_custom_call)
+    core.abstract_rules.set(prim, abstract_custom_call)
+    core.batch_rules.set(prim, batch_custom_call)
+    core.abatch_rules.set(prim, abatch_custom_call)
+    core.push_rules.set(prim, pushforward_custom_call)
+    core.apush_rules.set(prim, apushforward_custom_call)
+    core.pull_fwd_rules.set(prim, pullback_fwd_custom_call)
+    core.apull_fwd_rules.set(prim, apullback_fwd_custom_call)
+    core.pull_bwd_rules.set(prim, pullback_bwd_custom_call)
+    core.apull_bwd_rules.set(prim, apullback_bwd_custom_call)
     dead.dce_rules[prim] = dce_custom_call
 
 
@@ -197,8 +197,7 @@ class CustomFunc:
             ('[hello]', 'delta change')
         """
 
-        ad.push_rules[self.prim] = rule
-        return rule
+        return core.push_rules.set(self.prim, rule)
 
     def aset_pushforward[R: Callable[..., Awaitable[tuple[Tree, Tree]]]](self, rule: R, /) -> R:
         """Register an async custom pushforward rule.
@@ -221,8 +220,7 @@ class CustomFunc:
             ('[hello]', 'async delta change')
         """
 
-        ad.apush_rules[self.prim] = rule
-        return rule
+        return core.apush_rules.set(self.prim, rule)
 
     def set_pullback[R: Callable[..., Tree]](self, rule: R, /) -> R:
         """Register ``rule(in_tree, *, call) -> cotangents_in``.
@@ -243,8 +241,7 @@ class CustomFunc:
             ('[hello]', ('feedback via [hello]',))
         """
 
-        ad.pull_bwd_rules[self.prim] = rule
-        return rule
+        return core.pull_bwd_rules.set(self.prim, rule)
 
     def aset_pullback[R: Callable[..., Awaitable[Tree]]](self, rule: R, /) -> R:
         """Register an async custom pullback rule.
@@ -266,8 +263,7 @@ class CustomFunc:
             ('[hello]', ('async feedback via [hello]',))
         """
 
-        ad.apull_bwd_rules[self.prim] = rule
-        return rule
+        return core.apull_bwd_rules.set(self.prim, rule)
 
     def set_batch[R: Callable[..., tuple[Tree, Tree[bool]]]](self, rule: R, /) -> R:
         """Register ``rule(in_tree, *, call) -> (outputs, output_axes)``.
@@ -291,8 +287,7 @@ class CustomFunc:
             ['<a>', '<b>']
         """
 
-        axis.batch_rules[self.prim] = rule
-        return rule
+        return core.batch_rules.set(self.prim, rule)
 
     def aset_batch[R: Callable[..., Awaitable[tuple[Tree, Tree[bool]]]]](self, rule: R, /) -> R:
         """Register an async custom batch rule.
@@ -317,8 +312,7 @@ class CustomFunc:
             ['async <a>', 'async <b>']
         """
 
-        axis.abatch_rules[self.prim] = rule
-        return rule
+        return core.abatch_rules.set(self.prim, rule)
 
 
 def custom(func: Callable[..., Any], /) -> CustomFunc:

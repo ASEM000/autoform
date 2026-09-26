@@ -43,7 +43,6 @@ not part of the everyday user surface.
 
 | Term | Definition |
 | --- | --- |
-| Boxing | The internal technique interpreters use to wrap values with transform-specific metadata. Users normally see the result only through public transforms. |
 | `Eqn` | One recorded primitive application in an IR. |
 | `Var` | A typed placeholder for a runtime value inside an IR. |
 | `Prim` | A named primitive operation used as the dispatch key for execution and transform rules. |

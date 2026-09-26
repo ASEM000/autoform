@@ -26,12 +26,6 @@ from enum import Enum
 from operator import setitem
 from typing import Any, ClassVar, Self, TypeGuard, cast
 
-# ==================================================================================================
-# RULES
-# ==================================================================================================
-
-abstract_rules = {}
-
 import autoform.core as core
 import autoform.utils as utils
 
@@ -639,13 +633,13 @@ type DunderRule = Callable[..., Any]
 dunder_rules: dict[tuple[Dunder, type[core.AVal]], DunderRule] = {}
 
 
-class TraceBox(core.Box):
-    __slots__ = ["var"]
+class TraceBox:
+    __slots__ = ["owner", "var"]
 
     def __init__(self, /, *, owner: TraceInterpreter, var: Var):
         assert isinstance(owner, TraceInterpreter)
         assert is_var(var)
-        super().__init__(owner)
+        self.owner = owner
         self.var = var
 
     @property
@@ -766,7 +760,7 @@ def assert_foldable(prim: core.Prim, value: Tree) -> None:
     )
 
 
-class TraceInterpreter(core.Interpreter[TraceBox]):
+class TraceInterpreter(core.Interpreter):
     __slots__ = ["eqns"]
 
     def __init__(self):
@@ -834,7 +828,7 @@ class TraceInterpreter(core.Interpreter[TraceBox]):
 
         in_tree = utils.tree.map(to_in_ir_atom, in_tree)
         in_aval_tree = utils.tree.map(aval_if_var, in_tree)
-        out_aval_tree = abstract_rules[prim](in_aval_tree, **params)
+        out_aval_tree = core.abstract_rules.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x):
             # NOTE(asem): abstract rules return `AVal`/ python leaves.

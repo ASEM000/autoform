@@ -12,22 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Abstract values, spaces, primitives, and interpreter dispatch."""
+"""Core."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Generator
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
-
-# ==================================================================================================
-# RULES
-# ==================================================================================================
-
-impl_rules = {}
-aimpl_rules = {}
 
 import autoform.utils as utils
 
@@ -43,18 +36,24 @@ __all__ = [
     "primal_s",
     "tangent_s",
     "cotangent_s",
-    # rule registries
+    "Prim",
+    "Rule",
     "impl_rules",
     "aimpl_rules",
-    # primitive dispatch
-    "Prim",
-    "Box",
+    "abstract_rules",
+    "batch_rules",
+    "abatch_rules",
+    "push_rules",
+    "apush_rules",
+    "pull_fwd_rules",
+    "apull_fwd_rules",
+    "pull_bwd_rules",
+    "apull_bwd_rules",
     "Interpreter",
     "EvalInterpreter",
     "active_interpreter",
     "using_interpreter",
 ]
-
 
 # ==================================================================================================
 # BASE TYPES
@@ -221,33 +220,57 @@ class Prim:
 
 
 # ==================================================================================================
+# RULES
+# ==================================================================================================
+
+
+class Rule[T]:
+    __slots__ = ["name", "map"]
+
+    def __init__(self, name: str):
+        assert isinstance(name, str), f"Invalid name type: {type(name)=}"
+        self.name = name
+        self.map: dict[Prim, Callable[..., T]] = {}
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name!r})"
+
+    def set[R: Callable[..., T]](self, prim: Prim, rule: R, /) -> R:
+        assert isinstance(prim, Prim)
+        assert callable(rule)
+        self.map[prim] = rule
+        return rule
+
+    def get(self, prim: Prim, /) -> Callable[..., T]:
+        return self.map[prim]
+
+
+impl_rules: Rule[Tree] = Rule("impl")
+aimpl_rules: Rule[Awaitable[Tree]] = Rule("aimpl")
+abstract_rules: Rule[Tree] = Rule("abstract")
+batch_rules: Rule[tuple[Tree, Tree[bool]]] = Rule("batch")
+abatch_rules: Rule[Awaitable[tuple[Tree, Tree[bool]]]] = Rule("abatch")
+push_rules: Rule[tuple[Tree, Tree]] = Rule("pushforward")
+apush_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apushforward")
+pull_fwd_rules: Rule[tuple[Tree, Tree]] = Rule("pullback_fwd")
+apull_fwd_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apullback_fwd")
+pull_bwd_rules: Rule[Tree] = Rule("pullback_bwd")
+apull_bwd_rules: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
+
+
+# ==================================================================================================
 # INTERPRETER
 # ==================================================================================================
 
 
-class Box:
-    __slots__ = ["owner"]
-
-    def __init__(self, owner):
-        self.owner = owner
-
-
-class Interpreter[T](ABC):
-    """Primitive dispatch and value boxing."""
-
+class Interpreter(ABC):
     __slots__ = []
 
     @abstractmethod
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
 
     @abstractmethod
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
-
-    def box(self, value, /) -> Tree[T]:
-        return value
-
-    def unbox(self, value: Tree, /):
-        return value
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
 
 
 @contextmanager
@@ -270,10 +293,10 @@ class EvalInterpreter(Interpreter):
     __slots__ = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return impl_rules[prim](in_tree, **params)
+        return impl_rules.get(prim)(in_tree, **params)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await aimpl_rules[prim](in_tree, **params)
+        return await aimpl_rules.get(prim)(in_tree, **params)
 
 
 active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())

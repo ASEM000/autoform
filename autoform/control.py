@@ -106,17 +106,17 @@ def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
     return x, in_batched
 
 
-core.impl_rules[stop_gradient_p] = impl_stop_gradient
-core.aimpl_rules[stop_gradient_p] = utils.asyncify(impl_stop_gradient)
-stage.abstract_rules[stop_gradient_p] = abstract_stop_gradient
-axis.batch_rules[stop_gradient_p] = batch_stop_gradient
-axis.abatch_rules[stop_gradient_p] = utils.asyncify(batch_stop_gradient)
-ad.push_rules[stop_gradient_p] = pushforward_stop_gradient
-ad.apush_rules[stop_gradient_p] = utils.asyncify(pushforward_stop_gradient)
-ad.pull_fwd_rules[stop_gradient_p] = pullback_fwd_stop_gradient
-ad.apull_fwd_rules[stop_gradient_p] = utils.asyncify(pullback_fwd_stop_gradient)
-ad.pull_bwd_rules[stop_gradient_p] = pullback_bwd_stop_gradient
-ad.apull_bwd_rules[stop_gradient_p] = utils.asyncify(pullback_bwd_stop_gradient)
+core.impl_rules.set(stop_gradient_p, impl_stop_gradient)
+core.aimpl_rules.set(stop_gradient_p, utils.asyncify(impl_stop_gradient))
+core.abstract_rules.set(stop_gradient_p, abstract_stop_gradient)
+core.batch_rules.set(stop_gradient_p, batch_stop_gradient)
+core.abatch_rules.set(stop_gradient_p, utils.asyncify(batch_stop_gradient))
+core.push_rules.set(stop_gradient_p, pushforward_stop_gradient)
+core.apush_rules.set(stop_gradient_p, utils.asyncify(pushforward_stop_gradient))
+core.pull_fwd_rules.set(stop_gradient_p, pullback_fwd_stop_gradient)
+core.apull_fwd_rules.set(stop_gradient_p, utils.asyncify(pullback_fwd_stop_gradient))
+core.pull_bwd_rules.set(stop_gradient_p, pullback_bwd_stop_gradient)
+core.apull_bwd_rules.set(stop_gradient_p, utils.asyncify(pullback_bwd_stop_gradient))
 
 
 # ==================================================================================================
@@ -289,17 +289,17 @@ def dce_switch(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules[switch_p] = impl_switch
-core.aimpl_rules[switch_p] = aimpl_switch
-stage.abstract_rules[switch_p] = abstract_switch
-axis.batch_rules[switch_p] = batch_switch
-axis.abatch_rules[switch_p] = abatch_switch
-ad.push_rules[switch_p] = pushforward_switch
-ad.apush_rules[switch_p] = apush_switch
-ad.pull_fwd_rules[switch_p] = pullback_fwd_switch
-ad.apull_fwd_rules[switch_p] = apull_fwd_switch
-ad.pull_bwd_rules[switch_p] = pullback_bwd_switch
-ad.apull_bwd_rules[switch_p] = apull_bwd_switch
+core.impl_rules.set(switch_p, impl_switch)
+core.aimpl_rules.set(switch_p, aimpl_switch)
+core.abstract_rules.set(switch_p, abstract_switch)
+core.batch_rules.set(switch_p, batch_switch)
+core.abatch_rules.set(switch_p, abatch_switch)
+core.push_rules.set(switch_p, pushforward_switch)
+core.apush_rules.set(switch_p, apush_switch)
+core.pull_fwd_rules.set(switch_p, pullback_fwd_switch)
+core.apull_fwd_rules.set(switch_p, apull_fwd_switch)
+core.pull_bwd_rules.set(switch_p, pullback_bwd_switch)
+core.apull_bwd_rules.set(switch_p, apull_bwd_switch)
 dead.dce_rules[switch_p] = dce_switch
 
 
@@ -683,15 +683,15 @@ def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules[while_loop_p] = impl_while_loop
-core.aimpl_rules[while_loop_p] = aimpl_while_loop
-stage.abstract_rules[while_loop_p] = abstract_while_loop
-axis.batch_rules[while_loop_p] = batch_while_loop
-axis.abatch_rules[while_loop_p] = abatch_while_loop
-ad.pull_fwd_rules[while_loop_p] = pullback_fwd_while_loop
-ad.apull_fwd_rules[while_loop_p] = apull_fwd_while_loop
-ad.pull_bwd_rules[while_loop_p] = pullback_bwd_while_loop
-ad.apull_bwd_rules[while_loop_p] = apull_bwd_while_loop
+core.impl_rules.set(while_loop_p, impl_while_loop)
+core.aimpl_rules.set(while_loop_p, aimpl_while_loop)
+core.abstract_rules.set(while_loop_p, abstract_while_loop)
+core.batch_rules.set(while_loop_p, batch_while_loop)
+core.abatch_rules.set(while_loop_p, abatch_while_loop)
+core.pull_fwd_rules.set(while_loop_p, pullback_fwd_while_loop)
+core.apull_fwd_rules.set(while_loop_p, apull_fwd_while_loop)
+core.pull_bwd_rules.set(while_loop_p, pullback_bwd_while_loop)
+core.apull_bwd_rules.set(while_loop_p, apull_bwd_while_loop)
 dead.dce_rules[while_loop_p] = dce_while_loop
 
 
@@ -1114,13 +1114,13 @@ def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules[fixpoint_p] = impl_fixpoint
-core.aimpl_rules[fixpoint_p] = aimpl_fixpoint
-stage.abstract_rules[fixpoint_p] = abstract_fixpoint
-axis.batch_rules[fixpoint_p] = batch_fixpoint
-axis.abatch_rules[fixpoint_p] = abatch_fixpoint
-ad.pull_fwd_rules[fixpoint_p] = pullback_fwd_fixpoint
-ad.apull_fwd_rules[fixpoint_p] = apull_fwd_fixpoint
-ad.pull_bwd_rules[fixpoint_p] = pullback_bwd_fixpoint
-ad.apull_bwd_rules[fixpoint_p] = apull_bwd_fixpoint
+core.impl_rules.set(fixpoint_p, impl_fixpoint)
+core.aimpl_rules.set(fixpoint_p, aimpl_fixpoint)
+core.abstract_rules.set(fixpoint_p, abstract_fixpoint)
+core.batch_rules.set(fixpoint_p, batch_fixpoint)
+core.abatch_rules.set(fixpoint_p, abatch_fixpoint)
+core.pull_fwd_rules.set(fixpoint_p, pullback_fwd_fixpoint)
+core.apull_fwd_rules.set(fixpoint_p, apull_fwd_fixpoint)
+core.pull_bwd_rules.set(fixpoint_p, pullback_bwd_fixpoint)
+core.apull_bwd_rules.set(fixpoint_p, apull_bwd_fixpoint)
 dead.dce_rules[fixpoint_p] = dce_fixpoint

@@ -49,10 +49,10 @@ primal_s = core.primal_s
 tangent_s = core.tangent_s
 cotangent_s = core.cotangent_s
 Prim = core.Prim
+Rule = core.Rule
 Dunder = stage.Dunder
 Zero = core.Zero
 Interpreter = core.Interpreter
-Box = core.Box
 IR = stage.IR
 Eqn = stage.Eqn
 Var = stage.Var
@@ -117,10 +117,10 @@ __all__ = [
     "tangent_s",
     "cotangent_s",
     "Prim",
+    "Rule",
     "Dunder",
     "Zero",
     "Interpreter",
-    "Box",
     "IR",
     "Eqn",
     "Var",
@@ -188,69 +188,47 @@ type AValRule = Callable[[Any], AVal]
 
 
 def register_impl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    core.impl_rules[prim] = rule
-    return rule
+    return core.impl_rules.set(prim, rule)
 
 
 def register_aimpl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    core.aimpl_rules[prim] = rule
-    return rule
+    return core.aimpl_rules.set(prim, rule)
 
 
 def register_abstract[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    stage.abstract_rules[prim] = rule
-    return rule
+    return core.abstract_rules.set(prim, rule)
 
 
 def register_batch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    axis.batch_rules[prim] = rule
-    return rule
+    return core.batch_rules.set(prim, rule)
 
 
 def register_abatch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    axis.abatch_rules[prim] = rule
-    return rule
+    return core.abatch_rules.set(prim, rule)
 
 
 def register_pushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    ad.push_rules[prim] = rule
-    return rule
+    return core.push_rules.set(prim, rule)
 
 
 def register_apushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    ad.apush_rules[prim] = rule
-    return rule
+    return core.apush_rules.set(prim, rule)
 
 
 def register_pullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    ad.pull_fwd_rules[prim] = rule
-    return rule
+    return core.pull_fwd_rules.set(prim, rule)
 
 
 def register_apullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    ad.apull_fwd_rules[prim] = rule
-    return rule
+    return core.apull_fwd_rules.set(prim, rule)
 
 
 def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    ad.pull_bwd_rules[prim] = rule
-    return rule
+    return core.pull_bwd_rules.set(prim, rule)
 
 
 def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    assert isinstance(prim, Prim)
-    ad.apull_bwd_rules[prim] = rule
-    return rule
+    return core.apull_bwd_rules.set(prim, rule)
 
 
 def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:

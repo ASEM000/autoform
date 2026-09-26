@@ -81,40 +81,6 @@ def test_wrapper_uses_derivative_space(transform, space, change):
 
 
 class TestCotangentHelpers:
-    def test_zero_string_contract(self):
-        z = af.core.Zero(af.string.StrAVal())
-        assert isinstance(z, af.core.Zero)
-        assert z.aval == af.string.StrAVal()
-        assert z == af.core.Zero(af.string.StrAVal())
-        assert z != af.core.Zero(af.numeric.BoolAVal())
-        assert af.core.Zero(af.core.primal_s.map(af.core.avalof(z))) == z
-        assert af.core.materialize_zeros(z) == ""
-        assert af.core.avalof(z) == af.string.StrAVal()
-        assert not af.stage.is_traceable(z)
-
-    def test_zero_requires_aval(self):
-        with pytest.raises(AssertionError, match="Expected AVal"):
-            af.core.Zero(str)
-
-    def test_zero_non_differentiable_type(self):
-        z = af.core.Zero(af.numeric.BoolAVal())
-        assert isinstance(z, af.core.Zero)
-        assert z.aval == af.numeric.BoolAVal()
-        with pytest.raises(AssertionError, match="No concrete zero defined"):
-            af.core.materialize_zeros(z)
-
-    def test_zero_materializes_with_aval_metadata(self):
-        class BlobAVal(af.core.AVal):
-            __slots__ = ["size"]
-
-            def __init__(self, size):
-                self.size = size
-
-            def zero(self):
-                return "zero", self.size
-
-        assert af.core.materialize_zeros(af.core.Zero(BlobAVal(3))) == ("zero", 3)
-
     @pytest.mark.parametrize(
         "values, expected",
         [

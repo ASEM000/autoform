@@ -607,6 +607,12 @@ def numbered_switch():
 
 
 class TestSwitch:
+    def test_switch_rejects_kwargs(self):
+        branches = {"a": af.trace(lambda x: af.string.concat("A:", x))("X")}
+
+        with pytest.raises(AssertionError, match="switch.*keyword arguments"):
+            af.switch("a", branches, x="test")
+
     @pytest.mark.parametrize(
         "executor, key, expected",
         [

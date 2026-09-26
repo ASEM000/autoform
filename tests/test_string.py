@@ -272,6 +272,21 @@ def test_concat_rejects_nonstring():
         af.string.concat("A", 1)
 
 
+def test_format_lowers_template_and_args_to_concat():
+    def program(x):
+        return af.string.format("Hello, {x}!", x=x)
+
+    ir = af.trace(program)("World")
+    assert len(ir.eqns) == 1
+    eqn = ir.eqns[0]
+    assert eqn.prim is af.string.concat_p
+    prefix, value, suffix = eqn.in_tree
+    assert prefix == "Hello, "
+    assert suffix == "!"
+    assert isinstance(value, af.stage.Var)
+    assert ir.call("x0") == "Hello, x0!"
+
+
 @pytest.mark.parametrize(
     "template, values, expected",
     [

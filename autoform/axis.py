@@ -18,13 +18,6 @@ from __future__ import annotations
 
 import functools as ft
 
-# ==================================================================================================
-# RULES
-# ==================================================================================================
-
-batch_rules = {}
-abatch_rules = {}
-
 import autoform.ad as ad
 import autoform.core as core
 import autoform.dead as dead
@@ -155,16 +148,16 @@ def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
     return stage.IR([eqn], v_in_ir, v_out_ir)
 
 
-class BatchBox(core.Box):
-    __slots__ = ["value", "batched"]
+class BatchBox:
+    __slots__ = ["owner", "value", "batched"]
 
     def __init__(self, owner, value, batched):
-        super().__init__(owner)
+        self.owner = owner
         self.value = value
         self.batched = batched
 
 
-class BatchInterpreter(core.Interpreter[BatchBox]):
+class BatchInterpreter(core.Interpreter):
     __slots__ = ["parent", "batch_size"]
 
     def __init__(self, *, batch_size: int, parent):
@@ -194,7 +187,7 @@ class BatchInterpreter(core.Interpreter[BatchBox]):
         v_in, b_in = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            v_out, b_out = batch_rules[prim]((b_sz, b_in, v_in), **params)
+            v_out, b_out = core.batch_rules.get(prim)((b_sz, b_in, v_in), **params)
         return self.box((v_out, b_out))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
@@ -202,7 +195,7 @@ class BatchInterpreter(core.Interpreter[BatchBox]):
         v_in, b_in = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            v_out, b_out = await abatch_rules[prim]((b_sz, b_in, v_in), **params)
+            v_out, b_out = await core.abatch_rules.get(prim)((b_sz, b_in, v_in), **params)
         return self.box((v_out, b_out))
 
 
@@ -368,15 +361,15 @@ def dce_batch_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules[batch_call_p] = impl_batch_call
-core.aimpl_rules[batch_call_p] = aimpl_batch_call
-stage.abstract_rules[batch_call_p] = abstract_batch_call
-batch_rules[batch_call_p] = batch_batch_call
-abatch_rules[batch_call_p] = abatch_batch_call
-ad.push_rules[batch_call_p] = pushforward_batch_call
-ad.apush_rules[batch_call_p] = apushforward_batch_call
-ad.pull_fwd_rules[batch_call_p] = pullback_fwd_batch_call
-ad.apull_fwd_rules[batch_call_p] = apullback_fwd_batch_call
-ad.pull_bwd_rules[batch_call_p] = pullback_bwd_batch_call
-ad.apull_bwd_rules[batch_call_p] = apullback_bwd_batch_call
+core.impl_rules.set(batch_call_p, impl_batch_call)
+core.aimpl_rules.set(batch_call_p, aimpl_batch_call)
+core.abstract_rules.set(batch_call_p, abstract_batch_call)
+core.batch_rules.set(batch_call_p, batch_batch_call)
+core.abatch_rules.set(batch_call_p, abatch_batch_call)
+core.push_rules.set(batch_call_p, pushforward_batch_call)
+core.apush_rules.set(batch_call_p, apushforward_batch_call)
+core.pull_fwd_rules.set(batch_call_p, pullback_fwd_batch_call)
+core.apull_fwd_rules.set(batch_call_p, apullback_fwd_batch_call)
+core.pull_bwd_rules.set(batch_call_p, pullback_bwd_batch_call)
+core.apull_bwd_rules.set(batch_call_p, apullback_bwd_batch_call)
 dead.dce_rules[batch_call_p] = dce_batch_call
