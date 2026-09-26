@@ -19,7 +19,7 @@ from autoform.intercept import checkpoint_p
 from autoform.order import depends_p
 from autoform.stage import (
     eqn_graph,
-    is_same_stucture,
+    is_same_structure,
     liveness,
     toposort_levels,
     var_leaves,
@@ -147,7 +147,7 @@ class TestIrStructure:
         lhs = af.trace(lambda x: (x, "same"))("X")
         rhs = af.trace(lambda x: (af.string.concat(x, "!"), "same"))("Y")
 
-        assert is_same_stucture(lhs, rhs)
+        assert is_same_structure(lhs, rhs)
 
     @pytest.mark.parametrize(
         "left, right",
@@ -160,7 +160,7 @@ class TestIrStructure:
         lhs = af.trace(lambda: left)()
         rhs = af.trace(lambda: right)()
 
-        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_structure(lhs, rhs)
 
     @pytest.mark.parametrize(
         "left, right",
@@ -173,38 +173,38 @@ class TestIrStructure:
         lhs = af.trace(lambda x: "same")(left)
         rhs = af.trace(lambda x: "same")(right)
 
-        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_structure(lhs, rhs)
 
     def test_rejects_different_static_inputs(self):
         lhs = af.trace(lambda x: "same", static=True)("L")
         rhs = af.trace(lambda x: "same", static=True)("R")
 
-        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_structure(lhs, rhs)
 
     def test_rejects_static_and_dynamic_inputs(self):
         lhs = af.trace(lambda x: "same", static=True)("X")
         rhs = af.trace(lambda x: "same")("X")
 
-        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_structure(lhs, rhs)
 
     def test_rejects_variable_and_literal_outputs(self):
         lhs = af.trace(lambda x: x)("X")
         rhs = af.trace(lambda x: "X")("X")
 
-        assert not is_same_stucture(lhs, rhs)
-        assert not is_same_stucture(rhs, lhs)
+        assert not is_same_structure(lhs, rhs)
+        assert not is_same_structure(rhs, lhs)
 
     def test_rejects_different_output_structure(self):
         lhs = af.trace(lambda x: x)("X")
         rhs = af.trace(lambda x: [x])("X")
 
-        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_structure(lhs, rhs)
 
     def test_rejects_different_aval_metadata(self):
         lhs = af.batch(af.trace(lambda text, count: text)("X", 1))
         rhs = af.batch(af.trace(lambda text, count: count)("X", 1))
 
-        assert not is_same_stucture(lhs, rhs)
+        assert not is_same_structure(lhs, rhs)
 
 
 class TestIrVarLeaves:

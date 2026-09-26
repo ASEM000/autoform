@@ -419,7 +419,7 @@ type LiveSet = set[Var]
 type Liveness = list[LiveSet]
 
 
-def is_same_stucture(lhs: IR, rhs: IR, /) -> bool:
+def is_same_structure(lhs: IR, rhs: IR, /) -> bool:
     """Compare IR input/output structures"""
 
     assert isinstance(lhs, IR)
