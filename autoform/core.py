@@ -203,8 +203,6 @@ cotangent_s = Space("cotangent")
 trace_types: set[type] = set()
 aval_types: dict[type, Callable[[Any], AVal]] = {}
 
-aval_types[Zero] = lambda value: value.aval
-
 
 def avalof(value, /) -> AVal:
     if (rule := aval_types.get(type(value))) is None:
@@ -276,9 +274,6 @@ def aval_if_var(x, /):
     """
 
     return x.aval if is_var(x) else x
-
-
-aval_types[Var] = lambda value: value.aval
 
 
 # ==================================================================================================
@@ -1128,3 +1123,6 @@ push_rules = InterpreterRuleMapping[PushforwardRule, APushforwardRule]()
 pull_fwd_rules = InterpreterRuleMapping[PullbackFwdRule, APullbackFwdRule]()
 pull_bwd_rules = InterpreterRuleMapping[PullbackBwdRule, APullbackBwdRule]()
 abstract_rules = InterpreterRuleMapping[AbstractRule, AAbstractRule]()
+
+aval_types[Zero] = lambda value: value.aval
+aval_types[Var] = lambda value: value.aval
