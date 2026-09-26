@@ -341,9 +341,9 @@ class TestTags:
     def test_tag_accepts_plain_hashable_values(self):
         with af.tag("draft", 1) as active:
             assert active == ("draft", 1)
-            assert af.core.active_tags.get() == frozenset({"draft", 1})
+            assert af.stage.active_tags.get() == frozenset({"draft", 1})
 
-        assert af.core.active_tags.get() == frozenset()
+        assert af.stage.active_tags.get() == frozenset()
 
     def test_tag_rejects_unhashable_values(self):
         with pytest.raises(TypeError, match="Tags must be hashable"):
@@ -351,19 +351,19 @@ class TestTags:
                 ...
 
     def test_tag_unions_active_tags_and_restores_on_exit(self):
-        assert af.core.active_tags.get() == frozenset()
+        assert af.stage.active_tags.get() == frozenset()
 
         with af.tag(Label("outer")) as outer_tags:
             assert outer_tags == (Label("outer"),)
-            assert af.core.active_tags.get() == frozenset({Label("outer")})
+            assert af.stage.active_tags.get() == frozenset({Label("outer")})
 
             with af.tag(Label("inner")) as inner_tags:
                 assert inner_tags == (Label("inner"),)
-                assert af.core.active_tags.get() == frozenset({Label("outer"), Label("inner")})
+                assert af.stage.active_tags.get() == frozenset({Label("outer"), Label("inner")})
 
-            assert af.core.active_tags.get() == frozenset({Label("outer")})
+            assert af.stage.active_tags.get() == frozenset({Label("outer")})
 
-        assert af.core.active_tags.get() == frozenset()
+        assert af.stage.active_tags.get() == frozenset()
 
     def test_ireqn_tags_input_is_frozenset(self):
         prim = af.core.Prim("tag_set")
@@ -380,7 +380,7 @@ class TestTags:
             return af.string.StrAVal()
 
         def impl_probe(x):
-            names = sorted(tag.name for tag in af.core.active_tags.get() if isinstance(tag, Label))
+            names = sorted(tag.name for tag in af.stage.active_tags.get() if isinstance(tag, Label))
             return f"{','.join(names)}|{x}"
 
         probe_p = af.core.Prim("tag_probe")

@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Generator, Hashable
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
@@ -48,8 +48,6 @@ __all__ = [
     "aimpl_rules",
     # primitive dispatch
     "Prim",
-    "active_tags",
-    "tag",
     "Box",
     "Interpreter",
     "EvalInterpreter",
@@ -220,47 +218,6 @@ class Prim:
 
     async def abind(self, value: Tree, /, **params):
         return await active_interpreter.get().ainterpret(self, value, **params)
-
-
-# ==================================================================================================
-# TAGS
-# ==================================================================================================
-
-
-active_tags: ContextVar[frozenset[Hashable]] = ContextVar("active_tags", default=frozenset())
-
-
-@contextmanager
-def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
-    """Attach tags to equations at trace time.
-
-    Equations built inside nested ``tag`` blocks receive the tags from all active
-    blocks. Equations built after a block exits do not receive that block's tags.
-
-    Example:
-        >>> import autoform as af
-        >>> def program(x):
-        ...     with af.tag("outer"):
-        ...         head = x + "!"
-        ...         with af.tag("inner"):
-        ...             return head + "?"
-        >>> ir = af.trace(program)("seed")
-        >>> ir.eqns[0].tags == frozenset({"outer"})
-        True
-        >>> ir.eqns[1].tags == frozenset({"outer", "inner"})
-        True
-    """
-
-    for value in tags:
-        try:
-            hash(value)
-        except TypeError as e:
-            raise TypeError(f"Tags must be hashable, got {value!r}") from e
-    token = active_tags.set(active_tags.get() | frozenset(tags))
-    try:
-        yield tags
-    finally:
-        active_tags.reset(token)
 
 
 # ==================================================================================================

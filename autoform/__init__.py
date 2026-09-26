@@ -48,7 +48,7 @@ __version__ = "0.3.0"
 
 trace = stage.trace
 fold = stage.fold
-tag = core.tag
+tag = stage.tag
 
 # ==================================================================================================
 # TRANSFORMS
@@ -140,4 +140,5 @@ __all__ = [
     "string",
     "path",
     "stage",
+    "core",
 ]
