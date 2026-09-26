@@ -243,11 +243,11 @@ class Interpreter[T](ABC):
     @abstractmethod
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Any: ...
 
-    @abstractmethod
-    def box(self, value, /) -> Tree[T]: ...
+    def box(self, value, /) -> Tree[T]:
+        return value
 
-    @abstractmethod
-    def unbox(self, value: Tree, /): ...
+    def unbox(self, value: Tree, /):
+        return value
 
 
 @contextmanager
@@ -268,12 +268,6 @@ def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None
 
 class EvalInterpreter(Interpreter):
     __slots__ = []
-
-    def box(self, value, /):
-        return value
-
-    def unbox(self, value, /):
-        return value
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
         return impl_rules[prim](in_tree, **params)

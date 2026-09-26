@@ -161,12 +161,6 @@ class CollectingInterpreter(core.Interpreter):
         self.collection = collection
         self.collected: Collected = defaultdict(list)
 
-    def box(self, value, /):
-        return value
-
-    def unbox(self, value, /):
-        return value
-
     def interpret(self, prim: core.Prim, in_tree: Any, /, **params):
         result = self.parent.interpret(prim, in_tree, **params)
         if prim is checkpoint_p:
@@ -189,12 +183,6 @@ class InjectingInterpreter(core.Interpreter):
         self.parent = core.active_interpreter.get()
         self.collection = collection
         self.cache = {k: deque(values[k]) for k in values}
-
-    def box(self, value, /):
-        return value
-
-    def unbox(self, value, /):
-        return value
 
     def interpret(self, prim: core.Prim, in_tree: Any, /, **params):
         if prim is checkpoint_p and params["collection"] == self.collection:
