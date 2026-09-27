@@ -105,6 +105,19 @@ class TestBuildIR:
 
         assert ir.in_tree[0].aval == BlobAVal(3)
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_avalof_live_trace_values(self, executor):
+        def program(x):
+            assert af.core.avalof(x) is x.aval
+            y = append_bang(x)
+            assert af.core.avalof(y) is y.aval
+            return y
+
+        ir = af.trace(program)("x")
+
+        assert len(ir.eqns) == 1
+        assert executor(ir, "y") == "y!"
+
     def test_trace_static_unhashable_input_errors(self):
         class Unhashable:
             __hash__ = None
@@ -449,15 +462,24 @@ def test_ir_and_equation_fields():
     assert rebuilt.call("hello") == "hello"
 
 
-def test_variable_and_literal_boundary():
-    var = af.stage.Var(aval=af.string.StrAVal())
+@pytest.mark.parametrize(
+    "aval",
+    [
+        pytest.param(af.string.StrAVal(), id="string"),
+        pytest.param(af.numeric.FloatAVal(), id="float"),
+        pytest.param(BlobAVal(3), id="custom-metadata"),
+    ],
+)
+def test_variable_and_literal_boundary(aval):
+    var = af.stage.Var(aval=aval)
     assert af.stage.is_var(var)
-    assert var.aval == af.string.StrAVal()
+    assert var.aval is aval
     assert af.core.avalof(var) is var.aval
     assert not af.stage.is_traceable(var)
     assert not af.stage.is_var("hello")
     box = af.stage.TraceBox(owner=af.stage.TraceInterpreter(), var=var)
     assert box.aval is var.aval
+    assert af.core.avalof(box) is aval
     assert {box: var}[box] is var
 
 

@@ -971,3 +971,4 @@ def trace[*A, R](
 
 
 core.aval_types[Var] = lambda value: value.aval
+core.aval_types[TraceBox] = lambda value: value.aval
