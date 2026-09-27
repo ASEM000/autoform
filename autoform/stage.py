@@ -111,6 +111,9 @@ class Var:
         return f"{type(self).__name__}[{self.aval!r}](id={self.id}{source})"
 
 
+core.aval_types[Var] = lambda value: value.aval
+
+
 def is_var(x) -> TypeGuard[Var]:
     """Return ``True`` if input is an :class:`Var`."""
 
@@ -814,6 +817,9 @@ class TraceBox:
         return apply_dunder(Dunder.TRUNC, self, self)
 
 
+core.aval_types[TraceBox] = lambda value: value.aval
+
+
 def apply_dunder(dunder: Dunder, box: TraceBox, /, *operands, **kwargs):
     if (rule := dunder_rules.get((dunder, type(box.aval)))) is None:
         raise TypeError(f"No trace rule for {dunder.value} on values of type {box.aval!r}.")
@@ -968,6 +974,3 @@ def trace[*A, R](
         return IR(eqns=tracer.eqns, in_tree=in_tree, out_tree=out_tree)
 
     return wrapper
-
-
-core.aval_types[Var] = lambda value: value.aval
