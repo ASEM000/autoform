@@ -54,15 +54,6 @@ Any registered pytree can carry the schema:
     ...     answer=af.Float() @ af.Doc("The numeric answer."),
     ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
     ... )
-    >>> msgs = [dict(role="user", content="1 + 1?")]
-    >>> output = af.lm.generate(  # doctest: +SKIP
-    ...     msgs,
-    ...     model="openai/gpt-5.5",
-    ...     schema=schema,
-    ... )
-    >>> output  # doctest: +SKIP
-    Answer(answer=2.0, reasoning="Adding 1 and 1 gives 2.")
-
 """
 
 from __future__ import annotations
@@ -107,8 +98,6 @@ class Spec(Hashable):
 class Str(Spec):
     """String schema node with optional length and pattern constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Args:
         min: Optional minimum length of the string.
         max: Optional maximum length of the string.
@@ -150,8 +139,6 @@ class Str(Spec):
 class Int(Spec):
     """Integer schema node with optional range constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Args:
         min: Optional minimum value.
         max: Optional maximum value.
@@ -176,8 +163,6 @@ class Int(Spec):
 
 class Float(Spec):
     """Number schema node with optional range constraints.
-
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
 
     Args:
         min: Optional minimum value.
@@ -209,8 +194,6 @@ class Float(Spec):
 class Bool(Spec):
     """Boolean schema node.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Example:
         >>> import autoform as af
         >>> ok = af.Bool()
@@ -221,8 +204,6 @@ class Bool(Spec):
 
 class Enum(Spec):
     """Enum schema node with a fixed set of allowed values.
-
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
 
     Args:
         *values: Allowed values. Values must be non-empty and share one type.
@@ -266,8 +247,6 @@ class Docd[T]:
 
 class Doc:
     """Description node for attaching schema descriptions.
-
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
 
     Args:
         text: Description text.
