@@ -89,6 +89,10 @@ def slotted_values(node: Any) -> tuple[Any, ...]:
 class Spec(Hashable):
     __slots__ = []
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        utils.tree.register_node(cls, lambda node: ((), node), lambda node, _: node)
+
     def __eq__(self, other: object) -> bool:
         return type(self) is type(other) and slotted_values(self) == slotted_values(other)
 

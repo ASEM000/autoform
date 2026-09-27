@@ -126,3 +126,31 @@ def test_schema_dsl_rejects_invalid_forms(construct, error, message):
 def test_schema_dsl_nodes_compare_by_value(left, right):
     assert left == right
     assert hash(left) == hash(right)
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        pytest.param(af.Str(min=1), id="string"),
+        pytest.param(af.Int(min=0), id="integer"),
+        pytest.param(af.Float(min=0, max=1), id="float"),
+        pytest.param(af.Bool(), id="boolean"),
+        pytest.param(af.Enum("yes", "no"), id="enum"),
+    ],
+)
+def test_schema_specs_are_static_during_tracing(schema):
+    ir = af.trace(lambda x, y: (x, y))(schema, "seed")
+    assert af.utils.tree.leaves(schema) == []
+    assert ir.in_tree[0] is schema
+    assert ir.call(schema, "hello") == (schema, "hello")
+
+
+def test_new_spec_subclasses_register_as_static_nodes():
+    class CustomSpec(af.schemas.Spec):
+        __slots__ = []
+
+    schema = CustomSpec()
+    leaves, spec = af.utils.tree.flatten(schema)
+    assert leaves == []
+    assert spec.unflatten(leaves) is schema
+    assert af.trace(lambda x: x)(schema).call(schema) is schema
