@@ -50,6 +50,9 @@ class PushforwardBox:
         self.tangent = tangent
 
 
+core.aval_types[PushforwardBox] = lambda value: core.avalof(value.primal)
+
+
 class PushforwardInterpreter(core.Interpreter):
     __slots__ = ["parent"]
 
@@ -405,6 +408,9 @@ class PullbackFwdBox:
         self.primal = primal
 
 
+core.aval_types[PullbackFwdBox] = lambda value: core.avalof(value.primal)
+
+
 class PullbackFwdInterpreter(core.Interpreter):
     __slots__ = ["parent"]
 
@@ -439,6 +445,9 @@ class PullbackBwdBox:
     def __init__(self, owner, cotangent):
         self.owner = owner
         self.cotangent = cotangent
+
+
+core.aval_types[PullbackBwdBox] = lambda value: core.avalof(value.cotangent)
 
 
 def transpose_walk(ir: stage.IR, c_out: Tree, /):

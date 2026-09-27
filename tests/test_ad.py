@@ -16,7 +16,42 @@
 import pytest
 
 import autoform as af
-from tests import aexecute, angle_text, append_bang, bracket_text, execute
+from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, execute
+
+
+@pytest.mark.parametrize(
+    "box_type",
+    [af.ad.PushforwardBox, af.ad.PullbackFwdBox, af.ad.PullbackBwdBox],
+    ids=["pushforward", "pullback-forward", "pullback-backward"],
+)
+@pytest.mark.parametrize(
+    "value, aval",
+    [
+        pytest.param("x", af.string.StrAVal(), id="string"),
+        pytest.param(1.5, af.numeric.FloatAVal(), id="float"),
+        pytest.param(af.core.Zero(BlobAVal(3)), BlobAVal(3), id="zero-metadata"),
+    ],
+)
+def test_ad_box_avalof(box_type, value, aval):
+    owner = object()
+    if box_type is af.ad.PushforwardBox:
+        box = box_type(owner, value, object())
+    else:
+        box = box_type(owner, value)
+
+    assert af.core.avalof(box) == aval
+    if isinstance(value, af.core.Zero):
+        assert af.core.avalof(box) is value.aval
+
+
+def test_avalof_nested_ad_and_trace_boxes():
+    aval = BlobAVal(3)
+    x = af.stage.TraceBox(owner=af.stage.TraceInterpreter(), var=af.stage.Var(aval=aval))
+    x = af.ad.PullbackFwdBox(object(), x)
+    x = af.ad.PushforwardBox(object(), x, object())
+    x = af.ad.PullbackBwdBox(object(), x)
+
+    assert af.core.avalof(x) is aval
 
 
 @pytest.mark.parametrize(
@@ -74,6 +109,10 @@ def test_wrapper_uses_derivative_space(transform, space, change):
         assert isinstance(derivatives[0].aval, ChangeAVal)
 
     text, delta = Text("hello"), Change(change)
+    owner = object()
+    assert isinstance(af.core.avalof(af.ad.PushforwardBox(owner, text, delta)), TextAVal)
+    assert isinstance(af.core.avalof(af.ad.PullbackFwdBox(owner, text)), TextAVal)
+    assert isinstance(af.core.avalof(af.ad.PullbackBwdBox(owner, delta)), ChangeAVal)
     assert ir.call((text,), (delta,)) == ((text,), (delta,))
     assert isinstance(af.core.Zero(space.map(af.core.avalof(text))).aval, ChangeAVal)
     nested_derivatives = transform(ir).in_tree[1]
