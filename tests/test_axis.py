@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import namedtuple
+
 import pytest
 
 import autoform as af
 from autoform.axis import BatchAVal
-from tests import aexecute, angle_text, append_bang, bracket_text, execute
+from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, execute
 
 
 def greet(name, greeting):
@@ -356,3 +358,73 @@ def test_batch_box_treats_axis_spec_as_prefix():
     assert isinstance(boxed, af.axis.BatchBox)
     assert boxed.value == ["a", "b"]
     assert boxed.batched is True
+    assert af.core.avalof(boxed) == BatchAVal(af.string.StrAVal())
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param(("x", "y"), id="tuple"),
+        pytest.param({"x": "x", "y": "y"}, id="dict"),
+        pytest.param(namedtuple("Pair", "x y")("x", "y"), id="namedtuple"),
+    ],
+)
+def test_batch_box_avalof_container(values):
+    batcher = af.axis.BatchInterpreter(batch_size=2, parent=af.core.active_interpreter.get())
+    box = batcher.box((values, True))
+
+    assert af.core.avalof(box) == BatchAVal(af.string.StrAVal())
+    assert box.value is values
+
+
+def test_broadcast_box_avalof_zero_metadata():
+    aval = BlobAVal(3)
+    x = af.core.Zero(aval)
+    box = af.axis.BatchBox(object(), x, False)
+
+    assert af.core.avalof(box) is aval
+
+
+def test_batch_box_avalof_zero_metadata():
+    aval = BlobAVal(3)
+    x = af.core.Zero(aval)
+    box = af.axis.BatchBox(object(), [x, x], True)
+    actual = af.core.avalof(box)
+
+    assert isinstance(actual, BatchAVal)
+    assert actual.base is aval
+
+
+def test_avalof_nested_batch_ad_and_trace_boxes():
+    aval = TaggedAVal("input")
+    x = af.stage.TraceBox(owner=af.stage.TraceInterpreter(), var=af.stage.Var(aval=aval))
+    x = af.ad.PushforwardBox(object(), x, object())
+    x = af.axis.BatchBox(object(), (x, x), True)
+    x = af.axis.BatchBox(object(), {"x": x, "y": x}, True)
+    x = af.ad.PullbackBwdBox(object(), x)
+
+    actual = af.core.avalof(x)
+
+    assert actual == BatchAVal(BatchAVal(aval))
+    assert actual.base.base is aval
+
+
+@pytest.mark.parametrize(
+    "values, message",
+    [
+        pytest.param([], "empty batch", id="empty-list"),
+        pytest.param((), "empty batch", id="empty-tuple"),
+        pytest.param("x", "Expected a batch container", id="scalar"),
+        pytest.param(["x", 1], "different avals", id="mixed-types"),
+        pytest.param(
+            [af.core.Zero(BlobAVal(3)), af.core.Zero(BlobAVal(4))],
+            "different avals",
+            id="mixed-metadata",
+        ),
+    ],
+)
+def test_batch_box_avalof_rejects_invalid_batch(values, message):
+    box = af.axis.BatchBox(object(), values, True)
+
+    with pytest.raises(TypeError, match=message):
+        af.core.avalof(box)

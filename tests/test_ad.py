@@ -20,28 +20,39 @@ from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, exe
 
 
 @pytest.mark.parametrize(
-    "box_type",
-    [af.ad.PushforwardBox, af.ad.PullbackFwdBox, af.ad.PullbackBwdBox],
-    ids=["pushforward", "pullback-forward", "pullback-backward"],
+    "box_type, kwargs",
+    [
+        pytest.param(af.ad.PushforwardBox, {"tangent": object()}, id="pushforward"),
+        pytest.param(af.ad.PullbackFwdBox, {}, id="pullback-forward"),
+        pytest.param(af.ad.PullbackBwdBox, {}, id="pullback-backward"),
+    ],
 )
 @pytest.mark.parametrize(
     "value, aval",
     [
         pytest.param("x", af.string.StrAVal(), id="string"),
         pytest.param(1.5, af.numeric.FloatAVal(), id="float"),
-        pytest.param(af.core.Zero(BlobAVal(3)), BlobAVal(3), id="zero-metadata"),
     ],
 )
-def test_ad_box_avalof(box_type, value, aval):
-    owner = object()
-    if box_type is af.ad.PushforwardBox:
-        box = box_type(owner, value, object())
-    else:
-        box = box_type(owner, value)
+def test_ad_box_avalof(box_type, kwargs, value, aval):
+    box = box_type(object(), value, **kwargs)
 
     assert af.core.avalof(box) == aval
-    if isinstance(value, af.core.Zero):
-        assert af.core.avalof(box) is value.aval
+
+
+@pytest.mark.parametrize(
+    "box_type, kwargs",
+    [
+        pytest.param(af.ad.PushforwardBox, {"tangent": object()}, id="pushforward"),
+        pytest.param(af.ad.PullbackFwdBox, {}, id="pullback-forward"),
+        pytest.param(af.ad.PullbackBwdBox, {}, id="pullback-backward"),
+    ],
+)
+def test_ad_box_avalof_preserves_zero_metadata(box_type, kwargs):
+    aval = BlobAVal(3)
+    box = box_type(object(), af.core.Zero(aval), **kwargs)
+
+    assert af.core.avalof(box) is aval
 
 
 def test_avalof_nested_ad_and_trace_boxes():
