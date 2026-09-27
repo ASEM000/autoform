@@ -157,6 +157,23 @@ class BatchBox:
         self.batched = batched
 
 
+def avalof_batch_box(box: BatchBox, /) -> core.AVal:
+    if not box.batched:
+        return core.avalof(box.value)
+    if utils.tree.is_leaf(box.value):
+        raise TypeError("Expected a batch container to infer BatchBox aval")
+    if not (items := utils.tree.leaves(box.value, is_leaf=lambda x: x is not box.value)):
+        raise TypeError("Cannot infer BatchBox aval from an empty batch")
+    item0, *rest = items
+    aval = core.avalof(item0)
+    if any(core.avalof(item) != aval for item in rest):
+        raise TypeError("Cannot infer BatchBox aval from items with different avals")
+    return BatchAVal(aval)
+
+
+core.aval_types[BatchBox] = avalof_batch_box
+
+
 class BatchInterpreter(core.Interpreter):
     __slots__ = ["parent", "batch_size"]
 
