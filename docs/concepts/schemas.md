@@ -10,20 +10,20 @@ answer_schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
 
 | Python | Args | Meaning |
 | --- | --- | --- |
-| {py:class}`Str <autoform.Str>` | `min=None, max=None, pattern=None` | A string, optionally constrained by length or regex. |
-| {py:class}`Int <autoform.Int>` | `min=None, max=None` | An integer, optionally range constrained. |
-| {py:class}`Float <autoform.Float>` | `min=None, max=None` | A number, optionally range constrained. |
-| {py:class}`Bool <autoform.Bool>` | none | A boolean. |
-| {py:class}`Enum <autoform.Enum>` | `*values` | One of a non-empty set of JSON scalar values of the same type. |
+| {py:class}`Str <autoform.Str>` | `*, desc=None, min=None, max=None, pattern=None` | A string, optionally constrained by length or regex. |
+| {py:class}`Int <autoform.Int>` | `*, desc=None, min=None, max=None` | An integer, optionally range constrained. |
+| {py:class}`Float <autoform.Float>` | `*, desc=None, min=None, max=None` | A number, optionally range constrained. |
+| {py:class}`Bool <autoform.Bool>` | `*, desc=None` | A boolean. |
+| {py:class}`Enum <autoform.Enum>` | `*values, desc=None` | One of a non-empty set of JSON scalar values of the same type. |
 
 ## Descriptions
 
-Use {py:class}`Doc <autoform.Doc>` with the `@` operator to attach descriptions:
+Pass a description directly to a schema node with `desc=`:
 
 ```python
 schema = {
-    "kind": af.Enum("summary", "definition") @ af.Doc("Kind."),
-    "text": af.Str() @ af.Doc("Text."),
+    "kind": af.Enum("summary", "definition", desc="Kind."),
+    "text": af.Str(desc="Text."),
 }
 ```
 
@@ -76,51 +76,10 @@ decision_schema = Decision(tool=af.Enum("search", "done"), answer=af.Str())
 
 The schema is the instance `decision_schema`, not the class `Decision`.
 
-## Transform Schema Trees
-
-Because schemas are [pytrees](pytrees.md), project code can build one base schema and derive call-specific variants with pytree utilities. `tree_map` changes the schema value before tracing or execution; it is not post-processing model output. Use the `autoform` namespace when mapping over registered dataclasses.
-
-```python
-import optree
-import autoform as af
-
-
-base_schema = {"answer": af.Str(), "confidence": af.Float(min=0, max=1)}
-
-extract_schema = optree.tree_map(
-    lambda leaf: leaf @ af.Doc("Extract only facts explicitly present in the input."),
-    base_schema,
-    namespace=af.PYTREE_NAMESPACE,
-)
-
-critique_schema = optree.tree_map(
-    lambda leaf: leaf @ af.Doc("Critique the draft and report uncertainty conservatively."),
-    base_schema,
-    namespace=af.PYTREE_NAMESPACE,
-)
-```
-
-Both calls return the same shape, so downstream code still reads `result["answer"]` and `result["confidence"]`. Only the schema guidance changes.
-
-The same pattern works for dataclass-shaped schemas:
-
-```python
-plain_decision_schema = Decision(tool=af.Enum("search", "done"), answer=af.Str())
-
-documented_decision_schema = optree.tree_map(
-    lambda leaf: leaf @ af.Doc("Decision field."),
-    plain_decision_schema,
-    namespace=af.PYTREE_NAMESPACE,
-)
-```
-
-This is useful when several calls share the same shape but differ by descriptions, ranges, or other schema leaf metadata.
-
-The same shape-preserving rule is what makes schemas compose with `autoform` transforms:
+The shape-preserving rule makes schemas compose with `autoform` transforms:
 
 - {py:func}`batch <autoform.batch>` returns a batched version of the schema-shaped output.
 - {py:func}`pullback <autoform.pullback>` accepts feedback with the same schema shape.
-- `tree_map` can derive schema variants before the IR is traced or executed.
 
 ## Schema Calls
 

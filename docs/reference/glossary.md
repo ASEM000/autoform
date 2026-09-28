@@ -11,7 +11,7 @@
 | Cotangent | Feedback flowing backward through a pullback. In `autoform`, cotangents are usually text feedback. |
 | Custom rule | A rule registered on a {py:func}`custom <autoform.custom>` traceable function boundary to override {py:func}`pushforward <autoform.pushforward>`, {py:func}`pullback <autoform.pullback>`, or {py:func}`batch <autoform.batch>` behavior. |
 | {py:func}`dce <autoform.dce>` | Dead-code elimination, an IR transform that removes equations not needed by selected outputs. |
-| {py:class}`Doc <autoform.Doc>` annotation | A schema description attached with `field @ af.Doc("...")`. |
+| Schema description | Guidance passed through a schema node's keyword-only `desc=` argument. |
 | Dynamic argument | An input leaf represented by a placeholder during tracing and provided at execution time. |
 | Execute | The phase that runs an IR with concrete inputs through `.call(...)` or `.acall(...)`. |
 | {py:func}`factor <autoform.factor>` | A primitive that multiplies the current path weight. It is neutral during ordinary execution and contributes to {py:func}`weight <autoform.weight>` results. |

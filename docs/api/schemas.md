@@ -8,5 +8,4 @@ Schema nodes describe structured LM output.
 .. autoclass:: autoform.Float
 .. autoclass:: autoform.Bool
 .. autoclass:: autoform.Enum
-.. autoclass:: autoform.Doc
 ```

@@ -33,13 +33,12 @@ we want back:
 
 This fits autoform better. The schema is an ordinary pytree.
 
-Docs attach to the thing they describe and are used to guide the generation process.
-The same form works for a leaf or for arbitrary nested structures:
+Descriptions attach directly to schema nodes and guide generation:
     >>> answer = {
-    ...     "name": af.Str() @ af.Doc("Subject name."),
-    ...     "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
-    ...     "score": af.Float(min=0, max=1) @ af.Doc("Confidence score."),
-    ... } @ af.Doc("Answer object.")
+    ...     "name": af.Str(desc="Subject name."),
+    ...     "kind": af.Enum("summary", "definition", desc="Answer kind."),
+    ...     "score": af.Float(min=0, max=1, desc="Confidence score."),
+    ... }
 
 Any registered pytree can carry the schema:
     >>> import optree
@@ -51,31 +50,30 @@ Any registered pytree can carry the schema:
     ...     reasoning: str
 
     >>> schema = Answer(
-    ...     answer=af.Float() @ af.Doc("The numeric answer."),
-    ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
+    ...     answer=af.Float(desc="The numeric answer."),
+    ...     reasoning=af.Str(desc="The reasoning behind the answer."),
     ... )
-    >>> msgs = [dict(role="user", content="1 + 1?")]
-    >>> output = af.lm.generate(  # doctest: +SKIP
-    ...     msgs,
-    ...     model="openai/gpt-5.5",
-    ...     schema=schema,
-    ... )
-    >>> output  # doctest: +SKIP
-    Answer(answer=2.0, reasoning="Adding 1 and 1 gives 2.")
-
 """
 
 from __future__ import annotations
 
+import math
 import re
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable, Iterable
 from typing import Any
 
-from optree import GetAttrEntry
-
+import autoform.core as core
 import autoform.utils as utils
 
-__all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str"]
+__all__ = [
+    "Bool",
+    "Enum",
+    "Float",
+    "Int",
+    "Str",
+    "emit_json_schema",
+    "parse_json_value",
+]
 
 # ==================================================================================================
 # USER SCHEMA NODES
@@ -83,11 +81,20 @@ __all__ = ["Bool", "Doc", "Enum", "Float", "Int", "Str"]
 
 
 def slotted_values(node: Any) -> tuple[Any, ...]:
-    return tuple(getattr(node, name) for name in type(node).__slots__)
+    return tuple(getattr(node, name) for name in (*type(node).__slots__, "desc"))
 
 
 class Spec(Hashable):
-    __slots__ = []
+    __slots__ = ["desc"]
+
+    def __init__(self, *, desc: str | None = None) -> None:
+        if desc is not None and type(desc) is not str:
+            raise TypeError(f"desc must be a string, got {desc!r}")
+        self.desc = desc
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        utils.tree.register_node(cls, lambda node: ((), node), lambda node, _: node)
 
     def __eq__(self, other: object) -> bool:
         return type(self) is type(other) and slotted_values(self) == slotted_values(other)
@@ -96,16 +103,15 @@ class Spec(Hashable):
         return hash((type(self), slotted_values(self)))
 
     def __repr__(self) -> str:
-        fields = ", ".join(f"{name}={getattr(self, name)!r}" for name in type(self).__slots__)
-        return f"{type(self).__name__}({fields})"
+        fields = (f"{name}={getattr(self, name)!r}" for name in (*type(self).__slots__, "desc"))
+        return f"{type(self).__name__}({', '.join(fields)})"
 
 
 class Str(Spec):
     """String schema node with optional length and pattern constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Args:
+        desc: Optional generation guidance.
         min: Optional minimum length of the string.
         max: Optional maximum length of the string.
         pattern: Optional regular expression pattern that the string must match.
@@ -120,10 +126,12 @@ class Str(Spec):
     def __init__(
         self,
         *,
+        desc: str | None = None,
         min: int | None = None,
         max: int | None = None,
         pattern: str | None = None,
     ) -> None:
+        super().__init__(desc=desc)
         if min is not None and type(min) is not int:
             raise TypeError(f"min must be an int, got {min!r}")
         if max is not None and type(max) is not int:
@@ -146,9 +154,8 @@ class Str(Spec):
 class Int(Spec):
     """Integer schema node with optional range constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Args:
+        desc: Optional generation guidance.
         min: Optional minimum value.
         max: Optional maximum value.
 
@@ -159,7 +166,14 @@ class Int(Spec):
 
     __slots__ = ["min", "max"]
 
-    def __init__(self, *, min: int | None = None, max: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        desc: str | None = None,
+        min: int | None = None,
+        max: int | None = None,
+    ) -> None:
+        super().__init__(desc=desc)
         if min is not None and type(min) is not int:
             raise TypeError(f"min must be an int, got {min!r}")
         if max is not None and type(max) is not int:
@@ -173,9 +187,8 @@ class Int(Spec):
 class Float(Spec):
     """Number schema node with optional range constraints.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Args:
+        desc: Optional generation guidance.
         min: Optional minimum value.
         max: Optional maximum value.
 
@@ -189,9 +202,11 @@ class Float(Spec):
     def __init__(
         self,
         *,
+        desc: str | None = None,
         min: int | float | None = None,
         max: int | float | None = None,
     ) -> None:
+        super().__init__(desc=desc)
         if min is not None and type(min) not in (int, float):
             raise TypeError(f"min must be a number, got {min!r}")
         if max is not None and type(max) not in (int, float):
@@ -205,7 +220,8 @@ class Float(Spec):
 class Bool(Spec):
     """Boolean schema node.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
+    Args:
+        desc: Optional generation guidance.
 
     Example:
         >>> import autoform as af
@@ -218,9 +234,8 @@ class Bool(Spec):
 class Enum(Spec):
     """Enum schema node with a fixed set of allowed values.
 
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
     Args:
+        desc: Optional generation guidance.
         *values: Allowed values. Values must be non-empty and share one type.
 
     Example:
@@ -230,7 +245,8 @@ class Enum(Spec):
 
     __slots__ = ["values"]
 
-    def __init__(self, *values: Any) -> None:
+    def __init__(self, *values: Any, desc: str | None = None) -> None:
+        super().__init__(desc=desc)
         if not values:
             raise TypeError("Enum must have at least one value")
         value_types = {type(value) for value in values}
@@ -242,60 +258,241 @@ class Enum(Spec):
         return type(value) is type(self.values[0]) and value in self.values
 
 
-class Docd[T]:
-    __slots__ = ["value", "text"]
+# ==================================================================================================
+# JSON EMISSION
+# ==================================================================================================
 
-    def __init__(self, value: T, text: str, /) -> None:
-        self.value = value
-        assert type(text) is str, f"description must be a string, got {text!r}"
-        self.text = text
+type JsonSchema = dict[str, Any]
+type EmitJsonSchemaRule = Callable[[Any], JsonSchema]
 
-    def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and slotted_values(self) == slotted_values(other)
-
-    def __hash__(self) -> int:
-        return hash((type(self), slotted_values(self)))
-
-    def __repr__(self) -> str:
-        return f"Docd({self.value!r}, text={self.text!r})"
+zip = utils.strict_zip
 
 
-class Doc:
-    """Description node for attaching schema descriptions.
-
-    Use this node in schema trees passed to :func:`autoform.lm.generate`.
-
-    Args:
-        text: Description text.
-
-    Example:
-        >>> import autoform as af
-        >>> name = af.Str() @ af.Doc("Subject name.")
-    """
-
-    __slots__ = ["text"]
-
-    def __init__(self, text: str, /) -> None:
-        if not isinstance(text, str):
-            raise TypeError(f"description must be a string, got {text!r}")
-        self.text = text
-
-    def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and slotted_values(self) == slotted_values(other)
-
-    def __hash__(self) -> int:
-        return hash((type(self), slotted_values(self)))
-
-    def __rmatmul__[T](self, value: T) -> Docd[T]:
-        return Docd(value, self.text)
-
-    def __repr__(self) -> str:
-        return f"Doc({self.text!r})"
+missing = object()
 
 
-utils.tree.register_node(
-    Docd,
-    lambda node: ((node.value,), node.text, ("value",)),
-    lambda text, children: Docd(children[0], text),
-    path_entry_type=GetAttrEntry,
-)
+def json_property_names(entries: Iterable[Any]) -> tuple[str, ...]:
+    # NOTE(asem): avoid stringified name collision
+    names = []
+    used = set()
+    for entry in entries:
+        name = str(entry)
+        while name in used:
+            name += "_"
+        names.append(name)
+        used.add(name)
+    return tuple(names)
+
+
+def emit_string_json_schema(schema: Str) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="string")
+    if schema.min is not None:
+        json_schema["minLength"] = schema.min
+    if schema.max is not None:
+        json_schema["maxLength"] = schema.max
+    if schema.pattern is not None:
+        json_schema["pattern"] = schema.pattern
+    return json_schema
+
+
+def emit_integer_json_schema(schema: Int) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="integer")
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return json_schema
+
+
+def emit_number_json_schema(schema: Float) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="number")
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return json_schema
+
+
+def emit_boolean_json_schema(schema: Bool) -> JsonSchema:
+    return dict(type="boolean")
+
+
+def emit_enum_json_schema(schema: Enum) -> JsonSchema:
+    json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
+    if (value_type := type(schema.values[0])) not in json_types:
+        raise TypeError("Enum values must be str, int, float, or bool")
+    if value_type is float and not all(math.isfinite(value) for value in schema.values):
+        raise ValueError("Enum values must be finite")
+    return dict(type=json_types[value_type], enum=list(schema.values))
+
+
+emit_json_schema_rules: dict[type[Spec], EmitJsonSchemaRule] = {}
+emit_json_schema_rules[Str] = emit_string_json_schema
+emit_json_schema_rules[Int] = emit_integer_json_schema
+emit_json_schema_rules[Float] = emit_number_json_schema
+emit_json_schema_rules[Bool] = emit_boolean_json_schema
+emit_json_schema_rules[Enum] = emit_enum_json_schema
+
+
+def is_schema(node: Any) -> bool:
+    return isinstance(node, Spec)
+
+
+def partition_schema(schema: Any) -> tuple[Any, Any]:
+    lhs = utils.tree.map(lambda x: missing if is_schema(x) else x, schema, is_leaf=is_schema)
+    rhs = utils.tree.map(lambda x: x if is_schema(x) else missing, schema, is_leaf=is_schema)
+    return lhs, rhs
+
+
+def emit_json_schema(schema: Any) -> JsonSchema | None:
+    # NOTE(asem): key idea here is the only schema nodes qualify for json emission
+    # >>> schema = {
+    # ...     "name": af.Str(min=1, desc="doc text"),
+    # ...     "source": "fixed",
+    # ... }
+    # >>> emit_json_schema(schema)
+    # {
+    #   "type": "object",
+    #   "properties": {
+    #     "name": {
+    #       "type": "string",
+    #       "minLength": 1,
+    #       "description": "doc text"
+    #     }
+    #   },
+    #   "required": [
+    #     "name"
+    #   ],
+    #   "additionalProperties": false
+    # }
+    # here "fixed" is a literal and excluded from the schema
+    _, schema_tree = partition_schema(schema)
+    return emit_json_tree(schema_tree)
+
+
+def emit_json_tree(schema: Any) -> JsonSchema | None:
+    if schema is missing:
+        return None
+
+    if is_schema(schema):
+        json_schema = emit_json_schema_rules[type(schema)](schema)
+        if schema.desc is not None:
+            json_schema["description"] = schema.desc
+        return json_schema
+
+    flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    property_names = json_property_names(spec.entries())
+    properties = {}
+    for name, child in zip(property_names, flat):
+        if (child_schema := emit_json_tree(child)) is not None:
+            properties[name] = child_schema
+    if not properties:
+        return None
+
+    return dict(
+        type="object",
+        properties=properties,
+        required=list(properties),
+        additionalProperties=False,
+    )
+
+
+# ==================================================================================================
+# JSON PARSING
+# ==================================================================================================
+
+type ParseJsonValueRule = Callable[[Any, Any], Any]
+
+
+def parse_string_json_value(schema: Str, value: Any) -> str:
+    if type(value) is not str:
+        raise ValueError("Expected string")
+    if schema.min is not None and len(value) < schema.min:
+        raise ValueError(f"Expected string with length >= {schema.min}")
+    if schema.max is not None and len(value) > schema.max:
+        raise ValueError(f"Expected string with length <= {schema.max}")
+    if schema.pattern is not None and not re.search(schema.pattern, value):
+        raise ValueError(f"Expected string matching {schema.pattern!r}")
+    return value
+
+
+def parse_integer_json_value(schema: Int, value: Any) -> int:
+    if type(value) is not int:
+        raise ValueError("Expected integer")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected integer >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected integer <= {schema.max}")
+    return value
+
+
+def parse_number_json_value(schema: Float, value: Any) -> float:
+    if type(value) not in (int, float):
+        raise ValueError("Expected number")
+    if type(value) is float and not math.isfinite(value):
+        raise ValueError("Expected finite number")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected number >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected number <= {schema.max}")
+    return float(value)
+
+
+def parse_boolean_json_value(schema: Bool, value: Any) -> bool:
+    if type(value) is not bool:
+        raise ValueError("Expected boolean")
+    return value
+
+
+def parse_enum_json_value(schema: Enum, value: Any) -> Any:
+    if value not in schema:
+        raise ValueError(f"Expected one of {schema.values!r}")
+    return value
+
+
+parse_json_value_rules: dict[type[Spec], ParseJsonValueRule] = {}
+parse_json_value_rules[Str] = parse_string_json_value
+parse_json_value_rules[Int] = parse_integer_json_value
+parse_json_value_rules[Float] = parse_number_json_value
+parse_json_value_rules[Bool] = parse_boolean_json_value
+parse_json_value_rules[Enum] = parse_enum_json_value
+
+
+def parse_json_tree(schema: Any, value: Any) -> Any:
+    # NOTE(asem): schema leaves are missing or spec nodes
+    if schema is missing:
+        return missing
+
+    # NOTE(asem): case 1: in case a parsing rule exists use it.
+    if is_schema(schema):
+        return parse_json_value_rules[type(schema)](schema, value)
+
+    # NOTE(asem): case 2: flatten the schema one level to rebuild its original container.
+    flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+
+    schema_keys = json_property_names(spec.entries())
+    properties = {k: c for k, c in zip(schema_keys, flat) if emit_json_tree(c) is not None}
+    if not properties:
+        return schema
+    expected_spec = utils.tree.structure(properties, is_leaf=lambda x: id(x) != id(properties))
+    values = dict(zip(expected_spec.entries(), expected_spec.flatten_up_to(value)))
+    children = (parse_json_tree(child, values.get(key)) for key, child in zip(schema_keys, flat))
+    return spec.unflatten(children)
+
+
+def parse_json_value(schema: Any, value: Any) -> Any:
+    literal_tree, schema_tree = partition_schema(schema)
+    generated_tree = parse_json_tree(schema_tree, value)
+    return utils.tree.map(lambda l, r: r if l is missing else l, literal_tree, generated_tree)
+
+
+# ==================================================================================================
+# ABSTRACT
+# ==================================================================================================
+
+
+core.aval_types[Str] = lambda _: core.avalof("")
+core.aval_types[Int] = lambda _: core.avalof(0)
+core.aval_types[Float] = lambda _: core.avalof(0.0)
+core.aval_types[Bool] = lambda _: core.avalof(False)
+core.aval_types[Enum] = lambda schema: core.avalof(schema.values[0])

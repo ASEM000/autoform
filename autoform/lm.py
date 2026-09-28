@@ -281,7 +281,7 @@ def pullback_bwd_complete(in_tree: Tree, /) -> Tree:
     prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
     def make_schema(path, value):
-        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
+        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
 
     in_schema = utils.tree.map_with_path(make_schema, (messages, model))
     system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
@@ -296,7 +296,7 @@ async def apull_bwd_complete(in_tree: Tree, /) -> Tree:
     prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
     def make_schema(path, value):
-        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
+        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
 
     in_schema = utils.tree.map_with_path(make_schema, (messages, model))
     system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
@@ -372,8 +372,8 @@ def generate(messages: Messages, /, *, model: str, schema: Any) -> Any:
         ...     answer: float
         ...     reasoning: str
         >>> schema = Answer(
-        ...     answer=af.Float() @ af.Doc("The numeric answer."),
-        ...     reasoning=af.Str() @ af.Doc("The reasoning behind the answer."),
+        ...     answer=af.Float(desc="The numeric answer."),
+        ...     reasoning=af.Str(desc="The reasoning behind the answer."),
         ... )
         >>> msgs = [dict(role="user", content="1 + 1?")]
         >>> output = af.lm.generate(  # doctest: +SKIP
@@ -442,18 +442,11 @@ def emit_enum_json_schema(schema: schemas.Enum) -> JsonSchema:
     return dict(type=json_types[value_type], enum=list(schema.values))
 
 
-def emit_docd_json_schema(schema: schemas.Docd[Any]) -> JsonSchema | None:
-    if (json_schema := emit_json_schema(schema.value)) is None:
-        return None
-    return json_schema | dict(description=schema.text)
-
-
 emit_json_schema_rules[schemas.Str] = emit_string_json_schema
 emit_json_schema_rules[schemas.Int] = emit_integer_json_schema
 emit_json_schema_rules[schemas.Float] = emit_number_json_schema
 emit_json_schema_rules[schemas.Bool] = emit_boolean_json_schema
 emit_json_schema_rules[schemas.Enum] = emit_enum_json_schema
-emit_json_schema_rules[schemas.Docd] = emit_docd_json_schema
 
 
 def emit_json_schema(schema: Any, *, value: Any = ...) -> Any:
@@ -467,7 +460,7 @@ def emit_json_schema(schema: Any, *, value: Any = ...) -> Any:
     #     >>> import json
     #     >>> import autoform as af
     #     >>> schema = {
-    #     ...     "name": af.Str(min=1) @ af.Doc("Name slot."),
+    #     ...     "name": af.Str(min=1, desc="Name slot."),
     #     ...     "source": "fixed",
     #     ... }
     #     >>> print(json.dumps(af.lm.emit_json_schema(schema), indent=2))
@@ -486,12 +479,13 @@ def emit_json_schema(schema: Any, *, value: Any = ...) -> Any:
     #       "additionalProperties": false
     #     }
     # here only name is emitted, while literal value fixed is omitted.
-    if value is not ... and isinstance(schema, schemas.Docd):
-        return emit_json_schema(schema.value, value=value)
     if rule := emit_json_schema_rules.get(type(schema)):
         if value is ...:
-            return rule(schema)
-        aval = schema_abstract_tree(schema)
+            json_schema = rule(schema)
+            if schema.desc is not None:
+                json_schema["description"] = schema.desc
+            return json_schema
+        aval = core.avalof(schema)
         if core.avalof(value) != aval:
             raise TypeError(f"Expected {aval!r}, got {value!r}")
         return value
@@ -573,16 +567,11 @@ def parse_enum_json_value(schema: schemas.Enum, value: Any) -> Any:
     return value
 
 
-def parse_docd_json_value(schema: schemas.Docd[Any], value: Any) -> Any:
-    return parse_json_value(schema.value, value)
-
-
 parse_json_value_rules[schemas.Str] = parse_string_json_value
 parse_json_value_rules[schemas.Int] = parse_integer_json_value
 parse_json_value_rules[schemas.Float] = parse_number_json_value
 parse_json_value_rules[schemas.Bool] = parse_boolean_json_value
 parse_json_value_rules[schemas.Enum] = parse_enum_json_value
-parse_json_value_rules[schemas.Docd] = parse_docd_json_value
 
 
 def parse_json_value(schema: Any, value: Any) -> Any:
@@ -615,23 +604,22 @@ def parse_json_value(schema: Any, value: Any) -> Any:
     if type(schema) not in emit_json_schema_rules and utils.tree.is_leaf(schema):
         return schema
 
-    # NOTE(asem): case 3 a container case.
-    # first flatten one level for the reference schema and the input value
+    # NOTE(asem): case 3: flatten the schema one level to rebuild its original container.
     flat_schemas, spec_schema = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
-    flat_values, spec_value = utils.tree.flatten(value, is_leaf=lambda x: id(x) != id(value))
 
     schema_keys = [str(entry) for entry in spec_schema.entries()]
     is_emitted: list[bool] = [emit_json_schema(child) is not None for child in flat_schemas]
     expected_keys = [k for k, e in zip(schema_keys, is_emitted) if e]
-    value_keys = [str(entry) for entry in spec_value.entries()]
-
-    if len(expected_keys) != len(value_keys) or set(expected_keys) != set(value_keys):
-        raise ValueError(f"Key mismatch: expected entries {expected_keys!r}, got {value_keys!r}")
-
-    out_pos = {k: i for i, k in enumerate(value_keys)}
+    if expected_keys or value is not None:
+        if not isinstance(value, dict):
+            raise ValueError("Expected object")
+        if len(expected_keys) != len(value) or set(expected_keys) != value.keys():
+            raise ValueError(
+                f"Key mismatch: expected entries {expected_keys!r}, got {list(value)!r}"
+            )
 
     return spec_schema.unflatten(
-        parse_json_value(child, flat_values[out_pos[key]] if emit else None)
+        parse_json_value(child, value[key] if emit else None)
         for key, child, emit in zip(schema_keys, flat_schemas, is_emitted)
     )
 
@@ -676,57 +664,21 @@ async def aimpl_generate(in_tree: Tree, /, *, schema: Any) -> Any:
     return parse_json_value(schema, json.loads(resp.choices[0].message.content))
 
 
-def string_schema_abstract(_: schemas.Str) -> core.AVal:
-    return core.avalof("")
-
-
-def integer_schema_abstract(_: schemas.Int) -> core.AVal:
-    return core.avalof(0)
-
-
-def number_schema_abstract(_: schemas.Float) -> core.AVal:
-    return core.avalof(0.0)
-
-
-def boolean_schema_abstract(_: schemas.Bool) -> core.AVal:
-    return core.avalof(False)
-
-
-def enum_schema_abstract(s: schemas.Enum) -> core.AVal:
-    return core.avalof(s.values[0])
-
-
-def docd_schema_abstract(s: schemas.Docd[Any]) -> Tree:
-    return schema_abstract_tree(s.value)
-
-
-schema_abstract_rules = {}
-schema_abstract_rules[schemas.Str] = string_schema_abstract
-schema_abstract_rules[schemas.Int] = integer_schema_abstract
-schema_abstract_rules[schemas.Float] = number_schema_abstract
-schema_abstract_rules[schemas.Bool] = boolean_schema_abstract
-schema_abstract_rules[schemas.Enum] = enum_schema_abstract
-schema_abstract_rules[schemas.Docd] = docd_schema_abstract
-
-
-def schema_abstract_tree(schema: Any) -> Tree:
-    def abstract(x: Any) -> Any:
-        if rule := schema_abstract_rules.get(type(x)):
-            return rule(x)
-        if not stage.is_traceable(x):
-            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
-        return x
-
-    return utils.tree.map(abstract, schema, is_leaf=lambda x: type(x) in schema_abstract_rules)
-
-
 def abstract_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     messages, model = in_tree
     aval = core.avalof("")
     fields = [m[key] for m in messages for key in ("role", "content")]
     assert all(type(x) in (str, type(aval)) for x in fields), f"Expected strings: {messages!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
-    return schema_abstract_tree(schema)
+
+    def abstract(x: Any) -> Any:
+        if schemas.is_schema(x):
+            return core.avalof(x)
+        if not stage.is_traceable(x):
+            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
+        return x
+
+    return utils.tree.map(abstract, schema, is_leaf=schemas.is_schema)
 
 
 def pushforward_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
@@ -776,7 +728,7 @@ def pullback_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
     def make_schema(path, value):
-        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
+        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
 
     in_schema = utils.tree.map_with_path(make_schema, (messages, model))
     system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
@@ -793,7 +745,7 @@ async def apull_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
     def make_schema(path, value):
-        return schemas.Str() @ schemas.Doc(f"Feedback for input at {path}: {value!r}.")
+        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
 
     in_schema = utils.tree.map_with_path(make_schema, (messages, model))
     system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)

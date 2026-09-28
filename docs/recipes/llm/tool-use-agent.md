@@ -48,10 +48,13 @@ class State:
 
 # build the schema as a value-shaped instance
 decision_schema = Decision(
-    tool=af.Enum("search", "done")
-    @ af.Doc("Use search if history has no search line. Use done if history already has search."),
-    args=af.Str() @ af.Doc("Search query when tool is search. Empty when tool is done."),
-    answer=af.Str() @ af.Doc("Final answer when tool is done. Empty when tool is search."),
+    tool=af.Enum(
+        "search",
+        "done",
+        desc="Use search if history has no search line. Use done if it does.",
+    ),
+    args=af.Str(desc="Search query when tool is search. Empty when tool is done."),
+    answer=af.Str(desc="Final answer when tool is done. Empty when tool is search."),
 )
 
 
