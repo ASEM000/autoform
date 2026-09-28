@@ -41,11 +41,17 @@ so the path weight is `request_fit * history_fit`.
 
 ```python
 fit_schema = {
-    "request_fit": af.Float(min=0, max=1)
-    @ af.Doc("How well this tool handles the request. 0 is not at all; 1 is perfect."),
-    "history_fit": af.Float(min=0, max=1)
-    @ af.Doc("How consistent this tool is with the conversation history."),
-    "reasoning": af.Str(max=200) @ af.Doc("One sentence explaining the scores."),
+    "request_fit": af.Float(
+        min=0,
+        max=1,
+        desc="How well this tool handles the request. 0 is not at all; 1 is perfect.",
+    ),
+    "history_fit": af.Float(
+        min=0,
+        max=1,
+        desc="How consistent this tool is with the conversation history.",
+    ),
+    "reasoning": af.Str(max=200, desc="One sentence explaining the scores."),
 }
 
 

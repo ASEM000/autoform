@@ -82,7 +82,6 @@ factor = path.factor
 # ==================================================================================================
 
 Bool = schemas.Bool
-Doc = schemas.Doc
 Enum = schemas.Enum
 Float = schemas.Float
 Int = schemas.Int
@@ -126,7 +125,6 @@ __all__ = [
     "factor",
     # schemas
     "Bool",
-    "Doc",
     "Enum",
     "Float",
     "Int",

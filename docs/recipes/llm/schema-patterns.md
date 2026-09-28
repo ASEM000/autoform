@@ -52,7 +52,8 @@ class SearchDecision:
 
 
 decision_schema = SearchDecision(
-    tool=af.Enum("search", "done"), args=SearchArgs(query=af.Str(), limit=af.Int(min=1, max=5))
+    tool=af.Enum("search", "done"),
+    args=SearchArgs(query=af.Str(), limit=af.Int(min=1, max=5)),
 )
 
 
@@ -67,26 +68,21 @@ pytree-shaped schema.
 
 ## Build Schema Variants
 
-Schemas are [pytrees](../../concepts/pytrees.md), so regular pytree utilities can derive call-specific variants before a call.
+Build call-specific schema values with the same pytree shape and different leaf metadata.
 
 ```python
-import optree
 import autoform as af
 
 
-schema = {"answer": af.Str(), "confidence": af.Float(min=0, max=1)}
+extract_schema = {
+    "answer": af.Str(desc="Extract only facts explicitly present in the input."),
+    "confidence": af.Float(min=0, max=1, desc="Confidence in the extraction."),
+}
 
-extract_schema = optree.tree_map(
-    lambda leaf: leaf @ af.Doc("Extract only facts explicitly present in the input."),
-    schema,
-    namespace=af.PYTREE_NAMESPACE,
-)
-
-critique_schema = optree.tree_map(
-    lambda leaf: leaf @ af.Doc("Critique the draft and report uncertainty conservatively."),
-    schema,
-    namespace=af.PYTREE_NAMESPACE,
-)
+critique_schema = {
+    "answer": af.Str(desc="Critique the draft."),
+    "confidence": af.Float(min=0, max=1, desc="Confidence in the critique."),
+}
 ```
 
 Both schemas return `{"answer": ..., "confidence": ...}`. The downstream code stays fixed while each LM call receives different field guidance.
@@ -99,8 +95,8 @@ result = af.lm.generate(
     messages,
     model="gpt-5.5",
     schema={
-        "kind": af.Enum("question", "request") @ af.Doc("Request type."),
-        "reply": af.Str() @ af.Doc("Short reply."),
+        "kind": af.Enum("question", "request", desc="Request type."),
+        "reply": af.Str(desc="Short reply."),
     },
 )
 ```
@@ -163,4 +159,4 @@ inputs that produced the structured response.
 
 Malformed provider output raises a parsing error during execution. Keep schemas
 small and concrete: finite choices with {py:class}`Enum <autoform.Enum>`, bounded numbers with {py:class}`Int <autoform.Int>` or
-{py:class}`Float <autoform.Float>`, and field descriptions with {py:class}`Doc <autoform.Doc>`.
+{py:class}`Float <autoform.Float>`, and descriptions attached directly to schema nodes.

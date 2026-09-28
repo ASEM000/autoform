@@ -21,7 +21,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.lm import emit_json_schema, parse_json_value
+from autoform.schemas import emit_json_schema, parse_json_value
 from autoform.utils import tree
 from tests import aexecute, execute
 
@@ -161,7 +161,7 @@ def test_generate_executes_with_response_format():
     ("schema", "value"),
     [
         pytest.param(af.Str(), 'Hello "world"!', id="string"),
-        pytest.param(af.Str(min=1) @ af.Doc("Answer text."), "hello", id="described-string"),
+        pytest.param(af.Str(min=1, desc="Answer text."), "hello", id="described-string"),
         pytest.param(af.Int(), 2, id="integer"),
         pytest.param(af.Float(), 0.5, id="float"),
         pytest.param(af.Bool(), True, id="boolean"),
@@ -176,6 +176,7 @@ def test_generate_passes_scalar_schemas_to_client(executor, schema, value):
 
     program = lm_program(af.lm.generate, model="echo", schema=schema)
     ir = af.trace(program)("seed")
+    assert af.core.avalof(schema) == ir.out_tree.aval
     with af.lm.client(ScalarClient(render=lambda _: json.dumps(value))):
         assert program("hello") == value
         assert executor(ir, "hello") == value
@@ -183,9 +184,9 @@ def test_generate_passes_scalar_schemas_to_client(executor, schema, value):
 
 def test_generate_uses_runtime_model_with_structured_output():
     answer = {
-        "text": af.Str() @ af.Doc("Short text."),
+        "text": af.Str(desc="Short text."),
         "score": af.Float(),
-    } @ af.Doc("Answer object.")
+    }
 
     generate = lm_program(af.lm.generate, schema=answer)
 
@@ -303,17 +304,17 @@ def test_emit_json_schema_with_value_preserves_generated_structure():
 
     schema = Answer(
         [
-            af.Float(min=0) @ af.Doc("Score"),
+            af.Float(min=0, desc="Score"),
             (af.Str(min=1), af.Int(), af.Bool(), af.Enum("yes", "no")),
         ],
         {"source": "fixed", "nothing": None},
-    ) @ af.Doc("Answer")
+    )
     value = Answer([-0.2, ("", -1, False, "feedback")], {"source": "", "nothing": None})
-    assert emit_json_schema(schema, value=value) == {
+    assert af.lm.emit_json_schema(schema, value=value) == {
         "fields": {"0": -0.2, "1": {"0": "", "1": -1, "2": False, "3": "feedback"}}
     }
     with pytest.raises(ValueError):
-        emit_json_schema(schema, value=Answer([], value.metadata))
+        af.lm.emit_json_schema(schema, value=Answer([], value.metadata))
 
 
 @pytest.mark.parametrize(
@@ -322,21 +323,15 @@ def test_emit_json_schema_with_value_preserves_generated_structure():
         pytest.param(None, None, id="none"),
         pytest.param({}, {}, id="empty-dict"),
         pytest.param("fixed", "fixed", id="literal-string"),
-        pytest.param("fixed" @ af.Doc("Not generated."), "fixed", id="described-string"),
         pytest.param(
             {"source": "fixed", "nothing": None},
             {"source": "fixed", "nothing": None},
             id="literal-dict",
         ),
         pytest.param(
-            ("fixed" @ af.Doc("Not generated."), None, []),
+            ("fixed", None, []),
             ("fixed", None, []),
             id="literal-tuple",
-        ),
-        pytest.param(
-            {"source": "fixed"} @ af.Doc("Not generated."),
-            {"source": "fixed"},
-            id="described-dict",
         ),
     ],
 )
@@ -345,17 +340,41 @@ def test_schema_without_generated_fields(schema, expected):
     assert parse_json_value(schema, None) == expected
 
 
-def test_parse_json_value_rejects_omitted_generated_fields():
-    with pytest.raises(ValueError, match="Key mismatch"):
-        parse_json_value({"name": af.Str()}, None)
+@pytest.mark.parametrize("parse", [parse_json_value, af.lm.parse_json_value], ids=["schemas", "lm"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(None, id="missing-object"),
+        pytest.param(["x"], id="list"),
+        pytest.param(("x",), id="tuple"),
+        pytest.param({}, id="missing-field"),
+        pytest.param({"0": "x", "extra": "y"}, id="extra-field"),
+        pytest.param({0: "x"}, id="non-string-key"),
+    ],
+)
+def test_parse_json_value_rejects_invalid_objects(parse, value):
+    with pytest.raises(ValueError):
+        parse({"0": af.Str()}, value)
+
+
+@pytest.mark.parametrize("parse", [parse_json_value, af.lm.parse_json_value], ids=["schemas", "lm"])
+def test_parse_json_value_rebuilds_nested_containers_from_objects(parse):
+    schema = (af.Str(), {"score": af.Float(), "source": "fixed"}, None)
+    assert parse(schema, {"1": {"score": 2}, "0": "x"}) == (
+        "x",
+        {"score": 2.0, "source": "fixed"},
+        None,
+    )
+    with pytest.raises(ValueError):
+        parse(schema, {"0": "x", "1": [2]})
 
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": af.Str() @ af.Doc("Subject name."),
-        "kind": af.Enum("summary", "definition") @ af.Doc("Answer kind."),
-        "score": af.Float() @ af.Doc("Confidence score."),
-    } @ af.Doc("Answer object.")
+        "name": af.Str(desc="Subject name."),
+        "kind": af.Enum("summary", "definition", desc="Answer kind."),
+        "score": af.Float(desc="Confidence score."),
+    }
 
     json_schema = emit_json_schema(answer)
 
@@ -372,7 +391,6 @@ def test_schema_dsl_builds_described_schema():
         },
         "required": ["kind", "name", "score"],
         "additionalProperties": False,
-        "description": "Answer object.",
     }
     assert parse_json_value(
         answer,
@@ -391,7 +409,7 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
         details: object
 
     details = {
-        "literal": "fixed" @ af.Doc("Not generated."),
+        "literal": "fixed",
         "nothing": None,
     }
     answer = Answer(af.Str(), details)
