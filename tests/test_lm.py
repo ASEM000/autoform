@@ -21,7 +21,7 @@ import optree
 import pytest
 
 import autoform as af
-from autoform.schemas import emit_json_schema, parse_json_value
+from autoform.schemas import describe, parse
 from autoform.utils import tree
 from tests import aexecute, execute
 
@@ -64,10 +64,44 @@ def fake_response(content):
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
+def schema_response(value, response_format):
+    properties = response_format["json_schema"]["schema"].get("properties", {})
+    if "output" in properties:
+        value = {"output": value}
+    return fake_response(json.dumps(value))
+
+
+def parse_change_prompt(content):
+    input_text, change_text = content.removeprefix("INPUT: ").split(" INPUT CHANGE: ")
+    return json.loads(input_text), json.loads(change_text)
+
+
+def fill_values(content):
+    return json.loads(content)["values"]
+
+
+def fill_request_text(content):
+    return fill_values(content)["context"]["request"]
+
+
+def echo_or_json_fill(messages, *, structured=False):
+    content = af.lm.echo_messages(messages)
+    try:
+        payload = json.loads(messages[-1]["content"])
+    except json.JSONDecodeError:
+        return json.dumps(content) if structured else content
+    if isinstance(payload, dict) and "values" in payload and "schema" in payload:
+        return json.dumps({"output": content})
+    return json.dumps(content) if structured else content
+
+
 class EchoRouter:
-    def completion(self, *, messages, model, **kwargs):
+    def completion(self, *, messages, model, response_format=None, **kwargs):
         assert kwargs == {}
-        return fake_response(f"{model}|{messages[-1]['content']}")
+        content = f"{model}|{messages[-1]['content']}"
+        if response_format is not None:
+            return schema_response(content, response_format)
+        return fake_response(content)
 
     async def acompletion(self, **kwargs):
         return self.completion(**kwargs)
@@ -82,11 +116,12 @@ class SchemaRouter(EchoRouter):
     def completion(self, *, messages: list[dict], model: str, response_format, **kwargs):
         assert kwargs == {}
         self.response_formats.append(response_format)
-        return fake_response(
-            json.dumps({
+        return schema_response(
+            {
                 "text": f"{model}|{messages[-1]['content']}",
                 "score": 0.5,
-            })
+            },
+            response_format,
         )
 
 
@@ -100,7 +135,11 @@ class SchemaGradientRouter(EchoRouter):
         assert kwargs == {}
         self.calls.append(dict(messages=messages, model=model, response_format=response_format))
         if response_format is not None:
-            properties = response_format["json_schema"]["schema"]["properties"]
+            schema = response_format["json_schema"]["schema"]
+            schema = schema.get("properties", {}).get("output", schema)
+            if schema.get("type") == "string":
+                return schema_response("output change", response_format)
+            properties = schema["properties"]
             if "1" in properties:
                 feedback = {"1": "model feedback"}
                 if "0" in properties:
@@ -108,12 +147,12 @@ class SchemaGradientRouter(EchoRouter):
                         key: dict(role=f"role feedback {key}", content=f"content feedback {key}")
                         for key in properties["0"]["properties"]
                     }
-                return fake_response(json.dumps(feedback))
-        responses = {
-            False: "input feedback",
-            True: json.dumps({"text": "Recursion calls itself.", "score": 0.92}),
-        }
-        return fake_response(responses[response_format is not None])
+                return schema_response(feedback, response_format)
+            return schema_response(
+                {"text": "Recursion calls itself.", "score": 0.92},
+                response_format,
+            )
+        return fake_response("input feedback")
 
 
 def test_generate_executes_with_response_format():
@@ -171,7 +210,7 @@ def test_generate_executes_with_response_format():
 def test_generate_passes_scalar_schemas_to_client(executor, schema, value):
     class ScalarClient(af.lm.EchoClient):
         def completion(self, *, response_format, **kwargs):
-            assert response_format["json_schema"]["schema"] == emit_json_schema(schema)
+            assert response_format["json_schema"]["schema"] == describe(schema)
             return super().completion(**kwargs)
 
     program = lm_program(af.lm.generate, model="echo", schema=schema)
@@ -199,11 +238,581 @@ def test_generate_uses_runtime_model_with_structured_output():
         assert ir.call("hello", "m1") == "m1|hello"
 
 
-def test_emit_json_schema_rejects_non_json_enum_values():
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_generate_pushforward_preserves_non_string_literals(executor):
+    def program(x):
+        return af.lm.generate(
+            [dict(role="user", content=x)],
+            model="echo",
+            schema={"answer": af.Str(), "fixed": 1.0},
+        )
+
+    ir = af.pushforward(af.trace(program)("seed"))
+    render = lambda _: json.dumps({"output": {"answer": "filled"}})
+    with af.lm.client(af.lm.EchoClient(render=render)):
+        primal, tangent = executor(ir, ("q",), ("dq",))
+    assert primal == {"answer": "filled", "fixed": 1.0}
+    assert tangent["answer"] == "filled"
+    assert af.core.materialize_zeros(tangent["fixed"]) == 0.0
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_fill_uses_values_schema_envelope(executor):
+    class FillClient(EchoRouter):
+        __slots__ = ["calls"]
+
+        def __init__(self):
+            self.calls = []
+
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            self.calls.append(dict(messages=messages, model=model, response_format=response_format))
+            return fake_response(json.dumps({"answer": "four", "score": 0.9}))
+
+    def program(question):
+        return af.lm.fill(
+            {
+                "question": question,
+                "answer": af.Str(desc="Answer text."),
+                "score": af.Float(min=0, max=1),
+            },
+            model="m1",
+        )
+
+    ir = af.trace(program)("seed")
+    assert [eqn.prim for eqn in ir.eqns] == [
+        af.json.encode_p,
+        af.control.stop_gradient_p,
+        af.lm.fill_p,
+    ]
+    call = ir.eqns[-1]
+    assert call.params == {
+        "schema": {
+            "question": None,
+            "answer": af.Str(desc="Answer text."),
+            "score": af.Float(min=0, max=1),
+        }
+    }
+    assert ir.eqns[0].in_tree == {"question": ir.in_tree[0], "answer": None, "score": None}
+    assert call.in_tree == (ir.eqns[0].out_tree, ir.eqns[1].out_tree)
+    assert call.out_tree["question"] is None
+    assert ir.out_tree["question"] is ir.in_tree[0]
+    assert all(isinstance(x, af.stage.Var) for x in tree.leaves(call.out_tree))
+
+    client = FillClient()
+    with af.lm.client(client):
+        assert executor(ir, "1+1?") == {"question": "1+1?", "answer": "four", "score": 0.9}
+
+    call = client.calls[-1]
+    assert call["model"] == "m1"
+    assert json.loads(call["messages"][-1]["content"]) == {
+        "values": {"question": "1+1?"},
+        "schema": {
+            "type": "object",
+            "properties": {"question": {"type": "string"}},
+            "required": ["question"],
+            "additionalProperties": False,
+        },
+    }
+    assert call["response_format"]["json_schema"]["schema"] == {
+        "type": "object",
+        "properties": {
+            "answer": {"type": "string", "description": "Answer text."},
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        "required": ["answer", "score"],
+        "additionalProperties": False,
+    }
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "template, response, expected",
+    [
+        pytest.param(af.Str(), "filled", "filled", id="scalar"),
+        pytest.param(
+            ("fixed", [af.Str(), None, {}]),
+            {"1": {"0": "filled"}},
+            ("fixed", ["filled", None, {}]),
+            id="nested",
+        ),
+        pytest.param(("fixed", 0.5, 2, False), None, ("fixed", 0.5, 2, False), id="no-holes"),
+        pytest.param((None, [], {}), None, (None, [], {}), id="empty-containers"),
+    ],
+)
+def test_fill_preserves_tree_structure(executor, template, response, expected):
+    calls = []
+
+    def render(messages):
+        calls.append(messages)
+        return json.dumps(response)
+
+    ir = af.trace(lambda: af.lm.fill(template, model="echo"))()
+    with af.lm.client(af.lm.EchoClient(render=render)):
+        assert executor(ir) == expected
+    assert len(calls) == (response is not None)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "x, json_type",
+    [("context", "string"), (0.5, "number"), (2, "integer"), (False, "boolean")],
+)
+def test_fill_preserves_custom_pytree_and_json_property_names(executor, x, json_type):
+    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+    class Answer:
+        fields: object
+        metadata: object
+
+    class FillClient(EchoRouter):
+        def completion(self, *, messages, model, response_format, **kwargs):
+            content = json.loads(messages[-1]["content"])
+            assert content["values"] == {"fields": {"0": x}}
+            assert content["schema"]["properties"]["fields"]["properties"] == {
+                "0": {"type": json_type},
+            }
+            schema = response_format["json_schema"]["schema"]
+            assert schema["properties"]["fields"]["properties"] == {"0_": {"type": "string"}}
+            return fake_response(json.dumps({"fields": {"0_": "filled"}}))
+
+    def program(x):
+        return af.lm.fill(Answer({0: x, "0": af.Str()}, (None, [], {})), model="echo")
+
+    ir = af.trace(program)(x)
+    with af.lm.client(FillClient()):
+        assert program(x) == Answer({0: x, "0": "filled"}, (None, [], {}))
+        assert executor(ir, x) == Answer({0: x, "0": "filled"}, (None, [], {}))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("values", [["a", "b"], [0.5, 1.0]], ids=["string", "float"])
+def test_fill_batches_context(executor, values):
+    class FillClient(EchoRouter):
+        __slots__ = ["questions"]
+
+        def __init__(self):
+            self.questions = []
+
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            assert model == "m1"
+            assert response_format["json_schema"]["strict"] is True
+            question = json.loads(messages[-1]["content"])["values"]["question"]
+            self.questions.append(question)
+            return fake_response(json.dumps({"answer": f"filled:{question}"}))
+
+    def program(question):
+        return af.lm.fill({"question": question, "answer": af.Str()}, model="m1")
+
+    ir = af.batch(af.trace(program)(values[0]))
+    client = FillClient()
+    with af.lm.client(client):
+        assert executor(ir, values) == {
+            "question": values,
+            "answer": [f"filled:{value}" for value in values],
+        }
+    assert client.questions == values
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("batch_order", [None, "before", "after"])
+@pytest.mark.parametrize(
+    "question, d_question, json_type",
+    [("q", "dq", "string"), (0.5, 0.25, "number")],
+)
+def test_fill_pushforward_uses_tangent_context(
+    executor,
+    batch_order,
+    question,
+    d_question,
+    json_type,
+):
+    class FillClient(EchoRouter):
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            values = fill_values(messages[-1]["content"])
+            if "context" in values:
+                original, change = parse_change_prompt(values["context"]["request"])
+                for content in (original, change):
+                    assert content["schema"]["properties"]["question"] == {"type": json_type}
+                question = original["values"]["question"]
+                d_question = change["values"]["question"]
+                return schema_response(
+                    {"answer": f"filled:{question}->{d_question}"},
+                    response_format,
+                )
+            question = values["question"]
+            return schema_response({"answer": f"filled:{question}"}, response_format)
+
+    def program(question):
+        return af.lm.fill({"question": question, "answer": af.Str()}, model="m1")
+
+    ir = af.trace(program)(question)
+    ir = af.pushforward(af.batch(ir) if batch_order == "before" else ir)
+    if batch_order == "after":
+        ir = af.batch(ir)
+    args = ((question,), (d_question,))
+    expected = (
+        {"question": question, "answer": f"filled:{question}"},
+        {"question": d_question, "answer": f"filled:{question}->{d_question}"},
+    )
+    if batch_order is not None:
+        args, expected = tree.map(lambda x: [x, x], (args, expected))
+    client = FillClient()
+    with af.lm.client(client):
+        assert executor(ir, *args) == expected
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("description", ["Score clarity", "Estimate price"])
+def test_fill_pushforward_preserves_task_schema(executor, description):
+    schema = af.Float(min=0, max=10, desc=description)
+    calls = []
+
+    class FillClient(EchoRouter):
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            calls.append(messages)
+            values = fill_values(messages[-1]["content"])
+            response_schema = response_format["json_schema"]["schema"]
+            original_schema = describe({"y": schema})
+            if "context" not in values:
+                assert response_schema == original_schema
+                return schema_response({"y": 8.0}, response_format)
+
+            context = values["context"]
+            assert json.loads(context["output_schema"]) == original_schema
+            original, change = parse_change_prompt(context["request"])
+            assert original["values"] == {"x": "x"}
+            assert change["values"] == {"x": "dx"}
+            assert response_schema["properties"]["output"] == describe({"y": af.Float()})
+            return schema_response({"y": -2.0}, response_format)
+
+    def program(x):
+        return af.lm.fill({"x": x, "y": schema}, model="m1")
+
+    ir = af.pushforward(af.trace(program)("seed"))
+    with af.lm.client(FillClient()):
+        assert executor(ir, ("x",), ("dx",)) == (
+            {"x": "x", "y": 8.0},
+            {"x": "dx", "y": -2.0},
+        )
+    assert len(calls) == 2
+    assert schema == af.Float(min=0, max=10, desc=description)
+
+
+@pytest.mark.parametrize(
+    "t_tree",
+    [
+        pytest.param({"x": "dx", "y": af.Float(desc="Estimate price")}, id="description"),
+        pytest.param({"x": "dx", "y": af.Float(min=0, desc="Score clarity")}, id="constraint"),
+        pytest.param({"x": "dx", "y": af.Str(desc="Score clarity")}, id="schema-type"),
+        pytest.param({"x": "dx", "y": 0.0}, id="schema-to-leaf"),
+        pytest.param({"x": ["dx"], "y": af.Float(desc="Score clarity")}, id="structure"),
+    ],
+)
+def test_fill_pushforward_rejects_mismatched_specs(t_tree):
+    p_tree = {"x": "x", "y": af.Float(desc="Score clarity")}
+    ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
+    with pytest.raises(ValueError):
+        ir.call((p_tree,), (t_tree,))
+
+
+def test_fill_pushforward_accepts_equal_static_metadata():
+    class FillClient(EchoRouter):
+        def completion(self, *, response_format, **kwargs):
+            return schema_response({"y": 1.0}, response_format)
+
+    p_tree = {"x": "x", "y": af.Float(desc="Score clarity")}
+    t_tree = {"x": "dx", "y": af.Float(desc="Score clarity")}
+    assert p_tree["y"] is not t_tree["y"]
+    ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
+    with af.lm.client(FillClient()):
+        assert ir.call((p_tree,), (t_tree,)) == ({"x": "x", "y": 1.0}, {"x": "dx", "y": 1.0})
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("generated", [False, True], ids=["copied-only", "copied-and-generated"])
+@pytest.mark.parametrize("batch_order", [None, "before", "after"])
+def test_fill_pullback_preserves_context_identity(executor, generated, batch_order):
+    calls = []
+
+    def render(messages):
+        calls.append(messages)
+        values = fill_values(messages[-1]["content"])
+        if "context" in values:
+            prompt = values["context"]["request"]
+            feedback = json.loads(prompt.split(" OUTPUT FEEDBACK: ")[1])
+            assert feedback["values"] == {"answer": "generated feedback"}
+            return json.dumps({
+                "output": {"0": {"question": "model feedback"}, "1": "ignored"},
+            })
+        return json.dumps({"answer": "filled"})
+
+    def program(question):
+        out = af.lm.fill({"question": question, "answer": af.Str()}, model="m1")
+        return (out["question"], out["answer"]) if generated else out["question"]
+
+    ir = af.trace(program)("seed")
+    ir = af.pullback(af.batch(ir) if batch_order == "before" else ir)
+    if batch_order == "after":
+        ir = af.batch(ir)
+    cotangent = ("direct feedback", "generated feedback") if generated else "direct feedback"
+    expected = (
+        ("q", "filled") if generated else "q",
+        ("direct feedbackmodel feedback" if generated else "direct feedback",),
+    )
+    args = (("q",), cotangent)
+    if batch_order is not None:
+        args, expected = tree.map(lambda x: [x, x], (args, expected))
+    with af.lm.client(af.lm.EchoClient(render=render)):
+        assert executor(ir, *args) == expected
+    # Pullback of batch_call replays the forward pass before transposing it.
+    count = 1 + generated + (batch_order == "before")
+    assert len(calls) == count * (1 if batch_order is None else 2)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_fill_pullback_uses_original_output_schema_for_feedback(executor):
+    class FillGradientClient(EchoRouter):
+        __slots__ = ["calls"]
+
+        def __init__(self):
+            self.calls = []
+
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            self.calls.append(dict(messages=messages, model=model, response_format=response_format))
+            properties = response_format["json_schema"]["schema"]["properties"]
+            if "answer" in properties:
+                return fake_response(
+                    json.dumps({
+                        "answer": "Recursion calls itself.",
+                        "score": 0.92,
+                    })
+                )
+            return schema_response(
+                {
+                    "0": {"question": "question feedback"},
+                    "1": "model feedback",
+                },
+                response_format,
+            )
+
+    def program(question):
+        filled = af.lm.fill(
+            {
+                "question": question,
+                "answer": af.Str(),
+                "score": af.Float(min=0, max=1),
+            },
+            model="m1",
+        )
+        return af.string.format("{answer}", answer=filled["answer"])
+
+    ir = af.pullback(af.trace(program)("seed"))
+    client = FillGradientClient()
+    with af.lm.client(client):
+        assert executor(ir, ("Explain recursion.",), "too terse") == (
+            "Recursion calls itself.",
+            ("question feedback",),
+        )
+
+    backward = client.calls[-1]
+    prompt = fill_request_text(backward["messages"][-1]["content"])
+    input_text, rest = prompt.removeprefix("INPUT: ").split(" OUTPUT: ")
+    output_text, feedback_text = rest.split(" OUTPUT FEEDBACK: ")
+    assert json.loads(input_text)["values"] == {
+        "0": {"question": "Explain recursion."},
+        "1": "m1",
+    }
+    assert json.loads(output_text) == {
+        "values": {"answer": "Recursion calls itself.", "score": 0.92},
+        "schema": {
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+            },
+            "required": ["answer", "score"],
+            "additionalProperties": False,
+        },
+    }
+    assert json.loads(feedback_text) == {
+        "values": {"answer": "too terse", "score": 0.0},
+        "schema": {
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "score": {"type": "number"},
+            },
+            "required": ["answer", "score"],
+            "additionalProperties": False,
+        },
+    }
+    schema = backward["response_format"]["json_schema"]["schema"]["properties"]["output"]
+    assert schema["properties"]["0"]["properties"]["question"] == {
+        "type": "string",
+        "description": "Input cotangent at (0, 'question'), original value 'Explain recursion.'.",
+    }
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("generated", [False, True], ids=["copied-only", "copied-and-generated"])
+def test_fill_pullback_generates_input_cotangent_types(executor, generated):
+    calls = []
+
+    class FeedbackClient(EchoRouter):
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            calls.append(messages)
+            values = fill_values(messages[-1]["content"])
+            if "x" in values:
+                return schema_response({"y": "filled"}, response_format)
+            prompt = values["context"]["request"]
+            content = json.loads(prompt.removeprefix("INPUT: ").split(" OUTPUT: ")[0])
+            assert content["schema"]["properties"]["0"]["properties"]["x"] == {"type": "number"}
+            schema = response_format["json_schema"]["schema"]["properties"]["output"]
+            assert schema["properties"]["0"]["properties"]["x"] == {
+                "type": "number",
+                "description": "Input cotangent at (0, 'x'), original value 0.5.",
+            }
+            return schema_response({"0": {"x": -0.5}, "1": "model feedback"}, response_format)
+
+    def program(x):
+        out = af.lm.fill({"x": x, "y": af.Str()}, model="m1")
+        return out if generated else out["x"]
+
+    ir = af.pullback(af.trace(program)(0.5))
+    cotangent = {"x": 0.25, "y": "feedback"} if generated else 0.25
+    with af.lm.client(FeedbackClient()):
+        out, (dx,) = executor(ir, (0.5,), cotangent)
+    assert out == ({"x": 0.5, "y": "filled"} if generated else 0.5)
+    assert dx == (-0.25 if generated else 0.25)
+    assert len(calls) == 1 + generated
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("cotangent", [-1.0, 0.0, 1.0])
+def test_fill_pullback_propagates_numeric_sensitivities(executor, cotangent):
+    calls = []
+
+    class FillClient(EchoRouter):
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            calls.append(messages)
+            values = fill_values(messages[-1]["content"])
+            if "x" in values:
+                return schema_response({"y": 2.0 * values["x"]}, response_format)
+
+            context = values["context"]
+            instruction = context["instruction"]
+            assert instruction == af.lm.GRAD_SYSTEM_PROMPT
+            input_text, rest = context["request"].removeprefix("INPUT: ").split(" OUTPUT: ")
+            output_text, feedback_text = rest.split(" OUTPUT FEEDBACK: ")
+            original, output, feedback = map(json.loads, (input_text, output_text, feedback_text))
+            assert original["values"] == {"0": {"x": 1.0}, "1": "m1"}
+            assert original["schema"]["properties"]["0"]["properties"]["x"] == {"type": "number"}
+            assert output["values"] == {"y": 2.0}
+            assert output["schema"]["properties"]["y"] == {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "Double x.",
+            }
+            assert feedback["values"] == {"y": 3.0 * cotangent}
+            assert feedback["schema"]["properties"]["y"] == {"type": "number"}
+            schema = response_format["json_schema"]["schema"]["properties"]["output"]
+            assert schema["properties"]["0"]["properties"]["x"] == {
+                "type": "number",
+                "description": "Input cotangent at (0, 'x'), original value 1.0.",
+            }
+            dx = 2.0 * feedback["values"]["y"]
+            return schema_response({"0": {"x": dx}, "1": ""}, response_format)
+
+    def program(x):
+        out = af.lm.fill({"x": x, "y": af.Float(min=0, max=10, desc="Double x.")}, model="m1")
+        return 3.0 * out["y"]
+
+    ir = af.pullback(af.trace(program)(1.0))
+    with af.lm.client(FillClient()):
+        assert executor(ir, (1.0,), cotangent) == (6.0, (6.0 * cotangent,))
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "transform",
+    [af.pushforward, af.pullback],
+    ids=["pushforward", "pullback"],
+)
+def test_fill_composes_through_float_context(executor, transform):
+    calls = []
+
+    class FillClient(EchoRouter):
+        def completion(self, *, messages, model, response_format, **kwargs):
+            assert kwargs == {}
+            calls.append(messages)
+            content = json.loads(messages[-1]["content"])
+            values = content["values"]
+            if "x" in values:
+                return schema_response({"y": 0.5}, response_format)
+            if "y" in values:
+                assert values["y"] == 0.5
+                assert content["schema"]["properties"]["y"] == {"type": "number"}
+                return schema_response({"z": "filled"}, response_format)
+
+            prompt = values["context"]["request"]
+            schema = response_format["json_schema"]["schema"]["properties"]["output"]
+            if transform is af.pushforward:
+                original, change = parse_change_prompt(prompt)
+                if "y" in schema["properties"]:
+                    assert schema["properties"]["y"] == {"type": "number"}
+                    return schema_response({"y": 0.25}, response_format)
+                assert original["values"] == {"y": 0.5}
+                assert change["values"] == {"y": 0.25}
+                assert change["schema"]["properties"]["y"] == {"type": "number"}
+                return schema_response({"z": "changed"}, response_format)
+
+            feedback = json.loads(prompt.split(" OUTPUT FEEDBACK: ")[1])
+            properties = schema["properties"]["0"]["properties"]
+            if "y" in properties:
+                assert properties["y"]["type"] == "number"
+                assert feedback["values"] == {"z": "feedback"}
+                return schema_response({"0": {"y": -0.5}, "1": ""}, response_format)
+            assert properties["x"]["type"] == "string"
+            assert feedback["values"] == {"y": -0.5}
+            assert feedback["schema"]["properties"]["y"] == {"type": "number"}
+            return schema_response({"0": {"x": "input feedback"}, "1": ""}, response_format)
+
+    def program(x):
+        out = af.lm.fill({"x": x, "y": af.Float()}, model="m1")
+        return af.lm.fill({"y": out["y"], "z": af.Str()}, model="m1")["z"]
+
+    ir = transform(af.trace(program)("seed"))
+    change = ("dx",) if transform is af.pushforward else "feedback"
+    expected = "changed" if transform is af.pushforward else ("input feedback",)
+    with af.lm.client(FillClient()):
+        assert executor(ir, ("x",), change) == ("filled", expected)
+    assert len(calls) == 4
+
+
+def test_fill_rejects_unsupported_context_and_non_string_model():
+    with pytest.raises(TypeError, match="No aval rule registered"):
+        af.lm.fill({"x": object(), "y": af.Str()}, model="m1")
+    with pytest.raises(AssertionError, match="Expected string model"):
+        af.lm.fill({"x": 0.5, "y": af.Str()}, model=1.0)
+    with pytest.raises(AssertionError, match="Expected string model"):
+        af.trace(lambda x: af.lm.fill_p.bind(x, schema={"y": af.Str()}))(
+            (af.json.encode({"x": 0.5}), 1.0),
+        )
+
+
+def test_describe_rejects_non_json_enum_values():
     enum = af.Enum(object())
 
     with pytest.raises(TypeError, match="Enum values must be str, int, float, or bool"):
-        emit_json_schema({"kind": enum})
+        describe({"kind": enum})
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -272,7 +881,7 @@ def test_generate_pullback_materializes_unused_fields(
         expected,
         ("content feedback 0",),
     )
-    prompt = gradient_client.calls[-1]["messages"][-1]["content"]
+    prompt = fill_request_text(gradient_client.calls[-1]["messages"][-1]["content"])
     assert json.loads(prompt.split(" OUTPUT FEEDBACK: ")[1]) == feedback
 
 
@@ -296,7 +905,7 @@ def test_generate_pullback_rejects_wrong_schema_cotangent_type(
     assert len(gradient_client.calls) == 1
 
 
-def test_emit_json_schema_with_value_preserves_generated_structure():
+def test_project_value_preserves_generated_structure():
     @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
     class Answer:
         fields: object
@@ -310,11 +919,11 @@ def test_emit_json_schema_with_value_preserves_generated_structure():
         {"source": "fixed", "nothing": None},
     )
     value = Answer([-0.2, ("", -1, False, "feedback")], {"source": "", "nothing": None})
-    assert af.lm.emit_json_schema(schema, value=value) == {
+    assert af.json.project_value(schema, value) == {
         "fields": {"0": -0.2, "1": {"0": "", "1": -1, "2": False, "3": "feedback"}}
     }
     with pytest.raises(ValueError):
-        af.lm.emit_json_schema(schema, value=Answer([], value.metadata))
+        af.json.project_value(schema, Answer([], value.metadata))
 
 
 @pytest.mark.parametrize(
@@ -336,11 +945,11 @@ def test_emit_json_schema_with_value_preserves_generated_structure():
     ],
 )
 def test_schema_without_generated_fields(schema, expected):
-    assert emit_json_schema(schema) is None
-    assert parse_json_value(schema, None) == expected
+    assert describe(schema) is None
+    assert parse(schema, None) == expected
 
 
-@pytest.mark.parametrize("parse", [parse_json_value, af.lm.parse_json_value], ids=["schemas", "lm"])
+@pytest.mark.parametrize("parse", [parse, af.lm.parse], ids=["schemas", "lm"])
 @pytest.mark.parametrize(
     "value",
     [
@@ -352,13 +961,13 @@ def test_schema_without_generated_fields(schema, expected):
         pytest.param({0: "x"}, id="non-string-key"),
     ],
 )
-def test_parse_json_value_rejects_invalid_objects(parse, value):
+def test_parse_rejects_invalid_objects(parse, value):
     with pytest.raises(ValueError):
         parse({"0": af.Str()}, value)
 
 
-@pytest.mark.parametrize("parse", [parse_json_value, af.lm.parse_json_value], ids=["schemas", "lm"])
-def test_parse_json_value_rebuilds_nested_containers_from_objects(parse):
+@pytest.mark.parametrize("parse", [parse, af.lm.parse], ids=["schemas", "lm"])
+def test_parse_rebuilds_nested_containers_from_objects(parse):
     schema = (af.Str(), {"score": af.Float(), "source": "fixed"}, None)
     assert parse(schema, {"1": {"score": 2}, "0": "x"}) == (
         "x",
@@ -376,7 +985,7 @@ def test_schema_dsl_builds_described_schema():
         "score": af.Float(desc="Confidence score."),
     }
 
-    json_schema = emit_json_schema(answer)
+    json_schema = describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -392,7 +1001,7 @@ def test_schema_dsl_builds_described_schema():
         "required": ["kind", "name", "score"],
         "additionalProperties": False,
     }
-    assert parse_json_value(
+    assert parse(
         answer,
         {"name": "subject", "kind": "summary", "score": 1},
     ) == {
@@ -402,7 +1011,7 @@ def test_schema_dsl_builds_described_schema():
     }
 
 
-def test_schema_dsl_reconstructs_unemitted_subtree():
+def test_schema_dsl_reconstructs_literal_subtree():
     @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
     class Answer:
         decision: object
@@ -414,7 +1023,7 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
     }
     answer = Answer(af.Str(), details)
 
-    json_schema = emit_json_schema(answer)
+    json_schema = describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -422,7 +1031,7 @@ def test_schema_dsl_reconstructs_unemitted_subtree():
         "required": ["decision"],
         "additionalProperties": False,
     }
-    parsed = parse_json_value(answer, {"decision": "accept"})
+    parsed = parse(answer, {"decision": "accept"})
     expected = Answer(
         "accept",
         {"literal": "fixed", "nothing": None},
@@ -447,7 +1056,7 @@ def test_schema_dsl_reconstructs_untraceable_static_leaf():
 
     answer = {"decision": af.Str(), "metadata": metadata}
 
-    json_schema = emit_json_schema(answer)
+    json_schema = describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -455,7 +1064,7 @@ def test_schema_dsl_reconstructs_untraceable_static_leaf():
         "required": ["decision"],
         "additionalProperties": False,
     }
-    parsed = parse_json_value(answer, {"decision": "accept"})
+    parsed = parse(answer, {"decision": "accept"})
     assert parsed["decision"] == "accept"
     assert parsed["metadata"] is metadata
 
@@ -472,7 +1081,7 @@ def test_lm_schema_trace_rejects_untraceable_static_leaf():
 def test_schema_dsl_builds_string_constraints():
     answer = {"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")}
 
-    json_schema = emit_json_schema(answer)
+    json_schema = describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -487,13 +1096,13 @@ def test_schema_dsl_builds_string_constraints():
         "required": ["name"],
         "additionalProperties": False,
     }
-    assert parse_json_value(answer, {"name": "okay"}) == {"name": "okay"}
+    assert parse(answer, {"name": "okay"}) == {"name": "okay"}
     with pytest.raises(ValueError, match="Expected string with length >= 2"):
-        parse_json_value(answer, {"name": "x"})
+        parse(answer, {"name": "x"})
     with pytest.raises(ValueError, match="Expected string with length <= 4"):
-        parse_json_value(answer, {"name": "hello"})
+        parse(answer, {"name": "hello"})
     with pytest.raises(ValueError, match="Expected string matching"):
-        parse_json_value(answer, {"name": "OK"})
+        parse(answer, {"name": "OK"})
 
 
 def test_schema_dsl_builds_number_constraints():
@@ -502,7 +1111,7 @@ def test_schema_dsl_builds_number_constraints():
         "score": af.Float(min=0, max=1),
     }
 
-    json_schema = emit_json_schema(answer)
+    json_schema = describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -513,15 +1122,15 @@ def test_schema_dsl_builds_number_constraints():
         "required": ["count", "score"],
         "additionalProperties": False,
     }
-    assert parse_json_value(answer, {"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
+    assert parse(answer, {"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
     with pytest.raises(ValueError, match="Expected integer >= -2"):
-        parse_json_value(answer, {"count": -3, "score": 0.5})
+        parse(answer, {"count": -3, "score": 0.5})
     with pytest.raises(ValueError, match="Expected integer <= 2"):
-        parse_json_value(answer, {"count": 3, "score": 0.5})
+        parse(answer, {"count": 3, "score": 0.5})
     with pytest.raises(ValueError, match="Expected number >= 0"):
-        parse_json_value(answer, {"count": 0, "score": -0.1})
+        parse(answer, {"count": 0, "score": -0.1})
     with pytest.raises(ValueError, match="Expected number <= 1"):
-        parse_json_value(answer, {"count": 0, "score": 1.1})
+        parse(answer, {"count": 0, "score": 1.1})
 
 
 def test_schema_dsl_builds_custom_pytree_value():
@@ -546,7 +1155,7 @@ def test_schema_dsl_builds_custom_pytree_value():
 
     answer = Answer(af.Str(), af.Float())
 
-    json_schema = emit_json_schema(answer)
+    json_schema = describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -557,7 +1166,7 @@ def test_schema_dsl_builds_custom_pytree_value():
         "required": ["text", "score"],
         "additionalProperties": False,
     }
-    assert parse_json_value(answer, {"text": "hello", "score": 2}) == Answer("hello", 2.0)
+    assert parse(answer, {"text": "hello", "score": 2}) == Answer("hello", 2.0)
 
 
 def test_schema_dsl_reports_value_errors():
@@ -565,9 +1174,9 @@ def test_schema_dsl_reports_value_errors():
     score = {"score": af.Float()}
 
     with pytest.raises(ValueError, match="Expected integer"):
-        parse_json_value(count, {"count": True})
+        parse(count, {"count": True})
     with pytest.raises(ValueError, match="Expected number"):
-        parse_json_value(score, {"score": "bad"})
+        parse(score, {"score": "bad"})
 
 
 class TestLMPrimitive:
@@ -628,11 +1237,11 @@ class TestLMPrimitive:
     @pytest.mark.parametrize(
         "primitive, params, render",
         [
-            pytest.param(af.lm.complete, {}, af.lm.echo_messages, id="complete"),
+            pytest.param(af.lm.complete, {}, echo_or_json_fill, id="complete"),
             pytest.param(
                 af.lm.generate,
                 {"schema": af.Str()},
-                lambda messages: json.dumps(af.lm.echo_messages(messages)),
+                lambda messages: echo_or_json_fill(messages, structured=True),
                 id="generate",
             ),
         ],
@@ -681,11 +1290,11 @@ class TestLMPrimitive:
     @pytest.mark.parametrize(
         "primitive, params, render",
         [
-            pytest.param(af.lm.complete, {}, af.lm.echo_messages, id="complete"),
+            pytest.param(af.lm.complete, {}, echo_or_json_fill, id="complete"),
             pytest.param(
                 af.lm.generate,
                 {"schema": af.Str()},
-                lambda messages: json.dumps(af.lm.echo_messages(messages)),
+                lambda messages: echo_or_json_fill(messages, structured=True),
                 id="generate",
             ),
         ],
@@ -702,10 +1311,26 @@ class TestLMPrimitive:
         ir = af.pushforward(af.trace(program)(messages, "echo"))
         zero = af.core.Zero(af.string.StrAVal())
         tangents = [dict(role="ignored", content=zero), dict(role="ignored", content="tangent")]
-        assert executor(ir, (messages, "echo"), (tangents, "ignored")) == (
-            "<system> hello\n<user> world",
-            "<system> \n<user> tangent",
-        )
+        primal, tangent = executor(ir, (messages, "echo"), (tangents, "ignored"))
+        if params:
+            assert primal.startswith("<user> ")
+            assert fill_values(primal.removeprefix("<user> "))["context"] == {
+                "messages": {
+                    "0": {"content": "hello", "role": "system"},
+                    "1": {"content": "world", "role": "user"},
+                }
+            }
+        else:
+            assert primal == "<system> hello\n<user> world"
+        assert tangent.startswith("<user> ")
+        original, change = parse_change_prompt(fill_request_text(tangent.removeprefix("<user> ")))
+        assert original == {"messages": messages}
+        assert change == {
+            "messages": [
+                {"role": "", "content": ""},
+                {"role": "", "content": "tangent"},
+            ]
+        }
 
     def test_complete_leaves_litellm_params_to_active_client(self):
         class ConfiguredRouter(EchoRouter):
@@ -792,31 +1417,28 @@ class TestLMPrimitive:
         assert all(call["model"] == "m2" for call in gradient_client.calls)
         *context, message = backward["messages"]
         assert message["role"] == "user"
-        assert f"INPUT: {(messages, 'm2')}" in message["content"]
+        prompt = fill_request_text(message["content"])
+        assert f"INPUT: {(messages, 'm2')}" in prompt
         response_format = backward["response_format"]
         assert response_format["type"] == "json_schema"
         assert response_format["json_schema"]["strict"] is True
-        properties = response_format["json_schema"]["schema"]["properties"]
+        schema = response_format["json_schema"]["schema"]["properties"]["output"]
+        properties = schema["properties"]
         assert properties["1"] == {
             "type": "string",
-            "description": "Feedback for input at (1,): 'm2'.",
+            "description": "Input cotangent at (1,), original value 'm2'.",
         }
         for i, m in enumerate(messages):
             fields = properties["0"]["properties"][str(i)]["properties"]
             assert fields == {
                 key: {
                     "type": "string",
-                    "description": f"Feedback for input at {(0, i, key)}: {value!r}.",
+                    "description": f"Input cotangent at {(0, i, key)}, original value {value!r}.",
                 }
                 for key, value in m.items()
             }
-        assert context == [
-            dict(
-                role="system",
-                content="Translate output feedback into feedback on the corresponding input fields.",
-            )
-        ]
-        output, feedback = message["content"].split("OUTPUT: ", 1)[1].split(" OUTPUT FEEDBACK: ")
+        assert context == []
+        output, feedback = prompt.split("OUTPUT: ", 1)[1].split(" OUTPUT FEEDBACK: ")
         assert decode(output) == out
         assert decode(feedback) == out_cotangent
 
@@ -918,24 +1540,33 @@ class TestEchoLMClient:
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "primitive, params, client_type, expected",
+    "primitive, params, client_type, expected_primal",
     [
-        pytest.param(af.lm.complete, {}, EchoRouter, ("m1|hello", "m1|tangent"), id="complete"),
+        pytest.param(af.lm.complete, {}, EchoRouter, "m1|hello", id="complete"),
         pytest.param(
             af.lm.generate,
             {"schema": {"text": af.Str(), "score": af.Float()}},
             SchemaRouter,
-            ({"text": "m1|hello", "score": 0.5}, {"text": "m1|tangent", "score": 0.5}),
+            {"text": "m1|hello", "score": 0.5},
             id="generate",
         ),
     ],
 )
-def test_pushforward(executor, primitive, params, client_type, expected):
+def test_pushforward(executor, primitive, params, client_type, expected_primal):
     ir = af.pushforward(af.trace(lm_program(primitive, **params))("test", "gpt-5.5"))
     args = (("hello", "m1"), ("tangent", "ignored model tangent"))
     with af.lm.client(client_type()):
-        actual = executor(ir, *args)
-    assert actual == expected
+        primal, tangent = executor(ir, *args)
+    if params:
+        assert primal["score"] == expected_primal["score"]
+        primal_values = fill_values(primal["text"].removeprefix("m1|"))["context"]
+        assert primal_values == {"messages": {"0": {"content": "hello", "role": "user"}}}
+    else:
+        assert primal == expected_primal
+    tangent_text = tangent if type(tangent) is str else tangent["text"]
+    original, change = parse_change_prompt(fill_request_text(tangent_text.removeprefix("m1|")))
+    assert original == {"messages": [{"role": "user", "content": "hello"}]}
+    assert change == {"messages": [{"role": "", "content": "tangent"}]}
 
 
 @pytest.mark.parametrize(
