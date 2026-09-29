@@ -17,9 +17,7 @@
 from __future__ import annotations
 
 import functools as ft
-import json
-import re
-from collections import OrderedDict
+import json as jsonlib
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -29,6 +27,7 @@ from litellm import ModelResponse, acompletion, completion
 
 import autoform.control as control
 import autoform.core as core
+import autoform.json as json
 import autoform.order as order
 import autoform.schemas as schemas
 import autoform.stage as stage
@@ -41,8 +40,9 @@ __all__ = [
     "client",
     "complete",
     "generate",
-    "emit_json_schema",
-    "parse_json_value",
+    "fill",
+    "describe",
+    "parse",
 ]
 
 
@@ -51,10 +51,10 @@ zip = utils.strict_zip
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type Messages = list[dict[str, str]]
-type JsonSchema = dict[str, Any]
-type EmitJsonSchemaRule = Callable[[Any], JsonSchema | None]
-type ParseJsonValueRule = Callable[[Any, Any], Any]
 type ClientType = ModelResponse
+
+describe = json.describe
+parse = json.parse
 
 
 @runtime_checkable
@@ -150,6 +150,151 @@ def client(client: Client) -> Generator[Client, None, None]:
 
 
 # ==================================================================================================
+# HELPERS
+# ==================================================================================================
+
+PUSH_SYSTEM_PROMPT = "Translate an input change into the corresponding output change. "
+PUSH_PROMPT = """INPUT: {input} INPUT CHANGE: {in_tangent}"""
+GRAD_SYSTEM_PROMPT = "Translate output feedback into corresponding input feedback."
+GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_cotangent}"""
+
+
+def schema_content(value: Tree, schema: Tree) -> str:
+    value = dict(values=json.json_value(value), schema=describe(schema))
+    return jsonlib.dumps(value, allow_nan=False)
+
+
+def json_content(value: json.Json) -> str:
+    aval = core.avalof(value)
+    schema = aval.spec.unflatten(map(schemas.aval_to_schema, aval.avals))
+    content = dict(values=jsonlib.loads(value.text), schema=describe(schema))
+    return jsonlib.dumps(content, allow_nan=False)
+
+
+def schema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
+    messages, model = in_tree
+    json_schema = describe(schema)
+    if json_schema is None:
+        return parse(schema, None)
+    resp = active_client.get().completion(
+        messages=messages,
+        model=model,
+        response_format=dict(
+            type="json_schema",
+            json_schema=dict(
+                name="autoform_schema",
+                strict=True,
+                schema=json_schema,
+            ),
+        ),
+    )
+    return parse(schema, jsonlib.loads(resp.choices[0].message.content))
+
+
+async def aschema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
+    messages, model = in_tree
+    json_schema = describe(schema)
+    if json_schema is None:
+        return parse(schema, None)
+    resp = await active_client.get().acompletion(
+        messages=messages,
+        model=model,
+        response_format=dict(
+            type="json_schema",
+            json_schema=dict(
+                name="autoform_schema",
+                strict=True,
+                schema=json_schema,
+            ),
+        ),
+    )
+    return parse(schema, jsonlib.loads(resp.choices[0].message.content))
+
+
+def schema_abstract_tree(schema: Any) -> Tree:
+    def abstract(x: Any) -> Any:
+        if schemas.is_schema(x):
+            return core.avalof(x)
+        if not stage.is_traceable(x):
+            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
+        return x
+
+    return utils.tree.map(abstract, schema, is_leaf=schemas.is_schema)
+
+
+def fill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
+    schm_tree, _ = utils.partition(schemas.is_schema, schema, is_leaf=schemas.is_schema)
+    encoded, holes = prepare_fill(dict(context=context, output=schm_tree))
+    out = fill_p.bind((encoded, model), schema=holes)
+    return merge_fill(schema, out["output"])
+
+
+async def afill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
+    schm_tree, _ = utils.partition(schemas.is_schema, schema, is_leaf=schemas.is_schema)
+    encoded, holes = prepare_fill(dict(context=context, output=schm_tree))
+    out = await fill_p.abind((encoded, model), schema=holes)
+    return merge_fill(schema, out["output"])
+
+
+def feedback_schema(tree: Tree) -> Tree:
+    def make_schema(path, value):
+        aval = core.cotangent_s.map(core.avalof(value))
+        schema = schemas.aval_to_schema(aval)
+        schema.desc = f"Input cotangent at {path}, original value {value!r}."
+        return schema
+
+    return utils.tree.map_with_path(make_schema, tree)
+
+
+def pullback_fwd_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
+    context, model = in_tree
+    out = prim.bind(in_tree, **params)
+    residuals = (context, model, out)
+    return out, residuals
+
+
+async def apull_fwd_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
+    context, model = in_tree
+    out = await prim.abind(in_tree, **params)
+    residuals = (context, model, out)
+    return out, residuals
+
+
+def batch_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
+    batch_size, in_batched, in_values = in_tree
+
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
+        result = prim.bind(in_values, **params)
+        out_batched = utils.tree.map(lambda _: False, result)
+        return result, out_batched
+
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
+    bind = ft.partial(prim.bind, **params)
+    results = [bind(unbatch(b)) for b in range(batch_size)]
+    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
+    return out_ib, out_batched
+
+
+async def abatch_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
+    batch_size, in_batched, in_values = in_tree
+
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
+        result = await prim.abind(in_values, **params)
+        out_batched = utils.tree.map(lambda _: False, result)
+        return result, out_batched
+
+    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
+    inputs = [(unbatch(b),) for b in range(batch_size)]
+    in0, *_ = inputs
+    ir = stage.trace(ft.partial(prim.bind, **params))(*in0)
+    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
+    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
+    return out_ib, out_batched
+
+
+# ==================================================================================================
 # COMPLETE
 # ==================================================================================================
 
@@ -235,111 +380,63 @@ def abstract_complete(in_tree: Tree, /) -> Any:
 def pushforward_complete(in_tree: Tree, /) -> TreePair:
     p_in, t_in = in_tree
     t_in = core.materialize_zeros(t_in)
-    p_messages, p_model = p_in
-    t_messages, *_ = t_in
-    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
-    t_tree = (t_request, p_model)
+    t_context, p_model = pushforward_messages_request(p_in, t_in)
     p_resp = complete_p.bind(p_in)
-    t_resp = complete_p.bind(t_tree)
+    t_resp = fill_context(t_context, p_model, schema=schemas.Str())
     return p_resp, t_resp
 
 
 async def apush_complete(in_tree: Tree, /) -> TreePair:
     p_in, t_in = in_tree
     t_in = core.materialize_zeros(t_in)
-    p_messages, p_model = p_in
-    t_messages, *_ = t_in
-    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
-    t_tree = (t_request, p_model)
-    ir = stage.trace(complete_p.bind)(p_in)
-    p_resp, t_resp = await order.fanout_p.abind([(p_in,), (t_tree,)], irs=[ir, ir])
+    t_context, p_model = pushforward_messages_request(p_in, t_in)
+    p_ir = stage.trace(complete_p.bind)(p_in)
+    t_ir = stage.trace(ft.partial(fill_context, schema=schemas.Str()))(t_context, p_model)
+    p_resp, t_resp = await order.fanout_p.abind([(p_in,), (t_context, p_model)], irs=[p_ir, t_ir])
     return p_resp, t_resp
 
 
-def pullback_fwd_complete(in_tree: Tree, /) -> TreePair:
-    messages, model = in_tree
-    out = complete_p.bind(in_tree)
-    residuals = (messages, model, out)
-    return out, residuals
+def pushforward_messages_request(p_in: Tree, t_in: Tree, /) -> Tree:
+    p_messages, p_model = p_in
+    t_messages, *_ = t_in
+    return {
+        "instruction": PUSH_SYSTEM_PROMPT,
+        "request": PUSH_PROMPT.format(
+            input=jsonlib.dumps(dict(messages=p_messages), allow_nan=False),
+            in_tangent=jsonlib.dumps(dict(messages=t_messages), allow_nan=False),
+        ),
+    }, p_model
 
 
-async def apull_fwd_complete(in_tree: Tree, /) -> TreePair:
-    messages, model = in_tree
-    out = await complete_p.abind(in_tree)
-    residuals = (messages, model, out)
-    return out, residuals
+def complete_pullback_request(in_tree: Tree, /) -> TreePair:
+    residuals, out_cotangent = in_tree
+    out_cotangent = core.materialize_zeros(out_cotangent)
+    messages, model, out = residuals
+    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
-
-GRAD_SYSTEM_PROMPT = "Translate output feedback into feedback on the corresponding input fields."
-GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_cotangent}"""
+    context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
+    return (context, model), feedback_schema((messages, model))
 
 
 def pullback_bwd_complete(in_tree: Tree, /) -> Tree:
-    residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
-    messages, model, out = residuals
-    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
-
-    def make_schema(path, value):
-        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
-
-    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
-    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
-    user_request = dict(role="user", content=prompt)
-    return generate_p.bind(([system_request, user_request], model), schema=in_schema)
+    (context, model), schema = complete_pullback_request(in_tree)
+    return fill_context(context, model, schema=schema)
 
 
 async def apull_bwd_complete(in_tree: Tree, /) -> Tree:
-    residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
-    messages, model, out = residuals
-    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
-
-    def make_schema(path, value):
-        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
-
-    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
-    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
-    user_request = dict(role="user", content=prompt)
-    return await generate_p.abind(([system_request, user_request], model), schema=in_schema)
-
-
-def batch_complete(in_tree: Tree, /) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return complete_p.bind(in_values), False
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    results = [complete_p.bind(unbatch(b)) for b in range(batch_size)]
-    out_tree = spec.unflatten(results)
-    return out_tree, True
-
-
-async def abatch_complete(in_tree: Tree, /) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return await complete_p.abind(in_values), False
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    inputs = [(unbatch(b),) for b in range(batch_size)]
-    in0, *_ = inputs
-    ir = stage.trace(complete_p.bind)(*in0)
-    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
-    out_tree = spec.unflatten(results)
-    return out_tree, True
+    (context, model), schema = complete_pullback_request(in_tree)
+    return await afill_context(context, model, schema=schema)
 
 
 core.impl_rules.set(complete_p, impl_complete)
 core.aimpl_rules.set(complete_p, aimpl_complete)
 core.abstract_rules.set(complete_p, abstract_complete)
-core.batch_rules.set(complete_p, batch_complete)
-core.abatch_rules.set(complete_p, abatch_complete)
+core.batch_rules.set(complete_p, ft.partial(batch_lm, complete_p))
+core.abatch_rules.set(complete_p, ft.partial(abatch_lm, complete_p))
 core.push_rules.set(complete_p, pushforward_complete)
 core.apush_rules.set(complete_p, apush_complete)
-core.pull_fwd_rules.set(complete_p, pullback_fwd_complete)
-core.apull_fwd_rules.set(complete_p, apull_fwd_complete)
+core.pull_fwd_rules.set(complete_p, ft.partial(pullback_fwd_lm, complete_p))
+core.apull_fwd_rules.set(complete_p, ft.partial(apull_fwd_lm, complete_p))
 core.pull_bwd_rules.set(complete_p, pullback_bwd_complete)
 core.apull_bwd_rules.set(complete_p, apull_bwd_complete)
 
@@ -397,404 +494,273 @@ def generate(messages: Messages, /, *, model: str, schema: Any) -> Any:
     return generate_p.bind((messages, model), schema=schema)
 
 
-json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
-
-emit_json_schema_rules: dict[type[Any], EmitJsonSchemaRule] = {}
-
-
-def emit_string_json_schema(schema: schemas.Str) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="string")
-    if schema.min is not None:
-        json_schema["minLength"] = schema.min
-    if schema.max is not None:
-        json_schema["maxLength"] = schema.max
-    if schema.pattern is not None:
-        json_schema["pattern"] = schema.pattern
-    return json_schema
-
-
-def emit_integer_json_schema(schema: schemas.Int) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="integer")
-    if schema.min is not None:
-        json_schema["minimum"] = schema.min
-    if schema.max is not None:
-        json_schema["maximum"] = schema.max
-    return json_schema
-
-
-def emit_number_json_schema(schema: schemas.Float) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="number")
-    if schema.min is not None:
-        json_schema["minimum"] = schema.min
-    if schema.max is not None:
-        json_schema["maximum"] = schema.max
-    return json_schema
-
-
-def emit_boolean_json_schema(schema: schemas.Bool) -> JsonSchema:
-    return dict(type="boolean")
-
-
-def emit_enum_json_schema(schema: schemas.Enum) -> JsonSchema:
-    value_type = type(schema.values[0])
-    if value_type not in json_types:
-        raise TypeError("Enum values must be str, int, float, or bool")
-    return dict(type=json_types[value_type], enum=list(schema.values))
-
-
-emit_json_schema_rules[schemas.Str] = emit_string_json_schema
-emit_json_schema_rules[schemas.Int] = emit_integer_json_schema
-emit_json_schema_rules[schemas.Float] = emit_number_json_schema
-emit_json_schema_rules[schemas.Bool] = emit_boolean_json_schema
-emit_json_schema_rules[schemas.Enum] = emit_enum_json_schema
-
-
-def emit_json_schema(schema: Any, *, value: Any = ...) -> Any:
-    # NOTE(asem): internal function to emit json based on the following rules
-    # - A literal in the schema will not be generated in the schema.
-    # - Emission rules use rules registry that can be extended.
-    # - With value, emit typed JSON data using the same structure. Primal bounds
-    #   and enum choices do not constrain cotangents.
-
-    # Example:
-    #     >>> import json
-    #     >>> import autoform as af
-    #     >>> schema = {
-    #     ...     "name": af.Str(min=1, desc="Name slot."),
-    #     ...     "source": "fixed",
-    #     ... }
-    #     >>> print(json.dumps(af.lm.emit_json_schema(schema), indent=2))
-    #     {
-    #       "type": "object",
-    #       "properties": {
-    #         "name": {
-    #           "type": "string",
-    #           "minLength": 1,
-    #           "description": "Name slot."
-    #         }
-    #       },
-    #       "required": [
-    #         "name"
-    #       ],
-    #       "additionalProperties": false
-    #     }
-    # here only name is emitted, while literal value fixed is omitted.
-    if rule := emit_json_schema_rules.get(type(schema)):
-        if value is ...:
-            json_schema = rule(schema)
-            if schema.desc is not None:
-                json_schema["description"] = schema.desc
-            return json_schema
-        aval = core.avalof(schema)
-        if core.avalof(value) != aval:
-            raise TypeError(f"Expected {aval!r}, got {value!r}")
-        return value
-
-    # NOTE(asem): literal leaf case
-    if type(schema) not in emit_json_schema_rules and utils.tree.is_leaf(schema):
-        return None
-
-    children, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
-    values = [...] * len(children) if value is ... else spec.flatten_up_to(value)
-    properties = OrderedDict()
-    for entry, child, v in zip(spec.entries(), children, values):
-        property_name = str(entry)
-        if (child_schema := emit_json_schema(child, value=v)) is not None:
-            if property_name in properties:
-                raise TypeError(f"Duplicate object entries {(property_name,)!r}")
-            properties[property_name] = child_schema
-
-    if not properties:
-        # NOTE(asem): all tree is literals
-        # >>> dict(key="k", value=1)
-        return None
-
-    if value is not ...:
-        return properties
-
-    return dict(
-        type="object",
-        properties=properties,
-        required=list(properties),
-        additionalProperties=False,
-    )
-
-
-parse_json_value_rules: dict[type[Any], ParseJsonValueRule] = {}
-
-
-def parse_string_json_value(schema: schemas.Str, value: Any) -> str:
-    if type(value) is not str:
-        raise ValueError("Expected string")
-    if schema.min is not None and len(value) < schema.min:
-        raise ValueError(f"Expected string with length >= {schema.min}")
-    if schema.max is not None and len(value) > schema.max:
-        raise ValueError(f"Expected string with length <= {schema.max}")
-    if schema.pattern is not None and not re.search(schema.pattern, value):
-        raise ValueError(f"Expected string matching {schema.pattern!r}")
-    return value
-
-
-def parse_integer_json_value(schema: schemas.Int, value: Any) -> int:
-    if type(value) is not int:
-        raise ValueError("Expected integer")
-    if schema.min is not None and value < schema.min:
-        raise ValueError(f"Expected integer >= {schema.min}")
-    if schema.max is not None and value > schema.max:
-        raise ValueError(f"Expected integer <= {schema.max}")
-    return value
-
-
-def parse_number_json_value(schema: schemas.Float, value: Any) -> float:
-    if type(value) not in (int, float):
-        raise ValueError("Expected number")
-    if schema.min is not None and value < schema.min:
-        raise ValueError(f"Expected number >= {schema.min}")
-    if schema.max is not None and value > schema.max:
-        raise ValueError(f"Expected number <= {schema.max}")
-    return float(value)
-
-
-def parse_boolean_json_value(schema: schemas.Bool, value: Any) -> bool:
-    if type(value) is not bool:
-        raise ValueError("Expected boolean")
-    return value
-
-
-def parse_enum_json_value(schema: schemas.Enum, value: Any) -> Any:
-    if value not in schema:
-        raise ValueError(f"Expected one of {schema.values!r}")
-    return value
-
-
-parse_json_value_rules[schemas.Str] = parse_string_json_value
-parse_json_value_rules[schemas.Int] = parse_integer_json_value
-parse_json_value_rules[schemas.Float] = parse_number_json_value
-parse_json_value_rules[schemas.Bool] = parse_boolean_json_value
-parse_json_value_rules[schemas.Enum] = parse_enum_json_value
-
-
-def parse_json_value(schema: Any, value: Any) -> Any:
-    # NOTE(asem): internal function to
-    # 1. Rebuild json to original tree .
-    # 2. Validate its values.
-    # Here this function needs the original schema tree formed by schema nodes and/or literals
-    # and the output json value dict. The dict is being rebuilt and validated against the schema
-    # tree. For example
-    # >>> class Struct(NamedTuple):
-    # ...
-    # >>> reference_schema = {
-    # ...     "name": af.Str(min=1),
-    # ...     "source": "literal",
-    # ...     "details": None,
-    # ... }
-    # >>> model_json_output = {"name": "x"}
-    # >>> parse_json_value(reference_schema, model_json_output)
-    # {"name": "x", "source": "literal", "details": None}
-    # 3 cases are handled here
-    # 1. Registered schema type with parsing rule (e.g. af.Str())
-    # 2. Literal leaf (e.g. "literal")
-    # 3. Pytree of made of registred schema nodes or literals.
-
-    # NOTE(asem): case 1: in case a parsing rule exists use it.
-    if rule := parse_json_value_rules.get(type(schema)):
-        return rule(schema, value)
-
-    # NOTE(asem): case 2: literal node case.
-    if type(schema) not in emit_json_schema_rules and utils.tree.is_leaf(schema):
-        return schema
-
-    # NOTE(asem): case 3: flatten the schema one level to rebuild its original container.
-    flat_schemas, spec_schema = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
-
-    schema_keys = [str(entry) for entry in spec_schema.entries()]
-    is_emitted: list[bool] = [emit_json_schema(child) is not None for child in flat_schemas]
-    expected_keys = [k for k, e in zip(schema_keys, is_emitted) if e]
-    if expected_keys or value is not None:
-        if not isinstance(value, dict):
-            raise ValueError("Expected object")
-        if len(expected_keys) != len(value) or set(expected_keys) != value.keys():
-            raise ValueError(
-                f"Key mismatch: expected entries {expected_keys!r}, got {list(value)!r}"
-            )
-
-    return spec_schema.unflatten(
-        parse_json_value(child, value[key] if emit else None)
-        for key, child, emit in zip(schema_keys, flat_schemas, is_emitted)
-    )
-
-
-def impl_generate(in_tree: Tree, /, *, schema: Any) -> Any:
-    messages, model = in_tree
-    json_schema = emit_json_schema(schema)
-    if json_schema is None:
-        return parse_json_value(schema, None)
-    resp = active_client.get().completion(
-        messages=messages,
-        model=model,
-        response_format=dict(
-            type="json_schema",
-            json_schema=dict(
-                name="autoform_schema",
-                strict=True,
-                schema=json_schema,
-            ),
-        ),
-    )
-    return parse_json_value(schema, json.loads(resp.choices[0].message.content))
-
-
-async def aimpl_generate(in_tree: Tree, /, *, schema: Any) -> Any:
-    messages, model = in_tree
-    json_schema = emit_json_schema(schema)
-    if json_schema is None:
-        return parse_json_value(schema, None)
-    resp = await active_client.get().acompletion(
-        messages=messages,
-        model=model,
-        response_format=dict(
-            type="json_schema",
-            json_schema=dict(
-                name="autoform_schema",
-                strict=True,
-                schema=json_schema,
-            ),
-        ),
-    )
-    return parse_json_value(schema, json.loads(resp.choices[0].message.content))
-
-
 def abstract_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
     messages, model = in_tree
     aval = core.avalof("")
     fields = [m[key] for m in messages for key in ("role", "content")]
     assert all(type(x) in (str, type(aval)) for x in fields), f"Expected strings: {messages!r}"
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
-
-    def abstract(x: Any) -> Any:
-        if schemas.is_schema(x):
-            return core.avalof(x)
-        if not stage.is_traceable(x):
-            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
-        return x
-
-    return utils.tree.map(abstract, schema, is_leaf=schemas.is_schema)
+    return schema_abstract_tree(schema)
 
 
 def pushforward_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
     p_in, t_in = in_tree
     t_in = core.materialize_zeros(t_in)
-    p_messages, p_model = p_in
-    t_messages, *_ = t_in
-    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
-    t_tree = (t_request, p_model)
-    p_resp = generate_p.bind(p_in, schema=schema)
-    t_resp = generate_p.bind(t_tree, schema=schema)
+    t_context, p_model = pushforward_messages_request(p_in, t_in)
+    t_schema = utils.tree.map(
+        lambda node: (
+            schemas.aval_to_schema(core.tangent_s.map(core.avalof(node)))
+            if schemas.is_schema(node)
+            else node
+        ),
+        schema,
+        is_leaf=schemas.is_schema,
+    )
+    p_messages, _ = p_in
+    p_resp = fill_context(dict(messages=p_messages), p_model, schema=schema)
+    t_resp = fill_context(t_context, p_model, schema=t_schema)
     return p_resp, t_resp
 
 
 async def apush_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
     p_in, t_in = in_tree
     t_in = core.materialize_zeros(t_in)
-    p_messages, p_model = p_in
-    t_messages, *_ = t_in
-    t_request = [dict(role=p["role"], content=t["content"]) for p, t in zip(p_messages, t_messages)]
-    t_tree = (t_request, p_model)
-    ir = stage.trace(ft.partial(generate_p.bind, schema=schema))(p_in)
-    p_resp, t_resp = await order.fanout_p.abind([(p_in,), (t_tree,)], irs=[ir, ir])
+    t_context, p_model = pushforward_messages_request(p_in, t_in)
+    t_schema = utils.tree.map(
+        lambda node: (
+            schemas.aval_to_schema(core.tangent_s.map(core.avalof(node)))
+            if schemas.is_schema(node)
+            else node
+        ),
+        schema,
+        is_leaf=schemas.is_schema,
+    )
+    p_messages, _ = p_in
+    p_context = dict(messages=p_messages)
+    p_ir = stage.trace(ft.partial(fill_context, schema=schema))(p_context, p_model)
+    t_ir = stage.trace(ft.partial(fill_context, schema=t_schema))(t_context, p_model)
+    p_resp, t_resp = await order.fanout_p.abind(
+        [(p_context, p_model), (t_context, p_model)],
+        irs=[p_ir, t_ir],
+    )
     return p_resp, t_resp
 
 
-def pullback_fwd_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
-    messages, model = in_tree
-    out = generate_p.bind(in_tree, schema=schema)
-    residuals = (messages, model, out)
-    return out, residuals
+def generate_pullback_request(in_tree: Tree, /, *, schema: Tree) -> TreePair:
+    residuals, out_cotangent = in_tree
+    out_cotangent = core.materialize_zeros(out_cotangent)
+    messages, model, out = residuals
+    out = jsonlib.dumps(json.project_value(schema, out), allow_nan=False)
+    out_cotangent = jsonlib.dumps(json.project_value(schema, out_cotangent), allow_nan=False)
+    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
 
-
-async def apull_fwd_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
-    messages, model = in_tree
-    out = await generate_p.abind(in_tree, schema=schema)
-    residuals = (messages, model, out)
-    return out, residuals
+    context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
+    return (context, model), feedback_schema((messages, model))
 
 
 def pullback_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
-    residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
-    messages, model, out = residuals
-    out = json.dumps(emit_json_schema(schema, value=out), allow_nan=False)
-    out_cotangent = json.dumps(emit_json_schema(schema, value=out_cotangent), allow_nan=False)
-    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
-
-    def make_schema(path, value):
-        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
-
-    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
-    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
-    user_request = dict(role="user", content=prompt)
-    return generate_p.bind(([system_request, user_request], model), schema=in_schema)
+    (context, model), in_schema = generate_pullback_request(in_tree, schema=schema)
+    return fill_context(context, model, schema=in_schema)
 
 
 async def apull_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
-    residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
-    messages, model, out = residuals
-    out = json.dumps(emit_json_schema(schema, value=out), allow_nan=False)
-    out_cotangent = json.dumps(emit_json_schema(schema, value=out_cotangent), allow_nan=False)
-    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
-
-    def make_schema(path, value):
-        return schemas.Str(desc=f"Feedback for input at {path}: {value!r}.")
-
-    in_schema = utils.tree.map_with_path(make_schema, (messages, model))
-    system_request = dict(role="system", content=GRAD_SYSTEM_PROMPT)
-    user_request = dict(role="user", content=prompt)
-    return await generate_p.abind(([system_request, user_request], model), schema=in_schema)
+    (context, model), in_schema = generate_pullback_request(in_tree, schema=schema)
+    return await afill_context(context, model, schema=in_schema)
 
 
-def batch_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        result = generate_p.bind(in_values, schema=schema)
-        out_batched = utils.tree.map(lambda _: False, result)
-        return result, out_batched
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    bind = ft.partial(generate_p.bind, schema=schema)
-    results = [bind(unbatch(b)) for b in range(batch_size)]
-    out_batched = utils.tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
-    return out_ib, out_batched
-
-
-async def abatch_generate(in_tree: Tree, /, *, schema: Tree) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        result = await generate_p.abind(in_values, schema=schema)
-        out_batched = utils.tree.map(lambda _: False, result)
-        return result, out_batched
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    inputs = [(unbatch(b),) for b in range(batch_size)]
-    in0, *_ = inputs
-    ir = stage.trace(ft.partial(generate_p.bind, schema=schema))(*in0)
-    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
-    out_batched = utils.tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
-    return out_ib, out_batched
-
-
-core.impl_rules.set(generate_p, impl_generate)
-core.aimpl_rules.set(generate_p, aimpl_generate)
+core.impl_rules.set(generate_p, schema_completion)
+core.aimpl_rules.set(generate_p, aschema_completion)
 core.abstract_rules.set(generate_p, abstract_generate)
-core.batch_rules.set(generate_p, batch_generate)
-core.abatch_rules.set(generate_p, abatch_generate)
+core.batch_rules.set(generate_p, ft.partial(batch_lm, generate_p))
+core.abatch_rules.set(generate_p, ft.partial(abatch_lm, generate_p))
 core.push_rules.set(generate_p, pushforward_generate)
 core.apush_rules.set(generate_p, apush_generate)
-core.pull_fwd_rules.set(generate_p, pullback_fwd_generate)
-core.apull_fwd_rules.set(generate_p, apull_fwd_generate)
+core.pull_fwd_rules.set(generate_p, ft.partial(pullback_fwd_lm, generate_p))
+core.apull_fwd_rules.set(generate_p, ft.partial(apull_fwd_lm, generate_p))
 core.pull_bwd_rules.set(generate_p, pullback_bwd_generate)
 core.apull_bwd_rules.set(generate_p, apull_bwd_generate)
+
+
+# ==================================================================================================
+# FILL
+# ==================================================================================================
+
+fill_p = core.Prim("fill")
+
+
+def fill(tree: Tree, /, *, model: str) -> Tree:
+    """Fill schema nodes in a pytree with generated values.
+
+    Args:
+        tree: A pytree containing context leaves with registered AVal schemas and static schema nodes.
+        model: The model name or active client model alias to use.
+
+    Returns:
+        ``tree`` with each schema node replaced by a generated value.
+    """
+
+    def check_context(value):
+        schemas.aval_to_schema(core.avalof(value))
+
+    utils.tree.map(check_context, tree)
+    if not any(map(schemas.is_schema, utils.tree.leaves(tree, is_leaf=schemas.is_schema))):
+        return tree
+    assert core.avalof(model) == core.avalof(""), f"Expected string model: {model!r}"
+    encoded, schm_tree = prepare_fill(tree)
+    out = fill_p.bind((encoded, control.stop_gradient(model)), schema=schm_tree)
+    return merge_fill(tree, out)
+
+
+def prepare_fill(tree: Tree) -> TreePair:
+    schm_tree, lit_tree = utils.partition(schemas.is_schema, tree, is_leaf=schemas.is_schema)
+    return json.encode(lit_tree), schm_tree
+
+
+def merge_fill(tree: Tree, generated: Tree) -> Tree:
+    def generated_field(node, value):
+        return value if schemas.is_schema(node) else node
+
+    return utils.tree.map(generated_field, tree, generated, is_leaf=schemas.is_schema)
+
+
+def fill_request(in_tree: Tree, /) -> Tree:
+    encoded, model = in_tree
+    content = json_content(encoded)
+    return [dict(role="user", content=content)], model
+
+
+def impl_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
+    return schema_completion(fill_request(in_tree), schema=schema)
+
+
+async def aimpl_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
+    return await aschema_completion(fill_request(in_tree), schema=schema)
+
+
+def abstract_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
+    encoded, model = in_tree
+    aval = core.avalof("")
+    assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
+    context_aval = encoded if isinstance(encoded, core.AVal) else core.avalof(encoded)
+    if not isinstance(context_aval, json.JsonAVal):
+        raise TypeError(f"Expected typed JSON context, got {context_aval!r}")
+    return schema_abstract_tree(schema)
+
+
+def fill_pushforward_request(in_tree: Tree, /, *, schema: Tree) -> TreePair:
+    (p_context, p_model), (t_context, _) = core.materialize_zeros(in_tree)
+    expected = core.tangent_s.map(core.avalof(p_context))
+    if core.avalof(t_context) != expected:
+        raise TypeError(f"Expected {expected!r} tangent, got {core.avalof(t_context)!r}")
+
+    prompt = PUSH_PROMPT.format(
+        input=json_content(p_context),
+        in_tangent=json_content(t_context),
+    )
+    context = dict(
+        instruction=PUSH_SYSTEM_PROMPT,
+        request=prompt,
+        output_schema=jsonlib.dumps(describe(schema), allow_nan=False),
+    )
+
+    def tangent_field(x):
+        if not schemas.is_schema(x):
+            return x
+        return schemas.aval_to_schema(core.tangent_s.map(core.avalof(x)))
+
+    t_schema = utils.tree.map(tangent_field, schema, is_leaf=schemas.is_schema)
+    return (context, p_model), t_schema
+
+
+def pushforward_fill(in_tree: Tree, /, *, schema: Tree) -> TreePair:
+    p_in, _ = in_tree
+    (context, model), t_schema = fill_pushforward_request(in_tree, schema=schema)
+    p_out = fill_p.bind(p_in, schema=schema)
+    t_out = fill_context(context, model, schema=t_schema)
+    return p_out, t_out
+
+
+async def apush_fill(in_tree: Tree, /, *, schema: Tree) -> TreePair:
+    p_in, _ = in_tree
+    (context, model), t_schema = fill_pushforward_request(in_tree, schema=schema)
+    p_ir = stage.trace(ft.partial(fill_p.bind, schema=schema))(p_in)
+    t_ir = stage.trace(ft.partial(fill_context, schema=t_schema))(context, model)
+    return await order.fanout_p.abind([(p_in,), (context, model)], irs=[p_ir, t_ir])
+
+
+def fill_pullback_request(in_tree: Tree, /, *, schema: Tree) -> TreePair | None:
+    residuals, out_cotangent = in_tree
+    encoded, model, out = residuals
+
+    def check_cotangent(p_leaf, c_leaf):
+        aval = core.cotangent_s.map(core.avalof(p_leaf))
+        if core.avalof(c_leaf) != aval:
+            raise TypeError(f"Expected {aval!r} cotangent, got {c_leaf!r}")
+
+    utils.tree.map(check_cotangent, out, out_cotangent)
+
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(out_cotangent)):
+        return None
+
+    lit_tree = json.decode(encoded)
+
+    def to_schema(x):
+        return schemas.aval_to_schema(core.avalof(x))
+
+    context_schema = utils.tree.map(to_schema, lit_tree)
+
+    def to_cotangent_schema(x):
+        if not schemas.is_schema(x):
+            return x
+        return schemas.aval_to_schema(core.cotangent_s.map(core.avalof(x)))
+
+    cotangent_schema = utils.tree.map(to_cotangent_schema, schema, is_leaf=schemas.is_schema)
+    out_cotangent = core.materialize_zeros(out_cotangent)
+    prompt = GRAD_PROMPT.format(
+        input=schema_content((lit_tree, model), (context_schema, schemas.Str())),
+        output=schema_content(out, schema),
+        out_cotangent=schema_content(out_cotangent, cotangent_schema),
+    )
+
+    context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
+    in_schema = feedback_schema((lit_tree, model))
+    return (context, model), in_schema
+
+
+def pullback_bwd_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
+    def zero_input(x):
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+
+    request = fill_pullback_request(in_tree, schema=schema)
+    if request is None:
+        (encoded, model, _), _ = in_tree
+        return utils.tree.map(zero_input, (encoded, model))
+    (context, model), in_schema = request
+    feedback, model_feedback = fill_context(context, model, schema=in_schema)
+    return json.encode(feedback), model_feedback
+
+
+async def apull_bwd_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
+    def zero_input(x):
+        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+
+    request = fill_pullback_request(in_tree, schema=schema)
+    if request is None:
+        (encoded, model, _), _ = in_tree
+        return utils.tree.map(zero_input, (encoded, model))
+    (context, model), in_schema = request
+    feedback, model_feedback = await afill_context(context, model, schema=in_schema)
+    return json.encode(feedback), model_feedback
+
+
+core.impl_rules.set(fill_p, impl_fill)
+core.aimpl_rules.set(fill_p, aimpl_fill)
+core.abstract_rules.set(fill_p, abstract_fill)
+core.batch_rules.set(fill_p, ft.partial(batch_lm, fill_p))
+core.abatch_rules.set(fill_p, ft.partial(abatch_lm, fill_p))
+core.push_rules.set(fill_p, pushforward_fill)
+core.apush_rules.set(fill_p, apush_fill)
+core.pull_fwd_rules.set(fill_p, ft.partial(pullback_fwd_lm, fill_p))
+core.apull_fwd_rules.set(fill_p, ft.partial(apull_fwd_lm, fill_p))
+core.pull_bwd_rules.set(fill_p, pullback_bwd_fill)
+core.apull_bwd_rules.set(fill_p, apull_bwd_fill)

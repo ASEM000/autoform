@@ -156,11 +156,43 @@ def test_new_spec_subclasses_register_as_static_nodes():
     assert af.trace(lambda x: x)(schema).call(schema) is schema
 
 
+@pytest.mark.parametrize("operation", ["describe", "parse"])
+def test_unregistered_schema_nodes_remain_static(operation):
+    class CustomSpec(af.schemas.Spec):
+        __slots__ = []
+
+    schema = CustomSpec()
+    if operation == "describe":
+        assert af.schemas.describe(schema) is None
+    else:
+        assert af.schemas.parse(schema, "value") is schema
+
+
+@pytest.mark.parametrize(
+    "schema, expected",
+    [
+        pytest.param(af.Str(min=1, desc="Text"), dict(type="string", minLength=1), id="str"),
+        pytest.param(af.Int(min=0, desc="Text"), dict(type="integer", minimum=0), id="int"),
+        pytest.param(af.Float(max=1, desc="Text"), dict(type="number", maximum=1), id="float"),
+        pytest.param(af.Bool(desc="Text"), dict(type="boolean"), id="bool"),
+        pytest.param(
+            af.Enum("yes", "no", desc="Text"),
+            dict(type="string", enum=["yes", "no"]),
+            id="enum",
+        ),
+    ],
+)
+def test_json_rules_own_schema_descriptions(schema, expected):
+    expected = dict(expected, description="Text")
+    assert af.json.describe_rules[type(schema)](schema) == expected
+    assert af.json.describe(schema) == expected
+
+
 def test_json_mangles_duplicate_object_entries_before_omitting_literals():
     schema = {0: {"fixed": "value"}, "0": af.Str()}
-    json_schema = af.schemas.emit_json_schema(schema)
+    json_schema = af.schemas.describe(schema)
     assert list(json_schema["properties"]) == ["0_"]
-    assert af.schemas.parse_json_value(schema, {"0_": "generated"}) == {
+    assert af.schemas.parse(schema, {"0_": "generated"}) == {
         0: {"fixed": "value"},
         "0": "generated",
     }
@@ -174,15 +206,15 @@ def test_json_mangles_duplicate_object_entries_before_omitting_literals():
 )
 def test_parse_float_rejects_nonfinite_values(schema, value):
     with pytest.raises(ValueError, match="Expected finite number"):
-        af.schemas.parse_json_value(schema, value)
+        af.schemas.parse(schema, value)
 
 
 @pytest.mark.parametrize(
     "value", [float("nan"), float("inf"), -float("inf")], ids=["nan", "inf", "-inf"]
 )
-def test_emit_enum_rejects_nonfinite_values(value):
+def test_describe_enum_rejects_nonfinite_values(value):
     with pytest.raises(ValueError, match="Enum values must be finite"):
-        af.schemas.emit_json_schema(af.Enum(0.0, value))
+        af.schemas.describe(af.Enum(0.0, value))
 
 
 def test_parse_uses_partitioned_schema():
@@ -191,30 +223,26 @@ def test_parse_uses_partitioned_schema():
 
     calls = []
 
-    def emit(schema):
+    def describe(schema):
         calls.append(schema)
         return dict(type="string")
 
-    af.schemas.emit_json_schema_rules[CustomSpec] = emit
-    af.schemas.parse_json_value_rules[CustomSpec] = lambda _, value: value
-    try:
-        schema = {
-            "generated": {"text": af.Str(desc="Generated text.")},
-            "literal": {"text": "fixed", "nothing": None},
-            "custom": CustomSpec(),
-        }
-        value = {"generated": {"text": "x"}, "custom": "y"}
-        assert af.schemas.parse_json_value(schema, value) == {
-            "generated": {"text": "x"},
-            "literal": {"text": "fixed", "nothing": None},
-            "custom": "y",
-        }
-        assert calls == [schema["custom"]]
-        assert af.schemas.emit_json_schema(schema)["required"] == ["custom", "generated"]
-        assert calls == [schema["custom"], schema["custom"]]
-    finally:
-        del af.schemas.emit_json_schema_rules[CustomSpec]
-        del af.schemas.parse_json_value_rules[CustomSpec]
+    af.json.describe_rules[CustomSpec] = describe
+    af.json.parse_rules[CustomSpec] = lambda _, value: value
+    schema = {
+        "generated": {"text": af.Str(desc="Generated text.")},
+        "literal": {"text": "fixed", "nothing": None},
+        "custom": CustomSpec(),
+    }
+    value = {"generated": {"text": "x"}, "custom": "y"}
+    assert af.schemas.parse(schema, value) == {
+        "generated": {"text": "x"},
+        "literal": {"text": "fixed", "nothing": None},
+        "custom": "y",
+    }
+    assert calls == []
+    assert af.schemas.describe(schema)["required"] == ["custom", "generated"]
+    assert calls == [schema["custom"]]
 
 
 def test_partition_and_parse_custom_pytree():
@@ -229,28 +257,34 @@ def test_partition_and_parse_custom_pytree():
         {"source": "fixed"},
         af.Str(desc="Reasoning."),
     )
-    literal_tree, schema_tree = af.schemas.partition_schema(schema)
-
-    assert literal_tree == Answer(
-        af.schemas.missing,
-        {"source": "fixed"},
-        af.schemas.missing,
+    schm_tree, lit_tree = af.utils.partition(
+        af.schemas.is_schema,
+        schema,
+        is_leaf=af.schemas.is_schema,
+        fillvalue=af.json.missing,
     )
-    assert schema_tree == Answer(
+
+    assert lit_tree == Answer(
+        af.json.missing,
+        {"source": "fixed"},
+        af.json.missing,
+    )
+    assert schm_tree == Answer(
         af.Float(min=0, max=1),
-        {"source": af.schemas.missing},
+        {"source": af.json.missing},
         af.Str(desc="Reasoning."),
     )
-    assert af.schemas.emit_json_tree(schema_tree) == af.schemas.emit_json_schema(schema)
-    generated_tree = af.schemas.parse_json_tree(
-        schema_tree, {"score": 0.8, "reasoning": "Evidence agrees."}
+    assert af.json.describe_node(schm_tree) == af.schemas.describe(schema)
+    generated_tree = af.json.parse_node(
+        schm_tree,
+        {"score": 0.8, "reasoning": "Evidence agrees."},
     )
     assert generated_tree == Answer(
         0.8,
-        {"source": af.schemas.missing},
+        {"source": af.json.missing},
         "Evidence agrees.",
     )
-    assert af.schemas.parse_json_value(
+    assert af.schemas.parse(
         schema,
         {"score": 0.8, "reasoning": "Evidence agrees."},
     ) == Answer(

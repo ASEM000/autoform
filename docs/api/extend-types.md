@@ -9,6 +9,7 @@
 .. autoclass:: autoform.numeric.IntAVal
 .. autoclass:: autoform.numeric.FloatAVal
 .. autoclass:: autoform.numeric.BoolAVal
+.. autoclass:: autoform.json.JsonAVal
 ```
 
 ## Primitives

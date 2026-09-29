@@ -14,8 +14,11 @@
 .. autodata:: autoform.numeric.le_p
 .. autodata:: autoform.numeric.gt_p
 .. autodata:: autoform.numeric.ge_p
+.. autodata:: autoform.json.encode_p
+.. autodata:: autoform.json.decode_p
 .. autodata:: autoform.lm.complete_p
 .. autodata:: autoform.lm.generate_p
+.. autodata:: autoform.lm.fill_p
 .. autodata:: autoform.intercept.checkpoint_p
 .. autodata:: autoform.control.stop_gradient_p
 .. autodata:: autoform.control.switch_p

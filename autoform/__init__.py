@@ -26,6 +26,7 @@ import autoform.core as core
 import autoform.dead as dead
 import autoform.extend as extend
 import autoform.intercept as intercept
+import autoform.json as json
 import autoform.lm as lm
 import autoform.memo as memo
 import autoform.numeric as numeric
@@ -133,6 +134,7 @@ __all__ = [
     "PYTREE_NAMESPACE",
     # modules
     "extend",
+    "json",
     "lm",
     "numeric",
     "string",
