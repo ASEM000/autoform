@@ -74,6 +74,21 @@ def mask(in_tree: Tree, use: Tree[bool], replace: Any = None) -> Tree:
     return tree.map(func, in_tree, use)
 
 
+def partition(
+    predicate: Callable[[Any], bool],
+    in_tree: Tree,
+    /,
+    *,
+    is_leaf: Callable[[Any], bool] | None = None,
+    fillvalue: Any = None,
+) -> tuple[Tree, Tree]:
+    flat, spec = tree.flatten(in_tree, is_leaf=is_leaf)
+    selected = [predicate(x) for x in flat]
+    lhs = [x if keep else fillvalue for x, keep in zip(flat, selected)]
+    rhs = [fillvalue if keep else x for x, keep in zip(flat, selected)]
+    return spec.unflatten(lhs), spec.unflatten(rhs)
+
+
 def tree_equal(lhs: Tree, rhs: Tree, /) -> bool:
     """Return whether two pytrees have equal structure and leaves."""
     if tree.structure(lhs) != tree.structure(rhs):
