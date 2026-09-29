@@ -173,9 +173,12 @@ def json_content(value: json.Json) -> str:
 
 def schema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
     messages, model = in_tree
+    # NOTE(asem): enable scalar leaves (e.g. Str()) without a container
+    schema = [schema]
     json_schema = describe(schema)
     if json_schema is None:
-        return parse(schema, None)
+        [out] = parse(schema, None)
+        return out
     resp = active_client.get().completion(
         messages=messages,
         model=model,
@@ -188,14 +191,17 @@ def schema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
             ),
         ),
     )
-    return parse(schema, jsonlib.loads(resp.choices[0].message.content))
+    [out] = parse(schema, jsonlib.loads(resp.choices[0].message.content))
+    return out
 
 
 async def aschema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
     messages, model = in_tree
+    schema = [schema]
     json_schema = describe(schema)
     if json_schema is None:
-        return parse(schema, None)
+        [out] = parse(schema, None)
+        return out
     resp = await active_client.get().acompletion(
         messages=messages,
         model=model,
@@ -208,7 +214,8 @@ async def aschema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
             ),
         ),
     )
-    return parse(schema, jsonlib.loads(resp.choices[0].message.content))
+    [out] = parse(schema, jsonlib.loads(resp.choices[0].message.content))
+    return out
 
 
 def schema_abstract_tree(schema: Any) -> Tree:
