@@ -702,10 +702,7 @@ class TestSwitch:
                 af.pullback,
                 ["grad1", "grad2"],
                 (
-                    [
-                        af.core.Zero(af.core.primal_s.map(af.core.avalof("a"))),
-                        af.core.Zero(af.core.primal_s.map(af.core.avalof("a"))),
-                    ],
+                    af.core.Zero(af.core.primal_s.map(af.core.avalof("a"))),
                     ["grad1", "grad2"],
                 ),
                 id="pull",

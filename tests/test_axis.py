@@ -352,6 +352,67 @@ class TestBatchWithMixedAxes:
         assert result == ["a-a", "b-b"]
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "container",
+    [
+        pytest.param(list, id="list"),
+        pytest.param(tuple, id="tuple"),
+        pytest.param(lambda x: {"x": x[0], "y": x[1]}, id="dict"),
+    ],
+)
+@pytest.mark.parametrize(
+    "cotangents, shared",
+    [
+        pytest.param(["g1", "g2"], "g1g2", id="strings"),
+        pytest.param([af.core.Zero(af.string.StrAVal()), "g2"], "g2", id="mixed-zero"),
+        pytest.param(
+            [af.core.Zero(af.string.StrAVal()), af.core.Zero(af.string.StrAVal())],
+            af.core.Zero(af.string.StrAVal()),
+            id="all-zero",
+        ),
+    ],
+)
+def test_pullback_of_batch_accumulates_shared_input(executor, container, cotangents, shared):
+    ir = af.trace(af.string.concat)("x", "y")
+    primals = ("x", container(["a", "b"]))
+    feedback = container(cotangents)
+    outputs = container(["xa", "xb"])
+    pb = af.pullback(af.batch(ir, in_axes=(False, True)))
+    actual = executor(pb, primals, feedback)
+    assert actual == (outputs, (shared, feedback))
+    assert af.core.avalof(actual[1][0]) == pb.out_tree[1][0].aval
+    lane_pb = af.batch(af.pullback(ir), in_axes=((False, True), True))
+    assert executor(lane_pb, primals, feedback) == (outputs, (feedback, feedback))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_of_batch_accumulates_shared_pytree(executor):
+    def program(x, y):
+        return x["scale"] * y + x["bias"]
+
+    ir = af.trace(program)({"scale": 2.0, "bias": 1.0}, 3.0)
+    pb = af.pullback(af.batch(ir, in_axes=(False, True)))
+    actual = executor(pb, ({"scale": 2.0, "bias": 1.0}, [3.0, 4.0]), [1.0, 1.0])
+    assert actual == ([7.0, 9.0], ({"scale": 7.0, "bias": 2.0}, [2.0, 2.0]))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_of_batch_without_mapped_inputs(executor):
+    ir = af.trace(af.string.concat)("x", "y")
+    pb = af.pullback(af.batch(ir, in_axes=False))
+    assert executor(pb, ("a", "b"), "g") == ("ab", ("g", "g"))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_of_nested_batch_accumulates_shared_batch(executor):
+    ir = af.trace(af.string.concat)("x", "y")
+    inner = af.batch(ir, in_axes=(True, False))
+    pb = af.pullback(af.batch(inner, in_axes=(False, True)))
+    actual = executor(pb, (["a", "b"], ["c", "d"]), [["g1", "g2"], ["g3", "g4"]])
+    assert actual == ([["ac", "bc"], ["ad", "bd"]], (["g1g3", "g2g4"], ["g1g2", "g3g4"]))
+
+
 def test_batch_box_treats_axis_spec_as_prefix():
     batcher = af.axis.BatchInterpreter(batch_size=2, parent=af.core.active_interpreter.get())
     boxed = batcher.box((["a", "b"], True))
