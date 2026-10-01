@@ -1099,7 +1099,7 @@ class TestFold:
         def program(question):
             with af.fold():
                 rubric = af.lm.fill(
-                    {"prompt": "make a rubric", "output": af.Str()},
+                    {"prompt": "make a rubric", "output": af.lm.Str()},
                     model="test-model",
                 )["output"]
             return af.string.format("{rubric}: {question}", rubric=rubric, question=question)

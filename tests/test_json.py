@@ -252,9 +252,9 @@ def test_describe_and_parse_select_their_own_registered_nodes(operation):
 @pytest.mark.parametrize(
     "schema, value",
     [
-        pytest.param(af.Float(min=0, max=1), -2.0, id="float-bounds"),
-        pytest.param(af.Enum("yes", "no"), "feedback", id="enum-membership"),
-        pytest.param(af.Str(min=3), "", id="string-length"),
+        pytest.param(af.lm.Float(min=0, max=1), -2.0, id="float-bounds"),
+        pytest.param(af.lm.Enum("yes", "no"), "feedback", id="enum-membership"),
+        pytest.param(af.lm.Str(min=3), "", id="string-length"),
     ],
 )
 def test_schema_constraints_do_not_apply_to_typed_feedback(schema, value):

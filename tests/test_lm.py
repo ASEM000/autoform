@@ -21,7 +21,7 @@ import pytest
 from litellm import ResponsesAPIResponse
 
 import autoform as af
-from autoform.schemas import describe, parse
+from autoform.lm import describe, parse
 from autoform.utils import tree
 from tests import aexecute, execute
 
@@ -140,12 +140,12 @@ class SchemaGradientRouter(EchoRouter):
 @pytest.mark.parametrize(
     ("schema", "value"),
     [
-        pytest.param(af.Str(), 'Hello "world"!', id="string"),
-        pytest.param(af.Str(min=1, desc="Answer text."), "hello", id="described-string"),
-        pytest.param(af.Int(), 2, id="integer"),
-        pytest.param(af.Float(), 0.5, id="float"),
-        pytest.param(af.Bool(), True, id="boolean"),
-        pytest.param(af.Enum("yes", "no"), "yes", id="enum"),
+        pytest.param(af.lm.Str(), 'Hello "world"!', id="string"),
+        pytest.param(af.lm.Str(min=1, desc="Answer text."), "hello", id="described-string"),
+        pytest.param(af.lm.Int(), 2, id="integer"),
+        pytest.param(af.lm.Float(), 0.5, id="float"),
+        pytest.param(af.lm.Bool(), True, id="boolean"),
+        pytest.param(af.lm.Enum("yes", "no"), "yes", id="enum"),
     ],
 )
 def test_fill_passes_scalar_schemas_to_client(executor, schema, value):
@@ -164,8 +164,8 @@ def test_fill_passes_scalar_schemas_to_client(executor, schema, value):
 
 def test_fill_uses_runtime_model_with_structured_output():
     answer = {
-        "text": af.Str(desc="Short text."),
-        "score": af.Float(),
+        "text": af.lm.Str(desc="Short text."),
+        "score": af.lm.Float(),
     }
 
     fill = fill_program(answer)
@@ -190,7 +190,7 @@ def test_fill_pushforward_preserves_non_string_literals(executor):
 
     def program(x):
         return af.lm.fill(
-            {"prompt": x, "output": {"answer": af.Str(), "fixed": 1.0}},
+            {"prompt": x, "output": {"answer": af.lm.Str(), "fixed": 1.0}},
             model="echo",
         )["output"]
 
@@ -219,8 +219,8 @@ def test_fill_uses_values_schema_envelope(executor):
         return af.lm.fill(
             {
                 "question": question,
-                "answer": af.Str(desc="Answer text."),
-                "score": af.Float(min=0, max=1),
+                "answer": af.lm.Str(desc="Answer text."),
+                "score": af.lm.Float(min=0, max=1),
             },
             model="m1",
         )
@@ -235,8 +235,8 @@ def test_fill_uses_values_schema_envelope(executor):
     assert call.params == {
         "schema": {
             "question": None,
-            "answer": af.Str(desc="Answer text."),
-            "score": af.Float(min=0, max=1),
+            "answer": af.lm.Str(desc="Answer text."),
+            "score": af.lm.Float(min=0, max=1),
         }
     }
     assert ir.eqns[0].in_tree == {"question": ir.in_tree[0], "answer": None, "score": None}
@@ -278,9 +278,9 @@ def test_fill_uses_values_schema_envelope(executor):
 @pytest.mark.parametrize(
     "template, response, expected",
     [
-        pytest.param(af.Str(), "filled", "filled", id="scalar"),
+        pytest.param(af.lm.Str(), "filled", "filled", id="scalar"),
         pytest.param(
-            ("fixed", [af.Str(), None, {}]),
+            ("fixed", [af.lm.Str(), None, {}]),
             {"1": {"0": "filled"}},
             ("fixed", ["filled", None, {}]),
             id="nested",
@@ -325,7 +325,7 @@ def test_fill_preserves_custom_pytree_and_json_property_names(executor, x, json_
             return fake_response(json.dumps({"fields": {"0_": "filled"}}))
 
     def program(x):
-        return af.lm.fill(Answer({0: x, "0": af.Str()}, (None, [], {})), model="echo")
+        return af.lm.fill(Answer({0: x, "0": af.lm.Str()}, (None, [], {})), model="echo")
 
     ir = af.trace(program)(x)
     with af.lm.client(FillClient()):
@@ -351,7 +351,7 @@ def test_fill_batches_context(executor, values):
             return fake_response(json.dumps({"answer": f"filled:{question}"}))
 
     def program(question):
-        return af.lm.fill({"question": question, "answer": af.Str()}, model="m1")
+        return af.lm.fill({"question": question, "answer": af.lm.Str()}, model="m1")
 
     ir = af.batch(af.trace(program)(values[0]))
     client = FillClient()
@@ -394,7 +394,7 @@ def test_fill_pushforward_uses_tangent_context(
             return schema_response({"answer": f"filled:{question}"}, text)
 
     def program(question):
-        return af.lm.fill({"question": question, "answer": af.Str()}, model="m1")
+        return af.lm.fill({"question": question, "answer": af.lm.Str()}, model="m1")
 
     ir = af.trace(program)(question)
     ir = af.pushforward(af.batch(ir) if batch_order == "before" else ir)
@@ -415,7 +415,7 @@ def test_fill_pushforward_uses_tangent_context(
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("description", ["Score clarity", "Estimate price"])
 def test_fill_pushforward_preserves_task_schema(executor, description):
-    schema = af.Float(min=0, max=10, desc=description)
+    schema = af.lm.Float(min=0, max=10, desc=description)
     calls = []
 
     class FillClient(EchoRouter):
@@ -434,7 +434,7 @@ def test_fill_pushforward_preserves_task_schema(executor, description):
             original, change = parse_change_prompt(context["request"])
             assert original["values"] == {"x": "x"}
             assert change["values"] == {"x": "dx"}
-            assert response_schema["properties"]["output"] == describe({"y": af.Float()})
+            assert response_schema["properties"]["output"] == describe({"y": af.lm.Float()})
             return schema_response({"y": -2.0}, text)
 
     def program(x):
@@ -447,21 +447,21 @@ def test_fill_pushforward_preserves_task_schema(executor, description):
             {"x": "dx", "y": -2.0},
         )
     assert len(calls) == 2
-    assert schema == af.Float(min=0, max=10, desc=description)
+    assert schema == af.lm.Float(min=0, max=10, desc=description)
 
 
 @pytest.mark.parametrize(
     "t_tree",
     [
-        pytest.param({"x": "dx", "y": af.Float(desc="Estimate price")}, id="description"),
-        pytest.param({"x": "dx", "y": af.Float(min=0, desc="Score clarity")}, id="constraint"),
-        pytest.param({"x": "dx", "y": af.Str(desc="Score clarity")}, id="schema-type"),
+        pytest.param({"x": "dx", "y": af.lm.Float(desc="Estimate price")}, id="description"),
+        pytest.param({"x": "dx", "y": af.lm.Float(min=0, desc="Score clarity")}, id="constraint"),
+        pytest.param({"x": "dx", "y": af.lm.Str(desc="Score clarity")}, id="schema-type"),
         pytest.param({"x": "dx", "y": 0.0}, id="schema-to-leaf"),
-        pytest.param({"x": ["dx"], "y": af.Float(desc="Score clarity")}, id="structure"),
+        pytest.param({"x": ["dx"], "y": af.lm.Float(desc="Score clarity")}, id="structure"),
     ],
 )
 def test_fill_pushforward_rejects_mismatched_specs(t_tree):
-    p_tree = {"x": "x", "y": af.Float(desc="Score clarity")}
+    p_tree = {"x": "x", "y": af.lm.Float(desc="Score clarity")}
     ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
     with pytest.raises(ValueError):
         ir.call((p_tree,), (t_tree,))
@@ -472,8 +472,8 @@ def test_fill_pushforward_accepts_equal_static_metadata():
         def responses(self, *, text, **kwargs):
             return schema_response({"y": 1.0}, text)
 
-    p_tree = {"x": "x", "y": af.Float(desc="Score clarity")}
-    t_tree = {"x": "dx", "y": af.Float(desc="Score clarity")}
+    p_tree = {"x": "x", "y": af.lm.Float(desc="Score clarity")}
+    t_tree = {"x": "dx", "y": af.lm.Float(desc="Score clarity")}
     assert p_tree["y"] is not t_tree["y"]
     ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
     with af.lm.client(FillClient()):
@@ -499,7 +499,7 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
         return json.dumps({"answer": "filled"})
 
     def program(question):
-        out = af.lm.fill({"question": question, "answer": af.Str()}, model="m1")
+        out = af.lm.fill({"question": question, "answer": af.lm.Str()}, model="m1")
         return (out["question"], out["answer"]) if generated else out["question"]
 
     ir = af.trace(program)("seed")
@@ -552,8 +552,8 @@ def test_fill_pullback_uses_original_output_schema_for_feedback(executor):
         filled = af.lm.fill(
             {
                 "question": question,
-                "answer": af.Str(),
-                "score": af.Float(min=0, max=1),
+                "answer": af.lm.Str(),
+                "score": af.lm.Float(min=0, max=1),
             },
             model="m1",
         )
@@ -629,7 +629,7 @@ def test_fill_pullback_generates_input_cotangent_types(executor, generated):
             return schema_response({"0": {"x": -0.5}, "1": "model feedback"}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.Str()}, model="m1")
+        out = af.lm.fill({"x": x, "y": af.lm.Str()}, model="m1")
         return out if generated else out["x"]
 
     ir = af.pullback(af.trace(program)(0.5))
@@ -680,7 +680,7 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, cotangent):
             return schema_response({"0": {"x": dx}, "1": ""}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.Float(min=0, max=10, desc="Double x.")}, model="m1")
+        out = af.lm.fill({"x": x, "y": af.lm.Float(min=0, max=10, desc="Double x.")}, model="m1")
         return 3.0 * out["y"]
 
     ir = af.pullback(af.trace(program)(1.0))
@@ -735,8 +735,8 @@ def test_fill_composes_through_float_context(executor, transform):
             return schema_response({"0": {"x": "input feedback"}, "1": ""}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.Float()}, model="m1")
-        return af.lm.fill({"y": out["y"], "z": af.Str()}, model="m1")["z"]
+        out = af.lm.fill({"x": x, "y": af.lm.Float()}, model="m1")
+        return af.lm.fill({"y": out["y"], "z": af.lm.Str()}, model="m1")["z"]
 
     ir = transform(af.trace(program)("seed"))
     change = ("dx",) if transform is af.pushforward else "feedback"
@@ -748,17 +748,17 @@ def test_fill_composes_through_float_context(executor, transform):
 
 def test_fill_rejects_unsupported_context_and_non_string_model():
     with pytest.raises(TypeError, match="No aval rule registered"):
-        af.lm.fill({"x": object(), "y": af.Str()}, model="m1")
+        af.lm.fill({"x": object(), "y": af.lm.Str()}, model="m1")
     with pytest.raises(AssertionError, match="Expected string model"):
-        af.lm.fill({"x": 0.5, "y": af.Str()}, model=1.0)
+        af.lm.fill({"x": 0.5, "y": af.lm.Str()}, model=1.0)
     with pytest.raises(AssertionError, match="Expected string model"):
-        af.trace(lambda x: af.lm.fill_p.bind(x, schema={"y": af.Str()}))(
+        af.trace(lambda x: af.lm.fill_p.bind(x, schema={"y": af.lm.Str()}))(
             (af.json.encode({"x": 0.5}), 1.0),
         )
 
 
 def test_describe_rejects_non_json_enum_values():
-    enum = af.Enum(object())
+    enum = af.lm.Enum(object())
 
     with pytest.raises(TypeError, match="Enum values must be str, int, float, or bool"):
         describe({"kind": enum})
@@ -766,7 +766,7 @@ def test_describe_rejects_non_json_enum_values():
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_batch_supports_variable_models(executor):
-    program = fill_program({"text": af.Str(), "score": af.Float()})
+    program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
     ir = af.batch(af.trace(program)("test", "gpt-5.5"), in_axes=(True, True))
     args = (["hello", "goodbye"], ["m1", "m2"])
     with af.lm.client(SchemaRouter()):
@@ -805,7 +805,7 @@ def gradient_client():
 def test_fill_pullback_materializes_unused_fields(
     executor, field, out_cotangent, expected, feedback, gradient_client
 ):
-    schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
+    schema = {"text": af.lm.Str(min=1), "score": af.lm.Float(min=0, max=1)}
     fill = fill_program(schema)
 
     def program(x):
@@ -834,7 +834,7 @@ def test_fill_pullback_materializes_unused_fields(
 def test_fill_pullback_rejects_wrong_schema_cotangent_type(
     executor, out_cotangent, error, gradient_client
 ):
-    program = fill_program({"text": af.Str(), "score": af.Float()})
+    program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
     ir = af.pullback(af.trace(program)("seed"))
     with pytest.raises(TypeError, match=f"Expected {error}"):
         executor(ir, ("Explain recursion.",), out_cotangent)
@@ -849,8 +849,8 @@ def test_project_value_preserves_generated_structure():
 
     schema = Answer(
         [
-            af.Float(min=0, desc="Score"),
-            (af.Str(min=1), af.Int(), af.Bool(), af.Enum("yes", "no")),
+            af.lm.Float(min=0, desc="Score"),
+            (af.lm.Str(min=1), af.lm.Int(), af.lm.Bool(), af.lm.Enum("yes", "no")),
         ],
         {"source": "fixed", "nothing": None},
     )
@@ -885,7 +885,6 @@ def test_schema_without_generated_fields(schema, expected):
     assert parse(schema, None) == expected
 
 
-@pytest.mark.parametrize("parse", [parse, af.lm.parse], ids=["schemas", "lm"])
 @pytest.mark.parametrize(
     "value",
     [
@@ -897,14 +896,13 @@ def test_schema_without_generated_fields(schema, expected):
         pytest.param({0: "x"}, id="non-string-key"),
     ],
 )
-def test_parse_rejects_invalid_objects(parse, value):
+def test_parse_rejects_invalid_objects(value):
     with pytest.raises(ValueError):
-        parse({"0": af.Str()}, value)
+        parse({"0": af.lm.Str()}, value)
 
 
-@pytest.mark.parametrize("parse", [parse, af.lm.parse], ids=["schemas", "lm"])
-def test_parse_rebuilds_nested_containers_from_objects(parse):
-    schema = (af.Str(), {"score": af.Float(), "source": "fixed"}, None)
+def test_parse_rebuilds_nested_containers_from_objects():
+    schema = (af.lm.Str(), {"score": af.lm.Float(), "source": "fixed"}, None)
     assert parse(schema, {"1": {"score": 2}, "0": "x"}) == (
         "x",
         {"score": 2.0, "source": "fixed"},
@@ -916,9 +914,9 @@ def test_parse_rebuilds_nested_containers_from_objects(parse):
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": af.Str(desc="Subject name."),
-        "kind": af.Enum("summary", "definition", desc="Answer kind."),
-        "score": af.Float(desc="Confidence score."),
+        "name": af.lm.Str(desc="Subject name."),
+        "kind": af.lm.Enum("summary", "definition", desc="Answer kind."),
+        "score": af.lm.Float(desc="Confidence score."),
     }
 
     json_schema = describe(answer)
@@ -957,7 +955,7 @@ def test_schema_dsl_reconstructs_literal_subtree():
         "literal": "fixed",
         "nothing": None,
     }
-    answer = Answer(af.Str(), details)
+    answer = Answer(af.lm.Str(), details)
 
     json_schema = describe(answer)
 
@@ -989,7 +987,7 @@ def test_schema_dsl_reconstructs_literal_subtree():
 def test_schema_dsl_reconstructs_untraceable_static_leaf():
     metadata = object()
 
-    answer = {"decision": af.Str(), "metadata": metadata}
+    answer = {"decision": af.lm.Str(), "metadata": metadata}
 
     json_schema = describe(answer)
 
@@ -1007,14 +1005,14 @@ def test_schema_dsl_reconstructs_untraceable_static_leaf():
 def test_lm_schema_trace_rejects_untraceable_static_leaf():
     metadata = object()
 
-    program = fill_program({"decision": af.Str(), "metadata": metadata})
+    program = fill_program({"decision": af.lm.Str(), "metadata": metadata})
 
     with pytest.raises(TypeError, match="No aval rule registered"):
         af.trace(program)("test")
 
 
 def test_schema_dsl_builds_string_constraints():
-    answer = {"name": af.Str(min=2, max=4, pattern=r"^[a-z]+$")}
+    answer = {"name": af.lm.Str(min=2, max=4, pattern=r"^[a-z]+$")}
 
     json_schema = describe(answer)
 
@@ -1042,8 +1040,8 @@ def test_schema_dsl_builds_string_constraints():
 
 def test_schema_dsl_builds_number_constraints():
     answer = {
-        "count": af.Int(min=-2, max=2),
-        "score": af.Float(min=0, max=1),
+        "count": af.lm.Int(min=-2, max=2),
+        "score": af.lm.Float(min=0, max=1),
     }
 
     json_schema = describe(answer)
@@ -1088,7 +1086,7 @@ def test_schema_dsl_builds_custom_pytree_value():
         path_entry_type=optree.GetAttrEntry,
     )
 
-    answer = Answer(af.Str(), af.Float())
+    answer = Answer(af.lm.Str(), af.lm.Float())
 
     json_schema = describe(answer)
 
@@ -1105,8 +1103,8 @@ def test_schema_dsl_builds_custom_pytree_value():
 
 
 def test_schema_dsl_reports_value_errors():
-    count = {"count": af.Int()}
-    score = {"score": af.Float()}
+    count = {"count": af.lm.Int()}
+    score = {"score": af.lm.Float()}
 
     with pytest.raises(ValueError, match="Expected integer"):
         parse(count, {"count": True})
@@ -1136,7 +1134,7 @@ def test_async_transforms_respect_fanout(transform, args, width, serial):
             events.append(-1)
             return response
 
-    program = fill_program({"text": af.Str(), "score": af.Float()})
+    program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
     ir = transform(af.trace(program)("seed"))
     with af.lm.client(FillClient()) as client:
         expected = execute(ir, *args)

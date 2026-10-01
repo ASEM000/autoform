@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import functools as ft
 import json as jsonlib
-from collections.abc import Generator
+import math
+import re
+from collections.abc import Callable, Generator, Hashable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, runtime_checkable
@@ -28,9 +30,10 @@ from litellm import ResponsesAPIResponse, aresponses, responses
 import autoform.control as control
 import autoform.core as core
 import autoform.json as json
+import autoform.numeric as numeric
 import autoform.order as order
-import autoform.schemas as schemas
 import autoform.stage as stage
+import autoform.string as string
 import autoform.utils as utils
 
 __all__ = [
@@ -38,6 +41,11 @@ __all__ = [
     "LiteLLMClient",
     "client",
     "fill",
+    "Bool",
+    "Enum",
+    "Float",
+    "Int",
+    "Str",
     "describe",
     "parse",
 ]
@@ -51,6 +59,346 @@ type ClientType = ResponsesAPIResponse
 
 describe = json.describe
 parse = json.parse
+
+
+# ==================================================================================================
+# USER SCHEMA NODES
+# ==================================================================================================
+
+
+def slotted_values(node: Any) -> tuple[Any, ...]:
+    return tuple(getattr(node, name) for name in (*type(node).__slots__, "desc"))
+
+
+class Spec(Hashable):
+    __slots__ = ["desc"]
+
+    def __init__(self, *, desc: str | None = None) -> None:
+        if desc is not None and type(desc) is not str:
+            raise TypeError(f"desc must be a string, got {desc!r}")
+        self.desc = desc
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        utils.tree.register_node(cls, lambda node: ((), node), lambda node, _: node)
+
+    def __eq__(self, other: object) -> bool:
+        return type(self) is type(other) and slotted_values(self) == slotted_values(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), slotted_values(self)))
+
+    def __repr__(self) -> str:
+        fields = (f"{name}={getattr(self, name)!r}" for name in (*type(self).__slots__, "desc"))
+        return f"{type(self).__name__}({', '.join(fields)})"
+
+
+class Str(Spec):
+    """String schema node with optional length and pattern constraints.
+
+    Args:
+        desc: Optional generation guidance.
+        min: Optional minimum length of the string.
+        max: Optional maximum length of the string.
+        pattern: Optional regular expression pattern that the string must match.
+
+    Example:
+        >>> import autoform as af
+        >>> name = af.lm.Str(min=1, max=80, pattern=r"^[A-Za-z ]+$")
+    """
+
+    __slots__ = ["min", "max", "pattern"]
+
+    def __init__(
+        self,
+        *,
+        desc: str | None = None,
+        min: int | None = None,
+        max: int | None = None,
+        pattern: str | None = None,
+    ) -> None:
+        super().__init__(desc=desc)
+        if min is not None and type(min) is not int:
+            raise TypeError(f"min must be an int, got {min!r}")
+        if max is not None and type(max) is not int:
+            raise TypeError(f"max must be an int, got {max!r}")
+        if min is not None and min < 0:
+            raise ValueError(f"min must be >= 0, got {min!r}")
+        if max is not None and max < 0:
+            raise ValueError(f"max must be >= 0, got {max!r}")
+        if pattern is not None and type(pattern) is not str:
+            raise TypeError(f"pattern must be a string, got {pattern!r}")
+        if min is not None and max is not None and min > max:
+            raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
+        if pattern is not None:
+            re.compile(pattern)
+        self.min = min
+        self.max = max
+        self.pattern = pattern
+
+
+class Int(Spec):
+    """Integer schema node with optional range constraints.
+
+    Args:
+        desc: Optional generation guidance.
+        min: Optional minimum value.
+        max: Optional maximum value.
+
+    Example:
+        >>> import autoform as af
+        >>> count = af.lm.Int(min=0, max=10)
+    """
+
+    __slots__ = ["min", "max"]
+
+    def __init__(
+        self,
+        *,
+        desc: str | None = None,
+        min: int | None = None,
+        max: int | None = None,
+    ) -> None:
+        super().__init__(desc=desc)
+        if min is not None and type(min) is not int:
+            raise TypeError(f"min must be an int, got {min!r}")
+        if max is not None and type(max) is not int:
+            raise TypeError(f"max must be an int, got {max!r}")
+        if min is not None and max is not None and min > max:
+            raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
+        self.min = min
+        self.max = max
+
+
+class Float(Spec):
+    """Number schema node with optional range constraints.
+
+    Args:
+        desc: Optional generation guidance.
+        min: Optional minimum value.
+        max: Optional maximum value.
+
+    Example:
+        >>> import autoform as af
+        >>> score = af.lm.Float(min=0, max=1)
+    """
+
+    __slots__ = ["min", "max"]
+
+    def __init__(
+        self,
+        *,
+        desc: str | None = None,
+        min: int | float | None = None,
+        max: int | float | None = None,
+    ) -> None:
+        super().__init__(desc=desc)
+        if min is not None and type(min) not in (int, float):
+            raise TypeError(f"min must be a number, got {min!r}")
+        if max is not None and type(max) not in (int, float):
+            raise TypeError(f"max must be a number, got {max!r}")
+        if min is not None and max is not None and min > max:
+            raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
+        self.min = min
+        self.max = max
+
+
+class Bool(Spec):
+    """Boolean schema node.
+
+    Args:
+        desc: Optional generation guidance.
+
+    Example:
+        >>> import autoform as af
+        >>> ok = af.lm.Bool()
+    """
+
+    __slots__ = []
+
+
+class Enum(Spec):
+    """Enum schema node with a fixed set of allowed values.
+
+    Args:
+        desc: Optional generation guidance.
+        *values: Allowed values. Values must be non-empty and share one type.
+
+    Example:
+        >>> import autoform as af
+        >>> kind = af.lm.Enum("summary", "definition")
+    """
+
+    __slots__ = ["values"]
+
+    def __init__(self, *values: Any, desc: str | None = None) -> None:
+        super().__init__(desc=desc)
+        if not values:
+            raise TypeError("Enum must have at least one value")
+        value_types = {type(value) for value in values}
+        if len(value_types) != 1:
+            raise TypeError(f"Enum values must share one type, got {value_types!r}")
+        self.values = values
+
+    def __contains__(self, value: Any) -> bool:
+        return type(value) is type(self.values[0]) and value in self.values
+
+
+# ==================================================================================================
+# JSON DESCRIPTION RULES
+# ==================================================================================================
+
+
+def with_description(schema: Spec, value: json.JsonSchema) -> json.JsonSchema:
+    if schema.desc is not None:
+        value["description"] = schema.desc
+    return value
+
+
+def describe_str(schema: Str) -> json.JsonSchema:
+    json_schema: json.JsonSchema = dict(type="string")
+    if schema.min is not None:
+        json_schema["minLength"] = schema.min
+    if schema.max is not None:
+        json_schema["maxLength"] = schema.max
+    if schema.pattern is not None:
+        json_schema["pattern"] = schema.pattern
+    return with_description(schema, json_schema)
+
+
+def describe_int(schema: Int) -> json.JsonSchema:
+    json_schema: json.JsonSchema = dict(type="integer")
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return with_description(schema, json_schema)
+
+
+def describe_float(schema: Float) -> json.JsonSchema:
+    json_schema: json.JsonSchema = dict(type="number")
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return with_description(schema, json_schema)
+
+
+def describe_bool(schema: Bool) -> json.JsonSchema:
+    return with_description(schema, dict(type="boolean"))
+
+
+def describe_enum(schema: Enum) -> json.JsonSchema:
+    json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
+    if (value_type := type(schema.values[0])) not in json_types:
+        raise TypeError("Enum values must be str, int, float, or bool")
+    if value_type is float and not all(math.isfinite(value) for value in schema.values):
+        raise ValueError("Enum values must be finite")
+    json_schema = dict(type=json_types[value_type], enum=list(schema.values))
+    return with_description(schema, json_schema)
+
+
+json.describe_rules[Str] = describe_str
+json.describe_rules[Int] = describe_int
+json.describe_rules[Float] = describe_float
+json.describe_rules[Bool] = describe_bool
+json.describe_rules[Enum] = describe_enum
+
+
+def is_schema(node: Any) -> bool:
+    return isinstance(node, Spec)
+
+
+# ==================================================================================================
+# JSON PARSING RULES
+# ==================================================================================================
+
+
+def parse_str(schema: Str, value: Any) -> str:
+    if type(value) is not str:
+        raise ValueError("Expected string")
+    if schema.min is not None and len(value) < schema.min:
+        raise ValueError(f"Expected string with length >= {schema.min}")
+    if schema.max is not None and len(value) > schema.max:
+        raise ValueError(f"Expected string with length <= {schema.max}")
+    if schema.pattern is not None and not re.search(schema.pattern, value):
+        raise ValueError(f"Expected string matching {schema.pattern!r}")
+    return value
+
+
+def parse_int(schema: Int, value: Any) -> int:
+    if type(value) is not int:
+        raise ValueError("Expected integer")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected integer >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected integer <= {schema.max}")
+    return value
+
+
+def parse_float(schema: Float, value: Any) -> float:
+    if type(value) not in (int, float):
+        raise ValueError("Expected number")
+    if type(value) is float and not math.isfinite(value):
+        raise ValueError("Expected finite number")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected number >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected number <= {schema.max}")
+    return float(value)
+
+
+def parse_bool(schema: Bool, value: Any) -> bool:
+    if type(value) is not bool:
+        raise ValueError("Expected boolean")
+    return value
+
+
+def parse_enum(schema: Enum, value: Any) -> Any:
+    if value not in schema:
+        raise ValueError(f"Expected one of {schema.values!r}")
+    return value
+
+
+json.parse_rules[Str] = parse_str
+json.parse_rules[Int] = parse_int
+json.parse_rules[Float] = parse_float
+json.parse_rules[Bool] = parse_bool
+json.parse_rules[Enum] = parse_enum
+
+
+# ==================================================================================================
+# ABSTRACT
+# ==================================================================================================
+
+
+core.aval_types[Str] = lambda _: core.avalof("")
+core.aval_types[Int] = lambda _: core.avalof(0)
+core.aval_types[Float] = lambda _: core.avalof(0.0)
+core.aval_types[Bool] = lambda _: core.avalof(False)
+core.aval_types[Enum] = lambda schema: core.avalof(schema.values[0])
+
+
+type AValSchemaRule = Callable[[core.AVal], Spec]
+
+aval_schema_rules: dict[type[core.AVal], AValSchemaRule] = {}
+aval_schema_rules[string.StrAVal] = lambda _: Str()
+aval_schema_rules[numeric.IntAVal] = lambda _: Int()
+aval_schema_rules[numeric.FloatAVal] = lambda _: Float()
+aval_schema_rules[numeric.BoolAVal] = lambda _: Bool()
+
+
+def aval_to_schema(aval: core.AVal) -> Spec:
+    if rule := aval_schema_rules.get(type(aval)):
+        schema = rule(aval)
+        assert is_schema(schema), f"AVal schema rule returned {schema!r}"
+        return schema
+    raise TypeError(f"No schema rule registered for {aval!r}")
+
+
+# ==================================================================================================
+# CLIENTS
+# ==================================================================================================
 
 
 @runtime_checkable
@@ -120,7 +468,7 @@ def schema_content(value: Tree, schema: Tree) -> str:
 
 def json_content(value: json.Json) -> str:
     aval = core.avalof(value)
-    schema = aval.spec.unflatten(map(schemas.aval_to_schema, aval.avals))
+    schema = aval.spec.unflatten(map(aval_to_schema, aval.avals))
     content = dict(values=jsonlib.loads(value.text), schema=describe(schema))
     return jsonlib.dumps(content, allow_nan=False)
 
@@ -148,24 +496,24 @@ async def aschema_response(in_tree: Tree, /, *, schema: Any) -> Any:
 
 def schema_abstract_tree(schema: Any) -> Tree:
     def abstract(x: Any) -> Any:
-        if schemas.is_schema(x):
+        if is_schema(x):
             return core.avalof(x)
         if not stage.is_traceable(x):
             raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
         return x
 
-    return utils.tree.map(abstract, schema, is_leaf=schemas.is_schema)
+    return utils.tree.map(abstract, schema, is_leaf=is_schema)
 
 
 def fill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
-    schm_tree, _ = utils.partition(schemas.is_schema, schema, is_leaf=schemas.is_schema)
+    schm_tree, _ = utils.partition(is_schema, schema, is_leaf=is_schema)
     encoded, holes = prepare_fill(dict(context=context, output=schm_tree))
     out = fill_p.bind((encoded, model), schema=holes)
     return merge_fill(schema, out["output"])
 
 
 async def afill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
-    schm_tree, _ = utils.partition(schemas.is_schema, schema, is_leaf=schemas.is_schema)
+    schm_tree, _ = utils.partition(is_schema, schema, is_leaf=is_schema)
     encoded, holes = prepare_fill(dict(context=context, output=schm_tree))
     out = await fill_p.abind((encoded, model), schema=holes)
     return merge_fill(schema, out["output"])
@@ -174,7 +522,7 @@ async def afill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
 def feedback_schema(tree: Tree) -> Tree:
     def make_schema(path, value):
         aval = core.cotangent_s.map(core.avalof(value))
-        schema = schemas.aval_to_schema(aval)
+        schema = aval_to_schema(aval)
         schema.desc = f"Input cotangent at {path}, original value {value!r}."
         return schema
 
@@ -248,10 +596,10 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
     """
 
     def check_context(value):
-        schemas.aval_to_schema(core.avalof(value))
+        aval_to_schema(core.avalof(value))
 
     utils.tree.map(check_context, tree)
-    if not any(map(schemas.is_schema, utils.tree.leaves(tree, is_leaf=schemas.is_schema))):
+    if not any(map(is_schema, utils.tree.leaves(tree, is_leaf=is_schema))):
         return tree
     assert core.avalof(model) == core.avalof(""), f"Expected string model: {model!r}"
     encoded, schm_tree = prepare_fill(tree)
@@ -260,15 +608,15 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
 
 
 def prepare_fill(tree: Tree) -> TreePair:
-    schm_tree, lit_tree = utils.partition(schemas.is_schema, tree, is_leaf=schemas.is_schema)
+    schm_tree, lit_tree = utils.partition(is_schema, tree, is_leaf=is_schema)
     return json.encode(lit_tree), schm_tree
 
 
 def merge_fill(tree: Tree, generated: Tree) -> Tree:
     def generated_field(node, value):
-        return value if schemas.is_schema(node) else node
+        return value if is_schema(node) else node
 
-    return utils.tree.map(generated_field, tree, generated, is_leaf=schemas.is_schema)
+    return utils.tree.map(generated_field, tree, generated, is_leaf=is_schema)
 
 
 def fill_request(in_tree: Tree, /) -> Tree:
@@ -312,11 +660,11 @@ def fill_pushforward_request(in_tree: Tree, /, *, schema: Tree) -> TreePair:
     )
 
     def tangent_field(x):
-        if not schemas.is_schema(x):
+        if not is_schema(x):
             return x
-        return schemas.aval_to_schema(core.tangent_s.map(core.avalof(x)))
+        return aval_to_schema(core.tangent_s.map(core.avalof(x)))
 
-    t_schema = utils.tree.map(tangent_field, schema, is_leaf=schemas.is_schema)
+    t_schema = utils.tree.map(tangent_field, schema, is_leaf=is_schema)
     return (context, p_model), t_schema
 
 
@@ -353,19 +701,19 @@ def fill_pullback_request(in_tree: Tree, /, *, schema: Tree) -> TreePair | None:
     lit_tree = json.decode(encoded)
 
     def to_schema(x):
-        return schemas.aval_to_schema(core.avalof(x))
+        return aval_to_schema(core.avalof(x))
 
     context_schema = utils.tree.map(to_schema, lit_tree)
 
     def to_cotangent_schema(x):
-        if not schemas.is_schema(x):
+        if not is_schema(x):
             return x
-        return schemas.aval_to_schema(core.cotangent_s.map(core.avalof(x)))
+        return aval_to_schema(core.cotangent_s.map(core.avalof(x)))
 
-    cotangent_schema = utils.tree.map(to_cotangent_schema, schema, is_leaf=schemas.is_schema)
+    cotangent_schema = utils.tree.map(to_cotangent_schema, schema, is_leaf=is_schema)
     out_cotangent = core.materialize_zeros(out_cotangent)
     prompt = GRAD_PROMPT.format(
-        input=schema_content((lit_tree, model), (context_schema, schemas.Str())),
+        input=schema_content((lit_tree, model), (context_schema, Str())),
         output=schema_content(out, schema),
         out_cotangent=schema_content(out_cotangent, cotangent_schema),
     )
