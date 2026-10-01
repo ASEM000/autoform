@@ -23,7 +23,6 @@ from collections.abc import Awaitable, Callable, Generator, Hashable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
-from operator import setitem
 from typing import Any, ClassVar, Self, TypeGuard, cast
 
 import autoform.core as core
@@ -322,15 +321,11 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 type GenStep = tuple[Eqn | None, Tree]
 
 
-def check_inputs(atoms: Tree, args: Tree, /) -> None:
-
+def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
     def check_input(atom, value: Any):
-        if is_var(atom):
-            atom.aval.check(value)
-        else:
-            expected = atom
-            msg = f"Static input mismatch: expected {expected!r}, got {value!r}"
-            assert expected == value, msg
+        if not is_var(atom):
+            msg = f"Static input mismatch: expected {atom!r}, got {value!r}"
+            assert atom == value, msg
 
     utils.tree.map(check_input, atoms, args)
 
@@ -348,10 +343,16 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
         env: dict[Var, Any] = {}
 
         def read(ir_val) -> Any:
-            return env[ir_val] if is_var(ir_val) else ir_val
+            if not is_var(ir_val):
+                return ir_val
+            value = env[ir_val]
+            ir_val.aval.check(value)
+            return value
 
         def write(ir_val, value: Any):
-            is_var(ir_val) and setitem(env, ir_val, value)
+            if is_var(ir_val):
+                ir_val.aval.check(value)
+                env[ir_val] = value
 
         utils.tree.map(write, ir.in_tree, args)
 
@@ -375,7 +376,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
-        check_inputs(ir.in_tree, args)
+        check_static_inputs(ir.in_tree, args)
         eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
@@ -389,7 +390,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
-        check_inputs(ir.in_tree, args)
+        check_static_inputs(ir.in_tree, args)
         eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))

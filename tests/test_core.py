@@ -30,10 +30,35 @@ class TestAVal:
         assert len({X(), X(), Y()}) == 2
         assert {X(): "x"}[X()] == "x"
 
-    def test_check_respects_metadata_equality(self):
-        BlobAVal(3).check(af.core.Zero(BlobAVal(3)))
+    @pytest.mark.parametrize(
+        "aval, wrap",
+        [
+            pytest.param(BlobAVal(3), lambda x: x, id="value"),
+            pytest.param(BlobAVal(3), lambda x: af.ad.PushforwardBox(None, x, x), id="pushforward"),
+            pytest.param(
+                BlobAVal(3), lambda x: af.ad.PullbackFwdBox(None, x), id="pullback-forward"
+            ),
+            pytest.param(
+                BlobAVal(3), lambda x: af.ad.PullbackBwdBox(None, x), id="pullback-backward"
+            ),
+            pytest.param(BlobAVal(3), lambda x: af.axis.BatchBox(None, x, False), id="broadcast"),
+            pytest.param(BlobAVal(3), lambda x: af.axis.BatchBox(None, [x], True), id="batch"),
+            pytest.param(
+                af.axis.BatchAVal(BlobAVal(3)),
+                lambda x: af.axis.BatchBox(None, [x], False),
+                id="broadcast-batch",
+            ),
+            pytest.param(
+                af.axis.BatchAVal(BlobAVal(3)),
+                lambda x: af.axis.BatchBox(None, [[x]], True),
+                id="nested-batch",
+            ),
+        ],
+    )
+    def test_check_respects_metadata_equality(self, aval, wrap):
+        aval.check(wrap(af.core.Zero(BlobAVal(3))))
         with pytest.raises(TypeError, match="Expected"):
-            BlobAVal(3).check(af.core.Zero(BlobAVal(4)))
+            aval.check(wrap(af.core.Zero(BlobAVal(4))))
 
 
 class TestSpace:
@@ -221,5 +246,6 @@ def test_custom_rule_interpreter(executor):
 
     ir = af.trace(lambda x, y: (x + y) + y)("x", "y")
     with af.core.using_interpreter(OperationCountInterpreter()):
-        assert executor(ir, "x", "y") == 2
+        with pytest.raises(TypeError, match="Expected StrAVal"):
+            executor(ir, "x", "y")
     assert executor(ir, "x", "y") == "xyy"

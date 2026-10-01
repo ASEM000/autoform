@@ -192,9 +192,10 @@ def test_call_rejects_incompatible_input_aval(executor, transform, args):
         executor(ir, *args)
 
 
-def test_walk_does_not_check_input_aval():
+def test_walk_rejects_incompatible_input_aval():
     ir = af.trace(lambda x: x)("x")
-    assert next(ir.walk(["x"])) == (None, ["x"])
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        next(ir.walk(["x"]))
 
 
 class TestTraceStatic:
@@ -215,7 +216,7 @@ class TestTraceStatic:
         ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            af.stage.check_inputs(ir.in_tree, ("Hi", "x0"))
+            af.stage.check_static_inputs(ir.in_tree, ("Hi", "x0"))
 
         gen = ir.walk("Hi", "x0")
 
@@ -353,6 +354,60 @@ class TestTags:
 
 
 class TestRunIR:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_call_rejects_incompatible_injected_output(self, executor):
+        ir = af.trace(lambda x: af.checkpoint(x, key="value", collection="cache"))("hello")
+        with af.inject(collection="cache", values={"value": [1.0]}):
+            with pytest.raises(TypeError, match="Expected StrAVal"):
+                executor(ir, "world")
+
+    @pytest.mark.parametrize(
+        "program, output, error, message",
+        [
+            pytest.param(append_bang, 1.0, TypeError, "Expected StrAVal", id="dynamic"),
+            pytest.param(
+                lambda x: (append_bang(x), x)[1],
+                1.0,
+                TypeError,
+                "Expected StrAVal",
+                id="unused-output",
+            ),
+            pytest.param(
+                lambda x: af.checkpoint((x, x), key="value"),
+                ("world!",),
+                ValueError,
+                "arity mismatch",
+                id="wrong-output-tree",
+            ),
+        ],
+    )
+    def test_walk_rejects_incompatible_supplied_output(self, program, output, error, message):
+        gen = af.trace(program)("hello").walk("world")
+        next(gen)
+        with pytest.raises(error, match=message):
+            gen.send(output)
+
+    @pytest.mark.parametrize(
+        "use_in_equation", [False, True], ids=["final-output", "equation-input"]
+    )
+    def test_walk_rechecks_mutated_values(self, use_in_equation):
+        class Value(Blob): ...
+
+        af.extend.register_trace_type(Value, lambda value: BlobAVal(value.size))
+
+        def program(x):
+            x = af.checkpoint(x, key="value")
+            af.checkpoint("pause", key="pause")
+            return af.checkpoint(x, key="next") if use_in_equation else x
+
+        value = Value(3)
+        gen = af.trace(program)(value).walk(value)
+        eqn, inputs = next(gen)
+        eqn, inputs = gen.send(eqn.bind(inputs, **eqn.params))
+        value.size = 4
+        with pytest.raises(TypeError, match="Expected"):
+            gen.send(eqn.bind(inputs, **eqn.params))
+
     def test_walk_with_supplied_output(self):
         gen = af.trace(append_bang)("hello").walk("world")
         eqn, in_values = next(gen)
