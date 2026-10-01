@@ -473,54 +473,6 @@ async def apull_fwd_while_loop(
     return out, residuals
 
 
-def pullback_bwd_while_loop(
-    in_tree: Tree,
-    /,
-    *,
-    cond_ir: stage.IR,
-    body_ir: stage.IR,
-    max_iters: int,
-) -> Tree:
-    residuals, out_cotangent = in_tree
-    del cond_ir, max_iters
-    trajectory, _ = residuals
-    n_iters = len(trajectory) - 1
-
-    cotangent = out_cotangent
-    pb_body = ad.pullback(body_ir)
-
-    for t in reversed(range(n_iters)):
-        state_t = trajectory[t]
-        _, cotangent = pb_body.call(state_t, cotangent)
-        cotangent = cotangent[0]
-
-    return cotangent
-
-
-async def apull_bwd_while_loop(
-    in_tree: Tree,
-    /,
-    *,
-    cond_ir: stage.IR,
-    body_ir: stage.IR,
-    max_iters: int,
-) -> Tree:
-    residuals, out_cotangent = in_tree
-    del cond_ir, max_iters
-    trajectory, _ = residuals
-    n_iters = len(trajectory) - 1
-
-    cotangent = out_cotangent
-    pb_body = ad.pullback(body_ir)
-
-    for t in reversed(range(n_iters)):
-        state_t = trajectory[t]
-        _, cotangent = await pb_body.acall(state_t, cotangent)
-        cotangent = cotangent[0]
-
-    return cotangent
-
-
 def batch_while_loop(
     in_tree: Tree,
     /,
@@ -671,6 +623,88 @@ async def abatch_while_loop(
     return out_tree, out_batched
 
 
+def pushforward_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
+    max_iters: int,
+) -> TreePair:
+    p_state, t_state = in_tree
+    pf_body = ad.pushforward(body_ir)
+    for _ in range(max_iters):
+        if not cond_ir.call(p_state):
+            break
+        p_state, t_state = pf_body.call((p_state,), (t_state,))
+    return p_state, t_state
+
+
+async def apushforward_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
+    max_iters: int,
+) -> TreePair:
+    p_state, t_state = in_tree
+    pf_body = ad.pushforward(body_ir)
+    for _ in range(max_iters):
+        if not await cond_ir.acall(p_state):
+            break
+        p_state, t_state = await pf_body.acall((p_state,), (t_state,))
+    return p_state, t_state
+
+
+def pullback_bwd_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
+    max_iters: int,
+) -> Tree:
+    residuals, out_cotangent = in_tree
+    del cond_ir, max_iters
+    trajectory, _ = residuals
+    n_iters = len(trajectory) - 1
+
+    cotangent = out_cotangent
+    pb_body = ad.pullback(body_ir)
+
+    for t in reversed(range(n_iters)):
+        state_t = trajectory[t]
+        _, cotangent = pb_body.call(state_t, cotangent)
+        cotangent = cotangent[0]
+
+    return cotangent
+
+
+async def apull_bwd_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
+    max_iters: int,
+) -> Tree:
+    residuals, out_cotangent = in_tree
+    del cond_ir, max_iters
+    trajectory, _ = residuals
+    n_iters = len(trajectory) - 1
+
+    cotangent = out_cotangent
+    pb_body = ad.pullback(body_ir)
+
+    for t in reversed(range(n_iters)):
+        state_t = trajectory[t]
+        _, cotangent = await pb_body.acall(state_t, cotangent)
+        cotangent = cotangent[0]
+
+    return cotangent
+
+
 def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     cond_ir = eqn.params["cond_ir"]
     body_ir = eqn.params["body_ir"]
@@ -688,6 +722,8 @@ core.aimpl_rules.set(while_loop_p, aimpl_while_loop)
 core.abstract_rules.set(while_loop_p, abstract_while_loop)
 core.batch_rules.set(while_loop_p, batch_while_loop)
 core.abatch_rules.set(while_loop_p, abatch_while_loop)
+core.push_rules.set(while_loop_p, pushforward_while_loop)
+core.apush_rules.set(while_loop_p, apushforward_while_loop)
 core.pull_fwd_rules.set(while_loop_p, pullback_fwd_while_loop)
 core.apull_fwd_rules.set(while_loop_p, apull_fwd_while_loop)
 core.pull_bwd_rules.set(while_loop_p, pullback_bwd_while_loop)
