@@ -37,7 +37,6 @@ __all__ = [
     "Client",
     "LiteLLMClient",
     "client",
-    "generate",
     "fill",
     "describe",
     "parse",
@@ -48,7 +47,6 @@ zip = utils.strict_zip
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type Messages = list[dict[str, str]]
 type ClientType = ModelResponse
 
 describe = json.describe
@@ -248,158 +246,6 @@ async def abatch_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
     out_batched = utils.tree.map(lambda _: True, results[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
     return out_ib, out_batched
-
-
-def pushforward_messages_request(p_in: Tree, t_in: Tree, /) -> Tree:
-    p_messages, p_model = p_in
-    t_messages, *_ = t_in
-    return {
-        "instruction": PUSH_SYSTEM_PROMPT,
-        "request": PUSH_PROMPT.format(
-            input=jsonlib.dumps(dict(messages=p_messages), allow_nan=False),
-            in_tangent=jsonlib.dumps(dict(messages=t_messages), allow_nan=False),
-        ),
-    }, p_model
-
-
-# ==================================================================================================
-# GENERATE
-# ==================================================================================================
-
-generate_p = core.Prim("generate")
-
-
-def generate(messages: Messages, /, *, model: str, schema: Any) -> Any:
-    """Generate a value matching the supplied schema.
-
-    Args:
-        messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The model name or active client model alias to use (e.g., "gpt-5.5").
-        schema: An autoform schema tree describing the output.
-
-    Returns:
-        A value with the same pytree structure as the schema.
-
-    Use :func:`client` to configure provider-specific settings like ``max_tokens``.
-
-    Example with a registered pytree:
-        >>> import optree
-        >>> import autoform as af
-        >>> @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
-        ... class Answer:
-        ...     answer: float
-        ...     reasoning: str
-        >>> schema = Answer(
-        ...     answer=af.Float(desc="The numeric answer."),
-        ...     reasoning=af.Str(desc="The reasoning behind the answer."),
-        ... )
-        >>> msgs = [dict(role="user", content="1 + 1?")]
-        >>> output = af.lm.generate(  # doctest: +SKIP
-        ...     msgs,
-        ...     model="openai/gpt-5.5",
-        ...     schema=schema,
-        ... )
-        >>> output  # doctest: +SKIP
-        Answer(answer=2.0, reasoning='Adding 1 and 1 gives 2.')
-    """
-    assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
-    for m in messages:
-        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
-        assert "role" in m, f"message must have a 'role' key, got {m=}"
-        assert "content" in m, f"message must have a 'content' key, got {m=}"
-
-    roles, contents = [m["role"] for m in messages], [m["content"] for m in messages]
-    # NOTE(asem): emit a single stop_gradient not to pollute the IR with sg for each role
-    roles, model = control.stop_gradient((roles, model))
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    return generate_p.bind((messages, model), schema=schema)
-
-
-def abstract_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
-    messages, model = in_tree
-    aval = core.avalof("")
-    fields = [m[key] for m in messages for key in ("role", "content")]
-    assert all(type(x) in (str, type(aval)) for x in fields), f"Expected strings: {messages!r}"
-    assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
-    return schema_abstract_tree(schema)
-
-
-def pushforward_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
-    p_in, t_in = in_tree
-    t_in = core.materialize_zeros(t_in)
-    t_context, p_model = pushforward_messages_request(p_in, t_in)
-    t_schema = utils.tree.map(
-        lambda node: (
-            schemas.aval_to_schema(core.tangent_s.map(core.avalof(node)))
-            if schemas.is_schema(node)
-            else node
-        ),
-        schema,
-        is_leaf=schemas.is_schema,
-    )
-    p_messages, _ = p_in
-    p_resp = fill_context(dict(messages=p_messages), p_model, schema=schema)
-    t_resp = fill_context(t_context, p_model, schema=t_schema)
-    return p_resp, t_resp
-
-
-async def apush_generate(in_tree: Tree, /, *, schema: Any) -> TreePair:
-    p_in, t_in = in_tree
-    t_in = core.materialize_zeros(t_in)
-    t_context, p_model = pushforward_messages_request(p_in, t_in)
-    t_schema = utils.tree.map(
-        lambda node: (
-            schemas.aval_to_schema(core.tangent_s.map(core.avalof(node)))
-            if schemas.is_schema(node)
-            else node
-        ),
-        schema,
-        is_leaf=schemas.is_schema,
-    )
-    p_messages, _ = p_in
-    p_context = dict(messages=p_messages)
-    p_ir = stage.trace(ft.partial(fill_context, schema=schema))(p_context, p_model)
-    t_ir = stage.trace(ft.partial(fill_context, schema=t_schema))(t_context, p_model)
-    p_resp, t_resp = await order.fanout_p.abind(
-        [(p_context, p_model), (t_context, p_model)],
-        irs=[p_ir, t_ir],
-    )
-    return p_resp, t_resp
-
-
-def generate_pullback_request(in_tree: Tree, /, *, schema: Tree) -> TreePair:
-    residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
-    messages, model, out = residuals
-    out = jsonlib.dumps(json.project_value(schema, out), allow_nan=False)
-    out_cotangent = jsonlib.dumps(json.project_value(schema, out_cotangent), allow_nan=False)
-    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
-
-    context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
-    return (context, model), feedback_schema((messages, model))
-
-
-def pullback_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
-    (context, model), in_schema = generate_pullback_request(in_tree, schema=schema)
-    return fill_context(context, model, schema=in_schema)
-
-
-async def apull_bwd_generate(in_tree: Tree, /, *, schema: Any) -> Tree:
-    (context, model), in_schema = generate_pullback_request(in_tree, schema=schema)
-    return await afill_context(context, model, schema=in_schema)
-
-
-core.impl_rules.set(generate_p, schema_completion)
-core.aimpl_rules.set(generate_p, aschema_completion)
-core.abstract_rules.set(generate_p, abstract_generate)
-core.batch_rules.set(generate_p, ft.partial(batch_lm, generate_p))
-core.abatch_rules.set(generate_p, ft.partial(abatch_lm, generate_p))
-core.push_rules.set(generate_p, pushforward_generate)
-core.apush_rules.set(generate_p, apush_generate)
-core.pull_fwd_rules.set(generate_p, ft.partial(pullback_fwd_lm, generate_p))
-core.apull_fwd_rules.set(generate_p, ft.partial(apull_fwd_lm, generate_p))
-core.pull_bwd_rules.set(generate_p, pullback_bwd_generate)
-core.apull_bwd_rules.set(generate_p, apull_bwd_generate)
 
 
 # ==================================================================================================

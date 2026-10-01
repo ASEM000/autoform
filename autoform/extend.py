@@ -94,7 +94,6 @@ gt_p = numeric.gt_p
 ge_p = numeric.ge_p
 json_encode_p = json.encode_p
 json_decode_p = json.decode_p
-generate_p = lm.generate_p
 fill_p = lm.fill_p
 factor_p = path.factor_p
 weight_call_p = path.weight_call_p
@@ -171,7 +170,6 @@ __all__ = [
     "ge_p",
     "json_encode_p",
     "json_decode_p",
-    "generate_p",
     "fill_p",
     "factor_p",
     "weight_call_p",
