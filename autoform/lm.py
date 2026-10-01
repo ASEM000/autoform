@@ -136,19 +136,6 @@ def describe_node(schema: Tree, /) -> JsonSchema | None:
     )
 
 
-def project_value(schema: Tree, value: Tree, /) -> Any:
-    def select_field(node, value):
-        if not is_describe_node(node):
-            return None
-        aval = core.avalof(node)
-        if core.avalof(value) != aval:
-            raise TypeError(f"Expected {aval!r}, got {value!r}")
-        return value
-
-    generated = utils.tree.map(select_field, schema, value, is_leaf=is_describe_node)
-    return json_value(generated) if utils.tree.leaves(generated) else None
-
-
 def parse_node(schema: Tree, value: Any, /) -> Tree:
     if schema is missing:
         return missing

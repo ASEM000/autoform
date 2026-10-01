@@ -407,6 +407,8 @@ def test_describe_and_parse_select_their_own_registered_nodes(operation):
 def test_schema_constraints_do_not_apply_to_typed_feedback(schema, value):
     with pytest.raises(ValueError):
         af.lm.parse(schema, value)
-    assert af.lm.project_value(schema, value) == value
-    with pytest.raises(TypeError, match="Expected"):
-        af.lm.project_value(schema, True)
+    aval = af.core.cotangent_s.map(af.core.avalof(schema))
+    feedback_spec = af.lm.aval_to_spec(aval)
+    assert af.lm.parse(feedback_spec, value) == value
+    with pytest.raises(ValueError, match="Expected"):
+        af.lm.parse(feedback_spec, True)

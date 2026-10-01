@@ -962,27 +962,6 @@ def test_fill_pullback_rejects_wrong_schema_cotangent_type(
     assert len(gradient_client.calls) == 1
 
 
-def test_project_value_preserves_generated_structure():
-    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
-    class Answer:
-        fields: object
-        metadata: object
-
-    schema = Answer(
-        [
-            af.lm.Float(min=0) @ "Score",
-            (af.lm.Str(min=1), af.lm.Int(), af.lm.Bool(), af.lm.Enum("yes", "no")),
-        ],
-        {"source": "fixed", "nothing": None},
-    )
-    value = Answer([-0.2, ("", -1, False, "feedback")], {"source": "", "nothing": None})
-    assert af.lm.project_value(schema, value) == {
-        "fields": {"0": -0.2, "1": {"0": "", "1": -1, "2": False, "3": "feedback"}}
-    }
-    with pytest.raises(ValueError):
-        af.lm.project_value(schema, Answer([], value.metadata))
-
-
 @pytest.mark.parametrize(
     "schema, expected",
     [
