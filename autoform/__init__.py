@@ -26,13 +26,11 @@ import autoform.core as core
 import autoform.dead as dead
 import autoform.extend as extend
 import autoform.intercept as intercept
-import autoform.json as json
 import autoform.lm as lm
 import autoform.memo as memo
 import autoform.numeric as numeric
 import autoform.order as order
 import autoform.path as path
-import autoform.schemas as schemas
 import autoform.stage as stage
 import autoform.string as string
 import autoform.utils as utils
@@ -79,16 +77,6 @@ depends = order.depends
 factor = path.factor
 
 # ==================================================================================================
-# SCHEMAS
-# ==================================================================================================
-
-Bool = schemas.Bool
-Enum = schemas.Enum
-Float = schemas.Float
-Int = schemas.Int
-Str = schemas.Str
-
-# ==================================================================================================
 # TYPES
 # ==================================================================================================
 
@@ -124,17 +112,10 @@ __all__ = [
     "fixpoint",
     "depends",
     "factor",
-    # schemas
-    "Bool",
-    "Enum",
-    "Float",
-    "Int",
-    "Str",
     # types
     "PYTREE_NAMESPACE",
     # modules
     "extend",
-    "json",
     "lm",
     "numeric",
     "string",

@@ -96,8 +96,8 @@ def memoize() -> Generator[None, None, None]:
         >>> result
         'hello!hello!'
 
-    Tracing a program with `memoize` will act as compile-time deduplication of
-    identical primitive calls (including stochastic primitives like :func:`complete`).
+    Tracing a program with :func:`memoize` will act as compile-time deduplication of
+    identical primitive calls (including stochastic primitives like :func:`autoform.lm.fill`).
     Non-memoizable primitives are not memoized.
 
     Example:

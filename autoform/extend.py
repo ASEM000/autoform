@@ -25,7 +25,6 @@ import autoform.control as control
 import autoform.core as core
 import autoform.dead as dead
 import autoform.intercept as intercept
-import autoform.json as json
 import autoform.lm as lm
 import autoform.memo as memo
 import autoform.numeric as numeric
@@ -44,7 +43,6 @@ StrAVal = string.StrAVal
 IntAVal = numeric.IntAVal
 FloatAVal = numeric.FloatAVal
 BoolAVal = numeric.BoolAVal
-JsonAVal = json.JsonAVal
 Space = core.Space
 avalof = core.avalof
 primal_s = core.primal_s
@@ -92,10 +90,6 @@ lt_p = numeric.lt_p
 le_p = numeric.le_p
 gt_p = numeric.gt_p
 ge_p = numeric.ge_p
-json_encode_p = json.encode_p
-json_decode_p = json.decode_p
-complete_p = lm.complete_p
-generate_p = lm.generate_p
 fill_p = lm.fill_p
 factor_p = path.factor_p
 weight_call_p = path.weight_call_p
@@ -116,7 +110,6 @@ __all__ = [
     "IntAVal",
     "FloatAVal",
     "BoolAVal",
-    "JsonAVal",
     "Space",
     "avalof",
     "primal_s",
@@ -170,10 +163,6 @@ __all__ = [
     "le_p",
     "gt_p",
     "ge_p",
-    "json_encode_p",
-    "json_decode_p",
-    "complete_p",
-    "generate_p",
     "fill_p",
     "factor_p",
     "weight_call_p",

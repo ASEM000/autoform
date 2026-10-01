@@ -18,6 +18,7 @@ import math
 import operator
 import re
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -1084,22 +1085,26 @@ class TestFold:
         assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "concat"]
         assert ir.call("c") == "[ab]c!"
 
-    def test_fold_block_evaluates_complete_during_trace(self):
+    def test_fold_block_evaluates_fill_during_trace(self):
         calls = []
 
-        def render(messages):
-            calls.append(messages)
-            return "rubric"
+        class FillClient:
+            def responses(self, *, input, model, **kwargs):
+                calls.append(input)
+                return SimpleNamespace(output_text='{"output": "rubric"}')
+
+            async def aresponses(self, **kwargs):
+                return self.responses(**kwargs)
 
         def program(question):
             with af.fold():
-                rubric = af.lm.complete(
-                    [{"role": "user", "content": "make a rubric"}],
+                rubric = af.lm.fill(
+                    {"prompt": "make a rubric", "output": af.lm.Str()},
                     model="test-model",
-                )
+                )["output"]
             return af.string.format("{rubric}: {question}", rubric=rubric, question=question)
 
-        with af.lm.client(af.lm.EchoClient(render)):
+        with af.lm.client(FillClient()):
             ir = af.trace(program)("seed")
 
         assert len(calls) == 1

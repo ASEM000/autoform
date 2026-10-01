@@ -924,7 +924,8 @@ def trace[*A, R](
     """Build an IR by tracing a function's execution.
 
     Args:
-        func: A callable that uses autoform primitives (string.concat, lm.complete, etc.).
+        func: A callable that uses autoform primitives such as
+            :func:`autoform.string.concat` and :func:`autoform.lm.fill`.
         static: Bool pytree matching the positional input structure.
             Mark a leaf ``True`` to keep that value fixed at trace time.
             Mark a leaf ``False`` to keep it as a normal runtime input.

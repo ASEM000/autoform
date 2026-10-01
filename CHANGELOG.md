@@ -9,13 +9,36 @@
     | v0.3.0 | Now |
     | --- | --- |
     | `af.format`, `af.concat`, `af.match` | `af.string.format`, `af.string.concat`, `af.string.match` |
-    | `af.lm_call` | `af.lm.complete` |
-    | `af.lm_schema_call` | `af.lm.generate` |
+    | `af.lm_call`, `af.lm_schema_call` | `af.lm.fill` |
     | `af.lm_client` | `af.lm.client` |
     | `af.lm.LMClient` | `af.lm.Client` |
 
-    The extension primitives `lm_call_p` and `lm_schema_call_p` are now
-    `complete_p` and `generate_p`.
+    The extension primitives `lm_call_p` and `lm_schema_call_p` are replaced
+    by `fill_p`.
+
+  - `af.lm.fill` accepts a pytree containing literal inputs and specs, rather
+    than separate messages and an output schema. It preserves literal inputs
+    and replaces specs with filled values.
+
+    ```python
+    import autoform as af
+
+    out = af.lm.fill(
+        {"text": text, "summary": af.lm.Str() @ "Summarize the text."},
+        model="model-name",
+    )
+    summary = out["summary"]
+    ```
+
+  - Moved `Str`, `Int`, `Float`, `Bool`, and `Enum` from the top-level API
+    and `autoform.schemas` into `af.lm`. Removed `Doc` and `Docd`; attach
+    descriptions directly with `af.lm.Str() @ "description"` or keyword `desc=`.
+    Descriptions are dynamic pytree children; constraints remain static.
+    Custom specs subclass `af.lm.Spec` and implement `describe` and `parse`.
+
+  - LM clients now expose `responses` and `aresponses`, replacing `completion`
+    and `acompletion`. Requests use `input` and `text.format`; responses provide
+    `output_text`.
 
   - Formatting now lowers to `concat`; `format_p` is removed.
 
@@ -44,8 +67,6 @@
 
   - Added `af.numeric` with scalar arithmetic and comparisons, including
     dispatch through Python operators such as `+`, `*`, and `<`.
-
-  - Added `af.lm.EchoClient` for running examples and debugging without a provider.
 
   - Added {py:func}`fixpoint <autoform.fixpoint>`, a bounded control-flow
     primitive for iterating `(State, Theta) -> State` to structural convergence,
