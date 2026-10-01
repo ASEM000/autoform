@@ -18,6 +18,24 @@ import autoform as af
 from tests import Blob, BlobAVal, aexecute, execute
 
 
+class TestAVal:
+    def test_default_equality_and_hash(self):
+        class X(af.core.AVal): ...
+
+        class Y(af.core.AVal): ...
+
+        assert X() == X()
+        assert X() != Y()
+        assert X() != object()
+        assert len({X(), X(), Y()}) == 2
+        assert {X(): "x"}[X()] == "x"
+
+    def test_check_respects_metadata_equality(self):
+        BlobAVal(3).check(af.core.Zero(BlobAVal(3)))
+        with pytest.raises(TypeError, match="Expected"):
+            BlobAVal(3).check(af.core.Zero(BlobAVal(4)))
+
+
 class TestSpace:
     def test_registration_and_replacement(self):
         space = af.core.Space("blob")
