@@ -90,24 +90,24 @@ type JsonSchema = dict[str, Any]
 missing = object()
 
 
-def describe(schema: Tree, /) -> JsonSchema | None:
+def describe(spec_tree: Tree, /) -> JsonSchema | None:
     """Describe a tree of specs, omitting literal fields."""
-    schm_tree, _ = utils.partition(
+    spec_tree, _ = utils.partition(
         is_spec,
-        schema,
+        spec_tree,
         is_leaf=is_spec,
         fillvalue=missing,
     )
-    return describe_node(schm_tree)
+    return describe_node(spec_tree)
 
 
-def describe_node(schema: Tree, /) -> JsonSchema | None:
-    if schema is missing:
+def describe_node(spec_tree: Tree, /) -> JsonSchema | None:
+    if spec_tree is missing:
         return None
-    if is_spec(schema):
-        return schema.describe()
+    if is_spec(spec_tree):
+        return spec_tree.describe()
 
-    flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    flat, spec = utils.tree.flatten(spec_tree, is_leaf=lambda x: id(x) != id(spec_tree))
     property_names = json_property_names(spec.entries())
     properties = {}
     for name, child in zip(property_names, flat):
@@ -124,39 +124,39 @@ def describe_node(schema: Tree, /) -> JsonSchema | None:
     )
 
 
-def parse_node(schema: Tree, value: Any, /) -> Tree:
-    if schema is missing:
+def parse_node(spec_tree: Tree, value: Any, /) -> Tree:
+    if spec_tree is missing:
         return missing
-    if is_spec(schema):
-        return schema.parse(value)
+    if is_spec(spec_tree):
+        return spec_tree.parse(value)
 
     def has_spec(node):
         return any(map(is_spec, utils.tree.leaves(node, is_leaf=is_spec)))
 
-    flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    flat, spec = utils.tree.flatten(spec_tree, is_leaf=lambda x: id(x) != id(spec_tree))
     schema_keys = json_property_names(spec.entries())
     properties = {key: child for key, child in zip(schema_keys, flat) if has_spec(child)}
     if not properties:
-        return schema
+        return spec_tree
     expected_spec = utils.tree.structure(properties, is_leaf=lambda x: id(x) != id(properties))
     values = dict(zip(expected_spec.entries(), expected_spec.flatten_up_to(value)))
     children = (parse_node(child, values.get(key)) for key, child in zip(schema_keys, flat))
     return spec.unflatten(children)
 
 
-def parse(schema: Tree, value: Any, /) -> Tree:
+def parse(spec_tree: Tree, value: Any, /) -> Tree:
     """Parse a tree of specs with their constraints and preserve literals."""
 
     def select_filled(literal, generated):
         return generated if literal is missing else literal
 
-    schm_tree, lit_tree = utils.partition(
+    spec_tree, lit_tree = utils.partition(
         is_spec,
-        schema,
+        spec_tree,
         is_leaf=is_spec,
         fillvalue=missing,
     )
-    generated = parse_node(schm_tree, value)
+    generated = parse_node(spec_tree, value)
     return utils.tree.map(select_filled, lit_tree, generated)
 
 
@@ -224,7 +224,7 @@ def is_spec(node: Any) -> bool:
 
 
 class Str(Spec):
-    """String schema node with optional length and pattern constraints.
+    """String spec with optional length and pattern constraints.
 
     Args:
         desc: Optional generation guidance.
@@ -294,7 +294,7 @@ core.aval_types[Str] = lambda _: core.avalof("")
 
 
 class Int(Spec):
-    """Integer schema node with optional range constraints.
+    """Integer spec with optional range constraints.
 
     Args:
         desc: Optional generation guidance.
@@ -349,7 +349,7 @@ core.aval_types[Int] = lambda _: core.avalof(0)
 
 
 class Float(Spec):
-    """Number schema node with optional range constraints.
+    """Number spec with optional range constraints.
 
     Args:
         desc: Optional generation guidance.
@@ -406,7 +406,7 @@ core.aval_types[Float] = lambda _: core.avalof(0.0)
 
 
 class Bool(Spec):
-    """Boolean schema node.
+    """Boolean spec.
 
     Args:
         desc: Optional generation guidance.
@@ -434,7 +434,7 @@ core.aval_types[Bool] = lambda _: core.avalof(False)
 
 
 class Enum(Spec):
-    """Enum schema node with a fixed set of allowed values.
+    """Enum spec with a fixed set of allowed values.
 
     Args:
         desc: Optional generation guidance.
@@ -478,7 +478,7 @@ class Enum(Spec):
         return value
 
 
-core.aval_types[Enum] = lambda schema: core.avalof(schema.values[0])
+core.aval_types[Enum] = lambda spec: core.avalof(spec.values[0])
 
 
 # ==================================================================================================
@@ -568,17 +568,17 @@ GRAD_SYSTEM_PROMPT = "Translate output feedback into corresponding input feedbac
 GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_cotangent}"""
 
 
-def schema_content(value: Tree, schema: Tree) -> str:
-    value = dict(values=json_value(core.materialize_zeros(value)), schema=describe(schema))
+def spec_content(value: Tree, spec_tree: Tree) -> str:
+    value = dict(values=json_value(core.materialize_zeros(value)), schema=describe(spec_tree))
     return jsonlib.dumps(value, allow_nan=False)
 
 
 def literal_content(lit_tree: Tree) -> str:
-    def to_schema(value):
+    def to_spec(value):
         return aval_to_spec(core.avalof(value))
 
-    schema = utils.tree.map(to_schema, lit_tree)
-    return schema_content(lit_tree, schema)
+    spec_tree = utils.tree.map(to_spec, lit_tree)
+    return spec_content(lit_tree, spec_tree)
 
 
 # ==================================================================================================
@@ -589,14 +589,14 @@ fill_p = core.Prim("fill")
 
 
 def fill(tree: Tree, /, *, model: str) -> Tree:
-    """Fill schema nodes in a pytree with generated values.
+    """Fill specs in a pytree with generated values.
 
     Args:
-        tree: A pytree containing context leaves with registered AVal schemas and schema nodes.
+        tree: A pytree containing literal inputs and specs.
         model: The model name or active client model alias to use.
 
     Returns:
-        ``tree`` with each schema node replaced by a generated value.
+        ``tree`` with each spec replaced by a generated value.
 
     Example:
         >>> import autoform as af
@@ -608,12 +608,12 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
         aval_to_spec(core.avalof(value))
 
     utils.tree.map(check_context, tree)
-    schm_tree, lit_tree = utils.partition(is_spec, tree, is_leaf=is_spec)
-    specs = utils.tree.leaves(schm_tree, is_leaf=is_spec)
+    spec_tree, lit_tree = utils.partition(is_spec, tree, is_leaf=is_spec)
+    specs = utils.tree.leaves(spec_tree, is_leaf=is_spec)
     if not specs:
         return tree
     assert core.avalof(model) == core.avalof(""), f"Expected string model: {model!r}"
-    in_tree, static_tree = fill_input((lit_tree, schm_tree, control.stop_gradient(model)))
+    in_tree, static_tree = fill_input((lit_tree, spec_tree, control.stop_gradient(model)))
     out = fill_p.bind(in_tree, static_tree=static_tree)
     return utils.tree.map(select_filled, tree, out, is_leaf=is_spec)
 
@@ -625,12 +625,12 @@ def select_filled(node: Any, value: Any) -> Any:
 
 
 def fill_input(in_tree: Tree) -> TreePair:
-    lit_tree, schm_tree, model = in_tree
+    lit_tree, spec_tree, model = in_tree
 
     def is_dynamic(node):
         return not is_spec(node)
 
-    dynamic_tree, static_tree = utils.partition(is_dynamic, schm_tree)
+    dynamic_tree, static_tree = utils.partition(is_dynamic, spec_tree)
     return (lit_tree, dynamic_tree, model), static_tree
 
 
@@ -646,31 +646,31 @@ def reconstruct_spec_tree(dynamic_tree: Tree, static_tree: Tree) -> Tree:
 
 def impl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
-    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
+    spec_tree = reconstruct_spec_tree(dynamic_tree, static_tree)
     input = literal_content(lit_tree)
-    json_schema = describe(schema)
+    json_schema = describe(spec_tree)
     if json_schema is None:
-        return parse(schema, None)
+        return parse(spec_tree, None)
     fmt = dict(type="json_schema", name="autoform", strict=True, schema=json_schema)
     out = active_client.get().responses(input=input, model=model, text=dict(format=fmt))
-    return parse(schema, jsonlib.loads(out.output_text))
+    return parse(spec_tree, jsonlib.loads(out.output_text))
 
 
 async def aimpl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
-    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
+    spec_tree = reconstruct_spec_tree(dynamic_tree, static_tree)
     input = literal_content(lit_tree)
-    json_schema = describe(schema)
+    json_schema = describe(spec_tree)
     if json_schema is None:
-        return parse(schema, None)
+        return parse(spec_tree, None)
     fmt = dict(type="json_schema", name="autoform", strict=True, schema=json_schema)
     out = await active_client.get().aresponses(input=input, model=model, text=dict(format=fmt))
-    return parse(schema, jsonlib.loads(out.output_text))
+    return parse(spec_tree, jsonlib.loads(out.output_text))
 
 
 def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
-    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
+    spec_tree = reconstruct_spec_tree(dynamic_tree, static_tree)
     aval = core.avalof("")
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
 
@@ -683,7 +683,7 @@ def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
         if aval != core.avalof(""):
             raise TypeError(f"desc must be a string, got {value!r}")
 
-    def abstract_schema(value):
+    def abstract_spec(value):
         if is_spec(value):
             return core.avalof(value)
         if not stage.is_traceable(value):
@@ -692,7 +692,7 @@ def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
 
     utils.tree.map(check_literal, lit_tree)
     utils.tree.map(check_description, dynamic_tree)
-    return utils.tree.map(abstract_schema, schema, is_leaf=is_spec)
+    return utils.tree.map(abstract_spec, spec_tree, is_leaf=is_spec)
 
 
 def batch_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
@@ -751,17 +751,17 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
         return None
 
     t_lit_tree, t_dynamic_tree = core.materialize_zeros((t_lit_tree, t_dynamic_tree))
-    schema = reconstruct_spec_tree(p_dynamic_tree, static_tree)
-    t_schema = reconstruct_spec_tree(t_dynamic_tree, static_tree)
+    spec_tree = reconstruct_spec_tree(p_dynamic_tree, static_tree)
+    t_spec_tree = reconstruct_spec_tree(t_dynamic_tree, static_tree)
     prompt = PUSH_PROMPT.format(
         input=literal_content(p_lit_tree),
         in_tangent=literal_content(t_lit_tree),
     )
-    desc_tree = utils.tree.map(spec_description, t_schema, is_leaf=is_spec)
+    desc_tree = utils.tree.map(spec_description, t_spec_tree, is_leaf=is_spec)
     context = dict(
         instruction=PUSH_SYSTEM_PROMPT,
         request=prompt,
-        output_schema=jsonlib.dumps(describe(schema), allow_nan=False),
+        output_schema=jsonlib.dumps(describe(spec_tree), allow_nan=False),
         desc_change=jsonlib.dumps(json_value(desc_tree), allow_nan=False),
     )
 
@@ -770,11 +770,11 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
             return x
         return aval_to_spec(core.tangent_s.map(core.avalof(x)))
 
-    t_schema = utils.tree.map(tangent_field, schema, is_leaf=is_spec)
-    schm_tree, lit_tree = utils.partition(
-        is_spec, dict(context=context, output=t_schema), is_leaf=is_spec
+    t_spec_tree = utils.tree.map(tangent_field, spec_tree, is_leaf=is_spec)
+    spec_tree, lit_tree = utils.partition(
+        is_spec, dict(context=context, output=t_spec_tree), is_leaf=is_spec
     )
-    return fill_input((lit_tree, schm_tree, p_model))
+    return fill_input((lit_tree, spec_tree, p_model))
 
 
 def pushforward_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
@@ -825,7 +825,7 @@ async def apull_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
 def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | None:
     residuals, out_cotangent = in_tree
     lit_tree, dynamic_tree, model, out = residuals
-    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
+    spec_tree = reconstruct_spec_tree(dynamic_tree, static_tree)
     if utils.tree.structure(out) != utils.tree.structure(out_cotangent):
         raise ValueError("Output and cotangent must have identical pytree specs")
 
@@ -839,24 +839,24 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(out_cotangent)):
         return None
 
-    def to_schema(x):
+    def to_spec(x):
         return aval_to_spec(core.avalof(x))
 
-    context_schema = utils.tree.map(to_schema, lit_tree)
+    lit_spec_tree = utils.tree.map(to_spec, lit_tree)
 
     def to_cotangent_spec(x):
         if not is_spec(x):
             return x
         return aval_to_spec(core.cotangent_s.map(core.avalof(x)))
 
-    cotangent_spec = utils.tree.map(to_cotangent_spec, schema, is_leaf=is_spec)
+    cotangent_spec_tree = utils.tree.map(to_cotangent_spec, spec_tree, is_leaf=is_spec)
     out_cotangent = core.materialize_zeros(out_cotangent)
-    desc_tree = utils.tree.map(spec_description, schema, is_leaf=is_spec)
-    desc_schema = utils.tree.map(to_schema, desc_tree)
+    desc_tree = utils.tree.map(spec_description, spec_tree, is_leaf=is_spec)
+    desc_spec_tree = utils.tree.map(to_spec, desc_tree)
     prompt = GRAD_PROMPT.format(
-        input=schema_content((lit_tree, model, desc_tree), (context_schema, Str(), desc_schema)),
-        output=schema_content(out, schema),
-        out_cotangent=schema_content(out_cotangent, cotangent_spec),
+        input=spec_content((lit_tree, model, desc_tree), (lit_spec_tree, Str(), desc_spec_tree)),
+        output=spec_content(out, spec_tree),
+        out_cotangent=spec_content(out_cotangent, cotangent_spec_tree),
     )
 
     context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
@@ -867,11 +867,11 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
         spec.desc = f"Input cotangent at {path}, original value {value!r}."
         return spec
 
-    in_schema = utils.tree.map_with_path(make_feedback_spec, (lit_tree, model, desc_tree))
-    schm_tree, lit_tree = utils.partition(
-        is_spec, dict(context=context, output=in_schema), is_leaf=is_spec
+    in_spec_tree = utils.tree.map_with_path(make_feedback_spec, (lit_tree, model, desc_tree))
+    spec_tree, lit_tree = utils.partition(
+        is_spec, dict(context=context, output=in_spec_tree), is_leaf=is_spec
     )
-    return fill_input((lit_tree, schm_tree, model))
+    return fill_input((lit_tree, spec_tree, model))
 
 
 def pullback_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:

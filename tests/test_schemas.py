@@ -310,7 +310,7 @@ def test_partition_and_parse_custom_pytree():
         {"source": "fixed"},
         af.lm.Str() @ "Reasoning.",
     )
-    schm_tree, lit_tree = af.utils.partition(
+    spec_tree, lit_tree = af.utils.partition(
         af.lm.is_spec,
         schema,
         is_leaf=af.lm.is_spec,
@@ -322,14 +322,14 @@ def test_partition_and_parse_custom_pytree():
         {"source": "fixed"},
         af.lm.missing,
     )
-    assert schm_tree == Answer(
+    assert spec_tree == Answer(
         af.lm.Float(min=0, max=1),
         {"source": af.lm.missing},
         af.lm.Str() @ "Reasoning.",
     )
-    assert af.lm.describe_node(schm_tree) == af.lm.describe(schema)
+    assert af.lm.describe_node(spec_tree) == af.lm.describe(schema)
     generated_tree = af.lm.parse_node(
-        schm_tree,
+        spec_tree,
         {"score": 0.8, "reasoning": "Evidence agrees."},
     )
     assert generated_tree == Answer(
