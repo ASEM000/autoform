@@ -846,13 +846,8 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
 
     lit_spec_tree = utils.tree.map(to_spec, lit_tree)
 
-    def to_cotangent_spec(x):
-        if not is_spec(x):
-            return x
-        return aval_to_spec(core.cotangent_s.map(core.avalof(x)))
-
-    cotangent_spec_tree = utils.tree.map(to_cotangent_spec, spec_tree, is_leaf=is_spec)
-    out_cotangent = core.materialize_zeros(out_cotangent)
+    out_cotangent, _ = utils.partition(lambda c: not isinstance(c, core.Zero), out_cotangent)
+    cotangent_spec_tree = utils.tree.map(to_spec, out_cotangent)
     desc_tree = utils.tree.map(spec_description, spec_tree, is_leaf=is_spec)
     desc_spec_tree = utils.tree.map(to_spec, desc_tree)
     prompt = GRAD_PROMPT.format(
