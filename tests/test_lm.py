@@ -141,7 +141,7 @@ class SchemaGradientRouter(EchoRouter):
     ("schema", "value"),
     [
         pytest.param(af.lm.Str(), 'Hello "world"!', id="string"),
-        pytest.param(af.lm.Str(min=1, desc="Answer text."), "hello", id="described-string"),
+        pytest.param(af.lm.Str(min=1) @ "Answer text.", "hello", id="described-string"),
         pytest.param(af.lm.Int(), 2, id="integer"),
         pytest.param(af.lm.Float(), 0.5, id="float"),
         pytest.param(af.lm.Bool(), True, id="boolean"),
@@ -164,7 +164,7 @@ def test_fill_passes_scalar_schemas_to_client(executor, schema, value):
 
 def test_fill_uses_runtime_model_with_structured_output():
     answer = {
-        "text": af.lm.Str(desc="Short text."),
+        "text": af.lm.Str() @ "Short text.",
         "score": af.lm.Float(),
     }
 
@@ -219,7 +219,7 @@ def test_fill_uses_values_schema_envelope(executor):
         return af.lm.fill(
             {
                 "question": question,
-                "answer": af.lm.Str(desc="Answer text."),
+                "answer": af.lm.Str() @ "Answer text.",
                 "score": af.lm.Float(min=0, max=1),
             },
             model="m1",
@@ -242,7 +242,7 @@ def test_fill_uses_values_schema_envelope(executor):
         {"question": ir.in_tree[0], "answer": None, "score": None},
         {
             "question": None,
-            "answer": af.lm.Str(desc="Answer text."),
+            "answer": af.lm.Str() @ "Answer text.",
             "score": af.lm.Float(min=0, max=1),
         },
         ir.eqns[0].out_tree,
@@ -421,7 +421,7 @@ def test_fill_pushforward_uses_tangent_context(
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("description", ["Score clarity", "Estimate price"])
 def test_fill_pushforward_preserves_task_schema(executor, description):
-    schema = af.lm.Float(min=0, max=10, desc=description)
+    schema = af.lm.Float(min=0, max=10) @ description
     calls = []
 
     class FillClient(EchoRouter):
@@ -453,20 +453,20 @@ def test_fill_pushforward_preserves_task_schema(executor, description):
             {"x": "dx", "y": -2.0},
         )
     assert len(calls) == 2
-    assert schema == af.lm.Float(min=0, max=10, desc=description)
+    assert schema == af.lm.Float(min=0, max=10) @ description
 
 
 @pytest.mark.parametrize(
     "t_tree",
     [
-        pytest.param({"x": "dx", "y": af.lm.Float(min=0, desc="Score clarity")}, id="constraint"),
-        pytest.param({"x": "dx", "y": af.lm.Str(desc="Score clarity")}, id="schema-type"),
+        pytest.param({"x": "dx", "y": af.lm.Float(min=0) @ "Score clarity"}, id="constraint"),
+        pytest.param({"x": "dx", "y": af.lm.Str() @ "Score clarity"}, id="schema-type"),
         pytest.param({"x": "dx", "y": 0.0}, id="schema-to-leaf"),
-        pytest.param({"x": ["dx"], "y": af.lm.Float(desc="Score clarity")}, id="structure"),
+        pytest.param({"x": ["dx"], "y": af.lm.Float() @ "Score clarity"}, id="structure"),
     ],
 )
 def test_fill_pushforward_rejects_mismatched_specs(t_tree):
-    p_tree = {"x": "x", "y": af.lm.Float(desc="Score clarity")}
+    p_tree = {"x": "x", "y": af.lm.Float() @ "Score clarity"}
     ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
     with pytest.raises(ValueError):
         ir.call((p_tree,), (t_tree,))
@@ -486,9 +486,13 @@ def test_fill_pullback_retains_spec_constraints(executor, description):
                 value["2"] = {"answer": "revised"}
             return schema_response(value, text)
 
-    spec = af.lm.Str(min=1, max=100, desc=description)
+    spec = af.lm.Str(min=1, max=100)
+    if description is not None:
+        spec = spec @ description
     ir = af.pullback(af.trace(lambda x: af.lm.fill({"answer": x}, model="m1"))(spec))
-    expected = af.lm.Str(min=1, max=100, desc="revised" if description is not None else None)
+    expected = af.lm.Str(min=1, max=100)
+    if description is not None:
+        expected = expected @ "revised"
     with af.lm.client(FillClient()):
         assert executor(ir, (spec,), {"answer": "feedback"}) == (
             {"answer": "generated"},
@@ -501,8 +505,8 @@ def test_fill_pushforward_accepts_equal_static_metadata():
         def responses(self, *, text, **kwargs):
             return schema_response({"y": 1.0}, text)
 
-    p_tree = {"x": "x", "y": af.lm.Float(desc="Score clarity")}
-    t_tree = {"x": "dx", "y": af.lm.Float(desc="Score clarity")}
+    p_tree = {"x": "x", "y": af.lm.Float() @ "Score clarity"}
+    t_tree = {"x": "dx", "y": af.lm.Float() @ "Score clarity"}
     assert p_tree["y"] is not t_tree["y"]
     ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
     with af.lm.client(FillClient()):
@@ -762,7 +766,7 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, cotangent):
             return schema_response({"0": {"x": dx}, "1": "", "2": {"y": ""}}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.lm.Float(min=0, max=10, desc="Double x.")}, model="m1")
+        out = af.lm.fill({"x": x, "y": af.lm.Float(min=0, max=10) @ "Double x."}, model="m1")
         return 3.0 * out["y"]
 
     ir = af.pullback(af.trace(program)(1.0))
@@ -931,7 +935,7 @@ def test_project_value_preserves_generated_structure():
 
     schema = Answer(
         [
-            af.lm.Float(min=0, desc="Score"),
+            af.lm.Float(min=0) @ "Score",
             (af.lm.Str(min=1), af.lm.Int(), af.lm.Bool(), af.lm.Enum("yes", "no")),
         ],
         {"source": "fixed", "nothing": None},
@@ -996,9 +1000,9 @@ def test_parse_rebuilds_nested_containers_from_objects():
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": af.lm.Str(desc="Subject name."),
-        "kind": af.lm.Enum("summary", "definition", desc="Answer kind."),
-        "score": af.lm.Float(desc="Confidence score."),
+        "name": af.lm.Str() @ "Subject name.",
+        "kind": af.lm.Enum("summary", "definition") @ "Answer kind.",
+        "score": af.lm.Float() @ "Confidence score.",
     }
 
     json_schema = describe(answer)

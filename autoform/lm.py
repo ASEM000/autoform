@@ -197,6 +197,11 @@ def slotted_values(node: Any) -> tuple[Any, ...]:
 class Spec(Hashable):
     __slots__ = ["desc"]
 
+    def __new__(cls, *args, **kwargs) -> Spec:
+        if cls is Spec:
+            raise TypeError("Spec is a base class and cannot be instantiated")
+        return super().__new__(cls)
+
     def __init__(self, *, desc: str | None = None) -> None:
         if desc is not None and core.avalof(desc) != core.avalof(""):
             raise TypeError(f"desc must be a string, got {desc!r}")
@@ -292,7 +297,7 @@ class Int(Spec):
 
     Example:
         >>> import autoform as af
-        >>> count = af.lm.Int(min=0, max=10)
+        >>> spec = af.lm.Int(min=0, max=10) @ "description"
     """
 
     __slots__ = ["min", "max"]
@@ -325,7 +330,7 @@ class Float(Spec):
 
     Example:
         >>> import autoform as af
-        >>> score = af.lm.Float(min=0, max=1)
+        >>> spec = af.lm.Float(min=0, max=1) @ "description"
     """
 
     __slots__ = ["min", "max"]
@@ -356,7 +361,7 @@ class Bool(Spec):
 
     Example:
         >>> import autoform as af
-        >>> ok = af.lm.Bool()
+        >>> spec = af.lm.Bool() @ "description"
     """
 
     __slots__ = []
@@ -371,7 +376,7 @@ class Enum(Spec):
 
     Example:
         >>> import autoform as af
-        >>> kind = af.lm.Enum("summary", "definition")
+        >>> spec = af.lm.Enum("summary", "definition") @ "description"
     """
 
     __slots__ = ["values"]

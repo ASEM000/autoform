@@ -89,7 +89,7 @@ from autoform.utils import tree
             id="enum-enum-values-must-share-one-type",
         ),
         pytest.param(
-            lambda: af.lm.Str(desc=1),
+            lambda: af.lm.Str() @ 1,
             TypeError,
             "desc must be a string",
             id="desc-must-be-a-string",
@@ -118,8 +118,8 @@ def test_schema_dsl_rejects_invalid_forms(construct, error, message):
             id="enum",
         ),
         pytest.param(
-            af.lm.Str(desc="Subject name."),
-            af.lm.Str(desc="Subject name."),
+            af.lm.Str() @ "Subject name.",
+            af.lm.Str() @ "Subject name.",
             id="described-string",
         ),
     ],
@@ -146,6 +146,11 @@ def test_schema_constraints_are_static_during_tracing(schema):
     assert ir.call(schema, "hello") == (schema, "hello")
 
 
+def test_spec_base_cannot_be_instantiated():
+    with pytest.raises(TypeError, match="Spec is a base class and cannot be instantiated"):
+        af.lm.Spec()
+
+
 def test_new_spec_subclasses_register_description_children():
     class CustomSpec(af.lm.Spec):
         __slots__ = []
@@ -161,14 +166,54 @@ def test_spec_description_is_dynamic_and_constraints_are_static():
     schema = af.lm.Str(min=1, max=100)
     described = schema @ "description"
     leaves, spec = tree.flatten(described)
+    assert described is not schema
     assert schema.desc is None
     assert leaves == ["description"]
     assert spec.unflatten(["feedback"]) == schema @ "feedback"
+    updated = described @ "changed"
+    assert updated == schema @ "changed"
+    assert described.desc == "description"
     ir = af.trace(lambda x: schema @ x)("description")
     assert not ir.eqns
     assert ir.call("changed") == schema @ "changed"
     with pytest.raises(TypeError, match="desc must be a string"):
         schema @ 1.0
+
+
+def test_spec_matmul_runs_constructor_validation():
+    class CustomSpec(af.lm.Spec):
+        __slots__ = []
+
+        def __init__(self, *, desc=None):
+            super().__init__(desc=desc)
+            if desc == "blocked":
+                raise ValueError("Description is blocked")
+
+    schema = CustomSpec()
+    assert (schema @ "allowed").desc == "allowed"
+    assert schema.desc is None
+    with pytest.raises(ValueError, match="Description is blocked"):
+        schema @ "blocked"
+
+
+@pytest.mark.parametrize(
+    "constructor, args",
+    [
+        pytest.param(af.lm.Str, (), id="string"),
+        pytest.param(af.lm.Int, (), id="integer"),
+        pytest.param(af.lm.Float, (), id="float"),
+        pytest.param(af.lm.Bool, (), id="boolean"),
+        pytest.param(af.lm.Enum, ("yes", "no"), id="enum"),
+    ],
+)
+def test_keyword_description_matches_matmul(constructor, args):
+    schema = constructor(*args)
+    assert constructor(*args, desc=None) == schema
+    assert constructor(*args, desc="description") == schema @ "description"
+    ir = af.trace(lambda x: constructor(*args, desc=x))("description")
+    assert ir.call("changed") == schema @ "changed"
+    with pytest.raises(TypeError, match="desc must be a string"):
+        constructor(*args, desc=1.0)
 
 
 @pytest.mark.parametrize("operation", ["describe", "parse"])
@@ -186,12 +231,12 @@ def test_unregistered_schema_nodes_remain_static(operation):
 @pytest.mark.parametrize(
     "schema, expected",
     [
-        pytest.param(af.lm.Str(min=1, desc="Text"), dict(type="string", minLength=1), id="str"),
-        pytest.param(af.lm.Int(min=0, desc="Text"), dict(type="integer", minimum=0), id="int"),
-        pytest.param(af.lm.Float(max=1, desc="Text"), dict(type="number", maximum=1), id="float"),
-        pytest.param(af.lm.Bool(desc="Text"), dict(type="boolean"), id="bool"),
+        pytest.param(af.lm.Str(min=1) @ "Text", dict(type="string", minLength=1), id="str"),
+        pytest.param(af.lm.Int(min=0) @ "Text", dict(type="integer", minimum=0), id="int"),
+        pytest.param(af.lm.Float(max=1) @ "Text", dict(type="number", maximum=1), id="float"),
+        pytest.param(af.lm.Bool() @ "Text", dict(type="boolean"), id="bool"),
         pytest.param(
-            af.lm.Enum("yes", "no", desc="Text"),
+            af.lm.Enum("yes", "no") @ "Text",
             dict(type="string", enum=["yes", "no"]),
             id="enum",
         ),
@@ -245,7 +290,7 @@ def test_parse_uses_partitioned_schema():
     af.lm.describe_rules[CustomSpec] = describe
     af.lm.parse_rules[CustomSpec] = lambda _, value: value
     schema = {
-        "generated": {"text": af.lm.Str(desc="Generated text.")},
+        "generated": {"text": af.lm.Str() @ "Generated text."},
         "literal": {"text": "fixed", "nothing": None},
         "custom": CustomSpec(),
     }
@@ -270,7 +315,7 @@ def test_partition_and_parse_custom_pytree():
     schema = Answer(
         af.lm.Float(min=0, max=1),
         {"source": "fixed"},
-        af.lm.Str(desc="Reasoning."),
+        af.lm.Str() @ "Reasoning.",
     )
     schm_tree, lit_tree = af.utils.partition(
         af.lm.is_schema,
@@ -287,7 +332,7 @@ def test_partition_and_parse_custom_pytree():
     assert schm_tree == Answer(
         af.lm.Float(min=0, max=1),
         {"source": af.lm.missing},
-        af.lm.Str(desc="Reasoning."),
+        af.lm.Str() @ "Reasoning.",
     )
     assert af.lm.describe_node(schm_tree) == af.lm.describe(schema)
     generated_tree = af.lm.parse_node(
