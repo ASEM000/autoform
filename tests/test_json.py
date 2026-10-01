@@ -210,22 +210,22 @@ def test_schema_rules_support_independent_node_types():
             raise ValueError("Expected matching prefix")
         return value
 
-    af.json.describe_rules[Prefix] = describe
-    af.json.parse_rules[Prefix] = parse
+    af.lm.describe_rules[Prefix] = describe
+    af.lm.parse_rules[Prefix] = parse
     schema = Record(Prefix("ok:"), "fixed", "metadata")
-    assert af.json.describe(schema) == {
+    assert af.lm.describe(schema) == {
         "type": "object",
         "properties": {"x": {"type": "string", "description": "Start with ok:"}},
         "required": ["x"],
         "additionalProperties": False,
     }
-    assert af.json.parse(schema, {"x": "ok: done"}) == Record(
+    assert af.lm.parse(schema, {"x": "ok: done"}) == Record(
         "ok: done",
         "fixed",
         "metadata",
     )
     with pytest.raises(ValueError, match="Expected matching prefix"):
-        af.json.parse(schema, {"x": "wrong"})
+        af.lm.parse(schema, {"x": "wrong"})
 
 
 @pytest.mark.parametrize("operation", ["describe", "parse"])
@@ -235,18 +235,18 @@ def test_describe_and_parse_select_their_own_registered_nodes(operation):
 
     schema = {"x": Node(), "fixed": "literal"}
     if operation == "describe":
-        af.json.describe_rules[Node] = lambda _: dict(type="string")
-        assert af.json.describe(schema) == {
+        af.lm.describe_rules[Node] = lambda _: dict(type="string")
+        assert af.lm.describe(schema) == {
             "type": "object",
             "properties": {"x": {"type": "string"}},
             "required": ["x"],
             "additionalProperties": False,
         }
-        assert af.json.parse(schema, {"x": "value"}) == schema
+        assert af.lm.parse(schema, {"x": "value"}) == schema
     else:
-        af.json.parse_rules[Node] = lambda _, value: value
-        assert af.json.parse(schema, {"x": "value"}) == {"x": "value", "fixed": "literal"}
-        assert af.json.describe(schema) is None
+        af.lm.parse_rules[Node] = lambda _, value: value
+        assert af.lm.parse(schema, {"x": "value"}) == {"x": "value", "fixed": "literal"}
+        assert af.lm.describe(schema) is None
 
 
 @pytest.mark.parametrize(
@@ -259,8 +259,8 @@ def test_describe_and_parse_select_their_own_registered_nodes(operation):
 )
 def test_schema_constraints_do_not_apply_to_typed_feedback(schema, value):
     with pytest.raises(ValueError):
-        af.json.parse(schema, value)
-    assert af.json.project_value(schema, value) == value
+        af.lm.parse(schema, value)
+    assert af.lm.project_value(schema, value) == value
     assert af.json.decode(af.json.encode(value)) == value
     with pytest.raises(TypeError, match="Expected"):
-        af.json.project_value(schema, True)
+        af.lm.project_value(schema, True)

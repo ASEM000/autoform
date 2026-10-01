@@ -184,8 +184,8 @@ def test_unregistered_schema_nodes_remain_static(operation):
 )
 def test_json_rules_own_schema_descriptions(schema, expected):
     expected = dict(expected, description="Text")
-    assert af.json.describe_rules[type(schema)](schema) == expected
-    assert af.json.describe(schema) == expected
+    assert af.lm.describe_rules[type(schema)](schema) == expected
+    assert af.lm.describe(schema) == expected
 
 
 def test_json_mangles_duplicate_object_entries_before_omitting_literals():
@@ -227,8 +227,8 @@ def test_parse_uses_partitioned_schema():
         calls.append(schema)
         return dict(type="string")
 
-    af.json.describe_rules[CustomSpec] = describe
-    af.json.parse_rules[CustomSpec] = lambda _, value: value
+    af.lm.describe_rules[CustomSpec] = describe
+    af.lm.parse_rules[CustomSpec] = lambda _, value: value
     schema = {
         "generated": {"text": af.lm.Str(desc="Generated text.")},
         "literal": {"text": "fixed", "nothing": None},
@@ -261,27 +261,27 @@ def test_partition_and_parse_custom_pytree():
         af.lm.is_schema,
         schema,
         is_leaf=af.lm.is_schema,
-        fillvalue=af.json.missing,
+        fillvalue=af.lm.missing,
     )
 
     assert lit_tree == Answer(
-        af.json.missing,
+        af.lm.missing,
         {"source": "fixed"},
-        af.json.missing,
+        af.lm.missing,
     )
     assert schm_tree == Answer(
         af.lm.Float(min=0, max=1),
-        {"source": af.json.missing},
+        {"source": af.lm.missing},
         af.lm.Str(desc="Reasoning."),
     )
-    assert af.json.describe_node(schm_tree) == af.lm.describe(schema)
-    generated_tree = af.json.parse_node(
+    assert af.lm.describe_node(schm_tree) == af.lm.describe(schema)
+    generated_tree = af.lm.parse_node(
         schm_tree,
         {"score": 0.8, "reasoning": "Evidence agrees."},
     )
     assert generated_tree == Answer(
         0.8,
-        {"source": af.json.missing},
+        {"source": af.lm.missing},
         "Evidence agrees.",
     )
     assert af.lm.parse(

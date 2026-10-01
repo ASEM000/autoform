@@ -855,11 +855,11 @@ def test_project_value_preserves_generated_structure():
         {"source": "fixed", "nothing": None},
     )
     value = Answer([-0.2, ("", -1, False, "feedback")], {"source": "", "nothing": None})
-    assert af.json.project_value(schema, value) == {
+    assert af.lm.project_value(schema, value) == {
         "fields": {"0": -0.2, "1": {"0": "", "1": -1, "2": False, "3": "feedback"}}
     }
     with pytest.raises(ValueError):
-        af.json.project_value(schema, Answer([], value.metadata))
+        af.lm.project_value(schema, Answer([], value.metadata))
 
 
 @pytest.mark.parametrize(

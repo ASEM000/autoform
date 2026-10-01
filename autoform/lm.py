@@ -57,8 +57,108 @@ type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type ClientType = ResponsesAPIResponse
 
-describe = json.describe
-parse = json.parse
+# ==================================================================================================
+# DESCRIBE AND PARSE
+# ==================================================================================================
+
+type JsonSchema = dict[str, Any]
+type DescribeRule = Callable[[Any], JsonSchema]
+type ParseRule = Callable[[Any, Any], Any]
+
+describe_rules: dict[type, DescribeRule] = {}
+parse_rules: dict[type, ParseRule] = {}
+missing = object()
+
+
+def is_describe_node(node: Any) -> bool:
+    return type(node) in describe_rules
+
+
+def is_parse_node(node: Any) -> bool:
+    return type(node) in parse_rules
+
+
+def describe(schema: Tree, /) -> JsonSchema | None:
+    """Describe a tree using registered description rules, omitting literal fields."""
+    schm_tree, _ = utils.partition(
+        is_describe_node,
+        schema,
+        is_leaf=is_describe_node,
+        fillvalue=missing,
+    )
+    return describe_node(schm_tree)
+
+
+def describe_node(schema: Tree, /) -> JsonSchema | None:
+    if schema is missing:
+        return None
+    if rule := describe_rules.get(type(schema)):
+        return rule(schema)
+
+    flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    property_names = json.json_property_names(spec.entries())
+    properties = {}
+    for name, child in zip(property_names, flat):
+        if (child_schema := describe_node(child)) is not None:
+            properties[name] = child_schema
+    if not properties:
+        return None
+
+    return dict(
+        type="object",
+        properties=properties,
+        required=list(properties),
+        additionalProperties=False,
+    )
+
+
+def project_value(schema: Tree, value: Tree, /) -> Any:
+    def select_field(node, value):
+        if not is_describe_node(node):
+            return None
+        aval = core.avalof(node)
+        if core.avalof(value) != aval:
+            raise TypeError(f"Expected {aval!r}, got {value!r}")
+        return value
+
+    generated = utils.tree.map(select_field, schema, value, is_leaf=is_describe_node)
+    return json.json_value(generated) if utils.tree.leaves(generated) else None
+
+
+def parse_node(schema: Tree, value: Any, /) -> Tree:
+    if schema is missing:
+        return missing
+    if rule := parse_rules.get(type(schema)):
+        return rule(schema, value)
+
+    def has_parse_node(node):
+        return any(map(is_parse_node, utils.tree.leaves(node, is_leaf=is_parse_node)))
+
+    flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
+    schema_keys = json.json_property_names(spec.entries())
+    properties = {key: child for key, child in zip(schema_keys, flat) if has_parse_node(child)}
+    if not properties:
+        return schema
+    expected_spec = utils.tree.structure(properties, is_leaf=lambda x: id(x) != id(properties))
+    values = dict(zip(expected_spec.entries(), expected_spec.flatten_up_to(value)))
+    children = (parse_node(child, values.get(key)) for key, child in zip(schema_keys, flat))
+    return spec.unflatten(children)
+
+
+def parse(schema: Tree, value: Any, /) -> Tree:
+    """Parse a tree of registered nodes with their constraints and preserve literals."""
+
+    def generated_field(literal, generated):
+        return generated if literal is missing else literal
+
+    schm_tree, lit_tree = utils.partition(
+        is_parse_node,
+        schema,
+        is_leaf=is_parse_node,
+        fillvalue=missing,
+    )
+    generated = parse_node(schm_tree, value)
+    return utils.tree.map(generated_field, lit_tree, generated)
 
 
 # ==================================================================================================
@@ -249,14 +349,14 @@ class Enum(Spec):
 # ==================================================================================================
 
 
-def with_description(schema: Spec, value: json.JsonSchema) -> json.JsonSchema:
+def with_description(schema: Spec, value: JsonSchema) -> JsonSchema:
     if schema.desc is not None:
         value["description"] = schema.desc
     return value
 
 
-def describe_str(schema: Str) -> json.JsonSchema:
-    json_schema: json.JsonSchema = dict(type="string")
+def describe_str(schema: Str) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="string")
     if schema.min is not None:
         json_schema["minLength"] = schema.min
     if schema.max is not None:
@@ -266,8 +366,8 @@ def describe_str(schema: Str) -> json.JsonSchema:
     return with_description(schema, json_schema)
 
 
-def describe_int(schema: Int) -> json.JsonSchema:
-    json_schema: json.JsonSchema = dict(type="integer")
+def describe_int(schema: Int) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="integer")
     if schema.min is not None:
         json_schema["minimum"] = schema.min
     if schema.max is not None:
@@ -275,8 +375,8 @@ def describe_int(schema: Int) -> json.JsonSchema:
     return with_description(schema, json_schema)
 
 
-def describe_float(schema: Float) -> json.JsonSchema:
-    json_schema: json.JsonSchema = dict(type="number")
+def describe_float(schema: Float) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="number")
     if schema.min is not None:
         json_schema["minimum"] = schema.min
     if schema.max is not None:
@@ -284,11 +384,11 @@ def describe_float(schema: Float) -> json.JsonSchema:
     return with_description(schema, json_schema)
 
 
-def describe_bool(schema: Bool) -> json.JsonSchema:
+def describe_bool(schema: Bool) -> JsonSchema:
     return with_description(schema, dict(type="boolean"))
 
 
-def describe_enum(schema: Enum) -> json.JsonSchema:
+def describe_enum(schema: Enum) -> JsonSchema:
     json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
     if (value_type := type(schema.values[0])) not in json_types:
         raise TypeError("Enum values must be str, int, float, or bool")
@@ -298,11 +398,11 @@ def describe_enum(schema: Enum) -> json.JsonSchema:
     return with_description(schema, json_schema)
 
 
-json.describe_rules[Str] = describe_str
-json.describe_rules[Int] = describe_int
-json.describe_rules[Float] = describe_float
-json.describe_rules[Bool] = describe_bool
-json.describe_rules[Enum] = describe_enum
+describe_rules[Str] = describe_str
+describe_rules[Int] = describe_int
+describe_rules[Float] = describe_float
+describe_rules[Bool] = describe_bool
+describe_rules[Enum] = describe_enum
 
 
 def is_schema(node: Any) -> bool:
@@ -360,11 +460,11 @@ def parse_enum(schema: Enum, value: Any) -> Any:
     return value
 
 
-json.parse_rules[Str] = parse_str
-json.parse_rules[Int] = parse_int
-json.parse_rules[Float] = parse_float
-json.parse_rules[Bool] = parse_bool
-json.parse_rules[Enum] = parse_enum
+parse_rules[Str] = parse_str
+parse_rules[Int] = parse_int
+parse_rules[Float] = parse_float
+parse_rules[Bool] = parse_bool
+parse_rules[Enum] = parse_enum
 
 
 # ==================================================================================================
