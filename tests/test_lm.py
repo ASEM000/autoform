@@ -258,7 +258,7 @@ def test_fill_uses_values_schema_envelope(executor):
     call = client.calls[-1]
     assert call["model"] == "m1"
     assert call["text"]["format"]["type"] == "json_schema"
-    assert call["text"]["format"]["name"] == "autoform_schema"
+    assert call["text"]["format"]["name"] == "autoform"
     assert call["text"]["format"]["strict"] is True
     assert json.loads(call["input"]) == {
         "values": {"question": "1+1?"},

@@ -302,9 +302,9 @@ def test_partition_and_parse_custom_pytree():
         af.lm.Str() @ "Reasoning.",
     )
     schm_tree, lit_tree = af.utils.partition(
-        af.lm.is_schema,
+        af.lm.is_spec,
         schema,
-        is_leaf=af.lm.is_schema,
+        is_leaf=af.lm.is_spec,
         fillvalue=af.lm.missing,
     )
 

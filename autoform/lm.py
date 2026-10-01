@@ -172,7 +172,7 @@ def parse_node(schema: Tree, value: Any, /) -> Tree:
 def parse(schema: Tree, value: Any, /) -> Tree:
     """Parse a tree of registered nodes with their constraints and preserve literals."""
 
-    def generated_field(literal, generated):
+    def select_filled(literal, generated):
         return generated if literal is missing else literal
 
     schm_tree, lit_tree = utils.partition(
@@ -182,7 +182,7 @@ def parse(schema: Tree, value: Any, /) -> Tree:
         fillvalue=missing,
     )
     generated = parse_node(schm_tree, value)
-    return utils.tree.map(generated_field, lit_tree, generated)
+    return utils.tree.map(select_filled, lit_tree, generated)
 
 
 # ==================================================================================================
@@ -243,7 +243,7 @@ class Spec(Hashable):
         return f"{type(self).__name__}({', '.join(fields)})"
 
 
-def is_schema(node: Any) -> bool:
+def is_spec(node: Any) -> bool:
     return isinstance(node, Spec)
 
 
@@ -540,7 +540,7 @@ aval_schema_rules[numeric.BoolAVal] = lambda _: Bool()
 def aval_to_schema(aval: core.AVal) -> Spec:
     if rule := aval_schema_rules.get(type(aval)):
         schema = rule(aval)
-        assert is_schema(schema), f"AVal schema rule returned {schema!r}"
+        assert is_spec(schema), f"AVal schema rule returned {schema!r}"
         return schema
     raise TypeError(f"No schema rule registered for {aval!r}")
 
@@ -624,19 +624,23 @@ def literal_content(lit_tree: Tree) -> str:
 
 
 def fill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
-    schm_tree, _ = utils.partition(is_schema, schema, is_leaf=is_schema)
-    lit_tree, holes = prepare_fill(dict(context=context, output=schm_tree))
+    schm_tree, _ = utils.partition(is_spec, schema, is_leaf=is_spec)
+    holes, lit_tree = utils.partition(
+        is_spec, dict(context=context, output=schm_tree), is_leaf=is_spec
+    )
     in_tree, static_tree = fill_input((lit_tree, holes, model))
     out = fill_p.bind(in_tree, static_tree=static_tree)
-    return merge_fill(schema, out["output"])
+    return utils.tree.map(select_filled, schema, out["output"], is_leaf=is_spec)
 
 
 async def afill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
-    schm_tree, _ = utils.partition(is_schema, schema, is_leaf=is_schema)
-    lit_tree, holes = prepare_fill(dict(context=context, output=schm_tree))
+    schm_tree, _ = utils.partition(is_spec, schema, is_leaf=is_spec)
+    holes, lit_tree = utils.partition(
+        is_spec, dict(context=context, output=schm_tree), is_leaf=is_spec
+    )
     in_tree, static_tree = fill_input((lit_tree, holes, model))
     out = await fill_p.abind(in_tree, static_tree=static_tree)
-    return merge_fill(schema, out["output"])
+    return utils.tree.map(select_filled, schema, out["output"], is_leaf=is_spec)
 
 
 def feedback_schema(tree: Tree) -> Tree:
@@ -676,32 +680,26 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
         aval_to_schema(core.avalof(value))
 
     utils.tree.map(check_context, tree)
-    if not any(map(is_schema, utils.tree.leaves(tree, is_leaf=is_schema))):
+    if not any(map(is_spec, utils.tree.leaves(tree, is_leaf=is_spec))):
         return tree
     assert core.avalof(model) == core.avalof(""), f"Expected string model: {model!r}"
-    lit_tree, schm_tree = prepare_fill(tree)
+    schm_tree, lit_tree = utils.partition(is_spec, tree, is_leaf=is_spec)
     in_tree, static_tree = fill_input((lit_tree, schm_tree, control.stop_gradient(model)))
     out = fill_p.bind(in_tree, static_tree=static_tree)
-    return merge_fill(tree, out)
+    return utils.tree.map(select_filled, tree, out, is_leaf=is_spec)
 
 
-def prepare_fill(tree: Tree) -> TreePair:
-    schm_tree, lit_tree = utils.partition(is_schema, tree, is_leaf=is_schema)
-    return lit_tree, schm_tree
-
-
-def merge_fill(tree: Tree, generated: Tree) -> Tree:
-    def generated_field(node, value):
-        return value if is_schema(node) else node
-
-    return utils.tree.map(generated_field, tree, generated, is_leaf=is_schema)
+def select_filled(node: Any, value: Any) -> Any:
+    if is_spec(node):
+        return value
+    return node
 
 
 def fill_input(in_tree: Tree) -> TreePair:
     lit_tree, schm_tree, model = in_tree
 
     def is_dynamic(node):
-        return not is_schema(node)
+        return not is_spec(node)
 
     dynamic_tree, static_tree = utils.partition(is_dynamic, schm_tree)
     return (lit_tree, dynamic_tree, model), static_tree
@@ -757,7 +755,7 @@ def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
             raise TypeError(f"desc must be a string, got {value!r}")
 
     def abstract_schema(value):
-        if is_schema(value):
+        if is_spec(value):
             return core.avalof(value)
         if not stage.is_traceable(value):
             raise TypeError(f"Static schema leaf must be traceable, got {value!r}")
@@ -765,7 +763,7 @@ def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
 
     utils.tree.map(check_literal, lit_tree)
     utils.tree.map(check_description, dynamic_tree)
-    return utils.tree.map(abstract_schema, schema, is_leaf=is_schema)
+    return utils.tree.map(abstract_schema, schema, is_leaf=is_spec)
 
 
 def batch_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
@@ -830,7 +828,7 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
         input=literal_content(p_lit_tree),
         in_tangent=literal_content(t_lit_tree),
     )
-    desc_tree = utils.tree.map(schema_description, t_schema, is_leaf=is_schema)
+    desc_tree = utils.tree.map(schema_description, t_schema, is_leaf=is_spec)
     context = dict(
         instruction=PUSH_SYSTEM_PROMPT,
         request=prompt,
@@ -839,11 +837,11 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
     )
 
     def tangent_field(x):
-        if not is_schema(x):
+        if not is_spec(x):
             return x
         return aval_to_schema(core.tangent_s.map(core.avalof(x)))
 
-    t_schema = utils.tree.map(tangent_field, schema, is_leaf=is_schema)
+    t_schema = utils.tree.map(tangent_field, schema, is_leaf=is_spec)
     return (context, p_model), t_schema
 
 
@@ -909,13 +907,13 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
     context_schema = utils.tree.map(to_schema, lit_tree)
 
     def to_cotangent_schema(x):
-        if not is_schema(x):
+        if not is_spec(x):
             return x
         return aval_to_schema(core.cotangent_s.map(core.avalof(x)))
 
-    cotangent_schema = utils.tree.map(to_cotangent_schema, schema, is_leaf=is_schema)
+    cotangent_schema = utils.tree.map(to_cotangent_schema, schema, is_leaf=is_spec)
     out_cotangent = core.materialize_zeros(out_cotangent)
-    desc_tree = utils.tree.map(schema_description, schema, is_leaf=is_schema)
+    desc_tree = utils.tree.map(schema_description, schema, is_leaf=is_spec)
     desc_schema = utils.tree.map(to_schema, desc_tree)
     prompt = GRAD_PROMPT.format(
         input=schema_content((lit_tree, model, desc_tree), (context_schema, Str(), desc_schema)),
@@ -940,7 +938,7 @@ def pullback_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     feedback, model_feedback, desc_feedback = fill_context(context, model, schema=in_schema)
     (_, dynamic_tree, _, _), _ = in_tree
     dynamic_feedback = utils.tree.map(
-        cotangent_schema, dynamic_tree, desc_feedback, is_leaf=is_schema
+        cotangent_schema, dynamic_tree, desc_feedback, is_leaf=is_spec
     )
     return feedback, dynamic_feedback, model_feedback
 
@@ -957,7 +955,7 @@ async def apull_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     feedback, model_feedback, desc_feedback = await afill_context(context, model, schema=in_schema)
     (_, dynamic_tree, _, _), _ = in_tree
     dynamic_feedback = utils.tree.map(
-        cotangent_schema, dynamic_tree, desc_feedback, is_leaf=is_schema
+        cotangent_schema, dynamic_tree, desc_feedback, is_leaf=is_spec
     )
     return feedback, dynamic_feedback, model_feedback
 
