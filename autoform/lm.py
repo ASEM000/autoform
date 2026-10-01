@@ -772,7 +772,9 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
 
     t_spec_tree = utils.tree.map(tangent_field, spec_tree, is_leaf=is_spec)
     spec_tree, lit_tree = utils.partition(
-        is_spec, dict(context=context, output=t_spec_tree), is_leaf=is_spec
+        is_spec,
+        dict(context=context, output=t_spec_tree),
+        is_leaf=is_spec,
     )
     return fill_input((lit_tree, spec_tree, p_model))
 
@@ -869,7 +871,9 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
 
     in_spec_tree = utils.tree.map_with_path(make_feedback_spec, (lit_tree, model, desc_tree))
     spec_tree, lit_tree = utils.partition(
-        is_spec, dict(context=context, output=in_spec_tree), is_leaf=is_spec
+        is_spec,
+        dict(context=context, output=in_spec_tree),
+        is_leaf=is_spec,
     )
     return fill_input((lit_tree, spec_tree, model))
 
