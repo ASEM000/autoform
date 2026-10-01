@@ -610,16 +610,6 @@ def literal_content(lit_tree: Tree) -> str:
     return schema_content(lit_tree, schema)
 
 
-def feedback_schema(tree: Tree) -> Tree:
-    def make_schema(path, value):
-        aval = core.cotangent_s.map(core.avalof(value))
-        schema = aval_to_spec(aval)
-        schema.desc = f"Input cotangent at {path}, original value {value!r}."
-        return schema
-
-    return utils.tree.map_with_path(make_schema, tree)
-
-
 # ==================================================================================================
 # FILL
 # ==================================================================================================
@@ -896,7 +886,14 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
     )
 
     context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
-    in_schema = feedback_schema((lit_tree, model, desc_tree))
+
+    def make_feedback_spec(path, value):
+        aval = core.cotangent_s.map(core.avalof(value))
+        spec = aval_to_spec(aval)
+        spec.desc = f"Input cotangent at {path}, original value {value!r}."
+        return spec
+
+    in_schema = utils.tree.map_with_path(make_feedback_spec, (lit_tree, model, desc_tree))
     schm_tree, lit_tree = utils.partition(
         is_spec, dict(context=context, output=in_schema), is_leaf=is_spec
     )
