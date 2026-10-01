@@ -176,13 +176,13 @@ def test_invalid_traced_operands(program, args, error, message):
         ),
         pytest.param(
             af.pullback,
-            (("yes",), "feedback"),
+            (("yes",), af.core.Zero(BoolAVal())),
             (True, (af.core.Zero(StrAVal()),)),
             id="pullback-true",
         ),
         pytest.param(
             af.pullback,
-            (("no",), "feedback"),
+            (("no",), af.core.Zero(BoolAVal())),
             (False, (af.core.Zero(StrAVal()),)),
             id="pullback-false",
         ),

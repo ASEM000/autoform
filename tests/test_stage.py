@@ -177,6 +177,26 @@ class TestBuildIR:
         assert ir.call("z") == (["a", "b"], "z")
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "transform, args",
+    [
+        pytest.param(lambda ir: ir, (["x"],), id="primal"),
+        pytest.param(af.pushforward, (("x",), (["dx"],)), id="tangent"),
+        pytest.param(af.batch, (["x", 1.0],), id="batch"),
+    ],
+)
+def test_call_rejects_incompatible_input_aval(executor, transform, args):
+    ir = transform(af.trace(lambda x: x)("x"))
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, *args)
+
+
+def test_walk_does_not_check_input_aval():
+    ir = af.trace(lambda x: x)("x")
+    assert next(ir.walk(["x"])) == (None, ["x"])
+
+
 class TestTraceStatic:
     def test_static_inputs_become_literals(self):
         ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
@@ -195,7 +215,7 @@ class TestTraceStatic:
         ir = af.trace(prefix_name, static=(True, False))("Hello", "World")
 
         with pytest.raises(AssertionError, match="Static input mismatch"):
-            af.stage.check_static_inputs(ir.in_tree, ("Hi", "x0"))
+            af.stage.check_inputs(ir.in_tree, ("Hi", "x0"))
 
         gen = ir.walk("Hi", "x0")
 

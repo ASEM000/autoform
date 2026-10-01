@@ -483,18 +483,22 @@ def test_fill_pushforward_preserves_task_schema(executor, description):
 
 
 @pytest.mark.parametrize(
-    "t_tree",
+    "t_tree, error",
     [
-        pytest.param({"x": "dx", "y": af.lm.Float(min=0) @ "Score clarity"}, id="constraint"),
-        pytest.param({"x": "dx", "y": af.lm.Str() @ "Score clarity"}, id="schema-type"),
-        pytest.param({"x": "dx", "y": 0.0}, id="schema-to-leaf"),
-        pytest.param({"x": ["dx"], "y": af.lm.Float() @ "Score clarity"}, id="structure"),
+        pytest.param(
+            {"x": "dx", "y": af.lm.Float(min=0) @ "Score clarity"}, ValueError, id="constraint"
+        ),
+        pytest.param({"x": "dx", "y": af.lm.Str() @ "Score clarity"}, ValueError, id="schema-type"),
+        pytest.param({"x": "dx", "y": 0.0}, ValueError, id="schema-to-leaf"),
+        pytest.param(
+            {"x": ["dx"], "y": af.lm.Float() @ "Score clarity"}, TypeError, id="structure"
+        ),
     ],
 )
-def test_fill_pushforward_rejects_mismatched_specs(t_tree):
+def test_fill_pushforward_rejects_mismatched_specs(t_tree, error):
     p_tree = {"x": "x", "y": af.lm.Float() @ "Score clarity"}
     ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
-    with pytest.raises(ValueError):
+    with pytest.raises(error):
         ir.call((p_tree,), (t_tree,))
 
 
@@ -1002,7 +1006,7 @@ def test_fill_pullback_rejects_wrong_schema_cotangent_type(
     ir = af.pullback(af.trace(program)("seed"))
     with pytest.raises(TypeError, match=f"Expected {error}"):
         executor(ir, ("Explain recursion.",), out_cotangent)
-    assert len(gradient_client.calls) == 1
+    assert len(gradient_client.calls) == 0
 
 
 @pytest.mark.parametrize(

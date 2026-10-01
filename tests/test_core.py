@@ -207,7 +207,9 @@ def test_interpreter_context_restores_default():
 def test_custom_rule_interpreter(executor):
     rules = af.extend.Rule("operation_count")
     arules = af.extend.Rule("aoperation_count")
-    rules.set(af.extend.concat_p, lambda values: sum(values) + 1)
+    rules.set(
+        af.extend.concat_p, lambda values: sum(v if isinstance(v, int) else 0 for v in values) + 1
+    )
     arules.set(af.extend.concat_p, af.utils.asyncify(rules.get(af.extend.concat_p)))
 
     class OperationCountInterpreter(af.core.Interpreter):
@@ -219,5 +221,5 @@ def test_custom_rule_interpreter(executor):
 
     ir = af.trace(lambda x, y: (x + y) + y)("x", "y")
     with af.core.using_interpreter(OperationCountInterpreter()):
-        assert executor(ir, 0, 0) == 2
+        assert executor(ir, "x", "y") == 2
     assert executor(ir, "x", "y") == "xyy"
