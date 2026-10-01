@@ -524,25 +524,25 @@ parse_rules[Enum] = parse_enum
 
 
 # ==================================================================================================
-# AVAL SCHEMA RULES
+# AVAL SPEC RULES
 # ==================================================================================================
 
 
-type AValSchemaRule = Callable[[core.AVal], Spec]
+type AValSpecRule = Callable[[core.AVal], Spec]
 
-aval_schema_rules: dict[type[core.AVal], AValSchemaRule] = {}
-aval_schema_rules[string.StrAVal] = lambda _: Str()
-aval_schema_rules[numeric.IntAVal] = lambda _: Int()
-aval_schema_rules[numeric.FloatAVal] = lambda _: Float()
-aval_schema_rules[numeric.BoolAVal] = lambda _: Bool()
+aval_spec_rules: dict[type[core.AVal], AValSpecRule] = {}
+aval_spec_rules[string.StrAVal] = lambda _: Str()
+aval_spec_rules[numeric.IntAVal] = lambda _: Int()
+aval_spec_rules[numeric.FloatAVal] = lambda _: Float()
+aval_spec_rules[numeric.BoolAVal] = lambda _: Bool()
 
 
-def aval_to_schema(aval: core.AVal) -> Spec:
-    if rule := aval_schema_rules.get(type(aval)):
-        schema = rule(aval)
-        assert is_spec(schema), f"AVal schema rule returned {schema!r}"
-        return schema
-    raise TypeError(f"No schema rule registered for {aval!r}")
+def aval_to_spec(aval: core.AVal) -> Spec:
+    if rule := aval_spec_rules.get(type(aval)):
+        spec = rule(aval)
+        assert is_spec(spec), f"AVal spec rule returned {spec!r}"
+        return spec
+    raise TypeError(f"No spec rule registered for {aval!r}")
 
 
 # ==================================================================================================
@@ -617,7 +617,7 @@ def schema_content(value: Tree, schema: Tree) -> str:
 
 def literal_content(lit_tree: Tree) -> str:
     def to_schema(value):
-        return aval_to_schema(core.avalof(value))
+        return aval_to_spec(core.avalof(value))
 
     schema = utils.tree.map(to_schema, lit_tree)
     return schema_content(lit_tree, schema)
@@ -646,7 +646,7 @@ async def afill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
 def feedback_schema(tree: Tree) -> Tree:
     def make_schema(path, value):
         aval = core.cotangent_s.map(core.avalof(value))
-        schema = aval_to_schema(aval)
+        schema = aval_to_spec(aval)
         schema.desc = f"Input cotangent at {path}, original value {value!r}."
         return schema
 
@@ -677,7 +677,7 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
     """
 
     def check_context(value):
-        aval_to_schema(core.avalof(value))
+        aval_to_spec(core.avalof(value))
 
     utils.tree.map(check_context, tree)
     if not any(map(is_spec, utils.tree.leaves(tree, is_leaf=is_spec))):
@@ -705,7 +705,7 @@ def fill_input(in_tree: Tree) -> TreePair:
     return (lit_tree, dynamic_tree, model), static_tree
 
 
-def reconstruct_schema(dynamic_tree: Tree, static_tree: Tree) -> Tree:
+def reconstruct_spec_tree(dynamic_tree: Tree, static_tree: Tree) -> Tree:
     def merge_field(static, dynamic):
         return dynamic if static is None else static
 
@@ -717,7 +717,7 @@ def reconstruct_schema(dynamic_tree: Tree, static_tree: Tree) -> Tree:
 
 def impl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
-    schema = reconstruct_schema(dynamic_tree, static_tree)
+    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
     input = literal_content(lit_tree)
     json_schema = describe(schema)
     if json_schema is None:
@@ -729,7 +729,7 @@ def impl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
 
 async def aimpl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
-    schema = reconstruct_schema(dynamic_tree, static_tree)
+    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
     input = literal_content(lit_tree)
     json_schema = describe(schema)
     if json_schema is None:
@@ -741,13 +741,13 @@ async def aimpl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
 
 def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
-    schema = reconstruct_schema(dynamic_tree, static_tree)
+    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
     aval = core.avalof("")
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
 
     def check_literal(value):
         aval = value if isinstance(value, core.AVal) else core.avalof(value)
-        aval_to_schema(aval)
+        aval_to_spec(aval)
 
     def check_description(value):
         aval = value if isinstance(value, core.AVal) else core.avalof(value)
@@ -800,7 +800,7 @@ async def abatch_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
     return out_ib, out_batched
 
 
-def schema_description(node: Spec) -> str | None:
+def spec_description(node: Spec) -> str | None:
     return node.desc
 
 
@@ -822,13 +822,13 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
         return None
 
     t_lit_tree, t_dynamic_tree = core.materialize_zeros((t_lit_tree, t_dynamic_tree))
-    schema = reconstruct_schema(p_dynamic_tree, static_tree)
-    t_schema = reconstruct_schema(t_dynamic_tree, static_tree)
+    schema = reconstruct_spec_tree(p_dynamic_tree, static_tree)
+    t_schema = reconstruct_spec_tree(t_dynamic_tree, static_tree)
     prompt = PUSH_PROMPT.format(
         input=literal_content(p_lit_tree),
         in_tangent=literal_content(t_lit_tree),
     )
-    desc_tree = utils.tree.map(schema_description, t_schema, is_leaf=is_spec)
+    desc_tree = utils.tree.map(spec_description, t_schema, is_leaf=is_spec)
     context = dict(
         instruction=PUSH_SYSTEM_PROMPT,
         request=prompt,
@@ -839,7 +839,7 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
     def tangent_field(x):
         if not is_spec(x):
             return x
-        return aval_to_schema(core.tangent_s.map(core.avalof(x)))
+        return aval_to_spec(core.tangent_s.map(core.avalof(x)))
 
     t_schema = utils.tree.map(tangent_field, schema, is_leaf=is_spec)
     return (context, p_model), t_schema
@@ -889,7 +889,7 @@ async def apull_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
 def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | None:
     residuals, out_cotangent = in_tree
     lit_tree, dynamic_tree, model, out = residuals
-    schema = reconstruct_schema(dynamic_tree, static_tree)
+    schema = reconstruct_spec_tree(dynamic_tree, static_tree)
 
     def check_cotangent(p_leaf, c_leaf):
         aval = core.cotangent_s.map(core.avalof(p_leaf))
@@ -902,23 +902,23 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
         return None
 
     def to_schema(x):
-        return aval_to_schema(core.avalof(x))
+        return aval_to_spec(core.avalof(x))
 
     context_schema = utils.tree.map(to_schema, lit_tree)
 
-    def to_cotangent_schema(x):
+    def to_cotangent_spec(x):
         if not is_spec(x):
             return x
-        return aval_to_schema(core.cotangent_s.map(core.avalof(x)))
+        return aval_to_spec(core.cotangent_s.map(core.avalof(x)))
 
-    cotangent_schema = utils.tree.map(to_cotangent_schema, schema, is_leaf=is_spec)
+    cotangent_spec = utils.tree.map(to_cotangent_spec, schema, is_leaf=is_spec)
     out_cotangent = core.materialize_zeros(out_cotangent)
-    desc_tree = utils.tree.map(schema_description, schema, is_leaf=is_spec)
+    desc_tree = utils.tree.map(spec_description, schema, is_leaf=is_spec)
     desc_schema = utils.tree.map(to_schema, desc_tree)
     prompt = GRAD_PROMPT.format(
         input=schema_content((lit_tree, model, desc_tree), (context_schema, Str(), desc_schema)),
         output=schema_content(out, schema),
-        out_cotangent=schema_content(out_cotangent, cotangent_schema),
+        out_cotangent=schema_content(out_cotangent, cotangent_spec),
     )
 
     context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
@@ -937,9 +937,7 @@ def pullback_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     (context, model), in_schema = request
     feedback, model_feedback, desc_feedback = fill_context(context, model, schema=in_schema)
     (_, dynamic_tree, _, _), _ = in_tree
-    dynamic_feedback = utils.tree.map(
-        cotangent_schema, dynamic_tree, desc_feedback, is_leaf=is_spec
-    )
+    dynamic_feedback = utils.tree.map(cotangent_spec, dynamic_tree, desc_feedback, is_leaf=is_spec)
     return feedback, dynamic_feedback, model_feedback
 
 
@@ -954,13 +952,11 @@ async def apull_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     (context, model), in_schema = request
     feedback, model_feedback, desc_feedback = await afill_context(context, model, schema=in_schema)
     (_, dynamic_tree, _, _), _ = in_tree
-    dynamic_feedback = utils.tree.map(
-        cotangent_schema, dynamic_tree, desc_feedback, is_leaf=is_spec
-    )
+    dynamic_feedback = utils.tree.map(cotangent_spec, dynamic_tree, desc_feedback, is_leaf=is_spec)
     return feedback, dynamic_feedback, model_feedback
 
 
-def cotangent_schema(node: Spec, feedback: str | None) -> Spec:
+def cotangent_spec(node: Spec, feedback: str | None) -> Spec:
     if node.desc is None:
         return node
     return node @ feedback
