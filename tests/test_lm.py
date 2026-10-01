@@ -942,6 +942,21 @@ def test_fill_pullback_materializes_unused_fields(
     assert json.loads(prompt.split(" OUTPUT FEEDBACK: ")[1])["values"]["output"] == feedback
 
 
+@pytest.mark.parametrize(
+    "out_cotangent",
+    [
+        pytest.param({}, id="missing-field"),
+        pytest.param({"answer": "feedback", "extra": "feedback"}, id="extra-field"),
+        pytest.param({"answer": ["feedback"]}, id="nested-field"),
+    ],
+)
+def test_fill_pullback_requires_matching_cotangent_structure(out_cotangent):
+    in_tree, static_tree = af.lm.fill_input(("seed", {"answer": af.lm.Str()}, "m1"))
+    residuals = (*in_tree, {"answer": "value"})
+    with pytest.raises(ValueError, match="Output and cotangent must have identical pytree specs"):
+        af.lm.fill_pullback_request((residuals, out_cotangent), static_tree=static_tree)
+
+
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "out_cotangent, error",

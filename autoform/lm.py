@@ -637,10 +637,11 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
         aval_to_spec(core.avalof(value))
 
     utils.tree.map(check_context, tree)
-    if not any(map(is_spec, utils.tree.leaves(tree, is_leaf=is_spec))):
+    schm_tree, lit_tree = utils.partition(is_spec, tree, is_leaf=is_spec)
+    specs = utils.tree.leaves(schm_tree, is_leaf=is_spec)
+    if not specs:
         return tree
     assert core.avalof(model) == core.avalof(""), f"Expected string model: {model!r}"
-    schm_tree, lit_tree = utils.partition(is_spec, tree, is_leaf=is_spec)
     in_tree, static_tree = fill_input((lit_tree, schm_tree, control.stop_gradient(model)))
     out = fill_p.bind(in_tree, static_tree=static_tree)
     return utils.tree.map(select_filled, tree, out, is_leaf=is_spec)
@@ -854,6 +855,8 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
     residuals, out_cotangent = in_tree
     lit_tree, dynamic_tree, model, out = residuals
     schema = reconstruct_spec_tree(dynamic_tree, static_tree)
+    if utils.tree.structure(out) != utils.tree.structure(out_cotangent):
+        raise ValueError("Output and cotangent must have identical pytree specs")
 
     def check_cotangent(p_leaf, c_leaf):
         aval = core.cotangent_s.map(core.avalof(p_leaf))
