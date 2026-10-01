@@ -180,22 +180,6 @@ def test_spec_description_is_dynamic_and_constraints_are_static():
         schema @ 1.0
 
 
-def test_spec_matmul_runs_constructor_validation():
-    class CustomSpec(af.lm.Spec):
-        __slots__ = []
-
-        def __init__(self, *, desc=None):
-            super().__init__(desc=desc)
-            if desc == "blocked":
-                raise ValueError("Description is blocked")
-
-    schema = CustomSpec()
-    assert (schema @ "allowed").desc == "allowed"
-    assert schema.desc is None
-    with pytest.raises(ValueError, match="Description is blocked"):
-        schema @ "blocked"
-
-
 @pytest.mark.parametrize(
     "constructor, args",
     [

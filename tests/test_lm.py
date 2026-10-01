@@ -500,6 +500,41 @@ def test_fill_pullback_retains_spec_constraints(executor, description):
         )
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("source", ["literal", "description", "both", "constant"])
+def test_fill_pushforward_skips_generation_for_symbolic_zero(executor, source):
+    calls = []
+
+    class FillClient(EchoRouter):
+        def responses(self, *, input, model, text, **kwargs):
+            calls.append(input)
+            assert "context" not in fill_values(input)
+            return schema_response({"answer": "generated", "score": 0.5}, text)
+
+    def program(x):
+        description = x if source in ("description", "both") else "description"
+        template = {
+            "answer": af.lm.Str() @ description,
+            "score": af.lm.Float(min=0, max=1),
+        }
+        if source in ("literal", "both"):
+            template["x"] = x
+        return af.lm.fill(template, model="m1")
+
+    ir = af.pushforward(af.trace(program)("description"))
+    zero = af.core.Zero(af.core.avalof(""))
+    with af.lm.client(FillClient()):
+        primal, tangent = executor(ir, ("description",), (zero,))
+    expected = {"answer": "generated", "score": 0.5}
+    if source in ("literal", "both"):
+        expected["x"] = "description"
+    assert primal == expected
+    assert all(isinstance(value, af.core.Zero) for value in tree.leaves(tangent))
+    assert af.core.materialize_zeros(tangent)["answer"] == ""
+    assert af.core.materialize_zeros(tangent)["score"] == 0.0
+    assert len(calls) == 1
+
+
 def test_fill_pushforward_accepts_equal_static_metadata():
     class FillClient(EchoRouter):
         def responses(self, *, text, **kwargs):

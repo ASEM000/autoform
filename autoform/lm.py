@@ -832,12 +832,8 @@ def schema_description(node: Spec) -> str | None:
     return node.desc
 
 
-def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
-    (p_lit_tree, p_dynamic_tree, p_model), (t_lit_tree, t_dynamic_tree, _) = core.materialize_zeros(
-        in_tree
-    )
-    schema = reconstruct_schema(p_dynamic_tree, static_tree)
-    t_schema = reconstruct_schema(t_dynamic_tree, static_tree)
+def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | None:
+    (p_lit_tree, p_dynamic_tree, p_model), (t_lit_tree, t_dynamic_tree, _) = in_tree
     if utils.tree.structure(p_lit_tree) != utils.tree.structure(t_lit_tree):
         raise ValueError("Primal and tangent literals must have identical pytree specs")
     if utils.tree.structure(p_dynamic_tree) != utils.tree.structure(t_dynamic_tree):
@@ -850,6 +846,12 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
 
     utils.tree.map(check_tangent, (p_lit_tree, p_dynamic_tree), (t_lit_tree, t_dynamic_tree))
 
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves((t_lit_tree, t_dynamic_tree))):
+        return None
+
+    t_lit_tree, t_dynamic_tree = core.materialize_zeros((t_lit_tree, t_dynamic_tree))
+    schema = reconstruct_schema(p_dynamic_tree, static_tree)
+    t_schema = reconstruct_schema(t_dynamic_tree, static_tree)
     prompt = PUSH_PROMPT.format(
         input=literal_content(p_lit_tree),
         in_tangent=literal_content(t_lit_tree),
@@ -872,16 +874,29 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
 
 
 def pushforward_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
+    def zero_output(value):
+        return core.Zero(core.tangent_s.map(core.avalof(value)))
+
     p_in, _ = in_tree
-    (context, model), t_schema = fill_pushforward_request(in_tree, static_tree=static_tree)
+    request = fill_pushforward_request(in_tree, static_tree=static_tree)
     p_out = fill_p.bind(p_in, static_tree=static_tree)
+    if request is None:
+        return p_out, utils.tree.map(zero_output, p_out)
+    (context, model), t_schema = request
     t_out = fill_context(context, model, schema=t_schema)
     return p_out, t_out
 
 
 async def apush_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
+    def zero_output(value):
+        return core.Zero(core.tangent_s.map(core.avalof(value)))
+
     p_in, _ = in_tree
-    (context, model), t_schema = fill_pushforward_request(in_tree, static_tree=static_tree)
+    request = fill_pushforward_request(in_tree, static_tree=static_tree)
+    if request is None:
+        p_out = await fill_p.abind(p_in, static_tree=static_tree)
+        return p_out, utils.tree.map(zero_output, p_out)
+    (context, model), t_schema = request
     p_ir = stage.trace(ft.partial(fill_p.bind, static_tree=static_tree))(p_in)
     t_ir = stage.trace(ft.partial(fill_context, schema=t_schema))(context, model)
     return await order.fanout_p.abind([(p_in,), (context, model)], irs=[p_ir, t_ir])
