@@ -465,7 +465,7 @@ class Enum(Spec):
 
     Args:
         desc: Optional generation guidance.
-        *values: Allowed values. Values must be non-empty and share one type.
+        *values: Non-empty, unique allowed values sharing one type.
 
     Example:
         >>> import autoform as af
@@ -493,6 +493,8 @@ def describe_enum(schema: Enum) -> JsonSchema:
         raise TypeError("Enum values must be str, int, float, or bool")
     if value_type is float and not all(math.isfinite(value) for value in schema.values):
         raise ValueError("Enum values must be finite")
+    if len(set(schema.values)) != len(schema.values):
+        raise ValueError("Enum values must be unique")
     json_schema = dict(type=json_types[value_type], enum=list(schema.values))
     if schema.desc is not None:
         json_schema["description"] = schema.desc

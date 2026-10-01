@@ -261,6 +261,12 @@ def test_describe_enum_rejects_nonfinite_values(value):
         af.lm.describe(af.lm.Enum(0.0, value))
 
 
+@pytest.mark.parametrize("value", ["x", 1, 0.5, True], ids=["str", "int", "float", "bool"])
+def test_describe_enum_rejects_duplicate_values(value):
+    with pytest.raises(ValueError, match="Enum values must be unique"):
+        af.lm.describe(af.lm.Enum(value, value))
+
+
 def test_parse_uses_partitioned_schema():
     class CustomSpec(af.lm.Spec):
         __slots__ = []
