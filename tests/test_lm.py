@@ -43,36 +43,17 @@ class RenderClient:
 
 @pytest.fixture
 def echo_client():
-    with af.lm.client(RenderClient()) as client:
+    with af.lm.client(
+        RenderClient(render=lambda messages: json.dumps(render_messages(messages)))
+    ) as client:
         yield client
 
 
-def lm_program(primitive=af.lm.complete, *, model="m1", **params):
+def lm_program(primitive, *, model="m1", **params):
     def program(prompt, model=model):
         return primitive([dict(role="user", content=prompt)], model=model, **params)
 
     return program
-
-
-@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_complete_and_generate_use_distinct_primitives(executor):
-    def program(prompt):
-        messages = [dict(role="user", content=prompt)]
-        return (
-            af.lm.complete(messages, model="echo"),
-            af.lm.generate(messages, model="echo", schema=None),
-        )
-
-    ir = af.trace(program)("seed")
-    assert [eqn.prim for eqn in ir.eqns] == [
-        af.control.stop_gradient_p,
-        af.lm.complete_p,
-        af.control.stop_gradient_p,
-        af.lm.generate_p,
-    ]
-    with af.lm.client(RenderClient()):
-        assert program("hello") == ("<user> hello", None)
-        assert executor(ir, "hello") == ("<user> hello", None)
 
 
 def fake_response(content):
@@ -834,7 +815,6 @@ def test_describe_rejects_non_json_enum_values():
 @pytest.mark.parametrize(
     "primitive, params, client_type, expected",
     [
-        pytest.param(af.lm.complete, {}, EchoRouter, ["m1|hello", "m2|goodbye"], id="complete"),
         pytest.param(
             af.lm.generate,
             {"schema": {"text": af.Str(), "score": af.Float()}},
@@ -1198,7 +1178,6 @@ class TestLMPrimitive:
     @pytest.mark.parametrize(
         "primitive, params, out_cotangent",
         [
-            pytest.param(af.lm.complete, {}, "feedback", id="complete"),
             pytest.param(
                 af.lm.generate,
                 {"schema": {"text": af.Str(), "score": af.Float()}},
@@ -1252,7 +1231,6 @@ class TestLMPrimitive:
     @pytest.mark.parametrize(
         "primitive, params, render",
         [
-            pytest.param(af.lm.complete, {}, echo_or_json_fill, id="complete"),
             pytest.param(
                 af.lm.generate,
                 {"schema": af.Str()},
@@ -1305,7 +1283,6 @@ class TestLMPrimitive:
     @pytest.mark.parametrize(
         "primitive, params, render",
         [
-            pytest.param(af.lm.complete, {}, echo_or_json_fill, id="complete"),
             pytest.param(
                 af.lm.generate,
                 {"schema": af.Str()},
@@ -1347,17 +1324,18 @@ class TestLMPrimitive:
             ]
         }
 
-    def test_complete_leaves_litellm_params_to_active_client(self):
+    def test_generate_leaves_litellm_params_to_active_client(self):
         class ConfiguredRouter(EchoRouter):
-            def completion(self, *, messages, model, **kwargs):
+            def completion(self, *, messages, model, response_format, **kwargs):
                 assert kwargs == {}
                 params = {"m1": {"temperature": 0.7, "max_tokens": 128}}[model]
-                return fake_response(
+                return schema_response(
                     f"{model}|{params['temperature']}|{params['max_tokens']}|"
-                    f"{messages[-1]['content']}"
+                    f"{messages[-1]['content']}",
+                    response_format,
                 )
 
-        ir = af.trace(lm_program())("test", "gpt-5.5")
+        ir = af.trace(lm_program(af.lm.generate, schema=af.Str()))("test", "gpt-5.5")
         with af.lm.client(ConfiguredRouter()):
             assert ir.call("hello", "m1") == "m1|0.7|128|hello"
 
@@ -1365,15 +1343,6 @@ class TestLMPrimitive:
     @pytest.mark.parametrize(
         "primitive, raw, params, out_cotangent, expected, decode",
         [
-            pytest.param(
-                af.lm.complete,
-                af.lm.complete_p,
-                {},
-                "feedback",
-                "input feedback",
-                str,
-                id="complete",
-            ),
             pytest.param(
                 af.lm.generate,
                 af.lm.generate_p,
@@ -1479,19 +1448,20 @@ class TestEchoLMClient:
     )
     def test_direct_call(self, entries, expected, echo_client):
         messages = [dict(role=role, content=content) for role, content in entries]
-        assert af.lm.complete(messages, model="any-model") == expected
+        assert af.lm.generate(messages, model="any-model", schema=af.Str()) == expected
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_traced_and_batched_execution(self, executor, echo_client):
 
         def program(text):
             prompt = af.string.format("Hello, {text}!", text=text)
-            return af.lm.complete(
+            return af.lm.generate(
                 [
                     dict(role="system", content="Translate to Korean."),
                     dict(role="user", content=prompt),
                 ],
                 model="echo",
+                schema=af.Str(),
             )
 
         ir = af.trace(program)("name")
@@ -1508,21 +1478,24 @@ class TestEchoLMClient:
         messages = [dict(role="user", content="hello")]
         with af.lm.client(EchoRouter()):
             with pytest.raises(ValueError, match="stop"):
-                with af.lm.client(RenderClient()):
-                    assert af.lm.complete(messages, model="m1") == "<user> hello"
+                with af.lm.client(
+                    RenderClient(render=lambda messages: json.dumps(render_messages(messages)))
+                ):
+                    assert af.lm.generate(messages, model="m1", schema=af.Str()) == "<user> hello"
                     raise ValueError("stop")
-            assert af.lm.complete(messages, model="m1") == "m1|hello"
+            assert af.lm.generate(messages, model="m1", schema=af.Str()) == "m1|hello"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_custom_renderer_receives_all_messages(self, executor):
 
         def render(messages):
-            return " | ".join((message["content"] for message in messages))
+            return json.dumps(" | ".join(message["content"] for message in messages))
 
         def program(text):
-            return af.lm.complete(
+            return af.lm.generate(
                 [dict(role="system", content="Translate."), dict(role="user", content=text)],
                 model="echo",
+                schema=af.Str(),
             )
 
         ir = af.trace(program)("text")
@@ -1557,7 +1530,6 @@ class TestEchoLMClient:
 @pytest.mark.parametrize(
     "primitive, params, client_type, expected_primal",
     [
-        pytest.param(af.lm.complete, {}, EchoRouter, "m1|hello", id="complete"),
         pytest.param(
             af.lm.generate,
             {"schema": {"text": af.Str(), "score": af.Float()}},

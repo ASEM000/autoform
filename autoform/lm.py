@@ -37,7 +37,6 @@ __all__ = [
     "Client",
     "LiteLLMClient",
     "client",
-    "complete",
     "generate",
     "fill",
     "describe",
@@ -251,108 +250,6 @@ async def abatch_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
     return out_ib, out_batched
 
 
-# ==================================================================================================
-# COMPLETE
-# ==================================================================================================
-
-complete_p = core.Prim("complete")
-
-
-def complete(messages: Messages, /, *, model: str) -> str:
-    """Complete a conversation with text.
-
-    Args:
-        messages: A list of message dictionaries, each containing 'role' and 'content' keys.
-        model: The model name or active client model alias to use (e.g., "gpt-5.5").
-
-    Returns:
-        The response text.
-
-    Use :func:`client` to configure provider-specific settings like ``max_tokens``.
-
-    Example:
-        >>> import autoform as af
-        >>> def program(name: str) -> str:
-        ...     greeting = "Hello, " + name + "!"
-        ...     sys = dict(role="system", content="translate the greeting to Korean")
-        ...     usr = dict(role="user", content=greeting)
-        ...     greeting = af.lm.complete([sys, usr], model="gpt-5.5")
-        ...     return greeting
-        >>> ir = af.trace(program)("World") # doctest: +SKIP
-        >>> result = ir.call("x0") # doctest: +SKIP
-
-    Example with :func:`client`:
-        >>> import autoform as af
-        >>> from litellm import Router  # doctest: +SKIP
-        >>> params_1024 = dict(model="gpt-5.5", max_tokens=1024)
-        >>> params_512 = dict(model="gpt-5.5", max_tokens=512)
-        >>> model_list = [
-        ...     dict(model_name="gpt-5.5-1024", litellm_params=params_1024),
-        ...     dict(model_name="gpt-5.5-512", litellm_params=params_512),
-        ... ]
-        >>> router = Router(model_list=model_list)  # doctest: +SKIP
-        >>> def program(text: str, model: str):
-        ...     msg = [{"role": "user", "content": ("Explain " + text + " in one line.")}]
-        ...     answer = af.lm.complete(msg, model=model)
-        ...     return "Answer: " + answer
-        >>> ir = af.trace(program)("topic", "model")
-        >>> model_names = ["gpt-5.5-1024", "gpt-5.5-512"]
-        >>> with af.lm.client(router):  # doctest: +SKIP
-        ...     result = af.batch(ir, in_axes=(False, True)).call("AI", model_names)
-    """
-    assert isinstance(messages, list), f"messages must be a list, got {type(messages)=}"
-    for m in messages:
-        assert isinstance(m, dict), f"message must be a dict, got {type(m)=}"
-        assert "role" in m, f"message must have a 'role' key, got {m=}"
-        assert "content" in m, f"message must have a 'content' key, got {m=}"
-
-    roles, contents = [m["role"] for m in messages], [m["content"] for m in messages]
-    # NOTE(asem): emit a single stop_gradient not to pollute the IR with sg for each role
-    roles, model = control.stop_gradient((roles, model))
-    messages = [dict(role=r, content=c) for r, c in zip(roles, contents)]
-    return complete_p.bind((messages, model))
-
-
-def impl_complete(in_tree: Tree, /) -> str:
-    messages, model = in_tree
-    response = active_client.get().completion(messages=messages, model=model)
-    return response.choices[0].message.content
-
-
-async def aimpl_complete(in_tree: Tree, /) -> str:
-    messages, model = in_tree
-    response = await active_client.get().acompletion(messages=messages, model=model)
-    return response.choices[0].message.content
-
-
-def abstract_complete(in_tree: Tree, /) -> Any:
-    messages, model = in_tree
-    aval = core.avalof("")
-    fields = [m[key] for m in messages for key in ("role", "content")]
-    assert all(type(x) in (str, type(aval)) for x in fields), f"Expected strings: {messages!r}"
-    assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
-    return aval
-
-
-def pushforward_complete(in_tree: Tree, /) -> TreePair:
-    p_in, t_in = in_tree
-    t_in = core.materialize_zeros(t_in)
-    t_context, p_model = pushforward_messages_request(p_in, t_in)
-    p_resp = complete_p.bind(p_in)
-    t_resp = fill_context(t_context, p_model, schema=schemas.Str())
-    return p_resp, t_resp
-
-
-async def apush_complete(in_tree: Tree, /) -> TreePair:
-    p_in, t_in = in_tree
-    t_in = core.materialize_zeros(t_in)
-    t_context, p_model = pushforward_messages_request(p_in, t_in)
-    p_ir = stage.trace(complete_p.bind)(p_in)
-    t_ir = stage.trace(ft.partial(fill_context, schema=schemas.Str()))(t_context, p_model)
-    p_resp, t_resp = await order.fanout_p.abind([(p_in,), (t_context, p_model)], irs=[p_ir, t_ir])
-    return p_resp, t_resp
-
-
 def pushforward_messages_request(p_in: Tree, t_in: Tree, /) -> Tree:
     p_messages, p_model = p_in
     t_messages, *_ = t_in
@@ -363,39 +260,6 @@ def pushforward_messages_request(p_in: Tree, t_in: Tree, /) -> Tree:
             in_tangent=jsonlib.dumps(dict(messages=t_messages), allow_nan=False),
         ),
     }, p_model
-
-
-def complete_pullback_request(in_tree: Tree, /) -> TreePair:
-    residuals, out_cotangent = in_tree
-    out_cotangent = core.materialize_zeros(out_cotangent)
-    messages, model, out = residuals
-    prompt = GRAD_PROMPT.format(input=(messages, model), output=out, out_cotangent=out_cotangent)
-
-    context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
-    return (context, model), feedback_schema((messages, model))
-
-
-def pullback_bwd_complete(in_tree: Tree, /) -> Tree:
-    (context, model), schema = complete_pullback_request(in_tree)
-    return fill_context(context, model, schema=schema)
-
-
-async def apull_bwd_complete(in_tree: Tree, /) -> Tree:
-    (context, model), schema = complete_pullback_request(in_tree)
-    return await afill_context(context, model, schema=schema)
-
-
-core.impl_rules.set(complete_p, impl_complete)
-core.aimpl_rules.set(complete_p, aimpl_complete)
-core.abstract_rules.set(complete_p, abstract_complete)
-core.batch_rules.set(complete_p, ft.partial(batch_lm, complete_p))
-core.abatch_rules.set(complete_p, ft.partial(abatch_lm, complete_p))
-core.push_rules.set(complete_p, pushforward_complete)
-core.apush_rules.set(complete_p, apush_complete)
-core.pull_fwd_rules.set(complete_p, ft.partial(pullback_fwd_lm, complete_p))
-core.apull_fwd_rules.set(complete_p, ft.partial(apull_fwd_lm, complete_p))
-core.pull_bwd_rules.set(complete_p, pullback_bwd_complete)
-core.apull_bwd_rules.set(complete_p, apull_bwd_complete)
 
 
 # ==================================================================================================

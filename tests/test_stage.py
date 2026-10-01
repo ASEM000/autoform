@@ -1085,13 +1085,13 @@ class TestFold:
         assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "concat"]
         assert ir.call("c") == "[ab]c!"
 
-    def test_fold_block_evaluates_complete_during_trace(self):
+    def test_fold_block_evaluates_fill_during_trace(self):
         calls = []
 
         class FillClient:
             def completion(self, *, messages, model, **kwargs):
                 calls.append(messages)
-                message = SimpleNamespace(content="rubric")
+                message = SimpleNamespace(content='{"output": "rubric"}')
                 return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
             async def acompletion(self, **kwargs):
@@ -1099,10 +1099,10 @@ class TestFold:
 
         def program(question):
             with af.fold():
-                rubric = af.lm.complete(
-                    [{"role": "user", "content": "make a rubric"}],
+                rubric = af.lm.fill(
+                    {"prompt": "make a rubric", "output": af.Str()},
                     model="test-model",
-                )
+                )["output"]
             return af.string.format("{rubric}: {question}", rubric=rubric, question=question)
 
         with af.lm.client(FillClient()):
