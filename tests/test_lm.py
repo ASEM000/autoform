@@ -26,9 +26,24 @@ from autoform.utils import tree
 from tests import aexecute, execute
 
 
+def render_messages(messages):
+    return "\n".join(f"<{message['role']}> {message['content']}" for message in messages)
+
+
+class RenderClient:
+    def __init__(self, render=render_messages):
+        self.render = render
+
+    def completion(self, *, messages, model, **kwargs):
+        return fake_response(self.render(messages))
+
+    async def acompletion(self, **kwargs):
+        return self.completion(**kwargs)
+
+
 @pytest.fixture
 def echo_client():
-    with af.lm.client(af.lm.EchoClient()) as client:
+    with af.lm.client(RenderClient()) as client:
         yield client
 
 
@@ -55,7 +70,7 @@ def test_complete_and_generate_use_distinct_primitives(executor):
         af.control.stop_gradient_p,
         af.lm.generate_p,
     ]
-    with af.lm.client(af.lm.EchoClient()):
+    with af.lm.client(RenderClient()):
         assert program("hello") == ("<user> hello", None)
         assert executor(ir, "hello") == ("<user> hello", None)
 
@@ -85,7 +100,7 @@ def fill_request_text(content):
 
 
 def echo_or_json_fill(messages, *, structured=False):
-    content = af.lm.echo_messages(messages)
+    content = render_messages(messages)
     try:
         payload = json.loads(messages[-1]["content"])
     except json.JSONDecodeError:
@@ -208,7 +223,7 @@ def test_generate_executes_with_response_format():
     ],
 )
 def test_generate_passes_scalar_schemas_to_client(executor, schema, value):
-    class ScalarClient(af.lm.EchoClient):
+    class ScalarClient(RenderClient):
         def completion(self, *, response_format, **kwargs):
             assert response_format["json_schema"]["schema"] == describe(schema)
             return super().completion(**kwargs)
@@ -249,7 +264,7 @@ def test_generate_pushforward_preserves_non_string_literals(executor):
 
     ir = af.pushforward(af.trace(program)("seed"))
     render = lambda _: json.dumps({"output": {"answer": "filled"}})
-    with af.lm.client(af.lm.EchoClient(render=render)):
+    with af.lm.client(RenderClient(render=render)):
         primal, tangent = executor(ir, ("q",), ("dq",))
     assert primal == {"answer": "filled", "fixed": 1.0}
     assert tangent["answer"] == "filled"
@@ -348,7 +363,7 @@ def test_fill_preserves_tree_structure(executor, template, response, expected):
         return json.dumps(response)
 
     ir = af.trace(lambda: af.lm.fill(template, model="echo"))()
-    with af.lm.client(af.lm.EchoClient(render=render)):
+    with af.lm.client(RenderClient(render=render)):
         assert executor(ir) == expected
     assert len(calls) == (response is not None)
 
@@ -565,7 +580,7 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
     args = (("q",), cotangent)
     if batch_order is not None:
         args, expected = tree.map(lambda x: [x, x], (args, expected))
-    with af.lm.client(af.lm.EchoClient(render=render)):
+    with af.lm.client(RenderClient(render=render)):
         assert executor(ir, *args) == expected
     # Pullback of batch_call replays the forward pass before transposing it.
     count = 1 + generated + (batch_order == "before")
@@ -1493,7 +1508,7 @@ class TestEchoLMClient:
         messages = [dict(role="user", content="hello")]
         with af.lm.client(EchoRouter()):
             with pytest.raises(ValueError, match="stop"):
-                with af.lm.client(af.lm.EchoClient()):
+                with af.lm.client(RenderClient()):
                     assert af.lm.complete(messages, model="m1") == "<user> hello"
                     raise ValueError("stop")
             assert af.lm.complete(messages, model="m1") == "m1|hello"
@@ -1511,7 +1526,7 @@ class TestEchoLMClient:
             )
 
         ir = af.trace(program)("text")
-        with af.lm.client(af.lm.EchoClient(render=render)):
+        with af.lm.client(RenderClient(render=render)):
             result = executor(ir, "Hello!")
             assert result == "Translate. | Hello!"
             batched = af.batch(ir)
@@ -1526,14 +1541,14 @@ class TestEchoLMClient:
 
         program = lm_program(af.lm.generate, model="echo", schema={"text": af.Str()})
         ir = af.trace(program)("text")
-        with af.lm.client(af.lm.EchoClient(render=render)):
+        with af.lm.client(RenderClient(render=render)):
             assert executor(ir, text) == {"text": text}
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_schema_call_rejects_role_prefixed_text(self, executor):
         program = lm_program(af.lm.generate, model="echo", schema={"text": af.Str()})
         ir = af.trace(program)("json")
-        with af.lm.client(af.lm.EchoClient()):
+        with af.lm.client(RenderClient()):
             with pytest.raises(json.JSONDecodeError):
                 executor(ir, '{"text": "hello"}')
 

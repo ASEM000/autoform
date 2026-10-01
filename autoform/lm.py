@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 import json as jsonlib
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, runtime_checkable
@@ -36,7 +36,6 @@ import autoform.utils as utils
 __all__ = [
     "Client",
     "LiteLLMClient",
-    "EchoClient",
     "client",
     "complete",
     "generate",
@@ -71,48 +70,6 @@ class LiteLLMClient:
 
     async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
         return await acompletion(messages=messages, model=model, **kwargs)
-
-
-def echo_messages(messages: Messages) -> str:
-    return "\n".join(f"<{message['role']}> {message['content']}" for message in messages)
-
-
-class EchoClient:
-    """Echoes messages passed to lm calls without provider calls.
-
-    Mainly for debugging and demonstration.
-
-    Args:
-        render: A synchronous callable that receives all messages and returns response text.
-
-    Example:
-        >>> import autoform as af
-        >>> with af.lm.client(af.lm.EchoClient()):
-        ...     msg1 = dict(role="system", content="Translate to Korean.")
-        ...     msg2 = dict(role="user", content="Hello!")
-        ...     print(af.lm.complete([msg1, msg2], model="echo"))
-        <system> Translate to Korean.
-        <user> Hello!
-
-    Example with a custom renderer:
-        >>> client = af.lm.EchoClient(render=lambda messages: messages[-1]["content"])
-        >>> with af.lm.client(client):
-        ...     af.lm.complete([dict(role="user", content="Hello!")], model="echo")
-        'Hello!'
-    """
-
-    __slots__ = ["render"]
-
-    def __init__(self, render: Callable[[Messages], str] = echo_messages):
-        self.render = render
-
-    def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
-        content = self.render(messages)
-        assert isinstance(content, str), f"`EchoClient` renderer must return strings."
-        return ModelResponse(choices=[dict(message=dict(role="assistant", content=content))])
-
-    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
-        return self.completion(messages=messages, model=model, **kwargs)
 
 
 active_client: ContextVar[Client] = ContextVar("active_client", default=LiteLLMClient())

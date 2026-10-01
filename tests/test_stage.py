@@ -18,6 +18,7 @@ import math
 import operator
 import re
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -1087,9 +1088,14 @@ class TestFold:
     def test_fold_block_evaluates_complete_during_trace(self):
         calls = []
 
-        def render(messages):
-            calls.append(messages)
-            return "rubric"
+        class FillClient:
+            def completion(self, *, messages, model, **kwargs):
+                calls.append(messages)
+                message = SimpleNamespace(content="rubric")
+                return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+            async def acompletion(self, **kwargs):
+                return self.completion(**kwargs)
 
         def program(question):
             with af.fold():
@@ -1099,7 +1105,7 @@ class TestFold:
                 )
             return af.string.format("{rubric}: {question}", rubric=rubric, question=question)
 
-        with af.lm.client(af.lm.EchoClient(render)):
+        with af.lm.client(FillClient()):
             ir = af.trace(program)("seed")
 
         assert len(calls) == 1
