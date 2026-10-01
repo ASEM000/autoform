@@ -623,38 +623,6 @@ def literal_content(lit_tree: Tree) -> str:
     return schema_content(lit_tree, schema)
 
 
-def schema_response(in_tree: Tree, /, *, schema: Any) -> Any:
-    input, model = in_tree
-    json_schema = describe(schema)
-    if json_schema is None:
-        return parse(schema, None)
-
-    fmt = dict(type="json_schema", name="autoform_schema", strict=True, schema=json_schema)
-    out = active_client.get().responses(input=input, model=model, text=dict(format=fmt))
-    return parse(schema, jsonlib.loads(out.output_text))
-
-
-async def aschema_response(in_tree: Tree, /, *, schema: Any) -> Any:
-    input, model = in_tree
-    json_schema = describe(schema)
-    if json_schema is None:
-        return parse(schema, None)
-    fmt = dict(type="json_schema", name="autoform_schema", strict=True, schema=json_schema)
-    out = await active_client.get().aresponses(input=input, model=model, text=dict(format=fmt))
-    return parse(schema, jsonlib.loads(out.output_text))
-
-
-def schema_abstract_tree(schema: Any) -> Tree:
-    def abstract(x: Any) -> Any:
-        if is_schema(x):
-            return core.avalof(x)
-        if not stage.is_traceable(x):
-            raise TypeError(f"Static schema leaf must be traceable, got {x!r}")
-        return x
-
-    return utils.tree.map(abstract, schema, is_leaf=is_schema)
-
-
 def fill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
     schm_tree, _ = utils.partition(is_schema, schema, is_leaf=is_schema)
     lit_tree, holes = prepare_fill(dict(context=context, output=schm_tree))
@@ -752,13 +720,25 @@ def reconstruct_schema(dynamic_tree: Tree, static_tree: Tree) -> Tree:
 def impl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
     schema = reconstruct_schema(dynamic_tree, static_tree)
-    return schema_response((literal_content(lit_tree), model), schema=schema)
+    input = literal_content(lit_tree)
+    json_schema = describe(schema)
+    if json_schema is None:
+        return parse(schema, None)
+    fmt = dict(type="json_schema", name="autoform", strict=True, schema=json_schema)
+    out = active_client.get().responses(input=input, model=model, text=dict(format=fmt))
+    return parse(schema, jsonlib.loads(out.output_text))
 
 
 async def aimpl_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     lit_tree, dynamic_tree, model = in_tree
     schema = reconstruct_schema(dynamic_tree, static_tree)
-    return await aschema_response((literal_content(lit_tree), model), schema=schema)
+    input = literal_content(lit_tree)
+    json_schema = describe(schema)
+    if json_schema is None:
+        return parse(schema, None)
+    fmt = dict(type="json_schema", name="autoform", strict=True, schema=json_schema)
+    out = await active_client.get().aresponses(input=input, model=model, text=dict(format=fmt))
+    return parse(schema, jsonlib.loads(out.output_text))
 
 
 def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
@@ -776,9 +756,16 @@ def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
         if aval != core.avalof(""):
             raise TypeError(f"desc must be a string, got {value!r}")
 
+    def abstract_schema(value):
+        if is_schema(value):
+            return core.avalof(value)
+        if not stage.is_traceable(value):
+            raise TypeError(f"Static schema leaf must be traceable, got {value!r}")
+        return value
+
     utils.tree.map(check_literal, lit_tree)
     utils.tree.map(check_description, dynamic_tree)
-    return schema_abstract_tree(schema)
+    return utils.tree.map(abstract_schema, schema, is_leaf=is_schema)
 
 
 def batch_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
