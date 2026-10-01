@@ -23,7 +23,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, runtime_checkable
 
-from litellm import ModelResponse, acompletion, completion
+from litellm import ResponsesAPIResponse, aresponses, responses
 
 import autoform.control as control
 import autoform.core as core
@@ -47,7 +47,7 @@ zip = utils.strict_zip
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type ClientType = ModelResponse
+type ClientType = ResponsesAPIResponse
 
 describe = json.describe
 parse = json.parse
@@ -55,18 +55,18 @@ parse = json.parse
 
 @runtime_checkable
 class Client(Protocol):
-    def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType: ...
-    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType: ...
+    def responses(self, *, input: str, model: str, **kwargs) -> ClientType: ...
+    async def aresponses(self, *, input: str, model: str, **kwargs) -> ClientType: ...
 
 
 class LiteLLMClient:
     __slots__ = []
 
-    def completion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
-        return completion(messages=messages, model=model, **kwargs)
+    def responses(self, *, input: str, model: str, **kwargs) -> ClientType:
+        return responses(input=input, model=model, **kwargs)
 
-    async def acompletion(self, *, messages: list[dict], model: str, **kwargs) -> ClientType:
-        return await acompletion(messages=messages, model=model, **kwargs)
+    async def aresponses(self, *, input: str, model: str, **kwargs) -> ClientType:
+        return await aresponses(input=input, model=model, **kwargs)
 
 
 active_client: ContextVar[Client] = ContextVar("active_client", default=LiteLLMClient())
@@ -76,8 +76,8 @@ active_client: ContextVar[Client] = ContextVar("active_client", default=LiteLLMC
 def client(client: Client) -> Generator[Client, None, None]:
     """Set the LM client for all lm primitives.
 
-    The client must expose ``.completion()`` and ``.acompletion()`` matching
-    LiteLLM's chat completion signature.
+    The client must expose ``.responses()`` and ``.aresponses()`` matching
+    LiteLLM's Responses signature.
 
     Acceptable clients include the default direct LiteLLM adapter, a configured
     ``litellm.Router``, or any wrapper object that forwards those two methods
@@ -90,7 +90,7 @@ def client(client: Client) -> Generator[Client, None, None]:
         ...     model_list=[
         ...         dict(model_name="gpt-4", litellm_params=dict(model="gpt-5.5")),
         ...     ],
-        ...     max_parallel_requests=10,
+        ...     default_max_parallel_requests=10,
         ... )
         >>> with af.lm.client(client):  # doctest: +SKIP
         ...     ir.call(inputs)
@@ -125,44 +125,25 @@ def json_content(value: json.Json) -> str:
     return jsonlib.dumps(content, allow_nan=False)
 
 
-def schema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
-    messages, model = in_tree
+def schema_response(in_tree: Tree, /, *, schema: Any) -> Any:
+    input, model = in_tree
     json_schema = describe(schema)
     if json_schema is None:
         return parse(schema, None)
-    resp = active_client.get().completion(
-        messages=messages,
-        model=model,
-        response_format=dict(
-            type="json_schema",
-            json_schema=dict(
-                name="autoform_schema",
-                strict=True,
-                schema=json_schema,
-            ),
-        ),
-    )
-    return parse(schema, jsonlib.loads(resp.choices[0].message.content))
+
+    fmt = dict(type="json_schema", name="autoform_schema", strict=True, schema=json_schema)
+    out = active_client.get().responses(input=input, model=model, text=dict(format=fmt))
+    return parse(schema, jsonlib.loads(out.output_text))
 
 
-async def aschema_completion(in_tree: Tree, /, *, schema: Any) -> Any:
-    messages, model = in_tree
+async def aschema_response(in_tree: Tree, /, *, schema: Any) -> Any:
+    input, model = in_tree
     json_schema = describe(schema)
     if json_schema is None:
         return parse(schema, None)
-    resp = await active_client.get().acompletion(
-        messages=messages,
-        model=model,
-        response_format=dict(
-            type="json_schema",
-            json_schema=dict(
-                name="autoform_schema",
-                strict=True,
-                schema=json_schema,
-            ),
-        ),
-    )
-    return parse(schema, jsonlib.loads(resp.choices[0].message.content))
+    fmt = dict(type="json_schema", name="autoform_schema", strict=True, schema=json_schema)
+    out = await active_client.get().aresponses(input=input, model=model, text=dict(format=fmt))
+    return parse(schema, jsonlib.loads(out.output_text))
 
 
 def schema_abstract_tree(schema: Any) -> Tree:
@@ -293,15 +274,15 @@ def merge_fill(tree: Tree, generated: Tree) -> Tree:
 def fill_request(in_tree: Tree, /) -> Tree:
     encoded, model = in_tree
     content = json_content(encoded)
-    return [dict(role="user", content=content)], model
+    return content, model
 
 
 def impl_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
-    return schema_completion(fill_request(in_tree), schema=schema)
+    return schema_response(fill_request(in_tree), schema=schema)
 
 
 async def aimpl_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:
-    return await aschema_completion(fill_request(in_tree), schema=schema)
+    return await aschema_response(fill_request(in_tree), schema=schema)
 
 
 def abstract_fill(in_tree: Tree, /, *, schema: Tree) -> Tree:

@@ -1089,13 +1089,12 @@ class TestFold:
         calls = []
 
         class FillClient:
-            def completion(self, *, messages, model, **kwargs):
-                calls.append(messages)
-                message = SimpleNamespace(content='{"output": "rubric"}')
-                return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+            def responses(self, *, input, model, **kwargs):
+                calls.append(input)
+                return SimpleNamespace(output_text='{"output": "rubric"}')
 
-            async def acompletion(self, **kwargs):
-                return self.completion(**kwargs)
+            async def aresponses(self, **kwargs):
+                return self.responses(**kwargs)
 
         def program(question):
             with af.fold():
