@@ -32,6 +32,15 @@ class TaggedAVal(af.core.AVal):
 
 class TestBatchBasic:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_batch_valued_items(self, executor):
+        x = af.stage.Var(aval=BatchAVal(af.string.StrAVal()))
+        ir = af.batch(af.stage.IR([], (x,), x))
+        values = [[], ["a", "b"]]
+        assert executor(ir, values) == values
+        with pytest.raises(TypeError, match="Expected BatchAVal"):
+            executor(ir, ["a", "b"])
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize("container", [list, tuple], ids=["list", "tuple"])
     def test_single_arg(self, executor, container):
         ir = af.batch(af.trace(append_bang)("hello"))
@@ -419,7 +428,7 @@ def test_batch_box_treats_axis_spec_as_prefix():
     assert isinstance(boxed, af.axis.BatchBox)
     assert boxed.value == ["a", "b"]
     assert boxed.batched is True
-    assert af.core.avalof(boxed) == BatchAVal(af.string.StrAVal())
+    assert af.core.avalof(boxed) == af.string.StrAVal()
 
 
 @pytest.mark.parametrize(
@@ -434,7 +443,7 @@ def test_batch_box_avalof_container(values):
     batcher = af.axis.BatchInterpreter(batch_size=2, parent=af.core.active_interpreter.get())
     box = batcher.box((values, True))
 
-    assert af.core.avalof(box) == BatchAVal(af.string.StrAVal())
+    assert af.core.avalof(box) == af.string.StrAVal()
     assert box.value is values
 
 
@@ -452,8 +461,7 @@ def test_batch_box_avalof_zero_metadata():
     box = af.axis.BatchBox(object(), [x, x], True)
     actual = af.core.avalof(box)
 
-    assert isinstance(actual, BatchAVal)
-    assert actual.base is aval
+    assert actual is aval
 
 
 def test_avalof_nested_batch_ad_and_trace_boxes():
@@ -466,8 +474,7 @@ def test_avalof_nested_batch_ad_and_trace_boxes():
 
     actual = af.core.avalof(x)
 
-    assert actual == BatchAVal(BatchAVal(aval))
-    assert actual.base.base is aval
+    assert actual is aval
 
 
 @pytest.mark.parametrize(

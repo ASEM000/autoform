@@ -205,10 +205,10 @@ class TestWeight:
         ir = af.trace(program)(0.0)
         batched = af.batch(af.weight(ir), in_axes=True)
 
-        with af.inject(collection="cache", values={"seen": ["a", "b", "c"]}):
+        with af.inject(collection="cache", values={"seen": [3.0, 1.0, 2.0]}):
             outputs, weights = executor(batched, [0.03, 0.01, 0.02])
 
-        assert outputs == ["a", "b", "c"]
+        assert outputs == [3.0, 1.0, 2.0]
         assert weights == [1.0, 1.0, 1.0]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
