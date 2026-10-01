@@ -16,6 +16,7 @@ import optree
 import pytest
 
 import autoform as af
+from autoform.utils import tree
 
 
 @pytest.mark.parametrize(
@@ -138,22 +139,36 @@ def test_schema_dsl_nodes_compare_by_value(left, right):
         pytest.param(af.lm.Enum("yes", "no"), id="enum"),
     ],
 )
-def test_schema_specs_are_static_during_tracing(schema):
+def test_schema_constraints_are_static_during_tracing(schema):
     ir = af.trace(lambda x, y: (x, y))(schema, "seed")
     assert af.utils.tree.leaves(schema) == []
-    assert ir.in_tree[0] is schema
+    assert ir.in_tree[0] == schema
     assert ir.call(schema, "hello") == (schema, "hello")
 
 
-def test_new_spec_subclasses_register_as_static_nodes():
+def test_new_spec_subclasses_register_description_children():
     class CustomSpec(af.lm.Spec):
         __slots__ = []
 
     schema = CustomSpec()
     leaves, spec = af.utils.tree.flatten(schema)
     assert leaves == []
-    assert spec.unflatten(leaves) is schema
-    assert af.trace(lambda x: x)(schema).call(schema) is schema
+    assert spec.unflatten(leaves) == schema
+    assert af.trace(lambda x: x)(schema).call(schema) == schema
+
+
+def test_spec_description_is_dynamic_and_constraints_are_static():
+    schema = af.lm.Str(min=1, max=100)
+    described = schema @ "description"
+    leaves, spec = tree.flatten(described)
+    assert schema.desc is None
+    assert leaves == ["description"]
+    assert spec.unflatten(["feedback"]) == schema @ "feedback"
+    ir = af.trace(lambda x: schema @ x)("description")
+    assert not ir.eqns
+    assert ir.call("changed") == schema @ "changed"
+    with pytest.raises(TypeError, match="desc must be a string"):
+        schema @ 1.0
 
 
 @pytest.mark.parametrize("operation", ["describe", "parse"])
@@ -165,7 +180,7 @@ def test_unregistered_schema_nodes_remain_static(operation):
     if operation == "describe":
         assert af.lm.describe(schema) is None
     else:
-        assert af.lm.parse(schema, "value") is schema
+        assert af.lm.parse(schema, "value") == schema
 
 
 @pytest.mark.parametrize(
@@ -292,3 +307,77 @@ def test_partition_and_parse_custom_pytree():
         {"source": "fixed"},
         "Evidence agrees.",
     )
+
+
+def test_schema_rules_support_independent_node_types():
+    @tree.dataclasses.dataclass
+    class Record:
+        x: object
+        y: object
+        label: str = tree.dataclasses.field(pytree_node=False)
+
+    @tree.dataclasses.dataclass
+    class Prefix:
+        value: str
+
+    def describe(node):
+        return dict(type="string", description=f"Start with {node.value}")
+
+    def parse(node, value):
+        if not isinstance(value, str) or not value.startswith(node.value):
+            raise ValueError("Expected matching prefix")
+        return value
+
+    af.lm.describe_rules[Prefix] = describe
+    af.lm.parse_rules[Prefix] = parse
+    schema = Record(Prefix("ok:"), "fixed", "metadata")
+    assert af.lm.describe(schema) == {
+        "type": "object",
+        "properties": {"x": {"type": "string", "description": "Start with ok:"}},
+        "required": ["x"],
+        "additionalProperties": False,
+    }
+    assert af.lm.parse(schema, {"x": "ok: done"}) == Record(
+        "ok: done",
+        "fixed",
+        "metadata",
+    )
+    with pytest.raises(ValueError, match="Expected matching prefix"):
+        af.lm.parse(schema, {"x": "wrong"})
+
+
+@pytest.mark.parametrize("operation", ["describe", "parse"])
+def test_describe_and_parse_select_their_own_registered_nodes(operation):
+    class Node:
+        pass
+
+    schema = {"x": Node(), "fixed": "literal"}
+    if operation == "describe":
+        af.lm.describe_rules[Node] = lambda _: dict(type="string")
+        assert af.lm.describe(schema) == {
+            "type": "object",
+            "properties": {"x": {"type": "string"}},
+            "required": ["x"],
+            "additionalProperties": False,
+        }
+        assert af.lm.parse(schema, {"x": "value"}) == schema
+    else:
+        af.lm.parse_rules[Node] = lambda _, value: value
+        assert af.lm.parse(schema, {"x": "value"}) == {"x": "value", "fixed": "literal"}
+        assert af.lm.describe(schema) is None
+
+
+@pytest.mark.parametrize(
+    "schema, value",
+    [
+        pytest.param(af.lm.Float(min=0, max=1), -2.0, id="float-bounds"),
+        pytest.param(af.lm.Enum("yes", "no"), "feedback", id="enum-membership"),
+        pytest.param(af.lm.Str(min=3), "", id="string-length"),
+    ],
+)
+def test_schema_constraints_do_not_apply_to_typed_feedback(schema, value):
+    with pytest.raises(ValueError):
+        af.lm.parse(schema, value)
+    assert af.lm.project_value(schema, value) == value
+    with pytest.raises(TypeError, match="Expected"):
+        af.lm.project_value(schema, True)
