@@ -243,6 +243,10 @@ class Spec(Hashable):
         return f"{type(self).__name__}({', '.join(fields)})"
 
 
+def is_schema(node: Any) -> bool:
+    return isinstance(node, Spec)
+
+
 class Str(Spec):
     """String schema node with optional length and pattern constraints.
 
@@ -287,6 +291,36 @@ class Str(Spec):
         self.pattern = pattern
 
 
+def describe_str(schema: Str) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="string")
+    if schema.desc is not None:
+        json_schema["description"] = schema.desc
+    if schema.min is not None:
+        json_schema["minLength"] = schema.min
+    if schema.max is not None:
+        json_schema["maxLength"] = schema.max
+    if schema.pattern is not None:
+        json_schema["pattern"] = schema.pattern
+    return json_schema
+
+
+def parse_str(schema: Str, value: Any) -> str:
+    if type(value) is not str:
+        raise ValueError("Expected string")
+    if schema.min is not None and len(value) < schema.min:
+        raise ValueError(f"Expected string with length >= {schema.min}")
+    if schema.max is not None and len(value) > schema.max:
+        raise ValueError(f"Expected string with length <= {schema.max}")
+    if schema.pattern is not None and not re.search(schema.pattern, value):
+        raise ValueError(f"Expected string matching {schema.pattern!r}")
+    return value
+
+
+core.aval_types[Str] = lambda _: core.avalof("")
+describe_rules[Str] = describe_str
+parse_rules[Str] = parse_str
+
+
 class Int(Spec):
     """Integer schema node with optional range constraints.
 
@@ -318,6 +352,32 @@ class Int(Spec):
             raise ValueError(f"min must be <= max, got min={min!r}, max={max!r}")
         self.min = min
         self.max = max
+
+
+def describe_int(schema: Int) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="integer")
+    if schema.desc is not None:
+        json_schema["description"] = schema.desc
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return json_schema
+
+
+def parse_int(schema: Int, value: Any) -> int:
+    if type(value) is not int:
+        raise ValueError("Expected integer")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected integer >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected integer <= {schema.max}")
+    return value
+
+
+core.aval_types[Int] = lambda _: core.avalof(0)
+describe_rules[Int] = describe_int
+parse_rules[Int] = parse_int
 
 
 class Float(Spec):
@@ -353,6 +413,34 @@ class Float(Spec):
         self.max = max
 
 
+def describe_float(schema: Float) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="number")
+    if schema.desc is not None:
+        json_schema["description"] = schema.desc
+    if schema.min is not None:
+        json_schema["minimum"] = schema.min
+    if schema.max is not None:
+        json_schema["maximum"] = schema.max
+    return json_schema
+
+
+def parse_float(schema: Float, value: Any) -> float:
+    if type(value) not in (int, float):
+        raise ValueError("Expected number")
+    if type(value) is float and not math.isfinite(value):
+        raise ValueError("Expected finite number")
+    if schema.min is not None and value < schema.min:
+        raise ValueError(f"Expected number >= {schema.min}")
+    if schema.max is not None and value > schema.max:
+        raise ValueError(f"Expected number <= {schema.max}")
+    return float(value)
+
+
+core.aval_types[Float] = lambda _: core.avalof(0.0)
+describe_rules[Float] = describe_float
+parse_rules[Float] = parse_float
+
+
 class Bool(Spec):
     """Boolean schema node.
 
@@ -365,6 +453,24 @@ class Bool(Spec):
     """
 
     __slots__ = []
+
+
+def describe_bool(schema: Bool) -> JsonSchema:
+    json_schema: JsonSchema = dict(type="boolean")
+    if schema.desc is not None:
+        json_schema["description"] = schema.desc
+    return json_schema
+
+
+def parse_bool(schema: Bool, value: Any) -> bool:
+    if type(value) is not bool:
+        raise ValueError("Expected boolean")
+    return value
+
+
+core.aval_types[Bool] = lambda _: core.avalof(False)
+describe_rules[Bool] = describe_bool
+parse_rules[Bool] = parse_bool
 
 
 class Enum(Spec):
@@ -394,50 +500,6 @@ class Enum(Spec):
         return type(value) is type(self.values[0]) and value in self.values
 
 
-# ==================================================================================================
-# JSON DESCRIPTION RULES
-# ==================================================================================================
-
-
-def with_description(schema: Spec, value: JsonSchema) -> JsonSchema:
-    if schema.desc is not None:
-        value["description"] = schema.desc
-    return value
-
-
-def describe_str(schema: Str) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="string")
-    if schema.min is not None:
-        json_schema["minLength"] = schema.min
-    if schema.max is not None:
-        json_schema["maxLength"] = schema.max
-    if schema.pattern is not None:
-        json_schema["pattern"] = schema.pattern
-    return with_description(schema, json_schema)
-
-
-def describe_int(schema: Int) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="integer")
-    if schema.min is not None:
-        json_schema["minimum"] = schema.min
-    if schema.max is not None:
-        json_schema["maximum"] = schema.max
-    return with_description(schema, json_schema)
-
-
-def describe_float(schema: Float) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="number")
-    if schema.min is not None:
-        json_schema["minimum"] = schema.min
-    if schema.max is not None:
-        json_schema["maximum"] = schema.max
-    return with_description(schema, json_schema)
-
-
-def describe_bool(schema: Bool) -> JsonSchema:
-    return with_description(schema, dict(type="boolean"))
-
-
 def describe_enum(schema: Enum) -> JsonSchema:
     json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
     if (value_type := type(schema.values[0])) not in json_types:
@@ -445,63 +507,9 @@ def describe_enum(schema: Enum) -> JsonSchema:
     if value_type is float and not all(math.isfinite(value) for value in schema.values):
         raise ValueError("Enum values must be finite")
     json_schema = dict(type=json_types[value_type], enum=list(schema.values))
-    return with_description(schema, json_schema)
-
-
-describe_rules[Str] = describe_str
-describe_rules[Int] = describe_int
-describe_rules[Float] = describe_float
-describe_rules[Bool] = describe_bool
-describe_rules[Enum] = describe_enum
-
-
-def is_schema(node: Any) -> bool:
-    return isinstance(node, Spec)
-
-
-# ==================================================================================================
-# JSON PARSING RULES
-# ==================================================================================================
-
-
-def parse_str(schema: Str, value: Any) -> str:
-    if type(value) is not str:
-        raise ValueError("Expected string")
-    if schema.min is not None and len(value) < schema.min:
-        raise ValueError(f"Expected string with length >= {schema.min}")
-    if schema.max is not None and len(value) > schema.max:
-        raise ValueError(f"Expected string with length <= {schema.max}")
-    if schema.pattern is not None and not re.search(schema.pattern, value):
-        raise ValueError(f"Expected string matching {schema.pattern!r}")
-    return value
-
-
-def parse_int(schema: Int, value: Any) -> int:
-    if type(value) is not int:
-        raise ValueError("Expected integer")
-    if schema.min is not None and value < schema.min:
-        raise ValueError(f"Expected integer >= {schema.min}")
-    if schema.max is not None and value > schema.max:
-        raise ValueError(f"Expected integer <= {schema.max}")
-    return value
-
-
-def parse_float(schema: Float, value: Any) -> float:
-    if type(value) not in (int, float):
-        raise ValueError("Expected number")
-    if type(value) is float and not math.isfinite(value):
-        raise ValueError("Expected finite number")
-    if schema.min is not None and value < schema.min:
-        raise ValueError(f"Expected number >= {schema.min}")
-    if schema.max is not None and value > schema.max:
-        raise ValueError(f"Expected number <= {schema.max}")
-    return float(value)
-
-
-def parse_bool(schema: Bool, value: Any) -> bool:
-    if type(value) is not bool:
-        raise ValueError("Expected boolean")
-    return value
+    if schema.desc is not None:
+        json_schema["description"] = schema.desc
+    return json_schema
 
 
 def parse_enum(schema: Enum, value: Any) -> Any:
@@ -510,23 +518,14 @@ def parse_enum(schema: Enum, value: Any) -> Any:
     return value
 
 
-parse_rules[Str] = parse_str
-parse_rules[Int] = parse_int
-parse_rules[Float] = parse_float
-parse_rules[Bool] = parse_bool
+core.aval_types[Enum] = lambda schema: core.avalof(schema.values[0])
+describe_rules[Enum] = describe_enum
 parse_rules[Enum] = parse_enum
 
 
 # ==================================================================================================
-# ABSTRACT
+# AVAL SCHEMA RULES
 # ==================================================================================================
-
-
-core.aval_types[Str] = lambda _: core.avalof("")
-core.aval_types[Int] = lambda _: core.avalof(0)
-core.aval_types[Float] = lambda _: core.avalof(0.0)
-core.aval_types[Bool] = lambda _: core.avalof(False)
-core.aval_types[Enum] = lambda schema: core.avalof(schema.values[0])
 
 
 type AValSchemaRule = Callable[[core.AVal], Spec]
