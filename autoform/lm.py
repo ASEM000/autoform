@@ -623,26 +623,6 @@ def literal_content(lit_tree: Tree) -> str:
     return schema_content(lit_tree, schema)
 
 
-def fill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
-    schm_tree, _ = utils.partition(is_spec, schema, is_leaf=is_spec)
-    holes, lit_tree = utils.partition(
-        is_spec, dict(context=context, output=schm_tree), is_leaf=is_spec
-    )
-    in_tree, static_tree = fill_input((lit_tree, holes, model))
-    out = fill_p.bind(in_tree, static_tree=static_tree)
-    return utils.tree.map(select_filled, schema, out["output"], is_leaf=is_spec)
-
-
-async def afill_context(context: Tree, model: str, /, *, schema: Tree) -> Tree:
-    schm_tree, _ = utils.partition(is_spec, schema, is_leaf=is_spec)
-    holes, lit_tree = utils.partition(
-        is_spec, dict(context=context, output=schm_tree), is_leaf=is_spec
-    )
-    in_tree, static_tree = fill_input((lit_tree, holes, model))
-    out = await fill_p.abind(in_tree, static_tree=static_tree)
-    return utils.tree.map(select_filled, schema, out["output"], is_leaf=is_spec)
-
-
 def feedback_schema(tree: Tree) -> Tree:
     def make_schema(path, value):
         aval = core.cotangent_s.map(core.avalof(value))
@@ -842,7 +822,10 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
         return aval_to_spec(core.tangent_s.map(core.avalof(x)))
 
     t_schema = utils.tree.map(tangent_field, schema, is_leaf=is_spec)
-    return (context, p_model), t_schema
+    schm_tree, lit_tree = utils.partition(
+        is_spec, dict(context=context, output=t_schema), is_leaf=is_spec
+    )
+    return fill_input((lit_tree, schm_tree, p_model))
 
 
 def pushforward_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
@@ -854,8 +837,8 @@ def pushforward_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
     p_out = fill_p.bind(p_in, static_tree=static_tree)
     if request is None:
         return p_out, utils.tree.map(zero_output, p_out)
-    (context, model), t_schema = request
-    t_out = fill_context(context, model, schema=t_schema)
+    t_in, t_static_tree = request
+    t_out = fill_p.bind(t_in, static_tree=t_static_tree)["output"]
     return p_out, t_out
 
 
@@ -868,10 +851,14 @@ async def apush_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
     if request is None:
         p_out = await fill_p.abind(p_in, static_tree=static_tree)
         return p_out, utils.tree.map(zero_output, p_out)
-    (context, model), t_schema = request
+    t_in, t_static_tree = request
+
+    def tangent_fill(in_tree):
+        return fill_p.bind(in_tree, static_tree=t_static_tree)["output"]
+
     p_ir = stage.trace(ft.partial(fill_p.bind, static_tree=static_tree))(p_in)
-    t_ir = stage.trace(ft.partial(fill_context, schema=t_schema))(context, model)
-    return await order.fanout_p.abind([(p_in,), (context, model)], irs=[p_ir, t_ir])
+    t_ir = stage.trace(tangent_fill)(t_in)
+    return await order.fanout_p.abind([(p_in,), (t_in,)], irs=[p_ir, t_ir])
 
 
 def pullback_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
@@ -923,7 +910,10 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
 
     context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
     in_schema = feedback_schema((lit_tree, model, desc_tree))
-    return (context, model), in_schema
+    schm_tree, lit_tree = utils.partition(
+        is_spec, dict(context=context, output=in_schema), is_leaf=is_spec
+    )
+    return fill_input((lit_tree, schm_tree, model))
 
 
 def pullback_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
@@ -934,8 +924,9 @@ def pullback_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     if request is None:
         (lit_tree, dynamic_tree, model, _), _ = in_tree
         return utils.tree.map(zero_input, (lit_tree, dynamic_tree, model))
-    (context, model), in_schema = request
-    feedback, model_feedback, desc_feedback = fill_context(context, model, schema=in_schema)
+    feedback_in, feedback_static_tree = request
+    out = fill_p.bind(feedback_in, static_tree=feedback_static_tree)
+    feedback, model_feedback, desc_feedback = out["output"]
     (_, dynamic_tree, _, _), _ = in_tree
     dynamic_feedback = utils.tree.map(cotangent_spec, dynamic_tree, desc_feedback, is_leaf=is_spec)
     return feedback, dynamic_feedback, model_feedback
@@ -949,8 +940,9 @@ async def apull_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     if request is None:
         (lit_tree, dynamic_tree, model, _), _ = in_tree
         return utils.tree.map(zero_input, (lit_tree, dynamic_tree, model))
-    (context, model), in_schema = request
-    feedback, model_feedback, desc_feedback = await afill_context(context, model, schema=in_schema)
+    feedback_in, feedback_static_tree = request
+    out = await fill_p.abind(feedback_in, static_tree=feedback_static_tree)
+    feedback, model_feedback, desc_feedback = out["output"]
     (_, dynamic_tree, _, _), _ = in_tree
     dynamic_feedback = utils.tree.map(cotangent_spec, dynamic_tree, desc_feedback, is_leaf=is_spec)
     return feedback, dynamic_feedback, model_feedback
