@@ -54,10 +54,21 @@ class BatchAVal(core.AVal):
         return f"{type(self).__name__}({self.base!r})"
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, BatchAVal) and self.base == other.base
+        return isinstance(other, type(self)) and self.base == other.base
 
     def __hash__(self) -> int:
         return hash((type(self), self.base))
+
+    def check(self, value, /) -> None:
+        if type(value) in core.aval_types:
+            actual = core.avalof(value)
+            if not isinstance(actual, type(self)):
+                raise TypeError(f"Expected {self!r}, got {actual!r}")
+            self.base.check(core.Zero(actual.base))
+            return
+        if utils.tree.is_leaf(value):
+            raise TypeError(f"Expected {self!r}, got {type(value).__name__}")
+        utils.tree.map(self.base.check, value, is_leaf=lambda x: x is not value)
 
 
 core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.map(aval.base)))

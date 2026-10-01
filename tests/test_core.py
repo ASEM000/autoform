@@ -18,6 +18,24 @@ import autoform as af
 from tests import Blob, BlobAVal, aexecute, execute
 
 
+class TestAVal:
+    def test_default_equality_and_hash(self):
+        class X(af.core.AVal): ...
+
+        class Y(af.core.AVal): ...
+
+        assert X() == X()
+        assert X() != Y()
+        assert X() != object()
+        assert len({X(), X(), Y()}) == 2
+        assert {X(): "x"}[X()] == "x"
+
+    def test_check_respects_metadata_equality(self):
+        BlobAVal(3).check(af.core.Zero(BlobAVal(3)))
+        with pytest.raises(TypeError, match="Expected"):
+            BlobAVal(3).check(af.core.Zero(BlobAVal(4)))
+
+
 class TestSpace:
     def test_registration_and_replacement(self):
         space = af.core.Space("blob")
@@ -189,7 +207,9 @@ def test_interpreter_context_restores_default():
 def test_custom_rule_interpreter(executor):
     rules = af.extend.Rule("operation_count")
     arules = af.extend.Rule("aoperation_count")
-    rules.set(af.extend.concat_p, lambda values: sum(values) + 1)
+    rules.set(
+        af.extend.concat_p, lambda values: sum(v if isinstance(v, int) else 0 for v in values) + 1
+    )
     arules.set(af.extend.concat_p, af.utils.asyncify(rules.get(af.extend.concat_p)))
 
     class OperationCountInterpreter(af.core.Interpreter):
@@ -201,5 +221,5 @@ def test_custom_rule_interpreter(executor):
 
     ir = af.trace(lambda x, y: (x + y) + y)("x", "y")
     with af.core.using_interpreter(OperationCountInterpreter()):
-        assert executor(ir, 0, 0) == 2
+        assert executor(ir, "x", "y") == 2
     assert executor(ir, "x", "y") == "xyy"

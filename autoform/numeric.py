@@ -64,12 +64,6 @@ class IntAVal(core.AVal):
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other)
-
-    def __hash__(self) -> int:
-        return hash(type(self))
-
 
 core.aval_types[int] = lambda _: IntAVal()
 stage.trace_types.add(int)
@@ -92,17 +86,11 @@ class FloatAVal(core.AVal):
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other)
-
-    def __hash__(self) -> int:
-        return hash(type(self))
-
     def zero(self) -> float:
         return 0.0
 
-    def accumulate(self, cotangents: list[float], /) -> float:
-        return sum(cotangents)
+    def accumulate(self, values: list[float], /) -> float:
+        return sum(values)
 
 
 core.aval_types[float] = lambda _: FloatAVal()
@@ -127,12 +115,6 @@ class BoolAVal(core.AVal):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
-
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other)
-
-    def __hash__(self) -> int:
-        return hash(type(self))
 
 
 core.aval_types[bool] = lambda _: BoolAVal()

@@ -19,6 +19,50 @@ import autoform as af
 from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, execute
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "cotangent",
+    [
+        pytest.param(["x", "y"], id="list"),
+        pytest.param(1.0, id="float"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="wrong-zero"),
+    ],
+)
+def test_pullback_rejects_incompatible_cotangent(executor, cotangent):
+    ir = af.pullback(af.trace(lambda x: x)("x"))
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, ("x",), cotangent)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_batched_pullback_rejects_shared_list_cotangent(executor):
+    ir = af.pullback(af.trace(lambda x, y: x + y)("x", "y"))
+    ir = af.batch(ir, in_axes=((False, True), False))
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, ("x", ["y1", "y2"]), ["o1", "o2"])
+    assert executor(ir, ("x", ["y1", "y2"]), "o") == (
+        ["xy1", "xy2"],
+        (["o", "o"], ["o", "o"]),
+    )
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "cotangent, error",
+    [
+        pytest.param("o", "BatchAVal", id="scalar"),
+        pytest.param(["o", 1.0], "StrAVal", id="mixed-elements"),
+        pytest.param(
+            af.core.Zero(af.axis.BatchAVal(af.numeric.FloatAVal())), "StrAVal", id="wrong-zero"
+        ),
+    ],
+)
+def test_pullback_of_batch_rejects_incompatible_cotangent(executor, cotangent, error):
+    ir = af.pullback(af.batch(af.trace(lambda x: x)("x")))
+    with pytest.raises(TypeError, match=f"Expected {error}"):
+        executor(ir, (["x", "y"],), cotangent)
+
+
 @pytest.mark.parametrize(
     "box_type, kwargs",
     [
@@ -187,11 +231,11 @@ class TestCotangentHelpers:
     def test_cot_acc_unsupported_type_raises(self):
         with pytest.raises(
             AssertionError,
-            match=r"No cotangent accumulation defined for BoolAVal\(\)",
+            match=r"No accumulation defined for BoolAVal\(\)",
         ):
             af.ad.cot_acc([True, False])
         ir = af.trace(lambda x, y: af.ad.cot_acc([x, y]))(True, False)
-        with pytest.raises(AssertionError, match="No cotangent accumulation defined"):
+        with pytest.raises(AssertionError, match="No accumulation defined"):
             ir.call(True, False)
 
     def test_cot_acc_unregistered_leaf_raises(self):

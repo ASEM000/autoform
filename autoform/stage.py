@@ -121,13 +121,7 @@ def is_var(x) -> TypeGuard[Var]:
 
 
 def aval_if_var(x, /):
-    """Return the aval for an IR variable, otherwise return input unchanged.
-
-    This is useful when constructing new IR trees from existing ones: concrete
-    literals stay concrete, while symbolic variables are replaced by the
-    abstract values needed to create fresh variables or abstract outputs.
-    """
-
+    """Return the aval for an IR variable, otherwise return input unchanged."""
     return x.aval if is_var(x) else x
 
 
@@ -211,10 +205,6 @@ class IR[*A, R]:
 
     def call(self, *args: *A) -> R:
         """Run IR with concrete runtime inputs.
-
-        Use this after `trace(...)` has produced an `IR`. Pass values with the same
-        pytree structure as `in_tree`; the method executes the stored equations
-        in order and returns the final output tree.
 
         Example:
             >>> import autoform as af
@@ -332,11 +322,12 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 type GenStep = tuple[Eqn | None, Tree]
 
 
-def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
-    """Validate runtime inputs against static literals in an IR input tree."""
+def check_inputs(atoms: Tree, args: Tree, /) -> None:
 
     def check_input(atom, value: Any):
-        if not is_var(atom):
+        if is_var(atom):
+            atom.aval.check(value)
+        else:
             expected = atom
             msg = f"Static input mismatch: expected {expected!r}, got {value!r}"
             assert expected == value, msg
@@ -384,7 +375,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     def func(*args: *A) -> R:
-        check_static_inputs(ir.in_tree, args)
+        check_inputs(ir.in_tree, args)
         eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
@@ -398,7 +389,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
     assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
 
     async def func(*args: *A) -> R:
-        check_static_inputs(ir.in_tree, args)
+        check_inputs(ir.in_tree, args)
         eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))

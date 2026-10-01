@@ -20,6 +20,18 @@ import autoform as af
 from tests import aexecute, execute
 
 
+@pytest.mark.parametrize(
+    "x",
+    [
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="symbolic-zero"),
+        pytest.param(af.lm.Float(), id="schema"),
+    ],
+)
+def test_comparison_requires_concrete_floats(x):
+    with pytest.raises(AssertionError, match="Expected floats"):
+        af.numeric.eq(x, x)
+
+
 def test_numeric_dunders_form_one_scalar_program():
     def program(x, y):
         score = -(x + 2) * y / 2
