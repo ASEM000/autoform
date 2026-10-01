@@ -328,11 +328,11 @@ def test_partition_and_parse_custom_pytree():
         af.lm.Str() @ "Reasoning.",
     )
     assert af.lm.describe_node(spec_tree) == af.lm.describe(schema)
-    generated_tree = af.lm.parse_node(
+    filled_tree = af.lm.parse_node(
         spec_tree,
         {"score": 0.8, "reasoning": "Evidence agrees."},
     )
-    assert generated_tree == Answer(
+    assert filled_tree == Answer(
         0.8,
         {"source": af.lm.missing},
         "Evidence agrees.",

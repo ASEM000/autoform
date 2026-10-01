@@ -147,8 +147,8 @@ def parse_node(spec_tree: Tree, value: Any, /) -> Tree:
 def parse(spec_tree: Tree, value: Any, /) -> Tree:
     """Parse a tree of specs with their constraints and preserve literals."""
 
-    def select_filled(literal, generated):
-        return generated if literal is missing else literal
+    def select_filled(literal, filled):
+        return filled if literal is missing else literal
 
     spec_tree, lit_tree = utils.partition(
         is_spec,
@@ -156,8 +156,8 @@ def parse(spec_tree: Tree, value: Any, /) -> Tree:
         is_leaf=is_spec,
         fillvalue=missing,
     )
-    generated = parse_node(spec_tree, value)
-    return utils.tree.map(select_filled, lit_tree, generated)
+    filled = parse_node(spec_tree, value)
+    return utils.tree.map(select_filled, lit_tree, filled)
 
 
 # ==================================================================================================
