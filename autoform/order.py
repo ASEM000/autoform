@@ -233,8 +233,8 @@ def sched[*A, R](
         >>> import asyncio
         >>>
         >>> def parallel_calls(x):
-        ...     a = af.lm.fill({"prompt": "Q1: " + x, "output": af.lm.Str()}, model="gpt-5.5")["output"]
-        ...     b = af.lm.fill({"prompt": "Q2: " + x, "output": af.lm.Str()}, model="gpt-5.5")["output"]
+        ...     a = af.lm.fill({"prompt": "Q1: " + x, "output": af.lm.Str()}, model="model-name")["output"]
+        ...     b = af.lm.fill({"prompt": "Q2: " + x, "output": af.lm.Str()}, model="model-name")["output"]
         ...     return a + b
         >>>
         >>> ir = af.trace(parallel_calls)("input")

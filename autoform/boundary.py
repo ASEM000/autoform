@@ -454,13 +454,13 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     text_cotangent = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]
         ...     return text_cotangent, ""
 
-        >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model")
+        >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model-name")
         >>> af.pushforward(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "gpt-5.5"),
+        ...     ("recursion", "model-name"),
         ...     ("focus on the recursive step", ""),
         ... )
         >>> af.pullback(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "gpt-5.5"),
+        ...     ("recursion", "model-name"),
         ...     "make the answer more concrete",
         ... )
     """
