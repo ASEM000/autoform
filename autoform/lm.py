@@ -681,52 +681,6 @@ def feedback_schema(tree: Tree) -> Tree:
     return utils.tree.map_with_path(make_schema, tree)
 
 
-def pullback_fwd_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
-    out = prim.bind(in_tree, **params)
-    residuals = (*in_tree, out)
-    return out, residuals
-
-
-async def apull_fwd_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
-    out = await prim.abind(in_tree, **params)
-    residuals = (*in_tree, out)
-    return out, residuals
-
-
-def batch_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        result = prim.bind(in_values, **params)
-        out_batched = utils.tree.map(lambda _: False, result)
-        return result, out_batched
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    bind = ft.partial(prim.bind, **params)
-    results = [bind(unbatch(b)) for b in range(batch_size)]
-    out_batched = utils.tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
-    return out_ib, out_batched
-
-
-async def abatch_lm(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        result = await prim.abind(in_values, **params)
-        out_batched = utils.tree.map(lambda _: False, result)
-        return result, out_batched
-
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    inputs = [(unbatch(b),) for b in range(batch_size)]
-    in0, *_ = inputs
-    ir = stage.trace(ft.partial(prim.bind, **params))(*in0)
-    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
-    out_batched = utils.tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
-    return out_ib, out_batched
-
-
 # ==================================================================================================
 # FILL
 # ==================================================================================================
@@ -827,6 +781,40 @@ def abstract_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     return schema_abstract_tree(schema)
 
 
+def batch_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
+    batch_size, in_batched, in_values = in_tree
+
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
+        result = fill_p.bind(in_values, static_tree=static_tree)
+        out_batched = utils.tree.map(lambda _: False, result)
+        return result, out_batched
+
+    results = [
+        fill_p.bind(utils.batch_index(in_values, in_batched, b), static_tree=static_tree)
+        for b in range(batch_size)
+    ]
+    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
+    return out_ib, out_batched
+
+
+async def abatch_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
+    batch_size, in_batched, in_values = in_tree
+
+    if (spec := utils.batch_spec(in_values, in_batched)) is None:
+        result = await fill_p.abind(in_values, static_tree=static_tree)
+        out_batched = utils.tree.map(lambda _: False, result)
+        return result, out_batched
+
+    inputs = [(utils.batch_index(in_values, in_batched, b),) for b in range(batch_size)]
+    in0, *_ = inputs
+    ir = stage.trace(ft.partial(fill_p.bind, static_tree=static_tree))(*in0)
+    results = await order.fanout_p.abind(inputs, irs=[ir] * batch_size)
+    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
+    return out_ib, out_batched
+
+
 def schema_description(node: Spec) -> str | None:
     return node.desc
 
@@ -899,6 +887,18 @@ async def apush_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
     p_ir = stage.trace(ft.partial(fill_p.bind, static_tree=static_tree))(p_in)
     t_ir = stage.trace(ft.partial(fill_context, schema=t_schema))(context, model)
     return await order.fanout_p.abind([(p_in,), (context, model)], irs=[p_ir, t_ir])
+
+
+def pullback_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
+    out = fill_p.bind(in_tree, static_tree=static_tree)
+    residuals = (*in_tree, out)
+    return out, residuals
+
+
+async def apull_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
+    out = await fill_p.abind(in_tree, static_tree=static_tree)
+    residuals = (*in_tree, out)
+    return out, residuals
 
 
 def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | None:
@@ -984,11 +984,11 @@ def cotangent_schema(node: Spec, feedback: str | None) -> Spec:
 core.impl_rules.set(fill_p, impl_fill)
 core.aimpl_rules.set(fill_p, aimpl_fill)
 core.abstract_rules.set(fill_p, abstract_fill)
-core.batch_rules.set(fill_p, ft.partial(batch_lm, fill_p))
-core.abatch_rules.set(fill_p, ft.partial(abatch_lm, fill_p))
+core.batch_rules.set(fill_p, batch_fill)
+core.abatch_rules.set(fill_p, abatch_fill)
 core.push_rules.set(fill_p, pushforward_fill)
 core.apush_rules.set(fill_p, apush_fill)
-core.pull_fwd_rules.set(fill_p, ft.partial(pullback_fwd_lm, fill_p))
-core.apull_fwd_rules.set(fill_p, ft.partial(apull_fwd_lm, fill_p))
+core.pull_fwd_rules.set(fill_p, pullback_fwd_fill)
+core.apull_fwd_rules.set(fill_p, apull_fwd_fill)
 core.pull_bwd_rules.set(fill_p, pullback_bwd_fill)
 core.apull_bwd_rules.set(fill_p, apull_bwd_fill)
