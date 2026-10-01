@@ -194,7 +194,7 @@ def pushforward_switch(in_tree, /, *, branches: Branches):
     return pf_ir.call(p_operands, t_operands)
 
 
-async def apush_switch(in_tree, /, *, branches: Branches):
+async def apushforward_switch(in_tree, /, *, branches: Branches):
     primals, tangents = in_tree
     (key, p_operands), (_, t_operands) = primals, tangents
     pf_ir = ad.pushforward(branches[key])
@@ -295,7 +295,7 @@ core.abstract_rules.set(switch_p, abstract_switch)
 core.batch_rules.set(switch_p, batch_switch)
 core.abatch_rules.set(switch_p, abatch_switch)
 core.push_rules.set(switch_p, pushforward_switch)
-core.apush_rules.set(switch_p, apush_switch)
+core.apush_rules.set(switch_p, apushforward_switch)
 core.pull_fwd_rules.set(switch_p, pullback_fwd_switch)
 core.apull_fwd_rules.set(switch_p, apull_fwd_switch)
 core.pull_bwd_rules.set(switch_p, pullback_bwd_switch)
@@ -425,6 +425,40 @@ def abstract_while_loop(
         "the body's output types and literal values"
     )
     return out_tree
+
+
+def pushforward_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
+    max_iters: int,
+) -> TreePair:
+    p_state, t_state = in_tree
+    pf_body = ad.pushforward(body_ir)
+    for _ in range(max_iters):
+        if not cond_ir.call(p_state):
+            break
+        p_state, t_state = pf_body.call((p_state,), (t_state,))
+    return p_state, t_state
+
+
+async def apushforward_while_loop(
+    in_tree: Tree,
+    /,
+    *,
+    cond_ir: stage.IR,
+    body_ir: stage.IR,
+    max_iters: int,
+) -> TreePair:
+    p_state, t_state = in_tree
+    pf_body = ad.pushforward(body_ir)
+    for _ in range(max_iters):
+        if not await cond_ir.acall(p_state):
+            break
+        p_state, t_state = await pf_body.acall((p_state,), (t_state,))
+    return p_state, t_state
 
 
 def pullback_fwd_while_loop(
@@ -623,40 +657,6 @@ async def abatch_while_loop(
     return out_tree, out_batched
 
 
-def pushforward_while_loop(
-    in_tree: Tree,
-    /,
-    *,
-    cond_ir: stage.IR,
-    body_ir: stage.IR,
-    max_iters: int,
-) -> TreePair:
-    p_state, t_state = in_tree
-    pf_body = ad.pushforward(body_ir)
-    for _ in range(max_iters):
-        if not cond_ir.call(p_state):
-            break
-        p_state, t_state = pf_body.call((p_state,), (t_state,))
-    return p_state, t_state
-
-
-async def apushforward_while_loop(
-    in_tree: Tree,
-    /,
-    *,
-    cond_ir: stage.IR,
-    body_ir: stage.IR,
-    max_iters: int,
-) -> TreePair:
-    p_state, t_state = in_tree
-    pf_body = ad.pushforward(body_ir)
-    for _ in range(max_iters):
-        if not await cond_ir.acall(p_state):
-            break
-        p_state, t_state = await pf_body.acall((p_state,), (t_state,))
-    return p_state, t_state
-
-
 def pullback_bwd_while_loop(
     in_tree: Tree,
     /,
@@ -758,6 +758,10 @@ def fixpoint(
     is reached. Equivalence defaults to structural equality of the state
     pytree; pass ``equiv_ir`` with shape ``(State, State) -> Bool`` to decide
     stability inside the program.
+
+    Both AD directions approximate the implicit derivative at the returned
+    state using up to ``adj_iters + 1`` terms and treat sensitivity to
+    ``init_val`` as zero.
     """
     assert isinstance(step_ir, stage.IR), f"step_ir must be an IR, got {type(step_ir)}"
     assert len(step_ir.in_tree) == 2, "step_ir must take exactly two positional arguments"
@@ -850,6 +854,60 @@ def abstract_fixpoint(
     return utils.tree.map(stage.aval_if_var, step_ir.out_tree)
 
 
+def pushforward_fixpoint(
+    in_tree: Tree,
+    /,
+    *,
+    step_ir: stage.IR,
+    max_iters: int,
+    adj_iters: int,
+    equiv_ir: stage.IR | None,
+) -> TreePair:
+    primals, (_, t_theta) = in_tree
+    _, theta = primals
+    out = fixpoint_p.bind(
+        primals, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+    )
+    tangent = utils.tree.map(lambda x: core.Zero(core.tangent_s.map(core.avalof(x))), out)
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_theta)):
+        return out, tangent
+
+    pf_step_ir = ad.pushforward(step_ir)
+    for _ in range(adj_iters + 1):
+        _, next_tangent = pf_step_ir.call((out, theta), (tangent, t_theta))
+        if utils.tree_equal(next_tangent, tangent):
+            return out, next_tangent
+        tangent = next_tangent
+    return out, tangent
+
+
+async def apushforward_fixpoint(
+    in_tree: Tree,
+    /,
+    *,
+    step_ir: stage.IR,
+    max_iters: int,
+    adj_iters: int,
+    equiv_ir: stage.IR | None,
+) -> TreePair:
+    primals, (_, t_theta) = in_tree
+    _, theta = primals
+    out = await fixpoint_p.abind(
+        primals, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+    )
+    tangent = utils.tree.map(lambda x: core.Zero(core.tangent_s.map(core.avalof(x))), out)
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_theta)):
+        return out, tangent
+
+    pf_step_ir = ad.pushforward(step_ir)
+    for _ in range(adj_iters + 1):
+        _, next_tangent = await pf_step_ir.acall((out, theta), (tangent, t_theta))
+        if utils.tree_equal(next_tangent, tangent):
+            return out, next_tangent
+        tangent = next_tangent
+    return out, tangent
+
+
 def pullback_fwd_fixpoint(
     in_tree: Tree,
     /,
@@ -860,7 +918,11 @@ def pullback_fwd_fixpoint(
     equiv_ir: stage.IR | None,
 ) -> TreePair:
     out = fixpoint_p.bind(
-        in_tree, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+        in_tree,
+        step_ir=step_ir,
+        max_iters=max_iters,
+        adj_iters=adj_iters,
+        equiv_ir=equiv_ir,
     )
     _, theta = in_tree
     return out, (out, theta)
@@ -876,7 +938,11 @@ async def apull_fwd_fixpoint(
     equiv_ir: stage.IR | None,
 ) -> TreePair:
     out = await fixpoint_p.abind(
-        in_tree, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+        in_tree,
+        step_ir=step_ir,
+        max_iters=max_iters,
+        adj_iters=adj_iters,
+        equiv_ir=equiv_ir,
     )
     _, theta = in_tree
     return out, (out, theta)
@@ -1153,6 +1219,8 @@ def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
 core.impl_rules.set(fixpoint_p, impl_fixpoint)
 core.aimpl_rules.set(fixpoint_p, aimpl_fixpoint)
 core.abstract_rules.set(fixpoint_p, abstract_fixpoint)
+core.push_rules.set(fixpoint_p, pushforward_fixpoint)
+core.apush_rules.set(fixpoint_p, apushforward_fixpoint)
 core.batch_rules.set(fixpoint_p, batch_fixpoint)
 core.abatch_rules.set(fixpoint_p, abatch_fixpoint)
 core.pull_fwd_rules.set(fixpoint_p, pullback_fwd_fixpoint)

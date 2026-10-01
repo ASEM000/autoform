@@ -89,6 +89,78 @@ class TestFixpointTraced:
         assert result == "done"
 
 
+class TestFixpointPushforward:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
+        "adj_iters, expected",
+        [
+            pytest.param(0, 1.0, id="direct-effect"),
+            pytest.param(1, 1.5, id="default-budget"),
+            pytest.param(5, 1.96875, id="larger-budget"),
+        ],
+    )
+    def test_matches_implicit_pullback(self, executor, adj_iters, expected):
+        ir = fixpoint_ir(lambda x, y: 0.5 * x + y, (2.0, 1.0), max_iters=1, adj_iters=adj_iters)
+        assert executor(af.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, expected)
+        assert executor(af.pullback(ir), (2.0, 1.0), 1.0) == (
+            2.0,
+            (af.core.Zero(af.numeric.FloatAVal()), expected),
+        )
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
+        "tangent, expected",
+        [
+            pytest.param(2.0, 3.0, id="parameter-tangent"),
+            pytest.param(0.0, 0.0, id="concrete-zero"),
+            pytest.param(
+                af.core.Zero(af.numeric.FloatAVal()),
+                af.core.Zero(af.numeric.FloatAVal()),
+                id="symbolic-zero",
+            ),
+        ],
+    )
+    def test_ignores_initial_tangent(self, executor, tangent, expected):
+        ir = fixpoint_ir(lambda x, y: 0.5 * x + y, (2.0, 1.0), max_iters=1)
+        assert executor(af.pushforward(ir), (2.0, 1.0), (100.0, tangent)) == (2.0, expected)
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_linearizes_at_returned_state(self, executor):
+        ir = fixpoint_ir(lambda x, y: x * x / 4.0 + y, (0.0, 0.25), max_iters=1)
+        assert executor(af.pushforward(ir), (0.0, 0.25), (100.0, 2.0)) == (0.25, 2.25)
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_state_tree_and_equiv_ir(self, executor):
+        def step(x, y):
+            return {"x": 0.5 * x["x"] + y["x"], "y": af.string.concat(x["y"], y["y"])}
+
+        x, y = {"x": 2.0, "y": "a"}, {"x": 1.0, "y": "!"}
+        equiv_ir = trace(lambda x, y: True)(x, x)
+        ir = fixpoint_ir(step, (x, y), max_iters=10, equiv_ir=equiv_ir)
+        zero = af.core.Zero(af.string.StrAVal())
+        assert executor(
+            af.pushforward(ir), (x, y), ({"x": 100.0, "y": "ignored"}, {"x": 1.0, "y": zero})
+        ) == ({"x": 2.0, "y": "a!"}, {"x": 1.5, "y": zero})
+
+    def test_async_body_rule(self):
+        calls = []
+
+        @af.custom
+        def step(x, y):
+            return 0.5 * x + y
+
+        @step.aset_pushforward
+        async def push(in_tree, /, *, call):
+            primals, tangents = in_tree
+            x, y = af.core.materialize_zeros(tangents)
+            calls.append("push")
+            return call(*primals), 0.5 * x + y
+
+        ir = fixpoint_ir(step, (2.0, 1.0), max_iters=1)
+        assert aexecute(af.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, 1.5)
+        assert calls == ["push", "push"]
+
+
 class TestFixpointPullback:
     @pytest.mark.parametrize(
         "executor, step, args, options, cotangent, expected, c_theta",
