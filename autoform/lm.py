@@ -21,6 +21,7 @@ import functools as ft
 import json as jsonlib
 import math
 import re
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Hashable, Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -86,28 +87,15 @@ def json_value(tree: Tree) -> Any:
 # ==================================================================================================
 
 type JsonSchema = dict[str, Any]
-type DescribeRule = Callable[[Any], JsonSchema]
-type ParseRule = Callable[[Any, Any], Any]
-
-describe_rules: dict[type, DescribeRule] = {}
-parse_rules: dict[type, ParseRule] = {}
 missing = object()
 
 
-def is_describe_node(node: Any) -> bool:
-    return type(node) in describe_rules
-
-
-def is_parse_node(node: Any) -> bool:
-    return type(node) in parse_rules
-
-
 def describe(schema: Tree, /) -> JsonSchema | None:
-    """Describe a tree using registered description rules, omitting literal fields."""
+    """Describe a tree of specs, omitting literal fields."""
     schm_tree, _ = utils.partition(
-        is_describe_node,
+        is_spec,
         schema,
-        is_leaf=is_describe_node,
+        is_leaf=is_spec,
         fillvalue=missing,
     )
     return describe_node(schm_tree)
@@ -116,8 +104,8 @@ def describe(schema: Tree, /) -> JsonSchema | None:
 def describe_node(schema: Tree, /) -> JsonSchema | None:
     if schema is missing:
         return None
-    if rule := describe_rules.get(type(schema)):
-        return rule(schema)
+    if is_spec(schema):
+        return schema.describe()
 
     flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
     property_names = json_property_names(spec.entries())
@@ -139,15 +127,15 @@ def describe_node(schema: Tree, /) -> JsonSchema | None:
 def parse_node(schema: Tree, value: Any, /) -> Tree:
     if schema is missing:
         return missing
-    if rule := parse_rules.get(type(schema)):
-        return rule(schema, value)
+    if is_spec(schema):
+        return schema.parse(value)
 
-    def has_parse_node(node):
-        return any(map(is_parse_node, utils.tree.leaves(node, is_leaf=is_parse_node)))
+    def has_spec(node):
+        return any(map(is_spec, utils.tree.leaves(node, is_leaf=is_spec)))
 
     flat, spec = utils.tree.flatten(schema, is_leaf=lambda x: id(x) != id(schema))
     schema_keys = json_property_names(spec.entries())
-    properties = {key: child for key, child in zip(schema_keys, flat) if has_parse_node(child)}
+    properties = {key: child for key, child in zip(schema_keys, flat) if has_spec(child)}
     if not properties:
         return schema
     expected_spec = utils.tree.structure(properties, is_leaf=lambda x: id(x) != id(properties))
@@ -157,15 +145,15 @@ def parse_node(schema: Tree, value: Any, /) -> Tree:
 
 
 def parse(schema: Tree, value: Any, /) -> Tree:
-    """Parse a tree of registered nodes with their constraints and preserve literals."""
+    """Parse a tree of specs with their constraints and preserve literals."""
 
     def select_filled(literal, generated):
         return generated if literal is missing else literal
 
     schm_tree, lit_tree = utils.partition(
-        is_parse_node,
+        is_spec,
         schema,
-        is_leaf=is_parse_node,
+        is_leaf=is_spec,
         fillvalue=missing,
     )
     generated = parse_node(schm_tree, value)
@@ -181,18 +169,19 @@ def slotted_values(node: Any) -> tuple[Any, ...]:
     return tuple(getattr(node, name) for name in type(node).__slots__)
 
 
-class Spec(Hashable):
+class Spec(Hashable, ABC):
     __slots__ = ["desc"]
-
-    def __new__(cls, *args, **kwargs) -> Spec:
-        if cls is Spec:
-            raise TypeError("Spec is a base class and cannot be instantiated")
-        return super().__new__(cls)
 
     def __init__(self, *, desc: str | None = None) -> None:
         if desc is not None and core.avalof(desc) != core.avalof(""):
             raise TypeError(f"desc must be a string, got {desc!r}")
         self.desc = desc
+
+    @abstractmethod
+    def describe(self) -> JsonSchema: ...
+
+    @abstractmethod
+    def parse(self, value: Any) -> Any: ...
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -277,35 +266,31 @@ class Str(Spec):
         self.max = max
         self.pattern = pattern
 
+    def describe(self) -> JsonSchema:
+        json_schema: JsonSchema = dict(type="string")
+        if self.desc is not None:
+            json_schema["description"] = self.desc
+        if self.min is not None:
+            json_schema["minLength"] = self.min
+        if self.max is not None:
+            json_schema["maxLength"] = self.max
+        if self.pattern is not None:
+            json_schema["pattern"] = self.pattern
+        return json_schema
 
-def describe_str(schema: Str) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="string")
-    if schema.desc is not None:
-        json_schema["description"] = schema.desc
-    if schema.min is not None:
-        json_schema["minLength"] = schema.min
-    if schema.max is not None:
-        json_schema["maxLength"] = schema.max
-    if schema.pattern is not None:
-        json_schema["pattern"] = schema.pattern
-    return json_schema
-
-
-def parse_str(schema: Str, value: Any) -> str:
-    if type(value) is not str:
-        raise ValueError("Expected string")
-    if schema.min is not None and len(value) < schema.min:
-        raise ValueError(f"Expected string with length >= {schema.min}")
-    if schema.max is not None and len(value) > schema.max:
-        raise ValueError(f"Expected string with length <= {schema.max}")
-    if schema.pattern is not None and not re.search(schema.pattern, value):
-        raise ValueError(f"Expected string matching {schema.pattern!r}")
-    return value
+    def parse(self, value: Any) -> str:
+        if type(value) is not str:
+            raise ValueError("Expected string")
+        if self.min is not None and len(value) < self.min:
+            raise ValueError(f"Expected string with length >= {self.min}")
+        if self.max is not None and len(value) > self.max:
+            raise ValueError(f"Expected string with length <= {self.max}")
+        if self.pattern is not None and not re.search(self.pattern, value):
+            raise ValueError(f"Expected string matching {self.pattern!r}")
+        return value
 
 
 core.aval_types[Str] = lambda _: core.avalof("")
-describe_rules[Str] = describe_str
-parse_rules[Str] = parse_str
 
 
 class Int(Spec):
@@ -340,31 +325,27 @@ class Int(Spec):
         self.min = min
         self.max = max
 
+    def describe(self) -> JsonSchema:
+        json_schema: JsonSchema = dict(type="integer")
+        if self.desc is not None:
+            json_schema["description"] = self.desc
+        if self.min is not None:
+            json_schema["minimum"] = self.min
+        if self.max is not None:
+            json_schema["maximum"] = self.max
+        return json_schema
 
-def describe_int(schema: Int) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="integer")
-    if schema.desc is not None:
-        json_schema["description"] = schema.desc
-    if schema.min is not None:
-        json_schema["minimum"] = schema.min
-    if schema.max is not None:
-        json_schema["maximum"] = schema.max
-    return json_schema
-
-
-def parse_int(schema: Int, value: Any) -> int:
-    if type(value) is not int:
-        raise ValueError("Expected integer")
-    if schema.min is not None and value < schema.min:
-        raise ValueError(f"Expected integer >= {schema.min}")
-    if schema.max is not None and value > schema.max:
-        raise ValueError(f"Expected integer <= {schema.max}")
-    return value
+    def parse(self, value: Any) -> int:
+        if type(value) is not int:
+            raise ValueError("Expected integer")
+        if self.min is not None and value < self.min:
+            raise ValueError(f"Expected integer >= {self.min}")
+        if self.max is not None and value > self.max:
+            raise ValueError(f"Expected integer <= {self.max}")
+        return value
 
 
 core.aval_types[Int] = lambda _: core.avalof(0)
-describe_rules[Int] = describe_int
-parse_rules[Int] = parse_int
 
 
 class Float(Spec):
@@ -399,33 +380,29 @@ class Float(Spec):
         self.min = min
         self.max = max
 
+    def describe(self) -> JsonSchema:
+        json_schema: JsonSchema = dict(type="number")
+        if self.desc is not None:
+            json_schema["description"] = self.desc
+        if self.min is not None:
+            json_schema["minimum"] = self.min
+        if self.max is not None:
+            json_schema["maximum"] = self.max
+        return json_schema
 
-def describe_float(schema: Float) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="number")
-    if schema.desc is not None:
-        json_schema["description"] = schema.desc
-    if schema.min is not None:
-        json_schema["minimum"] = schema.min
-    if schema.max is not None:
-        json_schema["maximum"] = schema.max
-    return json_schema
-
-
-def parse_float(schema: Float, value: Any) -> float:
-    if type(value) not in (int, float):
-        raise ValueError("Expected number")
-    if type(value) is float and not math.isfinite(value):
-        raise ValueError("Expected finite number")
-    if schema.min is not None and value < schema.min:
-        raise ValueError(f"Expected number >= {schema.min}")
-    if schema.max is not None and value > schema.max:
-        raise ValueError(f"Expected number <= {schema.max}")
-    return float(value)
+    def parse(self, value: Any) -> float:
+        if type(value) not in (int, float):
+            raise ValueError("Expected number")
+        if type(value) is float and not math.isfinite(value):
+            raise ValueError("Expected finite number")
+        if self.min is not None and value < self.min:
+            raise ValueError(f"Expected number >= {self.min}")
+        if self.max is not None and value > self.max:
+            raise ValueError(f"Expected number <= {self.max}")
+        return float(value)
 
 
 core.aval_types[Float] = lambda _: core.avalof(0.0)
-describe_rules[Float] = describe_float
-parse_rules[Float] = parse_float
 
 
 class Bool(Spec):
@@ -441,23 +418,19 @@ class Bool(Spec):
 
     __slots__ = []
 
+    def describe(self) -> JsonSchema:
+        json_schema: JsonSchema = dict(type="boolean")
+        if self.desc is not None:
+            json_schema["description"] = self.desc
+        return json_schema
 
-def describe_bool(schema: Bool) -> JsonSchema:
-    json_schema: JsonSchema = dict(type="boolean")
-    if schema.desc is not None:
-        json_schema["description"] = schema.desc
-    return json_schema
-
-
-def parse_bool(schema: Bool, value: Any) -> bool:
-    if type(value) is not bool:
-        raise ValueError("Expected boolean")
-    return value
+    def parse(self, value: Any) -> bool:
+        if type(value) is not bool:
+            raise ValueError("Expected boolean")
+        return value
 
 
 core.aval_types[Bool] = lambda _: core.avalof(False)
-describe_rules[Bool] = describe_bool
-parse_rules[Bool] = parse_bool
 
 
 class Enum(Spec):
@@ -486,30 +459,26 @@ class Enum(Spec):
     def __contains__(self, value: Any) -> bool:
         return type(value) is type(self.values[0]) and value in self.values
 
+    def describe(self) -> JsonSchema:
+        json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
+        if (value_type := type(self.values[0])) not in json_types:
+            raise TypeError("Enum values must be str, int, float, or bool")
+        if value_type is float and not all(math.isfinite(value) for value in self.values):
+            raise ValueError("Enum values must be finite")
+        if len(set(self.values)) != len(self.values):
+            raise ValueError("Enum values must be unique")
+        json_schema = dict(type=json_types[value_type], enum=list(self.values))
+        if self.desc is not None:
+            json_schema["description"] = self.desc
+        return json_schema
 
-def describe_enum(schema: Enum) -> JsonSchema:
-    json_types = {str: "string", int: "integer", float: "number", bool: "boolean"}
-    if (value_type := type(schema.values[0])) not in json_types:
-        raise TypeError("Enum values must be str, int, float, or bool")
-    if value_type is float and not all(math.isfinite(value) for value in schema.values):
-        raise ValueError("Enum values must be finite")
-    if len(set(schema.values)) != len(schema.values):
-        raise ValueError("Enum values must be unique")
-    json_schema = dict(type=json_types[value_type], enum=list(schema.values))
-    if schema.desc is not None:
-        json_schema["description"] = schema.desc
-    return json_schema
-
-
-def parse_enum(schema: Enum, value: Any) -> Any:
-    if value not in schema:
-        raise ValueError(f"Expected one of {schema.values!r}")
-    return value
+    def parse(self, value: Any) -> Any:
+        if value not in self:
+            raise ValueError(f"Expected one of {self.values!r}")
+        return value
 
 
 core.aval_types[Enum] = lambda schema: core.avalof(schema.values[0])
-describe_rules[Enum] = describe_enum
-parse_rules[Enum] = parse_enum
 
 
 # ==================================================================================================

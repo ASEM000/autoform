@@ -37,6 +37,32 @@ class RenderClient:
         return self.responses(**kwargs)
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_fill_uses_custom_spec_methods(executor):
+    class CustomSpec(af.lm.Spec):
+        __slots__ = []
+
+        def describe(self):
+            return dict(type="string", description=self.desc)
+
+        def parse(self, value):
+            if type(value) is not str or not value.startswith("ok:"):
+                raise ValueError("Expected matching prefix")
+            return value
+
+    af.core.aval_types[CustomSpec] = lambda _: af.core.avalof("")
+
+    def program(x):
+        return af.lm.fill({"answer": CustomSpec() @ x}, model="m1")
+
+    ir = af.trace(program)("seed")
+    with af.lm.client(RenderClient(lambda _: '{"answer": "ok: value"}')):
+        assert executor(ir, "description") == {"answer": "ok: value"}
+    with af.lm.client(RenderClient(lambda _: '{"answer": "wrong"}')):
+        with pytest.raises(ValueError, match="Expected matching prefix"):
+            executor(ir, "description")
+
+
 def fill_program(schema, *, model="m1"):
     def program(prompt, model=model):
         return af.lm.fill({"prompt": prompt, "output": schema}, model=model)["output"]

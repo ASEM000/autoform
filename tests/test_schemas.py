@@ -147,13 +147,19 @@ def test_schema_constraints_are_static_during_tracing(schema):
 
 
 def test_spec_base_cannot_be_instantiated():
-    with pytest.raises(TypeError, match="Spec is a base class and cannot be instantiated"):
+    with pytest.raises(TypeError, match="abstract.*Spec"):
         af.lm.Spec()
 
 
 def test_new_spec_subclasses_register_description_children():
     class CustomSpec(af.lm.Spec):
         __slots__ = []
+
+        def describe(self):
+            return dict(type="string")
+
+        def parse(self, value):
+            return value
 
     schema = CustomSpec()
     leaves, spec = af.utils.tree.flatten(schema)
@@ -200,16 +206,12 @@ def test_keyword_description_matches_matmul(constructor, args):
         constructor(*args, desc=1.0)
 
 
-@pytest.mark.parametrize("operation", ["describe", "parse"])
-def test_unregistered_schema_nodes_remain_static(operation):
+def test_specs_require_description_and_parse_methods():
     class CustomSpec(af.lm.Spec):
         __slots__ = []
 
-    schema = CustomSpec()
-    if operation == "describe":
-        assert af.lm.describe(schema) is None
-    else:
-        assert af.lm.parse(schema, "value") == schema
+    with pytest.raises(TypeError, match="abstract.*CustomSpec"):
+        CustomSpec()
 
 
 @pytest.mark.parametrize(
@@ -226,9 +228,9 @@ def test_unregistered_schema_nodes_remain_static(operation):
         ),
     ],
 )
-def test_json_rules_own_schema_descriptions(schema, expected):
+def test_spec_methods_own_schema_descriptions(schema, expected):
     expected = dict(expected, description="Text")
-    assert af.lm.describe_rules[type(schema)](schema) == expected
+    assert schema.describe() == expected
     assert af.lm.describe(schema) == expected
 
 
@@ -268,17 +270,18 @@ def test_describe_enum_rejects_duplicate_values(value):
 
 
 def test_parse_uses_partitioned_schema():
+    calls = []
+
     class CustomSpec(af.lm.Spec):
         __slots__ = []
 
-    calls = []
+        def describe(self):
+            calls.append(self)
+            return dict(type="string")
 
-    def describe(schema):
-        calls.append(schema)
-        return dict(type="string")
+        def parse(self, value):
+            return value
 
-    af.lm.describe_rules[CustomSpec] = describe
-    af.lm.parse_rules[CustomSpec] = lambda _, value: value
     schema = {
         "generated": {"text": af.lm.Str() @ "Generated text."},
         "literal": {"text": "fixed", "nothing": None},
@@ -344,27 +347,28 @@ def test_partition_and_parse_custom_pytree():
     )
 
 
-def test_schema_rules_support_independent_node_types():
+def test_spec_methods_support_custom_pytrees():
     @tree.dataclasses.dataclass
     class Record:
         x: object
         y: object
         label: str = tree.dataclasses.field(pytree_node=False)
 
-    @tree.dataclasses.dataclass
-    class Prefix:
-        value: str
+    class Prefix(af.lm.Spec):
+        __slots__ = ["value"]
 
-    def describe(node):
-        return dict(type="string", description=f"Start with {node.value}")
+        def __init__(self, value):
+            super().__init__()
+            self.value = value
 
-    def parse(node, value):
-        if not isinstance(value, str) or not value.startswith(node.value):
-            raise ValueError("Expected matching prefix")
-        return value
+        def describe(self):
+            return dict(type="string", description=f"Start with {self.value}")
 
-    af.lm.describe_rules[Prefix] = describe
-    af.lm.parse_rules[Prefix] = parse
+        def parse(self, value):
+            if not isinstance(value, str) or not value.startswith(self.value):
+                raise ValueError("Expected matching prefix")
+            return value
+
     schema = Record(Prefix("ok:"), "fixed", "metadata")
     assert af.lm.describe(schema) == {
         "type": "object",
@@ -381,25 +385,26 @@ def test_schema_rules_support_independent_node_types():
         af.lm.parse(schema, {"x": "wrong"})
 
 
-@pytest.mark.parametrize("operation", ["describe", "parse"])
-def test_describe_and_parse_select_their_own_registered_nodes(operation):
-    class Node:
-        pass
+def test_specs_require_parse_method():
+    class Node(af.lm.Spec):
+        __slots__ = []
 
-    schema = {"x": Node(), "fixed": "literal"}
-    if operation == "describe":
-        af.lm.describe_rules[Node] = lambda _: dict(type="string")
-        assert af.lm.describe(schema) == {
-            "type": "object",
-            "properties": {"x": {"type": "string"}},
-            "required": ["x"],
-            "additionalProperties": False,
-        }
-        assert af.lm.parse(schema, {"x": "value"}) == schema
-    else:
-        af.lm.parse_rules[Node] = lambda _, value: value
-        assert af.lm.parse(schema, {"x": "value"}) == {"x": "value", "fixed": "literal"}
-        assert af.lm.describe(schema) is None
+        def describe(self):
+            return dict(type="string")
+
+    with pytest.raises(TypeError, match="abstract.*Node.*parse"):
+        Node()
+
+
+def test_specs_require_describe_method():
+    class Node(af.lm.Spec):
+        __slots__ = []
+
+        def parse(self, value):
+            return value
+
+    with pytest.raises(TypeError, match="abstract.*Node.*describe"):
+        Node()
 
 
 @pytest.mark.parametrize(
