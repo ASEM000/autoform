@@ -132,9 +132,9 @@ class AVal:
         """Construct a concrete zero with this abstract value."""
         assert False, f"No concrete zero defined for {self!r}"
 
-    def accumulate(self, cotangents: Tree, /):
-        """Combine nonzero cotangent contributions with this abstract value."""
-        assert False, f"No cotangent accumulation defined for {self!r}"
+    def accumulate(self, values: Tree, /):
+        """Combine values with this abstract value."""
+        assert False, f"No accumulation defined for {self!r}"
 
 
 class Zero[T: AVal]:

@@ -60,8 +60,8 @@ class StrAVal(core.AVal):
     def zero(self) -> str:
         return ""
 
-    def accumulate(self, cotangents: list[str], /) -> str:
-        return "".join(cotangents)
+    def accumulate(self, values: list[str], /) -> str:
+        return "".join(values)
 
 
 core.aval_types[str] = lambda _: StrAVal()

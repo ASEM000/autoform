@@ -101,8 +101,8 @@ class FloatAVal(core.AVal):
     def zero(self) -> float:
         return 0.0
 
-    def accumulate(self, cotangents: list[float], /) -> float:
-        return sum(cotangents)
+    def accumulate(self, values: list[float], /) -> float:
+        return sum(values)
 
 
 core.aval_types[float] = lambda _: FloatAVal()
