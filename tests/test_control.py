@@ -375,6 +375,59 @@ class TestWhileLoop:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
+        "condition, max_iters, tangent, expected",
+        [
+            pytest.param(lambda x: False, 10, 1.0, (2.0, 1.0), id="initially-false"),
+            pytest.param(lambda x: True, 0, 1.0, (2.0, 1.0), id="zero-limit"),
+            pytest.param(lambda x: True, 2, 1.0, (16.0, 32.0), id="iterations"),
+            pytest.param(lambda x: x < 10.0, 10, 10.0, (16.0, 320.0), id="primal-condition"),
+            pytest.param(
+                lambda x: True,
+                2,
+                af.core.Zero(af.numeric.FloatAVal()),
+                (16.0, af.core.Zero(af.numeric.FloatAVal())),
+                id="symbolic-zero",
+            ),
+        ],
+    )
+    def test_pushforward(self, executor, condition, max_iters, tangent, expected):
+        cond_ir = trace(condition)(2.0)
+        body_ir = trace(lambda x: x * x)(2.0)
+        ir = trace(while_program(cond_ir, body_ir, max_iters=max_iters))(2.0)
+        assert executor(af.pushforward(ir), (2.0,), (tangent,)) == expected
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_pushforward_preserves_state_tree(self, executor):
+        x = {"x": 2.0, "y": "a"}
+        cond_ir = trace(lambda x: x["x"] < 10.0)(x)
+        body_ir = trace(lambda x: {"x": x["x"] * x["x"], "y": af.string.concat(x["y"], "!")})(x)
+        ir = trace(while_program(cond_ir, body_ir, max_iters=10))(x)
+        zero = af.core.Zero(af.string.StrAVal())
+        assert executor(af.pushforward(ir), (x,), ({"x": 1.0, "y": zero},)) == (
+            {"x": 16.0, "y": "a!!"},
+            {"x": 32.0, "y": zero},
+        )
+
+    @pytest.mark.parametrize(
+        "executor, expected",
+        [pytest.param(execute, "t", id="sync"), pytest.param(aexecute, "t??", id="async")],
+    )
+    def test_pushforward_uses_async_body_rule(self, executor, expected):
+        @af.custom
+        def body(x):
+            return af.string.concat(x, "!")
+
+        @body.aset_pushforward
+        async def push(in_tree, /, *, call):
+            (x,), (y,) = in_tree
+            return call(x), af.string.concat(y, "?")
+
+        cond_ir = trace(always_true)("x")
+        ir = trace(while_program(cond_ir, trace(body)("x"), max_iters=2))("x")
+        assert executor(af.pushforward(ir), ("x",), ("t",)) == ("x!!", expected)
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
         "condition, suffix, max_iters, values, expected",
         [
             pytest.param(lambda x: False, "x", 10, ["a", "b", "c"], ["a", "b", "c"], id="all-exit"),
