@@ -333,19 +333,33 @@ async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: T
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     residuals, c_out = in_tree
     p, _ = residuals
+    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
     pb_ir = ad.pullback(ir)
+    if (spec := utils.batch_spec(p, b_in)) is None:
+        return pb_ir.call(p, c_out)[1]
     batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
     _, c_in = batch_pb_ir.call(p, c_out)
-    return c_in
+
+    def accumulate(batched, cotangents):
+        return cotangents if batched else ad.cot_acc(spec.flatten_up_to(cotangents))
+
+    return utils.tree.map(accumulate, b_in, c_in)
 
 
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     residuals, c_out = in_tree
     p, _ = residuals
+    b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
     pb_ir = ad.pullback(ir)
+    if (spec := utils.batch_spec(p, b_in)) is None:
+        return (await pb_ir.acall(p, c_out))[1]
     batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
     _, c_in = await batch_pb_ir.acall(p, c_out)
-    return c_in
+
+    def accumulate(batched, cotangents):
+        return cotangents if batched else ad.cot_acc(spec.flatten_up_to(cotangents))
+
+    return utils.tree.map(accumulate, b_in, c_in)
 
 
 def batch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
