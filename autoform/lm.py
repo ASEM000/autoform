@@ -740,13 +740,6 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
     if utils.tree.structure(p_dynamic_tree) != utils.tree.structure(t_dynamic_tree):
         raise ValueError("Primal and tangent schemas must have identical pytree specs")
 
-    def check_tangent(value, tangent):
-        expected = core.tangent_s.map(core.avalof(value))
-        if core.avalof(tangent) != expected:
-            raise TypeError(f"Expected {expected!r} tangent, got {tangent!r}")
-
-    utils.tree.map(check_tangent, (p_lit_tree, p_dynamic_tree), (t_lit_tree, t_dynamic_tree))
-
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves((t_lit_tree, t_dynamic_tree))):
         return None
 
@@ -830,13 +823,6 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
     spec_tree = reconstruct_spec_tree(dynamic_tree, static_tree)
     if utils.tree.structure(out) != utils.tree.structure(out_cotangent):
         raise ValueError("Output and cotangent must have identical pytree specs")
-
-    def check_cotangent(p_leaf, c_leaf):
-        aval = core.cotangent_s.map(core.avalof(p_leaf))
-        if core.avalof(c_leaf) != aval:
-            raise TypeError(f"Expected {aval!r} cotangent, got {c_leaf!r}")
-
-    utils.tree.map(check_cotangent, out, out_cotangent)
 
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(out_cotangent)):
         return None
