@@ -684,6 +684,7 @@ def test_fill_pullback_uses_original_output_schema_for_feedback(executor):
                 return fake_response(
                     json.dumps({
                         "answer": "Recursion calls itself.",
+                        "flag": True,
                         "score": 0.92,
                     })
                 )
@@ -700,6 +701,7 @@ def test_fill_pullback_uses_original_output_schema_for_feedback(executor):
             {
                 "question": question,
                 "answer": af.lm.Str(),
+                "flag": af.lm.Bool(),
                 "score": af.lm.Float(min=0, max=1),
             },
             model="m1",
@@ -723,26 +725,26 @@ def test_fill_pullback_uses_original_output_schema_for_feedback(executor):
         "1": "m1",
     }
     assert json.loads(output_text) == {
-        "values": {"answer": "Recursion calls itself.", "score": 0.92},
+        "values": {"answer": "Recursion calls itself.", "flag": True, "score": 0.92},
         "schema": {
             "type": "object",
             "properties": {
                 "answer": {"type": "string"},
+                "flag": {"type": "boolean"},
                 "score": {"type": "number", "minimum": 0, "maximum": 1},
             },
-            "required": ["answer", "score"],
+            "required": ["answer", "flag", "score"],
             "additionalProperties": False,
         },
     }
     assert json.loads(feedback_text) == {
-        "values": {"answer": "too terse", "score": 0.0},
+        "values": {"answer": "too terse"},
         "schema": {
             "type": "object",
             "properties": {
                 "answer": {"type": "string"},
-                "score": {"type": "number"},
             },
-            "required": ["answer", "score"],
+            "required": ["answer"],
             "additionalProperties": False,
         },
     }
@@ -937,19 +939,19 @@ def gradient_client():
             "text",
             "too terse",
             "Recursion calls itself.",
-            {"text": "too terse", "score": 0.0},
+            {"text": "too terse"},
             id="unused-float",
         ),
         pytest.param(
             "score",
             -0.1,
             1.84,
-            {"text": "", "score": -0.2},
+            {"score": -0.2},
             id="unused-string",
         ),
     ],
 )
-def test_fill_pullback_materializes_unused_fields(
+def test_fill_pullback_omits_unused_fields(
     executor, field, out_cotangent, expected, feedback, gradient_client
 ):
     schema = {"text": af.lm.Str(min=1), "score": af.lm.Float(min=0, max=1)}
