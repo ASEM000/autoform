@@ -60,6 +60,10 @@ class BatchAVal(core.AVal):
         return hash((type(self), self.base))
 
     def check(self, value, /) -> None:
+        if isinstance(value, BatchBox):
+            aval = BatchAVal(self) if value.batched else self
+            aval.check(value.value)
+            return
         if type(value) in core.aval_types:
             actual = core.avalof(value)
             if not isinstance(actual, type(self)):
@@ -179,7 +183,7 @@ def avalof_batch_box(box: BatchBox, /) -> core.AVal:
     aval = core.avalof(item0)
     if any(core.avalof(item) != aval for item in rest):
         raise TypeError("Cannot infer BatchBox aval from items with different avals")
-    return BatchAVal(aval)
+    return aval
 
 
 core.aval_types[BatchBox] = avalof_batch_box
