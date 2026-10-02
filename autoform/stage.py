@@ -261,7 +261,7 @@ class IR[*A, R]:
             >>> done is None, out
             (True, '[y!]')
         """
-        return walk(self)(*args)
+        return walk(self, check=lambda a, v: a.check(v))(*args)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
@@ -331,7 +331,12 @@ def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
-def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
+def walk[*A, R](
+    ir: IR[*A, R],
+    /,
+    *,
+    check: Callable[[core.AVal, Any], None],
+) -> Callable[[*A], Generator[GenStep, Tree, None]]:
     """Walk an IR one equation at a time."""
     # NOTE(asem): the key idea here is to hide the environment management
     # from the user.
@@ -346,12 +351,12 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
             if not is_var(ir_val):
                 return ir_val
             value = env[ir_val]
-            ir_val.aval.check(value)
+            check(ir_val.aval, value)
             return value
 
         def write(ir_val, value: Any):
             if is_var(ir_val):
-                ir_val.aval.check(value)
+                check(ir_val.aval, value)
                 env[ir_val] = value
 
         utils.tree.map(write, ir.in_tree, args)
@@ -377,7 +382,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
 
     def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
+        eqn, in_values = next(gen := walk(ir, check=lambda a, v: a.check(v))(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
         return in_values
@@ -391,7 +396,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 
     async def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
+        eqn, in_values = next(gen := walk(ir, check=lambda a, v: a.check(v))(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
         return in_values
