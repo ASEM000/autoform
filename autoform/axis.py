@@ -254,17 +254,20 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     assert batch_size, "batch size must be > 0"
 
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
-    with core.using_interpreter(batcher):
 
-        def custom_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    def batch_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+        with core.using_interpreter(batcher):
             boxed_out = eqn.bind(boxed_in, **eqn.params)
-            v_out, b_out = batcher.unbox(boxed_out)
-            b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
-            return batcher.box((v_out, b_out))
+        v_out, b_out = batcher.unbox(boxed_out)
+        b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
+        return batcher.box((v_out, b_out))
 
-        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
-        while eqn:
-            eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
+    def batch_check(a, v):
+        a.check(v)
+
+    eqn, boxed_in = next(gen := stage.walk(ir, check=batch_check)(*batcher.box((v_in, b_in))))
+    while eqn:
+        eqn, boxed_in = gen.send(batch_bind(eqn, boxed_in))
 
     v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)
@@ -281,17 +284,20 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
     assert batch_size, "batch size must be > 0"
 
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
-    with core.using_interpreter(batcher):
 
-        async def custom_abind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    async def batch_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+        with core.using_interpreter(batcher):
             boxed_out = await eqn.abind(boxed_in, **eqn.params)
-            v_out, b_out = batcher.unbox(boxed_out)
-            b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
-            return batcher.box((v_out, b_out))
+        v_out, b_out = batcher.unbox(boxed_out)
+        b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
+        return batcher.box((v_out, b_out))
 
-        eqn, boxed_in = next(gen := ir.walk(*batcher.box((v_in, b_in))))
-        while eqn:
-            eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
+    def batch_check(a, v):
+        a.check(v)
+
+    eqn, boxed_in = next(gen := stage.walk(ir, check=batch_check)(*batcher.box((v_in, b_in))))
+    while eqn:
+        eqn, boxed_in = gen.send(await batch_bind(eqn, boxed_in))
 
     v_out, b_out = batcher.unbox(boxed_in)
     return broadcast_batch_out(spec, v_out, b_out)

@@ -972,31 +972,48 @@ def pullback_bwd_fixpoint(
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
-    with core.using_interpreter(fwd):
-
-        def custom_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    def fwd_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+        with core.using_interpreter(fwd):
             boxed_out, residuals = eqn.bind(boxed_in, **eqn.params)
-            res[eqn] = residuals
-            return boxed_out
+        res[eqn] = residuals
+        return boxed_out
 
-        eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
-        while eqn:
-            eqn, boxed_in = gen.send(custom_bind(eqn, boxed_in))
+    def fwd_check(a, v):
+        a.check(fwd.unbox(v))
 
     def transpose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
 
-        def custom_bind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
+        def bwd_bind(eqn: stage.Eqn, boxed_c_out: Tree, /) -> Tree:
             residuals = res[eqn]
-            boxed_c_out = bwd.box(c_out)
             with core.using_interpreter(bwd):
-                boxed_c_in = eqn.bind((residuals, boxed_c_out), **eqn.params)
-            return bwd.unbox(boxed_c_in)
+                return eqn.bind((residuals, boxed_c_out), **eqn.params)
 
-        eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
+        def bwd_check(a, v):
+            a.check(bwd.unbox(v))
+
+        def zero(a):
+            return bwd.box(core.Zero(a))
+
+        def accumulate(values):
+            with core.using_interpreter(parent):
+                return bwd.box(ad.cot_acc(bwd.unbox(values)))
+
+        gen = ad.transpose_walk(
+            step_ir,
+            bwd.box(cot),
+            check=bwd_check,
+            zero=zero,
+            accumulate=accumulate,
+        )
+        eqn, boxed_c_out = next(gen)
         while eqn:
-            eqn, c_out = gen.send(custom_bind(eqn, c_out))
-        return c_out
+            eqn, boxed_c_out = gen.send(bwd_bind(eqn, boxed_c_out))
+        return bwd.unbox(boxed_c_out)
+
+    eqn, boxed_in = next(gen := stage.walk(step_ir, check=fwd_check)(*fwd.box((x_star, theta))))
+    while eqn:
+        eqn, boxed_in = gen.send(fwd_bind(eqn, boxed_in))
 
     u = g
 
@@ -1037,31 +1054,48 @@ async def apull_bwd_fixpoint(
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
-    with core.using_interpreter(fwd):
-
-        async def custom_abind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    async def fwd_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+        with core.using_interpreter(fwd):
             boxed_out, residuals = await eqn.abind(boxed_in, **eqn.params)
-            res[eqn] = residuals
-            return boxed_out
+        res[eqn] = residuals
+        return boxed_out
 
-        eqn, boxed_in = next(gen := step_ir.walk(*fwd.box((x_star, theta))))
-        while eqn:
-            eqn, boxed_in = gen.send(await custom_abind(eqn, boxed_in))
+    def fwd_check(a, v):
+        a.check(fwd.unbox(v))
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
 
-        async def custom_abind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
+        async def bwd_bind(eqn: stage.Eqn, boxed_c_out: Tree, /) -> Tree:
             residuals = res[eqn]
-            boxed_c_out = bwd.box(c_out)
             with core.using_interpreter(bwd):
-                boxed_c_in = await eqn.abind((residuals, boxed_c_out), **eqn.params)
-            return bwd.unbox(boxed_c_in)
+                return await eqn.abind((residuals, boxed_c_out), **eqn.params)
 
-        eqn, c_out = next(gen := ad.transpose_walk(step_ir, cot))
+        def bwd_check(a, v):
+            a.check(bwd.unbox(v))
+
+        def zero(a):
+            return bwd.box(core.Zero(a))
+
+        def accumulate(values):
+            with core.using_interpreter(parent):
+                return bwd.box(ad.cot_acc(bwd.unbox(values)))
+
+        gen = ad.transpose_walk(
+            step_ir,
+            bwd.box(cot),
+            check=bwd_check,
+            zero=zero,
+            accumulate=accumulate,
+        )
+        eqn, boxed_c_out = next(gen)
         while eqn:
-            eqn, c_out = gen.send(await custom_abind(eqn, c_out))
-        return c_out
+            eqn, boxed_c_out = gen.send(await bwd_bind(eqn, boxed_c_out))
+        return bwd.unbox(boxed_c_out)
+
+    eqn, boxed_in = next(gen := stage.walk(step_ir, check=fwd_check)(*fwd.box((x_star, theta))))
+    while eqn:
+        eqn, boxed_in = gen.send(await fwd_bind(eqn, boxed_in))
 
     u = g
 

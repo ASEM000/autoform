@@ -233,7 +233,7 @@ class IR[*A, R]:
         """
         return await acall(self)(*args)
 
-    def walk(self, *args: *A) -> Generator[tuple[Eqn | None, Tree], Tree, None]:
+    def walk(self, *args: *A) -> WalkGen:
         """Step through this IR one equation at a time.
 
         Manual control over IR execution. Start with `next(gen)` to receive `(eqn, in_values)`,
@@ -261,7 +261,7 @@ class IR[*A, R]:
             >>> done is None, out
             (True, '[y!]')
         """
-        return walk(self)(*args)
+        return walk(self, check=check_aval)(*args)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
@@ -319,6 +319,12 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 # ==================================================================================================
 
 type GenStep = tuple[Eqn | None, Tree]
+type WalkGen = Generator[GenStep, Tree, None]
+type CheckType = Callable[[core.AVal, Any], None]
+
+
+def check_aval(a: core.AVal, v: Any, /) -> None:
+    a.check(v)
 
 
 def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
@@ -331,14 +337,14 @@ def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
-def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, None]]:
+def walk[*A, R](ir: IR[*A, R], /, *, check: CheckType) -> Callable[[*A], WalkGen]:
     """Walk an IR one equation at a time."""
     # NOTE(asem): the key idea here is to hide the environment management
     # from the user.
     # TODO(asem): if user is using bind/abind, walk itself can be traced into another IR. maybe
     # add it to walk docs to clarify this point.
 
-    def func(*args: *A) -> Generator[GenStep, Tree, None]:
+    def func(*args: *A) -> WalkGen:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
         env: dict[Var, Any] = {}
 
@@ -346,12 +352,12 @@ def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Generator[GenStep, Tree, Non
             if not is_var(ir_val):
                 return ir_val
             value = env[ir_val]
-            ir_val.aval.check(value)
+            check(ir_val.aval, value)
             return value
 
         def write(ir_val, value: Any):
             if is_var(ir_val):
-                ir_val.aval.check(value)
+                check(ir_val.aval, value)
                 env[ir_val] = value
 
         utils.tree.map(write, ir.in_tree, args)
@@ -377,7 +383,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
 
     def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
+        eqn, in_values = next(gen := walk(ir, check=check_aval)(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
         return in_values
@@ -391,7 +397,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 
     async def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
+        eqn, in_values = next(gen := walk(ir, check=check_aval)(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
         return in_values

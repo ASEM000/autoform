@@ -19,6 +19,67 @@ import autoform as af
 from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, execute
 
 
+def test_pushforward_checker_rejects_nested_tangent_without_equations():
+    parent = af.ad.PushforwardInterpreter(parent=af.core.active_interpreter.get())
+    pusher = af.ad.PushforwardInterpreter(parent=parent)
+    x = pusher.box((parent.box(("x", "dx")), parent.box(("dy", 1.0))))
+    ir = af.trace(lambda x: x)("x")
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        next(af.stage.walk(ir, check=af.ad.check_pushforward)(x))
+
+
+@pytest.mark.parametrize("use_in_equation", [False, True], ids=["final-output", "equation-input"])
+def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
+    def program(x):
+        af.checkpoint("pause", key="pause")
+        return af.checkpoint(x, key="next") if use_in_equation else x
+
+    pusher = af.ad.PushforwardInterpreter(parent=af.core.active_interpreter.get())
+    x = pusher.box(("x", "dx"))
+    ir = af.trace(program)("x")
+    gen = af.stage.walk(ir, check=af.ad.check_pushforward)(x)
+    eqn, inputs = next(gen)
+    x.tangent = 1.0
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        gen.send(eqn.bind(inputs, **eqn.params))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "tangent",
+    [
+        pytest.param(1.0, id="float"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="wrong-zero"),
+    ],
+)
+def test_pushforward_rejects_invalid_intermediate_tangent(executor, tangent):
+    bad = af.extend.Prim("bad_tangent")
+    forward = lambda args: (args[0], tangent)
+    af.extend.register_abstract(bad, lambda x: x)
+    af.extend.register_pushforward(bad, forward)
+    af.extend.register_apushforward(bad, af.utils.asyncify(forward))
+    ir = af.pushforward(af.trace(lambda x: af.stop_gradient(bad.bind(x)))("x"))
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, ("x",), ("dx",))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_checks_concrete_primal(executor):
+    class NonemptyStrAVal(af.string.StrAVal):
+        def check(self, value):
+            if not isinstance(value, str) or not value:
+                raise TypeError("Expected a nonempty string")
+
+    af.core.cotangent_s.set(NonemptyStrAVal, lambda _: af.string.StrAVal())
+    x = af.stage.Var(aval=NonemptyStrAVal())
+    ir = af.pullback(af.stage.IR([], (x,), x))
+
+    assert executor(ir, ("x",), "df") == ("x", ("df",))
+
+
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "cotangent",
@@ -32,6 +93,100 @@ def test_pullback_rejects_incompatible_cotangent(executor, cotangent):
     ir = af.pullback(af.trace(lambda x: x)("x"))
     with pytest.raises(TypeError, match="Expected StrAVal"):
         executor(ir, ("x",), cotangent)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_rejects_invalid_intermediate_cotangent(executor):
+    bad = af.extend.Prim("bad_cotangent")
+    forward = lambda x: (x, None)
+    backward = lambda args: 1.0
+    af.extend.register_abstract(bad, lambda x: x)
+    af.extend.register_pullback_fwd(bad, forward)
+    af.extend.register_apullback_fwd(bad, af.utils.asyncify(forward))
+    af.extend.register_pullback_bwd(bad, backward)
+    af.extend.register_apullback_bwd(bad, af.utils.asyncify(backward))
+    ir = af.pullback(af.trace(lambda x: bad.bind(af.stop_gradient(x)))("x"))
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, ("x",), "df")
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_rejects_invalid_accumulated_cotangent(executor):
+    class Value: ...
+
+    class Feedback: ...
+
+    class ValueAVal(af.core.AVal): ...
+
+    class FeedbackAVal(af.core.AVal):
+        def accumulate(self, cotangents):
+            return 1.0
+
+    af.extend.register_trace_type(Value, lambda _: ValueAVal())
+    af.core.aval_types[Feedback] = lambda _: FeedbackAVal()
+    af.core.cotangent_s.set(ValueAVal, lambda _: FeedbackAVal())
+
+    def program(x):
+        y = af.stop_gradient(x)
+        return y, y
+
+    ir = af.pullback(af.trace(program)(Value()))
+    with pytest.raises(TypeError, match="Expected"):
+        executor(ir, (Value(),), (Feedback(), Feedback()))
+
+
+@pytest.mark.parametrize(
+    "cotangents, expected",
+    [
+        pytest.param(("a", "b"), "ab", id="accumulate"),
+        pytest.param(("a", af.core.Zero(af.string.StrAVal())), "a", id="mixed-zero"),
+        pytest.param(
+            (af.core.Zero(af.string.StrAVal()), af.core.Zero(af.string.StrAVal())),
+            af.core.Zero(af.string.StrAVal()),
+            id="all-zero",
+        ),
+    ],
+)
+def test_transpose_walk_boxed_cotangents(cotangents, expected):
+    ir = af.trace(lambda x, y: (x, x))("x", "y")
+    bwd = af.ad.PullbackBwdInterpreter(parent=af.core.active_interpreter.get())
+
+    def accumulate(values):
+        with af.core.using_interpreter(bwd.parent):
+            return bwd.box(af.ad.cot_acc(bwd.unbox(values)))
+
+    gen = af.ad.transpose_walk(
+        ir,
+        bwd.box(cotangents),
+        check=lambda a, v: a.check(bwd.unbox(v)),
+        zero=lambda a: bwd.box(af.core.Zero(a)),
+        accumulate=accumulate,
+    )
+    # Accumulation must use the parent even when the backward interpreter is active.
+    with af.core.using_interpreter(bwd):
+        eqn, (x, y) = next(gen)
+    assert eqn is None
+    assert isinstance(x, af.ad.PullbackBwdBox) and x.owner is bwd
+    assert isinstance(y, af.ad.PullbackBwdBox) and y.owner is bwd
+    assert bwd.unbox((x, y)) == (expected, af.core.Zero(af.string.StrAVal()))
+
+
+def test_transpose_walk_rechecks_mutated_contribution():
+    def program(x):
+        y = x + "!"
+        return y, y + "?"
+
+    ir = af.trace(program)("x")
+    seed = af.core.Zero(af.string.StrAVal())
+    gen = af.ad.transpose_walk(
+        ir, (seed, "df"), check=af.stage.check_aval, zero=af.core.Zero, accumulate=af.ad.cot_acc
+    )
+    next(gen)
+    seed.aval = af.numeric.FloatAVal()
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        gen.send(("dy", af.core.Zero(af.string.StrAVal())))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
