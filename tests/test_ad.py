@@ -21,6 +21,26 @@ from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, exe
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
+    "tangent",
+    [
+        pytest.param(1.0, id="float"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="wrong-zero"),
+    ],
+)
+def test_pushforward_rejects_invalid_intermediate_tangent(executor, tangent):
+    bad = af.extend.Prim("bad_tangent")
+    forward = lambda args: (args[0], tangent)
+    af.extend.register_abstract(bad, lambda x: x)
+    af.extend.register_pushforward(bad, forward)
+    af.extend.register_apushforward(bad, af.utils.asyncify(forward))
+    ir = af.pushforward(af.trace(lambda x: af.stop_gradient(bad.bind(x)))("x"))
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, ("x",), ("dx",))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
     "cotangent",
     [
         pytest.param(["x", "y"], id="list"),

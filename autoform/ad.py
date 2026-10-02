@@ -138,22 +138,35 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
     return stage.IR([eqn], in_tree, out_tree)
 
 
-def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    def make_t(x):
-        return core.Zero(core.tangent_s.map(core.avalof(x)))
+def check_tangent(atom, value: Any):
+    if stage.is_var(atom):
+        core.tangent_s.map(atom.aval).check(value)
 
+
+def zero_tangent(x):
+    return core.Zero(core.tangent_s.map(core.avalof(x)))
+
+
+def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
-    with core.using_interpreter(pusher):
+    with core.using_einterpreter(pusher):
 
         def custom_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
             p_in, t_in = pusher.unbox(boxed_in)
+            utils.tree.map(check_tangent, eqn.in_tree, t_in)
             if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
-                return eqn.bind(boxed_in, **eqn.params)
+                # NOTE(asem): non-zero tangent execute the pf interp
+                boxed_out = eqn.bind(boxed_in, **eqn.params)
+                _, t_out = pusher.unbox(boxed_out)
+                utils.tree.map(check_tangent, eqn.out_tree, t_out)
+                return boxed_out
+            # NOTE(asem): case where all are zero-tangents moves to parent
+            # no need to compute the tangents here, return all zeros.
             with core.using_interpreter(pusher.parent):
                 p_out = eqn.bind(p_in, **eqn.params)
-
-            t_out = utils.tree.map(make_t, p_out)
+            t_out = utils.tree.map(zero_tangent, p_out)
+            utils.tree.map(check_tangent, eqn.out_tree, t_out)
             return pusher.box((p_out, t_out))
 
         eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
@@ -163,20 +176,22 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    def make_t(x):
-        return core.Zero(core.tangent_s.map(core.avalof(x)))
-
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
     with core.using_interpreter(pusher):
 
         async def custom_abind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
             p_in, t_in = pusher.unbox(boxed_in)
+            utils.tree.map(check_tangent, eqn.in_tree, t_in)
             if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
-                return await eqn.abind(boxed_in, **eqn.params)
+                boxed_out = await eqn.abind(boxed_in, **eqn.params)
+                _, t_out = pusher.unbox(boxed_out)
+                utils.tree.map(check_tangent, eqn.out_tree, t_out)
+                return boxed_out
             with core.using_interpreter(pusher.parent):
                 p_out = await eqn.abind(p_in, **eqn.params)
-            t_out = utils.tree.map(make_t, p_out)
+            t_out = utils.tree.map(zero_tangent, p_out)
+            utils.tree.map(check_tangent, eqn.out_tree, t_out)
             return pusher.box((p_out, t_out))
 
         eqn, boxed_in = next(gen := ir.walk(*pusher.box(in_tree)))
