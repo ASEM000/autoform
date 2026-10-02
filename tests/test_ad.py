@@ -120,7 +120,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
     class ValueAVal(af.core.AVal): ...
 
     class FeedbackAVal(af.core.AVal):
-        def accumulate(self, cotangents):
+        def accum(self, cotangents):
             return 1.0
 
     af.extend.register_trace_type(Value, lambda _: ValueAVal())
@@ -139,7 +139,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
 @pytest.mark.parametrize(
     "cotangents, expected",
     [
-        pytest.param(("a", "b"), "ab", id="accumulate"),
+        pytest.param(("a", "b"), "ab", id="accum"),
         pytest.param(("a", af.core.Zero(af.string.StrAVal())), "a", id="mixed-zero"),
         pytest.param(
             (af.core.Zero(af.string.StrAVal()), af.core.Zero(af.string.StrAVal())),
@@ -152,16 +152,16 @@ def test_transpose_walk_boxed_cotangents(cotangents, expected):
     ir = af.trace(lambda x, y: (x, x))("x", "y")
     bwd = af.ad.PullbackBwdInterpreter(parent=af.core.active_interpreter.get())
 
-    def accumulate(values):
+    def accum(values):
         with af.core.using_interpreter(bwd.parent):
-            return bwd.box(af.ad.cot_acc(bwd.unbox(values)))
+            return bwd.box(af.ad.cot_accum(bwd.unbox(values)))
 
     gen = af.ad.transpose_walk(
         ir,
         bwd.box(cotangents),
         check=lambda a, v: a.check(bwd.unbox(v)),
         zero=lambda a: bwd.box(af.core.Zero(a)),
-        accumulate=accumulate,
+        accum=accum,
     )
     # Accumulation must use the parent even when the backward interpreter is active.
     with af.core.using_interpreter(bwd):
@@ -180,7 +180,7 @@ def test_transpose_walk_rechecks_mutated_contribution():
     ir = af.trace(program)("x")
     seed = af.core.Zero(af.string.StrAVal())
     gen = af.ad.transpose_walk(
-        ir, (seed, "df"), check=af.stage.check_aval, zero=af.core.Zero, accumulate=af.ad.cot_acc
+        ir, (seed, "df"), check=af.stage.check_aval, zero=af.core.Zero, accum=af.ad.cot_accum
     )
     next(gen)
     seed.aval = af.numeric.FloatAVal()
@@ -352,7 +352,7 @@ class TestCotangentHelpers:
         ],
     )
     def test_cotangent_accumulation(self, values, expected):
-        assert af.ad.cot_acc(values) == expected
+        assert af.ad.cot_accum(values) == expected
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
@@ -369,48 +369,48 @@ class TestCotangentHelpers:
             pytest.param(af.batch, (["a", "b"], ["c", "d"]), ["ac", "bd"], id="batch"),
         ],
     )
-    def test_cot_acc_transforms(self, executor, transform, args, expected):
-        source = af.trace(lambda x, y: af.ad.cot_acc([x, y]))("a", "b")
-        assert [eqn.prim for eqn in source.eqns] == [af.ad.cot_acc_p]
+    def test_cot_accum_transforms(self, executor, transform, args, expected):
+        source = af.trace(lambda x, y: af.ad.cot_accum([x, y]))("a", "b")
+        assert [eqn.prim for eqn in source.eqns] == [af.ad.cot_accum_p]
         ir = transform(source)
         actual = executor(ir, *args)
         assert actual == expected
 
-    def test_cot_acc_all_zeros_must_match_aval(self):
+    def test_cot_accum_all_zeros_must_match_aval(self):
         with pytest.raises(AssertionError):
-            af.ad.cot_acc([
+            af.ad.cot_accum([
                 af.core.Zero(af.string.StrAVal()),
                 af.core.Zero(af.numeric.IntAVal()),
             ])
 
-    def test_cot_acc_unsupported_type_raises(self):
+    def test_cot_accum_unsupported_type_raises(self):
         with pytest.raises(
             AssertionError,
             match=r"No accumulation defined for BoolAVal\(\)",
         ):
-            af.ad.cot_acc([True, False])
-        ir = af.trace(lambda x, y: af.ad.cot_acc([x, y]))(True, False)
+            af.ad.cot_accum([True, False])
+        ir = af.trace(lambda x, y: af.ad.cot_accum([x, y]))(True, False)
         with pytest.raises(AssertionError, match="No accumulation defined"):
             ir.call(True, False)
 
-    def test_cot_acc_unregistered_leaf_raises(self):
+    def test_cot_accum_unregistered_leaf_raises(self):
         class Blob: ...
 
         with pytest.raises(TypeError, match="No aval rule registered"):
-            af.ad.cot_acc([Blob(), Blob()])
+            af.ad.cot_accum([Blob(), Blob()])
 
-    def test_cot_acc_uses_aval_method(self):
+    def test_cot_accum_uses_aval_method(self):
         class Text:
             def __init__(self, value):
                 self.value = value
 
         class TextAVal(af.core.AVal):
-            def accumulate(self, cotangents):
+            def accum(self, cotangents):
                 return Text("|".join(c.value for c in cotangents))
 
         af.core.aval_types[Text] = lambda _: TextAVal()
         af.stage.trace_types.add(Text)
-        result = af.ad.cot_acc([Text("a"), Text("b")])
+        result = af.ad.cot_accum([Text("a"), Text("b")])
         assert isinstance(result, Text)
         assert result.value == "a|b"
 
@@ -430,7 +430,7 @@ class TestCotangentHelpers:
             def zero(self):
                 return TextFeedback("")
 
-            def accumulate(self, cotangents):
+            def accum(self, cotangents):
                 return TextFeedback(" | ".join(c.value for c in cotangents))
 
         class DerivedFeedbackAVal(TextFeedbackAVal): ...

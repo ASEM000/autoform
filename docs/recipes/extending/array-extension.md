@@ -56,7 +56,7 @@ class ArrayAVal(afe.AVal):
     def zero(self):
         return np.zeros(self.shape, dtype=self.dtype)
 
-    def accumulate(self, cotangents):
+    def accum(self, cotangents):
         return sum(cotangents[1:], cotangents[0])
 
 
@@ -71,7 +71,7 @@ afe.cotangent_s.set(ArrayAVal, lambda aval: aval)
 
 `ArrayAVal` is the trace-time description. It carries only the information the
 primitive rules need: shape and dtype. The `zero()` method constructs a zero
-array with that shape and dtype. The `accumulate()` method combines feedback
+array with that shape and dtype. The `accum()` method combines feedback
 contributions for array leaves.
 
 ## Register Binary Array Primitives

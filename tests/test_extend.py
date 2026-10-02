@@ -38,7 +38,7 @@ def make_box_domain():
         def zero(self):
             return Box(0)
 
-        def accumulate(self, cotangents):
+        def accum(self, cotangents):
             return Box(sum(c.value for c in cotangents))
 
     return Box, BoxAVal
@@ -59,7 +59,7 @@ def test_aval_zero_and_accumulation():
     af.extend.register_trace_type(Box, lambda value: BoxAVal())
 
     assert af.core.materialize_zeros(af.core.Zero(BoxAVal())) == Box(0)
-    assert af.ad.cot_acc([Box(1), Box(2)]) == Box(3)
+    assert af.ad.cot_accum([Box(1), Box(2)]) == Box(3)
 
 
 def test_register_dunder_with_primitive_rules():

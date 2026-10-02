@@ -54,7 +54,7 @@ class StrAVal(core.AVal):
     def zero(self) -> str:
         return ""
 
-    def accumulate(self, values: list[str], /) -> str:
+    def accum(self, values: list[str], /) -> str:
         return "".join(values)
 
 

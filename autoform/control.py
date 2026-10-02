@@ -738,8 +738,8 @@ dead.dce_rules[while_loop_p] = dce_while_loop
 fixpoint_p = core.Prim("fixpoint")
 
 
-def cot_tree_acc(lhs: Tree, rhs: Tree, /) -> Tree:
-    return utils.tree.map(lambda l, r: ad.cot_acc([l, r]), lhs, rhs)
+def cot_tree_accum(lhs: Tree, rhs: Tree, /) -> Tree:
+    return utils.tree.map(lambda l, r: ad.cot_accum([l, r]), lhs, rhs)
 
 
 def fixpoint(
@@ -995,16 +995,16 @@ def pullback_bwd_fixpoint(
         def zero(a):
             return bwd.box(core.Zero(a))
 
-        def accumulate(values):
+        def accum(values):
             with core.using_interpreter(parent):
-                return bwd.box(ad.cot_acc(bwd.unbox(values)))
+                return bwd.box(ad.cot_accum(bwd.unbox(values)))
 
         gen = ad.transpose_walk(
             step_ir,
             bwd.box(cot),
             check=bwd_check,
             zero=zero,
-            accumulate=accumulate,
+            accum=accum,
         )
         eqn, boxed_c_out = next(gen)
         while eqn:
@@ -1019,7 +1019,7 @@ def pullback_bwd_fixpoint(
 
     for _ in range(adj_iters):
         x_bar, theta_bar = transpose_eq(u)
-        next_u = cot_tree_acc(g, x_bar)
+        next_u = cot_tree_accum(g, x_bar)
         if utils.tree_equal(next_u, u):
             dtheta = theta_bar
             break
@@ -1077,16 +1077,16 @@ async def apull_bwd_fixpoint(
         def zero(a):
             return bwd.box(core.Zero(a))
 
-        def accumulate(values):
+        def accum(values):
             with core.using_interpreter(parent):
-                return bwd.box(ad.cot_acc(bwd.unbox(values)))
+                return bwd.box(ad.cot_accum(bwd.unbox(values)))
 
         gen = ad.transpose_walk(
             step_ir,
             bwd.box(cot),
             check=bwd_check,
             zero=zero,
-            accumulate=accumulate,
+            accum=accum,
         )
         eqn, boxed_c_out = next(gen)
         while eqn:
@@ -1101,7 +1101,7 @@ async def apull_bwd_fixpoint(
 
     for _ in range(adj_iters):
         x_bar, theta_bar = await atranspose_eq(u)
-        next_u = cot_tree_acc(g, x_bar)
+        next_u = cot_tree_accum(g, x_bar)
         if utils.tree_equal(next_u, u):
             dtheta = theta_bar
             break
