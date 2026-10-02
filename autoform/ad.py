@@ -29,7 +29,7 @@ import autoform.utils as utils
 type Tree[T] = utils.Tree[T]
 
 
-__all__ = ["cot_acc", "pushforward", "pullback"]
+__all__ = ["cot_accum", "pushforward", "pullback"]
 
 type TreePair = tuple[Tree, Tree]
 
@@ -315,10 +315,10 @@ dead.dce_rules[pushforward_call_p] = dce_pushforward_call
 # ==================================================================================================
 
 pullback_call_p = core.Prim("pullback_call")
-cot_acc_p = core.Prim("cot_acc")
+cot_accum_p = core.Prim("cot_accum")
 
 
-def cot_acc(cots: list[Any | core.Zero]) -> Any:
+def cot_accum(cots: list[Any | core.Zero]) -> Any:
     assert cots
     non_zero = [c for c in cots if not isinstance(c, core.Zero)]
     if not non_zero:
@@ -349,60 +349,60 @@ def cot_acc(cots: list[Any | core.Zero]) -> Any:
         # >>> ir = af.batch(af.trace(f)("..."))
         # >>> af.pullback(ir).call((["a", "b"],), (["G0", "G1"], ["H0", "H1"]))
         # ((['a', 'b'], ['a', 'b']), (['G0H0', 'G1H1'],))
-        return utils.tree.map(lambda *cs: cot_acc(list(cs)), *non_zero)
+        return utils.tree.map(lambda *cs: cot_accum(list(cs)), *non_zero)
     # NOTE(asem): leaf cotangents use their aval's accumulation method.
     # >>> def f(x):
     # ...     return x + x
     # >>> ir = af.trace(f)("...")
     # >>> af.pullback(ir).call(("a",), "df")
     # ('aa', ('dfdf',))
-    return cot_acc_p.bind(non_zero)
+    return cot_accum_p.bind(non_zero)
 
 
-def impl_cot_acc(cots: list[Any], /) -> Any:
+def impl_cot_accum(cots: list[Any], /) -> Any:
     aval = core.avalof(cots[0])
-    return aval.accumulate(cots)
+    return aval.accum(cots)
 
 
-def abstract_cot_acc(cots: list[Any], /) -> core.AVal:
+def abstract_cot_accum(cots: list[Any], /) -> core.AVal:
     first = cots[0]
     return first if isinstance(first, core.AVal) else core.avalof(first)
 
 
-def pushforward_cot_acc(in_tree: TreePair, /) -> TreePair:
+def pushforward_cot_accum(in_tree: TreePair, /) -> TreePair:
     p_cots, t_cots = in_tree
-    return cot_acc(p_cots), cot_acc(t_cots)
+    return cot_accum(p_cots), cot_accum(t_cots)
 
 
-def pullback_fwd_cot_acc(cots: list[Any], /) -> TreePair:
-    return cot_acc(cots), len(cots)
+def pullback_fwd_cot_accum(cots: list[Any], /) -> TreePair:
+    return cot_accum(cots), len(cots)
 
 
-def pullback_bwd_cot_acc(in_tree: TreePair, /) -> list[Any]:
+def pullback_bwd_cot_accum(in_tree: TreePair, /) -> list[Any]:
     num_cots, c_out = in_tree
     return [c_out] * num_cots
 
 
-def batch_cot_acc(in_tree: Tree, /) -> TreePair:
+def batch_cot_accum(in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, cots = in_tree
     if (spec := utils.batch_spec(cots, in_batched)) is None:
-        return cot_acc(cots), False
+        return cot_accum(cots), False
     unbatch = ft.partial(utils.batch_index, cots, in_batched)
-    out_bi = [cot_acc(unbatch(i)) for i in range(batch_size)]
+    out_bi = [cot_accum(unbatch(i)) for i in range(batch_size)]
     return spec.unflatten(out_bi), True
 
 
-core.impl_rules.set(cot_acc_p, impl_cot_acc)
-core.aimpl_rules.set(cot_acc_p, utils.asyncify(impl_cot_acc))
-core.abstract_rules.set(cot_acc_p, abstract_cot_acc)
-core.batch_rules.set(cot_acc_p, batch_cot_acc)
-core.abatch_rules.set(cot_acc_p, utils.asyncify(batch_cot_acc))
-core.push_rules.set(cot_acc_p, pushforward_cot_acc)
-core.apush_rules.set(cot_acc_p, utils.asyncify(pushforward_cot_acc))
-core.pull_fwd_rules.set(cot_acc_p, pullback_fwd_cot_acc)
-core.apull_fwd_rules.set(cot_acc_p, utils.asyncify(pullback_fwd_cot_acc))
-core.pull_bwd_rules.set(cot_acc_p, pullback_bwd_cot_acc)
-core.apull_bwd_rules.set(cot_acc_p, utils.asyncify(pullback_bwd_cot_acc))
+core.impl_rules.set(cot_accum_p, impl_cot_accum)
+core.aimpl_rules.set(cot_accum_p, utils.asyncify(impl_cot_accum))
+core.abstract_rules.set(cot_accum_p, abstract_cot_accum)
+core.batch_rules.set(cot_accum_p, batch_cot_accum)
+core.abatch_rules.set(cot_accum_p, utils.asyncify(batch_cot_accum))
+core.push_rules.set(cot_accum_p, pushforward_cot_accum)
+core.apush_rules.set(cot_accum_p, utils.asyncify(pushforward_cot_accum))
+core.pull_fwd_rules.set(cot_accum_p, pullback_fwd_cot_accum)
+core.apull_fwd_rules.set(cot_accum_p, utils.asyncify(pullback_fwd_cot_accum))
+core.pull_bwd_rules.set(cot_accum_p, pullback_bwd_cot_accum)
+core.apull_bwd_rules.set(cot_accum_p, utils.asyncify(pullback_bwd_cot_accum))
 
 
 class PullbackFwdBox:
@@ -455,7 +455,7 @@ class PullbackBwdBox:
 core.aval_types[PullbackBwdBox] = lambda value: core.avalof(value.cotangent)
 
 
-def transpose_walk(ir: stage.IR, c_out: Tree, /, *, check, zero, accumulate):
+def transpose_walk(ir: stage.IR, c_out: Tree, /, *, check, zero, accum):
     # NOTE(asem): walk the IR in reverse accumulating cotangents in an environment.
     # used for pullback backward pass.
     c_env: defaultdict[stage.Var, list[Any]] = defaultdict(list)
@@ -470,7 +470,7 @@ def transpose_walk(ir: stage.IR, c_out: Tree, /, *, check, zero, accumulate):
         # the trace contains `concat(x, x)`. during transpose, the concat pullback
         # returns one cotangent for each concat input. since both inputs are the same
         # Var `x`, `c_env[x]` receives two cotangents: ["df", "df"].
-        # `read_c(x)` then calls `accumulate`, which combines them using
+        # `read_c(x)` then calls `accum`, which combines them using
         # the cotangent AVal accumulation method.
 
         # NOTE(asem): the contract is that everywhere the values are boxed (e.g. inside env too)
@@ -487,7 +487,7 @@ def transpose_walk(ir: stage.IR, c_out: Tree, /, *, check, zero, accumulate):
             return value
         for value in cs:
             check(aval, value)
-        value = accumulate(cs)
+        value = accum(cs)
         check(aval, value)
         return value
 
@@ -604,15 +604,15 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     def zero(a):
         return bwd.box(core.Zero(a))
 
-    def accumulate(values):
+    def accum(values):
         with core.using_interpreter(parent):
-            return bwd.box(cot_acc(bwd.unbox(values)))
+            return bwd.box(cot_accum(bwd.unbox(values)))
 
     eqn, boxed_in = next(gen := stage.walk(ir, check=fwd_check)(*fwd.box(p_in)))
     while eqn:
         eqn, boxed_in = gen.send(fwd_bind(eqn, boxed_in))
 
-    gen = transpose_walk(ir, bwd.box(c_out), check=bwd_check, zero=zero, accumulate=accumulate)
+    gen = transpose_walk(ir, bwd.box(c_out), check=bwd_check, zero=zero, accum=accum)
     eqn, boxed_c_out = next(gen)
     while eqn:
         eqn, boxed_c_out = gen.send(bwd_bind(eqn, boxed_c_out))
@@ -648,15 +648,15 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     def zero(a):
         return bwd.box(core.Zero(a))
 
-    def accumulate(values):
+    def accum(values):
         with core.using_interpreter(parent):
-            return bwd.box(cot_acc(bwd.unbox(values)))
+            return bwd.box(cot_accum(bwd.unbox(values)))
 
     eqn, boxed_in = next(gen := stage.walk(ir, check=fwd_check)(*fwd.box(p_in)))
     while eqn:
         eqn, boxed_in = gen.send(await fwd_bind(eqn, boxed_in))
 
-    gen = transpose_walk(ir, bwd.box(c_out), check=bwd_check, zero=zero, accumulate=accumulate)
+    gen = transpose_walk(ir, bwd.box(c_out), check=bwd_check, zero=zero, accum=accum)
     eqn, boxed_c_out = next(gen)
     while eqn:
         eqn, boxed_c_out = gen.send(await bwd_bind(eqn, boxed_c_out))

@@ -89,7 +89,7 @@ class FloatAVal(core.AVal):
     def zero(self) -> float:
         return 0.0
 
-    def accumulate(self, values: list[float], /) -> float:
+    def accum(self, values: list[float], /) -> float:
         return sum(values)
 
 
