@@ -180,7 +180,7 @@ def test_transpose_walk_rechecks_mutated_contribution():
     ir = af.trace(program)("x")
     seed = af.core.Zero(af.string.StrAVal())
     gen = af.ad.transpose_walk(
-        ir, (seed, "df"), check=lambda a, v: a.check(v), zero=af.core.Zero, accumulate=af.ad.cot_acc
+        ir, (seed, "df"), check=af.stage.check_aval, zero=af.core.Zero, accumulate=af.ad.cot_acc
     )
     next(gen)
     seed.aval = af.numeric.FloatAVal()
