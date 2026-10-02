@@ -467,14 +467,19 @@ def transpose_walk(ir: stage.IR, c_out: Tree, /):
         # Var `x`, `c_env[x]` receives two cotangents: ["df", "df"].
         # `read_c(x)` then calls `cot_acc`, which combines them using
         # the cotangent AVal accumulation method.
-        stage.is_var(atom) and c_env[atom].append(value)
+        if stage.is_var(atom):
+            core.cotangent_s.map(atom.aval).check(value)
+            c_env[atom].append(value)
 
     def read_c(atom) -> Any:
-        if not stage.is_var(atom):
-            return core.Zero(core.cotangent_s.map(core.avalof(atom)))
-        if not (cs := c_env[atom]):
-            return core.Zero(core.cotangent_s.map(core.avalof(atom)))
-        return cot_acc(cs)
+        aval = core.cotangent_s.map(core.avalof(atom))
+        if not stage.is_var(atom) or not (cs := c_env[atom]):
+            return core.Zero(aval)
+        for value in cs:
+            aval.check(value)
+        value = cot_acc(cs)
+        aval.check(value)
+        return value
 
     utils.tree.map(write_c, ir.out_tree, c_out)
     for eqn in reversed(ir.eqns):

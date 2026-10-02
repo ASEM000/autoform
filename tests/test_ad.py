@@ -35,6 +35,62 @@ def test_pullback_rejects_incompatible_cotangent(executor, cotangent):
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_rejects_invalid_intermediate_cotangent(executor):
+    bad = af.extend.Prim("bad_cotangent")
+    forward = lambda x: (x, None)
+    backward = lambda args: 1.0
+    af.extend.register_abstract(bad, lambda x: x)
+    af.extend.register_pullback_fwd(bad, forward)
+    af.extend.register_apullback_fwd(bad, af.utils.asyncify(forward))
+    af.extend.register_pullback_bwd(bad, backward)
+    af.extend.register_apullback_bwd(bad, af.utils.asyncify(backward))
+    ir = af.pullback(af.trace(lambda x: bad.bind(af.stop_gradient(x)))("x"))
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        executor(ir, ("x",), "df")
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_rejects_invalid_accumulated_cotangent(executor):
+    class Value: ...
+
+    class Feedback: ...
+
+    class ValueAVal(af.core.AVal): ...
+
+    class FeedbackAVal(af.core.AVal):
+        def accumulate(self, cotangents):
+            return 1.0
+
+    af.extend.register_trace_type(Value, lambda _: ValueAVal())
+    af.core.aval_types[Feedback] = lambda _: FeedbackAVal()
+    af.core.cotangent_s.set(ValueAVal, lambda _: FeedbackAVal())
+
+    def program(x):
+        y = af.stop_gradient(x)
+        return y, y
+
+    ir = af.pullback(af.trace(program)(Value()))
+    with pytest.raises(TypeError, match="Expected"):
+        executor(ir, (Value(),), (Feedback(), Feedback()))
+
+
+def test_transpose_walk_rechecks_mutated_contribution():
+    def program(x):
+        y = x + "!"
+        return y, y + "?"
+
+    ir = af.trace(program)("x")
+    seed = af.core.Zero(af.string.StrAVal())
+    gen = af.ad.transpose_walk(ir, (seed, "df"))
+    next(gen)
+    seed.aval = af.numeric.FloatAVal()
+
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        gen.send(("dy", af.core.Zero(af.string.StrAVal())))
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_batched_pullback_rejects_shared_list_cotangent(executor):
     ir = af.pullback(af.trace(lambda x, y: x + y)("x", "y"))
     ir = af.batch(ir, in_axes=((False, True), False))
