@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
+import json
+from types import SimpleNamespace
+
 import pytest
 
 import autoform as af
@@ -163,3 +167,110 @@ def test_memoize_transformed_ir(transform, first_args, second_args, expected, mi
         results = ir.call(*first_args), ir.call(*second_args)
     assert results == expected
     assert counter.calls == misses
+
+
+@pytest.fixture
+def waiting_client():
+    class WaitingClient:
+        def __init__(self):
+            self.calls = 0
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+            self.error = None
+
+        def responses(self, *, input, model, **kwargs):
+            x = json.loads(input)["values"]["prompt"]
+            return SimpleNamespace(output_text=json.dumps({"output": f"{model}|{x}"}))
+
+        async def aresponses(self, **kwargs):
+            self.calls += 1
+            self.started.set()
+            await self.release.wait()
+            if self.error is not None:
+                raise self.error
+            return self.responses(**kwargs)
+
+    return WaitingClient()
+
+
+def fill_text(x, *, model="m1"):
+    return af.lm.fill({"prompt": x, "output": af.lm.Str()}, model=model)["output"]
+
+
+@pytest.mark.parametrize(
+    "transform, args, model, expected, misses",
+    [
+        pytest.param(af.sched, ("x", "x"), "m1", ("m1|x", "m1|x"), 1, id="scheduled-duplicates"),
+        pytest.param(af.sched, ("x", "y"), "m1", ("m1|x", "m1|y"), 2, id="different-inputs"),
+        pytest.param(af.sched, ("x", "x"), "m2", ("m1|x", "m2|x"), 2, id="different-models"),
+        pytest.param(
+            af.batch,
+            (["x", "x"], ["x", "x"]),
+            "m1",
+            (["m1|x", "m1|x"], ["m1|x", "m1|x"]),
+            1,
+            id="batched-duplicates",
+        ),
+    ],
+)
+def test_memoize_concurrent_fill(transform, args, model, expected, misses, waiting_client):
+    ir = transform(af.trace(lambda x, y: (fill_text(x), fill_text(y, model=model)))("x", "y"))
+
+    async def run():
+        with af.lm.client(waiting_client), af.memoize():
+            task = asyncio.create_task(ir.acall(*args))
+            await waiting_client.started.wait()
+            await asyncio.sleep(0)
+            assert waiting_client.calls == misses
+            waiting_client.release.set()
+            assert await task == expected
+            assert await ir.acall(*args) == expected
+            assert waiting_client.calls == misses
+
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
+
+
+def test_memoize_concurrent_failure_retries(waiting_client):
+    ir = af.trace(fill_text)("x")
+
+    async def run():
+        with af.lm.client(waiting_client), af.memoize():
+            first = asyncio.create_task(ir.acall("x"))
+            await waiting_client.started.wait()
+            second = asyncio.create_task(ir.acall("x"))
+            await asyncio.sleep(0)
+            waiting_client.error = RuntimeError("provider failed")
+            waiting_client.release.set()
+            errors = await asyncio.gather(first, second, return_exceptions=True)
+            assert all(error is waiting_client.error for error in errors)
+            waiting_client.error = None
+            assert await ir.acall("x") == "m1|x"
+            assert waiting_client.calls == 2
+
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
+
+
+@pytest.mark.parametrize("cancel_original", [True, False], ids=["original", "duplicate"])
+def test_memoize_concurrent_cancellation(cancel_original, waiting_client):
+    ir = af.trace(fill_text)("x")
+
+    async def run():
+        with af.lm.client(waiting_client), af.memoize():
+            first = asyncio.create_task(ir.acall("x"))
+            await waiting_client.started.wait()
+            second = asyncio.create_task(ir.acall("x"))
+            await asyncio.sleep(0)
+            cancelled = first if cancel_original else second
+            cancelled.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await cancelled
+            if cancel_original:
+                with pytest.raises(asyncio.CancelledError):
+                    await second
+            waiting_client.release.set()
+            if not cancel_original:
+                assert await first == "m1|x"
+            assert await ir.acall("x") == "m1|x"
+            assert waiting_client.calls == (2 if cancel_original else 1)
+
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
