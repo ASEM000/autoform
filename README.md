@@ -2,223 +2,114 @@
 
 # `autoform`
 
-**Trace once. Transform freely.**
-
-Composable function transformations for text-space programs[^spaces].
-
-*JAX-like, but for text-space programs: trace a Python function into an IR, then apply
-program transforms around it.*
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/ASEM000/autoform/actions/workflows/ci.yml/badge.svg)](https://github.com/ASEM000/autoform/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ASEM000/autoform/graph/badge.svg?token=Z0JBHSC3ZK)](https://codecov.io/gh/ASEM000/autoform)
 
-[Quickstart](#quickstart) - [Composition](#composition) - [Concurrency](#concurrency) - [Reference](#reference) - [GitHub](https://github.com/ASEM000/autoform) - [Documentation](https://autoform.readthedocs.io)
+
+[Documentation](https://autoform.readthedocs.io) ·
+[Getting started](https://autoform.readthedocs.io/en/latest/getting-started.html) ·
+[Recipes](https://autoform.readthedocs.io/en/latest/recipes/) ·
+[API reference](https://autoform.readthedocs.io/en/latest/api/)
 
 </div>
 
-[^spaces]: A text-space program is a traced program whose active values and
-    feedback live in text-like leaves such as strings and structured LM outputs.
-    The same machinery can be extended to other spaces by registering traceable
-    values, avals, zeros, cotangent accumulators, and operator dispatch. See the
-    [array extension recipe](https://autoform.readthedocs.io/en/latest/recipes/extending/array-extension.html)
-    for a concrete NumPy-backed example.
+`autoform` is a framework for composable program transformations over user-defined types and operations.
+Users define how feedback passes through operations and combine transformations to build optimization methods.
+
+The project explores how to apply ideas from programming languages, deep learning,
+optimization, and compiler design to text programs.
+
+## Installation
+
+`autoform` requires Python 3.12 or later.
 
 ```bash
 pip install git+https://github.com/ASEM000/autoform.git
 ```
 
-Set provider credentials for the active LM client. For OpenAI through [LiteLLM](https://docs.litellm.ai/):
+## Getting Started
 
-```bash
-export OPENAI_API_KEY=...
-```
+`autoform` has three main pieces: **types**, **operations** on these types, and **transformations** of programs.
 
-## Quickstart
+The following example optimizes a program with string and numerical inputs.
+It updates a text rubric $r$ and a numerical scale $s$.
+The language model generates a score $\mathrm{LM}(r, x)$ from the rubric $r$ and a fixed example $x$.
+As in regression, the loss is the squared error between the scaled score and a fixed target $y$:
 
-The quickstart writes one function, traces it once, then reuses the same IR in a few ways.
+$$
+\mathcal{L}(r, s) = (s \, \mathrm{LM}(r, x) - y)^2.
+$$
+
+With step size $\eta$, update the scale using the gradient for the generated score:
+
+$$
+s \leftarrow s - \eta \, \nabla_s \mathcal{L}(r, s).
+$$
+
+The model updates the rubric using textual feedback from `pullback`.
 
 ```python
 import autoform as af
 
-
-def explain(topic: str) -> str:
-    prompt = "Explain " + topic + " in one paragraph."
-    msg = dict(role="user", content=prompt)
-    return af.lm.complete([msg], model="gpt-5.5")
+model = "openai/gpt-5.5"
+example = "Recursion solves a problem by calling itself on smaller subproblems."
+target = 8.0  # illustrative reference score
 
 
-# trace with a representative input; this records structure
-ir = af.trace(explain)("placeholder topic")
+def grading_loss(rubric: str, scale: float) -> float:
+    score = af.lm.Float(min=0, max=10, desc="grade the example using the rubric.")
+    result = af.lm.fill(dict(rubric=rubric, example=example, score=score), model=model)
+    error = scale * result["score"] - target
+    return error * error
 
-# execute the same ir with real input
-answer = ir.call("recursion")
-print(answer)
+
+rubric = "Reward clear explanations of recursion."
+scale = 0.8
+
+# transform the program to return output along with
+# textual feedback on rubric and numerical feedback (gradient) on scale
+pullback = af.pullback(af.trace(grading_loss)(rubric, scale))
+
+for step in range(3):
+    loss, (rubric_fdbk, scale_fdbk) = pullback.call((rubric, scale), 1.0)
+    print(step, loss)
+    scale -= 0.005 * scale_fdbk
+    new_rubric = af.lm.Str(desc="Revise the rubric using the feedback.")
+    content = dict(rubric=rubric, rubric_feedback=rubric_fdbk, new_rubric=new_rubric)
+    rubric = af.lm.fill(content, model=model)["new_rubric"]
+
+print(scale, rubric)
 ```
 
-Expected result: one paragraph about recursion.
+## More
 
-Batch the same program without rewriting `explain`:
+The [concepts guide](https://autoform.readthedocs.io/en/latest/concepts/index.html)
+explains types, operations, feedback rules, and program transformations.
+It describes how a Python program is traced into an intermediate representation (IR).
+It then explains how the IR is transformed and executed.
 
-```python
-# batch vectorizes the original ir over the input leaf
-topics = ["recursion", "gravity", "memoization"]
-answers = af.batch(ir).call(topics)
+The [recipes](https://autoform.readthedocs.io/en/latest/recipes/index.html)
+show how to combine these pieces for specific tasks.
+Examples cover batching, control flow, prompt optimization, and programs with model and tool calls.
+They also show how to inspect execution and add custom types, operations, and feedback rules.
 
-assert len(answers) == len(topics)
+## Citation
+
+Please cite AutoForm in research that uses it:
+
+```bibtex
+@software{autoform,
+  author       = {Asem, Mahmoud},
+  title        = {AutoForm: Extensible Framework for Program Transformations over User-Defined Types},
+  year         = {2026},
+  url          = {https://github.com/ASEM000/autoform},
+  doi          = {10.5281/zenodo.18071950},
+  publisher    = {Zenodo},
+  license      = {Apache-2.0}
+}
 ```
 
-The result is one answer per topic.
-
-Send output feedback backward to the original input:
-
-```python
-# pullback returns the output and feedback for the original inputs
-pb_ir = af.pullback(ir)
-answer, (topic_hint,) = pb_ir.call(("recursion",), "too abstract")
-
-print(topic_hint)
-```
-
-Expected result: text feedback for the input topic.
-
-Compose both:
-
-```python
-# one pullback per topic, batched by the transform
-topics = ["recursion", "gravity", "memoization"]
-critiques = ["too abstract", "too terse", "needs an example"]
-
-composed = af.batch(af.pullback(ir))
-answers, (topic_hints,) = composed.call((topics,), critiques)
-
-assert len(topic_hints) == len(topics)
-```
-
-That last line is the core design: `pullback(ir)` returns an IR, and `batch`
-accepts an IR.
-
-## Why
-
-A text-space program written as ordinary Python tends to grow a second implementation
-for each new execution concern: batching, feedback, concurrency, debugging, or
-provider routing.
-
-`autoform` keeps those concerns outside the function. It records the function
-once as an IR, then applies transforms and execution contexts around that
-recorded program. The quickstart shows the split: write normal Python, trace it
-once, then decide how to transform or run it.
-
-## Composition
-
-The pieces do different jobs:
-
-| Job | [API](https://autoform.readthedocs.io/en/latest/api/) | For |
-| --- | --- | --- |
-| Transform an IR | `batch`, `pullback`, `pushforward`, `sched`, `dce` | Build another IR from an existing IR. |
-| Customize a boundary | `@af.custom` | Give a traceable Python function transform-specific rules. |
-| Wrap tracing or execution | `memoize`, `lm_client`, `collect`, `inject`, `tag`, `fold` | Change behavior inside a `with` block. |
-| Choose execution mode | `.call(...)`, `.acall(...)` | Run the same IR synchronously or asynchronously. |
-
-## Concurrency
-
-Write the function sequentially. Schedule the IR afterward.
-
-```python
-import asyncio
-import autoform as af
-
-
-def compare(topic: str) -> str:
-    explain_prompt = "Explain " + topic + " in one sentence."
-    example_prompt = "Give one concrete example of " + topic + "."
-    explain_msg = dict(role="user", content=explain_prompt)
-    example_msg = dict(role="user", content=example_prompt)
-
-    explanation = af.lm.complete([explain_msg], model="gpt-5.5")
-    example = af.lm.complete([example_msg], model="gpt-5.5")
-
-    combine_prompt = "Combine these:\n" + explanation + "\n" + example
-    combine_msg = dict(role="user", content=combine_prompt)
-    return af.lm.complete([combine_msg], model="gpt-5.5")
-
-
-ir = af.trace(compare)("placeholder topic")
-scheduled = af.sched(ir)
-answer = asyncio.run(scheduled.acall("recursion"))
-```
-
-```mermaid
-flowchart TD
-    topic["topic"] --> explain["LM: explain"]
-    topic --> example["LM: example"]
-    explain --> combine["LM: combine"]
-    example --> combine
-```
-
-There is no `async def` in `compare`. Use `.call(...)` for a sync run and
-`.acall(...)` for an async run.
-
-## Debugging
-
-`checkpoint` labels an intermediate. `collect` and `inject` wrap execution.
-
-```python
-def pipeline(topic: str) -> str:
-    draft_prompt = "Draft one sentence about " + topic + "."
-    draft_msg = dict(role="user", content=draft_prompt)
-    draft = af.lm.complete([draft_msg], model="gpt-5.5")
-    draft = af.checkpoint(draft, key="draft", collection="debug")
-
-    final_prompt = "Tighten this answer:\n" + draft
-    final_msg = dict(role="user", content=final_prompt)
-    return af.lm.complete([final_msg], model="gpt-5.5")
-
-
-ir = af.trace(pipeline)("placeholder topic")
-
-with af.collect(collection="debug") as captured:
-    result = ir.call("recursion")
-
-with af.inject(collection="debug", values={"draft": ["Recursion calls itself."]}):
-    result = ir.call("recursion")
-```
-
-The original function and IR stay the same. The context around execution changes
-what happens at checkpointed values.
-
-## Agents
-
-Tool-use agents are just traced programs with structured outputs, `switch`
-branches, and bounded `while_loop` state.
-
-```mermaid
-flowchart TD
-    question["question"] --> state["state"]
-    state --> condition{"continue?"}
-    condition -- "yes" --> decision{"tool?"}
-    decision -- "search" --> tool["search branch"]
-    tool --> state
-    decision -- "done" --> result["result"]
-    condition -- "no" --> result
-```
-
-Because the agent is one IR, the same transforms still apply:
-
-```python
-agent_ir = af.trace(agent)("question")
-batched_feedback = af.batch(af.pullback(agent_ir))
-```
-
-See the [Tool-Use Agent recipe](https://autoform.readthedocs.io/en/latest/recipes/llm/tool-use-agent.html)
-for the full version.
-
-## Reference
-
-- [Getting Started](https://autoform.readthedocs.io/en/latest/getting-started.html)
-- [Concepts](https://autoform.readthedocs.io/en/latest/concepts/)
-- [Recipes](https://autoform.readthedocs.io/en/latest/recipes/)
-- [API Reference](https://autoform.readthedocs.io/en/latest/api/)
-- [Glossary](https://autoform.readthedocs.io/en/latest/reference/glossary.html)
-
-> Early development: [API Reference](https://autoform.readthedocs.io/en/latest/api/) may change before a stable release.
+> [!WARNING]
+> Early development. Expect API changes that break existing code.
