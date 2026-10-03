@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
 from contextlib import contextmanager
 
@@ -57,11 +58,12 @@ def make_key(prim: core.Prim, in_tree: Tree, /, **params) -> CacheKey:
 
 
 class MemoizingInterpreter(core.Interpreter):
-    __slots__ = ["parent", "cache"]
+    __slots__ = ["parent", "cache", "pending"]
 
     def __init__(self):
         self.parent = core.active_interpreter.get()
         self.cache: dict[CacheKey, Tree] = {}
+        self.pending: dict[CacheKey, asyncio.Future] = {}
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         # NOTE(asem): constructing Eqn here is simply to make is_non_memo accepts Eqn
@@ -73,11 +75,59 @@ class MemoizingInterpreter(core.Interpreter):
         return self.cache[key]
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
+        # NOTE(asem): the async case needs a bit more handling, in this example
+        # >>> async def example(ir):
+        # ...     with af.memoize():
+        # ...         a = asyncio.create_task(ir.acall("x"))
+        # ...         b = asyncio.create_task(ir.acall("x"))
+        # ...         await asyncio.gather(a, b, return_exceptions=True)
+        # ...         c = await ir.acall("x")
+        #
+        # for a,b unlike sequential sync case, 1) cache is not enough to mark some work is already
+        # running, as a, b both can launch concurrently without cache hit. moreover,
+        # error/cancellation needs a bit of care, as a can fail or be cancelled before completion
+        # while b is still waiting for its result.
+
         if is_non_memo(stage.Eqn(prim, in_tree, None, params)):
             return await self.parent.ainterpret(prim, in_tree, **params)
-        if (key := make_key(prim, in_tree, **params)) not in self.cache:
-            self.cache[key] = await self.parent.ainterpret(prim, in_tree, **params)
-        return self.cache[key]
+        key = make_key(prim, in_tree, **params)
+        if key in self.cache:
+            # NOTE(asem): case 1) same call is launched and completed
+            return self.cache[key]
+        if key in self.pending:
+            # NOTE(asem): case 2) shield prevents cancelling b from cancelling the shared future.
+            # if not shield, then cancelling a-b future, when a completes future.set_result will
+            # fail.
+            return await asyncio.shield(self.pending[key])
+
+        # NOTE(asem) case 3) primitive is memoizable with no cache/pending result
+        future = asyncio.get_running_loop().create_future()
+
+        try:
+            # NOTE(asem): case 3a) task a is launched
+            self.pending[key] = future
+            result = await self.parent.ainterpret(prim, in_tree, **params)
+        except Exception as error:
+            # NOTE(asem): case 3b) task a raises an error, box the future with exception
+            # and raise error in task a.
+            future.set_exception(error)
+            # NOTE(asem): in case of a single task, the exception is never unboxed, thus asyncio
+            # may print an error message.
+            future.exception()
+            raise
+        except asyncio.CancelledError:
+            # NOTE(asem): case 3c) task a is canelled, future is cancelled and b recieves
+            # canellation error
+            future.cancel()
+            raise
+        else:
+            # NOTE(asem): case 3a) task a computation is ready, box it in future.
+            future.set_result(result)
+            self.cache[key] = result
+            return result
+        finally:
+            # NOTE(asem): remove pending key for all cases.
+            del self.pending[key]
 
 
 @contextmanager
