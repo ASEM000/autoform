@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use autoform in your research, please cite it using this metadata."
 type: software
-title: "AutoForm: A Research Framework for Program Transformation and Optimization"
+title: "AutoForm: Extensible Framework for Program Transformations over User-Defined Types"
 authors:
   - family-names: Asem
     given-names: Mahmoud
