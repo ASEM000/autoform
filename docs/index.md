@@ -1,25 +1,7 @@
-# `autoform`
-
 ```{include} ../README.md
-:start-after: "</div>"
-:end-before: "## Installation"
 ```
 
-## Example
-
-```{include} ../README.md
-:start-after: "## Getting Started"
-:end-before: "## More"
-```
-
-```{admonition} Model Setup
-`autoform` uses LiteLLM for model calls.
-Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
-Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
-Replace labels such as `"answer instructions"` with text for the task.
-```
-
-## Documentation
+`````{div} sd-p-3 sd-border sd-rounded-2
 
 ````{grid} 1 2 2 2
 :gutter: 3
@@ -53,6 +35,8 @@ API signatures, parameters, and return values.
 ```
 
 ````
+
+`````
 
 ```{toctree}
 :maxdepth: 2
@@ -95,8 +79,4 @@ recipes/extending/index
 api/index
 reference/changelog
 reference/glossary
-```
-
-```{warning}
-Early development. Expect API changes that break existing code.
 ```
