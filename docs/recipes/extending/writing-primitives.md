@@ -121,14 +121,7 @@ def pull_fwd_lookup(query: str, /):
 
 def pull_bwd_lookup(in_tree, /):
     (query, output), feedback = in_tree
-    return (
-        "Improve query '"
-        + query
-        + "'. Feedback: "
-        + feedback
-        + ". Result: "
-        + output
-    )
+    return "Improve query '" + query + "'. Feedback: " + feedback + ". Result: " + output
 
 
 afe.register_pullback_fwd(lookup_p, pull_fwd_lookup)

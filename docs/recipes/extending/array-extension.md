@@ -44,11 +44,7 @@ class ArrayAVal(afe.AVal):
         return f"ArrayAVal(shape={self.shape!r}, dtype={self.dtype!r})"
 
     def __eq__(self, other):
-        return (
-            type(self) is type(other)
-            and self.shape == other.shape
-            and self.dtype == other.dtype
-        )
+        return type(self) is type(other) and self.shape == other.shape and self.dtype == other.dtype
 
     def __hash__(self):
         return hash((type(self), self.shape, self.dtype.str))

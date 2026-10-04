@@ -120,9 +120,7 @@ async def abatch_wikipedia_search(in_tree, /):
     if not query_axis:
         return await wikipedia_search_p.abind(queries), False
 
-    results = await asyncio.gather(
-        *(wikipedia_search_p.abind(query) for query in queries)
-    )
+    results = await asyncio.gather(*(wikipedia_search_p.abind(query) for query in queries))
     return list(results), True
 
 
@@ -235,9 +233,7 @@ Compute question feedback through the executed loop:
 ```python
 # pullback turns output feedback into question feedback
 pb_agent = af.pullback(agent_ir)
-answer, (question_hint,) = asyncio.run(
-    pb_agent.acall(("question text",), "answer feedback")
-)
+answer, (question_hint,) = asyncio.run(pb_agent.acall(("question text",), "answer feedback"))
 ```
 
 For real tools, keep the branch signature stable: each branch here is `(query, answer, history) -> history`.

@@ -124,9 +124,7 @@ print(topic_feedback)
 This feedback can be used with an update policy like:
 
 ```python
-new_instruction = (
-    module.instruction + "\nFeedback: " + module_feedback.instruction
-)
+new_instruction = module.instruction + "\nFeedback: " + module_feedback.instruction
 next_module = Explainer(
     instruction=new_instruction,
     style=module.style,
