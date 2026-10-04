@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="dead-code-title dead-code-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="210.07pt" height="159.5pt" viewBox="0 0 210.07 159.5">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="dead-code-title dead-code-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="210.07pt" height="159.5pt" viewBox="0 0 210.07 159.5">
 <title id="dead-code-title">Dead code elimination removes an unused branch</title>
 <desc id="dead-code-desc">In the example, the used concat contributes to the output and the unused concat does not. DCE removes the unused equation and preserves the output dependency.</desc>
 <defs>

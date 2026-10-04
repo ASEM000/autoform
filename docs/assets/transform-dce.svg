@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-dce-title transform-dce-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="265.88pt" height="82.96pt" viewBox="0 0 265.88 82.96">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="transform-dce-title transform-dce-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="265.88pt" height="82.96pt" viewBox="0 0 265.88 82.96">
 <title id="transform-dce-title">Dead code elimination removes unused equations</title>
 <desc id="transform-dce-desc">The original IR contains a used equation and an unused equation. DCE removes the unused equation while retaining the equation needed for the selected output.</desc>
 <defs>

@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="ir-transform-title ir-transform-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="197.85pt" height="35.21pt" viewBox="0 0 197.85 35.21">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="ir-transform-title ir-transform-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="197.85pt" height="35.21pt" viewBox="0 0 197.85 35.21">
 <title id="ir-transform-title">An IR transform returns IR</title>
 <desc id="ir-transform-desc">A transform consumes an IR and returns an IR that can be executed or transformed again.</desc>
 <defs>

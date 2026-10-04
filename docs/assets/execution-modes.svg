@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="execution-modes-title execution-modes-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300.94pt" height="87.57pt" viewBox="0 0 300.94 87.57">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="execution-modes-title execution-modes-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300.94pt" height="87.57pt" viewBox="0 0 300.94 87.57">
 <title id="execution-modes-title">Execution mode is chosen at the IR boundary</title>
 <desc id="execution-modes-desc">The same transformed IR supports call for synchronous execution and acall for asynchronous execution.</desc>
 <defs>

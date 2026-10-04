@@ -27,8 +27,7 @@ def render(source):
     title_id = source.stem + "-title"
     desc_id = source.stem + "-desc"
     attributes = (
-        'style="display: block; width: 100%; '
-        'height: auto; margin: 1.5rem auto;" role="img" '
+        'style="display: block; width: 100%; height: auto;" role="img" '
         f'aria-labelledby="{title_id} {desc_id}" '
     )
     text = text.replace("<svg ", "<svg " + attributes, 1)

@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="mixed-feedback-title mixed-feedback-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="382.1pt" height="230.86pt" viewBox="0 0 382.1 230.86">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="mixed-feedback-title mixed-feedback-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="382.1pt" height="230.86pt" viewBox="0 0 382.1 230.86">
 <title id="mixed-feedback-title">Pullback adds reverse feedback to the grading program</title>
 <desc id="mixed-feedback-desc">Pullback transforms the original program into a feedback program. Solid arrows carry forward values, and dashed arrows return feedback. Blue arrows carry numerical gradients; purple arrows carry text feedback for the rubric. The reference example and target are fixed.</desc>
 <defs>

@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="batched-feedback-title batched-feedback-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="404.78pt" height="269.13pt" viewBox="0 0 404.78 269.13">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="batched-feedback-title batched-feedback-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="404.78pt" height="269.13pt" viewBox="0 0 404.78 269.13">
 <title id="batched-feedback-title">Batch runs the feedback program for each example</title>
 <desc id="batched-feedback-desc">Batch transforms the feedback program into one batched IR. Stacked program rectangles represent the batch dimension. The rubric, scale, and loss seed are shared; each example and target vary. Each batch item returns its own loss and feedback.</desc>
 <defs>

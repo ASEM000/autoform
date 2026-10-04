@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="ir-dataflow-title ir-dataflow-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="252.3pt" height="93.67pt" viewBox="0 0 252.3 93.67">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="ir-dataflow-title ir-dataflow-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="252.3pt" height="93.67pt" viewBox="0 0 252.3 93.67">
 <title id="ir-dataflow-title">Data flow through two IR equations</title>
 <desc id="ir-dataflow-desc">The runtime topic passes through two concat equations to produce the output. Each equation also takes a literal string. The intermediate value prompt connects the equations.</desc>
 <defs>

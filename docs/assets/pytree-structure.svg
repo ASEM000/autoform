@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="pytree-structure-title pytree-structure-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="293.2pt" height="89.14pt" viewBox="0 0 293.2 89.14">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="pytree-structure-title pytree-structure-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="293.2pt" height="89.14pt" viewBox="0 0 293.2 89.14">
 <title id="pytree-structure-title">Flattening and reconstructing a pytree</title>
 <desc id="pytree-structure-desc">Flattening separates leaf values from the tree structure. Unflattening reconstructs a State container from its structure and leaf values.</desc>
 <defs>

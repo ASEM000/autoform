@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="path-weight-channels-title path-weight-channels-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="320.04pt" height="90.13pt" viewBox="0 0 320.04 90.13">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="path-weight-channels-title path-weight-channels-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="320.04pt" height="90.13pt" viewBox="0 0 320.04 90.13">
 <title id="path-weight-channels-title">Output and path weight are separate channels</title>
 <desc id="path-weight-channels-desc">The program returns its original output. Each reached factor multiplies a path weight initialized to one, so factors a and b contribute a times b.</desc>
 <defs>

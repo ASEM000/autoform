@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-sched-title transform-sched-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="303.73pt" height="131.02pt" viewBox="0 0 303.73 131.02">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="transform-sched-title transform-sched-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="303.73pt" height="131.02pt" viewBox="0 0 303.73 131.02">
 <title id="transform-sched-title">Scheduling groups independent equations into parallel stages</title>
 <desc id="transform-sched-desc">The original IR lists independent operations A and B before Join, which depends on both. Scheduling groups A and B into a parallel stage followed by Join. The dependencies remain unchanged.</desc>
 <defs>

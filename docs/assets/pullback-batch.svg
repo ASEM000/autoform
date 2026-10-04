@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="pullback-batch-title pullback-batch-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="294.83pt" height="37.78pt" viewBox="0 0 294.83 37.78">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="pullback-batch-title pullback-batch-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="294.83pt" height="37.78pt" viewBox="0 0 294.83 37.78">
 <title id="pullback-batch-title">Batching a pullback</title>
 <desc id="pullback-batch-desc">Pullback transforms the original IR into a feedback IR. Batch then transforms that feedback IR into a batched feedback IR.</desc>
 <defs>

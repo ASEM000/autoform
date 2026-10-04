@@ -46,7 +46,7 @@ and numerical gradients for the scale.
 
 <picture id="grading-program">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/grading-program-dark.svg">
-  <img src="docs/assets/grading-program.svg" alt="The original grading program mixes a text rubric with a numerical scale. Purple arrows carry text; blue arrows carry numbers.">
+  <img width="100%" src="docs/assets/grading-program.svg" alt="The original grading program mixes a text rubric with a numerical scale. Purple arrows carry text; blue arrows carry numbers.">
 </picture>
 <!-- end grading-program -->
 
@@ -73,7 +73,7 @@ The `pullback` of the scoring program creates a feedback program. It returns bot
 
 <picture id="mixed-feedback">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mixed-feedback-dark.svg">
-  <img src="docs/assets/mixed-feedback.svg" alt="Pullback transforms the original program into a feedback program. Solid arrows carry forward values; dashed arrows return numerical gradients and text feedback.">
+  <img width="100%" src="docs/assets/mixed-feedback.svg" alt="Pullback transforms the original program into a feedback program. Solid arrows carry forward values; dashed arrows return numerical gradients and text feedback.">
 </picture>
 <!-- end mixed-feedback -->
 
@@ -94,7 +94,7 @@ feedback_program = af.pullback(program)
 
 <picture id="batched-feedback">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/batched-feedback-dark.svg">
-  <img src="docs/assets/batched-feedback.svg" alt="Batch transforms the feedback program into a batched IR. The stack represents one feedback computation per example, with a shared rubric and scale.">
+  <img width="100%" src="docs/assets/batched-feedback.svg" alt="Batch transforms the feedback program into a batched IR. The stack represents one feedback computation per example, with a shared rubric and scale.">
 </picture>
 <!-- end batched-feedback -->
 

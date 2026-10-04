@@ -1,4 +1,4 @@
-<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="primitive-rules-title primitive-rules-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="317.59pt" height="112.81pt" viewBox="0 0 317.59 112.81">
+<svg style="display: block; width: 100%; height: auto;" role="img" aria-labelledby="primitive-rules-title primitive-rules-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="317.59pt" height="112.81pt" viewBox="0 0 317.59 112.81">
 <title id="primitive-rules-title">Separate rules for one primitive</title>
 <desc id="primitive-rules-desc">The same primitive has an abstract rule for tracing, an implementation rule for execution, and separate rules for supported transforms.</desc>
 <defs>
