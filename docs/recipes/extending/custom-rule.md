@@ -65,19 +65,19 @@ def clean(text: str) -> str:
     return bracket(text)
 
 
-ir = af.trace(clean)("  Hello  ")
+ir = af.trace(clean)("text")
 
-output, tangent = af.pushforward(ir).call(("alpha",), ("make it direct",))
+output, tangent = af.pushforward(ir).call(("alpha",), ("input change",))
 print(output)
 print(tangent)
 assert output == "[alpha]"
-assert tangent == "bracket change: make it direct"
+assert tangent == "bracket change: input change"
 
-output, (text_feedback,) = af.pullback(ir).call(("alpha",), "too decorated")
+output, (text_feedback,) = af.pullback(ir).call(("alpha",), "output feedback")
 print(output)
 print(text_feedback)
 assert output == "[alpha]"
-assert text_feedback == "too decorated via [alpha] from alpha"
+assert text_feedback == "output feedback via [alpha] from alpha"
 
 batched = af.batch(ir)
 

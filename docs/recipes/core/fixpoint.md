@@ -26,8 +26,8 @@ def rewrite_step(state: RewriteState, target: str) -> RewriteState:
     return RewriteState(draft=target, status="stable")
 
 
-example_state = RewriteState(draft="rough draft", status="draft")
-step_ir = af.trace(rewrite_step)(example_state, "polished draft")
+example_state = RewriteState(draft="draft text", status="draft")
+step_ir = af.trace(rewrite_step)(example_state, "revised draft text")
 ```
 
 This step is deterministic so the example can run without an LM provider. In a
@@ -44,12 +44,12 @@ def settle(init: RewriteState, target: str) -> RewriteState:
     return af.fixpoint(step_ir, init, target, max_iters=4)
 
 
-ir = af.trace(settle)(example_state, "polished draft")
-result = ir.call(example_state, "polished draft")
+ir = af.trace(settle)(example_state, "revised draft text")
+result = ir.call(example_state, "revised draft text")
 print(result)
 ```
 
-The fixed point here runs for two iterations: the first iteration advances the state from `"rough draft"` to `"polished draft"`, but the next iteration leaves the state the same. The fixed point uses structural equality by default to detect that the state has reached a fixed point and no further iterations are necessary.
+The fixed point here runs for two iterations: the first iteration advances the state from `"draft text"` to `"revised draft text"`, but the next iteration leaves the state the same. The fixed point uses structural equality by default to detect that the state has reached a fixed point and no further iterations are necessary.
 
 ## Stability Check
 
@@ -83,10 +83,10 @@ def final_draft(init: RewriteState, target: str) -> str:
     return final.draft
 
 
-draft_ir = af.trace(final_draft)(example_state, "polished draft")
+draft_ir = af.trace(final_draft)(example_state, "revised draft text")
 output, (init_feedback, target_feedback) = af.pullback(draft_ir).call(
-    (example_state, "polished draft"),
-    "make the final draft more concrete",
+    (example_state, "revised draft text"),
+    "draft feedback",
 )
 
 print(output)

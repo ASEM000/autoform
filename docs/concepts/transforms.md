@@ -30,7 +30,7 @@ def label(topic: str) -> str:
     return "Topic: " + topic
 
 
-ir = af.trace(label)("recursion")
+ir = af.trace(label)("topic text")
 ```
 
 ## IR Transforms
@@ -50,7 +50,7 @@ Run one call for each topic:
 
 ```python
 batched = af.batch(ir)
-outputs = batched.call(["DNA", "gravity", "recursion"])
+outputs = batched.call(["topic text 1", "topic text 2", "topic text 3"])
 ```
 
 `````
@@ -118,7 +118,7 @@ def scored_label(topic: str, score: float) -> str:
     return label(topic)
 
 
-score_ir = af.trace(scored_label)("recursion", 1.0)
+score_ir = af.trace(scored_label)("topic text", 1.0)
 scored = af.weight(score_ir)
 output, path_weight = scored.call("topic", 0.8)
 ```
@@ -151,7 +151,7 @@ result = trimmed.call("topic")
 One can compose the different transforms because each one returns an IR.
 
 ```python
-topics = ["DNA", "gravity", "recursion"]
+topics = ["topic text 1", "topic text 2", "topic text 3"]
 critiques = ["output feedback 1", "output feedback 2", "output feedback 3"]
 transformed = af.batch(af.pullback(ir))
 outputs, (topic_hints,) = transformed.call((topics,), critiques)

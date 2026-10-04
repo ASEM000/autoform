@@ -49,14 +49,14 @@ def explain(topic: str) -> str:
     return af.lm.fill(content, model=model)["answer"]
 
 
-ir = af.trace(explain)("recursion")
+ir = af.trace(explain)("topic text")
 print(ir)
 ```
 
 The class {py:class}`Str <autoform.lm.Str>` defines a specification for how to generate a string. The function {py:func}`fill <autoform.lm.fill>` takes as context the topic of the explanation and replaces the `Str` with the generated string, returning the resulting filled in dictionary.
 
 During tracing, {py:func}`fill <autoform.lm.fill>` becomes a recorded operation; it doesn't call the model.
-The argument `"recursion"` tells {py:func}`trace <autoform.trace>` that the topic is a string.
+The argument `"topic text"` tells {py:func}`trace <autoform.trace>` that the topic is a string.
 Later runs can use another topic. The model and generation instructions stay fixed in this example.
 The printed IR shows the recorded model call.
 See [Tracing Semantics](concepts/tracing-semantics.md) for static inputs and Python control flow.
@@ -66,11 +66,11 @@ See [Tracing Semantics](concepts/tracing-semantics.md) for static inputs and Pyt
 Run the IR to generate an explanation for a different topic:
 
 ```python
-output = ir.call("gravity")
+output = ir.call("another topic text")
 print(output)
 ```
 
-This call prints an explanation of gravity.
+This call prints an explanation of the supplied topic.
 Each call reuses the recorded equations and makes a fresh request to the model.
 The IR doesn't cache model responses.
 
@@ -79,7 +79,7 @@ The IR doesn't cache model responses.
 To run it on multiple topics, transform the IR with {py:func}`batch <autoform.batch>`:
 
 ```python
-topics = ["DNA", "gravity", "recursion"]
+topics = ["topic text 1", "topic text 2", "topic text 3"]
 batched = af.batch(ir)
 outputs = batched.call(topics)
 print(outputs)
@@ -97,7 +97,7 @@ Transform the IR with {py:func}`pullback <autoform.pullback>` to compute input f
 ```python
 feedback_program = af.pullback(ir)
 output, (topic_feedback,) = feedback_program.call(
-    ("gravity",),
+    ("another topic text",),
     "answer feedback",
 )
 print(output)
@@ -156,8 +156,8 @@ def summarize(topic: str) -> Summary:
     return af.lm.fill(content, model=model)["summary"]
 
 
-summary_ir = af.trace(summarize)("recursion")
-summary = summary_ir.call("recursion")
+summary_ir = af.trace(summarize)("topic text")
+summary = summary_ir.call("topic text")
 print(summary.title, summary.kind)
 ```
 
@@ -174,14 +174,14 @@ def explain_then_rewrite(topic: str) -> str:
     return af.lm.fill(content, model=model)["answer"]
 
 
-rewrite_ir = af.trace(explain_then_rewrite)("recursion")
+rewrite_ir = af.trace(explain_then_rewrite)("topic text")
 
 with af.collect(collection="debug") as captured:
-    output = rewrite_ir.call("recursion")
+    output = rewrite_ir.call("topic text")
 print(captured["draft"])
 
 with af.inject(collection="debug", values={"draft": ["draft text"]}):
-    output = rewrite_ir.call("recursion")
+    output = rewrite_ir.call("topic text")
 print(output)
 ```
 
@@ -208,9 +208,9 @@ def compare(topic: str) -> str:
 
 import asyncio
 
-compare_ir = af.trace(compare)("recursion")
+compare_ir = af.trace(compare)("topic text")
 scheduled = af.sched(compare_ir)
-output = asyncio.run(scheduled.acall("recursion"))
+output = asyncio.run(scheduled.acall("topic text"))
 print(output)
 ```
 

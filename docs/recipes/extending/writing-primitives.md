@@ -42,7 +42,7 @@ afe.register_abstract(lookup_p, abstract_lookup)
 
 
 ir = af.trace(lookup)("seed")
-assert ir.call("recursion") == "result for recursion"
+assert ir.call("query text") == "result for query text"
 ```
 
 The wrapper `lookup(...)` is what traced programs call. During tracing, `lookup_p.bind(...)` records one equation. During execution, `impl_lookup(...)` receives the concrete runtime value.
@@ -135,11 +135,14 @@ afe.register_pullback_fwd(lookup_p, pull_fwd_lookup)
 afe.register_pullback_bwd(lookup_p, pull_bwd_lookup)
 
 
-output, (query_feedback,) = af.pullback(ir).call(("recursion",), "too broad")
-assert output == "result for recursion"
+output, (query_feedback,) = af.pullback(ir).call(
+    ("query text",),
+    "output feedback",
+)
+assert output == "result for query text"
 assert (
-    query_feedback == "Improve query 'recursion'. Feedback: too broad. "
-    "Result: result for recursion"
+    query_feedback == "Improve query 'query text'. Feedback: output feedback. "
+    "Result: result for query text"
 )
 ```
 

@@ -47,7 +47,7 @@ def choose_route(question: str) -> Route:
     return af.lm.fill(content, model=model)["route"]
 
 
-route_ir = af.trace(choose_route)("What is recursion?")
+route_ir = af.trace(choose_route)("question text")
 ```
 
 The result is a `Route` with generated fields. Its `tool` can select a branch through {py:func}`switch <autoform.switch>`.
@@ -141,9 +141,9 @@ def summarize(topic: str) -> Summary:
     return af.lm.fill(content, model=model)["summary"]
 
 
-ir = af.trace(summarize)("recursion")
+ir = af.trace(summarize)("topic text")
 feedback = Summary(title="title feedback", score=1.0)
-output, (topic_feedback,) = af.pullback(ir).call(("recursion",), feedback)
+output, (topic_feedback,) = af.pullback(ir).call(("topic text",), feedback)
 print(output)
 print(topic_feedback)
 ```

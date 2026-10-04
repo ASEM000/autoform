@@ -15,7 +15,7 @@ The context is preserved, and each specification is replaced by a parsed value:
 import autoform as af
 
 content = dict(
-    topic="recursion",
+    topic="topic text",
     answer=af.lm.Str(desc="answer instructions"),
     score=af.lm.Float(min=0, max=1, desc="confidence instructions"),
 )
@@ -24,7 +24,7 @@ print(result["answer"], result["score"])
 ```
 
 The result has the same dictionary structure as `content`.
-Its `topic` remains `"recursion"`; `answer` is a string and `score` is a float.
+Its `topic` remains `"topic text"`; `answer` is a string and `score` is a float.
 The model route must support the JSON Schema response format used by the
 [LiteLLM Responses API](https://docs.litellm.ai/docs/response_api).
 
@@ -66,7 +66,7 @@ def explain(topic: str, instruction: str) -> str:
     return af.lm.fill(content, model="model-name")["answer"]
 
 
-ir = af.trace(explain)("recursion", "answer instructions")
+ir = af.trace(explain)("topic text", "answer instructions")
 ```
 
 Here `instruction` is a runtime input. Its text can change between calls and receive feedback through a pullback.
@@ -77,7 +77,7 @@ Specifications can appear in dictionaries, tuples, lists, and registered datacla
 A fixed list of four specifications generates four values:
 
 ```python
-content = dict(topic="recursion", scores=[af.lm.Float(min=0, max=1)] * 4)
+content = dict(topic="topic text", scores=[af.lm.Float(min=0, max=1)] * 4)
 result = af.lm.fill(content, model="model-name")
 assert len(result["scores"]) == 4
 ```

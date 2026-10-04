@@ -39,13 +39,13 @@ def explain(topic: str) -> str:
     return af.lm.fill(content, model=model)["answer"]
 
 
-ir = af.trace(explain)("recursion")
+ir = af.trace(explain)("topic text")
 scheduled = af.sched(ir)
-output = asyncio.run(scheduled.acall("recursion"))
+output = asyncio.run(scheduled.acall("topic text"))
 print(output)
 ```
 
-The result is an answer about recursion that uses both generated pieces.
+The result is an answer about the supplied topic that uses both generated pieces.
 The final call waits for both inputs:
 
 ```{raw} html

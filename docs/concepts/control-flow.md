@@ -31,11 +31,11 @@ def route(kind: str, text: str) -> str:
     return af.switch(kind, branches, text)
 
 
-ir = af.trace(route)("brief", "recursion")
-print(ir.call("detailed", "recursion"))
+ir = af.trace(route)("brief", "topic text")
+print(ir.call("detailed", "topic text"))
 ```
 
-The above would print `detailed: recursion`. Note that all branches must have the same input and output structure and types.
+The above would print `detailed: topic text`. Note that all branches must have the same input and output structure and types.
 
 ## Loops
 
@@ -90,11 +90,11 @@ def combine(locked: str, editable: str) -> str:
     return locked + "\n" + editable
 
 
-ir = af.trace(combine)("terms:", "draft answer")
-inputs = ("terms:", "draft answer")
+ir = af.trace(combine)("fixed text", "editable text")
+inputs = ("fixed text", "editable text")
 output, (locked_feedback, editable_feedback) = af.pullback(ir).call(
     inputs,
-    "make clearer",
+    "output feedback",
 )
 
 print(output)
@@ -102,7 +102,7 @@ print(locked_feedback)
 print(editable_feedback)
 ```
 
-In the above example, the forward value of `locked` is unchanged, but the feedback value is `""`, while the feedback for the other input is `"make clearer"`.
+In the above example, the forward value of `locked` is unchanged, but the feedback value is `""`, while the feedback for the other input is `"output feedback"`.
 
 ## Dependencies
 
@@ -119,9 +119,9 @@ def ordered(topic: str) -> str:
     return af.depends(answer, audit)
 
 
-ir = af.trace(ordered)("recursion")
+ir = af.trace(ordered)("topic text")
 scheduled = af.sched(ir)
-print(scheduled.call("recursion"))
+print(scheduled.call("topic text"))
 ```
 
 Use {py:func}`depends <autoform.depends>` when a result should not become available until another traced

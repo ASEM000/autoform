@@ -28,10 +28,10 @@ class State:
     model: str = optree.dataclasses.field(pytree_node=False)
 
 
-state = State(topic="recursion", model="model-name")
+state = State(topic="topic text", model="model-name")
 upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 ```
 
-As a result, only the `topic` is changed to `"RECURSION"` while the `model` remains equal to `"model-name"`.
+As a result, only the `topic` is changed to `"TOPIC TEXT"` while the `model` remains equal to `"model-name"`.
 
 See [Pytrees](../concepts/pytrees.md) for the full pattern.

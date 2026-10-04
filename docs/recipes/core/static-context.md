@@ -43,11 +43,11 @@ Folded work requires concrete inputs. Mark the domain and model static while kee
 ```python
 model = "model-name"
 ir = af.trace(rewrite_for_domain, static=(True, True, False))(
-    "technical documentation",
+    "domain description",
     model,
     "draft text",
 )
-result = ir.call("technical documentation", model, "draft text")
+result = ir.call("domain description", model, "draft text")
 print(result)
 ```
 
@@ -59,7 +59,7 @@ Each execution uses that guide to rewrite its draft.
 Later calls must pass the same domain and model. This call raises `AssertionError: Static input mismatch`:
 
 ```python
-ir.call("another domain", model, "draft text")
+ir.call("another domain description", model, "draft text")
 ```
 
 To change a static input, trace the function again.
@@ -76,7 +76,7 @@ def compile_rewriter(domain: str, model: str):
     return af.trace(rewrite)("draft text")
 
 
-rewriter = compile_rewriter("technical documentation", model)
+rewriter = compile_rewriter("domain description", model)
 print(rewriter.call("draft text"))
 ```
 

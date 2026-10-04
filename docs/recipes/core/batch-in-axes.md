@@ -19,14 +19,14 @@ def label(topic: str, prefix: str) -> str:
 
 
 # topic is batched, prefix is reused for every topic
-ir = af.trace(label)("recursion", "topic")
+ir = af.trace(label)("topic text", "topic")
 batched = af.batch(ir, in_axes=(True, False))
-result = batched.call(["recursion", "gravity", "memoization"], "topic")
+result = batched.call(["topic text 1", "topic text 2", "topic text 3"], "topic")
 
 print(result)
 ```
 
-The result is `["topic: recursion", "topic: gravity", "topic: memoization"]`.
+The result is `["topic: topic text 1", "topic: topic text 2", "topic: topic text 3"]`.
 `True` marks a batched leaf; `False` reuses the same value for every example.
 
 ## Nested Input
@@ -42,9 +42,12 @@ def render(request: dict[str, str]) -> str:
 
 
 # a single dict argument needs axes inside a one-item tuple
-example = {"system": "answer instructions", "topic": "recursion"}
+example = {"system": "answer instructions", "topic": "topic text"}
 axes = ({"system": False, "topic": True},)
-requests = {"system": "answer instructions", "topic": ["recursion", "gravity"]}
+requests = {
+    "system": "answer instructions",
+    "topic": ["topic text 1", "topic text 2"],
+}
 
 ir = af.trace(render)(example)
 batched = af.batch(ir, in_axes=axes)

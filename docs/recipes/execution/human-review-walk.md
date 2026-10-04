@@ -23,7 +23,7 @@ review = "human-review"
 
 
 def draft_then_finalize(topic: str) -> str:
-    draft = "draft for " + topic + ": method A maps x to y."
+    draft = "draft for " + topic + ": draft text"
     with af.tag(review):
         draft = af.checkpoint(draft, key="draft", collection="review")
 

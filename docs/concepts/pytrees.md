@@ -32,10 +32,10 @@ class State:
     draft: str
 
 
-state = State(topic="dna", draft="short")
+state = State(topic="topic text", draft="draft text")
 upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 
-assert upper == State(topic="DNA", draft="SHORT")
+assert upper == State(topic="TOPIC TEXT", draft="DRAFT TEXT")
 ```
 
 Use the same namespace for both operations: use the same {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`
@@ -101,11 +101,11 @@ optree.register_pytree_node(
     namespace=af.PYTREE_NAMESPACE,
 )
 
-state = State(topic="dna", draft="short")
+state = State(topic="topic text", draft="draft text")
 upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 
-assert upper.topic == "DNA"
-assert upper.draft == "SHORT"
+assert upper.topic == "TOPIC TEXT"
+assert upper.draft == "DRAFT TEXT"
 ```
 
 The flatten rule returns two things:

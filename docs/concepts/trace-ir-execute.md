@@ -19,10 +19,10 @@ def label(topic: str) -> str:
     return "Prompt: " + prompt
 
 
-ir = af.trace(label)("DNA")
+ir = af.trace(label)("topic text")
 ```
 
-The argument `"DNA"` tells {py:func}`trace <autoform.trace>` that the input is a string. Tracing replaces it with a placeholder and runs the function body once to record its operations. Later calls can supply another string. See [Tracing Semantics](tracing-semantics.md) for static and dynamic input rules.
+The argument `"topic text"` tells {py:func}`trace <autoform.trace>` that the input is a string. Tracing replaces it with a placeholder and runs the function body once to record its operations. Later calls can supply another string. See [Tracing Semantics](tracing-semantics.md) for static and dynamic input rules.
 
 During that run:
 
@@ -61,21 +61,21 @@ Notice that the call to {py:func}`fill <autoform.lm.fill>` was recorded as an eq
 IRs can be executed synchronously with the `.call(...)` method.
 
 ```python
-output = ir.call("gravity")
+output = ir.call("another topic text")
 print(output)
-# Prompt: Explain gravity.
+# Prompt: Explain another topic text.
 ```
 
-At runtime, the input `"gravity"` is provided, and then the equations are walked and each primitive is dispatched to the appropriate implementation rule.
+At runtime, the input `"another topic text"` is provided, and then the equations are walked and each primitive is dispatched to the appropriate implementation rule.
 
 The async method runs the same IR through async primitive rules:
 
 ```python
 import asyncio
 
-output = asyncio.run(ir.acall("recursion"))
+output = asyncio.run(ir.acall("another topic text"))
 print(output)
-# Prompt: Explain recursion.
+# Prompt: Explain another topic text.
 ```
 
 The original function was not written as `async def`. Execution mode is chosen at the call site.
@@ -87,10 +87,13 @@ A transform is a function from IR to IR. Given one traced program, several trans
 ```python
 batched = af.batch(ir)
 
-outputs = batched.call(["DNA", "gravity", "recursion"])
+outputs = batched.call(["topic text 1", "topic text 2", "topic text 3"])
 print(outputs)
-# ['Prompt: Explain DNA.', 'Prompt: Explain gravity.',
-#  'Prompt: Explain recursion.']
+# [
+#     "Prompt: Explain topic text 1.",
+#     "Prompt: Explain topic text 2.",
+#     "Prompt: Explain topic text 3.",
+# ]
 ```
 
 To compute input feedback for several examples, compose the transforms:

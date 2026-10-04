@@ -38,7 +38,7 @@ def label(topic: str) -> str:
     return "Prompt: " + prompt
 
 
-ir = af.trace(label)("DNA")
+ir = af.trace(label)("topic text")
 ```
 
 The IR which traces this function contains the following list of equations (logically speaking):

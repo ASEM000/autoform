@@ -69,9 +69,9 @@ module = Explainer(
     style="style instructions",
     model=MODEL,
 )
-ir = af.trace(run)(module, "recursion")
+ir = af.trace(run)(module, "topic text")
 
-print(ir.call(module, "memoization"))
+print(ir.call(module, "another topic text"))
 ```
 
 Note that it’s important to pass the `module` as an input: if `run` instead closed over module, then the fields of module would get fixed at trace time, and transforms wouldn’t receive any inputs shaped like module.
@@ -88,7 +88,7 @@ modules = Explainer(
     style=["style instructions 1", "style instructions 2"],
     model=MODEL,
 )
-topics = ["recursion", "memoization"]
+topics = ["topic text 1", "topic text 2"]
 
 print(batched.call(modules, topics))
 ```
@@ -99,7 +99,7 @@ and batch only the topic input:
 
 ```python
 batched_topics = af.batch(ir, in_axes=(False, True))
-topics = ["recursion", "memoization"]
+topics = ["topic text 1", "topic text 2"]
 
 print(batched_topics.call(module, topics))
 ```
@@ -112,7 +112,7 @@ Similarly, {py:func}`pullback <autoform.pullback>` will return feedback with the
 pb_ir = af.pullback(ir)
 feedback = "answer feedback"
 output, (module_feedback, topic_feedback) = pb_ir.call(
-    (module, "recursion"),
+    (module, "topic text"),
     feedback,
 )
 

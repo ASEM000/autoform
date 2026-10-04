@@ -30,7 +30,7 @@ def label(kind: str, text: str) -> str:
 
 
 ir = af.trace(label, static=(True, False))("short", "seed")
-assert ir.call("short", "DNA") == "Short: DNA"
+assert ir.call("short", "topic text") == "Short: topic text"
 ```
 
 The value of the static input is recorded in the trace, and must be the same on subsequent calls.
@@ -64,7 +64,7 @@ def routed(kind: str, text: str) -> str:
 
 
 ir = af.trace(routed)("short", "seed")
-assert ir.call("long", "DNA") == "Long: DNA"
+assert ir.call("long", "topic text") == "Long: topic text"
 ```
 
 ## Runtime Loops
@@ -129,9 +129,9 @@ def inspectable(text: str) -> str:
 
 ir = af.trace(inspectable)("seed")
 with af.collect(collection="debug") as captured:
-    ir.call("recursion")
+    ir.call("topic text")
 
-assert captured["prompt"] == ["Explain recursion"]
+assert captured["prompt"] == ["Explain topic text"]
 ```
 
 ## Closures and Mutation

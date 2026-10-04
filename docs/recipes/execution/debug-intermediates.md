@@ -35,9 +35,9 @@ def draft_answer(topic: str) -> str:
     return af.lm.fill(content, model=model)["answer"]
 
 
-ir = af.trace(draft_answer)("recursion")
+ir = af.trace(draft_answer)("topic text")
 with af.collect(collection="debug") as captured:
-    result = ir.call("recursion")
+    result = ir.call("topic text")
 
 print(result)
 print(captured["outline"])
@@ -55,7 +55,7 @@ replacements = {
     "draft": ["replacement draft"],
 }
 with af.inject(collection="debug", values=replacements):
-    result = ir.call("recursion")
+    result = ir.call("topic text")
 print(result)
 ```
 

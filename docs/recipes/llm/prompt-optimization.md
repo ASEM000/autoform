@@ -23,7 +23,7 @@ To make the instruction an input at runtime, keep the topic fixed:
 import autoform as af
 
 model = "model-name"
-topic = "recursion"
+topic = "topic text"
 
 
 def answer(instruction: str) -> str:

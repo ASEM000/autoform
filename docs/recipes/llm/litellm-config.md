@@ -34,15 +34,15 @@ def explain(topic: str) -> str:
     return af.lm.fill(content, model="docs-model")["answer"]
 
 
-ir = af.trace(explain)("recursion")
+ir = af.trace(explain)("topic text")
 with af.lm.client(router):
-    output = ir.call("recursion")
+    output = ir.call("topic text")
 print(output)
 ```
 
 Replace `"model-name"` with the provider route. Keep `"docs-model"` as the alias used by the program.
 The router resolves the alias when the IR runs; ordinary tracing makes no model request.
-The output is an explanation of recursion from the configured route.
+The output is an explanation of the supplied topic from the configured route.
 
 ## Client Interface
 
