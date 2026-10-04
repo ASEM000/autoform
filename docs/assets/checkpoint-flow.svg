@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 30.5rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="checkpoint-flow-title checkpoint-flow-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="304.93pt" height="135.48pt" viewBox="0 0 304.93 135.48">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="checkpoint-flow-title checkpoint-flow-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="304.93pt" height="135.48pt" viewBox="0 0 304.93 135.48">
 <title id="checkpoint-flow-title">Capture or replace a checkpointed value</title>
 <desc id="checkpoint-flow-desc">The producer still runs. Collect captures its checkpointed value; inject replaces the value passed to downstream equations.</desc>
 <defs>

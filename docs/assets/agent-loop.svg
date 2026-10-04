@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 28.9rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="agent-loop-title agent-loop-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="288.89pt" height="307.86pt" viewBox="0 0 288.89 307.86">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="agent-loop-title agent-loop-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="288.89pt" height="307.86pt" viewBox="0 0 288.89 307.86">
 <title id="agent-loop-title">A tool-use agent updates its loop state</title>
 <desc id="agent-loop-desc">The bounded loop calls the model while state.active is true. Search updates history and keeps the state active. Done sets the result and makes the state inactive. Termination returns state.result.</desc>
 <defs>

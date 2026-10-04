@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 39rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="grading-program-title grading-program-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="382.1pt" height="172.67pt" viewBox="0 0 382.1 172.67">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="grading-program-title grading-program-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="382.1pt" height="172.67pt" viewBox="0 0 382.1 172.67">
 <title id="grading-program-title">The original grading program</title>
 <desc id="grading-program-desc">A language model scores an example using a text rubric. A numerical scale multiplies the score before the squared error loss. Blue arrows carry numbers; purple arrows carry text. The example and target are omitted.</desc>
 <defs>

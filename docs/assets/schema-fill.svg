@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 30.8rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="schema-fill-title schema-fill-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="308.4pt" height="111.82pt" viewBox="0 0 308.4 111.82">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="schema-fill-title schema-fill-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="308.4pt" height="111.82pt" viewBox="0 0 308.4 111.82">
 <title id="schema-fill-title">Fill preserves context and replaces specifications</title>
 <desc id="schema-fill-desc">The topic context remains unchanged. The answer Str specification becomes text and the score Float specification becomes a number, in the same dictionary structure.</desc>
 <defs>

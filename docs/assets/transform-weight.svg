@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 32rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-weight-title transform-weight-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="224.94pt" height="128.4pt" viewBox="0 0 224.94 128.4">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-weight-title transform-weight-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="224.94pt" height="128.4pt" viewBox="0 0 224.94 128.4">
 <title id="transform-weight-title">Weight adds a path-weight output</title>
 <desc id="transform-weight-desc">The original IR maps inputs to an output. Weight preserves these inputs and the original output and adds the product of weights from factor calls reached during execution.</desc>
 <defs>

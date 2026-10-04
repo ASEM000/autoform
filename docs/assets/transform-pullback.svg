@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 32rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-pullback-title transform-pullback-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="250.3pt" height="128.4pt" viewBox="0 0 250.3 128.4">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-pullback-title transform-pullback-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="250.3pt" height="128.4pt" viewBox="0 0 250.3 128.4">
 <title id="transform-pullback-title">Pullback adds backward feedback channels</title>
 <desc id="transform-pullback-desc">The original IR maps inputs to an output. Pullback keeps this forward path and adds output feedback entering from the right and input feedback leaving on the left.</desc>
 <defs>

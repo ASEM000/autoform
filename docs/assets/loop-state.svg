@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 30.3rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="loop-state-title loop-state-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="302.82pt" height="150.62pt" viewBox="0 0 302.82 150.62">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="loop-state-title loop-state-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="302.82pt" height="150.62pt" viewBox="0 0 302.82 150.62">
 <title id="loop-state-title">A bounded loop carries state between iterations</title>
 <desc id="loop-state-desc">The condition and iteration limit determine whether to run the body. The body returns the next state, and termination returns the final state.</desc>
 <defs>

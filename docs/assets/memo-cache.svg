@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 36.0rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="memo-cache-title memo-cache-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="360.2pt" height="163.81pt" viewBox="0 0 360.2 163.81">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="memo-cache-title memo-cache-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="360.2pt" height="163.81pt" viewBox="0 0 360.2 163.81">
 <title id="memo-cache-title">A memoized primitive call can reuse a cached result</title>
 <desc id="memo-cache-desc">Within a memoize context, an eligible primitive call looks up its primitive identity, input values, and parameters. A hit reuses the result; a miss runs the primitive and stores its result.</desc>
 <defs>

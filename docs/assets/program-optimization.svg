@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 34rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="program-optimization-title program-optimization-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="328.19pt" height="106.03pt" viewBox="0 0 328.19 106.03">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="program-optimization-title program-optimization-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="328.19pt" height="106.03pt" viewBox="0 0 328.19 106.03">
 <title id="program-optimization-title">Program optimization built on autoform</title>
 <desc id="program-optimization-desc">Spaces and operation rules support program transformations within autoform. These transformations support an optimization method.</desc>
 <defs>

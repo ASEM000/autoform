@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 36.8rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="human-review-title human-review-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="368.09pt" height="82.86pt" viewBox="0 0 368.09 82.86">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="human-review-title human-review-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="368.09pt" height="82.86pt" viewBox="0 0 368.09 82.86">
 <title id="human-review-title">Human review belongs to the walk runner</title>
 <desc id="human-review-desc">At a tagged review point, the runner passes the equation output to human review, then sends the accepted or edited value into the walk generator before the next equation runs.</desc>
 <defs>

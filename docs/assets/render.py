@@ -24,12 +24,10 @@ def render(source):
         text = text.replace(f'#{identifier}"', f'#{source.stem}-{identifier}"')
         text = text.replace(f"#{identifier})", f"#{source.stem}-{identifier})")
     text = text.replace("rgb(0%, 0%, 0%)", "currentColor")
-    view_width = float(re.search(r'viewBox="0 0 ([\d.]+)', text).group(1))
-    width = metadata.get("width", f"{min(42, view_width / 10):.1f}rem")
     title_id = source.stem + "-title"
     desc_id = source.stem + "-desc"
     attributes = (
-        f'style="display: block; width: min(100%, {width}); '
+        'style="display: block; width: 100%; '
         'height: auto; margin: 1.5rem auto;" role="img" '
         f'aria-labelledby="{title_id} {desc_id}" '
     )

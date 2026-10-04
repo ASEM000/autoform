@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 32.6rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="concurrent-calls-title concurrent-calls-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="325.71pt" height="125.33pt" viewBox="0 0 325.71 125.33">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="concurrent-calls-title concurrent-calls-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="325.71pt" height="125.33pt" viewBox="0 0 325.71 125.33">
 <title id="concurrent-calls-title">Independent model calls join before the final call</title>
 <desc id="concurrent-calls-desc">A topic feeds independent summary and analogy calls. Both results are required before the combined-answer call can run.</desc>
 <defs>

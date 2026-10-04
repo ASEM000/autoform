@@ -1,4 +1,4 @@
-<svg style="display: block; width: min(100%, 30rem); height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-batch-title transform-batch-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240.2pt" height="91.28pt" viewBox="0 0 240.2 91.28">
+<svg style="display: block; width: 100%; height: auto; margin: 1.5rem auto;" role="img" aria-labelledby="transform-batch-title transform-batch-desc" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240.2pt" height="91.28pt" viewBox="0 0 240.2 91.28">
 <title id="transform-batch-title">Batch adds a batch dimension to an IR</title>
 <desc id="transform-batch-desc">Batch transforms one IR into an IR with batched inputs and outputs. Stacked boxes depict the batch dimension, not separate IR objects.</desc>
 <defs>
