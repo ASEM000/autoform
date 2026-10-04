@@ -8,18 +8,6 @@ An [IR](the-ir.md) transform can be thought of as a function that looks like thi
 
 The result of the transform is itself an IR that can be executed. The result can also serve as input to another transform, allowing composition. This composition happens through regular Python function calls, but is constrained by the rules of the different operations.
 
-The transforms have the following call shapes:
-
-| Transform | Returned IR expects | Returned IR produces | Use when |
-| --- | --- | --- | --- |
-| {py:func}`batch <autoform.batch>` | Batched leaves where `in_axes=True`; broadcast leaves where `in_axes=False`. | Batched outputs. | Run the same program over many examples. |
-| {py:func}`pushforward <autoform.pushforward>` | Original inputs plus input tangents. | Original output plus output tangent. | Push a proposed input change forward. |
-| {py:func}`pullback <autoform.pullback>` | Original inputs plus feedback on the output. | Original output plus input feedback. | Turn output critique into prompt/input critique. |
-| {py:func}`sched <autoform.sched>` | The same inputs as `ir`. | The same output as `ir`. | Overlap independent equations during async execution. |
-| {py:func}`dce <autoform.dce>` | The same inputs as `ir`. | The selected output shape, with unused leaves removed or replaced. | Drop work that cannot affect the needed outputs. |
-| {py:func}`weight <autoform.weight>` | The same inputs as `ir`. | `(output, path_weight)`. | Score one concrete path with reached `factor` calls. |
-
-
 The code fragments use this one-input program:
 
 ```python
@@ -39,6 +27,10 @@ ir = af.trace(label)("topic text")
 
 `````{tab-item} batch
 
+```{raw} html
+:file: ../assets/transform-batch.svg
+```
+
 ```text
 batch(ir, /, *, in_axes=True) -> IR
 ```
@@ -57,6 +49,10 @@ outputs = batched.call(["topic text 1", "topic text 2", "topic text 3"])
 
 `````{tab-item} pushforward
 
+```{raw} html
+:file: ../assets/transform-pushforward.svg
+```
+
 ```text
 pushforward(ir, /) -> IR
 ```
@@ -72,6 +68,10 @@ output, tangent = pf.call(("topic",), ("input change",))
 
 `````{tab-item} pullback
 
+```{raw} html
+:file: ../assets/transform-pullback.svg
+```
+
 ```text
 pullback(ir, /) -> IR
 ```
@@ -86,6 +86,10 @@ output, input_feedback = pb.call(("topic",), "output feedback")
 `````
 
 `````{tab-item} sched
+
+```{raw} html
+:file: ../assets/transform-sched.svg
+```
 
 ```text
 sched(ir, /, *, cond=None) -> IR
@@ -105,6 +109,10 @@ result = asyncio.run(scheduled.acall("topic"))
 `````
 
 `````{tab-item} weight
+
+```{raw} html
+:file: ../assets/transform-weight.svg
+```
 
 ```text
 weight(ir, /) -> IR
@@ -126,6 +134,10 @@ output, path_weight = scored.call("topic", 0.8)
 `````
 
 `````{tab-item} dce
+
+```{raw} html
+:file: ../assets/transform-dce.svg
+```
 
 ```text
 dce(ir, /, *, out_used=None) -> IR
@@ -163,10 +175,10 @@ However, the order matters, because now the program that receives the feedback o
 
 | Expression | Meaning |
 | --- | --- |
-| `batch(pullback(ir))` | Run many independent pullback calls at once. Each input pairs with its own output feedback. |
-| `pullback(batch(ir))` | Treat the whole batched function as the program receiving feedback. The cotangent matches the batched output. |
-| `batch(weight(ir))` | Score many candidate paths separately. The result contains one weight per candidate. |
-| `weight(batch(ir))` | Score one batched path. Reached factors across the batched execution multiply into one weight. |
+| `batch(pullback(ir))` | Runs a separate pullback for each batch item, with its own output feedback. |
+| `pullback(batch(ir))` | Takes the pullback of the whole batched program. Feedback has the same structure as the batched output. |
+| `batch(weight(ir))` | Runs a weighted program with a separate path weight for each batch item. |
+| `weight(batch(ir))` | Runs a batched program with one path weight: the product of all reached factors in the batch. |
 
 Trying to perform AD around the function `weight(ir)` with `pullback(weight(ir))` or `pushforward(weight(ir))` will result in an error. If this is the semantics that one wants, then the path scoring should be applied after the AD.
 

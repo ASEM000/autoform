@@ -1,0 +1,14 @@
+% title: The original grading program
+% description: A language model scores an example using a text rubric. A numerical scale multiplies the score before the squared error loss. Blue arrows carry numbers; purple arrows carry text. The example and target are omitted.
+% width: 39rem
+% variants: dark
+\documentclass[tikz,border=5pt]{standalone}
+\input{parts/grading-diagram.tex}
+\begin{document}
+\begin{tikzpicture}
+    \node[note, anchor=west] at (-1.3,2.7) {Original program};
+    \draw[line width=0.8pt] (-1.3,-1.7) rectangle (11.8,2.5);
+    \gradingprogram{0}
+    \forwardlegend{-2.55}
+\end{tikzpicture}
+\end{document}

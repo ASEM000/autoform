@@ -1,0 +1,30 @@
+% title: Pullback adds backward feedback channels
+% description: The original IR maps inputs to an output. Pullback keeps this forward path and adds output feedback entering from the right and input feedback leaving on the left.
+% width: 32rem
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=2cm, align=center},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    note/.style={font=\small, align=center},
+]
+
+    \node[box] (original) at (3, 0) {IR};
+    \node (inputs) at (0, 0) {Inputs};
+    \node (output) at (6, 0) {Output};
+    \draw[flow] (inputs) -- (original);
+    \draw[flow] (original) -- (output);
+    \node[box, minimum height=1.5cm] (new) at (3, -3) {Feedback IR};
+    \draw[flow] (original.south) -- node[right, note] {\texttt{pullback}} (new.north);
+    \node (newin) at (0, -2.55) {Inputs};
+    \node[note] (changein) at (0, -3.45) {Input feedback};
+    \node (newout) at (6, -2.55) {Output};
+    \node[note] (changeout) at (6, -3.45) {Output feedback};
+    \draw[flow] (newin.east) -- ([yshift=0.45cm]new.west);
+    \draw[flow] ([yshift=0.45cm]new.east) -- (newout.west);
+    \draw[flow, dashed] (changeout.west) -- ([yshift=-0.45cm]new.east);
+    \draw[flow, dashed] ([yshift=-0.45cm]new.west) -- (changein.east);
+\end{tikzpicture}
+\end{document}

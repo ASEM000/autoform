@@ -12,6 +12,7 @@ def render(source):
         subprocess.run(
             ["tectonic", "--only-cached", "--outdir", directory, str(source)],
             check=True,
+            cwd=source.parent,
         )
         pdf = Path(directory, source.stem + ".pdf")
         svg = pdf.with_suffix(".svg")
@@ -41,6 +42,10 @@ def render(source):
         + text[start:]
     )
     source.with_suffix(".svg").write_text(text)
+    if metadata.get("variants") == "dark":
+        source.with_name(source.stem + "-dark.svg").write_text(
+            text.replace("currentColor", "#cfd0d0")
+        )
     print("Rendered", source.name, flush=True)
 
 

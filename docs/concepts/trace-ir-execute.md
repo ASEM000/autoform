@@ -15,7 +15,7 @@ import autoform as af
 
 
 def label(topic: str) -> str:
-    prompt = "Explain " + topic + "."
+    prompt = "Explain " + topic
     return "Prompt: " + prompt
 
 
@@ -41,8 +41,7 @@ The example above records this logical structure:
 ```text
 input: topic
 equations:
-  head = concat("Explain ", topic)
-  prompt = concat(head, ".")
+  prompt = concat("Explain ", topic)
   output = concat("Prompt: ", prompt)
 output: output
 ```
@@ -50,11 +49,9 @@ output: output
 Read it as data flow:
 
 - `topic` is the runtime input;
-- the first two {py:func}`concat <autoform.string.concat>` equations build `prompt`;
-- the third adds the `"Prompt: "` prefix;
+- the first {py:func}`concat <autoform.string.concat>` equation builds `prompt`;
+- the second adds the `"Prompt: "` prefix;
 - `output` is the returned value.
-
-Notice that the call to {py:func}`fill <autoform.lm.fill>` was recorded as an equation, rather than executed and calling out to a language model provider at trace time.
 
 ## Execute
 
@@ -63,7 +60,7 @@ IRs can be executed synchronously with the `.call(...)` method.
 ```python
 output = ir.call("another topic text")
 print(output)
-# Prompt: Explain another topic text.
+# Prompt: Explain another topic text
 ```
 
 At runtime, the input `"another topic text"` is provided, and then the equations are walked and each primitive is dispatched to the appropriate implementation rule.
@@ -75,7 +72,7 @@ import asyncio
 
 output = asyncio.run(ir.acall("another topic text"))
 print(output)
-# Prompt: Explain another topic text.
+# Prompt: Explain another topic text
 ```
 
 The original function was not written as `async def`. Execution mode is chosen at the call site.
@@ -90,9 +87,9 @@ batched = af.batch(ir)
 outputs = batched.call(["topic text 1", "topic text 2", "topic text 3"])
 print(outputs)
 # [
-#     "Prompt: Explain topic text 1.",
-#     "Prompt: Explain topic text 2.",
-#     "Prompt: Explain topic text 3.",
+#     "Prompt: Explain topic text 1",
+#     "Prompt: Explain topic text 2",
+#     "Prompt: Explain topic text 3",
 # ]
 ```
 

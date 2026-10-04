@@ -4,11 +4,11 @@
 \usetikzlibrary{arrows.meta,shapes.geometric}
 \begin{document}
 \begin{tikzpicture}[
-    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
                 minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
     note/.style={font=\small, align=center},
-    choice/.style={diamond, draw, line width=0.5pt,
+    choice/.style={diamond, draw, line width=0.8pt,
                    aspect=2, inner sep=2pt, align=center},
 ]
 
@@ -28,8 +28,8 @@
     \draw[flow] (tool) -- node[above,sloped,note] {search} (search);
     \draw[flow] (tool) -- node[above,sloped,note] {done} (done);
     \coordinate (updated) at (0,-6.3);
-    \draw (search.south) |- (updated);
-    \draw (done.south) |- (updated);
+    \draw[line width=0.9pt] (search.south) |- (updated);
+    \draw[line width=0.9pt] (done.south) |- (updated);
     \draw[flow] (updated) -- (-4.1,-6.3) -- (-4.1,2) -- (state.west);
     \node[note] at (0,-6.7) {Updated state; \texttt{max\_iters=4}};
 

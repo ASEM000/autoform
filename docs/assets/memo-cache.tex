@@ -4,11 +4,11 @@
 \usetikzlibrary{arrows.meta,shapes.geometric}
 \begin{document}
 \begin{tikzpicture}[
-    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
                 minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
     note/.style={font=\small, align=center},
-    choice/.style={diamond, draw, line width=0.5pt,
+    choice/.style={diamond, draw, line width=0.8pt,
                    aspect=2, inner sep=2pt, align=center},
 ]
 
@@ -23,7 +23,7 @@
     \draw[flow] (reuse) -- (out);
     \draw[flow] (run) -- (out);
     \node[note] at (3.6,-2.6) {Cache key: primitive, inputs, parameters};
-    \draw[dashed,line width=0.4pt] (2.1,-2) rectangle (8.7,2);
+    \draw[dashed,line width=0.7pt] (2.1,-2) rectangle (8.7,2);
     \node[note] at (5.4,2.35) {\texttt{memoize} context};
 
 \end{tikzpicture}

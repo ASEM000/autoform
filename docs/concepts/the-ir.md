@@ -34,7 +34,7 @@ import autoform as af
 
 
 def label(topic: str) -> str:
-    prompt = "Explain " + topic + "."
+    prompt = "Explain " + topic
     return "Prompt: " + prompt
 
 
@@ -46,16 +46,19 @@ The IR which traces this function contains the following list of equations (logi
 ```text
 input: topic
 equations:
-  head = concat("Explain ", topic)
-  prompt = concat(head, ".")
+  prompt = concat("Explain ", topic)
   output = concat("Prompt: ", prompt)
 output: output
 ```
 
 The equations express the data flow of the function:
 
+```{raw} html
+:file: ../assets/ir-dataflow.svg
+```
+
 - `topic` is the runtime input.
-- The first two {py:func}`concat <autoform.string.concat>` equations build `prompt`, one for each `+`.
+- The first {py:func}`concat <autoform.string.concat>` equation builds `prompt`.
 - {py:func}`concat <autoform.string.concat>` consumes the literal `"Prompt: "` and `prompt`, then produces `output`.
 - `output` is the function output.
 

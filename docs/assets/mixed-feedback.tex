@@ -1,0 +1,15 @@
+% title: Pullback adds reverse feedback to the grading program
+% description: Pullback transforms the original program into a feedback program. Solid arrows carry forward values, and dashed arrows return feedback. Blue arrows carry numerical gradients; purple arrows carry text feedback for the rubric. The reference example and target are fixed.
+% width: 39rem
+% variants: dark
+\documentclass[tikz,border=5pt]{standalone}
+\input{parts/grading-diagram.tex}
+\begin{document}
+\begin{tikzpicture}
+    \node[box, minimum width=3cm] (original) at (5.25,4) {Original program};
+    \draw[flow] (original.south) -- node[right, note] {pullback} (5.25,2.5);
+    \node[note, anchor=west] at (-1.3,2.7) {Feedback program};
+    \feedbackcopy
+    \feedbacklegend{-2.55}
+\end{tikzpicture}
+\end{document}

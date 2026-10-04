@@ -6,6 +6,10 @@ Primitives are named operations that are recorded in the [IR](the-ir.md) rather 
 
 ## Rule Registries
 
+```{raw} html
+:file: ../assets/primitive-rules.svg
+```
+
 A primitive can have separate rules for execution, tracing, and each transform. Extension authors register these rules through `autoform.extend`; the internal registries are:
 
 - `impl_rules`: concrete execution.
