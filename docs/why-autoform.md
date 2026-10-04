@@ -44,7 +44,7 @@ An update operation revises the summary based on the feedback. An extension defi
 
 Different spaces can coexist in one program. In the [example on the home page](index.md), a text rubric and a numerical scale contribute to the same loss. Their cotangent types are different: textual feedback for the rubric and a numerical gradient for the scale. A single {py:func}`pullback <autoform.pullback>` handles both through the registered operation rules. Each input is then updated according to its feedback type.
 
-## Composing transforms
+## Transform Composition
 
 There are two levels of composition in `autoform` : operations can be composed into programs, and transforms can be composed. When a transform is applied to a program, it returns an intermediate representation (IR) that can be transformed again.
 

@@ -221,12 +221,3 @@ The same Python function can be run either synchronously, with `ir.call(...)`, o
 ## More
 
 For more on the types, operations, feedback rules, and transforms, see the [concepts guide](concepts/index.md). For more examples of how these pieces can be combined, see the [recipes](recipes/index.md).
-
-If looking for something specific, some useful pages include:
-
-| Task | Page |
-| --- | --- |
-| Update prompts from feedback | [Prompt Optimization](recipes/llm/prompt-optimization.md) |
-| Add custom types and operations | [Extending `autoform`](recipes/extending/index.md) |
-| Inspect or replace intermediate values | [Intercepts](concepts/intercepts.md) |
-| Find call signatures | [API Reference](api/index.md) |

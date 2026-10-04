@@ -121,5 +121,3 @@ The Python function stays the same in both modes. Independent equations can over
 - Python `if` on a traced value: use {py:func}`switch <autoform.switch>` for runtime decisions. If the branch should be fixed while tracing, mark the controlling input {ref}`static <static-and-dynamic-inputs>` or use {ref}`fold <trace-time-decisions>`.
 - Loops with runtime-dependent length: use {py:func}`while_loop <autoform.while_loop>`; ordinary Python loops are only appropriate when the iteration structure is known at trace time.
 - Mutating closure state: pass state through the function inputs and outputs instead, preferably as registered [pytrees](pytrees.md) for structured state.
-
-Next, read [The IR](the-ir.md) for the IR structure in more detail.

@@ -69,10 +69,10 @@ getting-started
 :hidden:
 
 concepts/programs
-concepts/values
 concepts/tracing
 concepts/transforms-and-rules
 concepts/execution
+concepts/values
 concepts/control-flow-and-scoring
 ```
 

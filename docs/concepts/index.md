@@ -12,11 +12,6 @@ Pages describing how `autoform` records, transforms, and runs programs, as well 
 - [The IR](the-ir.md)
 - [Primitives](primitives.md)
 
-## Values
-
-- [Pytrees](pytrees.md)
-- [Schemas](schemas.md)
-
 ## Tracing
 
 - [Tracing Semantics](tracing-semantics.md)
@@ -34,6 +29,11 @@ Pages describing how `autoform` records, transforms, and runs programs, as well 
 - [Walk](walk.md)
 - [Memoization](memoize.md)
 - [Path Weights](path-weights.md)
+
+## Values
+
+- [Pytrees](pytrees.md)
+- [Schemas](schemas.md)
 
 ## Control Flow
 
