@@ -12,7 +12,12 @@
 :end-before: "## More"
 ```
 
-Model calls require [provider credentials](getting-started.md).
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls.
+Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
+Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
+Replace labels such as `"answer instructions"` with text for the task.
+```
 
 ## Documentation
 

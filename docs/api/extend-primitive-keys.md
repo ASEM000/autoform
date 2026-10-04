@@ -1,5 +1,7 @@
 # Primitive Keys
 
+Primitive instances are the keys used by rule registries. Register rules against these exported instances; creating another primitive with the same name creates a different key.
+
 ```{eval-rst}
 .. autodata:: autoform.string.concat_p
 .. autodata:: autoform.string.match_p
@@ -14,15 +16,14 @@
 .. autodata:: autoform.numeric.le_p
 .. autodata:: autoform.numeric.gt_p
 .. autodata:: autoform.numeric.ge_p
-.. autodata:: autoform.json.encode_p
-.. autodata:: autoform.json.decode_p
-.. autodata:: autoform.lm.complete_p
-.. autodata:: autoform.lm.generate_p
 .. autodata:: autoform.lm.fill_p
 .. autodata:: autoform.intercept.checkpoint_p
 .. autodata:: autoform.control.stop_gradient_p
 .. autodata:: autoform.control.switch_p
 .. autodata:: autoform.control.while_loop_p
+.. autodata:: autoform.control.fixpoint_p
+.. autodata:: autoform.path.factor_p
+.. autodata:: autoform.path.weight_call_p
 .. autodata:: autoform.order.fanout_p
 .. autodata:: autoform.order.depends_p
 .. autodata:: autoform.axis.batch_call_p

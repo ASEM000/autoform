@@ -1,20 +1,21 @@
 # Types
 
-## Abstract Values
+These classes describe runtime values, primitive keys, equations, and interpreters. Extension authors use these classes to define behavior for new types and operations.
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal
-   :members: zero, accum
+   :members: check, zero, accum
 .. autoclass:: autoform.string.StrAVal
 .. autoclass:: autoform.numeric.IntAVal
 .. autoclass:: autoform.numeric.FloatAVal
 .. autoclass:: autoform.numeric.BoolAVal
-.. autoclass:: autoform.json.JsonAVal
 ```
 
 ## Primitives
 
 ```{eval-rst}
+.. autoclass:: autoform.extend.Rule
+   :members: set, get
 .. autoclass:: autoform.extend.Prim
 .. autoclass:: autoform.extend.Zero
 ```

@@ -1,7 +1,6 @@
 # Execution Policies
 
-Use these recipes when the traced program is fixed, but the execution policy
-changes.
+Recipes for inspecting intermediate values, adding human review, caching, and dead code removal.
 
 ```{toctree}
 :maxdepth: 2

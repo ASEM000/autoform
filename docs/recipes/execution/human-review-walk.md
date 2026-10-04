@@ -1,8 +1,4 @@
-# Add Human Feedback with Walk
-
-AutoForm is a small, low-level library; it does not prescribe an approval UI,
-review queue, or feedback service. The core idea is that human feedback can be
-an executor policy over traced primitive equations.
+# Human Review
 
 Use `ir.walk(...)` when human feedback belongs to the executor rather than the
 traced program. Tags mark which primitive equations require review; the walk
@@ -40,29 +36,28 @@ ir = af.trace(draft_then_finalize)("topic x")
 The tag is attached to equations emitted during tracing. It does not change the
 primitive result or execution order by itself.
 
-## Ask for Feedback
+## Feedback Function
 
-The feedback function can block on user input. Returning the original value
-accepts it; returning a different value patches what downstream equations see.
+A feedback function can accept the draft or return an edited value for downstream equations:
 
 ```python
 def ask_for_feedback(draft: str) -> str:
-    print("review output:")
+    print("Output for review:")
     print(draft)
-    note = input("feedback, or empty to accept: ")
+    note = input("Feedback (leave empty to accept): ")
     if not note:
         return draft
-    return draft + "\nhuman feedback: " + note
+    return draft + "\nHuman feedback: " + note
 ```
 
 The pause happens at `input(...)`. The runner decides when to call this
 function.
 
-## Pause on Tagged Equations
+## Runner
 
 The runner executes one equation at a time. When a yielded equation has the
 review tag, it passes the equation output to `feedback(...)` before sending it
-back into the generator.
+back into the generator:
 
 ```python
 def run_with_human_feedback(ir, *args, tag: str, feedback):
@@ -83,9 +78,9 @@ def run_with_human_feedback(ir, *args, tag: str, feedback):
 The pause happens before `gen.send(...)`. Execution continues only after the
 runner sends the accepted or edited output back to the walk generator.
 
-## Run the Reviewed Program
+## Execution
 
-Call the runner with the traced IR and the feedback function:
+Finally, run the program by calling the runner with the IR and the feedback function:
 
 ```python
 result = run_with_human_feedback(
@@ -101,9 +96,6 @@ print(result)
 Execution resumes after `run_with_human_feedback(...)` sends the accepted or
 edited value back to the walk generator.
 
-## Choose the Review Boundary
+## Review Boundary
 
-Use {py:func}`checkpoint <autoform.checkpoint>` and
-{py:func}`inject <autoform.inject>` when the traced function should expose named
-review points. Use `ir.walk(...)` when the review policy belongs to a custom
-runner and should stay outside the traced function.
+{py:func}`checkpoint <autoform.checkpoint>` and {py:func}`inject <autoform.inject>` should be used when review points need to be specified within the traced function. `ir.walk(...)` should be used when the review policy will be specified within a custom runner, and should not be specified in the traced function.

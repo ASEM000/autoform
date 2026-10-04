@@ -6,17 +6,11 @@
 Use this when manual equation stepping is needed for debugging, visualization, or a custom runner. For ordinary execution, prefer `ir.call(...)` or `await ir.acall(...)`.
 ```
 
-## Manual Execution
-
 `ir.walk(...)` is the manual execution interface on the object returned by {py:func}`trace <autoform.trace>`. It exposes the same equation stream that `.call(...)` and `.acall(...)` execute.
 
-## Use Cases
+## Generator
 
-It is useful for debuggers, visualizers, custom runners, or test harnesses that need to observe or replace individual equation results. For ordinary execution, use `ir.call(...)` or `await ir.acall(...)`.
-
-## Generator Contract
-
-`ir.walk(*inputs)` returns a generator:
+The function `ir.walk(*inputs)` returns a generator:
 
 | Step | Action | Result |
 | --- | --- | --- |
@@ -26,7 +20,9 @@ It is useful for debuggers, visualizers, custom runners, or test harnesses that 
 
 Each yielded equation carries its primitive and parameters. The concrete input values have the same pytree shape as that equation's inputs.
 
-## Minimal Example
+## Example
+
+To run each equation, and send the result back into the generator, simply do:
 
 ```python
 import autoform as af
@@ -63,12 +59,8 @@ assert eqn is None
 assert output == "[world!]"
 ```
 
-`eqn.bind(...)` runs the primitive's synchronous implementation for that one equation. Async runners can use `await eqn.abind(...)` instead.
+Here `eqn.bind(...)` runs the synchronous implementation of the primitive for that equation. If the runner is asynchronous, then `await eqn.abind(...)` should be used instead.
 
-## Non-Goals
+## Execution Boundary
 
-`walk` is not an IR transform. It does not take an IR and return another IR.
-
-`walk` is not a context manager. It does not wrap trace-time or execution-time behavior around a block.
-
-It is an advanced execution interface for the traced object. The built-in `.call(...)` and `.acall(...)` methods use the same stepping model.
+The runner controls execution one equation at a time. It must send a value with the expected type and container structure before continuing. The built-in `.call(...)` and `.acall(...)` methods handle this sequence automatically.

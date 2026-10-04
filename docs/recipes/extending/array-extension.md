@@ -1,4 +1,4 @@
-# Build an Array Extension
+# Array Extension
 
 ```{admonition} Advanced
 :class: info
@@ -7,15 +7,9 @@ This recipe uses `autoform.extend`, the low-level extension API. Use it when a
 runtime value type should become part of the traced IR system.
 ```
 
-`autoform` starts with text-space programs, but the extension API lets other
-feedback spaces participate in the same IR machinery. A richer extension can
-also define boundaries where spaces meet, for example turning textual feedback
-into numerical cotangents, or summarizing numerical signals back into text-space
-feedback.
+To add support for a new array type in the tracing and transformations, one needs to register an abstract value type and a set of rules for operating on those values. Here’s a recipe that demonstrates how to add support for NumPy arrays, using numerical arrays for tangents and cotangents.
 
-Arrays are not built in. This recipe uses NumPy as the concrete runtime, but the
-same extension pattern applies to any value space that can define trace-time
-avals, zeros, cotangent accumulation, and primitive rules.
+Arrays are not a built-in feature, so this is a recipe. It uses NumPy arrays as a concrete runtime, but could be adapted to other types by providing different implementations of abstract value types, zero creation, feedback accumulation, primitive rules, etc.
 
 ```{admonition} Concept
 [Primitives](../../concepts/primitives.md) · [Transforms](../../concepts/transforms.md) ·
@@ -26,7 +20,9 @@ This example keeps arrays as atomic leaves. The {py:func}`batch <autoform.batch>
 example batches over a Python list of arrays, not over the leading axis of one
 stacked array.
 
-## Define the Array Domain
+## Abstract Value
+
+Describe an array by its shape and dtype:
 
 ```python
 import functools as ft
@@ -48,7 +44,11 @@ class ArrayAVal(afe.AVal):
         return f"ArrayAVal(shape={self.shape!r}, dtype={self.dtype!r})"
 
     def __eq__(self, other):
-        return type(self) is type(other) and self.shape == other.shape and self.dtype == other.dtype
+        return (
+            type(self) is type(other)
+            and self.shape == other.shape
+            and self.dtype == other.dtype
+        )
 
     def __hash__(self):
         return hash((type(self), self.shape, self.dtype.str))
@@ -65,6 +65,7 @@ def aval_rule(value):
 
 
 afe.register_trace_type(np.ndarray, aval_rule)
+afe.primal_s.set(ArrayAVal, lambda aval: aval)
 afe.tangent_s.set(ArrayAVal, lambda aval: aval)
 afe.cotangent_s.set(ArrayAVal, lambda aval: aval)
 ```
@@ -74,10 +75,10 @@ primitive rules need: shape and dtype. The `zero()` method constructs a zero
 array with that shape and dtype. The `accum()` method combines feedback
 contributions for array leaves.
 
-## Register Binary Array Primitives
+## Operation Rules
 
 Each primitive needs rules for ordinary execution, abstraction, forward-mode AD,
-reverse-mode AD, and batching.
+reverse-mode AD, and batching. The following helper registers those rules for one binary operation:
 
 ```python
 def array_aval(value):
@@ -87,7 +88,10 @@ def array_aval(value):
 def result_aval(x, y, op):
     ax = array_aval(x)
     ay = array_aval(y)
-    result = op(np.ones(ax.shape, dtype=ax.dtype), np.ones(ay.shape, dtype=ay.dtype))
+    result = op(
+        np.ones(ax.shape, dtype=ax.dtype),
+        np.ones(ay.shape, dtype=ay.dtype),
+    )
     return ArrayAVal(result.shape, result.dtype)
 
 
@@ -140,7 +144,9 @@ The `bind` wrapper is the function traced programs call. During tracing it
 stages a primitive equation; during execution the registered implementation rule
 receives real NumPy arrays.
 
-## Add Operators
+## Operators
+
+Register arithmetic and matrix multiplication, then connect these operations to Python operators:
 
 ```python
 a_add = register_binary(
@@ -191,7 +197,9 @@ The final registrations connect traced Python syntax to the primitives through
 one dunder rule table. For example, `x + y` stages `a_add` when `x` has
 `ArrayAVal`.
 
-## Use the Extension
+## Execution and AD
+
+Check the output and derivatives of a two-input program:
 
 ```python
 def f(x, y):
@@ -204,7 +212,10 @@ ir = af.trace(f)(x, y)
 
 np.testing.assert_allclose(ir.call(x, y), f(x, y))
 
-p_out, t_out = af.pushforward(ir).call((x, y), (np.ones_like(x), np.zeros_like(y)))
+p_out, t_out = af.pushforward(ir).call(
+    (x, y),
+    (np.ones_like(x), np.zeros_like(y)),
+)
 np.testing.assert_allclose(p_out, f(x, y))
 np.testing.assert_allclose(t_out, -y * y / (x * x))
 
@@ -215,7 +226,7 @@ np.testing.assert_allclose(dy, (x + 2 * y) / x)
 ```
 
 Batching uses an outer Python batch container. Each element is still a NumPy
-array leaf.
+array leaf:
 
 ```python
 batched = af.batch(ir, in_axes=(True, True))
@@ -242,7 +253,4 @@ np.testing.assert_allclose(da, np.ones((2, 2)) @ b.T)
 np.testing.assert_allclose(db, a.T @ np.ones((2, 2)))
 ```
 
-This is intentionally not a full NumPy backend. Broadcasting pullbacks,
-reductions, dtype policy, scalar promotion, and stacked-array batch semantics
-need additional rules. The point of the recipe is the extension shape: define an
-aval, register value behavior, define primitives, then attach transform rules.
+This example is limited to floating-point arrays of the same shape, and two-dimensional matrix multiplications. One would need to register additional rules to handle broadcasting in pullback, reduction operations, dtype polymorphism and scalar promotion, to define batch semantics over stacked arrays rather than lists of arrays, etc. But regardless of the details of those rules, the rules would be registered in the same order as here: first an abstract value type, then rules for manipulating those values, then some primitives, and finally rules for transforming those primitives.

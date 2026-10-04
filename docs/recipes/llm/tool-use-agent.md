@@ -1,9 +1,16 @@
-# Build a Tool-Use Agent
+# Tool-Use Agent
 
-Build an agent as one traced function, then use [IR transforms](../../concepts/transforms.md) around it. The agent below can ask for a search observation, finish with `done`, keep its loop state in a registered [pytree](../../concepts/pytrees.md), and run tool calls through async primitive rules.
+Build an agent as one traced function, then use [IR transforms](../../concepts/transforms.md) around it. The agent below can ask for a search observation, finish with `done`, keep its loop state in a registered [pytree](../../concepts/pytrees.md), and run tool calls through async primitive rules. It uses `httpx` for the Wikipedia request. Model and HTTP requests occur when the agent executes.
 
 ```{admonition} Concept
 [Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md) · [Schemas](../../concepts/schemas.md) · [Primitives](../../concepts/primitives.md)
+```
+
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls.
+Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
+Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
+Replace labels such as `"answer instructions"` with text for the task.
 ```
 
 ```{mermaid}
@@ -18,7 +25,9 @@ flowchart TD
     should_continue -- "no" --> result
 ```
 
-## Build the Agent
+## Agent
+
+Register the tool operation, trace its branches, and carry the decision through a bounded loop:
 
 ```python
 import asyncio
@@ -28,6 +37,8 @@ from urllib.parse import urlencode
 import httpx
 import autoform as af
 import autoform.extend as afe
+
+model = "model-name"
 
 
 # decision is the structured output returned by the lm
@@ -48,13 +59,13 @@ class State:
 
 # build the schema as a value-shaped instance
 decision_schema = Decision(
-    tool=af.Enum(
+    tool=af.lm.Enum(
         "search",
         "done",
-        desc="Use search if history has no search line. Use done if it does.",
+        desc="Select done after a search result; otherwise select search.",
     ),
-    args=af.Str(desc="Search query when tool is search. Empty when tool is done."),
-    answer=af.Str(desc="Final answer when tool is done. Empty when tool is search."),
+    args=af.lm.Str(desc="Search query; empty for done."),
+    answer=af.lm.Str(desc="Final answer; empty for search."),
 )
 
 
@@ -85,7 +96,10 @@ def format_wikipedia_response(payload) -> str:
     pages = payload.get("query", {}).get("pages", {})
     rows = [
         f"{page.get('title', 'Untitled')}: {page.get('extract', 'No extract.')}"
-        for page in sorted(pages.values(), key=lambda page: page.get("index", 0))
+        for page in sorted(
+            pages.values(),
+            key=lambda page: page.get("index", 0),
+        )
     ]
     return "\n".join(rows) or "No results."
 
@@ -114,7 +128,9 @@ async def abatch_wikipedia_search(in_tree, /):
     if not query_axis:
         return await wikipedia_search_p.abind(queries), False
 
-    results = await asyncio.gather(*(wikipedia_search_p.abind(query) for query in queries))
+    results = await asyncio.gather(
+        *(wikipedia_search_p.abind(query) for query in queries)
+    )
     return list(results), True
 
 
@@ -164,15 +180,30 @@ def should_continue(state: State) -> bool:
 
 
 def step(state: State) -> State:
-    system = "If the history contains a line that starts with search, choose done. Otherwise choose search."
-    user = "Question and history:\n" + state.history
-    messages = [dict(role="system", content=system), dict(role="user", content=user)]
-    decision = af.lm.generate(messages, model="gpt-5.5", schema=decision_schema)
-    history = af.switch(decision.tool, tool_branches, decision.args, decision.answer, state.history)
-    return State(history=history, result=decision.answer, active=decision.tool == "search")
+    system = "Select done after a search result; otherwise select search."
+    messages = [
+        dict(role="system", content=system),
+        dict(role="user", content="Question and history:\n" + state.history),
+    ]
+    decision = af.lm.fill(
+        dict(context=messages, output=decision_schema),
+        model=model,
+    )["output"]
+    history = af.switch(
+        decision.tool,
+        tool_branches,
+        decision.args,
+        decision.answer,
+        state.history,
+    )
+    return State(
+        history=history,
+        result=decision.answer,
+        active=decision.tool == "search",
+    )
 
 
-example = State(history="Question: What is recursion?", result="", active=True)
+example = State(history="Question: question text", result="", active=True)
 
 # while_loop takes traced condition and body programs
 cond_ir = af.trace(should_continue)(example)
@@ -188,45 +219,44 @@ def agent(question: str) -> str:
 
 
 # trace the whole agent once, then execute with a real question
-agent_ir = af.trace(agent)("What is recursion?")
-answer = asyncio.run(agent_ir.acall("What is recursion?"))
+agent_ir = af.trace(agent)("question text")
+answer = asyncio.run(agent_ir.acall("question text"))
 print(answer)
 ```
 
 The provider decides which branch to run by returning a [`Decision` schema value](../../concepts/schemas.md). {py:func}`switch <autoform.switch>` dispatches to the traced tool branch at execution time, and the selected branch appends to the history. {py:func}`while_loop <autoform.while_loop>` keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
 
-`wikipedia_search` is a [primitive](../../concepts/primitives.md) written with the same pattern as [Write a Primitive](../extending/writing-primitives.md). The HTTP call stays in the async runtime implementation, while the abstract, {py:func}`batch <autoform.batch>`, and {py:func}`pullback <autoform.pullback>` rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
+`wikipedia_search` is a [primitive](../../concepts/primitives.md) written with the same pattern as [Primitive Definitions](../extending/writing-primitives.md). The HTTP call stays in the async runtime implementation, while the abstract, {py:func}`batch <autoform.batch>`, and {py:func}`pullback <autoform.pullback>` rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
 
-## Transform the Agent
+## Transforms
 
-The agent is still one IR:
+Batch the agent IR to answer several questions:
 
 ```python
 # batch runs the same agent ir over many questions
-questions = ["What is recursion?", "What is memoization?"]
+questions = ["question text 1", "question text 2"]
 answers = asyncio.run(af.batch(agent_ir).acall(questions))
 ```
 
-Feedback can flow through the full loop:
+Compute question feedback through the executed loop:
 
 ```python
 # pullback turns output feedback into question feedback
 pb_agent = af.pullback(agent_ir)
-answer, (question_hint,) = asyncio.run(pb_agent.acall(("What is recursion?",), "too vague"))
+answer, (question_hint,) = asyncio.run(
+    pb_agent.acall(("question text",), "answer feedback")
+)
 ```
 
 For real tools, keep the branch signature stable: each branch here is `(query, answer, history) -> history`.
 
-## Sync Rules
+## Synchronous Execution
 
-The async and sync registries are independent. To support `.call(...)` for the
-same primitive, add sync counterparts with the same input and output shapes:
+Note that the async and sync registries are independent. To also allow the primitive to be called with `.call(...)`, sync counterparts must be added with the same input/output shapes.
 
 - `afe.register_impl(wikipedia_search_p, impl_wikipedia_search)`;
 - `afe.register_batch(wikipedia_search_p, batch_wikipedia_search)`;
 - `afe.register_pullback_fwd(wikipedia_search_p, pull_fwd_wikipedia_search)`;
 - `afe.register_pullback_bwd(wikipedia_search_p, pull_bwd_wikipedia_search)`.
 
-The sync HTTP implementation can use `httpx.get(...)` or `httpx.Client`. The
-async implementation above uses `httpx.AsyncClient` so `.acall(...)` can overlap
-independent tool calls.
+Note that the sync case uses `httpx.get(...)` or `httpx.Client` while the async case uses `httpx.AsyncClient` in order to allow for overlapping independent tool calls with `.acall(...)`.

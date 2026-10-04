@@ -1,6 +1,6 @@
-# Extending AutoForm
+# Extending `autoform`
 
-Use these recipes for new primitives, custom rules, and extension packages.
+These recipes show how to use `autoform.extend` to add new types, operations, transforms, and execution policies. The recipes are intended for readers who are already familiar with tracing and some of the built-in transforms.
 
 ```{toctree}
 :maxdepth: 2

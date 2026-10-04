@@ -6,19 +6,19 @@
 Use custom rules when a traceable function boundary needs transform-specific behavior. Most functions should rely on the default behavior, where transforms trace through the function body.
 ```
 
-Most functions do not need custom rules. The default [transform](transforms.md) behavior traces through the function body and applies [primitive](primitives.md) rules inside it.
+Custom rules let a [transform](transforms.md) use a domain-specific rule for a traceable function. Without a custom rule, the transform uses the [primitive](primitives.md) rules in the function body.
 
-The wrapped function body must still be traceable. Use {py:func}`custom <autoform.custom>` for a boundary around traceable `autoform` code. Use [Write a Primitive](../recipes/extending/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
+The wrapped function body must still be traceable. Use {py:func}`custom <autoform.custom>` for a boundary around traceable `autoform` code. Use [Primitive Definitions](../recipes/extending/writing-primitives.md) for runtime work such as HTTP calls, database lookups, or libraries that require concrete Python values.
 
-Reach for {py:func}`custom <autoform.custom>` when one of these applies:
+Use {py:func}`custom <autoform.custom>` when one of these applies:
 
 - a sub-function should be treated as an atomic boundary by a transform;
 - a domain-specific rule is more correct than the default decomposition;
 - a domain-specific rule is more efficient than tracing through the body.
 
-## Mental Model
+## Function Boundaries
 
-{py:func}`custom <autoform.custom>` is a decorator on a traceable Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule.
+{py:func}`custom <autoform.custom>` is a decorator on a traceable Python function. It wraps the function as a primitive-like boundary. Direct calls still behave like the original function, but [transforms](transforms.md) can stop at that boundary and use a registered rule. Mark a function boundary with the decorator:
 
 ```python
 import autoform as af
@@ -31,7 +31,9 @@ def bracket(text: str) -> str:
 
 With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform to override.
 
-## {py:func}`pushforward <autoform.pushforward>` Rule
+## Pushforward Rule
+
+Define how input changes affect the bracketed result:
 
 ```python
 @bracket.set_pushforward
@@ -53,7 +55,9 @@ assert tangent == "bracket change: make it direct"
 The pushforward rule receives `(primals, tangents)` and returns
 `(primal_output, tangent_output)`.
 
-## {py:func}`pullback <autoform.pullback>` Rule
+## Pullback Rule
+
+Define how output feedback becomes feedback for the original text:
 
 ```python
 @bracket.set_pullback
@@ -75,7 +79,9 @@ assert text_feedback == "too decorated via [hello] from hello"
 The pullback rule receives `((primals, output), feedback)` and returns
 feedback with the same shape as the original inputs.
 
-## {py:func}`batch <autoform.batch>` Rule
+## Batch Rule
+
+Define the behavior for a batch of texts:
 
 ```python
 @bracket.set_batch
@@ -111,4 +117,4 @@ Sync and async registrations are independent. If only `set_batch` is registered,
 
 ## Rule Correctness
 
-A custom rule is trusted. If the rule returns the wrong structure, wrong axes, or wrong cotangents, the transformed IR is wrong. Use custom rules for traceable subprogram boundaries, not as a general extension point for ordinary application code.
+Transforms will trust that the rules provided are correct. It is possible to provide rules that are structurally correct but do not provide the correct feedback or result when used in a transform. Custom rules should be used to indicate boundaries between traceable subprograms. Custom rules should not be used as a general purpose extension point.

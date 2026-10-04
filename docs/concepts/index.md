@@ -1,6 +1,6 @@
 # Concepts
 
-These pages explain the mental model behind `autoform`: trace once, transform the IR, then execute it sync or async.
+Pages describing how `autoform` records, transforms, and runs programs, as well as how types and operation rules are used to define the behavior of a transform.
 
 ```{toctree}
 :maxdepth: 2

@@ -1,4 +1,4 @@
-# Write a Primitive
+# Primitive Definitions
 
 ```{admonition} Advanced
 :class: info
@@ -8,7 +8,13 @@
 
 A primitive is the right boundary for runtime work that needs concrete values: HTTP calls, retrieval systems, databases, calculators, or libraries that cannot run on traced placeholders. The function wrapper stays small; the behavior lives in registered rules.
 
-## Minimal Shape
+```{admonition} Concept
+[Primitives](../../concepts/primitives.md) · [Transforms](../../concepts/transforms.md)
+```
+
+## Execution and Tracing
+
+Define a wrapper and register its concrete and abstract rules:
 
 ```python
 import autoform as af
@@ -43,25 +49,29 @@ The wrapper `lookup(...)` is what traced programs call. During tracing, `lookup_
 
 The abstract rule runs at trace time. It must return the output shape and abstract value without calling the runtime implementation. Built-in scalar outputs use explicit avals such as `af.string.StrAVal()`, `af.numeric.IntAVal()`, `af.numeric.FloatAVal()`, and `af.numeric.BoolAVal()`.
 
-For new runtime value types, define an `afe.AVal` subclass that carries the abstract metadata you need, then register the trace type:
+In order to allow a new runtime type to be used, one needs to define the abstract value type for this runtime type and register the mapping from concrete to abstract values:
 
 ```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    text: str
+
+
 class SearchResultAVal(afe.AVal):
-    __slots__ = ["fields"]
-
-    def __init__(self, fields: tuple[str, ...]):
-        self.fields = fields
+    __slots__ = []
 
 
-afe.register_trace_type(
-    SearchResult,
-    lambda value: SearchResultAVal(tuple(value.fields)),
-)
+afe.register_trace_type(SearchResult, lambda value: SearchResultAVal())
 ```
 
-This allows values of the Python type to enter `af.trace` and teaches `avalof(...)` how to infer their abstract value.
+Registration lets the type enter {py:func}`trace <autoform.trace>` as a dynamic leaf. Add primal, tangent, and cotangent space mappings for the transforms it should support. See [Array Extension](array-extension.md) for a type with shape metadata and AD rules.
 
-## Rules by Phase
+## Rules
+
+Each registry has a separate purpose:
 
 | Registry | Purpose |
 | --- | --- |
@@ -75,6 +85,8 @@ This allows values of the Python type to enter `af.trace` and teaches `avalof(..
 Register only the behavior the primitive needs. Applying a transform that reaches a primitive without the matching rule raises an error from the rule registry.
 
 ## Batch Rule
+
+Handle a batch of queries or one shared query:
 
 ```python
 def batch_lookup(in_tree, /):
@@ -99,6 +111,8 @@ The batch rule receives the batch size, the input axes, and the input values. It
 
 ## Pullback Rule
 
+Keep the query and result as residuals for the backward rule:
+
 ```python
 def pull_fwd_lookup(query: str, /):
     output = lookup_p.bind(query)
@@ -107,7 +121,14 @@ def pull_fwd_lookup(query: str, /):
 
 def pull_bwd_lookup(in_tree, /):
     (query, output), feedback = in_tree
-    return "Improve query '" + query + "'. Feedback: " + feedback + ". Result: " + output
+    return (
+        "Improve query '"
+        + query
+        + "'. Feedback: "
+        + feedback
+        + ". Result: "
+        + output
+    )
 
 
 afe.register_pullback_fwd(lookup_p, pull_fwd_lookup)
@@ -117,7 +138,8 @@ afe.register_pullback_bwd(lookup_p, pull_bwd_lookup)
 output, (query_feedback,) = af.pullback(ir).call(("recursion",), "too broad")
 assert output == "result for recursion"
 assert (
-    query_feedback == "Improve query 'recursion'. Feedback: too broad. Result: result for recursion"
+    query_feedback == "Improve query 'recursion'. Feedback: too broad. "
+    "Result: result for recursion"
 )
 ```
 

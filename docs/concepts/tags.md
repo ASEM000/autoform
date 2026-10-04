@@ -1,6 +1,6 @@
 # Tags
 
-Tags attach metadata to IR equations while tracing. They do not change execution by themselves; they give later code a way to recognize equations that belong to a logical region.
+Tags are simply metadata that is traced along with the IR equations of a program. Tags are used to select a certain part of the program for schedulers/runners etc. but have no inherent effect on the execution.
 
 Pass any hashable value to {py:func}`tag <autoform.tag>`:
 
@@ -24,18 +24,18 @@ assert draft not in ir.eqns[1].tags
 
 Nested tag blocks accumulate tags. Code outside the block does not receive the tags from the block.
 
-## Scheduling Tags
+## Scheduling
 
-{py:func}`sched <autoform.sched>` accepts a `cond` callback that receives each IR equation. Tags give that callback a stable way to select only part of a traced program.
+{py:func}`sched <autoform.sched>` accepts a `cond` callback that receives each IR equation. Use a tag to select equations for scheduling:
 
 ```python
 scheduled = af.sched(ir, cond=lambda eqn: draft in eqn.tags)
 assert scheduled.call("world") == "[world!]"
 ```
 
-## Walk Tags
+## Manual Execution
 
-[Walk](walk.md) steps through an IR equation by equation. Tags are available on each yielded equation, so a debugger or custom runner can act on tagged regions without guessing from primitive names or source order.
+[Walk](walk.md) steps through an IR equation by equation. Tags are available on each yielded equation, so a debugger or custom runner can act on tagged regions using the metadata recorded on each equation:
 
 ```python
 def run_and_record_tagged_prims(ir, text: str):
@@ -60,9 +60,9 @@ assert tagged_prims == ["concat"]
 
 ## Hashable Values
 
-{py:func}`tag <autoform.tag>` asserts that every tag value is hashable because equation tags are stored in a `frozenset`. Strings, integers, tuples of hashable values, and other immutable identifiers work.
+The {py:func}`tag <autoform.tag>` function asserts that the tag is hashable, because it is stored with each equation in a `frozenset`. Often, simple strings, integers, tuples of other hashable things etc. are enough to tag parts of a program.
 
-For structured tags, use a hashable object directly. A frozen dataclass is usually the most convenient payload:
+However, if more complex tag information is needed, any hashable object can be used. Usually, a frozen dataclass is the easiest way to create such a payload:
 
 ```python
 from dataclasses import dataclass

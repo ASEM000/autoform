@@ -1,141 +1,85 @@
-# Specialize a Program with Static Context
+# Static Context
 
-Use {py:func}`fold <autoform.fold>` when a structured LM call should run while
-tracing and produce configuration for later dynamic inputs. This recipe builds
-a domain-specific rewriter: the domain is fixed at trace time, and each draft
-is supplied at execution time.
+A domain guide can be generated once and reused to rewrite many drafts.
+{py:func}`fold <autoform.fold>` runs the guide-generation call while tracing and embeds the result in the IR.
+Later executions generate only the rewritten draft.
 
 ```{admonition} Concept
 [Fold](../../concepts/fold.md) · [Tracing Semantics](../../concepts/tracing-semantics.md) · [Schemas](../../concepts/schemas.md)
 ```
 
-## Trace-Time and Runtime
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls.
+Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
+Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
+Replace labels such as `"answer instructions"` with text for the task.
+```
 
-Tracing and execution happen at different times:
+## Program
 
-- Trace-time: {py:func}`trace <autoform.trace>` runs the Python function once
-  to build an IR. Static inputs are concrete during this run. Work inside
-  {py:func}`fold <autoform.fold>` also runs during this phase, so its result is
-  embedded in the IR.
-- Runtime: `.call(...)` or `.acall(...)` runs the traced IR with real dynamic
-  inputs. Dynamic inputs replace the example values used for tracing. Folded
-  work does not run again.
-
-In this recipe, the domain and model are trace-time context. The draft is
-runtime data.
-
-## Build the Program
-
-The first schema call creates a domain guide. It runs inside
-{py:func}`fold <autoform.fold>`, so the guide becomes a concrete value in the
-traced program. The second schema call runs later and consumes the dynamic
-draft.
+Generate a guide from the fixed domain, then use it with the runtime draft:
 
 ```python
 import autoform as af
 
 
-guide_schema = dict(
-    audience=af.Str(),
-    terms=[af.Str(), af.Str(), af.Str()],
-    rule=af.Str(),
-)
-
-rewrite_schema = dict(text=af.Str())
-
-
-def rewrite_for_domain(domain: str, model: str, draft: str) -> dict[str, str]:
-    # trace-time: build a domain guide once and embed it in the ir.
+def rewrite_for_domain(domain: str, model: str, draft: str) -> str:
     with af.fold():
-        guide_messages = [
-            dict(role="system", content="Derive a formal policy for the selected topic."),
-            dict(role="user", content=domain),
-        ]
-        guide = af.lm.generate(
-            guide_messages,
-            model=model,
-            schema=guide_schema,
+        content = dict(
+            domain=domain,
+            guide=af.lm.Str(desc="style guide instructions"),
         )
-
-    # runtime: rewrite each draft using the guide embedded above.
-    system = (
-        f"Audience: {guide['audience']}\n"
-        f"Preferred terms: {', '.join(guide['terms'])}\n"
-        f"Rule: {guide['rule']}"
+        guide = af.lm.fill(content, model=model)["guide"]
+    content = dict(
+        guide=guide,
+        draft=draft,
+        text=af.lm.Str(desc="rewrite instructions"),
     )
-    draft_prompt = "Apply the topic policy to statement S:\n" + draft
-    rewrite_messages = [
-        dict(role="system", content=system),
-        dict(role="user", content=draft_prompt),
-    ]
-    return af.lm.generate(
-        rewrite_messages,
-        model=model,
-        schema=rewrite_schema,
-    )
+    return af.lm.fill(content, model=model)["text"]
 ```
 
-## Trace with Static Context
-
-Mark the domain and model static, and the draft dynamic:
+Folded work requires concrete inputs. Mark the domain and model static while keeping the draft dynamic:
 
 ```python
-# trace-time: the static domain and model specialize the ir.
-ir = af.trace(rewrite_for_domain, static=(True, True, False))("topic x", "gpt-5.5", "seed draft")
-
-# runtime: the same ir can run on new drafts.
-result = ir.call("topic x", "gpt-5.5", "method A maps input x to output y under constraint C")
-
-print(result["text"])
+model = "model-name"
+ir = af.trace(rewrite_for_domain, static=(True, True, False))(
+    "technical documentation",
+    model,
+    "draft text",
+)
+result = ir.call("technical documentation", model, "draft text")
+print(result)
 ```
 
-The folded schema call executes during tracing. Later calls only execute the
-second schema call because the domain guide is already embedded in the IR.
+Tracing makes the first model request. The resulting IR contains the generated guide as a literal.
+Each execution uses that guide to rewrite its draft.
 
-## Changing Static Context Requires Retracing
+## Static Inputs
 
-The IR is specialized to the domain and model used during tracing. The same IR
-can run with many drafts, but calling it with different static context is
-invalid:
+Later calls must pass the same domain and model. This call raises `AssertionError: Static input mismatch`:
 
 ```python
-ir.call("topic y", "gpt-5.5", "method A maps input x to output y under constraint C")
+ir.call("another domain", model, "draft text")
 ```
 
-Expected error:
+To change a static input, trace the function again.
 
-```text
-AssertionError: Static input mismatch
-```
+## Closure
 
-This catches accidental reuse of an IR specialized for one domain or model as
-if it were specialized for another.
-
-## Compile a Rewriter for One Domain
-
-When the domain and model are compile-time configuration, capture them before
-tracing so callers only pass the draft:
+If callers should pass only the draft, capture the domain and model before tracing:
 
 ```python
 def compile_rewriter(domain: str, model: str):
-    def rewrite(draft: str) -> dict[str, str]:
+    def rewrite(draft: str) -> str:
         return rewrite_for_domain(domain, model, draft)
 
-    # trace-time: domain and model are captured by the closure.
-    return af.trace(rewrite)("seed draft")
+    return af.trace(rewrite)("draft text")
 
 
-rewrite_topic_x = compile_rewriter("topic x", "gpt-5.5")
-
-# runtime: callers only pass the draft.
-result = rewrite_topic_x.call("procedure P estimates parameter theta from observations z")
+rewriter = compile_rewriter("technical documentation", model)
+print(rewriter.call("draft text"))
 ```
 
-The closure version has one runtime input: `draft`. There is no domain or model
-argument to pass incorrectly. To change either value, compile another IR.
-
-- Use `static=(True, True, False)` when the fixed values should stay visible in
-  the traced signature. Runtime calls still pass `domain`, `model`, and
-  `draft`; a different static value raises `Static input mismatch`.
-- Use a closure when the fixed value is compile-time configuration. Runtime
-  calls only pass `draft`; changing the domain or model requires retracing.
+The closure and static-input forms both specialize the IR.
+The closure form removes the fixed configuration from the call signature.
+Creating another rewriter makes another guide-generation request.

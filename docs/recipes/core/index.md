@@ -1,7 +1,6 @@
-# Core Program Patterns
+# Core Programs
 
-Use these recipes for traced Python programs, pytrees, batching, control flow,
-and dependency-aware execution.
+Pages describing how to use common program patterns with `autoform`, including tracing python programs, working with pytrees, batching, control flow, and running programs concurrently.
 
 ```{toctree}
 :maxdepth: 2

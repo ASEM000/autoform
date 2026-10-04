@@ -1,9 +1,6 @@
-# Define a Custom Interpreter
+# Custom Interpreters
 
-A custom interpreter is an execution-time layer around primitive dispatch. Use
-one when a program should keep the same traced function and IR, but execution
-needs an extra policy such as recording, routing, blocking, or modifying
-primitive calls.
+Custom interpreters provide a way to add an execution-time layer in between dispatching a primitive. A custom interpreter adds an execution policy while preserving the traced function and IR.
 
 ```{admonition} Advanced
 :class: info
@@ -18,9 +15,9 @@ execution, transforms, and public context managers first.
 [Walk](../../concepts/walk.md)
 ```
 
-## Trace a Program Once
+## Program
 
-Trace the program once. The interpreter is installed later, around execution.
+Trace a program whose draft operations are tagged:
 
 ```python
 from contextlib import contextmanager
@@ -40,13 +37,13 @@ def program(topic: str) -> str:
 ir = af.trace(program)("topic x")
 ```
 
-## Define the Interpreter
+## Dispatch
 
 Store the current interpreter as `parent`, then delegate to it from
 `interpret(...)` and `ainterpret(...)`. The example below records primitive
 outputs, but the same shape can route, block, or modify primitive dispatch.
 
-An interpreter method receives one primitive call:
+Each method of an interpreter will be passed a single primitive call.
 
 | Name | Meaning |
 | --- | --- |
@@ -58,15 +55,10 @@ The method must return the primitive output. Calling `self.parent.interpret(...)
 runs the next interpreter in the stack. If there is no custom parent, the default
 interpreter reaches the registered implementation rule.
 
-The parent is captured before the custom interpreter is installed. This gives
-the custom interpreter a place to delegate the actual primitive call. Calling
-`prim.bind(...)` from inside `interpret(...)` would dispatch to the active
-interpreter again, which is the same custom interpreter, causing recursive
-dispatch instead of execution.
+Capture the parent before installing the custom interpreter. Calling `prim.bind(...)` from `interpret(...)` would dispatch to the same active interpreter again and recurse.
 
 If another interpreter is already active, `parent` points to that interpreter.
-This preserves interpreter stacking: the new policy runs first, then delegates
-to the policy that was active before it.
+Delegation keeps that policy in the dispatch chain:
 
 ```python
 @dataclass(frozen=True)
@@ -104,13 +96,12 @@ class RecordingInterpreter(afe.Interpreter):
         return output
 ```
 
-The sync and async methods are separate because `.call(...)` uses
-`interpret(...)`, while `.acall(...)` uses `ainterpret(...)`.
+Note that the method for each of the sync and async cases must be implemented separately, because `.call(...)` will use `interpret(...)` whereas `.acall(...)` will use `ainterpret(...)`.
 
 Record before delegation when the policy should inspect or reject a call before
 it runs. Record after delegation when the policy needs the produced output.
 
-## Install the Interpreter
+## Context
 
 Use {py:func}`using_interpreter <autoform.extend.using_interpreter>` as a
 temporary execution context:
@@ -129,21 +120,22 @@ print(result)
 print(recorder.records)
 ```
 
-Expected result:
+This will give the following result:
 
 ```text
 draft for topic y.
 [CallRecord(prim_name='concat', tags=frozenset({'draft'}), output='draft for topic y'), CallRecord(prim_name='concat', tags=frozenset(), output='draft for topic y.')]
 ```
 
-The traced function does not change. The IR does not change. Only the execution
-context around `ir.call(...)` changes.
+The records contain the primitive name, tags, and produced value for each executed call. The context restores the previous interpreter when it exits.
 
-## Choose the Boundary
+## Boundary Choice
+
+Choose the API according to the part of execution that needs control:
 
 | Need | Use |
 | --- | --- |
-| Add a runtime operation to the IR | [Write a Primitive](writing-primitives.md) |
+| Add a runtime operation to the IR | [Primitive Definitions](writing-primitives.md) |
 | Customize transform behavior at a traceable helper boundary | {py:func}`custom <autoform.custom>` |
 | Add execution-time policy around primitive dispatch | interpreter |
 | Pause, yield, stream, or replace top-level equation outputs | `ir.walk(...)` |

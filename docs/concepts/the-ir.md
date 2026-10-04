@@ -6,24 +6,26 @@
 This page describes the IR as a concept so transform behavior is easier to reason about. Most code should get an IR from {py:func}`trace <autoform.trace>`, then use public transforms and execution methods rather than constructing internal IR classes directly.
 ```
 
-An `autoform` IR is an equation list. Each equation has this conceptual shape:
+An `autoform` IR is a list of equations. Each equation is conceptually of the form:
 
 ```text
 out_vars = primitive(in_vars; static_params)
 ```
 
-The IR is not Python source and it is not bytecode. It is a small data structure that records the parts of a function that `autoform` can transform and execute later.
+Equations capture individual operations for later execution or transformation. Literal values are stored directly in the IR, variables are values which are provided or calculated at run time.
 
 ## IR Components
 
+An `autoform` IR contains the following:
+
 - input and output trees describe the runtime values entering and leaving the program;
 - equations record one primitive call, its input tree, its output tree, static parameters, and tags;
-- primitive names identify operations such as {py:func}`concat <autoform.string.concat>` and {py:func}`af.lm.complete <autoform.lm.complete>`;
+- primitive keys identify operations such as {py:func}`concat <autoform.string.concat>` and {py:func}`fill <autoform.lm.fill>`;
 - the whole IR is the input tree, the equation list, and the output tree.
 
 Most code should get an IR from {py:func}`trace <autoform.trace>`, transform it, and run it. Direct construction of the internal IR classes is not needed.
 
-## Worked Example
+## Example
 
 Start with a short function:
 
@@ -39,7 +41,7 @@ def label(topic: str) -> str:
 ir = af.trace(label)("DNA")
 ```
 
-The trace contains this logical equation list:
+The IR which traces this function contains the following list of equations (logically speaking):
 
 ```text
 input: topic
@@ -50,37 +52,35 @@ equations:
 output: output
 ```
 
-Read it left to right:
+The equations express the data flow of the function:
 
 - `topic` is the runtime input.
 - The first two {py:func}`concat <autoform.string.concat>` equations build `prompt`, one for each `+`.
 - {py:func}`concat <autoform.string.concat>` consumes the literal `"Prompt: "` and `prompt`, then produces `output`.
 - `output` is the function output.
 
-Literal values can appear directly in an equation. Runtime values are represented
-by placeholders until execution supplies concrete inputs.
+Further, literal values are directly included in the equation, and run-time values are represented as placeholders:
 
 ## IR Operations
 
-Once an IR exists, there are two broad operations:
+An IR supports transformation and execution:
 
-- Transform it: {py:func}`batch <autoform.batch>`, {py:func}`pushforward <autoform.pushforward>`, {py:func}`pullback <autoform.pullback>`, {py:func}`sched <autoform.sched>`, and {py:func}`dce <autoform.dce>` consume an IR and return another IR.
+- Transform it: {py:func}`batch <autoform.batch>`, {py:func}`pushforward <autoform.pushforward>`, {py:func}`pullback <autoform.pullback>`, {py:func}`sched <autoform.sched>`, {py:func}`dce <autoform.dce>`, and {py:func}`weight <autoform.weight>` consume an IR and return another IR.
 - Execute it: `.call(...)` and `.acall(...)` run the equation list with concrete inputs.
 
-That is why the trace/transform/execute split matters. A transform does not need the original Python function. It only needs the equation list.
+Transforms use the recorded operations and registered rules. A transform does not need to run the original Python function again.
 
-## Non-Goals
+## Limits
+
+The operations and registered behavior are:
 
 - It is not a graph database. The main representation is an ordered equation list.
 - It is not Python source. Recovering arbitrary Python syntax from it is not supported.
-- It is not a provider call log. An {py:func}`af.lm.complete <autoform.lm.complete>` is one equation whose implementation runs later.
-- It is not the usual [public API](../api/index.md) for application code. It is the substrate that makes the public transforms compose.
+- It is not a provider call log. An {py:func}`fill <autoform.lm.fill>` is one equation whose implementation runs later.
+- It is not the usual [public API](../api/index.md) for application code. Public transforms operate on it.
 
 ## IR Inspection
 
-For execution-time diagnostics, prefer {py:func}`checkpoint <autoform.checkpoint>` with {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`.
-If an expected operation is missing, the original function probably used
-ordinary Python outside an `autoform` primitive. If an operation is present but
-not used, {py:func}`dce <autoform.dce>` may be able to remove it.
+For diagnostic purposes at execution time, {py:func}`checkpoint <autoform.checkpoint>` can be used in conjunction with {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`. If an expected operation does not appear in the IR, the most likely cause is that the traced function executed plain python code rather than an `autoform` primitive. If an operation appears to not be used, running {py:func}`dce <autoform.dce>` may eliminate it.
 
-The public workflow is still trace, transform, execute. Inspect these internals for debugging, analysis, or transform implementation work.
+While it can be useful to inspect the equation list for debugging, analysis, or implementing a transform, most applications should only need to use the publicly-exposed transforms and execution methods.

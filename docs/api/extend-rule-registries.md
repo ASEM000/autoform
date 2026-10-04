@@ -1,13 +1,6 @@
 # Rule Registration
 
-Register each rule with its corresponding function:
-
-```python
-import autoform.extend as afe
-
-afe.register_impl(primitive, implementation)
-afe.register_abstract(primitive, abstract_rule)
-```
+Register rules for running, abstracting, batching, doing AD, and doing DCE on a primitive. Separate functions for registering sync and async rules.
 
 ```{eval-rst}
 .. autofunction:: autoform.extend.register_impl

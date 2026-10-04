@@ -1,16 +1,10 @@
 # Path Weights
 
-A path is one concrete execution of an IR with particular runtime inputs. If the
-IR contains branches, loops, batched inputs, or LM calls, different inputs can
-reach different equations and produce different intermediate values.
+A *path* is one execution of some IR for some set of inputs at runtime. Inputs can lead to different paths through the IR due to branches, loops, batched inputs, LM calls, etc.
 
-A path weight is an extra scalar carried alongside that execution. It is useful
-when the program output should stay unchanged, but the caller also needs a score
-for the route that produced it. Examples include ranking candidate actions,
-keeping or rejecting generated paths, or attaching evidence scores to outputs.
+A *path weight* is extra information attached to the execution of a path, often used to decide if paths should be kept/rejected, or how good a generated path is, without changing the output of the program itself.
 
-The public primitive that changes this score is {py:func}`factor
-<autoform.factor>`.
+Use {py:func}`factor <autoform.factor>` to contribute a score to the path:
 
 ```python
 import autoform as af
@@ -30,7 +24,7 @@ ir = af.trace(label_path)("p1", 1.0)
 output, path_weight = af.weight(ir).call("p1", 0.9)
 ```
 
-Mathematically, for one concrete execution path `p`:
+Mathematically, for a single path `p` (concrete execution):
 
 ```{math}
 \mathrm{path\_weight}(p) =
@@ -40,6 +34,8 @@ Mathematically, for one concrete execution path `p`:
 That value is the accumulated score for that concrete path.
 
 ## Accumulation
+
+Two reached factors contribute the product of the factor values:
 
 ```python
 def program(x: str, a: float, b: float) -> str:
@@ -67,19 +63,19 @@ same concrete execution path.
 
 ## Batch Path Scoring
 
-Use {py:func}`batch <autoform.batch>` around {py:func}`weight
-<autoform.weight>` when each input path should get its own independent path
-weight:
+To score multiple paths, where each path should start with an independent path weight, wrap the {py:func}`weight
+<autoform.weight>` call in a {py:func}`batch <autoform.batch>` call:
 
 ```python
-scored = af.batch(af.weight(ir), in_axes=(True, True))
+single_factor_ir = af.trace(label_path)("p1", 1.0)
+scored = af.batch(af.weight(single_factor_ir), in_axes=(True, True))
 
 labels = ["p1", "p2"]
 weights = [0.9, 0.2]
 outputs, path_weights = scored.call(labels, weights)
 ```
 
-This is the common shape when several paths should be scored:
+Which is a common pattern for scoring paths.
 
 1. Prepare the batched inputs.
 2. Run `batch(weight(ir))`.
@@ -104,6 +100,8 @@ second value:
 output, path_weight = af.weight(ir).call(...)
 ```
 
+Factors must be finite, non-negative numbers. A zero factor makes the path weight zero; later operations still run.
+
 The returned `path_weight` is an ordinary Python number. Caller code decides what
 to do with it after the IR call returns.
 
@@ -114,7 +112,7 @@ each candidate path as a candidate `x`, and treat each reached `factor` as
 evidence compatibility. Then the path weight can be used as a likelihood-style
 score.
 
-For a small discrete example:
+In probability terms, the variables are:
 
 | Term | Meaning |
 | --- | --- |
@@ -125,8 +123,7 @@ For a small discrete example:
 | Path weight `w(x)` | The value returned by `weight(ir)` for candidate `x`. |
 | Posterior `P(x \| e)` | The normalized result after combining the prior and path weight. |
 
-When each reached `factor` represents calibrated evidence compatibility, the
-path weight can stand in for `L(e | x)`.
+When the product of the factors represents the likelihood of the evidence given the candidate, the path weight can stand in for `L(e | x)`.
 
 For exact enumeration, caller code can compute:
 
@@ -138,17 +135,19 @@ For exact enumeration, caller code can compute:
 P(x \mid e) = \frac{\mathrm{mass}(x)}{\sum_{x'} \mathrm{mass}(x')}
 ```
 
-AutoForm only returns `w(x)`. The prior, aggregation, and normalization stay in
+`autoform` returns `w(x)`. The prior, aggregation, and normalization stay in
 the caller.
 
 The posterior reading depends on the meaning of the factors. If the factors are
 calibrated likelihood terms, the normalized masses have the form of a posterior.
 If the factors are heuristic scores, the same calculation is a normalized
-decision score.
+decision score. Normalization requires a positive total mass.
 
 If candidates are sampled from the prior instead of enumerated once, the prior
 is already represented by sample frequency. In that case, aggregate the returned
 path weights by candidate and normalize those masses.
+
+The candidate source determines how to calculate mass:
 
 | Candidate source | Caller-side mass |
 | --- | --- |

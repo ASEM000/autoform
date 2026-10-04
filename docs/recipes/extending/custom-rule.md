@@ -1,4 +1,4 @@
-# Define a {py:func}`custom <autoform.custom>` Rule
+# Custom Rules
 
 Use {py:func}`custom <autoform.custom>` when a traceable helper function
 should appear as one boundary in the [IR](../../concepts/the-ir.md). Add transform rules for the
@@ -7,6 +7,8 @@ should appear as one boundary in the [IR](../../concepts/the-ir.md). Add transfo
 ```{admonition} Concept
 [Custom Rules](../../concepts/custom-rules.md) · [Transforms](../../concepts/transforms.md) · [Primitives](../../concepts/primitives.md)
 ```
+
+There are three kinds of rules to separately register: forward, backward, and batch.
 
 ```python
 import autoform as af
@@ -90,7 +92,9 @@ Each rule receives one `in_tree` argument:
 For batch, `output_axes` has the same [pytree](../../concepts/pytrees.md) shape as the output and marks which
 output leaves are batched.
 
+The custom batch rule deliberately replaces brackets with angle brackets. A rule that should preserve the primal program would keep the original brackets.
+
 Add only the rules the program needs. If a custom boundary should run under
 scheduled async execution, add the matching async rule. Runtime calls that need
-concrete Python values belong in [Write a Primitive](writing-primitives.md),
+concrete Python values belong in [Primitive Definitions](writing-primitives.md),
 not in function bodies decorated with {py:func}`custom <autoform.custom>`.

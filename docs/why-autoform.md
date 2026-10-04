@@ -17,11 +17,11 @@ To support this, one can use `autoform` ’s extension mechanism to create a doc
 | Value | `Document(sections={"introduction": "...", "methods": "...", "conclusion": "..."})` |
 | Feedback | `Review(comments=[Comment(section="methods", issue="Why not compare to baseline X?", source="peer review"), Comment(section="conclusion", issue="Claim Y is not supported by the results.", source="self review")])` |
 | Zero | `Review(comments=[])` |
-| Accumulate | Combine two reviews, keeping track of which comments came from which review and which section they are associated with. |
+| Accumulate | Combine two reviews, keeping track of which comments came from which review and which section each comment refers to. |
 
 One would then need to define how feedback for these types flows through operations. For example, one may have an operation that assembles sections into a document. The pullback of this operation would take a review of the document and return a review for each section. For the example review above, the pullback might return `Review(comments=[Comment(section="methods", issue="Why not compare to baseline X?", source="peer review")])` for the methods section and `Review(comments=[Comment(section="conclusion", issue="Claim Y is not supported by the results.", source="self review")])` for the conclusion section. One would also need a way to update the sections given the feedback.
 
-This is just an example of how one might want to extend `autoform` . To actually define this extension one needs to register the types and rules for how to accumulate them and how they interact with operations. See Primitives or check out the array extension for an example of how to register these types and rules.
+This is just an example of how one might want to extend `autoform` . To actually define this extension one needs to register the types, feedback accumulation rules, and rules for transforming operations on these types. See Primitives or check out the array extension for an example of how to register these types and rules.
 
 ## Handling mixed types
 

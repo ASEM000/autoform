@@ -1,8 +1,8 @@
 # Getting Started
 
 The examples start with a function that asks a language model to explain a topic.
-They show how to run it on different topics, batch its inputs, and compute feedback.
-They assume familiarity with Python. Run the code blocks in order in the same Python session.
+The examples show how to run the function on different topics, batch its inputs, and compute feedback.
+The examples assume familiarity with Python. Run the code blocks in order in the same Python session.
 
 `autoform` has three main phases: tracing, transforming, and executing. First, trace a program defined as a Python function to get an intermediate representation (IR). Then, transform the IR to produce new IR. Finally, execute the IR.
 

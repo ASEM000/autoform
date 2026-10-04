@@ -1,13 +1,14 @@
-# Vectorize Inputs with `in_axes`
+# Batched Inputs
 
-{py:func}`batch <autoform.batch>` needs to know which inputs are batched and
-which inputs should be reused for every example. That is what `in_axes` describes.
+A batch can vary some inputs while reusing others. Use `in_axes` with {py:func}`batch <autoform.batch>` to select which input leaves vary for each example.
 
 ```{admonition} Concept
 [Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md)
 ```
 
-## Broadcast One Input
+## Shared Input
+
+Reuse one prefix for every topic:
 
 ```python
 import autoform as af
@@ -25,11 +26,12 @@ result = batched.call(["recursion", "gravity", "memoization"], "topic")
 print(result)
 ```
 
-`True` means "this leaf has a batch axis." `False` means "broadcast this leaf."
+The result is `["topic: recursion", "topic: gravity", "topic: memoization"]`.
+`True` marks a batched leaf; `False` reuses the same value for every example.
 
-## Batch a Nested Input
+## Nested Input
 
-`in_axes` can match a nested [pytree](../../concepts/pytrees.md).
+For a dictionary input, keep the instruction shared and batch only the topic:
 
 ```python
 import autoform as af
@@ -39,10 +41,10 @@ def render(request: dict[str, str]) -> str:
     return request["system"] + ": " + request["topic"]
 
 
-# the single function argument is a dict, so the axes sit inside a one-item tuple
-example = {"system": "explain briefly", "topic": "recursion"}
+# a single dict argument needs axes inside a one-item tuple
+example = {"system": "answer instructions", "topic": "recursion"}
 axes = ({"system": False, "topic": True},)
-requests = {"system": "explain briefly", "topic": ["recursion", "gravity"]}
+requests = {"system": "answer instructions", "topic": ["recursion", "gravity"]}
 
 ir = af.trace(render)(example)
 batched = af.batch(ir, in_axes=axes)
@@ -53,7 +55,9 @@ The output batch length is inferred from the batched leaves. All batched leaves
 must agree on length. Broadcast leaves are passed through unchanged to each
 per-example execution.
 
-## Pair Two Batches
+## Paired Inputs
+
+Pair each answer with the rubric at the same position:
 
 ```python
 import autoform as af
@@ -66,11 +70,10 @@ def score(answer: str, rubric: str) -> str:
 # both leaves are batched, so examples are paired by position
 ir = af.trace(score)("a", "r")
 batched = af.batch(ir, in_axes=(True, True))
-answers = ["short answer", "long answer"]
-rubrics = ["prefer detail", "prefer brevity"]
+answers = ["answer text 1", "answer text 2"]
+rubrics = ["rubric instructions 1", "rubric instructions 2"]
 
 print(batched.call(answers, rubrics))
 ```
 
-Use `in_axes=True` when every input leaf is batched. Use an explicit pytree of
-booleans when some leaves should be reused.
+Note that when all leaves of the input will be batched, `in_axes=True` can be used instead of constructing a pytree of booleans. However, when some leaves will be reused, a pytree of booleans must be used to indicate which leaves should be batched.
