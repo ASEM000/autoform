@@ -51,21 +51,29 @@ and numerical gradients for the scale.
 <!-- end grading-program -->
 
 ```python
+from typing import NamedTuple
+
 import autoform as af
 
 # choose a litellm model, e.g. "openai/gpt-5.6"
 model = "model-name"
 
+class Params(NamedTuple):
+    rubric: str
+    scale: float
 
-# score an example and compare the scaled score with its target
-def grading_loss(rubric, scale, example, target):
-    # keep reference data fixed
-    example, target = af.stop_gradient((example, target))
+
+def forward(params, x):
     # a slot that fill asks the lm to supply, constrained to 0 through 10
     score = af.lm.Float(min=0, max=10, desc="grading instructions")
-    content = dict(rubric=rubric, example=example, score=score)
+    content = dict(rubric=params.rubric, example=x, score=score)
     result = af.lm.fill(content, model=model)
-    error = scale * result["score"] - target
+    return params.scale * result["score"]
+
+
+def loss_func(params, x, y):
+    x, y = af.stop_gradient((x, y))
+    error = forward(params, x) - y
     return error * error
 ```
 
@@ -78,13 +86,12 @@ The `pullback` of the scoring program creates a feedback program. It returns bot
 <!-- end mixed-feedback -->
 
 ```python
-# set the text rubric and numerical scale
-rubric = "rubric instructions"
-scale = 0.8
+# set the text and numerical parameters
+params = Params(rubric="rubric instructions", scale=0.8)
 
 # trace the grading program with one example
-sample_inputs = (rubric, scale, "example text", 8.0)
-program = af.trace(grading_loss)(*sample_inputs)
+sample_inputs = (params, "example text", 8.0)
+program = af.trace(loss_func)(*sample_inputs)
 
 # add text feedback for the rubric and gradients for the scale
 feedback_program = af.pullback(program)
@@ -103,18 +110,17 @@ feedback_program = af.pullback(program)
 examples = ["example text 1", "example text 2"]
 targets = [8.0, 6.0]
 
-# share rubric and scale; batch examples and targets
+# share parameters; batch examples and targets
 # the final false shares the loss seed across the batch
-batch_axes = ((False, False, True, True), False)
+batch_axes = ((False, True, True), False)
 batched_feedback = af.batch(feedback_program, in_axes=batch_axes)
 
 # run the feedback program for all examples
-batch_inputs = (rubric, scale, examples, targets)
-losses, input_feedback = batched_feedback.call(batch_inputs, 1.0)
+batch_inputs = (params, examples, targets)
+losses, (params_feedback, _, _) = batched_feedback.call(batch_inputs, 1.0)
 
 # keep rubric feedback and scale gradients
-rubric_feedback, scale_gradients, _, _ = input_feedback
-print(losses, rubric_feedback, scale_gradients)
+print(losses, params_feedback.rubric, params_feedback.scale)
 ```
 
 This example composes transformations on a mixed-type program with a language
