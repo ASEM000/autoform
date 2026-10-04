@@ -15,11 +15,14 @@
 
 </div>
 
-`autoform` is a framework for composable program transformations over user-defined types and operations.
-Users define how feedback passes through operations and combine transformations to build optimization methods.
+`autoform` is an extensible framework for program transformations over user-defined types and operations.
+Rules for individual operations compose to transform entire programs.
+The result can be executed or transformed again.
 
-The project explores how to apply ideas from programming languages, deep learning,
-optimization, and compiler design to text programs.
+Programs can mix text, numbers, and user-defined structures.
+Extensions define how to represent changes or feedback for each type,
+and how transformations handle its operations.
+These building blocks support program optimization and other applications.
 
 ## Installation
 
@@ -31,26 +34,13 @@ pip install git+https://github.com/ASEM000/autoform.git
 
 ## Getting Started
 
-`autoform` has three main pieces: **types**, **operations** on these types, and **transformations** of programs.
+The example optimizes a text rubric and a numerical scale.
+A language model scores an example using the rubric.
+The loss is the squared error between the scaled score and a target.
+A single `pullback` returns textual feedback for the rubric and a numerical gradient for the scale.
 
-The following example optimizes a program with string and numerical inputs.
-It updates a text rubric $r$ and a numerical scale $s$.
-The language model generates a score $\mathrm{LM}(r, x)$ from the rubric $r$ and a fixed example $x$.
-As in regression, the loss is the squared error between the scaled score and a fixed target $y$:
-
-$$
-\mathcal{L}(r, s) = (s \, \mathrm{LM}(r, x) - y)^2.
-$$
-
-With step size $\eta$, update the scale using the gradient for the generated score:
-
-$$
-s \leftarrow s - \eta \, \nabla_s \mathcal{L}(r, s).
-$$
-
-The model updates the rubric using textual feedback from `pullback`.
-Replace `"model-name"` with a LiteLLM model name.
-Replace the example and instruction labels with text for the task.
+Replace `"model-name"` with a LiteLLM model name,
+and replace the example and instruction labels with text for the task.
 
 ```python
 import autoform as af
@@ -95,18 +85,14 @@ print(scale, rubric)
 ## More
 
 The [concepts guide](https://autoform.readthedocs.io/en/latest/concepts/index.html)
-explains types, operations, feedback rules, and program transformations.
-It describes how a Python program is traced into an intermediate representation (IR).
-It then explains how the IR is transformed and executed.
+explains tracing, types, spaces, and transformation rules.
 
 The [recipes](https://autoform.readthedocs.io/en/latest/recipes/index.html)
-show how to combine these pieces for specific tasks.
-Examples cover batching, control flow, prompt optimization, and programs with model and tool calls.
-The examples also show how to inspect execution and add custom types, operations, and feedback rules.
+show batching, control flow, prompt optimization, model and tool calls, and extensions.
 
 ## Citation
 
-Please cite AutoForm in research that uses it:
+Cite `autoform` in research that uses it:
 
 ```bibtex
 @software{autoform,
@@ -120,5 +106,6 @@ Please cite AutoForm in research that uses it:
 }
 ```
 
-> [!WARNING]
+> **Warning**
+>
 > Early development. Expect API changes that break existing code.
