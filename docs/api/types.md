@@ -1,6 +1,6 @@
 # Types
 
-Public constants.
+The package version and pytree namespace are public constants. Use the namespace for both Optree registration and traversal.
 
 ```{eval-rst}
 .. py:data:: autoform.__version__
@@ -14,9 +14,8 @@ Public constants.
    The Optree namespace reserved by ``autoform``.
 ```
 
-Use it anywhere Optree needs the same tree rules as `autoform`: registration and traversal functions such as `tree_map`.
-Use `optree.dataclasses.field(pytree_node=False)` for static metadata fields
-that should not be transform leaves.
+Register a dataclass in the namespace, then use it for traversal:
+Use `optree.dataclasses.field(pytree_node=False)` for fields that remain fixed, such as the model name:
 
 ```python
 import optree
@@ -29,8 +28,10 @@ class State:
     model: str = optree.dataclasses.field(pytree_node=False)
 
 
-state = State(topic="recursion", model="gpt-5.5")
+state = State(topic="topic text", model="model-name")
 upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 ```
+
+As a result, only the `topic` is changed to `"TOPIC TEXT"` while the `model` remains equal to `"model-name"`.
 
 See [Pytrees](../concepts/pytrees.md) for the full pattern.

@@ -1,16 +1,14 @@
 # Tracing Semantics
 
-At trace time, the function runs once with placeholder values for every dynamic input. Operations that hit [`autoform` primitives](primitives.md) are recorded as [IR equations](the-ir.md). Everything else is ordinary Python and runs immediately.
-
-That rule explains most tracing surprises.
+At trace time, the function runs once with placeholder values for every dynamic input. Calls to [`autoform` primitives](primitives.md) are recorded as [IR equations](the-ir.md). Everything else is ordinary Python and runs immediately.
 
 (static-and-dynamic-inputs)=
 ## Static and Dynamic Inputs
 
 The {py:func}`trace <autoform.trace>` API is:
 
-```python
-af.trace(func, /, *, static: Tree[bool] = False)
+```text
+ir = af.trace(func, static=False)(*example_inputs)
 ```
 
 `static` is a bool [pytree](pytrees.md) matching the positional input structure:
@@ -19,9 +17,12 @@ af.trace(func, /, *, static: Tree[bool] = False)
 - `static=True`: every input leaf is fixed at trace time.
 - `static=(True, False)`: for a two-argument function, the first input is static and the second is dynamic.
 
-Use static inputs when ordinary Python control flow should be selected while tracing:
+To select a Python branch while tracing, mark the controlling input static:
 
 ```python
+import autoform as af
+
+
 def label(kind: str, text: str) -> str:
     if kind == "short":
         return "Short: " + text
@@ -29,12 +30,14 @@ def label(kind: str, text: str) -> str:
 
 
 ir = af.trace(label, static=(True, False))("short", "seed")
-assert ir.call("short", "DNA") == "Short: DNA"
+assert ir.call("short", "topic text") == "Short: topic text"
 ```
 
-The static value is part of the trace. Later calls must pass the same static value.
+The value of the static input is recorded in the trace, and must be the same on subsequent calls.
 
 ## Traced Branches
+
+A Python `if` needs a concrete condition. This function cannot be traced with a dynamic `kind`:
 
 ```python
 def bad(kind: str, text: str) -> str:
@@ -46,7 +49,7 @@ def bad(kind: str, text: str) -> str:
 ir = af.trace(bad)("short", "seed")
 ```
 
-The comparison would need a concrete value while tracing. A dynamic input only carries abstract type information.
+The comparison will be recorded, but python can’t pick a branch to follow using the placeholder value.
 
 Use {py:func}`switch <autoform.switch>` when the branch is a runtime decision:
 
@@ -61,10 +64,12 @@ def routed(kind: str, text: str) -> str:
 
 
 ir = af.trace(routed)("short", "seed")
-assert ir.call("long", "DNA") == "Long: DNA"
+assert ir.call("long", "topic text") == "Long: topic text"
 ```
 
 ## Runtime Loops
+
+Python needs the number of iterations while tracing. A dynamic `n` cannot control `range`:
 
 ```python
 def bad_repeat(n: int, text: str) -> str:
@@ -74,7 +79,7 @@ def bad_repeat(n: int, text: str) -> str:
     return out
 ```
 
-Python needs `n` while tracing to decide how many equations to create.
+Python needs to know `n` in order to decide how many equations to make.
 
 Use {py:func}`while_loop <autoform.while_loop>` when the loop condition is runtime data:
 
@@ -91,12 +96,21 @@ def body(state: tuple[str, str]) -> tuple[str, str]:
 
 cond_ir = af.trace(cond)(("seed", "target"))
 body_ir = af.trace(body)(("seed", "target"))
-looped = af.while_loop(cond_ir, body_ir, ("go", "go"), max_iters=1)
+
+
+def repeat(state: tuple[str, str]) -> tuple[str, str]:
+    return af.while_loop(cond_ir, body_ir, state, max_iters=1)
+
+
+loop_ir = af.trace(repeat)(("go", "go"))
+assert loop_ir.call(("go", "go")) == ("go!", "go")
 ```
 
-The loop is now one explicit primitive in the surrounding IR.
+The outer trace records the loop as one primitive. Each run checks its condition and executes its body with runtime values.
 
 ## Runtime Value Inspection
+
+A Python `print` runs while the function is traced:
 
 ```python
 def noisy(text: str) -> str:
@@ -105,7 +119,7 @@ def noisy(text: str) -> str:
     return prompt
 ```
 
-Use [checkpoints](intercepts.md) when execution-time diagnostics are needed:
+Use [checkpoints](intercepts.md) (see [intercepts](intercepts.md)) for diagnostic output at execution time.
 
 ```python
 def inspectable(text: str) -> str:
@@ -115,15 +129,15 @@ def inspectable(text: str) -> str:
 
 ir = af.trace(inspectable)("seed")
 with af.collect(collection="debug") as captured:
-    ir.call("recursion")
+    ir.call("topic text")
 
-assert captured["prompt"] == ["Explain recursion"]
+assert captured["prompt"] == ["Explain topic text"]
 ```
 
 ## Closures and Mutation
 
-Closure values are captured by the Python function while tracing. Mutating a list inside a traced function is still Python mutation; it is not an IR equation.
+Values closed over by the function are captured at trace time. Mutation is handled by python and will not be recorded as IR equations:
 
-Pass state through inputs and outputs instead. If the state is structured, register it as a [pytree](pytrees.md) so transforms can walk its leaves.
+Pass state as input and output to the function instead. If the state has structure, register it as a [pytree](pytrees.md) (see [pytrees](pytrees.md)).
 
-Missing equations usually mean the operation ran as Python instead of going through an `autoform` primitive.
+Missing equations usually mean that some operation has been executed as python, instead of as an `autoform` primitive.

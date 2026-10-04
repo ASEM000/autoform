@@ -1,0 +1,27 @@
+% title: Flattening and reconstructing a pytree
+% description: Flattening separates leaf values from the tree structure. Unflattening reconstructs a State container from its structure and leaf values.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.8pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node[box] (state) at (0,0) {\texttt{State}\\topic, draft};
+    \node[box] (leaves) at (4,0.9) {Leaf values\\topic, draft};
+    \node[box] (spec) at (4,-0.9) {Tree structure\\\texttt{State} fields};
+    \node[box] (result) at (8,0) {\texttt{State}\\topic, draft};
+    \draw[flow] (state) -- (leaves);
+    \draw[flow] (state) -- (spec);
+    \draw[flow] (leaves) -- (result);
+    \draw[flow] (spec) -- (result);
+    \node[note] at (1.7,1.2) {flatten};
+    \node[note] at (6.3,1.2) {unflatten};
+
+\end{tikzpicture}
+\end{document}

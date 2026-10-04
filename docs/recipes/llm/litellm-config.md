@@ -1,47 +1,54 @@
-# Configure LiteLLM Routing
+# Model Routing
 
-`autoform` uses the active LM client at execution time. By default that client
-calls [LiteLLM](https://docs.litellm.ai/) directly. Use {py:func}`af.lm.client <autoform.lm.client>` for a
-configured [`litellm.Router`](https://docs.litellm.ai/docs/routing) with retries, aliases, or provider fallback.
+The same IR can run with different model clients.
+{py:func}`client <autoform.lm.client>` selects the client during execution.
+Use a [LiteLLM Router](https://docs.litellm.ai/docs/routing) to configure model aliases, retries, and fallback policy.
 
 ```{admonition} Concept
 [Trace, IR, Execute](../../concepts/trace-ir-execute.md)
 ```
 
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls.
+Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
+Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
+Replace labels such as `"answer instructions"` with text for the task.
+```
+
+## Router
+
+Map the program's `docs-model` alias to a provider model:
+
 ```python
 from litellm import Router
 import autoform as af
 
-
-model_list = [dict(model_name="docs-model", litellm_params=dict(model="gpt-5.5"))]
+model_list = [
+    dict(model_name="docs-model", litellm_params=dict(model="model-name")),
+]
 router = Router(model_list=model_list, num_retries=2)
 
 
 def explain(topic: str) -> str:
-    prompt = "Explain " + topic + " in one paragraph."
-    msg = dict(role="user", content=prompt)
-    # docs-model is resolved by the active router
-    return af.lm.complete([msg], model="docs-model")
+    content = dict(topic=topic, answer=af.lm.Str(desc="answer instructions"))
+    return af.lm.fill(content, model="docs-model")["answer"]
 
 
-ir = af.trace(explain)("recursion")
-
-# credentials are still provider credentials, such as openai_api_key or env vars
+ir = af.trace(explain)("topic text")
 with af.lm.client(router):
-    print(ir.call("recursion"))
+    output = ir.call("topic text")
+print(output)
 ```
 
-The context applies when the IR executes, not when it is traced. That means the
-same IR can run with different routers:
+Replace `"model-name"` with the provider route. Keep `"docs-model"` as the alias used by the program.
+The router resolves the alias when the IR runs; ordinary tracing makes no model request.
+The output is an explanation of the supplied topic from the configured route.
 
-```python
-# run the same ir with a different execution context
-with af.lm.client(router):
-    answer = ir.call("memoization")
+## Client Interface
 
-print(answer)
-```
+A client must provide `.responses(...)` and `.aresponses(...)` with LiteLLM's
+[Responses request and response shapes](https://docs.litellm.ai/docs/response_api).
+The default client forwards calls directly to LiteLLM.
+A wrapper can add routing policy while preserving this interface.
 
-Keep provider-specific routing policy in [LiteLLM](https://docs.litellm.ai/docs/routing). Keep program structure in
-`autoform`: {py:func}`trace <autoform.trace>` the Python function, transform the [IR](../../concepts/the-ir.md), and choose the LM
-client around execution.
+This sets the client for the context of the block, but restores the previous client when the block is exited. This can be used to set the client for a single `.call(...)` or `.acall(...)` without changing the traced function or IR.

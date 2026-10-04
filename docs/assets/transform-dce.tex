@@ -1,0 +1,21 @@
+% title: Dead code elimination removes unused equations
+% description: The original IR contains a used equation and an unused equation. DCE removes the unused equation while retaining the equation needed for the selected output.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=2cm, align=center},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    note/.style={font=\small, align=center},
+]
+
+    \node[box, minimum width=3cm, minimum height=1.8cm] (original) at (0, 0) {};
+    \node[note] at (0, 1.4) {Original IR};
+    \node at (0, 0.4) {Used equation};
+    \node at (0, -0.4) {Unused equation};
+    \node[box, minimum width=3cm, minimum height=1.8cm] (new) at (6, 0) {Used equation};
+    \node[note] at (6, 1.4) {After \texttt{dce}};
+    \draw[flow] (original.east) -- node[above, note] {\texttt{dce}} (new.west);
+\end{tikzpicture}
+\end{document}

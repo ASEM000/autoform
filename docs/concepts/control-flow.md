@@ -1,15 +1,13 @@
-# Use Control Flow Inside a Traced Function
+# Control Flow
 
-`autoform` [control-flow primitives](../../concepts/primitives.md) keep branches and loops visible to the [IR](../../concepts/the-ir.md).
-Use them when the branch condition or loop state is part of the traced program.
+`autoform` [control-flow primitives](primitives.md) keep branches and loops visible to the [IR](the-ir.md).
+Use these operations when a branch condition or loop count depends on runtime inputs.
 For loops that should stop when repeated application reaches a stable state, see
-[Iterate To A Fixed Point](fixpoint.md).
+[Fixed Points](fixpoint.md).
 
-```{admonition} Concept
-[Primitives](../../concepts/primitives.md) · [The IR](../../concepts/the-ir.md) · [Pytrees](../../concepts/pytrees.md)
-```
+## Branches
 
-## Route with {py:func}`switch <autoform.switch>`
+Select a traced branch from the runtime `kind`:
 
 ```python
 import autoform as af
@@ -33,11 +31,19 @@ def route(kind: str, text: str) -> str:
     return af.switch(kind, branches, text)
 
 
-ir = af.trace(route)("brief", "recursion")
-print(ir.call("detailed", "recursion"))
+ir = af.trace(route)("brief", "topic text")
+print(ir.call("detailed", "topic text"))
 ```
 
-## Repeat with {py:func}`while_loop <autoform.while_loop>`
+The above would print `detailed: topic text`. Note that all branches must have the same input and output structure and types.
+
+## Loops
+
+```{raw} html
+:file: ../assets/loop-state.svg
+```
+
+Carry a structured state through the loop:
 
 ```python
 import optree
@@ -67,9 +73,13 @@ result = af.while_loop(cond_ir, body_ir, example, max_iters=3)
 print(result)
 ```
 
-The loop state is a registered [pytree](../../concepts/pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
+The result is `State(text="go!", status="done")`. The body changes the status after one iteration.
 
-## Block Feedback with {py:func}`stop_gradient <autoform.stop_gradient>`
+The loop state is a registered [pytree](pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
+
+## Feedback Boundaries
+
+Use {py:func}`stop_gradient <autoform.stop_gradient>` to keep one input fixed during AD:
 
 ```python
 import autoform as af
@@ -80,18 +90,23 @@ def combine(locked: str, editable: str) -> str:
     return locked + "\n" + editable
 
 
-ir = af.trace(combine)("terms:", "draft answer")
-inputs = ("terms:", "draft answer")
-output, (locked_feedback, editable_feedback) = af.pullback(ir).call(inputs, "make clearer")
+ir = af.trace(combine)("fixed text", "editable text")
+inputs = ("fixed text", "editable text")
+output, (locked_feedback, editable_feedback) = af.pullback(ir).call(
+    inputs,
+    "output feedback",
+)
 
 print(output)
 print(locked_feedback)
 print(editable_feedback)
 ```
 
-The forward value of `locked` is unchanged. Feedback for that input is blocked.
+In the above example, the forward value of `locked` is unchanged, but the feedback value is `""`, while the feedback for the other input is `"output feedback"`.
 
-## Force Ordering with {py:func}`depends <autoform.depends>`
+## Dependencies
+
+Use {py:func}`depends <autoform.depends>` to delay a result until another traced value is available:
 
 ```python
 import autoform as af
@@ -104,12 +119,12 @@ def ordered(topic: str) -> str:
     return af.depends(answer, audit)
 
 
-ir = af.trace(ordered)("recursion")
+ir = af.trace(ordered)("topic text")
 scheduled = af.sched(ir)
-print(scheduled.call("recursion"))
+print(scheduled.call("topic text"))
 ```
 
 Use {py:func}`depends <autoform.depends>` when a result should not become available until another traced
 value has also been evaluated, even though the returned value does not consume it directly. It does not
 force the computation that produces the returned value to start after the dependencies; a scheduler may still
-run independent producers concurrently and place the `depends` barrier after them.
+run independent producers concurrently and place the `depends` barrier after those producers.

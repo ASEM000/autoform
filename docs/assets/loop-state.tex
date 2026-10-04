@@ -1,0 +1,26 @@
+% title: A bounded loop carries state between iterations
+% description: The condition and iteration limit determine whether to run the body. The body returns the next state, and termination returns the final state.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.8pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node[box] (state) at (0,0) {Initial state};
+    \node[choice] (cond) at (3.7,0) {Condition true\\and below limit?};
+    \node[box] (body) at (7.4,0) {Body};
+    \node[box] (final) at (3.7,-2.3) {Final state};
+    \draw[flow] (state) -- (cond);
+    \draw[flow] (cond) -- node[above,note] {yes} (body);
+    \draw[flow] (cond) -- node[right,note] {no} (final);
+    \draw[flow] (body.north) -- (7.4,1.8) -- node[above,note] {next state} (3.7,1.8) -- (cond.north);
+    \node[note] at (7.4,-1.1) {At most \texttt{max\_iters} steps};
+
+\end{tikzpicture}
+\end{document}

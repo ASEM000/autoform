@@ -1,7 +1,6 @@
 # Extend
 
-The extension API exposes the low-level surface for adding value domains,
-primitive behavior, and transform rules.
+`autoform.extend` exposes the types, registration functions, and dispatch helpers used to add operations and value types. See [Extending `autoform`](../recipes/extending/index.md) for complete examples.
 
 ```{toctree}
 :maxdepth: 2

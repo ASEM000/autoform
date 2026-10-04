@@ -1,6 +1,8 @@
 # Fold
 
-{py:func}`fold <autoform.fold>` changes tracing inside its block. Normally, primitives inside {py:func}`trace <autoform.trace>` become IR equations. Inside the {py:func}`fold <autoform.fold>` block, primitives are evaluated immediately and their concrete result is embedded as a literal in the surrounding trace.
+The {py:func}`fold <autoform.fold>` block changes how Primitives are handled within the block. Outside of the {py:func}`fold <autoform.fold>` block, when a Primitive is called within a {py:func}`trace <autoform.trace>` block, the Primitive is recorded as an equation in the returned IR. Within the {py:func}`fold <autoform.fold>` block, the Primitive is run and the resulting value is recorded as a literal in the surrounding IR.
+
+Evaluate a fixed prefix while tracing:
 
 ```python
 import autoform as af
@@ -21,7 +23,7 @@ assert len(ir.eqns) == 1
 assert ir.call("world") == "v2.0: world"
 ```
 
-Without {py:func}`fold <autoform.fold>`, the call to `increment` would be recorded in the surrounding IR. With {py:func}`fold <autoform.fold>`, it is computed at trace time.
+Without {py:func}`fold <autoform.fold>`, the trace would record the call to `increment` in the surrounding IR. With {py:func}`fold <autoform.fold>`, the call runs at trace time.
 
 (trace-time-decisions)=
 ## Trace-Time Decisions
@@ -41,11 +43,11 @@ ir = af.trace(route)("seed")
 assert ir.call("answer") == "yes: answer"
 ```
 
-The branch is chosen during tracing. The resulting IR contains only the path that was taken.
+Tracing chooses the branch. The resulting IR contains only the chosen path.
 
 ## Dynamic Value Limits
 
-Folded work must not depend on dynamic traced values:
+Folded work needs concrete values. This example fails because `text` is dynamic:
 
 ```python
 def bad(text: str) -> str:

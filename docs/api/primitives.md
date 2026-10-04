@@ -1,12 +1,9 @@
 # Primitives
 
-Primitives are operations that tracing records as IR equations.
-
-## LM
+Functions which have registered execution and transform behavior. When traced, calls to these primitives will be recorded as equations in the IR. The string formatting helper is implemented by composing multiple concatenation operations.
 
 ```{eval-rst}
-.. autofunction:: autoform.lm.complete
-.. autofunction:: autoform.lm.generate
+.. autofunction:: autoform.lm.fill
 ```
 
 ## String

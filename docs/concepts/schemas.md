@@ -1,68 +1,93 @@
 # Schemas
 
-An `autoform` schema is a [pytree](pytrees.md) whose leaves are schema specs. It is instance-first: the schema is a value shape, not a separate output class definition. With `schema=`, {py:func}`af.lm.generate <autoform.lm.generate>` returns the same pytree structure, with each schema leaf replaced by a parsed value.
-
-```python
-answer_schema = {"text": af.Str(min=1), "score": af.Float(min=0, max=1)}
+A schema describes the values a language model should generate.
+{py:func}`fill <autoform.lm.fill>` accepts a [pytree](pytrees.md) containing context values and specifications.
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls.
+Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
+Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
+Replace labels such as `"answer instructions"` with text for the task.
 ```
 
-## Leaf Types
+The context is preserved, and each specification is replaced by a parsed value:
 
-| Python | Args | Meaning |
+```python
+import autoform as af
+
+content = dict(
+    topic="topic text",
+    answer=af.lm.Str(desc="answer instructions"),
+    score=af.lm.Float(min=0, max=1, desc="confidence instructions"),
+)
+result = af.lm.fill(content, model="model-name")
+print(result["answer"], result["score"])
+```
+
+The result has the same dictionary structure as `content`.
+Its `topic` remains `"topic text"`; `answer` is a string and `score` is a float.
+The model route must support the JSON Schema response format used by the
+[LiteLLM Responses API](https://docs.litellm.ai/docs/response_api).
+
+```{raw} html
+:file: ../assets/schema-fill.svg
+```
+
+## Specifications
+
+The built-in specifications describe scalar values:
+
+| Specification | Parameters | Generated value |
 | --- | --- | --- |
-| {py:class}`Str <autoform.Str>` | `*, desc=None, min=None, max=None, pattern=None` | A string, optionally constrained by length or regex. |
-| {py:class}`Int <autoform.Int>` | `*, desc=None, min=None, max=None` | An integer, optionally range constrained. |
-| {py:class}`Float <autoform.Float>` | `*, desc=None, min=None, max=None` | A number, optionally range constrained. |
-| {py:class}`Bool <autoform.Bool>` | `*, desc=None` | A boolean. |
-| {py:class}`Enum <autoform.Enum>` | `*values, desc=None` | One of a non-empty set of JSON scalar values of the same type. |
+| {py:class}`Str <autoform.lm.Str>` | `desc`, `min`, `max`, `pattern` | A string with optional length and pattern constraints. |
+| {py:class}`Int <autoform.lm.Int>` | `desc`, `min`, `max` | An integer with optional bounds. |
+| {py:class}`Float <autoform.lm.Float>` | `desc`, `min`, `max` | A floating-point number with optional bounds. |
+| {py:class}`Bool <autoform.lm.Bool>` | `desc` | A boolean. |
+| {py:class}`Enum <autoform.lm.Enum>` | `*values`, `desc` | One value from a non-empty set of JSON scalar values of the same type. |
+
+Parameters other than enum values are keyword-only.
+Specifications validate the parsed result. Malformed JSON, incorrect types, or values outside the constraints raise an error during execution.
 
 ## Descriptions
 
-Pass a description directly to a schema node with `desc=`:
+Use the `desc` keyword argument to provide instructions to the model for how to generate a value for that field:
 
 ```python
 schema = {
-    "kind": af.Enum("summary", "definition", desc="Kind."),
-    "text": af.Str(desc="Text."),
+    "kind": af.lm.Enum("summary", "definition", desc="kind instructions"),
+    "text": af.lm.Str(desc="answer instructions"),
 }
 ```
 
-The descriptions become JSON Schema descriptions in the provider request.
-
-## Pytree Shapes
-
-A schema can have any [pytree](pytrees.md) shape that `autoform` can walk. It does not need a special schema class. Dictionaries, tuples, lists, and registered dataclasses all work.
+These descriptions are used in the JSON Schema description field when making a request to the provider. The expression `spec @ description` returns a copy of the specification with a different description:
 
 ```python
-schema = {"route": (af.Enum("search", "done"), af.Str()), "answer": af.Str()}
+def explain(topic: str, instruction: str) -> str:
+    content = dict(topic=topic, answer=af.lm.Str() @ instruction)
+    return af.lm.fill(content, model="model-name")["answer"]
+
+
+ir = af.trace(explain)("topic text", "answer instructions")
 ```
 
-With `schema=`, {py:func}`af.lm.generate <autoform.lm.generate>` returns the same shape with schema leaves replaced by parsed values. The example above returns a dictionary whose `"route"` value is a tuple and whose `"answer"` value is a string.
+Here `instruction` is a runtime input. Its text can change between calls and receive feedback through a pullback.
 
-Fixed-size repeated fields are just list-shaped schemas:
+## Containers
 
-```python
-score_schema = [af.Float(min=0, max=1)] * 4
-schema = {"scores": score_schema}
-```
-
-This is a fixed-size schema. The parsed result has the same list shape:
+Specifications can appear in dictionaries, tuples, lists, and registered dataclasses.
+A fixed list of four specifications generates four values:
 
 ```python
-result = af.lm.generate(messages, model="gpt-5.5", schema=schema)
-assert isinstance(result["scores"], list)
+content = dict(topic="topic text", scores=[af.lm.Float(min=0, max=1)] * 4)
+result = af.lm.fill(content, model="model-name")
 assert len(result["scores"]) == 4
 ```
 
-For variable-length output, choose a bounded representation in the schema, such as a fixed number of slots plus a count or status field.
+Currently, the structure of the container must be fixed, but it is possible to make something close to a variable length result by using a bounded number of slots in a container along with a count or a status.
 
-## Define a Custom Pytree
-
-Schema trees can use any registered custom pytree. For dataclasses, use [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html):
+Register dataclasses in the `autoform` pytree namespace before using instances as containers:
 
 ```python
 import optree
-import autoform as af
 
 
 @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
@@ -71,38 +96,22 @@ class Decision:
     answer: str
 
 
-decision_schema = Decision(tool=af.Enum("search", "done"), answer=af.Str())
+decision = Decision(tool=af.lm.Enum("search", "done"), answer=af.lm.Str())
 ```
 
-The schema is the instance `decision_schema`, not the class `Decision`.
+The specifications belong to the instance `decision`. The class defines the returned container.
+See [Pytrees](pytrees.md) for registration details.
 
-The shape-preserving rule makes schemas compose with `autoform` transforms:
+## Feedback
 
-- {py:func}`batch <autoform.batch>` returns a batched version of the schema-shaped output.
-- {py:func}`pullback <autoform.pullback>` accepts feedback with the same schema shape.
-
-## Schema Calls
-
-Pass the schema value to {py:func}`af.lm.generate <autoform.lm.generate>`. The result has the same pytree shape, with schema leaves replaced by parsed provider output.[^schema-provider-support]
+A pullback receives feedback with the same container structure as the program output.
+The feedback type comes from each output leaf's registered cotangent space.
+For an output such as `{"text": "answer text", "score": 0.8}`, use text feedback for `text` and a numerical cotangent for `score`:
 
 ```python
-import autoform as af
-
-
-schema = {"text": af.Str(), "score": af.Float(min=0, max=1)}
-
-messages = [dict(role="user", content="Explain recursion.")]
-result = af.lm.generate(messages, model="gpt-5.5", schema=schema)
-
-print(result["text"], result["score"])
+feedback = {"text": "answer feedback", "score": 1.0}
 ```
 
-For provider routing, retries, aliases, or fallback chains, use {py:func}`af.lm.client <autoform.lm.client>`. See [Configure LiteLLM Routing](../recipes/llm/litellm-config.md).
-
-## Schema Pullback
-
-When a schema call is used inside {py:func}`pullback <autoform.pullback>`, feedback is still text. The output cotangent should match the schema shape, with text feedback at leaves. For example, feedback might be `{"text": "too terse", "score": "overconfident"}`.
-
-If the provider returns malformed structured output, {py:func}`af.lm.generate <autoform.lm.generate>` raises while parsing the response.
-
-[^schema-provider-support]: When given a schema, {py:func}`af.lm.generate <autoform.lm.generate>` sends a JSON Schema response format through the active LiteLLM client. Provider and model support for strict structured output can differ, so use a model route that supports the requested response format when schemas are required.
+The LM backward rule uses that feedback to generate cotangents for the inputs.
+A string input receives text feedback; a floating-point input receives a numerical cotangent.
+See [Transforms](transforms.md) and [Schema Patterns](../recipes/llm/schema-patterns.md).

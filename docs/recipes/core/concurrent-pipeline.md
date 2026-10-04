@@ -1,69 +1,61 @@
-# Run an LM Pipeline Concurrently
+# Concurrent Execution
 
-{py:func}`sched <autoform.sched>` turns independent equations into async
-fanout steps. The Python function can stay sequential.
+An explanation and an analogy can be generated independently from the same topic.
+{py:func}`sched <autoform.sched>` groups independent calls for concurrent asynchronous execution.
+The Python function stays sequential.
 
 ```{admonition} Concept
 [Trace, IR, Execute](../../concepts/trace-ir-execute.md) · [Transforms](../../concepts/transforms.md)
 ```
 
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls.
+Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
+Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
+Replace labels such as `"answer instructions"` with text for the task.
+```
+
+## Program
+
+Generate the two pieces, then combine both results in a final call:
+
 ```python
 import asyncio
-import time
 import autoform as af
 
-
-def research(topic: str) -> str:
-    summary_prompt = "Summarize " + topic + " in two sentences."
-    analogy_prompt = "Give one concrete analogy for " + topic + "."
-    summary_msg = dict(role="user", content=summary_prompt)
-    analogy_msg = dict(role="user", content=analogy_prompt)
-
-    # these two calls only depend on topic
-    summary = af.lm.complete([summary_msg], model="gpt-5.5")
-    analogy = af.lm.complete([analogy_msg], model="gpt-5.5")
-
-    join_prompt = "Combine these notes.\nsummary: " + summary + "\nanalogy: " + analogy
-    join_msg = dict(role="user", content=join_prompt)
-    combined = af.lm.complete([join_msg], model="gpt-5.5")
-
-    final_prompt = "Rewrite this as a crisp answer:\n" + combined
-    final_msg = dict(role="user", content=final_prompt)
-    return af.lm.complete([final_msg], model="gpt-5.5")
+model = "model-name"
 
 
-# trace once, then choose the execution form
-ir = af.trace(research)("recursion")
+def explain(topic: str) -> str:
+    content = dict(topic=topic, summary=af.lm.Str(desc="summary instructions"))
+    summary = af.lm.fill(content, model=model)["summary"]
+    content = dict(topic=topic, analogy=af.lm.Str(desc="analogy instructions"))
+    analogy = af.lm.fill(content, model=model)["analogy"]
+    content = dict(
+        summary=summary,
+        analogy=analogy,
+        answer=af.lm.Str(desc="response instructions"),
+    )
+    return af.lm.fill(content, model=model)["answer"]
+
+
+ir = af.trace(explain)("topic text")
 scheduled = af.sched(ir)
-
-start = time.perf_counter()
-sequential = ir.call("recursion")
-sequential_s = time.perf_counter() - start
-
-start = time.perf_counter()
-parallel = asyncio.run(scheduled.acall("recursion"))
-parallel_s = time.perf_counter() - start
-
-print(sequential)
-print(parallel)
-print(f"sequential: {sequential_s:.2f}s")
-print(f"scheduled:  {parallel_s:.2f}s")
+output = asyncio.run(scheduled.acall("topic text"))
+print(output)
 ```
 
-```{mermaid}
-flowchart TD
-    topic["topic"] --> summary["LM: summary"]
-    topic --> analogy["LM: analogy"]
-    summary --> join["LM: combine notes"]
-    analogy --> join
-    join --> final["LM: final answer"]
-    final --> answer["answer"]
+The result is an answer about the supplied topic that uses both generated pieces.
+The final call waits for both inputs:
+
+```{raw} html
+:file: ../../assets/concurrent-calls.svg
 ```
 
-Only the first two LM calls can overlap. The combine call waits for both, and
-the final call waits for the combined text.
+## Execution
 
-Measured speed depends on provider latency, provider-side rate limits, and the
-active [LiteLLM client](../llm/litellm-config.md). The property that matters is the dependency graph: if two
-equations do not depend on each other, {py:func}`sched <autoform.sched>` with `.acall(...)` can run them in
-the same async level.
+Use `.call(...)` for synchronous execution and `.acall(...)` for asynchronous execution.
+In async code, use `await scheduled.acall(...)` instead of `asyncio.run(...)`.
+Scheduling preserves dependencies; it does not make dependent calls independent.
+
+The running time will depend on the latency and rate limits of the model provider. The above example is merely to illustrate how `autoform` can be used to overlap LLM calls. It is not intended to be a benchmark for speedup. Please refer to [Model Routing](../llm/litellm-config.md) to see how to configure the client.

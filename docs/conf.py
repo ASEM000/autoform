@@ -46,6 +46,7 @@ exclude_patterns = [
 master_doc = "index"
 suppress_warnings = ["epub.duplicated_toc_entry"]
 myst_fence_as_directive = ["mermaid"]
+myst_enable_extensions = ["dollarmath"]
 
 html_theme = "furo"
 html_static_path = ["_static"]

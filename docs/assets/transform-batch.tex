@@ -1,0 +1,24 @@
+% title: Batch adds a batch dimension to an IR
+% description: Batch transforms one IR into an IR with batched inputs and outputs. Stacked boxes depict the batch dimension, not separate IR objects.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=2cm, align=center},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    note/.style={font=\small, align=center},
+]
+
+    \node[box] (original) at (0, 0) {IR};
+    \node[note] at (0, 1.25) {Original IR};
+    \draw[line width=0.8pt] (4.3, 0.55) -- (4.3, 0.7) -- (6.3, 0.7)
+        -- (6.3, -0.1) -- (6.15, -0.1);
+    \draw[line width=0.8pt] (4.15, 0.4) -- (4.15, 0.55) -- (6.15, 0.55)
+        -- (6.15, -0.25) -- (6, -0.25);
+    \node[box] (batched) at (5, 0) {IR};
+    \node[note] at (5.2, 1.25) {Batched IR};
+    \draw[flow] (original.east) -- node[above, note] {\texttt{batch}} (batched.west);
+    \node[note] at (5, -1.1) {Batched inputs and outputs};
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,26 @@
+% title: Capture or replace a checkpointed value
+% description: The producer still runs. Collect captures its checkpointed value; inject replaces the value passed to downstream equations.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.8pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node[box] (producer) at (0,0) {Producer};
+    \node[box] (checkpoint) at (4.2,0) {\texttt{checkpoint}};
+    \node[box] (downstream) at (8.4,0) {Downstream\\equations};
+    \node[box] (captured) at (4.2,1.8) {Captured values};
+    \node[box] (replacement) at (4.2,-1.8) {Replacement};
+    \draw[flow] (producer) -- (checkpoint);
+    \draw[flow] (checkpoint) -- (downstream);
+    \draw[flow,dashed] (checkpoint) -- node[right,note] {\texttt{collect}} (captured);
+    \draw[flow,dashed] (replacement) -- node[right,note] {\texttt{inject}} (checkpoint);
+
+\end{tikzpicture}
+\end{document}

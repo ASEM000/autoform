@@ -179,7 +179,7 @@
 
 ### Improvements
 
-  - {py:func}`trace <autoform.trace>` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking them in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
+  - {py:func}`trace <autoform.trace>` now treats `int`, `float`, and `bool` input leaves as dynamic inputs instead of silently baking those leaves in as literals. Unsupported input leaves now fail fast at trace time instead of being treated as constants.
 
   - {py:func}`concat <autoform.concat>` and {py:func}`match <autoform.match>` now validate input types during tracing. Ill-typed programs fail during abstract evaluation instead of building invalid IR and crashing later at execution.
 

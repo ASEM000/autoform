@@ -2,33 +2,35 @@
 
 ## Public Terms
 
+These terms describe tracing, transformations, and execution:
+
 | Term | Definition |
 | --- | --- |
 | {py:func}`batch <autoform.batch>` | An IR transform that vectorizes execution over selected input leaves. |
 | {py:func}`checkpoint <autoform.checkpoint>` | A primitive that labels an intermediate value with a key and collection. It is transparent unless {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>` is active. |
 | {py:func}`collect <autoform.collect>` | A context manager that captures checkpointed values during IR execution. |
 | Collection | A namespace used by checkpoints, {py:func}`collect <autoform.collect>`, and {py:func}`inject <autoform.inject>` to decide which values belong together. |
-| Cotangent | Feedback flowing backward through a pullback. In `autoform`, cotangents are usually text feedback. |
+| Cotangent | Feedback flowing backward through a pullback. The registered type determines its meaning, such as text feedback for strings or numerical gradients for floats. |
 | Custom rule | A rule registered on a {py:func}`custom <autoform.custom>` traceable function boundary to override {py:func}`pushforward <autoform.pushforward>`, {py:func}`pullback <autoform.pullback>`, or {py:func}`batch <autoform.batch>` behavior. |
 | {py:func}`dce <autoform.dce>` | Dead-code elimination, an IR transform that removes equations not needed by selected outputs. |
-| Schema description | Guidance passed through a schema node's keyword-only `desc=` argument. |
+| Schema description | Generation guidance attached to a specification with `desc=` or `spec @ description`. |
 | Dynamic argument | An input leaf represented by a placeholder during tracing and provided at execution time. |
 | Execute | The phase that runs an IR with concrete inputs through `.call(...)` or `.acall(...)`. |
 | {py:func}`factor <autoform.factor>` | A primitive that multiplies the current path weight. It is neutral during ordinary execution and contributes to {py:func}`weight <autoform.weight>` results. |
 | {py:func}`fixpoint <autoform.fixpoint>` | A higher-order control-flow primitive that repeatedly applies a traced `(State, Theta) -> State` step until the state is stable or `max_iters` is reached. |
 | {py:func}`fold <autoform.fold>` | A context manager that evaluates foldable primitive calls immediately during tracing and embeds the result as a literal. |
 | {py:func}`inject <autoform.inject>` | A context manager that substitutes checkpointed values from a provided dictionary during execution. |
-| Instance-first DSL | The schema style where the schema is a value-shaped Python instance, not a separate output class declaration. |
-| Intercept | A runtime hook around checkpointed values. {py:func}`collect <autoform.collect>` captures intercepted values; {py:func}`inject <autoform.inject>` replaces them. |
+| Schema instance | A container holding context and specifications. Its structure defines the shape returned by the model call. |
+| Intercept | A runtime hook around checkpointed values. {py:func}`collect <autoform.collect>` captures intercepted values; {py:func}`inject <autoform.inject>` replaces the values. |
 | IR | The intermediate representation produced by {py:func}`trace <autoform.trace>`; it contains input variables, equations, and outputs. |
-| {py:func}`af.lm.client <autoform.lm.client>` | A context manager that changes the active LM client for {py:func}`af.lm.complete <autoform.lm.complete>` and {py:func}`af.lm.generate <autoform.lm.generate>`. |
+| {py:func}`client <autoform.lm.client>` | A context manager that selects the client used by {py:func}`fill <autoform.lm.fill>`. |
 | {py:func}`memoize <autoform.memoize>` | A context manager that caches primitive results within its block. During tracing, it can deduplicate identical primitive calls. |
 | {py:func}`pullback <autoform.pullback>` | An IR transform that propagates output cotangents backward to input cotangents. |
 | {py:func}`pushforward <autoform.pushforward>` | An IR transform that propagates input tangents forward to output tangents. |
 | Pytree | A nested container/leaf structure that `autoform` can walk. Registered dataclasses can be pytrees. |
 | {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` | The optree namespace reserved by `autoform` for user pytree registration. |
 | {py:func}`sched <autoform.sched>` | An IR transform that groups independent equations for concurrent async execution. |
-| Schema | A pytree of schema leaves such as {py:class}`Str <autoform.Str>`, {py:class}`Float <autoform.Float>`, and {py:class}`Enum <autoform.Enum>`, used by {py:func}`af.lm.generate <autoform.lm.generate>` for structured output. |
+| Schema | A pytree of specifications such as {py:class}`Str <autoform.lm.Str>`, {py:class}`Float <autoform.lm.Float>`, and {py:class}`Enum <autoform.lm.Enum>`, used by {py:func}`fill <autoform.lm.fill>` to describe generated values. |
 | Static argument | An input leaf fixed at trace time by {py:func}`trace <autoform.trace>`. The `static` value is a bool pytree matching positional input structure. |
 | tag value | A hashable metadata value attached to equations during tracing. |
 | {py:func}`tag <autoform.tag>` | A context manager that activates one or more tag values for equations created in its block. |
@@ -38,14 +40,13 @@
 
 ## Internal IR Machinery
 
-These names are useful when reading internals or debugging a transform. They are
-not part of the everyday user surface.
+These names may be useful when inspecting internals and debugging transforms, but these names are not part of the normal user surface.
 
 | Term | Definition |
 | --- | --- |
 | `Eqn` | One recorded primitive application in an IR. |
 | `Var` | A typed placeholder for a runtime value inside an IR. |
 | `Prim` | A named primitive operation used as the dispatch key for execution and transform rules. |
-| `TraceBox` | The internal wrapper used by the trace interpreter to carry an `Var` through Python code. |
-| Tracer | The trace-time interpreter machinery that records primitive calls instead of executing them normally. |
+| `TraceBox` | The internal wrapper used by the trace interpreter to carry a `Var` through Python code. |
+| Tracer | The trace-time interpreter machinery that records primitive calls instead of executing the calls normally. |
 | `walk` | The manual IR stepping interface used by execution internals and advanced debugging code. See [Walk](../concepts/walk.md). |

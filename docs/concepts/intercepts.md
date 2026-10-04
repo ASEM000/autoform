@@ -1,6 +1,6 @@
 # Intercepts
 
-Interceptors are the runtime side-channel for intermediate values. Use them to inspect or replace a value inside an [IR](the-ir.md) without rewriting the original function.
+Checkpoints are a way to capture or replace intermediate values in an [IR](the-ir.md) during a run.
 
 The three public pieces are:
 
@@ -8,17 +8,26 @@ The three public pieces are:
 - {py:func}`collect <autoform.collect>`: capture marked values during execution.
 - {py:func}`inject <autoform.inject>`: substitute marked values during execution.
 
+```{raw} html
+:file: ../assets/checkpoint-flow.svg
+```
+
 ## {py:func}`checkpoint <autoform.checkpoint>`
 
 {py:func}`checkpoint <autoform.checkpoint>` is transparent by default:
 
 ```python
+import autoform as af
+
+step = "draft"
 step = af.checkpoint(step, key="step", collection="debug")
 ```
 
-Without {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>`, it returns `step`. With a context active, the same checkpoint becomes a hook.
+Without {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>`, it returns `step`. An active context captures or replaces the value at that checkpoint.
 
-## {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`
+## Capture and Replacement
+
+Here, first, the normalized text is captured, and then it is replaced with a new value for a subsequent run of the same IR.
 
 ```python
 import autoform as af
@@ -44,7 +53,9 @@ with af.inject(collection="debug", values={"normalized": ["cached item"]}):
 assert result == "cached item!"
 ```
 
-Values are stored in lists because the same key may be encountered more than once. {py:func}`inject <autoform.inject>` consumes values in encounter order.
+The replacement changes what downstream equations receive. Earlier equations still run.
+
+The values are stored as lists, because there could be multiple encounters of a given key. In the case of {py:func}`inject <autoform.inject>`, replacement values are consumed in encounter order.
 
 ## Trace-Time Printing
 
@@ -54,7 +65,7 @@ Values are stored in lists because the same key may be encountered more than onc
 
 ## Runtime Contexts
 
-{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` do not produce new IRs. They wrap execution:
+{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` do not produce new IRs. Both contexts wrap execution when used around an IR call:
 
 ```python
 with af.collect(collection="debug") as captured:

@@ -1,7 +1,6 @@
-# Core Program Patterns
+# Core Programs
 
-Use these recipes for traced Python programs, pytrees, batching, control flow,
-and dependency-aware execution.
+Recipes for batching inputs, working with pytree modules, running programs concurrently, specializing a program, removing unused work, and iterating to a fixed point.
 
 ```{toctree}
 :maxdepth: 2
@@ -9,6 +8,7 @@ and dependency-aware execution.
 batch-in-axes
 pytree-modules
 concurrent-pipeline
-control-flow
+static-context
+dce
 fixpoint
 ```

@@ -1,6 +1,6 @@
-# LLM and Tool Programs
+# LM and Tool Programs
 
-Use these recipes for LM calls, schemas, static context, and tool-use programs.
+These recipes show how to use `autoform` to generate structured values, revise prompts based on feedback, configure model routing, and combine model calls with other tools.
 
 ```{toctree}
 :maxdepth: 2
@@ -9,6 +9,5 @@ prompt-optimization
 litellm-config
 schema-patterns
 rank-tool-candidates
-static-context
 tool-use-agent
 ```
