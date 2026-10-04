@@ -1,6 +1,6 @@
 # Why `autoform` ?
 
-A growing number of methods and tools are being developed to optimize LLM programs and prompts. These methods all have some mechanism for evaluating a program and propagating some signal between operations to make updates.
+There are a number of methods and tools that aim to optimize programs over text spaces (e.g. programs with LM calls). Each of these methods has some way of evaluating a program and propagating a signal between operations in the program to make updates to it.
 
 Writing this evaluation machinery out by hand is similar to writing forward and backward passes for a neural network by hand. If a model is written out by hand, a change in the model may require changes in both the forward and the backward. On the other hand, automatic differentiation (autodiff) frameworks allow users to define new operations and then the user can combine operations in new ways without having to define a new backward pass. The backward pass is composed from the rules for the individual operations.
 
@@ -42,19 +42,18 @@ An update operation revises the summary based on the feedback. An extension defi
 
 (handling-mixed-types)=
 
-Different spaces can coexist in one program. In the [example on the home page](index.md), a text rubric and a numerical scale contribute to the same loss. Their cotangent types are different: textual feedback for the rubric and a numerical gradient for the scale. A single {py:func}`pullback <autoform.pullback>` handles both through the registered operation rules. Each input is then updated according to its feedback type.
+A single program can have multiple spaces. A language model grades an example according to a text rubric. Its score is multiplied by a numerical scale, and the loss is the squared error against a target. A {py:func}`pullback <autoform.pullback>` gives a numerical gradient for the scale and textual feedback for the rubric through the LM rule. Each input can then be updated using its type of feedback.
 
 ## Transform Composition
 
 There are two levels of composition in `autoform` : operations can be composed into programs, and transforms can be composed. When a transform is applied to a program, it returns an intermediate representation (IR) that can be transformed again.
 
-For the [example on the home page](index.md), one could compute the feedback for a batch of rubrics and scales like this:
+Batching the pullback of this program gives feedback for multiple rubrics and scales:
 
 ```python
-ir = af.trace(grading_loss)(rubric, scale)
 batched_feedback = af.batch(af.pullback(ir))
 ```
 
-Here, the batch transform {py:func}`autoform.batch` is applied to the result of the pullback transform {py:func}`autoform.pullback` , which was applied to the IR of the `grading_loss` function. The same definition of the function was used for both the non-batched and batched version, and the transforms were composed to get the desired behavior. Similarly, if one defines an extension, the extension will work with other types and transforms as long as the necessary rules are defined, although the order of transforms may be important. See Transforms for more information.
+The {py:func}`batch <autoform.batch>` transform operates on the feedback IR returned by {py:func}`pullback <autoform.pullback>`. The original program stays the same. Extensions can compose with other types and transforms when the required rules are registered, although transform order can affect the result. See [Transforms](concepts/transforms.md) for more information.
 
 Note that `autoform` is in early stages of development, and breaking API changes may be made that require changes to existing code.
