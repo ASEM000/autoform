@@ -49,23 +49,29 @@ s \leftarrow s - \eta \, \nabla_s \mathcal{L}(r, s).
 $$
 
 The model updates the rubric using textual feedback from `pullback`.
+Replace `"model-name"` with a LiteLLM model name.
+Replace the example and instruction labels with text for the task.
 
 ```python
 import autoform as af
 
-model = "openai/gpt-5.5"
-example = "Recursion solves a problem by calling itself on smaller subproblems."
+model = "model-name"
+example = "example text"
 target = 8.0  # illustrative reference score
 
 
 def grading_loss(rubric: str, scale: float) -> float:
-    score = af.lm.Float(min=0, max=10, desc="grade the example using the rubric.")
-    result = af.lm.fill(dict(rubric=rubric, example=example, score=score), model=model)
+    content = dict(
+        rubric=rubric,
+        example=example,
+        score=af.lm.Float(min=0, max=10, desc="grading instructions"),
+    )
+    result = af.lm.fill(content, model=model)
     error = scale * result["score"] - target
     return error * error
 
 
-rubric = "Reward clear explanations of recursion."
+rubric = "rubric instructions"
 scale = 0.8
 
 # transform the program to return output along with
@@ -76,8 +82,11 @@ for step in range(3):
     loss, (rubric_fdbk, scale_fdbk) = pullback.call((rubric, scale), 1.0)
     print(step, loss)
     scale -= 0.005 * scale_fdbk
-    new_rubric = af.lm.Str(desc="Revise the rubric using the feedback.")
-    content = dict(rubric=rubric, rubric_feedback=rubric_fdbk, new_rubric=new_rubric)
+    content = dict(
+        rubric=rubric,
+        rubric_feedback=rubric_fdbk,
+        new_rubric=af.lm.Str(desc="rubric update instructions"),
+    )
     rubric = af.lm.fill(content, model=model)["new_rubric"]
 
 print(scale, rubric)
@@ -93,7 +102,7 @@ It then explains how the IR is transformed and executed.
 The [recipes](https://autoform.readthedocs.io/en/latest/recipes/index.html)
 show how to combine these pieces for specific tasks.
 Examples cover batching, control flow, prompt optimization, and programs with model and tool calls.
-They also show how to inspect execution and add custom types, operations, and feedback rules.
+The examples also show how to inspect execution and add custom types, operations, and feedback rules.
 
 ## Citation
 

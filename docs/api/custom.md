@@ -1,6 +1,6 @@
 # Custom Boundaries
 
-{py:func}`custom <autoform.custom>` marks a traceable Python function as a boundary and registers per-transform rules for that boundary.
+Use {py:func}`custom <autoform.custom>` to wrap a traceable function and give it separate rules for batching, pushforwards, pullbacks, etc. See [Custom Rules](../concepts/custom-rules.md) for the input and output shapes of these rules.
 
 ```{eval-rst}
 .. autofunction:: autoform.custom

@@ -1,100 +1,53 @@
-# Why `autoform`
+# Why `autoform` ?
 
-A text-space program written in ordinary Python often hardens around the first way it runs. Later requirements tend to ask for the same logic in new shapes:
+A growing number of methods and tools are being developed to optimize LLM programs and prompts. These methods all have some mechanism for evaluating a program and propagating some signal between operations to make updates.
 
-- Evaluate on 100 inputs: write a batched loop.
-- Route prompt-tuning feedback through every LM call: thread critiques backward by hand.
-- Run independent calls concurrently: rewrite with `async def` and `asyncio.gather`.
-- Inspect a bad intermediate value: wrap each step manually or split the function apart.
+Writing this evaluation machinery out by hand is similar to writing forward and backward passes for a neural network by hand. If a model is written out by hand, a change in the model may require changes in both the forward and the backward. On the other hand, automatic differentiation (autodiff) frameworks allow users to define new operations and then the user can combine operations in new ways without having to define a new backward pass. The backward pass is composed from the rules for the individual operations. Check out this tutorial from PyTorch to see the difference between writing backward passes by hand and using autodiff [4] .
 
-Each new requirement becomes another version of the same program: batched rewrite, feedback rewrite, async rewrite, debugging rewrite.
+`autoform` provides building blocks to define transformations on programs that use strings, numbers, and user-defined types. To define a transformation, one needs to define rules for how to transform individual operations, and these rules are combined to transform larger programs. The result of a transformation is itself a program, which may itself be transformed. A key application of these building blocks is to define optimization methods, but many other uses are possible.
 
-`autoform` factors those requirements differently:
+## Defining feedback spaces
 
-- {py:func}`trace <autoform.trace>` captures the function as an IR.
-- {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>`, and {py:func}`sched <autoform.sched>` transform that IR into another IR.
-- {py:func}`collect <autoform.collect>`, {py:func}`inject <autoform.inject>`, and {py:func}`af.lm.client <autoform.lm.client>` wrap execution without changing the function.
+When working with programs composed of text, it may be natural to use some structure in the feedback other than just a string. For example, when reviewing a document, one may want to associate each comment with a particular section of the document, and perhaps also want to keep track of which reviewer made each comment and what criteria was used to evaluate the document.
 
-The IR transforms compose because their input and output type is the same. The contexts wrap execution without changing the original function.
+To support this, one can use `autoform` ’s extension mechanism to create a document type and an associated review type. The definition of the value and feedback space would look something like this:
+
+| | Example review of a document |
+| --- | --- |
+| Value | `Document(sections={"introduction": "...", "methods": "...", "conclusion": "..."})` |
+| Feedback | `Review(comments=[Comment(section="methods", issue="Why not compare to baseline X?", source="peer review"), Comment(section="conclusion", issue="Claim Y is not supported by the results.", source="self review")])` |
+| Zero | `Review(comments=[])` |
+| Accumulate | Combine two reviews, keeping track of which comments came from which review and which section they are associated with. |
+
+One would then need to define how feedback for these types flows through operations. For example, one may have an operation that assembles sections into a document. The pullback of this operation would take a review of the document and return a review for each section. For the example review above, the pullback might return `Review(comments=[Comment(section="methods", issue="Why not compare to baseline X?", source="peer review")])` for the methods section and `Review(comments=[Comment(section="conclusion", issue="Claim Y is not supported by the results.", source="self review")])` for the conclusion section. One would also need a way to update the sections given the feedback.
+
+This is just an example of how one might want to extend `autoform` . To actually define this extension one needs to register the types and rules for how to accumulate them and how they interact with operations. See Primitives or check out the array extension for an example of how to register these types and rules.
+
+## Handling mixed types
+
+In the example from the previous section, a rubric (text) was used to grade responses, and a scale (numerical) was used to adjust the rubric. The language model returned a numerical score, which was then used in numerical operations to compute the squared error.
+
+When the pullback {py:func}`autoform.pullback` was taken, the function returned both text feedback for the rubric and a numerical gradient for the scale. The feedback for the scale was a number all the way through the loss and scale operations, but then was used to generate text feedback for the rubric when calling the language model. Finally, in the update loop, a language model was used to update the rubric, and a gradient step was used to update the scale.
+
+This example shows how `autoform` can handle multiple types of values and feedback in the same program, and even allows for custom types to be used.
+
+## Composing transforms
+
+There are two levels of composition in `autoform` : operations can be composed into programs, and transforms can be composed. When a transform is applied to a program, it returns an intermediate representation (IR) that can be transformed again.
+
+For example, in the example from the previous section, one could compute the feedback for a batch of rubrics and scales like this:
 
 ```python
-ir = af.trace(explain)("...")  # capture once
-
-af.batch(ir)  # 100 inputs at once
-af.pullback(ir)  # text feedback flows backward
-af.sched(ir)  # independent calls run concurrently
-af.batch(af.pullback(ir))  # batched prompt optimization
+ir = af.trace(grading_loss)(rubric, scale)
+batched_feedback = af.batch(af.pullback(ir))
 ```
 
-*the original `explain` was not modified, was not rewritten, did not know any of this would happen.*
+Here, the batch transform {py:func}`autoform.batch` is applied to the result of the pullback transform {py:func}`autoform.pullback` , which was applied to the IR of the `grading_loss` function. The same definition of the function was used for both the non-batched and batched version, and the transforms were composed to get the desired behavior. Similarly, if one defines an extension, the extension will work with other types and transforms as long as the necessary rules are defined, although the order of transforms may be important. See Transforms for more information.
 
-## One Task, Two Shapes
+## Defining optimization methods
 
-Suppose a three-step pipeline needs batched prompt feedback: run the pipeline over many topics, collect critiques on the outputs, then route text feedback backward to the corresponding inputs.
+`autoform` is a low-level library that operates on types, rules, and transforms. This low-level interface allows for a wide variety of higher-level frameworks and methods to be built on top of it. One example of a higher-level framework is defining optimization methods for LLM programs and prompts. For an example of this kind of framework, see DSPy’s optimizers [5] .
 
-``````{tab-set}
+To define an optimization method, one needs a way to propagate feedback through a program, which is what `autoform` provides. However, there are many other things one can do with a traced program. See Getting Started and Trace, IR, Execute for more information.
 
-
-`````{tab-item} autoform
-````python
-ir = af.trace(pipeline)("...")
-transformed = af.batch(af.pullback(ir))
-outputs, (topic_hints,) = transformed.call((topics,), critiques)
-````
-`````
-
-
-`````{tab-item} Plain Python Rewrite
-````python
-results = []
-hints = []
-
-for topic, critique in zip(topics, critiques):
-    prompt1 = build_prompt(topic)
-    step1 = call_lm(prompt1)
-
-    prompt2 = build_followup(step1)
-    step2 = call_lm(prompt2)
-
-    prompt3 = build_answer(step1, step2)
-    answer = call_lm(prompt3)
-
-    c_answer = critique
-    c_step1, c_step2 = critique_join(step1, step2, c_answer)
-    c_prompt2 = critique_followup(prompt2, c_step2)
-    c_prompt1 = critique_start(prompt1, c_step1)
-    c_topic = critique_topic(topic, c_prompt1)
-
-    results.append(answer)
-    hints.append(c_topic)
-````
-`````
-
-``````
-
-The rewritten version is not replaced by a special combined feature. {py:func}`pullback <autoform.pullback>` returns an IR. {py:func}`batch <autoform.batch>` accepts an IR. Composition is ordinary Python function composition applied to a traced program.
-
-## Adjacent LM Frameworks
-
-| Framework family | Architectural choice | `autoform` choice |
-| --- | --- | --- |
-| LangChain<br>LangGraph | Build a chain object and call it. | Separate trace, transform, and execute phases. The extra concept is the IR; the payoff is ordinary composition between transforms. |
-| DSPy | Describe programs with signatures and modules, then use examples and metrics to tune them. | Expose the traced program as IR data, so feedback, batching, and scheduling are directly *composable* transforms. |
-| TextGrad | Center the interface on textual-gradient optimization with an autograd-style workflow. | Treat text feedback as {py:func}`pullback <autoform.pullback>`, one IR transform that composes with batching, scheduling, and other transforms. |
-| Microsoft Trace | Center agent training on a traced computation graph with trainable values and generative optimizers. | Keep trace, transform, and execute separate; training-style feedback is one use of the IR, not the whole interface. |
-| Outlines<br>Instructor<br>Pydantic AI | Focus on structured output for one LM call. | Put structured output inside a traceable program, so it can compose with batching, pullback, and scheduling. |
-
-## Project Fit
-
-| Good fit | Poor fit |
-| --- | --- |
-| Agents or multi-step LM pipelines are expected to evolve. | The program is a one-shot script. |
-| Text feedback should flow backward through the full program. | Structured output for one LM call is the whole task. |
-| Batched evaluation should compose with other transforms. | One latency-critical request cannot afford another layer. |
-| Debugging or concurrency experiments should not require rewrites. | The project cannot take on a trace/IR/execute model yet. |
-
-Next, read [Getting Started](getting-started.md), or go deeper on the model in [Trace, IR, Execute](concepts/trace-ir-execute.md).
-
-```{warning}
-[API Reference](api/index.md) may change before a stable release.
-```
+Note that `autoform` is in early stages of development, and breaking API changes may be made that require changes to existing code.
