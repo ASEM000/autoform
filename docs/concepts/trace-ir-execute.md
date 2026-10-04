@@ -2,14 +2,8 @@
 
 There are three main ways to interact with `autoform`: passing a Python function to `autoform` to create an IR, applying transforms to an IR to create new IRs, and executing an IR on actual inputs.
 
-```{mermaid}
-flowchart TD
-    func["Python function + example args"] --> trace["Trace"]
-    trace --> ir["IR"]
-    ir --> transform["Transform"]
-    transform --> transformed_ir["IR"]
-    transformed_ir --> execute["Execute"]
-    execute --> output["output"]
+```{raw} html
+:file: ../assets/program-lifecycle.svg
 ```
 
 ## Trace
@@ -118,22 +112,8 @@ Finally, note again that the decision of whether to run in sync or async mode is
 
 The Python function stays the same in both modes. Independent equations can overlap when a scheduled IR runs asynchronously:
 
-```{mermaid}
-flowchart TD
-    func["Python function"] --> trace_step["Trace"]
-    trace_step --> ir["IR"]
-    ir --> batch_step["batch"]
-    ir --> pullback_step["pullback"]
-    ir --> sched_step["sched"]
-    ir --> more_transforms["..."]
-    batch_step --> transformed_ir["transformed IR"]
-    pullback_step --> transformed_ir
-    sched_step --> transformed_ir
-    more_transforms --> transformed_ir
-    transformed_ir --> sync_exec["sync execution"]
-    transformed_ir --> async_exec["async execution"]
-    sync_exec --> output["output"]
-    async_exec --> output
+```{raw} html
+:file: ../assets/execution-modes.svg
 ```
 
 ## Tracing Limits

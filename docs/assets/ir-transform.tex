@@ -1,0 +1,22 @@
+% title: An IR transform returns IR
+% description: A transform consumes an IR and returns an IR that can be executed or transformed again.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.5pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node[box] (in) at (0,0) {IR};
+    \node[box] (transform) at (3.4,0) {Transform};
+    \node[box] (out) at (6.8,0) {IR};
+    \draw[flow] (in) -- (transform);
+    \draw[flow] (transform) -- (out);
+
+\end{tikzpicture}
+\end{document}

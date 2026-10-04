@@ -1,0 +1,29 @@
+% title: Independent model calls join before the final call
+% description: A topic feeds independent summary and analogy calls. Both results are required before the combined-answer call can run.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.5pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node (topic) at (0,0) {topic};
+    \node[box] (summary) at (3,1) {LM: summary};
+    \node[box] (analogy) at (3,-1) {LM: analogy};
+    \node[box] (join) at (6.7,0) {LM: combined\\answer};
+    \node (answer) at (10,0) {answer};
+    \draw[flow] (topic) -- (summary);
+    \draw[flow] (topic) -- (analogy);
+    \draw[flow] (summary) -- (join);
+    \draw[flow] (analogy) -- (join);
+    \draw[flow] (join) -- (answer);
+    \draw[dashed,line width=0.4pt] (1.5,-1.7) rectangle (4.5,1.7);
+    \node[note] at (3,2.1) {Independent calls};
+
+\end{tikzpicture}
+\end{document}

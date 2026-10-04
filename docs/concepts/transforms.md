@@ -2,10 +2,8 @@
 
 An [IR](the-ir.md) transform can be thought of as a function that looks like this:
 
-```{mermaid}
-flowchart TD
-    input_ir["IR"] --> transform["IR transform"]
-    transform --> output_ir["IR"]
+```{raw} html
+:file: ../assets/ir-transform.svg
 ```
 
 The result of the transform is itself an IR that can be executed. The result can also serve as input to another transform, allowing composition. This composition happens through regular Python function calls, but is constrained by the rules of the different operations.
@@ -145,6 +143,10 @@ result = trimmed.call("topic")
 ``````
 
 ## Composition
+
+```{raw} html
+:file: ../assets/pullback-batch.svg
+```
 
 One can compose the different transforms because each one returns an IR.
 

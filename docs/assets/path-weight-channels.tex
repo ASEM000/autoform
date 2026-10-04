@@ -1,0 +1,33 @@
+% title: Output and path weight are separate channels
+% description: The program returns its original output. Each reached factor multiplies a path weight initialized to one, so factors a and b contribute a times b.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.5pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node (x) at (0,1) {$x$};
+    \node[box] (program) at (4.2,1) {Program};
+    \node (out) at (8.4,1) {$x$};
+    \draw[flow] (x) -- (program);
+    \draw[flow] (program) -- (out);
+    \node[note,anchor=west] at (8.8,1) {output};
+    \node (one) at (0,-1) {$1$};
+    \node[box] (a) at (2.8,-1) {$\times a$};
+    \node[box] (b) at (5.6,-1) {$\times b$};
+    \node (weight) at (8.4,-1) {$ab$};
+    \draw[flow] (one) -- (a);
+    \draw[flow] (a) -- (b);
+    \draw[flow] (b) -- (weight);
+    \draw[flow,dashed] (program.south) -- node[above,sloped,note] {factor $a$} (a.north);
+    \draw[flow,dashed] (program.south) -- node[above,sloped,note] {factor $b$} (b.north);
+    \node[note,anchor=west] at (8.8,-1) {path weight};
+
+\end{tikzpicture}
+\end{document}

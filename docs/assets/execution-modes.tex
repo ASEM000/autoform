@@ -1,0 +1,25 @@
+% title: Execution mode is chosen at the IR boundary
+% description: The same transformed IR supports call for synchronous execution and acall for asynchronous execution.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.5pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node[box] (ir) at (0,0) {Transformed IR};
+    \node[box] (sync) at (4,0.9) {Synchronous\\execution};
+    \node[box] (async) at (4,-0.9) {Asynchronous\\execution};
+    \node[box] (out) at (8,0) {Output};
+    \draw[flow] (ir) -- node[above,sloped,note] {\texttt{call}} (sync);
+    \draw[flow] (ir) -- node[below,sloped,note] {\texttt{acall}} (async);
+    \draw[flow] (sync) -- (out);
+    \draw[flow] (async) -- (out);
+
+\end{tikzpicture}
+\end{document}

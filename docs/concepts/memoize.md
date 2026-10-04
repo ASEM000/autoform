@@ -4,6 +4,10 @@
 results inside the `with` block. Use it when the same primitive call is repeated
 with the same inputs.
 
+```{raw} html
+:file: ../assets/memo-cache.svg
+```
+
 ## Execution
 
 Run repeated operations within one cache context:

@@ -48,13 +48,8 @@ print(output)
 The result is an answer about recursion that uses both generated pieces.
 The final call waits for both inputs:
 
-```{mermaid}
-flowchart TD
-    topic["topic"] --> summary["LM: explanation"]
-    topic --> analogy["LM: analogy"]
-    summary --> join["LM: combined answer"]
-    analogy --> join
-    join --> answer["answer"]
+```{raw} html
+:file: ../../assets/concurrent-calls.svg
 ```
 
 ## Execution

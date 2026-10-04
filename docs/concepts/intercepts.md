@@ -8,6 +8,10 @@ The three public pieces are:
 - {py:func}`collect <autoform.collect>`: capture marked values during execution.
 - {py:func}`inject <autoform.inject>`: substitute marked values during execution.
 
+```{raw} html
+:file: ../assets/checkpoint-flow.svg
+```
+
 ## {py:func}`checkpoint <autoform.checkpoint>`
 
 {py:func}`checkpoint <autoform.checkpoint>` is transparent by default:

@@ -13,16 +13,8 @@ Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-k
 Replace labels such as `"answer instructions"` with text for the task.
 ```
 
-```{mermaid}
-flowchart TD
-    question["question"] --> state["state"]
-    state --> should_continue{"continue?"}
-    should_continue -- "yes" --> step["agent step"]
-    step --> tool{"tool?"}
-    tool -- "search" --> search["search branch"]
-    search --> state
-    tool -- "done" --> result["result"]
-    should_continue -- "no" --> result
+```{raw} html
+:file: ../../assets/agent-loop.svg
 ```
 
 ## Agent

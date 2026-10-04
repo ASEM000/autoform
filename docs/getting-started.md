@@ -6,6 +6,10 @@ The examples assume familiarity with Python. Run the code blocks in order in the
 
 `autoform` has three main phases: tracing, transforming, and executing. First, trace a program defined as a Python function to get an intermediate representation (IR). Then, transform the IR to produce new IR. Finally, execute the IR.
 
+```{raw} html
+:file: assets/program-lifecycle.svg
+```
+
 ```{admonition} Concept
 [Trace, IR, Execute](concepts/trace-ir-execute.md) · [Transforms](concepts/transforms.md)
 ```

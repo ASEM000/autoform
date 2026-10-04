@@ -33,6 +33,10 @@ Mathematically, for a single path `p` (concrete execution):
 
 That value is the accumulated score for that concrete path.
 
+```{raw} html
+:file: ../assets/path-weight-channels.svg
+```
+
 ## Accumulation
 
 Two reached factors contribute the product of the factor values:

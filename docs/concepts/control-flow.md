@@ -39,6 +39,10 @@ The above would print `detailed: recursion`. Note that all branches must have th
 
 ## Loops
 
+```{raw} html
+:file: ../assets/loop-state.svg
+```
+
 Carry a structured state through the loop:
 
 ```python

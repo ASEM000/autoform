@@ -5,6 +5,10 @@ A pytree is a nested structure of containers and leaves. A string is a leaf; a t
 `autoform` uses [Optree's pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html)
 for traversal and registration.
 
+```{raw} html
+:file: ../assets/pytree-structure.svg
+```
+
 ## Registration
 
 Without registering a pytree, an object is considered a leaf, which is opaque to `autoform`. This means when using transforms like {py:func}`batch <autoform.batch>`, it won't know which fields of the object should be batched together. Similarly, when using transforms like {py:func}`pullback <autoform.pullback>`, it won't know how to assign cotangents to the fields of the object.

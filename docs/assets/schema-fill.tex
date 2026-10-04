@@ -1,0 +1,29 @@
+% title: Fill preserves context and replaces specifications
+% description: The topic context remains unchanged. The answer Str specification becomes text and the score Float specification becomes a number, in the same dictionary structure.
+\documentclass[tikz,border=5pt]{standalone}
+\usetikzlibrary{arrows.meta,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[
+    box/.style={draw, line width=0.5pt, minimum height=0.8cm,
+                minimum width=1.8cm, align=center},
+    flow/.style={-{Stealth[length=4pt]}, line width=0.5pt},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.5pt,
+                   aspect=2, inner sep=2pt, align=center},
+]
+
+    \node[box,minimum width=4cm,minimum height=2cm] (input) at (0,0) {};
+    \node[box,minimum width=4cm,minimum height=2cm] (output) at (6.5,0) {};
+    \node[note] at (0,1.45) {Input dictionary};
+    \node[note] at (6.5,1.45) {Output dictionary};
+    \node[anchor=west] at (-1.75,0.6) {\texttt{topic}: context};
+    \node[anchor=west] at (-1.75,0) {\texttt{answer}: \texttt{Str}};
+    \node[anchor=west] at (-1.75,-0.6) {\texttt{score}: \texttt{Float}};
+    \node[anchor=west] at (4.75,0.6) {\texttt{topic}: context};
+    \node[anchor=west] at (4.75,0) {\texttt{answer}: text};
+    \node[anchor=west] at (4.75,-0.6) {\texttt{score}: number};
+    \draw[flow] (input) -- node[above,note] {\texttt{fill}} (output);
+    \node[note] at (3.25,-1.65) {Same container structure};
+
+\end{tikzpicture}
+\end{document}

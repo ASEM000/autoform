@@ -28,6 +28,10 @@ print(cleaned.call("alpha"))
 
 The {py:func}`dce <autoform.dce>` function walks backwards from the output, which can be a [pytree](../../concepts/pytrees.md). Because the {py:func}`concat <autoform.string.concat>` operation is not used in the selected part of the output, it is removed in the cleaned version of the IR, and the result of executing the IR is only `used: alpha`.
 
+```{raw} html
+:file: ../../assets/dead-code.svg
+```
+
 ## Selected Outputs
 
 Use `out_used` to select the required output leaves:

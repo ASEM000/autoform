@@ -53,6 +53,10 @@ def ask_for_feedback(draft: str) -> str:
 The pause happens at `input(...)`. The runner decides when to call this
 function.
 
+```{raw} html
+:file: ../../assets/human-review.svg
+```
+
 ## Runner
 
 The runner executes one equation at a time. When a yielded equation has the

@@ -28,6 +28,10 @@ Its `topic` remains `"recursion"`; `answer` is a string and `score` is a float.
 The model route must support the JSON Schema response format used by the
 [LiteLLM Responses API](https://docs.litellm.ai/docs/response_api).
 
+```{raw} html
+:file: ../assets/schema-fill.svg
+```
+
 ## Specifications
 
 The built-in specifications describe scalar values:
