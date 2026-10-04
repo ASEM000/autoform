@@ -1,4 +1,31 @@
 ```{include} ../README.md
+:end-before: <picture id="grading-program">
+```
+
+```{raw} html
+:file: assets/grading-program.svg
+```
+
+```{include} ../README.md
+:start-after: <!-- end grading-program -->
+:end-before: <picture id="mixed-feedback">
+```
+
+```{raw} html
+:file: assets/mixed-feedback.svg
+```
+
+```{include} ../README.md
+:start-after: <!-- end mixed-feedback -->
+:end-before: <picture id="batched-feedback">
+```
+
+```{raw} html
+:file: assets/batched-feedback.svg
+```
+
+```{include} ../README.md
+:start-after: <!-- end batched-feedback -->
 ```
 
 `````{div} sd-p-3 sd-border sd-rounded-2
