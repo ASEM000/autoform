@@ -27,81 +27,16 @@ import autoform as af
 @af.custom
 def bracket(text: str) -> str:
     return "[" + text + "]"
+
+
+ir = af.trace(bracket)("seed")
+assert ir.call("alpha") == "[alpha]"
+assert af.batch(ir).call(["a", "b"]) == ["[a]", "[b]"]
 ```
 
 With no registered rules, transforms fall back to the body behavior. Register a rule only for the transform to override.
 
-## Pushforward Rule
-
-Define how input changes affect the bracketed result:
-
-```python
-@bracket.set_pushforward
-def bracket_pushforward(in_tree, /, *, call):
-    primals, tangents = in_tree
-    (text_tangent,) = tangents
-    output = call(*primals)
-    tangent = "bracket change: " + text_tangent
-    return output, tangent
-
-
-ir = af.trace(lambda text: bracket(text))("seed")
-output, tangent = af.pushforward(ir).call(("hello",), ("make it direct",))
-
-assert output == "[hello]"
-assert tangent == "bracket change: make it direct"
-```
-
-The pushforward rule receives `(primals, tangents)` and returns
-`(primal_output, tangent_output)`.
-
-## Pullback Rule
-
-Define how output feedback becomes feedback for the original text:
-
-```python
-@bracket.set_pullback
-def bracket_pullback(in_tree, /, *, call):
-    del call
-    (primals, output), feedback = in_tree
-    (text,) = primals
-    text_feedback = feedback + " via " + output + " from " + text
-    return (text_feedback,)
-
-
-ir = af.trace(lambda text: bracket(text))("seed")
-output, (text_feedback,) = af.pullback(ir).call(("hello",), "too decorated")
-
-assert output == "[hello]"
-assert text_feedback == "too decorated via [hello] from hello"
-```
-
-The pullback rule receives `((primals, output), feedback)` and returns
-feedback with the same shape as the original inputs.
-
-## Batch Rule
-
-Define the behavior for a batch of texts:
-
-```python
-@bracket.set_batch
-def bracket_batch(in_tree, /, *, call):
-    del call
-    batch_size, axes, values = in_tree
-    (texts,) = values
-    (text_axis,) = axes
-
-    assert text_axis is True
-    assert batch_size == len(texts)
-
-    return [("<" + text + ">") for text in texts], True
-
-
-ir = af.trace(lambda text: bracket(text))("seed")
-assert af.batch(ir).call(["a", "b"]) == ["<a>", "<b>"]
-```
-
-The rule receives one `in_tree` argument. For batch, that tree is `(batch_size, axes, values)`, and the rule returns `(outputs, output_axes)`.
+The [Custom Rules recipe](../recipes/extending/custom-rule.md) shows how to register and check rules for each transform.
 
 ## Rule Hooks
 

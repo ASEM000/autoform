@@ -173,7 +173,7 @@ Trying to perform AD around the function `weight(ir)` with `pullback(weight(ir))
 Other [public APIs](../api/index.md) work at different boundaries:
 
 - {py:func}`custom <autoform.custom>` is a decorator on traceable user functions. It marks a function boundary and lets transforms consult custom rules at that boundary. See [Custom Rules](custom-rules.md).
-- {py:func}`memoize <autoform.memoize>` is a context manager. It caches primitive results within a `with` block. See [Memoization](../recipes/execution/memoize.md).
+- {py:func}`memoize <autoform.memoize>` is a context manager. It caches primitive results within a `with` block. See [Memoization](memoize.md).
 - {py:func}`client <autoform.lm.client>` is a context manager. It changes provider routing during execution. See [Model Routing](../recipes/llm/litellm-config.md).
 - {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` are context managers. These contexts capture or replace checkpointed values during execution. See [Intercepts](intercepts.md).
 - {py:func}`tag <autoform.tag>` and {py:func}`fold <autoform.fold>` are context managers. These contexts alter trace-time annotation or trace-time evaluation. See [Tags](tags.md) and [Fold](fold.md).

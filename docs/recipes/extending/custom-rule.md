@@ -70,15 +70,22 @@ ir = af.trace(clean)("  Hello  ")
 output, tangent = af.pushforward(ir).call(("alpha",), ("make it direct",))
 print(output)
 print(tangent)
+assert output == "[alpha]"
+assert tangent == "bracket change: make it direct"
 
 output, (text_feedback,) = af.pullback(ir).call(("alpha",), "too decorated")
 print(output)
 print(text_feedback)
+assert output == "[alpha]"
+assert text_feedback == "too decorated via [alpha] from alpha"
 
 batched = af.batch(ir)
 
-print(batched.call(["a", "b"]))
+outputs = batched.call(["a", "b"])
+print(outputs)
 print(calls)
+assert outputs == ["<a>", "<b>"]
+assert calls == ["batch"]
 ```
 
 Each rule receives one `in_tree` argument:

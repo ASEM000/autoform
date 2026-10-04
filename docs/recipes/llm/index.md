@@ -9,6 +9,5 @@ prompt-optimization
 litellm-config
 schema-patterns
 rank-tool-candidates
-static-context
 tool-use-agent
 ```

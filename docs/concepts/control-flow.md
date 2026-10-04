@@ -1,13 +1,9 @@
 # Control Flow
 
-`autoform` [control-flow primitives](../../concepts/primitives.md) keep branches and loops visible to the [IR](../../concepts/the-ir.md).
+`autoform` [control-flow primitives](primitives.md) keep branches and loops visible to the [IR](the-ir.md).
 Use these operations when a branch condition or loop count depends on runtime inputs.
 For loops that should stop when repeated application reaches a stable state, see
 [Fixed Points](fixpoint.md).
-
-```{admonition} Concept
-[Primitives](../../concepts/primitives.md) · [The IR](../../concepts/the-ir.md) · [Pytrees](../../concepts/pytrees.md)
-```
 
 ## Branches
 
@@ -75,7 +71,7 @@ print(result)
 
 The result is `State(text="go!", status="done")`. The body changes the status after one iteration.
 
-The loop state is a registered [pytree](../../concepts/pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
+The loop state is a registered [pytree](pytrees.md), using [Optree's dataclass integration](https://optree.readthedocs.io/en/latest/dataclasses.html).
 
 ## Feedback Boundaries
 

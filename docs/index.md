@@ -59,6 +59,7 @@ API signatures, parameters, and return values.
 :caption: Getting Started
 :hidden:
 
+why-autoform
 getting-started
 ```
 
@@ -67,8 +68,12 @@ getting-started
 :caption: Concepts
 :hidden:
 
-why-autoform
-concepts/index
+concepts/programs
+concepts/values
+concepts/tracing
+concepts/transforms-and-rules
+concepts/execution
+concepts/control-flow-and-scoring
 ```
 
 ```{toctree}
@@ -76,7 +81,10 @@ concepts/index
 :caption: Recipes
 :hidden:
 
-recipes/index
+recipes/core/index
+recipes/llm/index
+recipes/execution/index
+recipes/extending/index
 ```
 
 ```{toctree}
