@@ -1,25 +1,18 @@
 % title: Human review belongs to the walk runner
 % description: At a tagged review point, the runner passes the equation output to human review, then sends the accepted or edited value into the walk generator before the next equation runs.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta,shapes.geometric}
+\input{parts/diagram-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-    choice/.style={diamond, draw, line width=0.8pt,
-                   aspect=2, inner sep=2pt, align=center},
-]
+\begin{tikzpicture}
 
-    \node[box] (out) at (0,0) {Equation\\output};
+    \node[align=center] (out) at (0,0) {Equation\\output};
     \node[box] (review) at (3.4,0) {Human review};
     \node[box] (send) at (7,0) {\texttt{gen.send}\\accepted or edited};
     \node[box] (next) at (10.5,0) {Next equation};
     \draw[flow] (out) -- (review);
     \draw[flow] (review) -- (send);
     \draw[flow] (send) -- (next);
-    \draw[dashed,line width=0.7pt] (2,-0.95) rectangle (8.6,0.95);
+    \draw[dashed,line width=0.7pt] (2,-0.95) rectangle (8.9,0.95);
     \node[note] at (5.3,1.35) {Walk runner: tagged review point};
 
 \end{tikzpicture}

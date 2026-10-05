@@ -4,38 +4,22 @@ orphan: true
 
 # Concepts
 
-Pages describing how `autoform` records, transforms, and runs programs, as well as how types and operation rules are used to define the behavior of a transform.
+Concepts explain program structure, types and spaces, operation rules, and execution.
 
-## Programs
+## Foundations
 
-- [Trace, IR, Execute](trace-ir-execute.md)
-- [The IR](the-ir.md)
-- [Primitives](primitives.md)
-
-## Tracing
-
-- [Tracing Semantics](tracing-semantics.md)
-- [Tags](tags.md)
-- [Fold](fold.md)
-
-## Transforms and Rules
-
-- [Transforms](transforms.md)
-- [Custom Rules](custom-rules.md)
-
-## Execution and Scoring
-
-- [Intercepts](intercepts.md)
-- [Walk](walk.md)
-- [Memoization](memoize.md)
-- [Path Weights](path-weights.md)
-
-## Values
-
+- [Programs and IR](programs-and-ir.md)
 - [Pytrees](pytrees.md)
-- [Schemas](schemas.md)
+- [Tracing](tracing.md)
+- [Types and Spaces](types-and-spaces.md)
 
-## Control Flow
+## Computation and Transforms
 
+- [Primitives and Rules](primitives-and-rules.md)
 - [Control Flow](control-flow.md)
-- [Fixed Points](fixpoint.md)
+- [Transforms](transforms.md)
+
+## Execution
+
+- [Execution](execution.md)
+- [Path Weights](path-weights.md)

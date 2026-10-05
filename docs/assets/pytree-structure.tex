@@ -1,27 +1,22 @@
 % title: Flattening and reconstructing a pytree
-% description: Flattening separates leaf values from the tree structure. Unflattening reconstructs a State container from its structure and leaf values.
+% description: Flattening separates a Review's comment and score from its structure and static source label. Unflattening reconstructs the Review.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta,shapes.geometric}
+\input{parts/diagram-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-    choice/.style={diamond, draw, line width=0.8pt,
-                   aspect=2, inner sep=2pt, align=center},
-]
+\begin{tikzpicture}
 
-    \node[box] (state) at (0,0) {\texttt{State}\\topic, draft};
-    \node[box] (leaves) at (4,0.9) {Leaf values\\topic, draft};
-    \node[box] (spec) at (4,-0.9) {Tree structure\\\texttt{State} fields};
-    \node[box] (result) at (8,0) {\texttt{State}\\topic, draft};
-    \draw[flow] (state) -- (leaves);
-    \draw[flow] (state) -- (spec);
-    \draw[flow] (leaves) -- (result);
-    \draw[flow] (spec) -- (result);
-    \node[note] at (1.7,1.2) {flatten};
-    \node[note] at (6.3,1.2) {unflatten};
+    \node[align=center] (state) at (0,0) {\texttt{Review}\\comment, score};
+    \node[box] (flatten) at (3,0) {\texttt{flatten}};
+    \node[align=center] (leaves) at (6,1) {Leaf values\\comment, score};
+    \node[align=center] (spec) at (6,-1) {Tree structure\\\texttt{Review}, source};
+    \node[box] (unflatten) at (9,0) {\texttt{unflatten}};
+    \node[align=center] (result) at (12,0) {\texttt{Review}\\comment, score};
+    \draw[flow] (state) -- (flatten);
+    \draw[flow] (flatten) -- (leaves);
+    \draw[flow] (flatten) -- (spec);
+    \draw[flow] (leaves) -- (unflatten);
+    \draw[flow] (spec) -- (unflatten);
+    \draw[flow] (unflatten) -- (result);
 
 \end{tikzpicture}
 \end{document}

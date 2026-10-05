@@ -34,4 +34,4 @@ upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 
 As a result, only the `topic` is changed to `"TOPIC TEXT"` while the `model` remains equal to `"model-name"`.
 
-See [Pytrees](../concepts/pytrees.md) for the full pattern.
+See [Pytrees](../concepts/pytrees.md#pytrees) for the full pattern.

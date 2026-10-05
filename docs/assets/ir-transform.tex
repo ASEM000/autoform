@@ -1,18 +1,13 @@
 % title: An IR transform returns IR
 % description: A transform consumes an IR and returns an IR that can be executed or transformed again.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta}
+\input{parts/diagram-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-]
+\begin{tikzpicture}
 
-    \node[box] (in) at (0,0) {IR};
-    \node[box] (out) at (4.8,0) {IR};
-    \draw[flow] (in) -- node[note, above] {Transform} (out);
+    \node[ir, label={[note]above:IR}] (in) at (0,0) {};
+    \node[ir, label={[note]above:IR}] (out) at (4.8,0) {};
+    \transformarrow{in.east}{out.west}{Transform}
 
 \end{tikzpicture}
 \end{document}

@@ -1,16 +1,9 @@
 % title: A memoized primitive call can reuse a cached result
 % description: Within a memoize context, an eligible primitive call looks up its primitive identity, input values, and parameters. A hit reuses the result; a miss runs the primitive and stores its result.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta,shapes.geometric}
+\input{parts/diagram-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-    choice/.style={diamond, draw, line width=0.8pt,
-                   aspect=2, inner sep=2pt, align=center},
-]
+\begin{tikzpicture}
 
     \node[box] (call) at (0,0) {Eligible\\primitive call};
     \node[choice] (cache) at (3.6,0) {Cached?};

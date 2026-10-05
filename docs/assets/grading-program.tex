@@ -1,13 +1,15 @@
-% title: The original grading program
-% description: A language model scores an example using a text rubric. A numerical scale multiplies the score before the squared error loss. Blue arrows carry numbers; purple arrows carry text. The example and target are omitted.
+% title: The forward grading program
+% description: A language model scores an example using a text rubric. A numerical adjustment adds or subtracts points from the score to produce a prediction. Blue arrows carry numbers; purple arrows carry text.
 % variants: dark
 \documentclass[tikz,border=5pt]{standalone}
 \input{parts/grading-diagram.tex}
 \begin{document}
 \begin{tikzpicture}
-    \node[note, anchor=west] at (-1.3,2.7) {Original program};
-    \draw[line width=0.8pt] (-1.3,-1.7) rectangle (11.8,2.5);
-    \gradingprogram{0}
+    \node[note, anchor=west] at (-1.3,2.7) {Forward program};
+    \irframe{(-1.3,-1.7)}{(12.4,2.5)}
+    \forwardprogram
+    \node (prediction) at (10.5,0) {Prediction};
+    \draw[flow, numeric] (add.east) -- (prediction.west);
     \forwardlegend{-2.55}
 \end{tikzpicture}
 \end{document}
