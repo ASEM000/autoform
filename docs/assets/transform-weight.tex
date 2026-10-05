@@ -1,27 +1,25 @@
 % title: Weight adds a path-weight output
 % description: The original IR maps inputs to an output. Weight preserves these inputs and the original output and adds the product of weights from factor calls reached during execution.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta}
+\input{parts/transform-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=2cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-]
+\begin{tikzpicture}[transform panel]
+    \transformcanvas
 
-    \node[box] (original) at (3, 0) {IR};
-    \node (inputs) at (0, 0) {Inputs};
-    \node (output) at (6, 0) {Output};
-    \draw[flow] (inputs) -- (original);
-    \draw[flow] (original) -- (output);
-    \node[box, minimum height=1.5cm] (new) at (3, -3) {Weighted IR};
-    \draw[flow] (original.south) -- node[right, note] {\texttt{weight}} (new.north);
-    \node (newin) at (0, -3) {Inputs};
-    \node (newout) at (6, -2.55) {Output};
-    \node[note] (pathweight) at (6, -3.45) {Path weight};
+    \node[transform program, minimum height=1.0cm] (original) at (0,1.5) {Original IR};
+    \node (inputs) at (-5,1.5) {Inputs};
+    \node (output) at (5,1.5) {Output};
+    \draw[flow] (inputs.east) -- (original.west);
+    \draw[flow] (original.east) -- (output.west);
+
+    \node[transform program, minimum height=1.65cm] (new) at (0,-1.35) {Weighted IR};
+    \transformarrow[right]{original.south}{new.north}{\texttt{weight}}
+    \node (newin) at (-5,-1.35) {Inputs};
+    \node (newout) at (5,-0.9) {Output};
+    \node (pathweight) at (5,-1.8) {Path weight};
     \draw[flow] (newin.east) -- (new.west);
     \draw[flow] ([yshift=0.45cm]new.east) -- (newout.west);
     \draw[flow] ([yshift=-0.45cm]new.east) -- (pathweight.west);
+
 \end{tikzpicture}
 \end{document}

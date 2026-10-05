@@ -1,9 +1,9 @@
 # Tool-Use Agent
 
-Build an agent as one traced function, then use [IR transforms](../../concepts/transforms.md) around it. The agent below can ask for a search observation, finish with `done`, keep its loop state in a registered [pytree](../../concepts/pytrees.md), and run tool calls through async primitive rules. It uses `httpx` for the Wikipedia request. Model and HTTP requests occur when the agent executes.
+An agent may need to search for information, remember the information it has found, and know when it has found an answer to a question. The following program defines an agent with those capabilities by composing a structured model call, a search tool, and a loop. The agent can be run on multiple questions, or to produce feedback on an input question.
 
 ```{admonition} Concept
-[Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md) · [Schemas](../../concepts/schemas.md) · [Primitives](../../concepts/primitives.md)
+[Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md#pytrees) · [Language Models](../../language-models.md) · [Primitives and Rules](../../concepts/primitives-and-rules.md)
 ```
 
 ```{admonition} Model Setup
@@ -17,9 +17,7 @@ Replace labels such as `"answer instructions"` with text for the task.
 :file: ../../assets/agent-loop.svg
 ```
 
-## Agent
-
-Register the tool operation, trace its branches, and carry the decision through a bounded loop:
+## Decision and State
 
 ```python
 import asyncio
@@ -59,8 +57,11 @@ decision_schema = Decision(
     args=af.lm.Str(desc="Search query; empty for done."),
     answer=af.lm.Str(desc="Final answer; empty for search."),
 )
+```
 
+## Search Tool
 
+```python
 # primitive wrapper called by traced programs
 wikipedia_search_p = afe.Prim("wikipedia_search")
 
@@ -150,8 +151,11 @@ afe.register_abstract(wikipedia_search_p, abstract_wikipedia_search)
 afe.register_abatch(wikipedia_search_p, abatch_wikipedia_search)
 afe.register_apullback_fwd(wikipedia_search_p, apull_fwd_wikipedia_search)
 afe.register_apullback_bwd(wikipedia_search_p, apull_bwd_wikipedia_search)
+```
 
+## Agent Loop
 
+```python
 def search_tool(query: str, _answer: str, history: str) -> str:
     result = wikipedia_search(query)
     return history + "\nsearch(" + query + "): " + result
@@ -216,9 +220,7 @@ answer = asyncio.run(agent_ir.acall("question text"))
 print(answer)
 ```
 
-The provider decides which branch to run by returning a [`Decision` schema value](../../concepts/schemas.md). {py:func}`switch <autoform.switch>` dispatches to the traced tool branch at execution time, and the selected branch appends to the history. {py:func}`while_loop <autoform.while_loop>` keeps applying `body_ir` while `should_continue` returns true, capped by `max_iters`.
-
-`wikipedia_search` is a [primitive](../../concepts/primitives.md) written with the same pattern as [Primitive Definitions](../extending/writing-primitives.md). The HTTP call stays in the async runtime implementation, while the abstract, {py:func}`batch <autoform.batch>`, and {py:func}`pullback <autoform.pullback>` rules tell `autoform` how the external tool behaves when tracing or transforming the IR.
+The result is the answer from the final model call. `max_iters=4` bounds the loop, but reaching that limit does not guarantee a completed answer. The search tool runs asynchronously; model and HTTP requests occur during execution.[^synchronous-rules]
 
 ## Transforms
 
@@ -242,13 +244,4 @@ answer, (question_hint,) = asyncio.run(
 
 For real tools, keep the branch signature stable: each branch here is `(query, answer, history) -> history`.
 
-## Synchronous Execution
-
-Note that the async and sync registries are independent. To also allow the primitive to be called with `.call(...)`, sync counterparts must be added with the same input/output shapes.
-
-- `afe.register_impl(wikipedia_search_p, impl_wikipedia_search)`;
-- `afe.register_batch(wikipedia_search_p, batch_wikipedia_search)`;
-- `afe.register_pullback_fwd(wikipedia_search_p, pull_fwd_wikipedia_search)`;
-- `afe.register_pullback_bwd(wikipedia_search_p, pull_bwd_wikipedia_search)`.
-
-Note that the sync case uses `httpx.get(...)` or `httpx.Client` while the async case uses `httpx.AsyncClient` in order to allow for overlapping independent tool calls with `.acall(...)`.
+[^synchronous-rules]: This tool registers async rules. Synchronous execution also needs synchronous execution, batch, and pullback rules; see [Primitive Definitions](../../concepts/primitives-and-rules.md#primitive-definitions).

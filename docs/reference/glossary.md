@@ -49,4 +49,4 @@ These names may be useful when inspecting internals and debugging transforms, bu
 | `Prim` | A named primitive operation used as the dispatch key for execution and transform rules. |
 | `TraceBox` | The internal wrapper used by the trace interpreter to carry a `Var` through Python code. |
 | Tracer | The trace-time interpreter machinery that records primitive calls instead of executing the calls normally. |
-| `walk` | The manual IR stepping interface used by execution internals and advanced debugging code. See [Walk](../concepts/walk.md). |
+| `walk` | The manual IR stepping interface used by execution internals and advanced debugging code. See [Manual Execution](../concepts/execution.md#manual-execution). |

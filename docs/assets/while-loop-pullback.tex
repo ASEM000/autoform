@@ -1,0 +1,40 @@
+% title: Feedback through two executed while-loop steps
+% description: Two body calls take the initial state s0 to s1 and then s2. The backward pass starts with feedback for s2 and applies the body pullback at the saved states s1 and s0, in that order. The result is feedback for the initial state. Solid arrows carry states; dashed arrows carry feedback.
+\documentclass[tikz,border=5pt]{standalone}
+\input{parts/diagram-style.tex}
+\begin{document}
+\begin{tikzpicture}[font=\small]
+    \path[use as bounding box] (-6.6,-2.05) rectangle (6.6,2.0);
+
+    \node (initial) at (-5.6,1.0) {$s_0$};
+    \node[box, minimum width=2.6cm] (stepone) at (-2.8,1.0) {Body};
+    \node (middle) at (0,1.0) {$s_1$};
+    \node[box, minimum width=2.6cm] (steptwo) at (2.8,1.0) {Body};
+    \node (final) at (5.6,1.0) {$s_2$};
+    \node[note] at (-5.6,1.65) {Initial state};
+    \node[note] at (5.6,1.65) {Final state};
+
+    \draw[flow] (initial) -- (stepone);
+    \draw[flow] (stepone) -- (middle);
+    \draw[flow] (middle) -- (steptwo);
+    \draw[flow] (steptwo) -- (final);
+
+    \node (initialfeedback) at (-5.6,-1.0) {$g_0$};
+    \node[box, minimum width=2.6cm] (pullone) at (-2.8,-1.0) {Body pullback};
+    \node (middlefeedback) at (0,-1.0) {$g_1$};
+    \node[box, minimum width=2.6cm] (pulltwo) at (2.8,-1.0) {Body pullback};
+    \node (outputfeedback) at (5.6,-1.0) {$g_2$};
+    \node[note] at (-5.6,-1.65) {Initial feedback};
+    \node[note] at (5.6,-1.65) {Output feedback};
+
+    \draw[feedback] (outputfeedback) -- (pulltwo);
+    \draw[feedback] (pulltwo) -- (middlefeedback);
+    \draw[feedback] (middlefeedback) -- (pullone);
+    \draw[feedback] (pullone) -- (initialfeedback);
+
+    \draw[flow] (initial.south) -- (-5.6,0)
+        -- node[above,note] {saved state} (-2.8,0) -- (pullone.north);
+    \draw[flow] (middle.south) -- (0,0)
+        -- node[above,note] {saved state} (2.8,0) -- (pulltwo.north);
+\end{tikzpicture}
+\end{document}

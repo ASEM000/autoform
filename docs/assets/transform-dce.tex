@@ -1,21 +1,29 @@
 % title: Dead code elimination removes unused equations
 % description: The original IR contains a used equation and an unused equation. DCE removes the unused equation while retaining the equation needed for the selected output.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta}
+\input{parts/transform-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=2cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-]
+\begin{tikzpicture}[transform panel]
+    \transformcanvas
 
-    \node[box, minimum width=3cm, minimum height=1.8cm] (original) at (0, 0) {};
-    \node[note] at (0, 1.4) {Original IR};
-    \node at (0, 0.4) {Used equation};
-    \node at (0, -0.4) {Unused equation};
-    \node[box, minimum width=3cm, minimum height=1.8cm] (new) at (6, 0) {Used equation};
-    \node[note] at (6, 1.4) {After \texttt{dce}};
-    \draw[flow] (original.east) -- node[above, note] {\texttt{dce}} (new.west);
+    \node[ir, minimum width=4.2cm, minimum height=4cm] (original) at (-3.7,0) {};
+    \node at (-3.7,2.3) {Original IR};
+    \node (input) at (-3.7,1.45) {$x$};
+    \node[box, minimum width=1.2cm] (used) at (-4.65,0.1) {$f$};
+    \node[box, minimum width=1.2cm] (unused) at (-2.75,0.1) {$g$};
+    \node (output) at (-4.65,-1.35) {$y$};
+    \node at (-2.75,-1.35) {Unused};
+    \draw[flow] (input.south) -- (used.north);
+    \draw[flow] (input.south) -- (unused.north);
+    \draw[flow] (used.south) -- (output.north);
+    \node[ir, minimum width=4.2cm, minimum height=4cm] (new) at (3.7,0) {};
+    \node at (3.7,2.3) {After \texttt{dce}};
+    \node (newin) at (3.7,1.45) {$x$};
+    \node[box, minimum width=1.2cm] (kept) at (3.7,0.1) {$f$};
+    \node (newout) at (3.7,-1.35) {$y$};
+    \draw[flow] (newin.south) -- (kept.north);
+    \draw[flow] (kept.south) -- (newout.north);
+    \transformarrow{original.east}{new.west}{\texttt{dce}}
+
 \end{tikzpicture}
 \end{document}

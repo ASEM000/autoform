@@ -8,6 +8,15 @@
 
 ```{include} ../README.md
 :start-after: <!-- end grading-program -->
+:end-before: <picture id="grading-loss">
+```
+
+```{raw} html
+:file: assets/grading-loss.svg
+```
+
+```{include} ../README.md
+:start-after: <!-- end grading-loss -->
 :end-before: <picture id="mixed-feedback">
 ```
 
@@ -33,28 +42,28 @@
 ````{grid} 1 2 2 2
 :gutter: 3
 
-```{grid-item-card} Getting Started
-:link: getting-started
+```{grid-item-card} A First Program
+:link: a-first-program
 :link-type: doc
 
-Installation, tracing, execution, and transformations.
+Trace, run, and transform a language model program.
 ```
 
 ```{grid-item-card} Concepts
 :link: concepts/index
 :link-type: doc
 
-Types, operations, feedback rules, and program transformations.
+Programs, spaces, rules, and transforms.
 ```
 
 ```{grid-item-card} Recipes
 :link: recipes/index
 :link-type: doc
 
-Batching, control flow, model and tool calls, and custom types.
+Tool use, tool ranking, human review, and array extensions.
 ```
 
-```{grid-item-card} Reference
+```{grid-item-card} API Reference
 :link: api/index
 :link-type: doc
 
@@ -67,11 +76,12 @@ API signatures, parameters, and return values.
 
 ```{toctree}
 :maxdepth: 2
-:caption: Getting Started
+:caption: Introduction
 :hidden:
 
-why-autoform
-getting-started
+a-first-program
+building-blocks
+motivation-and-applications
 ```
 
 ```{toctree}
@@ -79,30 +89,17 @@ getting-started
 :caption: Concepts
 :hidden:
 
-concepts/programs
-concepts/tracing
-concepts/transforms-and-rules
-concepts/execution
-concepts/values
-concepts/control-flow-and-scoring
+concepts/foundations
+concepts/computation-and-transforms
+concepts/execution-overview
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Recipes
+:caption: Resources
 :hidden:
 
-recipes/core/index
-recipes/llm/index
-recipes/execution/index
-recipes/extending/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Reference
-:hidden:
-
+recipes/index
 api/index
 reference/changelog
 reference/glossary

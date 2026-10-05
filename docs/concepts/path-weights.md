@@ -2,7 +2,7 @@
 
 A *path* is one execution of some IR for some set of inputs at runtime. Inputs can lead to different paths through the IR due to branches, loops, batched inputs, LM calls, etc.
 
-A *path weight* is extra information attached to the execution of a path, often used to decide if paths should be kept/rejected, or how good a generated path is, without changing the output of the program itself.
+A *path weight* is extra information attached to the execution of a path, often used to decide if paths should be kept/rejected, or how good a generated path is, without changing the output of the program itself.[^probability-reading]
 
 Use {py:func}`factor <autoform.factor>` to contribute a score to the path:
 
@@ -109,51 +109,49 @@ Factors must be finite, non-negative numbers. A zero factor makes the path weigh
 The returned `path_weight` is an ordinary Python number. Caller code decides what
 to do with it after the IR call returns.
 
-## Probability Reading
+[^probability-reading]: **Probability Reading.** Probability is an interpretation layer over the same execution result. Treat
+    each candidate path as a candidate `x`, and treat each reached `factor` as
+    evidence compatibility. Then the path weight can be used as a likelihood-style
+    score.
 
-Probability is an interpretation layer over the same execution result. Treat
-each candidate path as a candidate `x`, and treat each reached `factor` as
-evidence compatibility. Then the path weight can be used as a likelihood-style
-score.
+    In probability terms, the variables are:
 
-In probability terms, the variables are:
+    | Term | Meaning |
+    | --- | --- |
+    | Candidate `x` | A concrete value being scored. |
+    | Evidence `e` | An observed condition used to score candidates. |
+    | Prior `P(x)` | The probability of candidate `x` before using `e`. |
+    | Likelihood `L(e \| x)` | How likely candidate `x` would be to generate evidence `e`. |
+    | Path weight `w(x)` | The value returned by `weight(ir)` for candidate `x`. |
+    | Posterior `P(x \| e)` | The normalized result after combining the prior and path weight. |
 
-| Term | Meaning |
-| --- | --- |
-| Candidate `x` | A concrete value being scored. |
-| Evidence `e` | An observed condition used to score candidates. |
-| Prior `P(x)` | The probability of candidate `x` before using `e`. |
-| Likelihood `L(e \| x)` | How likely candidate `x` would be to generate evidence `e`. |
-| Path weight `w(x)` | The value returned by `weight(ir)` for candidate `x`. |
-| Posterior `P(x \| e)` | The normalized result after combining the prior and path weight. |
+    When the product of the factors represents the likelihood of the evidence given the candidate, the path weight can stand in for `L(e | x)`.
 
-When the product of the factors represents the likelihood of the evidence given the candidate, the path weight can stand in for `L(e | x)`.
+    For exact enumeration, caller code can compute:
 
-For exact enumeration, caller code can compute:
+    ```{math}
+    \mathrm{mass}(x) = P(x)\,w(x)
+    ```
 
-```{math}
-\mathrm{mass}(x) = P(x)\,w(x)
-```
+    ```{math}
+    P(x \mid e) = \frac{\mathrm{mass}(x)}{\sum_{x'} \mathrm{mass}(x')}
+    ```
 
-```{math}
-P(x \mid e) = \frac{\mathrm{mass}(x)}{\sum_{x'} \mathrm{mass}(x')}
-```
+    `autoform` returns `w(x)`. The prior, aggregation, and normalization stay in
+    the caller.
 
-`autoform` returns `w(x)`. The prior, aggregation, and normalization stay in
-the caller.
+    The posterior reading depends on the meaning of the factors. If the factors are
+    calibrated likelihood terms, the normalized masses have the form of a posterior.
+    If the factors are heuristic scores, the same calculation is a normalized
+    decision score. Normalization requires a positive total mass.
 
-The posterior reading depends on the meaning of the factors. If the factors are
-calibrated likelihood terms, the normalized masses have the form of a posterior.
-If the factors are heuristic scores, the same calculation is a normalized
-decision score. Normalization requires a positive total mass.
+    If candidates are sampled from the prior instead of enumerated once, the prior
+    is already represented by sample frequency. In that case, aggregate the returned
+    path weights by candidate and normalize those masses.
 
-If candidates are sampled from the prior instead of enumerated once, the prior
-is already represented by sample frequency. In that case, aggregate the returned
-path weights by candidate and normalize those masses.
+    The candidate source determines how to calculate mass:
 
-The candidate source determines how to calculate mass:
-
-| Candidate source | Caller-side mass |
-| --- | --- |
-| Enumerate each unique candidate once | `prior_mass * path_weight` |
-| Sample candidates from the prior | Sum `path_weight` over samples with the same output |
+    | Candidate source | Caller-side mass |
+    | --- | --- |
+    | Enumerate each unique candidate once | `prior_mass * path_weight` |
+    | Sample candidates from the prior | Sum `path_weight` over samples with the same output |

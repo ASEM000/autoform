@@ -1,24 +1,26 @@
-% title: Program optimization built on autoform
-% description: Spaces and operation rules support program transformations within autoform. These transformations support an optimization method.
+% title: Program optimization as a feedback loop
+% description: A transformed program takes parameters, examples, and targets, and computes loss and parameter feedback. An update rule uses the feedback to revise the parameters, which return to the program on the next iteration. The optimization method supplies the update rule.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta}
+\input{parts/diagram-style.tex}
 
 \begin{document}
-\begin{tikzpicture}[
-    node/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                 minimum width=2.4cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-]
-    \node[node] (spaces) at (0, 0.65) {Spaces};
-    \node[node] (rules) at (0, -0.65) {Operation rules};
-    \node[node] (transforms) at (4, 0) {Program\\transformations};
-    \node[node] (method) at (8.4, 0) {Optimization\\method};
+\begin{tikzpicture}
 
-    \draw[flow] (spaces.east) -- (transforms.west);
-    \draw[flow] (rules.east) -- (transforms.west);
-    \draw[flow] (transforms.east) -- node[above, font=\small] {supports} (method.west);
+    \node[ir, minimum width=4.2cm, minimum height=1.2cm,
+          label={[note]above:Transformed program}] (program) at (6,0)
+        {Evaluate loss\\and compute feedback};
+    \node[anchor=east] (parameters) at (0.8,0) {Parameters};
+    \node[anchor=east] (data) at (2.8,1.8) {Examples and targets};
+    \node[anchor=west] (loss) at (10.5,0) {Loss};
+    \node[box, minimum width=2.6cm] (update) at (6,-3) {Update rule};
 
-    \draw[dashed, line width=0.7pt] (-1.6, -1.4) rectangle (5.6, 1.4);
-    \node at (2, 1.75) {\texttt{autoform}};
+    \draw[flow] (parameters.east) -- (program.west);
+    \draw[flow] (data.east) -| (4.2,0.6);
+    \draw[flow] (program.east) -- (loss.west);
+    \draw[flow] (program.south) -- node[right,note] {parameter feedback} (update.north);
+    \draw[flow] (update.west) -- (2,-3)
+        -- node[left,note,align=right] {revised\\parameters} (2,0);
+    \fill (2,0) circle (1.6pt);
+
 \end{tikzpicture}
 \end{document}

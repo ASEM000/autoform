@@ -1,22 +1,20 @@
 % title: Batching a pullback
 % description: Pullback transforms the original IR into a feedback IR. Batch then transforms that feedback IR into a batched feedback IR.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta,shapes.geometric}
+\input{parts/transform-style.tex}
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=1.8cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-    choice/.style={diamond, draw, line width=0.8pt,
-                   aspect=2, inner sep=2pt, align=center},
-]
+\begin{tikzpicture}[transform panel]
+    \path[use as bounding box] (-6.6,-1.1) rectangle (6.6,1.2);
 
-    \node[box] (ir) at (0,0) {Original IR};
-    \node[box] (feedback) at (4,0) {Feedback IR};
-    \node[box] (batch) at (8,0) {Batched\\feedback IR};
-    \draw[flow] (ir) -- node[above,note] {\texttt{pullback}} (feedback);
-    \draw[flow] (feedback) -- node[above,note] {\texttt{batch}} (batch);
+    \node[transform program, minimum height=1.2cm] (ir) at (-4.6,0) {Original IR};
+    \node[transform program, minimum height=1.2cm] (feedback) at (0,0) {Feedback IR};
+    \draw[line width=0.8pt] (3.38,0.78) -- (3.38,0.96)
+        -- (6.36,0.96) -- (6.36,-0.24) -- (6.18,-0.24);
+    \draw[line width=0.8pt] (3.2,0.6) -- (3.2,0.78)
+        -- (6.18,0.78) -- (6.18,-0.42) -- (6,-0.42);
+    \node[transform program, minimum height=1.2cm] (batch) at (4.6,0) {Batched\\feedback IR};
+    \transformarrow{ir.east}{feedback.west}{\texttt{pullback}}
+    \transformarrow{feedback.east}{batch.west}{\texttt{batch}}
 
 \end{tikzpicture}
 \end{document}

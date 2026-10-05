@@ -1,15 +1,12 @@
 % title: Data flow through two IR equations
 % description: The runtime topic passes through two concat equations to produce the output. Each equation also takes a literal string. The intermediate value prompt connects the equations.
 \documentclass[tikz,border=5pt]{standalone}
-\usetikzlibrary{arrows.meta}
+\input{parts/diagram-style.tex}
 
 \begin{document}
-\begin{tikzpicture}[
-    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
-                minimum width=1.5cm, align=center},
-    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
-    note/.style={font=\small, align=center},
-]
+\begin{tikzpicture}
+    \irframe{(0.9,-0.8)}{(6.25,2.6)}
+    \node[note,anchor=west] at (0.9,2.95) {IR};
     \node (topic) at (0, 0) {\texttt{topic}};
     \node[box] (first) at (2, 0) {\texttt{concat}};
     \node[box] (second) at (5.2, 0) {\texttt{concat}};

@@ -1,12 +1,12 @@
----
-orphan: true
----
-
 # Recipes
 
-These recipes show how to use `autoform` operations, transforms, and execution contexts to accomplish specific tasks. The recipes are intended for readers who are familiar with the [Getting Started](../getting-started.md) guide.
+Each recipe explains a concrete problem and combines `autoform` concepts to solve it. The examples assume familiarity with [A First Program](../a-first-program.md). For API descriptions and small examples, see [Concepts](../concepts/index.md).
 
-- [Core Programs](core/index.md)
-- [LM and Tool Programs](llm/index.md)
-- [Execution Policies](execution/index.md)
-- [Extending `autoform`](extending/index.md)
+```{toctree}
+:maxdepth: 1
+
+execution/human-review
+llm/tool-ranking
+llm/tool-use-agent
+extending/array-extension
+```

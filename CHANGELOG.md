@@ -80,7 +80,33 @@
 
 ### Documentation
 
-  - Examples use Python operators such as `+` and `==` where supported.
+  - Reorganized the introduction into [A First Program](docs/a-first-program.md),
+    [Building Blocks](docs/building-blocks.md), and
+    [Motivation and Applications](docs/motivation-and-applications.md), each
+    on its own page.
+
+  - Reworked the README example to combine a text rubric, a numerical adjustment,
+    and a language model call, and to compose `pullback` and `batch`. The
+    documentation home page includes the README.
+
+  - Consolidated [concept pages](docs/concepts/index.md) under Foundations,
+    Computation and Transforms, and Execution. [Pytrees](docs/concepts/pytrees.md)
+    have a separate page, and fixed points are covered under
+    [Control Flow](docs/concepts/control-flow.md#fixed-points).
+
+  - Reworked the [recipes](docs/recipes/index.md) to focus on complete tasks that
+    combine several concepts. Examples of concurrent execution, static context,
+    intermediate values, and feedback updates are part of the concept pages.
+    Specifications and model clients are covered in
+    [Language Models](docs/language-models.md).
+
+  - Replaced several diagrams with TikZ figures for program structure,
+    transformations, input axes, and loop feedback. The figures share drawing
+    styles.
+
+  - Updated examples to use descriptive placeholders and Python operators such
+    as `+` and `==` where supported. Moved supplementary explanations into
+    footnotes.
 
 ## v0.3.0 (May 30, 2026)
 
@@ -211,9 +237,9 @@
 
   - Added a published [Changelog](docs/reference/changelog.md) page under Reference.
 
-  - Reworked [Getting Started](docs/getting-started.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
+  - Reworked [Getting Started](docs/a-first-program.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
 
-  - Added [Path Weights](docs/concepts/path-weights.md) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/rank-tool-candidates.md) documentation for using {py:func}`factor <autoform.factor>` with the path-weight transform to score candidate paths, including the probabilistic reading and independent batched scoring.
+  - Added [Path Weights](docs/concepts/path-weights.md) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/tool-ranking.md) documentation for using {py:func}`factor <autoform.factor>` with the path-weight transform to score candidate paths, including the probabilistic reading and independent batched scoring.
 
   - Added an [array extension recipe](docs/recipes/extending/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
 

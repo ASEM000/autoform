@@ -1,5 +1,20 @@
 /* Custom styles for autoform documentation */
 
+.sidebar-drawer {
+    min-width: 18em;
+}
+
+.sidebar-container {
+    width: 18em;
+}
+
+@media (max-width: 63em) {
+    .sidebar-drawer {
+        left: -18em;
+        width: 18em;
+    }
+}
+
 /* Wrap long lines in code blocks */
 pre {
     white-space: pre-wrap;
