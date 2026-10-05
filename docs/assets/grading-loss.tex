@@ -1,0 +1,13 @@
+% title: Squared error measures the prediction error
+% description: The loss program compares the adjusted language model score with a fixed target using squared error. Blue arrows carry numbers; purple arrows carry text.
+% variants: dark
+\documentclass[tikz,border=5pt]{standalone}
+\input{parts/grading-diagram.tex}
+\begin{document}
+\begin{tikzpicture}
+    \node[note, anchor=west] at (-1.3,2.7) {Loss program};
+    \irframe{(-1.3,-1.7)}{(12.4,2.5)}
+    \gradingprogram{0}
+    \forwardlegend{-2.55}
+\end{tikzpicture}
+\end{document}

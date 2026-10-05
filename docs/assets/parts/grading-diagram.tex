@@ -1,0 +1,53 @@
+\input{parts/diagram-style.tex}
+
+\newcommand{\forwardprogram}{
+    \node (rubric) at (0, 0) {Text rubric};
+    \node[box] (lm) at (3.5, 0) {LM score};
+    \node[box] (add) at (7, 0) {Add};
+    \node (adjustment) at (7, 1.8) {Points adjustment};
+    \node (example) at (3.5,1.8) {Example};
+
+    \draw[flow, textual] (rubric.east) -- (lm.west);
+    \draw[flow, textual] (example.south) -- (lm.north);
+    \draw[flow, numeric] (lm.east) -- node[above, note] {score} (add.west);
+    \draw[flow, numeric] (adjustment.south) -- (add.north);
+}
+
+\newcommand{\gradingprogram}[1]{
+    \forwardprogram
+    \node[box] (loss) at (10.5, 0) {Squared error\\\small loss};
+    \node (target) at (10.5,1.8) {Target};
+    \draw[flow, numeric] (target.south) -- (loss.north);
+    \draw[flow, numeric] (add.east) -- (loss.west);
+
+    \ifnum#1=1
+        \draw[feedback, numeric] (loss.south) to[bend left=35]
+            node[below, note] {gradient} (add.south);
+        \draw[feedback, numeric] (add.south) to[bend left=35]
+            node[below, note] {gradient} (lm.south);
+        \draw[feedback, textual] (lm.south) to[bend left=35]
+            node[below, note] {text feedback} (rubric.south);
+        \draw[feedback, numeric] (add.north east) to[bend right=35]
+            node[right, note] {gradient} (adjustment.east);
+    \fi
+}
+
+\newcommand{\feedbackcopy}{
+    \irframe{(-1.3,-1.7)}{(12.4,2.5)}
+    \gradingprogram{1}
+}
+
+\newcommand{\forwardlegend}[1]{
+    \draw[flow, numeric] (0.5, #1) -- (1.3, #1);
+    \node[anchor=west, note] at (1.4, #1) {Forward: numbers};
+    \draw[flow, textual] (6.1, #1) -- (6.9, #1);
+    \node[anchor=west, note] at (7, #1) {Forward: text};
+}
+
+\newcommand{\feedbacklegend}[1]{
+    \forwardlegend{#1}
+    \draw[feedback, numeric] (1.3, {#1-0.6}) -- (0.5, {#1-0.6});
+    \node[anchor=west, note] at (1.4, {#1-0.6}) {Backward: numbers};
+    \draw[feedback, textual] (6.9, {#1-0.6}) -- (6.1, {#1-0.6});
+    \node[anchor=west, note] at (7, {#1-0.6}) {Backward: text};
+}

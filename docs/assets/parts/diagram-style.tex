@@ -1,0 +1,22 @@
+\usetikzlibrary{arrows.meta,calc,shapes.geometric}
+\definecolor{numeric}{HTML}{4477AA}
+\definecolor{textual}{HTML}{AA4499}
+
+\tikzset{
+    box/.style={draw, line width=0.8pt, minimum height=0.8cm,
+                minimum width=1.8cm, inner sep=6pt, align=center},
+    ir/.style={box},
+    flow/.style={-{Stealth[length=5pt]}, line width=0.9pt},
+    feedback/.style={flow, dashed},
+    note/.style={font=\small, align=center},
+    choice/.style={diamond, draw, line width=0.8pt,
+                   aspect=2, inner sep=2pt, align=center},
+}
+
+\newcommand{\irframe}[2]{
+    \draw[line width=0.8pt] #1 rectangle #2;
+}
+
+\newcommand{\transformarrow}[4][above]{
+    \draw[flow] (#2) -- node[#1=6pt,note] {#4} (#3);
+}

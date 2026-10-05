@@ -1,0 +1,32 @@
+% title: Shared and paired batch inputs
+% description: Each box is a call to the same program. On the left panel, the two texts have a single prefix. On the right panel, each text has its own prefix. In both cases, each call produces a single output. The first entry of in_axes is for the text, and the second is for the prefix.
+\documentclass[tikz,border=5pt]{standalone}
+\input{parts/transform-style.tex}
+\begin{document}
+\begin{tikzpicture}[transform panel]
+    \path[use as bounding box] (-6.6,-2.85) rectangle (6.6,2.75);
+
+    \node at (-3.5,2.4) {Shared prefix};
+    \node at (-3.5,1.9) {\texttt{in\_axes=(True, False)}};
+    \node at (3.5,2.4) {Paired prefixes};
+    \node at (3.5,1.9) {\texttt{in\_axes=(True, True)}};
+
+    \node (prefix) at (-1.2,-0.3) {\texttt{prefix}};
+    \foreach \i/\y in {1/0.85,2/-1.45} {
+        \node (text\i) at (-5.8,\y) {\texttt{text \i}};
+        \node[ir] (call\i) at (-3.5,\y) {IR};
+        \node (output\i) at (-3.5,\y-1) {\texttt{output \i}};
+        \draw[flow] (text\i.east) -- (call\i.west);
+        \draw[flow] (prefix.west) -- (call\i.east);
+        \draw[flow] (call\i.south) -- (output\i.north);
+
+        \node (pairedtext\i) at (1.2,\y) {\texttt{text \i}};
+        \node[ir] (pairedcall\i) at (3.5,\y) {IR};
+        \node (pairedprefix\i) at (5.8,\y) {\texttt{prefix \i}};
+        \node (pairedoutput\i) at (3.5,\y-1) {\texttt{output \i}};
+        \draw[flow] (pairedtext\i.east) -- (pairedcall\i.west);
+        \draw[flow] (pairedprefix\i.west) -- (pairedcall\i.east);
+        \draw[flow] (pairedcall\i.south) -- (pairedoutput\i.north);
+    }
+\end{tikzpicture}
+\end{document}
