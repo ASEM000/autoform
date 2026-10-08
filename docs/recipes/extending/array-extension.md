@@ -44,8 +44,8 @@ class ArrayAVal(afe.AVal):
     def zero(self):
         return np.zeros(self.shape, dtype=self.dtype)
 
-    def accum(self, cotangents):
-        return sum(cotangents[1:], cotangents[0])
+    def accum(self, c):
+        return sum(c[1:], c[0])
 
 
 def aval_rule(value):
@@ -191,12 +191,12 @@ ir = af.trace(f)(x, y)
 
 np.testing.assert_allclose(ir.call(x, y), f(x, y))
 
-p_out, t_out = af.pushforward(ir).call(
+out_p, out_t = af.pushforward(ir).call(
     (x, y),
     (np.ones_like(x), np.zeros_like(y)),
 )
-np.testing.assert_allclose(p_out, f(x, y))
-np.testing.assert_allclose(t_out, -y * y / (x * x))
+np.testing.assert_allclose(out_p, f(x, y))
+np.testing.assert_allclose(out_t, -y * y / (x * x))
 
 out, (dx, dy) = af.pullback(ir).call((x, y), np.ones_like(x))
 np.testing.assert_allclose(out, f(x, y))
@@ -226,8 +226,8 @@ a = np.eye(2)
 b = np.array([[2.0, 0.0], [0.0, 3.0]])
 mm_ir = af.trace(mm)(a, b)
 
-pb_out, (da, db) = af.pullback(mm_ir).call((a, b), np.ones((2, 2)))
-np.testing.assert_allclose(pb_out, a @ b)
+out_pb, (da, db) = af.pullback(mm_ir).call((a, b), np.ones((2, 2)))
+np.testing.assert_allclose(out_pb, a @ b)
 np.testing.assert_allclose(da, np.ones((2, 2)) @ b.T)
 np.testing.assert_allclose(db, a.T @ np.ones((2, 2)))
 ```

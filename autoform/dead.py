@@ -164,13 +164,13 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
     """
 
     if out_used is None:
-        user_out_used = utils.tree.map(lambda _: True, ir.out_tree)
+        out_user_used = utils.tree.map(lambda _: True, ir.out_tree)
     else:
         assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
         assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
-        user_out_used = out_used
+        out_user_used = out_used
 
-    live_boundaries: stage.Liveness = stage.liveness(ir, out_used=user_out_used)
+    live_boundaries: stage.Liveness = stage.liveness(ir, out_used=out_user_used)
     active_vars: set[stage.Var] = set(live_boundaries[-1])
     active_eqns: deque[stage.Eqn] = deque()
 
@@ -182,12 +182,12 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
         protected = is_non_dce(eqn)
-        eqn_out_used: Tree[bool] = utils.tree.map(is_active_node, eqn.out_tree)
-        new_eqn, in_used = dce_rules.get(eqn.prim, default_dce)(eqn, eqn_out_used)
+        out_eqn_used: Tree[bool] = utils.tree.map(is_active_node, eqn.out_tree)
+        new_eqn, in_used = dce_rules.get(eqn.prim, default_dce)(eqn, out_eqn_used)
         assert utils.tree.structure(in_used) == utils.tree.structure(eqn.in_tree)
 
         changed = new_eqn is not eqn
-        used = utils.tree.any(eqn_out_used)
+        used = utils.tree.any(out_eqn_used)
         keep = protected or used
         new_eqn = update_eqn_out(new_eqn, active_vars) if changed and keep else new_eqn
 
@@ -200,5 +200,5 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
             active_vars |= set(stage.var_leaves(utils.mask(eqn.in_tree, in_used)))
 
     eqns = list(active_eqns)
-    out_tree = sanitize_out(ir, eqns, user_out_used)
+    out_tree = sanitize_out(ir, eqns, out_user_used)
     return stage.IR(eqns, in_tree=ir.in_tree, out_tree=out_tree)

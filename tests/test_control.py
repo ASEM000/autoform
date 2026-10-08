@@ -109,7 +109,7 @@ class TestFixpointPushforward:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "tangent, expected",
+        "t, expected",
         [
             pytest.param(2.0, 3.0, id="parameter-tangent"),
             pytest.param(0.0, 0.0, id="concrete-zero"),
@@ -120,9 +120,9 @@ class TestFixpointPushforward:
             ),
         ],
     )
-    def test_ignores_initial_tangent(self, executor, tangent, expected):
+    def test_ignores_initial_tangent(self, executor, t, expected):
         ir = fixpoint_ir(lambda x, y: 0.5 * x + y, (2.0, 1.0), max_iters=1)
-        assert executor(af.pushforward(ir), (2.0, 1.0), (100.0, tangent)) == (2.0, expected)
+        assert executor(af.pushforward(ir), (2.0, 1.0), (100.0, t)) == (2.0, expected)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_linearizes_at_returned_state(self, executor):
@@ -151,10 +151,10 @@ class TestFixpointPushforward:
 
         @step.aset_pushforward
         async def push(in_tree, /, *, call):
-            primals, tangents = in_tree
-            x, y = af.core.materialize_zeros(tangents)
+            p, t = in_tree
+            x, y = af.core.materialize_zeros(t)
             calls.append("push")
-            return call(*primals), 0.5 * x + y
+            return call(*p), 0.5 * x + y
 
         ir = fixpoint_ir(step, (2.0, 1.0), max_iters=1)
         assert aexecute(af.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, 1.5)
@@ -163,7 +163,7 @@ class TestFixpointPushforward:
 
 class TestFixpointPullback:
     @pytest.mark.parametrize(
-        "executor, step, args, options, cotangent, expected, c_theta",
+        "executor, step, args, options, c, expected, c_theta",
         [
             pytest.param(
                 execute,
@@ -207,9 +207,9 @@ class TestFixpointPullback:
             ),
         ],
     )
-    def test_feedback(self, executor, step, args, options, cotangent, expected, c_theta):
+    def test_feedback(self, executor, step, args, options, c, expected, c_theta):
         ir = af.pullback(fixpoint_ir(step, args, **options))
-        out, (c_init, actual_theta) = executor(ir, args, cotangent)
+        out, (c_init, actual_theta) = executor(ir, args, c)
         assert out == expected
         assert isinstance(c_init, af.core.Zero)
         assert actual_theta == c_theta
@@ -393,17 +393,17 @@ class TestStopGradient:
         assert result == value
 
     @pytest.mark.parametrize(
-        "transform, primals, feedback, expected",
+        "transform, p, feedback, expected",
         [
             pytest.param(af.pushforward, ("primal",), ("tangent",), "primal", id="push"),
             pytest.param(af.pullback, ("primal",), "cotangent", "primal", id="pull"),
             pytest.param(af.pullback, (("p1", "p2"),), ("c1", "c2"), ("p1", "p2"), id="tree-pull"),
         ],
     )
-    def test_ad_zeros_feedback(self, transform, primals, feedback, expected):
-        ir = af.trace(stop_gradient)(*primals)
-        primal, derivative = transform(ir).call(primals, feedback)
-        assert primal == expected
+    def test_ad_zeros_feedback(self, transform, p, feedback, expected):
+        ir = af.trace(stop_gradient)(*p)
+        p, derivative = transform(ir).call(p, feedback)
+        assert p == expected
         assert all(isinstance(leaf, af.core.Zero) for leaf in tree.leaves(derivative))
 
     def test_batch(self):
@@ -417,9 +417,9 @@ class TestStopGradient:
 
         ir = af.trace(func)("a", "b")
         pb_ir = af.pullback(ir)
-        _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
-        assert isinstance(cotangent_x, af.core.Zero)
-        assert cotangent_y == "grad"
+        _, (c_x, c_y) = pb_ir.call(("a", "b"), "grad")
+        assert isinstance(c_x, af.core.Zero)
+        assert c_y == "grad"
 
 
 def loop_ir(cond, suffix, max_iters):
@@ -447,7 +447,7 @@ class TestWhileLoop:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "condition, max_iters, tangent, expected",
+        "condition, max_iters, t, expected",
         [
             pytest.param(lambda x: False, 10, 1.0, (2.0, 1.0), id="initially-false"),
             pytest.param(lambda x: True, 0, 1.0, (2.0, 1.0), id="zero-limit"),
@@ -462,11 +462,11 @@ class TestWhileLoop:
             ),
         ],
     )
-    def test_pushforward(self, executor, condition, max_iters, tangent, expected):
+    def test_pushforward(self, executor, condition, max_iters, t, expected):
         cond_ir = trace(condition)(2.0)
         body_ir = trace(lambda x: x * x)(2.0)
         ir = trace(while_program(cond_ir, body_ir, max_iters=max_iters))(2.0)
-        assert executor(af.pushforward(ir), (2.0,), (tangent,)) == expected
+        assert executor(af.pushforward(ir), (2.0,), (t,)) == expected
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_pushforward_preserves_state_tree(self, executor):
@@ -538,7 +538,7 @@ class TestWhileLoop:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "condition, suffix, max_iters, primal, cotangent, expected",
+        "condition, suffix, max_iters, p, c, expected",
         [
             pytest.param(
                 lambda x: False,
@@ -552,11 +552,11 @@ class TestWhileLoop:
             pytest.param(lambda x: True, ".", 2, "a", "g", "a..", id="iterations"),
         ],
     )
-    def test_pullback(self, executor, condition, suffix, max_iters, primal, cotangent, expected):
+    def test_pullback(self, executor, condition, suffix, max_iters, p, c, expected):
         ir = af.pullback(loop_ir(condition, suffix, max_iters))
-        args = ((primal,), cotangent)
+        args = ((p,), c)
         result = executor(ir, *args)
-        assert result == (expected, (cotangent,))
+        assert result == (expected, (c,))
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_of_pullback(self, executor):

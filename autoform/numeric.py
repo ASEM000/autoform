@@ -168,8 +168,8 @@ def abstract_neg(in_tree: Tree, /) -> FloatAVal:
 
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
-    primal, tangent = in_tree
-    return neg(primal), neg(core.materialize_zeros(tangent))
+    p, t = in_tree
+    return neg(p), neg(core.materialize_zeros(t))
 
 
 def pullback_fwd_neg(in_tree: Tree, /) -> TreePair:
@@ -177,8 +177,8 @@ def pullback_fwd_neg(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_neg(in_tree: Tree, /) -> Tree:
-    _, out_cotangent = in_tree
-    return neg(out_cotangent)
+    _, out_c = in_tree
+    return neg(out_c)
 
 
 def batch_neg(in_tree: Tree, /) -> TreePair:
@@ -225,9 +225,9 @@ def abstract_add(in_tree: Tree, /) -> FloatAVal:
 
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
-    primals, tangents = in_tree
-    tangents = core.materialize_zeros(tangents)
-    return add_p.bind(primals), add_p.bind(tangents)
+    p, t = in_tree
+    t = core.materialize_zeros(t)
+    return add_p.bind(p), add_p.bind(t)
 
 
 def pullback_fwd_add(in_tree: Tree, /) -> TreePair:
@@ -235,8 +235,8 @@ def pullback_fwd_add(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_add(in_tree: Tree, /) -> Tree:
-    _, out_cotangent = in_tree
-    return out_cotangent, out_cotangent
+    _, out_c = in_tree
+    return out_c, out_c
 
 
 def batch_add(in_tree: Tree, /) -> TreePair:
@@ -283,9 +283,9 @@ def abstract_sub(in_tree: Tree, /) -> FloatAVal:
 
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
-    primals, tangents = in_tree
-    tangents = core.materialize_zeros(tangents)
-    return sub_p.bind(primals), sub_p.bind(tangents)
+    p, t = in_tree
+    t = core.materialize_zeros(t)
+    return sub_p.bind(p), sub_p.bind(t)
 
 
 def pullback_fwd_sub(in_tree: Tree, /) -> TreePair:
@@ -293,8 +293,8 @@ def pullback_fwd_sub(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_sub(in_tree: Tree, /) -> Tree:
-    _, out_cotangent = in_tree
-    return out_cotangent, neg(out_cotangent)
+    _, out_c = in_tree
+    return out_c, neg(out_c)
 
 
 def batch_sub(in_tree: Tree, /) -> TreePair:
@@ -341,9 +341,9 @@ def abstract_mul(in_tree: Tree, /) -> FloatAVal:
 
 
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
-    primals, tangents = in_tree
-    a, b = primals
-    da, db = core.materialize_zeros(tangents)
+    p, t = in_tree
+    a, b = p
+    da, db = core.materialize_zeros(t)
     return mul(a, b), add(mul(da, b), mul(a, db))
 
 
@@ -352,8 +352,8 @@ def pullback_fwd_mul(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_mul(in_tree: Tree, /) -> Tree:
-    (a, b), out_cotangent = in_tree
-    return mul(out_cotangent, b), mul(out_cotangent, a)
+    (a, b), out_c = in_tree
+    return mul(out_c, b), mul(out_c, a)
 
 
 def batch_mul(in_tree: Tree, /) -> TreePair:
@@ -400,9 +400,9 @@ def abstract_div(in_tree: Tree, /) -> FloatAVal:
 
 
 def pushforward_div(in_tree: Tree, /) -> TreePair:
-    primals, tangents = in_tree
-    a, b = primals
-    da, db = core.materialize_zeros(tangents)
+    p, t = in_tree
+    a, b = p
+    da, db = core.materialize_zeros(t)
     return div(a, b), div(sub(mul(da, b), mul(a, db)), mul(b, b))
 
 
@@ -411,10 +411,10 @@ def pullback_fwd_div(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_div(in_tree: Tree, /) -> Tree:
-    (a, b), out_cotangent = in_tree
-    a_cotangent = div(out_cotangent, b)
-    b_cotangent = neg(div(mul(out_cotangent, a), mul(b, b)))
-    return a_cotangent, b_cotangent
+    (a, b), out_c = in_tree
+    c_a = div(out_c, b)
+    c_b = neg(div(mul(out_c, a), mul(b, b)))
+    return c_a, c_b
 
 
 def batch_div(in_tree: Tree, /) -> TreePair:
@@ -445,8 +445,8 @@ def abstract_compare(in_tree: Tree, /) -> BoolAVal:
 
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
-    primals, _ = in_tree
-    return prim.bind(primals), core.Zero(core.tangent_s.map(BoolAVal()))
+    p, _ = in_tree
+    return prim.bind(p), core.Zero(core.tangent_s.map(BoolAVal()))
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -459,8 +459,8 @@ def pullback_bwd_compare(in_tree: Tree, /) -> Tree:
             return x
         return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
-    primals, _ = in_tree
-    return utils.tree.map(make_c, primals)
+    p, _ = in_tree
+    return utils.tree.map(make_c, p)
 
 
 def batch_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:

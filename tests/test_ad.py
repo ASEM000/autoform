@@ -57,15 +57,15 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "tangent",
+    "t",
     [
         pytest.param(1.0, id="float"),
         pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="wrong-zero"),
     ],
 )
-def test_pushforward_rejects_invalid_intermediate_tangent(executor, tangent):
+def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
     bad = af.extend.Prim("bad_tangent")
-    forward = lambda args: (args[0], tangent)
+    forward = lambda args: (args[0], t)
     af.extend.register_abstract(bad, lambda x: x)
     af.extend.register_pushforward(bad, forward)
     af.extend.register_apushforward(bad, af.utils.asyncify(forward))
@@ -95,17 +95,17 @@ def test_pullback_checks_concrete_primal(executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "cotangent, message",
+    "c, message",
     [
         pytest.param(["x", "y"], "No aval rule registered", id="list"),
         pytest.param(1.0, "Expected StrAVal", id="float"),
         pytest.param(af.core.Zero(af.numeric.FloatAVal()), "Expected StrAVal", id="wrong-zero"),
     ],
 )
-def test_pullback_rejects_incompatible_cotangent(executor, cotangent, message):
+def test_pullback_rejects_incompatible_cotangent(executor, c, message):
     ir = af.pullback(af.trace(lambda x: x)("x"))
     with pytest.raises(TypeError, match=message):
-        executor(ir, ("x",), cotangent)
+        executor(ir, ("x",), c)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -133,7 +133,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
     class ValueAVal(af.core.AVal): ...
 
     class FeedbackAVal(af.core.AVal):
-        def accum(self, cotangents):
+        def accum(self, c):
             return 1.0
 
     af.extend.register_trace_type(Value, lambda _: ValueAVal())
@@ -154,7 +154,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "cotangents, expected",
+    "c, expected",
     [
         pytest.param(("a", "b"), "ab", id="accum"),
         pytest.param(("a", af.core.Zero(af.string.StrAVal())), "a", id="mixed-zero"),
@@ -165,9 +165,9 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
         ),
     ],
 )
-def test_pullback_accumulates_cotangents_and_zeros_unused_inputs(executor, cotangents, expected):
+def test_pullback_accumulates_cotangents_and_zeros_unused_inputs(executor, c, expected):
     ir = af.pullback(af.trace(lambda x, y: (x, x))("x", "y"))
-    assert executor(ir, ("x", "y"), cotangents) == (
+    assert executor(ir, ("x", "y"), c) == (
         ("x", "x"),
         (expected, af.core.Zero(af.string.StrAVal())),
     )
@@ -238,8 +238,8 @@ def test_pullback_checks_under_caller_interpreter():
     ir = af.stage.IR([], (x, y), (x, x))
 
     with af.core.using_interpreter(parent):
-        _, cotangents = af.ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
-        assert cotangents == ("ab", af.core.Zero(af.string.StrAVal()))
+        _, c = af.ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
+        assert c == ("ab", af.core.Zero(af.string.StrAVal()))
         with pytest.raises(TypeError, match="Expected StrAVal"):
             af.ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
     assert af.core.active_interpreter.get() is parent
@@ -255,8 +255,8 @@ def test_pullback_preserves_parent_pushforward_values():
 
     with af.core.using_interpreter(pusher):
         values = pusher.box((("a", "b"), ("da", "db")))
-        _, cotangents = af.ad.impl_pullback_call((("x", "y"), values), ir=ir)
-        assert pusher.unbox(cotangents) == (("ab", zero), ("dadb", zero))
+        _, c = af.ad.impl_pullback_call((("x", "y"), values), ir=ir)
+        assert pusher.unbox(c) == (("ab", zero), ("dadb", zero))
     assert af.core.active_interpreter.get() is parent
 
 
@@ -274,7 +274,7 @@ def test_batched_pullback_rejects_shared_list_cotangent(executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "cotangent, error",
+    "c, error",
     [
         pytest.param("o", "BatchAVal", id="scalar"),
         pytest.param(["o", 1.0], "StrAVal", id="mixed-elements"),
@@ -283,10 +283,10 @@ def test_batched_pullback_rejects_shared_list_cotangent(executor):
         ),
     ],
 )
-def test_pullback_of_batch_rejects_incompatible_cotangent(executor, cotangent, error):
+def test_pullback_of_batch_rejects_incompatible_cotangent(executor, c, error):
     ir = af.pullback(af.batch(af.trace(lambda x: x)("x")))
     with pytest.raises(TypeError, match=f"Expected {error}"):
-        executor(ir, (["x", "y"],), cotangent)
+        executor(ir, (["x", "y"],), c)
 
 
 @pytest.mark.parametrize(
@@ -389,8 +389,8 @@ def test_wrapper_uses_derivative_space(transform, space, change):
     var = af.stage.Var(aval=aval)
     source = af.stage.IR([], (var,), (var,))
     ir = transform(source)
-    for primals, derivatives in (ir.in_tree, ir.out_tree):
-        assert primals[0].aval is aval
+    for p, derivatives in (ir.in_tree, ir.out_tree):
+        assert p[0].aval is aval
         assert isinstance(derivatives[0].aval, ChangeAVal)
 
     text, delta = Text("hello"), Change(change)
@@ -480,8 +480,8 @@ class TestCotangentHelpers:
                 self.value = value
 
         class TextAVal(af.core.AVal):
-            def accum(self, cotangents):
-                return Text("|".join(c.value for c in cotangents))
+            def accum(self, c):
+                return Text("|".join(c.value for c in c))
 
         af.core.aval_types[Text] = lambda _: TextAVal()
         af.stage.trace_types.add(Text)
@@ -505,8 +505,8 @@ class TestCotangentHelpers:
             def zero(self):
                 return TextFeedback("")
 
-            def accum(self, cotangents):
-                return TextFeedback(" | ".join(c.value for c in cotangents))
+            def accum(self, c):
+                return TextFeedback(" | ".join(c.value for c in c))
 
         class DerivedFeedbackAVal(TextFeedbackAVal): ...
 
@@ -521,12 +521,12 @@ class TestCotangentHelpers:
         var = af.stage.Var(aval=TextAVal())
         ir = af.stage.IR([], (var,), (var, var))
         text = Text("hello")
-        p_out, c_in = executor(
+        out_p, in_c = executor(
             af.pullback(ir), (text,), (TextFeedback("left"), TextFeedback("right"))
         )
-        assert p_out == (text, text)
-        assert isinstance(c_in[0], TextFeedback)
-        assert c_in[0].value == "left | right"
+        assert out_p == (text, text)
+        assert isinstance(in_c[0], TextFeedback)
+        assert in_c[0].value == "left | right"
         zero = af.core.Zero(af.core.cotangent_s.map(af.core.avalof(text)))
         assert af.core.materialize_zeros(zero).value == ""
 
@@ -602,12 +602,12 @@ def formatted_bang(x):
 
 def test_alternating_pushforward_pullback():
     ir = af.pushforward(af.pullback(af.pushforward(af.pullback(af.trace(bracket_text)("x")))))
-    primals = ((("x",), "x"), (("x",), "x"))
+    p = ((("x",), "x"), (("x",), "x"))
     feedback = (("x", ("x",)), ("x", ("x",)))
-    args = ((primals, feedback), (primals, feedback))
+    args = ((p, feedback), (p, feedback))
     expected = (
-        ((("[x]", ("x",)), ("x", ("x",))), primals),
-        (feedback, primals),
+        ((("[x]", ("x",)), ("x", ("x",))), p),
+        (feedback, p),
     )
     assert ir.call(*args) == expected
 

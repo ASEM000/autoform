@@ -79,45 +79,45 @@ def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    primals, tangents = in_tree
-    ir, p_out = call_custom_body(call, primals)
-    _, t_out = ad.pushforward(ir).call(primals, tangents)
-    return p_out, t_out
+    p, t = in_tree
+    ir, out_p = call_custom_body(call, p)
+    _, out_t = ad.pushforward(ir).call(p, t)
+    return out_p, out_t
 
 
 async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    primals, tangents = in_tree
-    ir, p_out = await acall_custom_body(call, primals)
-    _, t_out = await ad.pushforward(ir).acall(primals, tangents)
-    return p_out, t_out
+    p, t = in_tree
+    ir, out_p = await acall_custom_body(call, p)
+    _, out_t = await ad.pushforward(ir).acall(p, t)
+    return out_p, out_t
 
 
 def pullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    primals = in_tree
-    _, out = call_custom_body(call, primals)
-    return out, (primals, out)
+    p = in_tree
+    _, out = call_custom_body(call, p)
+    return out, (p, out)
 
 
 async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    primals = in_tree
-    _, out = await acall_custom_body(call, primals)
-    return out, (primals, out)
+    p = in_tree
+    _, out = await acall_custom_body(call, p)
+    return out, (p, out)
 
 
 def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    primals, out = in_tree[0]
-    cotangent = in_tree[1]
-    ir = trace_custom_func(call, primals)
-    _, c_in = ad.pullback(ir).call(primals, cotangent)
-    return c_in
+    p, out = in_tree[0]
+    c = in_tree[1]
+    ir = trace_custom_func(call, p)
+    _, in_c = ad.pullback(ir).call(p, c)
+    return in_c
 
 
 async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    primals, out = in_tree[0]
-    cotangent = in_tree[1]
-    ir = trace_custom_func(call, primals)
-    _, c_in = await ad.pullback(ir).acall(primals, cotangent)
-    return c_in
+    p, out = in_tree[0]
+    c = in_tree[1]
+    ir = trace_custom_func(call, p)
+    _, in_c = await ad.pullback(ir).acall(p, c)
+    return in_c
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
@@ -178,7 +178,7 @@ class CustomFunc:
         return self.prim.bind(args, call=self.func)
 
     def set_pushforward[R: Callable[..., tuple[Tree, Tree]]](self, rule: R, /) -> R:
-        """Register ``rule(in_tree, *, call) -> (primal_output, tangent_output)``.
+        """Register ``rule(in_tree, *, call) -> (out_p, out_t)``.
 
         Example:
             >>> import autoform as af
@@ -187,11 +187,11 @@ class CustomFunc:
             ...     return "[" + x + "]"
             >>> @bracket_push_example.set_pushforward
             ... def bracket_push_rule(in_tree, /, *, call):
-            ...     primals, tangents = in_tree
-            ...     (dx,) = tangents
-            ...     p_out = call(*primals)
-            ...     t_out = "delta " + af.core.materialize_zeros(dx)
-            ...     return p_out, t_out
+            ...     p, t = in_tree
+            ...     (dx,) = t
+            ...     out_p = call(*p)
+            ...     out_t = "delta " + af.core.materialize_zeros(dx)
+            ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
             >>> af.pushforward(ir).call(("hello",), ("change",))
             ('[hello]', 'delta change')
@@ -210,11 +210,11 @@ class CustomFunc:
             ...     return "[" + x + "]"
             >>> @bracket_apush_example.aset_pushforward
             ... async def bracket_apush_rule(in_tree, /, *, call):
-            ...     primals, tangents = in_tree
-            ...     (dx,) = tangents
-            ...     p_out = call(*primals)
-            ...     t_out = "async delta " + af.core.materialize_zeros(dx)
-            ...     return p_out, t_out
+            ...     p, t = in_tree
+            ...     (dx,) = t
+            ...     out_p = call(*p)
+            ...     out_t = "async delta " + af.core.materialize_zeros(dx)
+            ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
             >>> asyncio.run(af.pushforward(ir).acall(("hello",), ("change",)))
             ('[hello]', 'async delta change')
@@ -223,7 +223,7 @@ class CustomFunc:
         return core.apush_rules.set(self.prim, rule)
 
     def set_pullback[R: Callable[..., Tree]](self, rule: R, /) -> R:
-        """Register ``rule(in_tree, *, call) -> cotangents_in``.
+        """Register ``rule(in_tree, *, call) -> in_c``.
 
         Example:
             >>> import autoform as af
@@ -233,9 +233,9 @@ class CustomFunc:
             >>> @bracket_pull_example.set_pullback
             ... def bracket_pull_rule(in_tree, /, *, call):
             ...     del call
-            ...     (primals, output), cotangent = in_tree
-            ...     del primals
-            ...     return (cotangent + " via " + output),
+            ...     (p, output), c = in_tree
+            ...     del p
+            ...     return (c + " via " + output),
             >>> ir = af.trace(lambda x: bracket_pull_example(x))("seed")
             >>> af.pullback(ir).call(("hello",), "feedback")
             ('[hello]', ('feedback via [hello]',))
@@ -255,9 +255,9 @@ class CustomFunc:
             >>> @bracket_apull_example.aset_pullback
             ... async def bracket_apull_rule(in_tree, /, *, call):
             ...     del call
-            ...     (primals, output), cotangent = in_tree
-            ...     del primals
-            ...     return ("async " + cotangent + " via " + output),
+            ...     (p, output), c = in_tree
+            ...     del p
+            ...     return ("async " + c + " via " + output),
             >>> ir = af.trace(lambda x: bracket_apull_example(x))("seed")
             >>> asyncio.run(af.pullback(ir).acall(("hello",), "feedback"))
             ('[hello]', ('async feedback via [hello]',))
@@ -336,7 +336,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     available as the keyword-only ``call`` argument, so a rule can use
     ``call(*primals)`` when it wants to reuse the normal primal behavior.
     The rule signatures are:
-    - Pushforward: ``rule((primals, tangents), /, *, call) -> (p_out, t_out)``.
+    - Pushforward: ``rule((primals, tangents), /, *, call) -> (out_p, out_t)``.
     - Pullback backward:
       ``rule(((primals, output), cotangent), /, *, call) -> cotangents``.
     - Batch:
@@ -380,11 +380,11 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> @bracket.set_pushforward
         ... def bracket_push(in_tree, /, *, call):
-        ...     primals, tangents = in_tree
-        ...     (dx,) = tangents
-        ...     p_out = call(*primals)
-        ...     t_out = "delta: " + af.core.materialize_zeros(dx)
-        ...     return p_out, t_out
+        ...     p, t = in_tree
+        ...     (dx,) = t
+        ...     out_p = call(*p)
+        ...     out_t = "delta: " + af.core.materialize_zeros(dx)
+        ...     return out_p, out_t
         >>> af.pushforward(base).call(("hello",), ("change",))
         ('[hello]', 'delta: change')
 
@@ -393,9 +393,9 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         >>> @bracket.set_pullback
         ... def bracket_pull(in_tree, /, *, call):
         ...     del call
-        ...     (primals, output), cotangent = in_tree
-        ...     (x,) = primals
-        ...     return (cotangent + " via " + output + " from " + x),
+        ...     (p, output), c = in_tree
+        ...     (x,) = p
+        ...     return (c + " via " + output + " from " + x),
         >>> af.pullback(base).call(("hello",), "feedback")
         ('[hello]', ('feedback via [hello] from hello',))
 
@@ -425,17 +425,17 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> @summarize.set_pushforward
         ... def summarize_push(in_tree, /, *, call):
-        ...     primals, tangents = in_tree
-        ...     text, model = primals
-        ...     text_tangent, _ = tangents
-        ...     p_out = call(*primals)
+        ...     p, t = in_tree
+        ...     text, model = p
+        ...     t_text, _ = t
+        ...     out_p = call(*p)
         ...     prompt = (
         ...         "Original input:\\n" + text
-        ...         + "\\n\\nInput edit:\\n" + materialize_zeros(text_tangent)
+        ...         + "\\n\\nInput edit:\\n" + materialize_zeros(t_text)
         ...         + "\\n\\nDescribe how the summary should change."
         ...     )
-        ...     t_out = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]
-        ...     return p_out, t_out
+        ...     out_t = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]
+        ...     return out_p, out_t
 
         The custom pullback rule can replace the default backward LM prompt with
         a domain-specific feedback prompt.
@@ -443,12 +443,12 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         >>> @summarize.set_pullback
         ... def summarize_pull(in_tree, /, *, call):
         ...     del call
-        ...     (primals, output), cotangent = in_tree
-        ...     text, model = primals
+        ...     (p, output), c = in_tree
+        ...     text, model = p
         ...     prompt = (
         ...         "Original input:\\n" + text
         ...         + "\\n\\nLM output:\\n" + output
-        ...         + "\\n\\nDownstream feedback:\\n" + materialize_zeros(cotangent)
+        ...         + "\\n\\nDownstream feedback:\\n" + materialize_zeros(c)
         ...         + "\\n\\nReturn feedback for improving the original input."
         ...     )
         ...     text_cotangent = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]

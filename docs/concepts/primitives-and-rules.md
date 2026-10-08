@@ -152,24 +152,24 @@ The hooks are given the `in_tree` and a `call` function that will call the origi
 ```python
 @bracket.set_pushforward
 def pushforward_bracket(in_tree, /, *, call):
-    primals, tangents = in_tree
-    (text_tangent,) = tangents
-    return call(*primals), "bracket change: " + text_tangent
+    p, t = in_tree
+    (t_text,) = t
+    return call(*p), "bracket change: " + t_text
 
 
 @bracket.set_pullback
 def pullback_bracket(in_tree, /, *, call):
     del call
-    (primals, output), feedback = in_tree
-    (text,) = primals
+    (p, output), feedback = in_tree
+    (text,) = p
     return (feedback + " via " + output + " from " + text,)
 
 
-output, tangent = af.pushforward(bracket_ir).call(
+output, t = af.pushforward(bracket_ir).call(
     ("text",),
     ("input change",),
 )
-assert (output, tangent) == ("[text]", "bracket change: input change")
+assert (output, t) == ("[text]", "bracket change: input change")
 
 output, (text_feedback,) = af.pullback(bracket_ir).call(
     ("text",),

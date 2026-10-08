@@ -565,7 +565,7 @@ def client(client: Client) -> Generator[Client, None, None]:
 PUSH_SYSTEM_PROMPT = "Translate an input change into the corresponding output change. "
 PUSH_PROMPT = """INPUT: {input} INPUT CHANGE: {in_tangent}"""
 GRAD_SYSTEM_PROMPT = "Translate output feedback into corresponding input feedback."
-GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_cotangent}"""
+GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_c}"""
 
 
 def spec_content(value: Tree, spec_tree: Tree) -> str:
@@ -776,33 +776,33 @@ def pushforward_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
     def zero_output(value):
         return core.Zero(core.tangent_s.map(core.avalof(value)))
 
-    p_in, _ = in_tree
+    in_p, _ = in_tree
     request = fill_pushforward_request(in_tree, static_tree=static_tree)
-    p_out = fill_p.bind(p_in, static_tree=static_tree)
+    out_p = fill_p.bind(in_p, static_tree=static_tree)
     if request is None:
-        return p_out, utils.tree.map(zero_output, p_out)
-    t_in, t_static_tree = request
-    t_out = fill_p.bind(t_in, static_tree=t_static_tree)["output"]
-    return p_out, t_out
+        return out_p, utils.tree.map(zero_output, out_p)
+    in_t, t_static_tree = request
+    out_t = fill_p.bind(in_t, static_tree=t_static_tree)["output"]
+    return out_p, out_t
 
 
 async def apush_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
     def zero_output(value):
         return core.Zero(core.tangent_s.map(core.avalof(value)))
 
-    p_in, _ = in_tree
+    in_p, _ = in_tree
     request = fill_pushforward_request(in_tree, static_tree=static_tree)
     if request is None:
-        p_out = await fill_p.abind(p_in, static_tree=static_tree)
-        return p_out, utils.tree.map(zero_output, p_out)
-    t_in, t_static_tree = request
+        out_p = await fill_p.abind(in_p, static_tree=static_tree)
+        return out_p, utils.tree.map(zero_output, out_p)
+    in_t, t_static_tree = request
 
     def tangent_fill(in_tree):
         return fill_p.bind(in_tree, static_tree=t_static_tree)["output"]
 
-    p_ir = stage.trace(ft.partial(fill_p.bind, static_tree=static_tree))(p_in)
-    t_ir = stage.trace(tangent_fill)(t_in)
-    return await order.fanout_p.abind([(p_in,), (t_in,)], irs=[p_ir, t_ir])
+    p_ir = stage.trace(ft.partial(fill_p.bind, static_tree=static_tree))(in_p)
+    t_ir = stage.trace(tangent_fill)(in_t)
+    return await order.fanout_p.abind([(in_p,), (in_t,)], irs=[p_ir, t_ir])
 
 
 def pullback_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
@@ -818,13 +818,13 @@ async def apull_fwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> TreePair:
 
 
 def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | None:
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     lit_tree, dynamic_tree, model, out = residuals
     spec_tree = reconstruct_spec_tree(dynamic_tree, static_tree)
-    if utils.tree.structure(out) != utils.tree.structure(out_cotangent):
+    if utils.tree.structure(out) != utils.tree.structure(out_c):
         raise ValueError("Output and cotangent must have identical pytree specs")
 
-    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(out_cotangent)):
+    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(out_c)):
         return None
 
     def to_spec(x):
@@ -832,14 +832,14 @@ def fill_pullback_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair | 
 
     lit_spec_tree = utils.tree.map(to_spec, lit_tree)
 
-    out_cotangent, _ = utils.partition(lambda c: not isinstance(c, core.Zero), out_cotangent)
-    cotangent_spec_tree = utils.tree.map(to_spec, out_cotangent)
+    out_c, _ = utils.partition(lambda c: not isinstance(c, core.Zero), out_c)
+    c_spec_tree = utils.tree.map(to_spec, out_c)
     desc_tree = utils.tree.map(spec_description, spec_tree, is_leaf=is_spec)
     desc_spec_tree = utils.tree.map(to_spec, desc_tree)
     prompt = GRAD_PROMPT.format(
         input=spec_content((lit_tree, model, desc_tree), (lit_spec_tree, Str(), desc_spec_tree)),
         output=spec_content(out, spec_tree),
-        out_cotangent=spec_content(out_cotangent, cotangent_spec_tree),
+        out_c=spec_content(out_c, c_spec_tree),
     )
 
     context = dict(instruction=GRAD_SYSTEM_PROMPT, request=prompt)
@@ -867,8 +867,8 @@ def pullback_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     if request is None:
         (lit_tree, dynamic_tree, model, _), _ = in_tree
         return utils.tree.map(zero_input, (lit_tree, dynamic_tree, model))
-    feedback_in, feedback_static_tree = request
-    out = fill_p.bind(feedback_in, static_tree=feedback_static_tree)
+    in_feedback, feedback_static_tree = request
+    out = fill_p.bind(in_feedback, static_tree=feedback_static_tree)
     feedback, model_feedback, desc_feedback = out["output"]
     (_, dynamic_tree, _, _), _ = in_tree
     dynamic_feedback = utils.tree.map(cotangent_spec, dynamic_tree, desc_feedback, is_leaf=is_spec)
@@ -883,8 +883,8 @@ async def apull_bwd_fill(in_tree: Tree, /, *, static_tree: Tree) -> Tree:
     if request is None:
         (lit_tree, dynamic_tree, model, _), _ = in_tree
         return utils.tree.map(zero_input, (lit_tree, dynamic_tree, model))
-    feedback_in, feedback_static_tree = request
-    out = await fill_p.abind(feedback_in, static_tree=feedback_static_tree)
+    in_feedback, feedback_static_tree = request
+    out = await fill_p.abind(in_feedback, static_tree=feedback_static_tree)
     feedback, model_feedback, desc_feedback = out["output"]
     (_, dynamic_tree, _, _), _ = in_tree
     dynamic_feedback = utils.tree.map(cotangent_spec, dynamic_tree, desc_feedback, is_leaf=is_spec)

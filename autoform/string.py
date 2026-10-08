@@ -100,9 +100,9 @@ def abstract_concat(in_tree: Tree, /) -> Any:
 
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
-    primals, tangents = in_tree
-    tangents = core.materialize_zeros(tangents)
-    return concat_p.bind(primals), concat_p.bind(tangents)
+    p, t = in_tree
+    t = core.materialize_zeros(t)
+    return concat_p.bind(p), concat_p.bind(t)
 
 
 def pullback_fwd_concat(in_tree: Tree, /) -> TreePair:
@@ -111,9 +111,9 @@ def pullback_fwd_concat(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     n = residuals
-    return tuple([out_cotangent] * n)
+    return tuple([out_c] * n)
 
 
 def batch_concat(in_tree: Tree, /) -> TreePair:
@@ -181,9 +181,9 @@ def abstract_match(in_tree: Tree, /) -> Any:
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
-    primals, tangents = in_tree
-    out_primal = match_p.bind(primals)
-    return out_primal, core.Zero(core.tangent_s.map(core.avalof(False)))
+    p, t = in_tree
+    out_p = match_p.bind(p)
+    return out_p, core.Zero(core.tangent_s.map(core.avalof(False)))
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -198,8 +198,8 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
             return x
         return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
-    residuals, out_cotangent = in_tree
-    del out_cotangent
+    residuals, out_c = in_tree
+    del out_c
     return utils.tree.map(make_c, residuals)
 
 

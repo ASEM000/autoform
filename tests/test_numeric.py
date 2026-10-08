@@ -62,23 +62,23 @@ def test_reverse_numeric_dunders_promote_integer_literals():
 
 def test_comparison_blocks_pushforward():
     ir = af.pushforward(af.trace(lambda x: x >= 0)(1.0))
-    primal, derivative = ir.call((1.0,), (1.0,))
-    assert primal is True
+    p, derivative = ir.call((1.0,), (1.0,))
+    assert p is True
     assert isinstance(derivative, af.core.Zero)
     assert derivative.aval == af.numeric.BoolAVal()
 
 
 def test_comparison_blocks_pullback():
     ir = af.pullback(af.trace(lambda x: x >= 0)(1.0))
-    primal, (derivative,) = ir.call((1.0,), True)
-    assert primal is True
+    p, (derivative,) = ir.call((1.0,), True)
+    assert p is True
     assert isinstance(derivative, af.core.Zero)
     assert derivative.aval == af.numeric.FloatAVal()
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "operation, primal, tangent",
+    "operation, p, t",
     [
         pytest.param(af.numeric.add, 3.0, 3.0, id="add"),
         pytest.param(af.numeric.sub, 1.0, -1.0, id="sub"),
@@ -86,15 +86,15 @@ def test_comparison_blocks_pullback():
         pytest.param(af.numeric.div, 2.0, -3.0, id="div"),
     ],
 )
-def test_binary_pushforward(executor, operation, primal, tangent):
+def test_binary_pushforward(executor, operation, p, t):
     ir = af.pushforward(af.trace(operation)(2.0, 1.0))
     actual = executor(ir, (2.0, 1.0), (1.0, 2.0))
-    assert actual == (primal, tangent)
+    assert actual == (p, t)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "operation, primal, cotangents",
+    "operation, p, c",
     [
         pytest.param(af.numeric.add, 3.0, (1.0, 1.0), id="add"),
         pytest.param(af.numeric.sub, 1.0, (1.0, -1.0), id="sub"),
@@ -102,10 +102,10 @@ def test_binary_pushforward(executor, operation, primal, tangent):
         pytest.param(af.numeric.div, 2.0, (1.0, -2.0), id="div"),
     ],
 )
-def test_binary_pullback(executor, operation, primal, cotangents):
+def test_binary_pullback(executor, operation, p, c):
     ir = af.pullback(af.trace(operation)(2.0, 1.0))
     actual = executor(ir, (2.0, 1.0), 1.0)
-    assert actual == (primal, cotangents)
+    assert actual == (p, c)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

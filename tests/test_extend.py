@@ -38,8 +38,8 @@ def make_box_domain():
         def zero(self):
             return Box(0)
 
-        def accum(self, cotangents):
-            return Box(sum(c.value for c in cotangents))
+        def accum(self, c):
+            return Box(sum(c.value for c in c))
 
     af.core.aval_types[BoxAVal] = lambda aval: aval
     return Box, BoxAVal

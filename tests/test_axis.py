@@ -394,7 +394,7 @@ class TestBatchWithMixedAxes:
     ],
 )
 @pytest.mark.parametrize(
-    "cotangents, shared",
+    "c, shared",
     [
         pytest.param(["g1", "g2"], "g1g2", id="strings"),
         pytest.param([af.core.Zero(af.string.StrAVal()), "g2"], "g2", id="mixed-zero"),
@@ -405,17 +405,17 @@ class TestBatchWithMixedAxes:
         ),
     ],
 )
-def test_pullback_of_batch_accumulates_shared_input(executor, container, cotangents, shared):
+def test_pullback_of_batch_accumulates_shared_input(executor, container, c, shared):
     ir = af.trace(af.string.concat)("x", "y")
-    primals = ("x", container(["a", "b"]))
-    feedback = container(cotangents)
+    p = ("x", container(["a", "b"]))
+    feedback = container(c)
     outputs = container(["xa", "xb"])
     pb = af.pullback(af.batch(ir, in_axes=(False, True)))
-    actual = executor(pb, primals, feedback)
+    actual = executor(pb, p, feedback)
     assert actual == (outputs, (shared, feedback))
     assert af.core.avalof(actual[1][0]) == pb.out_tree[1][0].aval
     lane_pb = af.batch(af.pullback(ir), in_axes=((False, True), True))
-    assert executor(lane_pb, primals, feedback) == (outputs, (feedback, feedback))
+    assert executor(lane_pb, p, feedback) == (outputs, (feedback, feedback))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

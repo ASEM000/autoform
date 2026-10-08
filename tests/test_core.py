@@ -155,13 +155,13 @@ class TestSpace:
         cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
         cotangent_s.set(TextFeedbackAVal, lambda aval: aval)
 
-        tangent = tangent_s.map(TextAVal())
-        cotangent = cotangent_s.map(TextAVal())
+        t = tangent_s.map(TextAVal())
+        c = cotangent_s.map(TextAVal())
 
-        assert isinstance(tangent, TextEditAVal)
-        assert isinstance(cotangent, TextFeedbackAVal)
-        assert tangent_s.map(tangent) is tangent
-        assert cotangent_s.map(cotangent) is cotangent
+        assert isinstance(t, TextEditAVal)
+        assert isinstance(c, TextFeedbackAVal)
+        assert tangent_s.map(t) is t
+        assert cotangent_s.map(c) is c
         assert isinstance(af.core.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
         assert isinstance(af.core.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
 

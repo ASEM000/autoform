@@ -58,10 +58,10 @@ def stop_gradient(x: Tree, /) -> Tree:
         ...     return stopped + y
         >>> ir = af.trace(ir)("a", "b")
         >>> pb_ir = af.pullback(ir)
-        >>> _, (cotangent_x, cotangent_y) = pb_ir.call(("a", "b"), "grad")
-        >>> cotangent_x
+        >>> _, (c_x, c_y) = pb_ir.call(("a", "b"), "grad")
+        >>> c_x
         Zero(StrAVal())
-        >>> cotangent_y
+        >>> c_y
         'grad'
     """
     return stop_gradient_p.bind(x)
@@ -79,9 +79,9 @@ def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
     def make_t(x):
         return core.Zero(core.tangent_s.map(core.avalof(x)))
 
-    primal, tangent = in_tree
-    zero_t = utils.tree.map(make_t, primal)
-    return primal, zero_t
+    p, t = in_tree
+    zero_t = utils.tree.map(make_t, p)
+    return p, zero_t
 
 
 def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
@@ -95,8 +95,8 @@ def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
             return x
         return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
-    residuals, out_cotangent = in_tree
-    del out_cotangent
+    residuals, out_c = in_tree
+    del out_c
     return utils.tree.map(make_c, residuals)
 
 
@@ -188,15 +188,15 @@ def abstract_switch(in_tree, /, *, branches: Branches) -> Tree:
 
 
 def pushforward_switch(in_tree, /, *, branches: Branches):
-    primals, tangents = in_tree
-    (key, p_operands), (_, t_operands) = primals, tangents
+    p, t = in_tree
+    (key, p_operands), (_, t_operands) = p, t
     pf_ir = ad.pushforward(branches[key])
     return pf_ir.call(p_operands, t_operands)
 
 
 async def apushforward_switch(in_tree, /, *, branches: Branches):
-    primals, tangents = in_tree
-    (key, p_operands), (_, t_operands) = primals, tangents
+    p, t = in_tree
+    (key, p_operands), (_, t_operands) = p, t
     pf_ir = ad.pushforward(branches[key])
     return await pf_ir.acall(p_operands, t_operands)
 
@@ -216,18 +216,18 @@ async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
-    _, c_operands = pb_ir.call(operands, out_cotangent)
+    _, c_operands = pb_ir.call(operands, out_c)
     return (core.Zero(core.cotangent_s.map(core.avalof(key))), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
-    _, c_operands = await pb_ir.acall(operands, out_cotangent)
+    _, c_operands = await pb_ir.acall(operands, out_c)
     return (core.Zero(core.cotangent_s.map(core.avalof(key))), c_operands)
 
 
@@ -554,11 +554,11 @@ def batch_while_loop(
     alive = [True] * b_sz
 
     # NOTE(asem): pre-batch cond and body IRs. True marks all leaves as batched.
-    state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
-    cond_in_axes = state_in_axes
-    body_in_axes = state_in_axes
-    batched_cond = axis.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = axis.batch(body_ir, in_axes=body_in_axes)
+    in_state_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
+    in_cond_axes = in_state_axes
+    in_body_axes = in_state_axes
+    batched_cond = axis.batch(cond_ir, in_axes=in_cond_axes)
+    batched_body = axis.batch(body_ir, in_axes=in_body_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -567,7 +567,7 @@ def batch_while_loop(
         # NOTE(asem): check conditions only for alive items (transpose AoS -> SoA for call)
         alive_states = [states[i] for i in alive_idx]
         n_alive = len(alive_states)
-        in_batched_cond = state_in_axes
+        in_batched_cond = in_state_axes
         # NOTE(asem): move from AoS to SoA for alive states
         in_transposed_cond = utils.batch_transpose(n_alive, in_batched_cond, alive_states)
         conds_result = batched_cond.call(*in_transposed_cond)
@@ -583,7 +583,7 @@ def batch_while_loop(
         if still_alive:
             still_alive_states = [states[i] for i in still_alive]
             n_body = len(still_alive_states)
-            b_body = state_in_axes
+            b_body = in_state_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = batched_body.call(*in_transposed)
             out_batched = utils.tree.map(stage.is_var, body_ir.out_tree)
@@ -616,11 +616,11 @@ async def abatch_while_loop(
     alive = [True] * b_sz
 
     # NOTE(asem): pre-batch cond and body IRs
-    state_in_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
-    cond_in_axes = state_in_axes
-    body_in_axes = state_in_axes
-    batched_cond = axis.batch(cond_ir, in_axes=cond_in_axes)
-    batched_body = axis.batch(body_ir, in_axes=body_in_axes)
+    in_state_axes = utils.tree.map(lambda _: True, body_ir.in_tree)
+    in_cond_axes = in_state_axes
+    in_body_axes = in_state_axes
+    batched_cond = axis.batch(cond_ir, in_axes=in_cond_axes)
+    batched_body = axis.batch(body_ir, in_axes=in_body_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
@@ -628,7 +628,7 @@ async def abatch_while_loop(
 
         alive_states = [states[i] for i in alive_idx]
         n_alive = len(alive_states)
-        in_batched_cond = state_in_axes
+        in_batched_cond = in_state_axes
         in_transposed_cond = utils.batch_transpose(n_alive, in_batched_cond, alive_states)
         conds_result = await batched_cond.acall(*in_transposed_cond)
         out_batched_cond = isinstance(conds_result, list)
@@ -641,7 +641,7 @@ async def abatch_while_loop(
         if still_alive := [i for i in alive_idx if alive[i]]:
             still_alive_states = [states[i] for i in still_alive]
             n_body = len(still_alive_states)
-            b_body = state_in_axes
+            b_body = in_state_axes
             in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
             out_transposed = await batched_body.acall(*in_transposed)
             out_batched_body = utils.tree.map(stage.is_var, body_ir.out_tree)
@@ -665,20 +665,20 @@ def pullback_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
     n_iters = len(trajectory) - 1
 
-    cotangent = out_cotangent
+    c = out_c
     pb_body = ad.pullback(body_ir)
 
     for t in reversed(range(n_iters)):
         state_t = trajectory[t]
-        _, cotangent = pb_body.call(state_t, cotangent)
-        cotangent = cotangent[0]
+        _, c = pb_body.call(state_t, c)
+        c = c[0]
 
-    return cotangent
+    return c
 
 
 async def apull_bwd_while_loop(
@@ -689,20 +689,20 @@ async def apull_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     del cond_ir, max_iters
     trajectory, _ = residuals
     n_iters = len(trajectory) - 1
 
-    cotangent = out_cotangent
+    c = out_c
     pb_body = ad.pullback(body_ir)
 
     for t in reversed(range(n_iters)):
         state_t = trajectory[t]
-        _, cotangent = await pb_body.acall(state_t, cotangent)
-        cotangent = cotangent[0]
+        _, c = await pb_body.acall(state_t, c)
+        c = c[0]
 
-    return cotangent
+    return c
 
 
 def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -863,22 +863,22 @@ def pushforward_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    primals, (_, t_theta) = in_tree
-    _, theta = primals
+    p, (_, t_theta) = in_tree
+    _, theta = p
     out = fixpoint_p.bind(
-        primals, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+        p, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
     )
-    tangent = utils.tree.map(lambda x: core.Zero(core.tangent_s.map(core.avalof(x))), out)
+    t = utils.tree.map(lambda x: core.Zero(core.tangent_s.map(core.avalof(x))), out)
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_theta)):
-        return out, tangent
+        return out, t
 
     pf_step_ir = ad.pushforward(step_ir)
     for _ in range(adj_iters + 1):
-        _, next_tangent = pf_step_ir.call((out, theta), (tangent, t_theta))
-        if utils.tree_equal(next_tangent, tangent):
-            return out, next_tangent
-        tangent = next_tangent
-    return out, tangent
+        _, t_next = pf_step_ir.call((out, theta), (t, t_theta))
+        if utils.tree_equal(t_next, t):
+            return out, t_next
+        t = t_next
+    return out, t
 
 
 async def apushforward_fixpoint(
@@ -890,22 +890,22 @@ async def apushforward_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    primals, (_, t_theta) = in_tree
-    _, theta = primals
+    p, (_, t_theta) = in_tree
+    _, theta = p
     out = await fixpoint_p.abind(
-        primals, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
+        p, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
     )
-    tangent = utils.tree.map(lambda x: core.Zero(core.tangent_s.map(core.avalof(x))), out)
+    t = utils.tree.map(lambda x: core.Zero(core.tangent_s.map(core.avalof(x))), out)
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_theta)):
-        return out, tangent
+        return out, t
 
     pf_step_ir = ad.pushforward(step_ir)
     for _ in range(adj_iters + 1):
-        _, next_tangent = await pf_step_ir.acall((out, theta), (tangent, t_theta))
-        if utils.tree_equal(next_tangent, tangent):
-            return out, next_tangent
-        tangent = next_tangent
-    return out, tangent
+        _, t_next = await pf_step_ir.acall((out, theta), (t, t_theta))
+        if utils.tree_equal(t_next, t):
+            return out, t_next
+        t = t_next
+    return out, t
 
 
 def pullback_fwd_fixpoint(
@@ -972,37 +972,37 @@ def pullback_bwd_fixpoint(
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
-    def fwd_bind(eqn: stage.Eqn, p_in: Tree, /) -> Tree:
+    def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
         with core.using_interpreter(fwd):
-            boxed_out, residuals = eqn.bind(fwd.box(p_in), **eqn.params)
+            out_boxed, residuals = eqn.bind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
-        return fwd.unbox(boxed_out)
+        return fwd.unbox(out_boxed)
 
     def transpose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
 
-        def bwd_bind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
+        def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
             residuals = res[eqn]
             with core.using_interpreter(bwd):
-                boxed_c_in = eqn.bind((residuals, bwd.box(c_out)), **eqn.params)
-            return bwd.unbox(boxed_c_in)
+                in_boxed_c = eqn.bind((residuals, bwd.box(out_c)), **eqn.params)
+            return bwd.unbox(in_boxed_c)
 
         env = ad.PBEnv()
 
         utils.tree.map(env.write_c, step_ir.out_tree, cot)
         for eqn in reversed(step_ir.eqns):
-            c_out = utils.tree.map(env.read_c, eqn.out_tree)
-            c_in = bwd_bind(eqn, c_out)
-            utils.tree.map(env.write_c, eqn.in_tree, c_in)
+            out_c = utils.tree.map(env.read_c, eqn.out_tree)
+            in_c = bwd_bind(eqn, out_c)
+            utils.tree.map(env.write_c, eqn.in_tree, in_c)
         return utils.tree.map(env.read_c, step_ir.in_tree)
 
     env = ad.PBEnv()
 
     utils.tree.map(env.write_p, step_ir.in_tree, (x_star, theta))
     for eqn in step_ir.eqns:
-        p_in = utils.tree.map(env.read_p, eqn.in_tree)
-        p_out = fwd_bind(eqn, p_in)
-        utils.tree.map(env.write_p, eqn.out_tree, p_out)
+        in_p = utils.tree.map(env.read_p, eqn.in_tree)
+        out_p = fwd_bind(eqn, in_p)
+        utils.tree.map(env.write_p, eqn.out_tree, out_p)
     utils.tree.map(env.read_p, step_ir.out_tree)
 
     u = g
@@ -1044,37 +1044,37 @@ async def apull_bwd_fixpoint(
     parent = core.active_interpreter.get()
     fwd = ad.PullbackFwdInterpreter(parent=parent)
 
-    async def fwd_bind(eqn: stage.Eqn, p_in: Tree, /) -> Tree:
+    async def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
         with core.using_interpreter(fwd):
-            boxed_out, residuals = await eqn.abind(fwd.box(p_in), **eqn.params)
+            out_boxed, residuals = await eqn.abind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
-        return fwd.unbox(boxed_out)
+        return fwd.unbox(out_boxed)
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
 
-        async def bwd_bind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
+        async def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
             residuals = res[eqn]
             with core.using_interpreter(bwd):
-                boxed_c_in = await eqn.abind((residuals, bwd.box(c_out)), **eqn.params)
-            return bwd.unbox(boxed_c_in)
+                in_boxed_c = await eqn.abind((residuals, bwd.box(out_c)), **eqn.params)
+            return bwd.unbox(in_boxed_c)
 
         env = ad.PBEnv()
 
         utils.tree.map(env.write_c, step_ir.out_tree, cot)
         for eqn in reversed(step_ir.eqns):
-            c_out = utils.tree.map(env.read_c, eqn.out_tree)
-            c_in = await bwd_bind(eqn, c_out)
-            utils.tree.map(env.write_c, eqn.in_tree, c_in)
+            out_c = utils.tree.map(env.read_c, eqn.out_tree)
+            in_c = await bwd_bind(eqn, out_c)
+            utils.tree.map(env.write_c, eqn.in_tree, in_c)
         return utils.tree.map(env.read_c, step_ir.in_tree)
 
     env = ad.PBEnv()
 
     utils.tree.map(env.write_p, step_ir.in_tree, (x_star, theta))
     for eqn in step_ir.eqns:
-        p_in = utils.tree.map(env.read_p, eqn.in_tree)
-        p_out = await fwd_bind(eqn, p_in)
-        utils.tree.map(env.write_p, eqn.out_tree, p_out)
+        in_p = utils.tree.map(env.read_p, eqn.in_tree)
+        out_p = await fwd_bind(eqn, in_p)
+        utils.tree.map(env.write_p, eqn.out_tree, out_p)
     utils.tree.map(env.read_p, step_ir.out_tree)
 
     u = g
@@ -1116,21 +1116,21 @@ def batch_fixpoint(
     thetas = [theta_at(b) for b in range(b_sz)]
     alive = [True] * b_sz
 
-    state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
-    theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
-    in_axes = (state_in_axes, theta_in_axes)
+    in_state_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
+    in_theta_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
+    in_axes = (in_state_axes, in_theta_axes)
     batched_step = axis.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
-        equiv_axes = (state_in_axes, state_in_axes)
+        equiv_axes = (in_state_axes, in_state_axes)
         batched_equiv = axis.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
             break
 
-        alive_in = [(states[i], thetas[i]) for i in alive_idx]
-        n_alive = len(alive_in)
-        in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
+        in_alive = [(states[i], thetas[i]) for i in alive_idx]
+        n_alive = len(in_alive)
+        in_transposed = utils.batch_transpose(n_alive, in_axes, in_alive)
         out_transposed = batched_step.call(*in_transposed)
         out_batched = utils.tree.map(stage.is_var, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
@@ -1140,8 +1140,8 @@ def batch_fixpoint(
             flags = [utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states)]
         else:
             pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states)]
-            equiv_in = utils.batch_transpose(n_alive, equiv_axes, pairs)
-            flags = batched_equiv.call(*equiv_in)
+            in_equiv = utils.batch_transpose(n_alive, equiv_axes, pairs)
+            flags = batched_equiv.call(*in_equiv)
 
         for flag, batch_idx, new_state in zip(flags, alive_idx, new_states):
             if flag:
@@ -1179,21 +1179,21 @@ async def abatch_fixpoint(
     thetas = [theta_at(b) for b in range(b_sz)]
     alive = [True] * b_sz
 
-    state_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
-    theta_in_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
-    in_axes = (state_in_axes, theta_in_axes)
+    in_state_axes = utils.tree.map(lambda _: True, step_ir.in_tree[0])
+    in_theta_axes = utils.tree.map(lambda _: True, step_ir.in_tree[1])
+    in_axes = (in_state_axes, in_theta_axes)
     batched_step = axis.batch(step_ir, in_axes=in_axes)
     if equiv_ir is not None:
-        equiv_axes = (state_in_axes, state_in_axes)
+        equiv_axes = (in_state_axes, in_state_axes)
         batched_equiv = axis.batch(equiv_ir, in_axes=equiv_axes)
 
     for _ in range(max_iters):
         if not (alive_idx := [i for i in range(b_sz) if alive[i]]):
             break
 
-        alive_in = [(states[i], thetas[i]) for i in alive_idx]
-        n_alive = len(alive_in)
-        in_transposed = utils.batch_transpose(n_alive, in_axes, alive_in)
+        in_alive = [(states[i], thetas[i]) for i in alive_idx]
+        n_alive = len(in_alive)
+        in_transposed = utils.batch_transpose(n_alive, in_axes, in_alive)
         out_transposed = await batched_step.acall(*in_transposed)
         out_batched = utils.tree.map(stage.is_var, step_ir.out_tree)
         out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
@@ -1203,8 +1203,8 @@ async def abatch_fixpoint(
             flags = [utils.tree_equal(states[b], ns) for b, ns in zip(alive_idx, new_states)]
         else:
             pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states)]
-            equiv_in = utils.batch_transpose(n_alive, equiv_axes, pairs)
-            flags = await batched_equiv.acall(*equiv_in)
+            in_equiv = utils.batch_transpose(n_alive, equiv_axes, pairs)
+            flags = await batched_equiv.acall(*in_equiv)
 
         for flag, batch_idx, new_state in zip(flags, alive_idx, new_states):
             if flag:

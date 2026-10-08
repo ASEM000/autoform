@@ -57,58 +57,11 @@ __all__ = [
 
 
 # ==================================================================================================
-# SPACES
+# AVAL
 # ==================================================================================================
-class Space:
-    __slots__ = ["name", "rules"]
 
-    def __init__(self, name: str, /):
-        assert isinstance(name, str), f"Expected str, got {name!r}"
-        self.name = name
-        self.rules: dict[type[AVal], Callable[[AVal], AVal]] = {}
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.name!r})"
-
-    def set[R: Callable[[AVal], AVal]](
-        self, value_type: type[AVal], rule: R, /, *, replace: bool = False
-    ) -> R:
-        assert isinstance(value_type, type), f"Expected type, got {value_type!r}"
-        assert issubclass(value_type, AVal), f"Expected AVal type, got {value_type!r}"
-        assert callable(rule), f"Expected callable, got {rule!r}"
-        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-        assert replace or value_type not in self.rules, f"Rule for {value_type} already defined"
-        self.rules[value_type] = rule
-        return rule
-
-    def map(self, value: AVal, /) -> AVal:
-        """Return the abstract value of ``value`` in this space."""
-        assert isinstance(value, AVal), f"Expected AVal, got {value!r}"
-        if (rule := self.rules.get(type(value))) is None:
-            raise TypeError(f"No {self.name} aval rule registered for {value!r}")
-        aval = rule(value)
-        assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
-        return aval
-
-
-primal_s = Space("primal")
-tangent_s = Space("tangent")
-cotangent_s = Space("cotangent")
 
 aval_types: dict[type, Callable[[Any], AVal]] = {}
-
-
-def avalof(value, /) -> AVal:
-    if (rule := aval_types.get(type(value))) is None:
-        raise TypeError(f"No aval rule registered for {value!r}")
-    aval = rule(value)
-    assert isinstance(aval, AVal), f"Aval rule returned {aval!r}"
-    return aval
-
-
-# ==================================================================================================
-# BASE TYPES
-# ==================================================================================================
 
 
 class AVal:
@@ -149,6 +102,51 @@ class AVal:
     def accum(self, values: Tree, /):
         """Combine values with this abstract value."""
         assert False, f"No accumulation defined for {self!r}"
+
+
+def avalof(value, /) -> AVal:
+    if (rule := aval_types.get(type(value))) is None:
+        raise TypeError(f"No aval rule registered for {value!r}")
+    aval = rule(value)
+    assert isinstance(aval, AVal), f"Aval rule returned {aval!r}"
+    return aval
+
+
+# ==================================================================================================
+# SPACES
+# ==================================================================================================
+
+
+class Space:
+    __slots__ = ["name", "rules"]
+
+    def __init__(self, name: str, /):
+        assert isinstance(name, str), f"Expected str, got {name!r}"
+        self.name = name
+        self.rules: dict[type[AVal], Callable[[AVal], AVal]] = {}
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name!r})"
+
+    def set[R: Callable[[AVal], AVal]](
+        self, value_type: type[AVal], rule: R, /, *, replace: bool = False
+    ) -> R:
+        assert isinstance(value_type, type), f"Expected type, got {value_type!r}"
+        assert issubclass(value_type, AVal), f"Expected AVal type, got {value_type!r}"
+        assert callable(rule), f"Expected callable, got {rule!r}"
+        assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+        assert replace or value_type not in self.rules, f"Rule for {value_type} already defined"
+        self.rules[value_type] = rule
+        return rule
+
+    def map(self, value: AVal, /) -> AVal:
+        """Return the abstract value of ``value`` in this space."""
+        assert isinstance(value, AVal), f"Expected AVal, got {value!r}"
+        if (rule := self.rules.get(type(value))) is None:
+            raise TypeError(f"No {self.name} aval rule registered for {value!r}")
+        aval = rule(value)
+        assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
+        return aval
 
 
 class Zero[T: AVal]:
@@ -196,6 +194,10 @@ def materialize_zeros(x: Tree, /) -> Tree:
 
     return utils.tree.map(map_func, x)
 
+
+primal_s = Space("primal")
+tangent_s = Space("tangent")
+cotangent_s = Space("cotangent")
 
 aval_types[Zero] = lambda value: value.aval
 
