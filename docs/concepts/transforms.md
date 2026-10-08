@@ -102,7 +102,7 @@ pushforward(ir, /) -> IR
 
 ```python
 pf = af.pushforward(ir)
-output, tangent = pf.call(("topic",), ("input change",))
+output, t = pf.call(("topic",), ("input change",))
 ```
 
 `````

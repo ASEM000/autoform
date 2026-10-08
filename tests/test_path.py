@@ -253,14 +253,14 @@ class TestWeight:
         ir = af.trace(program)("x", 1.0)
         pushforward_ir = af.pushforward(ir)
 
-        (output, tangent), path_weight = executor(
+        (output, t), path_weight = executor(
             af.weight(pushforward_ir),
             ("hello", 0.5),
             ("dhello", 0.0),
         )
 
         assert output == "hello!"
-        assert tangent == "dhello"
+        assert t == "dhello"
         assert path_weight == 0.5
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -272,15 +272,15 @@ class TestWeight:
         ir = af.trace(program)("x", 1.0)
         pullback_ir = af.pullback(ir)
 
-        (output, cotangents), path_weight = executor(
+        (output, c), path_weight = executor(
             af.weight(pullback_ir),
             ("hello", 0.5),
             "feedback",
         )
 
         assert output == "hello!"
-        assert cotangents[0] == "feedback"
-        assert isinstance(cotangents[1], af.core.Zero)
+        assert c[0] == "feedback"
+        assert isinstance(c[1], af.core.Zero)
         assert path_weight == 0.5
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

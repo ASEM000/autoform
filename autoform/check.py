@@ -40,17 +40,17 @@ def impl_check(value: Tree, /, *, aval: core.AVal) -> Tree:
 
 
 def pushforward_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
-    primal, tangent = in_tree
-    primal = typecheck_p.bind(primal, aval=core.primal_s.map(aval))
-    tangent = typecheck_p.bind(tangent, aval=core.tangent_s.map(aval))
-    return primal, tangent
+    p, t = in_tree
+    p = typecheck_p.bind(p, aval=core.primal_s.map(aval))
+    t = typecheck_p.bind(t, aval=core.tangent_s.map(aval))
+    return p, t
 
 
 async def apushforward_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
-    primal, tangent = in_tree
-    primal = await typecheck_p.abind(primal, aval=core.primal_s.map(aval))
-    tangent = await typecheck_p.abind(tangent, aval=core.tangent_s.map(aval))
-    return primal, tangent
+    p, t = in_tree
+    p = await typecheck_p.abind(p, aval=core.primal_s.map(aval))
+    t = await typecheck_p.abind(t, aval=core.tangent_s.map(aval))
+    return p, t
 
 
 def pullback_fwd_check(value: Tree, /, *, aval: core.AVal) -> tuple[Tree, None]:
@@ -62,13 +62,13 @@ async def apullback_fwd_check(value: Tree, /, *, aval: core.AVal) -> tuple[Tree,
 
 
 def pullback_bwd_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
-    _, cotangent = in_tree
-    return typecheck_p.bind(cotangent, aval=core.cotangent_s.map(aval))
+    _, c = in_tree
+    return typecheck_p.bind(c, aval=core.cotangent_s.map(aval))
 
 
 async def apullback_bwd_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
-    _, cotangent = in_tree
-    return await typecheck_p.abind(cotangent, aval=core.cotangent_s.map(aval))
+    _, c = in_tree
+    return await typecheck_p.abind(c, aval=core.cotangent_s.map(aval))
 
 
 def batch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:

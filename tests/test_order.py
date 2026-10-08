@@ -101,15 +101,15 @@ def test_fanout_transforms(executor, joined, transform, args, expected):
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-@pytest.mark.parametrize("c_out", [(1.0, 0.0), (2.0, 3.0)], ids=["one-live", "both-live"])
-def test_fanout_pullback_repeated_operand(executor, c_out):
+@pytest.mark.parametrize("out_c", [(1.0, 0.0), (2.0, 3.0)], ids=["one-live", "both-live"])
+def test_fanout_pullback_repeated_operand(executor, out_c):
     ir = af.trace(lambda x: (x * x, x + 1.0))(3.0)
     scheduled = af.sched(ir)
     assert [e.prim for e in scheduled.eqns] == [fanout_p]
-    expected = ((9.0, 4.0), (6.0 * c_out[0] + c_out[1],))
-    assert af.pullback(ir).call((3.0,), c_out) == expected
+    expected = ((9.0, 4.0), (6.0 * out_c[0] + out_c[1],))
+    assert af.pullback(ir).call((3.0,), out_c) == expected
     pb = af.pullback(scheduled)
-    assert executor(pb, (3.0,), c_out) == expected
+    assert executor(pb, (3.0,), out_c) == expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

@@ -222,10 +222,10 @@ def test_fill_pushforward_preserves_non_string_literals(executor):
 
     ir = af.pushforward(af.trace(program)("seed"))
     with af.lm.client(FillClient()):
-        primal, tangent = executor(ir, ("q",), ("dq",))
-    assert primal == {"answer": "filled", "fixed": 1.0}
-    assert tangent["answer"] == "filled"
-    assert af.core.materialize_zeros(tangent["fixed"]) == 0.0
+        p, t = executor(ir, ("q",), ("dq",))
+    assert p == {"answer": "filled", "fixed": 1.0}
+    assert t["answer"] == "filled"
+    assert af.core.materialize_zeros(t["fixed"]) == 0.0
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -554,14 +554,14 @@ def test_fill_pushforward_skips_generation_for_symbolic_zero(executor, source):
     ir = af.pushforward(af.trace(program)("description"))
     zero = af.core.Zero(af.core.avalof(""))
     with af.lm.client(FillClient()):
-        primal, tangent = executor(ir, ("description",), (zero,))
+        p, t = executor(ir, ("description",), (zero,))
     expected = {"answer": "generated", "score": 0.5}
     if source in ("literal", "both"):
         expected["x"] = "description"
-    assert primal == expected
-    assert all(isinstance(value, af.core.Zero) for value in tree.leaves(tangent))
-    assert af.core.materialize_zeros(tangent)["answer"] == ""
-    assert af.core.materialize_zeros(tangent)["score"] == 0.0
+    assert p == expected
+    assert all(isinstance(value, af.core.Zero) for value in tree.leaves(t))
+    assert af.core.materialize_zeros(t)["answer"] == ""
+    assert af.core.materialize_zeros(t)["score"] == 0.0
     assert len(calls) == 1
 
 
@@ -657,12 +657,12 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
     ir = af.pullback(af.batch(ir) if batch_order == "before" else ir)
     if batch_order == "after":
         ir = af.batch(ir)
-    cotangent = ("direct feedback", "generated feedback") if generated else "direct feedback"
+    c = ("direct feedback", "generated feedback") if generated else "direct feedback"
     expected = (
         ("q", "filled") if generated else "q",
         ("direct feedbackmodel feedback" if generated else "direct feedback",),
     )
-    args = (("q",), cotangent)
+    args = (("q",), c)
     if batch_order is not None:
         args, expected = tree.map(lambda x: [x, x], (args, expected))
     with af.lm.client(RenderClient(render=render)):
@@ -786,17 +786,17 @@ def test_fill_pullback_generates_input_cotangent_types(executor, generated):
         return out if generated else out["x"]
 
     ir = af.pullback(af.trace(program)(0.5))
-    cotangent = {"x": 0.25, "y": "feedback"} if generated else 0.25
+    c = {"x": 0.25, "y": "feedback"} if generated else 0.25
     with af.lm.client(FeedbackClient()):
-        out, (dx,) = executor(ir, (0.5,), cotangent)
+        out, (dx,) = executor(ir, (0.5,), c)
     assert out == ({"x": 0.5, "y": "filled"} if generated else 0.5)
     assert dx == (-0.25 if generated else 0.25)
     assert len(calls) == 1 + generated
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-@pytest.mark.parametrize("cotangent", [-1.0, 0.0, 1.0])
-def test_fill_pullback_propagates_numeric_sensitivities(executor, cotangent):
+@pytest.mark.parametrize("c", [-1.0, 0.0, 1.0])
+def test_fill_pullback_propagates_numeric_sensitivities(executor, c):
     calls = []
 
     class FillClient(EchoRouter):
@@ -822,7 +822,7 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, cotangent):
                 "maximum": 10,
                 "description": "Double x.",
             }
-            assert feedback["values"] == {"y": 3.0 * cotangent}
+            assert feedback["values"] == {"y": 3.0 * c}
             assert feedback["schema"]["properties"]["y"] == {"type": "number"}
             schema = text["format"]["schema"]["properties"]["output"]
             assert schema["properties"]["0"]["properties"]["x"] == {
@@ -838,7 +838,7 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, cotangent):
 
     ir = af.pullback(af.trace(program)(1.0))
     with af.lm.client(FillClient()):
-        assert executor(ir, (1.0,), cotangent) == (6.0, (6.0 * cotangent,))
+        assert executor(ir, (1.0,), c) == (6.0, (6.0 * c,))
     assert len(calls) == 2
 
 
@@ -937,7 +937,7 @@ def gradient_client():
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "field, out_cotangent, expected, feedback",
+    "field, out_c, expected, feedback",
     [
         pytest.param(
             "text",
@@ -956,7 +956,7 @@ def gradient_client():
     ],
 )
 def test_fill_pullback_omits_unused_fields(
-    executor, field, out_cotangent, expected, feedback, gradient_client
+    executor, field, out_c, expected, feedback, gradient_client
 ):
     schema = {"text": af.lm.Str(min=1), "score": af.lm.Float(min=0, max=1)}
     fill = fill_program(schema)
@@ -966,7 +966,7 @@ def test_fill_pullback_omits_unused_fields(
         return y * 2.0 if field == "score" else af.string.format("{text}", text=y)
 
     ir = af.sched(af.pullback(af.trace(program)("seed")))
-    assert executor(ir, ("Explain recursion.",), out_cotangent) == (
+    assert executor(ir, ("Explain recursion.",), out_c) == (
         expected,
         ("input feedback",),
     )
@@ -975,23 +975,23 @@ def test_fill_pullback_omits_unused_fields(
 
 
 @pytest.mark.parametrize(
-    "out_cotangent",
+    "out_c",
     [
         pytest.param({}, id="missing-field"),
         pytest.param({"answer": "feedback", "extra": "feedback"}, id="extra-field"),
         pytest.param({"answer": ["feedback"]}, id="nested-field"),
     ],
 )
-def test_fill_pullback_requires_matching_cotangent_structure(out_cotangent):
+def test_fill_pullback_requires_matching_cotangent_structure(out_c):
     in_tree, static_tree = af.lm.fill_input(("seed", {"answer": af.lm.Str()}, "m1"))
     residuals = (*in_tree, {"answer": "value"})
     with pytest.raises(ValueError, match="Output and cotangent must have identical pytree specs"):
-        af.lm.fill_pullback_request((residuals, out_cotangent), static_tree=static_tree)
+        af.lm.fill_pullback_request((residuals, out_c), static_tree=static_tree)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "out_cotangent, error",
+    "out_c, error",
     [
         pytest.param(
             {"text": "too terse", "score": "overconfident"}, "FloatAVal", id="text-for-float"
@@ -999,13 +999,11 @@ def test_fill_pullback_requires_matching_cotangent_structure(out_cotangent):
         pytest.param({"text": -0.2, "score": -0.2}, "StrAVal", id="float-for-text"),
     ],
 )
-def test_fill_pullback_rejects_wrong_schema_cotangent_type(
-    executor, out_cotangent, error, gradient_client
-):
+def test_fill_pullback_rejects_wrong_schema_cotangent_type(executor, out_c, error, gradient_client):
     program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
     ir = af.pullback(af.trace(program)("seed"))
     with pytest.raises(TypeError, match=f"Expected {error}"):
-        executor(ir, ("Explain recursion.",), out_cotangent)
+        executor(ir, ("Explain recursion.",), out_c)
     assert len(gradient_client.calls) == 0
 
 

@@ -349,16 +349,16 @@ def test_format_lowers_to_concat(executor, template, values, expected, feedback)
     ir = af.trace(program)(values)
     assert len(ir.eqns) == 1
     assert ir.eqns[0].prim is af.string.concat_p
-    primal = template.format(**values)
-    assert program(values) == primal
+    p = template.format(**values)
+    assert program(values) == p
     actual = executor(ir, values)
-    assert actual == primal
+    assert actual == p
     pf = af.pushforward(ir)
     result = executor(pf, (values,), (values,))
-    assert af.core.materialize_zeros(result) == (primal, expected)
+    assert af.core.materialize_zeros(result) == (p, expected)
     pb = af.pullback(ir)
     result = executor(pb, (values,), "g")
-    assert af.core.materialize_zeros(result) == (primal, (feedback,))
+    assert af.core.materialize_zeros(result) == (p, (feedback,))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

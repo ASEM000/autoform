@@ -51,9 +51,9 @@ def abstract_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):
 
 
 def push_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
-    primal, tangent = in_tree
-    out_p = checkpoint_p.bind(primal, key=key, collection=collection)
-    out_t = checkpoint_p.bind(tangent, key=key, collection=collection)
+    p, t = in_tree
+    out_p = checkpoint_p.bind(p, key=key, collection=collection)
+    out_t = checkpoint_p.bind(t, key=key, collection=collection)
     return out_p, out_t
 
 
@@ -62,8 +62,8 @@ def pull_fwd_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):
 
 
 def pull_bwd_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
-    _, cotangent = in_tree
-    return checkpoint_p.bind(cotangent, key=key, collection=collection)
+    _, c = in_tree
+    return checkpoint_p.bind(c, key=key, collection=collection)
 
 
 def batch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):

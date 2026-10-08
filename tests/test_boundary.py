@@ -40,10 +40,10 @@ class TestCustomFunction:
             return af.string.format("[{x}]", x=x)
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, tangent = af.pushforward(ir).call(("hello",), ("change",))
+        out, t = af.pushforward(ir).call(("hello",), ("change",))
 
         assert out == "[hello]"
-        assert tangent == "change"
+        assert t == "change"
 
     def test_undefined_pullback_falls_back_to_body_ir(self):
         @af.custom
@@ -51,10 +51,10 @@ class TestCustomFunction:
             return af.string.format("[{x}]", x=x)
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, cotangent = af.pullback(ir).call(("hello",), "feedback")
+        out, c = af.pullback(ir).call(("hello",), "feedback")
 
         assert out == "[hello]"
-        assert cotangent == ("feedback",)
+        assert c == ("feedback",)
 
     def test_undefined_batch_falls_back_to_body_ir(self):
         @af.custom
@@ -84,9 +84,9 @@ class TestCustomPushforward:
         @pair_program.set_pushforward
         def pair_program_pushforward(in_tree, /, *, call):
             del call
-            primals, tangents = in_tree
-            x, y = primals
-            dx, dy = tangents
+            p, t = in_tree
+            x, y = p
+            dx, dy = t
             return (
                 python_only_upper(x),
                 python_only_upper(y),
@@ -96,10 +96,10 @@ class TestCustomPushforward:
             )
 
         ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
-        out, tangent = af.pushforward(ir).call(("hello", "world"), ("small", "change"))
+        out, t = af.pushforward(ir).call(("hello", "world"), ("small", "change"))
 
         assert out == ("HELLO", "WORLD")
-        assert tangent == ("SMALL", "CHANGE")
+        assert t == ("SMALL", "CHANGE")
 
     def test_custom_pushforward_rule_matches_mapping_signature(self):
         @af.custom
@@ -108,18 +108,18 @@ class TestCustomPushforward:
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
-            primals, tangents = in_tree
-            (dx,) = tangents
-            return call(*primals), af.string.format(
+            p, t = in_tree
+            (dx,) = t
+            return call(*p), af.string.format(
                 "custom delta: {value}",
                 value=af.core.materialize_zeros(dx),
             )
 
         ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
-        out, tangent = af.pushforward(ir).call(("hello",), ("small change",))
+        out, t = af.pushforward(ir).call(("hello",), ("small change",))
 
         assert out == "[hello]!"
-        assert tangent == "custom delta: small change"
+        assert t == "custom delta: small change"
 
     @pytest.mark.parametrize(
         "executor, expected",
@@ -135,18 +135,18 @@ class TestCustomPushforward:
 
         @bracket.aset_pushforward
         async def bracket_pushforward(in_tree, /, *, call):
-            primals, tangents = in_tree
-            (dx,) = tangents
-            return call(*primals), af.string.format(
+            p, t = in_tree
+            (dx,) = t
+            return call(*p), af.string.format(
                 "async delta: {value}",
                 value=af.core.materialize_zeros(dx),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, tangent = executor(af.pushforward(ir), ("hello",), ("change",))
+        out, t = executor(af.pushforward(ir), ("hello",), ("change",))
 
         assert out == "[hello]"
-        assert tangent == expected
+        assert t == expected
 
     def test_set_pushforward_replaces_default_rule(self):
         @af.custom
@@ -155,16 +155,14 @@ class TestCustomPushforward:
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
-            primals, tangents = in_tree
-            (dx,) = tangents
-            return call(*primals), af.string.format(
-                "push {value}", value=af.core.materialize_zeros(dx)
-            )
+            p, t = in_tree
+            (dx,) = t
+            return call(*p), af.string.format("push {value}", value=af.core.materialize_zeros(dx))
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, tangent = af.pushforward(ir).call(("hello",), ("change",))
+        _, t = af.pushforward(ir).call(("hello",), ("change",))
 
-        assert tangent == "push change"
+        assert t == "push change"
 
     @pytest.mark.parametrize(
         "executor, expected",
@@ -180,17 +178,17 @@ class TestCustomPushforward:
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
-            primals, tangents = in_tree
-            (dx,) = tangents
-            return call(*primals), af.string.format(
+            p, t = in_tree
+            (dx,) = t
+            return call(*p), af.string.format(
                 "sync push {value}",
                 value=af.core.materialize_zeros(dx),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, tangent = executor(af.pushforward(ir), ("hello",), ("change",))
+        _, t = executor(af.pushforward(ir), ("hello",), ("change",))
 
-        assert tangent == expected
+        assert t == expected
 
 
 class TestCustomPullback:
@@ -210,20 +208,20 @@ class TestCustomPullback:
         @pair_program.set_pullback
         def pair_program_pullback(in_tree, /, *, call):
             del call
-            (primals, output), cotangents = in_tree
-            x, y = primals
-            left_out, right_out = output
-            left_cotangent, right_cotangent = cotangents
+            (p, output), c = in_tree
+            x, y = p
+            out_left, out_right = output
+            c_left, c_right = c
             return (
-                f"{python_only_lower(x)} <- {python_only_lower(left_out)} <- {left_cotangent}",
-                f"{python_only_lower(y)} <- {python_only_lower(right_out)} <- {right_cotangent}",
+                f"{python_only_lower(x)} <- {python_only_lower(out_left)} <- {c_left}",
+                f"{python_only_lower(y)} <- {python_only_lower(out_right)} <- {c_right}",
             )
 
         ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
-        out, cotangents = af.pullback(ir).call(("HELLO", "WORLD"), ("L", "R"))
+        out, c = af.pullback(ir).call(("HELLO", "WORLD"), ("L", "R"))
 
         assert out == ("left HELLO", "WORLD!")
-        assert cotangents == ("hello <- left hello <- L", "world <- world! <- R")
+        assert c == ("hello <- left hello <- L", "world <- world! <- R")
 
     def test_custom_pullback_rule_uses_mlx_argument_order(self):
         @af.custom
@@ -233,22 +231,22 @@ class TestCustomPullback:
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
-            (primals, output), cotangent = in_tree
-            (x,) = primals
+            (p, output), c = in_tree
+            (x,) = p
             return (
                 af.string.format(
                     "{cotangent} via {output} from {x}",
-                    cotangent=cotangent,
+                    cotangent=c,
                     output=output,
                     x=x,
                 ),
             )
 
         ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
-        out, cotangent = af.pullback(ir).call(("hello",), "feedback")
+        out, c = af.pullback(ir).call(("hello",), "feedback")
 
         assert out == "[hello]!"
-        assert cotangent == ("feedback via [hello] from hello",)
+        assert c == ("feedback via [hello] from hello",)
 
     @pytest.mark.parametrize(
         "executor, expected",
@@ -265,21 +263,21 @@ class TestCustomPullback:
         @bracket.aset_pullback
         async def bracket_pullback(in_tree, /, *, call):
             del call
-            (primals, output), cotangent = in_tree
-            del primals
+            (p, output), c = in_tree
+            del p
             return (
                 af.string.format(
                     "async {cotangent} via {output}",
-                    cotangent=cotangent,
+                    cotangent=c,
                     output=output,
                 ),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        out, cotangent = executor(af.pullback(ir), ("hello",), "feedback")
+        out, c = executor(af.pullback(ir), ("hello",), "feedback")
 
         assert out == "[hello]"
-        assert cotangent == expected
+        assert c == expected
 
     def test_set_pullback_replaces_default_rule(self):
         @af.custom
@@ -289,16 +287,14 @@ class TestCustomPullback:
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
-            (primals, output), cotangent = in_tree
-            del primals
-            return (
-                af.string.format("pull {output} {cotangent}", output=output, cotangent=cotangent),
-            )
+            (p, output), c = in_tree
+            del p
+            return (af.string.format("pull {output} {cotangent}", output=output, cotangent=c),)
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, cotangent = af.pullback(ir).call(("hello",), "feedback")
+        _, c = af.pullback(ir).call(("hello",), "feedback")
 
-        assert cotangent == ("pull [hello] feedback",)
+        assert c == ("pull [hello] feedback",)
 
     @pytest.mark.parametrize(
         "executor, expected",
@@ -315,20 +311,20 @@ class TestCustomPullback:
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
-            (primals, output), cotangent = in_tree
-            del primals
+            (p, output), c = in_tree
+            del p
             return (
                 af.string.format(
                     "sync pull {output} {cotangent}",
                     output=output,
-                    cotangent=cotangent,
+                    cotangent=c,
                 ),
             )
 
         ir = af.trace(lambda x: bracket(x))("seed")
-        _, cotangent = executor(af.pullback(ir), ("hello",), "feedback")
+        _, c = executor(af.pullback(ir), ("hello",), "feedback")
 
-        assert cotangent == expected
+        assert c == expected
 
 
 class TestCustomBatch:

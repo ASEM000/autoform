@@ -89,18 +89,18 @@ def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    primals, tangents = in_tree
+    p, t = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
-    pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
+    pf_inputs = [(p, t) for p, t in zip(p, t)]
     results = fanout_p.bind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
 
 async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
-    primals, tangents = in_tree
+    p, t = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
-    pf_inputs = [(p, t) for p, t in zip(primals, tangents)]
+    pf_inputs = [(p, t) for p, t in zip(p, t)]
     results = await fanout_p.abind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
@@ -119,19 +119,19 @@ async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdR
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
-    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent)]
+    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_c)]
     results = fanout_p.bind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    residuals, out_cotangent = in_tree
+    residuals, out_c = in_tree
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
-    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_cotangent)]
+    pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_c)]
     results = await fanout_p.abind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
@@ -315,10 +315,10 @@ def abstract_depends(in_tree: DependsType[Tree], /) -> Tree:
 
 
 def push_depends(in_tree: DependsPair, /) -> TreePair:
-    (primal_value, primal_deps), (tangent_value, tangent_deps) = in_tree
-    p_out = depends_p.bind((primal_value, primal_deps))
-    t_out = depends_p.bind((tangent_value, tangent_deps))
-    return p_out, t_out
+    (p_value, p_deps), (t_value, t_deps) = in_tree
+    out_p = depends_p.bind((p_value, p_deps))
+    out_t = depends_p.bind((t_value, t_deps))
+    return out_p, out_t
 
 
 def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
@@ -332,8 +332,8 @@ def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
             return x
         return core.Zero(core.cotangent_s.map(core.avalof(x)))
 
-    (_, deps), out_cotangent = in_tree
-    return out_cotangent, utils.tree.map(make_c, deps)
+    (_, deps), out_c = in_tree
+    return out_c, utils.tree.map(make_c, deps)
 
 
 def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:

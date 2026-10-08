@@ -140,11 +140,11 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     # >>> spec = tree.structure([1, 2, 3])
     # >>> spec.flatten_up_to([1, [2, 3]])
     # [[1, 2, 3]]
-    flat_in_tree = spec.flatten_up_to(in_tree)
-    flat_in_batched = tree.leaves(in_batched)
+    in_flat_tree = spec.flatten_up_to(in_tree)
+    in_flat_batched = tree.leaves(in_batched)
     # NOTE(asem): iterate over the flat version and index iff its batched
     # and broadcast otherwise
-    zipped = zip(flat_in_tree, flat_in_batched)
+    zipped = zip(in_flat_tree, in_flat_batched)
     leaves_i = (index(leaf, b) if is_batched else leaf for leaf, is_batched in zipped)
     return spec.unflatten(leaves_i)
 
