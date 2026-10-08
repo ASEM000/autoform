@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+import asyncio
+
 import pytest
 
 import autoform as af
@@ -927,6 +929,43 @@ def test_pushforward_preserves_batched_zero_structure(executor):
         [5.0, 8.0],
         [1.0, 1.0],
     )
+
+
+@pytest.mark.parametrize(
+    "executor, forward",
+    [
+        (execute, af.ad.impl_pushforward_call),
+        (
+            aexecute,
+            lambda args, *, ir: asyncio.run(af.ad.aimpl_pushforward_call(args, ir=ir)),
+        ),
+    ],
+    ids=["sync", "async"],
+)
+def test_traced_pushforward_preserves_batched_zero_structure(executor, forward):
+    double = af.batch(af.trace(lambda x: x + x)(1.0))
+    add = af.batch(af.trace(lambda x, y: x + y)(1.0, 1.0))
+    x, y = [1.0, 2.0], [3.0, 4.0]
+    source = af.trace(lambda x, y: add.call(double.call(x), y))(x, y)
+    zero = af.core.Zero(af.numeric.FloatAVal())
+    ir = af.trace(lambda x, y: forward(((x, y), ([zero, zero], [1.0, 1.0])), ir=source))(x, y)
+
+    assert executor(ir, x, y) == ([5.0, 8.0], [1.0, 1.0])
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_unused_batched_output(executor):
+    double = af.batch(af.trace(lambda x: x + x)(1.0))
+
+    def program(x, y):
+        double.call(x)
+        return y
+
+    x, y = [1.0, 2.0], [3.0, 4.0]
+    ir = af.pullback(af.trace(program)(x, y))
+    zero = af.core.Zero(af.numeric.FloatAVal())
+
+    assert executor(ir, (x, y), [1.0, 1.0]) == (y, ([zero, zero], [1.0, 1.0]))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
