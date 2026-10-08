@@ -548,6 +548,16 @@ def is_traceable(x) -> TypeGuard[str | int | float | bool]:
 
 
 fold_flag: ContextVar[bool] = ContextVar("fold_mode", default=False)
+no_stage_flag: ContextVar[bool] = ContextVar("no_trace_flag", default=False)
+
+
+@contextmanager
+def no_stage() -> Generator[None, None, None]:
+    token = no_stage_flag.set(True)
+    try:
+        yield
+    finally:
+        no_stage_flag.reset(token)
 
 
 @contextmanager
@@ -905,7 +915,8 @@ class TraceInterpreter(core.Interpreter):
             return Var.fresh(aval=x) if isinstance(x, core.AVal) else x
 
         out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
-        self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
+        if not no_stage_flag.get():
+            self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
         return self.box(out_tree)
 
 
