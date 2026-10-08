@@ -15,6 +15,7 @@
 import pytest
 
 import autoform as af
+import autoform.check as check
 from tests import Blob, BlobAVal, aexecute, execute
 
 
@@ -80,16 +81,6 @@ class TestAVal:
             ),
             pytest.param(BlobAVal(3), lambda x: af.axis.BatchBox(None, x, False), id="broadcast"),
             pytest.param(BlobAVal(3), lambda x: af.axis.BatchBox(None, [x], True), id="batch"),
-            pytest.param(
-                af.axis.BatchAVal(BlobAVal(3)),
-                lambda x: af.axis.BatchBox(None, [x], False),
-                id="broadcast-batch",
-            ),
-            pytest.param(
-                af.axis.BatchAVal(BlobAVal(3)),
-                lambda x: af.axis.BatchBox(None, [[x]], True),
-                id="nested-batch",
-            ),
         ],
     )
     def test_check_respects_metadata_equality(self, aval, wrap):
@@ -273,6 +264,8 @@ def test_custom_rule_interpreter(executor):
         af.extend.concat_p, lambda values: sum(v if isinstance(v, int) else 0 for v in values) + 1
     )
     arules.set(af.extend.concat_p, af.utils.asyncify(rules.get(af.extend.concat_p)))
+    rules.set(check.typecheck_p, check.impl_check)
+    arules.set(check.typecheck_p, af.utils.asyncify(check.impl_check))
 
     class OperationCountInterpreter(af.core.Interpreter):
         def interpret(self, prim, in_tree, /, **params):

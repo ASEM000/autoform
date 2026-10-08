@@ -81,11 +81,13 @@ class CountingInterpreter(af.core.Interpreter):
         self.calls = 0
 
     def interpret(self, prim, in_tree, /, **params):
-        self.calls += 1
+        if not af.stage.no_stage_flag.get():
+            self.calls += 1
         return self.parent.interpret(prim, in_tree, **params)
 
     async def ainterpret(self, prim, in_tree, /, **params):
-        self.calls += 1
+        if not af.stage.no_stage_flag.get():
+            self.calls += 1
         return await self.parent.ainterpret(prim, in_tree, **params)
 
 

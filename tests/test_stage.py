@@ -354,26 +354,6 @@ class TestTags:
 
 
 class TestRunIR:
-    @pytest.mark.parametrize("program", [lambda x: x, append_bang], ids=["identity", "equation"])
-    def test_walk_custom_checker(self, program):
-        checked = []
-
-        def check(aval, value):
-            af.core.avalof(aval).check(value.text)
-            checked.append(value.text)
-
-        x = SimpleNamespace(text="x")
-        ir = af.trace(program)("x")
-        gen = af.stage.walk(ir, check=check)(x)
-        eqn, value = next(gen)
-        if eqn is None:
-            assert value is x
-            assert checked == ["x", "x"]
-            return
-        y = SimpleNamespace(text="x!")
-        assert gen.send(y) == (None, y)
-        assert checked == ["x", "x", "x!", "x!"]
-
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_call_rejects_incompatible_injected_output(self, executor):
         ir = af.trace(lambda x: af.checkpoint(x, key="value", collection="cache"))("hello")

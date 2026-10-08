@@ -60,18 +60,12 @@ class BatchAVal(core.AVal):
         return hash((type(self), self.base))
 
     def check(self, value, /) -> None:
-        if isinstance(value, BatchBox):
-            aval = BatchAVal(self) if value.batched else self
-            aval.check(value.value)
-            return
-        if isinstance(value, core.AVal) or type(value) in core.aval_types:
+        if utils.tree.is_leaf(value):
             actual = core.avalof(value)
             if not isinstance(actual, type(self)):
                 raise TypeError(f"Expected {self!r}, got {actual!r}")
             self.base.check(actual.base)
             return
-        if utils.tree.is_leaf(value):
-            raise TypeError(f"Expected {self!r}, got {type(value).__name__}")
         utils.tree.map(self.base.check, value, is_leaf=lambda x: x is not value)
 
 
@@ -232,6 +226,32 @@ class BatchInterpreter(core.Interpreter):
         return self.box((v_out, b_out))
 
 
+class BatchEnv:
+    __slots__ = ["values", "batched"]
+
+    def __init__(self):
+        self.values = {}
+        self.batched = {}
+
+    def read_v(self, atom, /):
+        if not stage.is_var(atom):
+            return atom
+        value = self.values[atom]
+        aval = BatchAVal(atom.aval) if self.batched[atom] else atom.aval
+        stage.no_stage_typecheck(value, aval)
+        return value
+
+    def read_b(self, atom, /):
+        return self.batched[atom] if stage.is_var(atom) else False
+
+    def write(self, atom, value, is_batched, /):
+        if stage.is_var(atom):
+            aval = BatchAVal(atom.aval) if is_batched else atom.aval
+            stage.no_stage_typecheck(value, aval)
+            self.values[atom] = value
+            self.batched[atom] = is_batched
+
+
 def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     # NOTE(asem): ``in_axes`` only marks which leaves are batched.
     # the actual batch container comes from runtime data.
@@ -256,22 +276,22 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
 
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
 
-    def batch_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    env = BatchEnv()
+
+    def batch_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
         with core.using_interpreter(batcher):
-            boxed_out = eqn.bind(boxed_in, **eqn.params)
+            boxed_out = eqn.bind(batcher.box(in_tree), **eqn.params)
         v_out, b_out = batcher.unbox(boxed_out)
-        b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
-        return batcher.box((v_out, b_out))
+        return v_out, assert_trees(b_out, eqn.out_tree, eqn.prim.name)
 
-    eqn, boxed_in = next(
-        gen := stage.walk(ir, check=lambda a, v: core.avalof(a).check(v))(
-            *batcher.box((v_in, b_in))
-        )
-    )
-    while eqn:
-        eqn, boxed_in = gen.send(batch_bind(eqn, boxed_in))
-
-    v_out, b_out = batcher.unbox(boxed_in)
+    utils.tree.map(env.write, ir.in_tree, v_in, b_in)
+    for eqn in ir.eqns:
+        v_in = utils.tree.map(env.read_v, eqn.in_tree)
+        b_in = utils.tree.map(env.read_b, eqn.in_tree)
+        v_out, b_out = batch_bind(eqn, (v_in, b_in))
+        utils.tree.map(env.write, eqn.out_tree, v_out, b_out)
+    v_out = utils.tree.map(env.read_v, ir.out_tree)
+    b_out = utils.tree.map(env.read_b, ir.out_tree)
     return broadcast_batch_out(spec, v_out, b_out)
 
 
@@ -287,22 +307,22 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
 
     batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
 
-    async def batch_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    env = BatchEnv()
+
+    async def batch_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
         with core.using_interpreter(batcher):
-            boxed_out = await eqn.abind(boxed_in, **eqn.params)
+            boxed_out = await eqn.abind(batcher.box(in_tree), **eqn.params)
         v_out, b_out = batcher.unbox(boxed_out)
-        b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
-        return batcher.box((v_out, b_out))
+        return v_out, assert_trees(b_out, eqn.out_tree, eqn.prim.name)
 
-    eqn, boxed_in = next(
-        gen := stage.walk(ir, check=lambda a, v: core.avalof(a).check(v))(
-            *batcher.box((v_in, b_in))
-        )
-    )
-    while eqn:
-        eqn, boxed_in = gen.send(await batch_bind(eqn, boxed_in))
-
-    v_out, b_out = batcher.unbox(boxed_in)
+    utils.tree.map(env.write, ir.in_tree, v_in, b_in)
+    for eqn in ir.eqns:
+        v_in = utils.tree.map(env.read_v, eqn.in_tree)
+        b_in = utils.tree.map(env.read_b, eqn.in_tree)
+        v_out, b_out = await batch_bind(eqn, (v_in, b_in))
+        utils.tree.map(env.write, eqn.out_tree, v_out, b_out)
+    v_out = utils.tree.map(env.read_v, ir.out_tree)
+    b_out = utils.tree.map(env.read_b, ir.out_tree)
     return broadcast_batch_out(spec, v_out, b_out)
 
 
