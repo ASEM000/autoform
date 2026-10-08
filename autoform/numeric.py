@@ -66,6 +66,7 @@ class IntAVal(core.AVal):
 
 
 core.aval_types[int] = lambda _: IntAVal()
+core.aval_types[IntAVal] = lambda aval: aval
 stage.trace_types.add(int)
 core.primal_s.set(IntAVal, lambda aval: aval)
 
@@ -94,6 +95,7 @@ class FloatAVal(core.AVal):
 
 
 core.aval_types[float] = lambda _: FloatAVal()
+core.aval_types[FloatAVal] = lambda aval: aval
 stage.trace_types.add(float)
 core.primal_s.set(FloatAVal, lambda aval: aval)
 core.tangent_s.set(FloatAVal, lambda aval: aval)
@@ -118,6 +120,7 @@ class BoolAVal(core.AVal):
 
 
 core.aval_types[bool] = lambda _: BoolAVal()
+core.aval_types[BoolAVal] = lambda aval: aval
 stage.trace_types.add(bool)
 core.primal_s.set(BoolAVal, lambda aval: aval)
 core.tangent_s.set(BoolAVal, lambda aval: aval)

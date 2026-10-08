@@ -359,7 +359,7 @@ class TestRunIR:
         checked = []
 
         def check(aval, value):
-            aval.check(value.text)
+            af.core.avalof(aval).check(value.text)
             checked.append(value.text)
 
         x = SimpleNamespace(text="x")
@@ -977,6 +977,7 @@ class TestTraceValuePythonOps:
 
         prim = af.core.Prim(dunder.value)
         af.extend.register_trace_type(Value, lambda _: ValueAVal())
+        af.core.aval_types[ValueAVal] = lambda aval: aval
         af.extend.register_impl(
             prim, lambda inputs: operation(*(x.size if isinstance(x, Value) else x for x in inputs))
         )
@@ -995,6 +996,7 @@ class TestTraceValuePythonOps:
 
         prim = af.core.Prim("call_value")
         af.extend.register_trace_type(Value, lambda _: ValueAVal())
+        af.core.aval_types[ValueAVal] = lambda aval: aval
         af.extend.register_impl(
             prim, lambda inputs: inputs[0].size + sum(inputs[1]) + sum(inputs[2].values())
         )
@@ -1024,6 +1026,7 @@ class TestTraceValuePythonOps:
 
         prim = af.core.Prim("next_value")
         af.extend.register_trace_type(Values, lambda _: ValuesAVal())
+        af.core.aval_types[ValuesAVal] = lambda aval: aval
         af.extend.register_impl(prim, lambda value: next(value.values))
         af.extend.register_abstract(prim, lambda _: af.numeric.IntAVal())
         af.extend.register_dunder(Dunder.NEXT, ValuesAVal, prim.bind)
@@ -1042,6 +1045,7 @@ class TestTraceValuePythonOps:
 
         prim = af.core.Prim("pair_values")
         af.extend.register_trace_type(Pair, lambda _: PairAVal())
+        af.core.aval_types[PairAVal] = lambda aval: aval
         af.extend.register_impl(prim, lambda pair: pair.values)
         af.extend.register_abstract(prim, lambda _: (af.numeric.IntAVal(), af.numeric.IntAVal()))
         af.extend.register_dunder(Dunder.REVERSED, PairAVal, lambda pair: reversed(prim.bind(pair)))

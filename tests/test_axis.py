@@ -30,6 +30,19 @@ class TaggedAVal(af.core.AVal):
         self.tag = tag
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(BatchAVal(af.string.StrAVal()), id="aval"),
+        pytest.param(af.core.Zero(BatchAVal(af.string.StrAVal())), id="zero"),
+    ],
+)
+def test_check_batch_aval(value):
+    BatchAVal(af.string.StrAVal()).check(value)
+    with pytest.raises(TypeError, match="Expected FloatAVal"):
+        BatchAVal(af.numeric.FloatAVal()).check(value)
+
+
 class TestBatchBasic:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_valued_items(self, executor):

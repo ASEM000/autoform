@@ -143,7 +143,7 @@ def check_pushforward(aval: core.AVal, value: Any) -> None:
         check_pushforward(aval, value.primal)
         check_pushforward(core.tangent_s.map(aval), value.tangent)
         return
-    aval.check(value)
+    core.avalof(aval).check(value)
 
 
 def zero_tangent(x):
@@ -591,7 +591,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
         return boxed_out
 
     def fwd_check(a, v):
-        a.check(fwd.unbox(v))
+        core.avalof(a).check(fwd.unbox(v))
 
     def bwd_bind(eqn: stage.Eqn, boxed_c_out: Tree, /) -> Tree:
         residuals = res[eqn]
@@ -599,7 +599,7 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
             return eqn.bind((residuals, boxed_c_out), **eqn.params)
 
     def bwd_check(a, v):
-        a.check(bwd.unbox(v))
+        core.avalof(a).check(bwd.unbox(v))
 
     def zero(a):
         return bwd.box(core.Zero(a))
@@ -635,7 +635,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
         return boxed_out
 
     def fwd_check(a, v):
-        a.check(fwd.unbox(v))
+        core.avalof(a).check(fwd.unbox(v))
 
     async def bwd_bind(eqn: stage.Eqn, boxed_c_out: Tree, /) -> Tree:
         residuals = res[eqn]
@@ -643,7 +643,7 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
             return await eqn.abind((residuals, boxed_c_out), **eqn.params)
 
     def bwd_check(a, v):
-        a.check(bwd.unbox(v))
+        core.avalof(a).check(bwd.unbox(v))
 
     def zero(a):
         return bwd.box(core.Zero(a))

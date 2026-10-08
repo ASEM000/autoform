@@ -59,6 +59,7 @@ class StrAVal(core.AVal):
 
 
 core.aval_types[str] = lambda _: StrAVal()
+core.aval_types[StrAVal] = lambda aval: aval
 stage.trace_types.add(str)
 core.primal_s.set(StrAVal, lambda aval: aval)
 core.tangent_s.set(StrAVal, lambda aval: aval)

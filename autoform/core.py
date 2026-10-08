@@ -137,10 +137,10 @@ class AVal:
         return hash(type(self))
 
     def check(self, value, /) -> None:
-        """Reject a runtime value incompatible with this abstract value."""
+        """Reject an aval or value incompatible with this abstract value."""
         actual = avalof(value)
         if self != actual:
-            raise TypeError(f"Expected {self!r}, got {actual!r}")
+            raise TypeError(f"Expected {self!r}, got {actual!r} for value {value!r}")
 
     def zero(self):
         """Construct a concrete zero with this abstract value."""

@@ -105,3 +105,6 @@ class BlobAVal(af.core.AVal):
 
     def __hash__(self):
         return hash((type(self), self.size))
+
+
+af.core.aval_types[BlobAVal] = lambda aval: aval
