@@ -45,6 +45,15 @@ def test_check_batch_aval(value):
 
 class TestBatchBasic:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_broadcast_symbolic_zero(self, executor):
+        ir = af.batch(af.trace(lambda x, y: af.ad.cot_accum([x, y]))(1.0, 2.0))
+        zero = af.core.Zero(BatchAVal(af.numeric.FloatAVal()))
+
+        assert executor(ir, zero, [2.0, 3.0]) == [2.0, 3.0]
+        with pytest.raises(TypeError, match="Cannot infer batch layout from symbolic zeros alone"):
+            executor(ir, zero, zero)
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_valued_items(self, executor):
         x = af.stage.Var(aval=BatchAVal(af.string.StrAVal()))
         ir = af.batch(af.stage.IR([], (x,), x))

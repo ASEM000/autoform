@@ -105,6 +105,16 @@ def broadcast_batch_out(spec, v_out: Tree, b_out: Tree[bool], /) -> Tree:
     return out_spec.unflatten(map(broadcast_leaf, flat_out, flat_b_out))
 
 
+def unbatch_zeros(v_in: Tree, b_in: Tree[bool], /) -> TreePair:
+    def is_batched_zero(b, v):
+        return b and isinstance(v, core.Zero) and isinstance(core.avalof(v), BatchAVal)
+
+    is_zero = utils.tree.map(is_batched_zero, b_in, v_in)
+    v_out = utils.tree.map(lambda z, v: core.Zero(v.aval.base) if z else v, is_zero, v_in)
+    b_out = utils.tree.map(lambda z, b: b and not z, is_zero, b_in)
+    return v_out, b_out
+
+
 batch_call_p = core.Prim("batch_call")
 
 
@@ -263,8 +273,13 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     v_in = in_tree
     b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
 
-    if (spec := utils.batch_spec(v_in, b_in)) is None:
+    if not any(utils.tree.leaves(b_in)):
         return ir.call(*v_in)
+
+    v_in, b_in = unbatch_zeros(v_in, b_in)
+    spec = utils.batch_spec(v_in, b_in)
+    if spec is None:
+        raise TypeError("Cannot infer batch layout from symbolic zeros alone")
 
     batch_size = spec.num_children
     # NOTE(asem): this case can be something like
@@ -300,8 +315,13 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
     v_in = in_tree
     b_in = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
 
-    if (spec := utils.batch_spec(v_in, b_in)) is None:
+    if not any(utils.tree.leaves(b_in)):
         return await ir.acall(*v_in)
+
+    v_in, b_in = unbatch_zeros(v_in, b_in)
+    spec = utils.batch_spec(v_in, b_in)
+    if spec is None:
+        raise TypeError("Cannot infer batch layout from symbolic zeros alone")
 
     batch_size = spec.num_children
     assert batch_size, "batch size must be > 0"
