@@ -179,22 +179,22 @@ class TestBuildIR:
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "transform, args",
+    "transform, args, message",
     [
-        pytest.param(lambda ir: ir, (["x"],), id="primal"),
-        pytest.param(af.pushforward, (("x",), (["dx"],)), id="tangent"),
-        pytest.param(af.batch, (["x", 1.0],), id="batch"),
+        pytest.param(lambda ir: ir, (["x"],), "No aval rule registered", id="primal"),
+        pytest.param(af.pushforward, (("x",), (["dx"],)), "No aval rule registered", id="tangent"),
+        pytest.param(af.batch, (["x", 1.0],), "Expected StrAVal", id="batch"),
     ],
 )
-def test_call_rejects_incompatible_input_aval(executor, transform, args):
+def test_call_rejects_incompatible_input_aval(executor, transform, args, message):
     ir = transform(af.trace(lambda x: x)("x"))
-    with pytest.raises(TypeError, match="Expected StrAVal"):
+    with pytest.raises(TypeError, match=message):
         executor(ir, *args)
 
 
 def test_walk_rejects_incompatible_input_aval():
     ir = af.trace(lambda x: x)("x")
-    with pytest.raises(TypeError, match="Expected StrAVal"):
+    with pytest.raises(TypeError, match="No aval rule registered"):
         next(ir.walk(["x"]))
 
 

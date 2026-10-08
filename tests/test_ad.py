@@ -82,16 +82,16 @@ def test_pullback_checks_concrete_primal(executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "cotangent",
+    "cotangent, message",
     [
-        pytest.param(["x", "y"], id="list"),
-        pytest.param(1.0, id="float"),
-        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="wrong-zero"),
+        pytest.param(["x", "y"], "No aval rule registered", id="list"),
+        pytest.param(1.0, "Expected StrAVal", id="float"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), "Expected StrAVal", id="wrong-zero"),
     ],
 )
-def test_pullback_rejects_incompatible_cotangent(executor, cotangent):
+def test_pullback_rejects_incompatible_cotangent(executor, cotangent, message):
     ir = af.pullback(af.trace(lambda x: x)("x"))
-    with pytest.raises(TypeError, match="Expected StrAVal"):
+    with pytest.raises(TypeError, match=message):
         executor(ir, ("x",), cotangent)
 
 
@@ -193,7 +193,7 @@ def test_transpose_walk_rechecks_mutated_contribution():
 def test_batched_pullback_rejects_shared_list_cotangent(executor):
     ir = af.pullback(af.trace(lambda x, y: x + y)("x", "y"))
     ir = af.batch(ir, in_axes=((False, True), False))
-    with pytest.raises(TypeError, match="Expected StrAVal"):
+    with pytest.raises(TypeError, match="No aval rule registered"):
         executor(ir, ("x", ["y1", "y2"]), ["o1", "o2"])
     assert executor(ir, ("x", ["y1", "y2"]), "o") == (
         ["xy1", "xy2"],

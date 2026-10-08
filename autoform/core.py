@@ -138,10 +138,7 @@ class AVal:
 
     def check(self, value, /) -> None:
         """Reject a runtime value incompatible with this abstract value."""
-        try:
-            actual = avalof(value)
-        except TypeError as exc:
-            raise TypeError(f"Expected {self!r}, got {type(value).__name__}") from exc
+        actual = avalof(value)
         if self != actual:
             raise TypeError(f"Expected {self!r}, got {actual!r}")
 
