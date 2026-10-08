@@ -19,7 +19,7 @@ from __future__ import annotations
 import functools as ft
 import itertools as it
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Generator, Hashable, Iterator
+from collections.abc import Callable, Generator, Hashable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
@@ -120,7 +120,7 @@ def is_var(x) -> TypeGuard[Var]:
     return isinstance(x, Var)
 
 
-def aval_if_var(x, /):
+def aval_if_var(x: Any, /):
     """Return the aval for an IR variable, otherwise return input unchanged."""
     return x.aval if is_var(x) else x
 
@@ -214,7 +214,11 @@ class IR[*A, R]:
             >>> ir.call("y")
             '[y]'
         """
-        return call(self)(*args)
+        check_static_inputs(self.in_tree, args)
+        eqn, in_values = next(gen := self.walk(*args))
+        while eqn:
+            eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
+        return in_values
 
     async def acall(self, *args: *A) -> R:
         """Run IR asynchronously with concrete runtime inputs.
@@ -232,7 +236,11 @@ class IR[*A, R]:
             >>> asyncio.run(ir.acall("y"))
             '[y]'
         """
-        return await acall(self)(*args)
+        check_static_inputs(self.in_tree, args)
+        eqn, in_values = next(gen := self.walk(*args))
+        while eqn:
+            eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
+        return in_values
 
     def walk(self, *args: *A) -> WalkGen:
         """Step through this IR one equation at a time.
@@ -262,14 +270,22 @@ class IR[*A, R]:
             >>> done is None, out
             (True, '[y!]')
         """
-        return walk(self)(*args)
+        env = Env()
+        utils.tree.map(env.write, self.in_tree, args)
+
+        for eqn in self.eqns:
+            in_values = utils.tree.map(env.read, eqn.in_tree)
+            out_values = yield eqn, in_values
+            utils.tree.map(env.write, eqn.out_tree, out_values)
+
+        yield None, utils.tree.map(env.read, self.out_tree)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
     assert isinstance(indent, int) and indent >= 0
     sp = " " * indent
 
-    def format_ir_val(ir_val) -> str:
+    def format_ir_val(ir_val: Any) -> str:
         if is_var(ir_val):
             var_type = type(ir_val).__name__
             aval_info = repr(ir_val.aval)
@@ -323,15 +339,6 @@ type GenStep = tuple[Eqn | None, Tree]
 type WalkGen = Generator[GenStep, Tree, None]
 
 
-def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
-    def check_input(atom, value: Any):
-        if not is_var(atom):
-            msg = f"Static input mismatch: expected {atom!r}, got {value!r}"
-            assert atom == value, msg
-
-    utils.tree.map(check_input, atoms, args)
-
-
 def no_stage_typecheck(value, aval, /):
     with no_stage():
         # NOTE(asem): the key idea here is to avoid recording this as an equation to avoid inserting
@@ -345,69 +352,26 @@ class Env:
     def __init__(self):
         self.values = {}
 
-    def read(self, atom):
+    def read(self, atom: Any) -> Any:
         if not is_var(atom):
             return atom
         value = self.values[atom]
         no_stage_typecheck(value, core.avalof(atom))
         return value
 
-    def write(self, atom, value: Any):
+    def write(self, atom: Any, value: Any) -> None:
         if is_var(atom):
             no_stage_typecheck(value, core.avalof(atom))
             self.values[atom] = value
 
 
-@ft.partial(utils.lru_cache, maxsize=256)
-def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], WalkGen]:
-    """Walk an IR one equation at a time with its own environment."""
+def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
+    def check_input(atom: Any, value: Any):
+        if not is_var(atom):
+            msg = f"Static input mismatch: expected {atom!r}, got {value!r}"
+            assert atom == value, msg
 
-    def func(*args: *A) -> WalkGen:
-        assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        env = Env()
-        utils.tree.map(env.write, ir.in_tree, args)
-
-        for eqn in ir.eqns:
-            in_values = utils.tree.map(env.read, eqn.in_tree)
-            out_values = yield eqn, in_values
-            utils.tree.map(env.write, eqn.out_tree, out_values)
-
-        yield None, utils.tree.map(env.read, ir.out_tree)
-
-    return func
-
-
-# ==================================================================================================
-# CALL
-# ==================================================================================================
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-
-    def func(*args: *A) -> R:
-        check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
-        while eqn:
-            eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
-        return in_values
-
-    return func
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
-    assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-
-    async def func(*args: *A) -> R:
-        check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir)(*args))
-        while eqn:
-            eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
-        return in_values
-
-    return func
+    utils.tree.map(check_input, atoms, args)
 
 
 # ==================================================================================================
@@ -425,7 +389,7 @@ def is_same_structure(lhs: IR, rhs: IR, /) -> bool:
     assert isinstance(lhs, IR)
     assert isinstance(rhs, IR)
 
-    def same_atom(x, y):
+    def same_atom(x: Any, y: Any) -> bool:
         if is_var(x) and is_var(y):
             return x.aval == y.aval
         # NOTE(asem): check for literals.
@@ -853,7 +817,7 @@ class TraceInterpreter(core.Interpreter):
     def __init__(self):
         self.eqns: list[Eqn] = []
 
-    def box(self, value, /) -> Tree:
+    def box(self, value: Tree, /) -> Tree:
         return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_var(v) else v, value)
 
     def unbox(self, value: Tree, /) -> Tree:
@@ -900,7 +864,7 @@ class TraceInterpreter(core.Interpreter):
         return out_tree
 
     def stage(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
-        def to_in_ir_atom(value):
+        def to_in_ir_atom(value: Any) -> Any:
             if not is_var(value):
                 hash(value)
             return value
@@ -917,7 +881,7 @@ class TraceInterpreter(core.Interpreter):
         in_aval_tree = utils.tree.map(aval_if_var, in_tree)
         out_aval_tree = core.abstract_rules.get(prim)(in_aval_tree, **params)
 
-        def to_out_ir_atom(x):
+        def to_out_ir_atom(x: Any) -> Any:
             # NOTE(asem): abstract rules return `AVal`/ python leaves.
             # `AVal` simply denotes a placeholder for a value that will be computed later
             # this is basically delegated to the user to handle
@@ -967,13 +931,13 @@ def trace[*A, R](
     def is_static_spec(x) -> bool:
         return isinstance(x, bool)
 
-    def to_in_ir_atom(x, is_static: bool):
+    def to_in_ir_atom(x: Any, is_static: bool) -> Any:
         if is_static:
             hash(x)
             return x
         return to_var(x)
 
-    def to_var(x, /) -> Var:
+    def to_var(x: Any, /) -> Var:
         assert not is_var(x), "Inputs to `trace` must be normal python types"
         assert is_traceable(x), f"Unsupported input leaf type for `trace`: {type(x).__name__}. "
         return Var.fresh(aval=core.avalof(x))

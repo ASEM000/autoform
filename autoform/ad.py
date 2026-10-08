@@ -163,12 +163,15 @@ class PFEnv:
         stage.no_stage_typecheck(value, core.tangent_s.map(atom.aval))
         return value
 
-    def write(self, atom, p, t, /):
+    def write_p(self, atom, value, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(p, core.primal_s.map(atom.aval))
-            stage.no_stage_typecheck(t, core.tangent_s.map(atom.aval))
-            self.primals[atom] = p
-            self.tangents[atom] = t
+            stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
+            self.primals[atom] = value
+
+    def write_t(self, atom, value, /):
+        if stage.is_var(atom):
+            stage.no_stage_typecheck(value, core.tangent_s.map(atom.aval))
+            self.tangents[atom] = value
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
@@ -190,12 +193,15 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
             out_boxed = eqn.bind(pusher.box((in_p, in_t)), **eqn.params)
         return pusher.unbox(out_boxed)
 
-    utils.tree.map(env.write, ir.in_tree, *in_tree)
+    in_p, in_t = in_tree
+    utils.tree.map(env.write_p, ir.in_tree, in_p)
+    utils.tree.map(env.write_t, ir.in_tree, in_t)
     for eqn in ir.eqns:
         in_p = utils.tree.map(env.read_p, eqn.in_tree)
         in_t = utils.tree.map(env.read_t, eqn.in_tree)
         out_p, out_t = fwd_bind(eqn, (in_p, in_t))
-        utils.tree.map(env.write, eqn.out_tree, out_p, out_t)
+        utils.tree.map(env.write_p, eqn.out_tree, out_p)
+        utils.tree.map(env.write_t, eqn.out_tree, out_t)
     return utils.tree.map(env.read_p, ir.out_tree), utils.tree.map(env.read_t, ir.out_tree)
 
 
@@ -218,12 +224,15 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
             out_boxed = await eqn.abind(pusher.box((in_p, in_t)), **eqn.params)
         return pusher.unbox(out_boxed)
 
-    utils.tree.map(env.write, ir.in_tree, *in_tree)
+    in_p, in_t = in_tree
+    utils.tree.map(env.write_p, ir.in_tree, in_p)
+    utils.tree.map(env.write_t, ir.in_tree, in_t)
     for eqn in ir.eqns:
         in_p = utils.tree.map(env.read_p, eqn.in_tree)
         in_t = utils.tree.map(env.read_t, eqn.in_tree)
         out_p, out_t = await fwd_bind(eqn, (in_p, in_t))
-        utils.tree.map(env.write, eqn.out_tree, out_p, out_t)
+        utils.tree.map(env.write_p, eqn.out_tree, out_p)
+        utils.tree.map(env.write_t, eqn.out_tree, out_t)
     return utils.tree.map(env.read_p, ir.out_tree), utils.tree.map(env.read_t, ir.out_tree)
 
 
