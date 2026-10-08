@@ -25,6 +25,7 @@ from contextvars import ContextVar
 from enum import Enum
 from typing import Any, ClassVar, Self, TypeGuard, cast
 
+import autoform.check as check
 import autoform.core as core
 import autoform.utils as utils
 
@@ -261,7 +262,7 @@ class IR[*A, R]:
             >>> done is None, out
             (True, '[y!]')
         """
-        return walk(self, check=lambda a, v: core.avalof(a).check(v))(*args)
+        return walk(self)(*args)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
@@ -320,7 +321,6 @@ def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> s
 
 type GenStep = tuple[Eqn | None, Tree]
 type WalkGen = Generator[GenStep, Tree, None]
-type CheckType = Callable[[core.AVal, Any], None]
 
 
 def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
@@ -332,38 +332,47 @@ def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
     utils.tree.map(check_input, atoms, args)
 
 
+def no_stage_typecheck(value, aval, /):
+    with no_stage():
+        # NOTE(asem): the key idea here is to avoid recording this as an equation to avoid inserting
+        # check equation everytime this gets retraced.
+        check.typecheck(value, aval)
+
+
+class Env:
+    __slots__ = ["values"]
+
+    def __init__(self):
+        self.values = {}
+
+    def read(self, atom):
+        if not is_var(atom):
+            return atom
+        value = self.values[atom]
+        no_stage_typecheck(value, core.avalof(atom))
+        return value
+
+    def write(self, atom, value: Any):
+        if is_var(atom):
+            no_stage_typecheck(value, core.avalof(atom))
+            self.values[atom] = value
+
+
 @ft.partial(utils.lru_cache, maxsize=256)
-def walk[*A, R](ir: IR[*A, R], /, *, check: CheckType) -> Callable[[*A], WalkGen]:
-    """Walk an IR one equation at a time."""
-    # NOTE(asem): the key idea here is to hide the environment management
-    # from the user.
-    # TODO(asem): if user is using bind/abind, walk itself can be traced into another IR. maybe
-    # add it to walk docs to clarify this point.
+def walk[*A, R](ir: IR[*A, R], /) -> Callable[[*A], WalkGen]:
+    """Walk an IR one equation at a time with its own environment."""
 
     def func(*args: *A) -> WalkGen:
         assert isinstance(ir, IR), f"Expected IR, got {type(ir)}"
-        env: dict[Var, Any] = {}
-
-        def read(ir_val) -> Any:
-            if not is_var(ir_val):
-                return ir_val
-            value = env[ir_val]
-            check(ir_val.aval, value)
-            return value
-
-        def write(ir_val, value: Any):
-            if is_var(ir_val):
-                check(ir_val.aval, value)
-                env[ir_val] = value
-
-        utils.tree.map(write, ir.in_tree, args)
+        env = Env()
+        utils.tree.map(env.write, ir.in_tree, args)
 
         for eqn in ir.eqns:
-            in_values = utils.tree.map(read, eqn.in_tree)
+            in_values = utils.tree.map(env.read, eqn.in_tree)
             out_values = yield eqn, in_values
-            utils.tree.map(write, eqn.out_tree, out_values)
+            utils.tree.map(env.write, eqn.out_tree, out_values)
 
-        yield None, utils.tree.map(read, ir.out_tree)
+        yield None, utils.tree.map(env.read, ir.out_tree)
 
     return func
 
@@ -379,7 +388,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
 
     def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir, check=lambda a, v: core.avalof(a).check(v))(*args))
+        eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
         return in_values
@@ -393,7 +402,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 
     async def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir, check=lambda a, v: core.avalof(a).check(v))(*args))
+        eqn, in_values = next(gen := walk(ir)(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
         return in_values
@@ -548,6 +557,16 @@ def is_traceable(x) -> TypeGuard[str | int | float | bool]:
 
 
 fold_flag: ContextVar[bool] = ContextVar("fold_mode", default=False)
+no_stage_flag: ContextVar[bool] = ContextVar("no_trace_flag", default=False)
+
+
+@contextmanager
+def no_stage() -> Generator[None, None, None]:
+    token = no_stage_flag.set(True)
+    try:
+        yield
+    finally:
+        no_stage_flag.reset(token)
 
 
 @contextmanager
@@ -905,7 +924,8 @@ class TraceInterpreter(core.Interpreter):
             return Var.fresh(aval=x) if isinstance(x, core.AVal) else x
 
         out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
-        self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
+        if not no_stage_flag.get():
+            self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
         return self.box(out_tree)
 
 

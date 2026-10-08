@@ -138,56 +138,85 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
     return stage.IR([eqn], in_tree, out_tree)
 
 
-def check_pushforward(aval: core.AVal, value: Any) -> None:
-    if isinstance(value, PushforwardBox):
-        check_pushforward(aval, value.primal)
-        check_pushforward(core.tangent_s.map(aval), value.tangent)
-        return
-    core.avalof(aval).check(value)
-
-
 def zero_tangent(x):
     return core.Zero(core.tangent_s.map(core.avalof(x)))
+
+
+class PFEnv:
+    __slots__ = ["primals", "tangents"]
+
+    def __init__(self):
+        self.primals = {}
+        self.tangents = {}
+
+    def read_p(self, atom, /):
+        if not stage.is_var(atom):
+            return atom
+        value = self.primals[atom]
+        stage.no_stage_typecheck(value, atom.aval)
+        return value
+
+    def read_t(self, atom, /):
+        if not stage.is_var(atom):
+            return zero_tangent(atom)
+        value = self.tangents[atom]
+        stage.no_stage_typecheck(value, core.tangent_s.map(atom.aval))
+        return value
+
+    def write(self, atom, primal, tangent, /):
+        if stage.is_var(atom):
+            stage.no_stage_typecheck(primal, atom.aval)
+            stage.no_stage_typecheck(tangent, core.tangent_s.map(atom.aval))
+            self.primals[atom] = primal
+            self.tangents[atom] = tangent
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
+    env = PFEnv()
 
-    def fwd_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
-        p_in, t_in = pusher.unbox(boxed_in)
-        if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
-            with core.using_interpreter(pusher):
-                return eqn.bind(boxed_in, **eqn.params)
-        with core.using_interpreter(pusher.parent):
-            p_out = eqn.bind(p_in, **eqn.params)
-        t_out = utils.tree.map(zero_tangent, p_out)
-        return pusher.box((p_out, t_out))
+    def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
+        p_in, t_in = in_tree
+        if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
+            with core.using_interpreter(parent):
+                p_out = eqn.bind(p_in, **eqn.params)
+            return p_out, utils.tree.map(zero_tangent, p_out)
+        with core.using_interpreter(pusher):
+            boxed_out = eqn.bind(pusher.box((p_in, t_in)), **eqn.params)
+        return pusher.unbox(boxed_out)
 
-    eqn, boxed_in = next(gen := stage.walk(ir, check=check_pushforward)(*pusher.box(in_tree)))
-    while eqn:
-        eqn, boxed_in = gen.send(fwd_bind(eqn, boxed_in))
-    return pusher.unbox(boxed_in)
+    utils.tree.map(env.write, ir.in_tree, *in_tree)
+    for eqn in ir.eqns:
+        p_in = utils.tree.map(env.read_p, eqn.in_tree)
+        t_in = utils.tree.map(env.read_t, eqn.in_tree)
+        p_out, t_out = fwd_bind(eqn, (p_in, t_in))
+        utils.tree.map(env.write, eqn.out_tree, p_out, t_out)
+    return utils.tree.map(env.read_p, ir.out_tree), utils.tree.map(env.read_t, ir.out_tree)
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     parent = core.active_interpreter.get()
     pusher = PushforwardInterpreter(parent=parent)
+    env = PFEnv()
 
-    async def fwd_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
-        p_in, t_in = pusher.unbox(boxed_in)
-        if not all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
-            with core.using_interpreter(pusher):
-                return await eqn.abind(boxed_in, **eqn.params)
-        with core.using_interpreter(pusher.parent):
-            p_out = await eqn.abind(p_in, **eqn.params)
-        t_out = utils.tree.map(zero_tangent, p_out)
-        return pusher.box((p_out, t_out))
+    async def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
+        p_in, t_in = in_tree
+        if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
+            with core.using_interpreter(parent):
+                p_out = await eqn.abind(p_in, **eqn.params)
+            return p_out, utils.tree.map(zero_tangent, p_out)
+        with core.using_interpreter(pusher):
+            boxed_out = await eqn.abind(pusher.box((p_in, t_in)), **eqn.params)
+        return pusher.unbox(boxed_out)
 
-    eqn, boxed_in = next(gen := stage.walk(ir, check=check_pushforward)(*pusher.box(in_tree)))
-    while eqn:
-        eqn, boxed_in = gen.send(await fwd_bind(eqn, boxed_in))
-    return pusher.unbox(boxed_in)
+    utils.tree.map(env.write, ir.in_tree, *in_tree)
+    for eqn in ir.eqns:
+        p_in = utils.tree.map(env.read_p, eqn.in_tree)
+        t_in = utils.tree.map(env.read_t, eqn.in_tree)
+        p_out, t_out = await fwd_bind(eqn, (p_in, t_in))
+        utils.tree.map(env.write, eqn.out_tree, p_out, t_out)
+    return utils.tree.map(env.read_p, ir.out_tree), utils.tree.map(env.read_t, ir.out_tree)
 
 
 def abstract_pushforward_call(_: Tree, /, *, ir: stage.IR) -> TreePair:
@@ -455,50 +484,6 @@ class PullbackBwdBox:
 core.aval_types[PullbackBwdBox] = lambda value: core.avalof(value.cotangent)
 
 
-def transpose_walk(ir: stage.IR, c_out: Tree, /, *, check, zero, accum):
-    # NOTE(asem): walk the IR in reverse accumulating cotangents in an environment.
-    # used for pullback backward pass.
-    c_env: defaultdict[stage.Var, list[Any]] = defaultdict(list)
-
-    def write_c(atom, value: Any):
-        # NOTE(asem): cotangent contributions are collected by appending them to the
-        # same Var entry in `c_env`. accumulation happens when that Var is read.
-        # for example:
-        # >>> def f(x): return x + x
-        # >>> ir = af.trace(f)("...")
-        # >>> out, (dx,) = af.pullback(ir).call(("...",), "df")
-        # the trace contains `concat(x, x)`. during transpose, the concat pullback
-        # returns one cotangent for each concat input. since both inputs are the same
-        # Var `x`, `c_env[x]` receives two cotangents: ["df", "df"].
-        # `read_c(x)` then calls `accum`, which combines them using
-        # the cotangent AVal accumulation method.
-
-        # NOTE(asem): the contract is that everywhere the values are boxed (e.g. inside env too)
-        # boundary is at equations to unbox/box for consistency with the forward walker
-        if stage.is_var(atom):
-            check(core.cotangent_s.map(atom.aval), value)
-            c_env[atom].append(value)
-
-    def read_c(atom) -> Any:
-        aval = core.cotangent_s.map(core.avalof(atom))
-        if not stage.is_var(atom) or not (cs := c_env[atom]):
-            value = zero(aval)
-            check(aval, value)
-            return value
-        for value in cs:
-            check(aval, value)
-        value = accum(cs)
-        check(aval, value)
-        return value
-
-    utils.tree.map(write_c, ir.out_tree, c_out)
-    for eqn in reversed(ir.eqns):
-        c_out = utils.tree.map(read_c, eqn.out_tree)
-        c_in = yield eqn, c_out
-        utils.tree.map(write_c, eqn.in_tree, c_in)
-    yield None, utils.tree.map(read_c, ir.in_tree)
-
-
 class PullbackBwdInterpreter(core.Interpreter):
     __slots__ = ["parent"]
 
@@ -576,6 +561,42 @@ def pullback(ir: stage.IR, /) -> stage.IR:
     return stage.IR([eqn], in_tree, out_tree)
 
 
+class PBEnv:
+    __slots__ = ["primals", "cotangents"]
+
+    def __init__(self):
+        self.primals = {}
+        self.cotangents = defaultdict(list)
+
+    def read_p(self, atom, /):
+        if not stage.is_var(atom):
+            return atom
+        value = self.primals[atom]
+        stage.no_stage_typecheck(value, atom.aval)
+        return value
+
+    def write_p(self, atom, value, /):
+        if stage.is_var(atom):
+            stage.no_stage_typecheck(value, atom.aval)
+            self.primals[atom] = value
+
+    def read_c(self, atom, /):
+        aval = core.cotangent_s.map(core.avalof(atom))
+        if not stage.is_var(atom) or not (values := self.cotangents[atom]):
+            value = core.Zero(aval)
+        else:
+            for value in values:
+                stage.no_stage_typecheck(value, aval)
+            value = cot_accum(values)
+        stage.no_stage_typecheck(value, aval)
+        return value
+
+    def write_c(self, atom, value, /):
+        if stage.is_var(atom):
+            stage.no_stage_typecheck(value, core.cotangent_s.map(atom.aval))
+            self.cotangents[atom].append(value)
+
+
 def impl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     (p_in, c_out) = in_tree
 
@@ -584,40 +605,33 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     fwd = PullbackFwdInterpreter(parent=parent)
     bwd = PullbackBwdInterpreter(parent=parent)
 
-    def fwd_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    def fwd_bind(eqn: stage.Eqn, p_in: Tree, /) -> Tree:
         with core.using_interpreter(fwd):
-            boxed_out, residuals = eqn.bind(boxed_in, **eqn.params)
+            boxed_out, residuals = eqn.bind(fwd.box(p_in), **eqn.params)
         res[eqn] = residuals
-        return boxed_out
+        return fwd.unbox(boxed_out)
 
-    def fwd_check(a, v):
-        core.avalof(a).check(fwd.unbox(v))
-
-    def bwd_bind(eqn: stage.Eqn, boxed_c_out: Tree, /) -> Tree:
+    def bwd_bind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
         residuals = res[eqn]
         with core.using_interpreter(bwd):
-            return eqn.bind((residuals, boxed_c_out), **eqn.params)
+            boxed_c_in = eqn.bind((residuals, bwd.box(c_out)), **eqn.params)
+        return bwd.unbox(boxed_c_in)
 
-    def bwd_check(a, v):
-        core.avalof(a).check(bwd.unbox(v))
+    env = PBEnv()
 
-    def zero(a):
-        return bwd.box(core.Zero(a))
+    utils.tree.map(env.write_p, ir.in_tree, p_in)
+    for eqn in ir.eqns:
+        p_in = utils.tree.map(env.read_p, eqn.in_tree)
+        p_out = fwd_bind(eqn, p_in)
+        utils.tree.map(env.write_p, eqn.out_tree, p_out)
+    p_out = utils.tree.map(env.read_p, ir.out_tree)
 
-    def accum(values):
-        with core.using_interpreter(parent):
-            return bwd.box(cot_accum(bwd.unbox(values)))
-
-    eqn, boxed_in = next(gen := stage.walk(ir, check=fwd_check)(*fwd.box(p_in)))
-    while eqn:
-        eqn, boxed_in = gen.send(fwd_bind(eqn, boxed_in))
-
-    gen = transpose_walk(ir, bwd.box(c_out), check=bwd_check, zero=zero, accum=accum)
-    eqn, boxed_c_out = next(gen)
-    while eqn:
-        eqn, boxed_c_out = gen.send(bwd_bind(eqn, boxed_c_out))
-
-    return fwd.unbox(boxed_in), bwd.unbox(boxed_c_out)
+    utils.tree.map(env.write_c, ir.out_tree, c_out)
+    for eqn in reversed(ir.eqns):
+        c_out = utils.tree.map(env.read_c, eqn.out_tree)
+        c_in = bwd_bind(eqn, c_out)
+        utils.tree.map(env.write_c, eqn.in_tree, c_in)
+    return p_out, utils.tree.map(env.read_c, ir.in_tree)
 
 
 async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
@@ -628,40 +642,33 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     fwd = PullbackFwdInterpreter(parent=parent)
     bwd = PullbackBwdInterpreter(parent=parent)
 
-    async def fwd_bind(eqn: stage.Eqn, boxed_in: Tree, /) -> Tree:
+    async def fwd_bind(eqn: stage.Eqn, p_in: Tree, /) -> Tree:
         with core.using_interpreter(fwd):
-            boxed_out, residuals = await eqn.abind(boxed_in, **eqn.params)
+            boxed_out, residuals = await eqn.abind(fwd.box(p_in), **eqn.params)
         res[eqn] = residuals
-        return boxed_out
+        return fwd.unbox(boxed_out)
 
-    def fwd_check(a, v):
-        core.avalof(a).check(fwd.unbox(v))
-
-    async def bwd_bind(eqn: stage.Eqn, boxed_c_out: Tree, /) -> Tree:
+    async def bwd_bind(eqn: stage.Eqn, c_out: Tree, /) -> Tree:
         residuals = res[eqn]
         with core.using_interpreter(bwd):
-            return await eqn.abind((residuals, boxed_c_out), **eqn.params)
+            boxed_c_in = await eqn.abind((residuals, bwd.box(c_out)), **eqn.params)
+        return bwd.unbox(boxed_c_in)
 
-    def bwd_check(a, v):
-        core.avalof(a).check(bwd.unbox(v))
+    env = PBEnv()
 
-    def zero(a):
-        return bwd.box(core.Zero(a))
+    utils.tree.map(env.write_p, ir.in_tree, p_in)
+    for eqn in ir.eqns:
+        p_in = utils.tree.map(env.read_p, eqn.in_tree)
+        p_out = await fwd_bind(eqn, p_in)
+        utils.tree.map(env.write_p, eqn.out_tree, p_out)
+    p_out = utils.tree.map(env.read_p, ir.out_tree)
 
-    def accum(values):
-        with core.using_interpreter(parent):
-            return bwd.box(cot_accum(bwd.unbox(values)))
-
-    eqn, boxed_in = next(gen := stage.walk(ir, check=fwd_check)(*fwd.box(p_in)))
-    while eqn:
-        eqn, boxed_in = gen.send(await fwd_bind(eqn, boxed_in))
-
-    gen = transpose_walk(ir, bwd.box(c_out), check=bwd_check, zero=zero, accum=accum)
-    eqn, boxed_c_out = next(gen)
-    while eqn:
-        eqn, boxed_c_out = gen.send(await bwd_bind(eqn, boxed_c_out))
-
-    return fwd.unbox(boxed_in), bwd.unbox(boxed_c_out)
+    utils.tree.map(env.write_c, ir.out_tree, c_out)
+    for eqn in reversed(ir.eqns):
+        c_out = utils.tree.map(env.read_c, eqn.out_tree)
+        c_in = await bwd_bind(eqn, c_out)
+        utils.tree.map(env.write_c, eqn.in_tree, c_in)
+    return p_out, utils.tree.map(env.read_c, ir.in_tree)
 
 
 def abstract_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:

@@ -20,13 +20,16 @@ from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, exe
 
 
 def test_pushforward_checker_rejects_nested_tangent_without_equations():
-    parent = af.ad.PushforwardInterpreter(parent=af.core.active_interpreter.get())
+    active = af.core.active_interpreter.get()
+    parent = af.ad.PushforwardInterpreter(parent=active)
     pusher = af.ad.PushforwardInterpreter(parent=parent)
     x = pusher.box((parent.box(("x", "dx")), parent.box(("dy", 1.0))))
     ir = af.trace(lambda x: x)("x")
 
-    with pytest.raises(TypeError, match="Expected StrAVal"):
-        next(af.stage.walk(ir, check=af.ad.check_pushforward)(x))
+    with af.core.using_interpreter(pusher):
+        with pytest.raises(TypeError, match="Expected StrAVal"):
+            next(ir.walk(x))
+    assert af.core.active_interpreter.get() is active
 
 
 @pytest.mark.parametrize("use_in_equation", [False, True], ids=["final-output", "equation-input"])
@@ -35,15 +38,19 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
         af.checkpoint("pause", key="pause")
         return af.checkpoint(x, key="next") if use_in_equation else x
 
-    pusher = af.ad.PushforwardInterpreter(parent=af.core.active_interpreter.get())
+    active = af.core.active_interpreter.get()
+    pusher = af.ad.PushforwardInterpreter(parent=active)
     x = pusher.box(("x", "dx"))
     ir = af.trace(program)("x")
-    gen = af.stage.walk(ir, check=af.ad.check_pushforward)(x)
-    eqn, inputs = next(gen)
-    x.tangent = 1.0
+    gen = ir.walk(x)
+    with af.core.using_interpreter(pusher):
+        eqn, inputs = next(gen)
+        x.tangent = 1.0
+        output = eqn.bind(inputs, **eqn.params)
 
-    with pytest.raises(TypeError, match="Expected StrAVal"):
-        gen.send(eqn.bind(inputs, **eqn.params))
+        with pytest.raises(TypeError, match="Expected StrAVal"):
+            gen.send(output)
+    assert af.core.active_interpreter.get() is active
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -141,6 +148,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
         executor(ir, (Value(),), (Feedback(), Feedback()))
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "cotangents, expected",
     [
@@ -153,49 +161,98 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
         ),
     ],
 )
-def test_transpose_walk_boxed_cotangents(cotangents, expected):
-    ir = af.trace(lambda x, y: (x, x))("x", "y")
-    bwd = af.ad.PullbackBwdInterpreter(parent=af.core.active_interpreter.get())
-
-    def accum(values):
-        with af.core.using_interpreter(bwd.parent):
-            return bwd.box(af.ad.cot_accum(bwd.unbox(values)))
-
-    gen = af.ad.transpose_walk(
-        ir,
-        bwd.box(cotangents),
-        check=lambda a, v: af.core.avalof(a).check(bwd.unbox(v)),
-        zero=lambda a: bwd.box(af.core.Zero(a)),
-        accum=accum,
+def test_pullback_accumulates_cotangents_and_zeros_unused_inputs(executor, cotangents, expected):
+    ir = af.pullback(af.trace(lambda x, y: (x, x))("x", "y"))
+    assert executor(ir, ("x", "y"), cotangents) == (
+        ("x", "x"),
+        (expected, af.core.Zero(af.string.StrAVal())),
     )
-    # Accumulation must use the parent even when the backward interpreter is active.
-    with af.core.using_interpreter(bwd):
-        eqn, (x, y) = next(gen)
-    assert eqn is None
-    assert isinstance(x, af.ad.PullbackBwdBox) and x.owner is bwd
-    assert isinstance(y, af.ad.PullbackBwdBox) and y.owner is bwd
-    assert bwd.unbox((x, y)) == (expected, af.core.Zero(af.string.StrAVal()))
 
 
-def test_transpose_walk_rechecks_mutated_contribution():
+def test_pullback_rechecks_mutated_contribution():
+    seed = af.core.Zero(af.string.StrAVal())
+    mutate = af.extend.Prim("mutate_cotangent")
+
+    def backward(args):
+        seed.aval = af.numeric.FloatAVal()
+        return args[1]
+
+    af.extend.register_abstract(mutate, lambda x: x)
+    af.extend.register_pullback_fwd(mutate, lambda x: (x, None))
+    af.extend.register_pullback_bwd(mutate, backward)
+
     def program(x):
         y = x + "!"
-        return y, y + "?"
+        return y, mutate.bind(y)
 
-    ir = af.trace(program)("x")
-    seed = af.core.Zero(af.string.StrAVal())
-    gen = af.ad.transpose_walk(
-        ir,
-        (seed, "df"),
-        check=lambda a, v: af.core.avalof(a).check(v),
-        zero=af.core.Zero,
-        accum=af.ad.cot_accum,
-    )
-    next(gen)
-    seed.aval = af.numeric.FloatAVal()
-
+    ir = af.pullback(af.trace(program)("x"))
     with pytest.raises(TypeError, match="Expected StrAVal"):
-        gen.send(("dy", af.core.Zero(af.string.StrAVal())))
+        ir.call(("x",), (seed, "df"))
+
+
+def test_pullback_maps_cotangent_once():
+    class ValueAVal(af.core.AVal): ...
+
+    class FeedbackAVal(af.core.AVal): ...
+
+    class HigherFeedbackAVal(af.core.AVal): ...
+
+    for cls in (ValueAVal, FeedbackAVal, HigherFeedbackAVal):
+        af.core.aval_types[cls] = lambda a: a
+    af.core.cotangent_s.set(ValueAVal, lambda _: FeedbackAVal())
+    af.core.cotangent_s.set(FeedbackAVal, lambda _: HigherFeedbackAVal())
+    x, y = (af.stage.Var(aval=ValueAVal()) for _ in range(2))
+    ir = af.stage.IR([], (x, y), x)
+    parent = af.core.active_interpreter.get()
+    no_stage = af.stage.no_stage_flag.get()
+    value = af.core.Zero(ValueAVal())
+    feedback = af.core.Zero(FeedbackAVal())
+    assert af.ad.impl_pullback_call(((value, value), feedback), ir=ir) == (
+        value,
+        (feedback, feedback),
+    )
+    with pytest.raises(TypeError, match="Expected"):
+        af.ad.impl_pullback_call(((value, value), af.core.Zero(HigherFeedbackAVal())), ir=ir)
+    assert af.core.active_interpreter.get() is parent
+    assert af.stage.no_stage_flag.get() is no_stage
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pullback_preserves_original_ir(executor):
+    ir = af.trace(lambda x: x * x + 1.0)(2.0)
+    pullback = af.pullback(ir)
+    for x in (2.0, 3.0):
+        assert executor(pullback, (x,), 1.0) == (x * x + 1.0, (2.0 * x,))
+        assert executor(ir, x) == x * x + 1.0
+
+
+def test_pullback_checks_under_caller_interpreter():
+    parent = af.core.active_interpreter.get()
+    no_stage = af.stage.no_stage_flag.get()
+    x, y = (af.stage.Var(aval=af.string.StrAVal()) for _ in range(2))
+    ir = af.stage.IR([], (x, y), (x, x))
+
+    with af.core.using_interpreter(parent):
+        _, cotangents = af.ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
+        assert cotangents == ("ab", af.core.Zero(af.string.StrAVal()))
+        with pytest.raises(TypeError, match="Expected StrAVal"):
+            af.ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
+    assert af.core.active_interpreter.get() is parent
+    assert af.stage.no_stage_flag.get() is no_stage
+
+
+def test_pullback_preserves_parent_pushforward_values():
+    parent = af.core.active_interpreter.get()
+    pusher = af.ad.PushforwardInterpreter(parent=parent)
+    x, y = (af.stage.Var(aval=af.string.StrAVal()) for _ in range(2))
+    ir = af.stage.IR([], (x, y), (x, x))
+    zero = af.core.Zero(af.string.StrAVal())
+
+    with af.core.using_interpreter(pusher):
+        values = pusher.box((("a", "b"), ("da", "db")))
+        _, cotangents = af.ad.impl_pullback_call((("x", "y"), values), ir=ir)
+        assert pusher.unbox(cotangents) == (("ab", zero), ("dadb", zero))
+    assert af.core.active_interpreter.get() is parent
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
