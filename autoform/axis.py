@@ -255,11 +255,14 @@ class BatchEnv:
     def read_b(self, atom, /):
         return self.batched[atom] if stage.is_var(atom) else False
 
-    def write(self, atom, value, is_batched, /):
+    def write_v(self, atom, value, /):
         if stage.is_var(atom):
-            aval = BatchAVal(atom.aval) if is_batched else atom.aval
+            aval = BatchAVal(atom.aval) if self.batched[atom] else atom.aval
             stage.no_stage_typecheck(value, aval)
             self.values[atom] = value
+
+    def write_b(self, atom, is_batched, /):
+        if stage.is_var(atom):
             self.batched[atom] = is_batched
 
 
@@ -300,12 +303,14 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
         out_v, out_b = batcher.unbox(out_boxed)
         return out_v, assert_trees(out_b, eqn.out_tree, eqn.prim.name)
 
-    utils.tree.map(env.write, ir.in_tree, in_v, in_b)
+    utils.tree.map(env.write_b, ir.in_tree, in_b)
+    utils.tree.map(env.write_v, ir.in_tree, in_v)
     for eqn in ir.eqns:
         in_v = utils.tree.map(env.read_v, eqn.in_tree)
         in_b = utils.tree.map(env.read_b, eqn.in_tree)
         out_v, out_b = batch_bind(eqn, (in_v, in_b))
-        utils.tree.map(env.write, eqn.out_tree, out_v, out_b)
+        utils.tree.map(env.write_b, eqn.out_tree, out_b)
+        utils.tree.map(env.write_v, eqn.out_tree, out_v)
     out_v = utils.tree.map(env.read_v, ir.out_tree)
     out_b = utils.tree.map(env.read_b, ir.out_tree)
     return broadcast_batch_out(spec, out_v, out_b)
@@ -336,12 +341,14 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
         out_v, out_b = batcher.unbox(out_boxed)
         return out_v, assert_trees(out_b, eqn.out_tree, eqn.prim.name)
 
-    utils.tree.map(env.write, ir.in_tree, in_v, in_b)
+    utils.tree.map(env.write_b, ir.in_tree, in_b)
+    utils.tree.map(env.write_v, ir.in_tree, in_v)
     for eqn in ir.eqns:
         in_v = utils.tree.map(env.read_v, eqn.in_tree)
         in_b = utils.tree.map(env.read_b, eqn.in_tree)
         out_v, out_b = await batch_bind(eqn, (in_v, in_b))
-        utils.tree.map(env.write, eqn.out_tree, out_v, out_b)
+        utils.tree.map(env.write_b, eqn.out_tree, out_b)
+        utils.tree.map(env.write_v, eqn.out_tree, out_v)
     out_v = utils.tree.map(env.read_v, ir.out_tree)
     out_b = utils.tree.map(env.read_b, ir.out_tree)
     return broadcast_batch_out(spec, out_v, out_b)
