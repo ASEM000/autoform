@@ -18,6 +18,43 @@ import autoform as af
 from tests import Blob, BlobAVal, aexecute, execute
 
 
+@pytest.mark.parametrize(
+    "expected",
+    [
+        pytest.param(af.numeric.FloatAVal(), id="aval"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="zero"),
+        pytest.param(3.0, id="concrete"),
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(af.numeric.FloatAVal(), id="aval"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="zero"),
+        pytest.param(3.0, id="concrete"),
+    ],
+)
+def test_check_representations(expected, value):
+    af.core.avalof(expected).check(value)
+    with pytest.raises(TypeError, match="Expected StrAVal"):
+        af.string.StrAVal().check(value)
+
+
+def test_avalof_requires_explicit_subclass_registration():
+    class FloatAVal(af.numeric.FloatAVal): ...
+
+    x = FloatAVal()
+    with pytest.raises(TypeError, match="No aval rule registered"):
+        af.core.avalof(x)
+
+    af.core.aval_types[FloatAVal] = lambda aval: aval
+    assert af.core.avalof(x) is x
+    assert af.core.avalof(af.core.Zero(x)) is x
+    af.core.avalof(x).check(x)
+    with pytest.raises(TypeError, match="Expected FloatAVal"):
+        af.core.avalof(x).check(3.0)
+
+
 class TestAVal:
     def test_default_equality_and_hash(self):
         class X(af.core.AVal): ...
@@ -56,9 +93,9 @@ class TestAVal:
         ],
     )
     def test_check_respects_metadata_equality(self, aval, wrap):
-        aval.check(wrap(af.core.Zero(BlobAVal(3))))
+        af.core.avalof(aval).check(wrap(af.core.Zero(BlobAVal(3))))
         with pytest.raises(TypeError, match="Expected"):
-            aval.check(wrap(af.core.Zero(BlobAVal(4))))
+            af.core.avalof(aval).check(wrap(af.core.Zero(BlobAVal(4))))
 
 
 class TestSpace:

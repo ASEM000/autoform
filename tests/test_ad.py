@@ -73,25 +73,28 @@ def test_pullback_checks_concrete_primal(executor):
             if not isinstance(value, str) or not value:
                 raise TypeError("Expected a nonempty string")
 
+    af.core.aval_types[NonemptyStrAVal] = lambda aval: aval
     af.core.cotangent_s.set(NonemptyStrAVal, lambda _: af.string.StrAVal())
     x = af.stage.Var(aval=NonemptyStrAVal())
     ir = af.pullback(af.stage.IR([], (x,), x))
 
     assert executor(ir, ("x",), "df") == ("x", ("df",))
+    with pytest.raises(TypeError, match="Expected a nonempty string"):
+        executor(ir, ("",), "df")
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "cotangent",
+    "cotangent, message",
     [
-        pytest.param(["x", "y"], id="list"),
-        pytest.param(1.0, id="float"),
-        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="wrong-zero"),
+        pytest.param(["x", "y"], "No aval rule registered", id="list"),
+        pytest.param(1.0, "Expected StrAVal", id="float"),
+        pytest.param(af.core.Zero(af.numeric.FloatAVal()), "Expected StrAVal", id="wrong-zero"),
     ],
 )
-def test_pullback_rejects_incompatible_cotangent(executor, cotangent):
+def test_pullback_rejects_incompatible_cotangent(executor, cotangent, message):
     ir = af.pullback(af.trace(lambda x: x)("x"))
-    with pytest.raises(TypeError, match="Expected StrAVal"):
+    with pytest.raises(TypeError, match=message):
         executor(ir, ("x",), cotangent)
 
 
@@ -124,7 +127,9 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
             return 1.0
 
     af.extend.register_trace_type(Value, lambda _: ValueAVal())
+    af.core.aval_types[ValueAVal] = lambda aval: aval
     af.core.aval_types[Feedback] = lambda _: FeedbackAVal()
+    af.core.aval_types[FeedbackAVal] = lambda aval: aval
     af.core.cotangent_s.set(ValueAVal, lambda _: FeedbackAVal())
 
     def program(x):
@@ -159,7 +164,7 @@ def test_transpose_walk_boxed_cotangents(cotangents, expected):
     gen = af.ad.transpose_walk(
         ir,
         bwd.box(cotangents),
-        check=lambda a, v: a.check(bwd.unbox(v)),
+        check=lambda a, v: af.core.avalof(a).check(bwd.unbox(v)),
         zero=lambda a: bwd.box(af.core.Zero(a)),
         accum=accum,
     )
@@ -180,7 +185,11 @@ def test_transpose_walk_rechecks_mutated_contribution():
     ir = af.trace(program)("x")
     seed = af.core.Zero(af.string.StrAVal())
     gen = af.ad.transpose_walk(
-        ir, (seed, "df"), check=af.stage.check_aval, zero=af.core.Zero, accum=af.ad.cot_accum
+        ir,
+        (seed, "df"),
+        check=lambda a, v: af.core.avalof(a).check(v),
+        zero=af.core.Zero,
+        accum=af.ad.cot_accum,
     )
     next(gen)
     seed.aval = af.numeric.FloatAVal()
@@ -193,7 +202,7 @@ def test_transpose_walk_rechecks_mutated_contribution():
 def test_batched_pullback_rejects_shared_list_cotangent(executor):
     ir = af.pullback(af.trace(lambda x, y: x + y)("x", "y"))
     ir = af.batch(ir, in_axes=((False, True), False))
-    with pytest.raises(TypeError, match="Expected StrAVal"):
+    with pytest.raises(TypeError, match="No aval rule registered"):
         executor(ir, ("x", ["y1", "y2"]), ["o1", "o2"])
     assert executor(ir, ("x", ["y1", "y2"]), "o") == (
         ["xy1", "xy2"],
@@ -305,8 +314,10 @@ def test_wrapper_uses_derivative_space(transform, space, change):
     class ChangeAVal(af.core.AVal): ...
 
     af.core.aval_types[Text] = lambda _: TextAVal()
+    af.core.aval_types[TextAVal] = lambda aval: aval
     af.stage.trace_types.add(Text)
     af.core.aval_types[Change] = lambda _: ChangeAVal()
+    af.core.aval_types[ChangeAVal] = lambda aval: aval
     af.stage.trace_types.add(Change)
     space.set(TextAVal, lambda _: ChangeAVal())
     space.set(ChangeAVal, lambda aval: aval)
@@ -436,8 +447,10 @@ class TestCotangentHelpers:
         class DerivedFeedbackAVal(TextFeedbackAVal): ...
 
         af.core.aval_types[Text] = lambda _: TextAVal()
+        af.core.aval_types[TextAVal] = lambda aval: aval
         af.stage.trace_types.add(Text)
         af.core.aval_types[TextFeedback] = lambda _: DerivedFeedbackAVal()
+        af.core.aval_types[DerivedFeedbackAVal] = lambda aval: aval
         af.stage.trace_types.add(TextFeedback)
         af.core.cotangent_s.set(TextAVal, lambda _: DerivedFeedbackAVal())
         var = af.stage.Var(aval=TextAVal())

@@ -979,7 +979,7 @@ def pullback_bwd_fixpoint(
         return boxed_out
 
     def fwd_check(a, v):
-        a.check(fwd.unbox(v))
+        core.avalof(a).check(fwd.unbox(v))
 
     def transpose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
@@ -990,7 +990,7 @@ def pullback_bwd_fixpoint(
                 return eqn.bind((residuals, boxed_c_out), **eqn.params)
 
         def bwd_check(a, v):
-            a.check(bwd.unbox(v))
+            core.avalof(a).check(bwd.unbox(v))
 
         def zero(a):
             return bwd.box(core.Zero(a))
@@ -1061,7 +1061,7 @@ async def apull_bwd_fixpoint(
         return boxed_out
 
     def fwd_check(a, v):
-        a.check(fwd.unbox(v))
+        core.avalof(a).check(fwd.unbox(v))
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
         bwd = ad.PullbackBwdInterpreter(parent=parent)
@@ -1072,7 +1072,7 @@ async def apull_bwd_fixpoint(
                 return await eqn.abind((residuals, boxed_c_out), **eqn.params)
 
         def bwd_check(a, v):
-            a.check(bwd.unbox(v))
+            core.avalof(a).check(bwd.unbox(v))
 
         def zero(a):
             return bwd.box(core.Zero(a))

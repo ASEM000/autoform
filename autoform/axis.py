@@ -41,7 +41,7 @@ type TreePair = tuple[Tree, Tree]
 
 
 class BatchAVal(core.AVal):
-    # NOTE(asem): unlike atomic AVals(e.g StrAVal), no aval_type rule can be registered
+    # NOTE(asem): no aval_type rule can infer BatchAVal from a concrete container
     # as containers are later introduced at the call site. unlike jax the atomic unit is not
     # the array object but any thing really.
     def __init__(self, base: core.AVal):
@@ -64,17 +64,18 @@ class BatchAVal(core.AVal):
             aval = BatchAVal(self) if value.batched else self
             aval.check(value.value)
             return
-        if type(value) in core.aval_types:
+        if isinstance(value, core.AVal) or type(value) in core.aval_types:
             actual = core.avalof(value)
             if not isinstance(actual, type(self)):
                 raise TypeError(f"Expected {self!r}, got {actual!r}")
-            self.base.check(core.Zero(actual.base))
+            self.base.check(actual.base)
             return
         if utils.tree.is_leaf(value):
             raise TypeError(f"Expected {self!r}, got {type(value).__name__}")
         utils.tree.map(self.base.check, value, is_leaf=lambda x: x is not value)
 
 
+core.aval_types[BatchAVal] = lambda aval: aval
 core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.map(aval.base)))
 core.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(core.cotangent_s.map(aval.base)))
 
@@ -262,10 +263,11 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
         b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
         return batcher.box((v_out, b_out))
 
-    def batch_check(a, v):
-        a.check(v)
-
-    eqn, boxed_in = next(gen := stage.walk(ir, check=batch_check)(*batcher.box((v_in, b_in))))
+    eqn, boxed_in = next(
+        gen := stage.walk(ir, check=lambda a, v: core.avalof(a).check(v))(
+            *batcher.box((v_in, b_in))
+        )
+    )
     while eqn:
         eqn, boxed_in = gen.send(batch_bind(eqn, boxed_in))
 
@@ -292,10 +294,11 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
         b_out = assert_trees(b_out, eqn.out_tree, eqn.prim.name)
         return batcher.box((v_out, b_out))
 
-    def batch_check(a, v):
-        a.check(v)
-
-    eqn, boxed_in = next(gen := stage.walk(ir, check=batch_check)(*batcher.box((v_in, b_in))))
+    eqn, boxed_in = next(
+        gen := stage.walk(ir, check=lambda a, v: core.avalof(a).check(v))(
+            *batcher.box((v_in, b_in))
+        )
+    )
     while eqn:
         eqn, boxed_in = gen.send(await batch_bind(eqn, boxed_in))
 

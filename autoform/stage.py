@@ -261,7 +261,7 @@ class IR[*A, R]:
             >>> done is None, out
             (True, '[y!]')
         """
-        return walk(self, check=check_aval)(*args)
+        return walk(self, check=lambda a, v: core.avalof(a).check(v))(*args)
 
 
 def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
@@ -323,10 +323,6 @@ type WalkGen = Generator[GenStep, Tree, None]
 type CheckType = Callable[[core.AVal, Any], None]
 
 
-def check_aval(a: core.AVal, v: Any, /) -> None:
-    a.check(v)
-
-
 def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
     def check_input(atom, value: Any):
         if not is_var(atom):
@@ -383,7 +379,7 @@ def call[*A, R](ir: IR[*A, R], /) -> Callable[[*A], R]:
 
     def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir, check=check_aval)(*args))
+        eqn, in_values = next(gen := walk(ir, check=lambda a, v: core.avalof(a).check(v))(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
         return in_values
@@ -397,7 +393,7 @@ def acall[*A, R](ir: IR[*A, R], /) -> Callable[[*A], Awaitable[R]]:
 
     async def func(*args: *A) -> R:
         check_static_inputs(ir.in_tree, args)
-        eqn, in_values = next(gen := walk(ir, check=check_aval)(*args))
+        eqn, in_values = next(gen := walk(ir, check=lambda a, v: core.avalof(a).check(v))(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
         return in_values
