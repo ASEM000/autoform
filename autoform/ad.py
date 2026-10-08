@@ -120,7 +120,7 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
 
     def make_p(atom):
         if stage.is_var(atom):
-            return stage.Var.fresh(aval=stage.aval_if_var(atom), source=atom)
+            return stage.Var.fresh(aval=core.primal_s.map(atom.aval), source=atom)
         return atom
 
     def make_t(atom):
@@ -153,7 +153,7 @@ class PFEnv:
         if not stage.is_var(atom):
             return atom
         value = self.primals[atom]
-        stage.no_stage_typecheck(value, atom.aval)
+        stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
         return value
 
     def read_t(self, atom, /):
@@ -165,7 +165,7 @@ class PFEnv:
 
     def write(self, atom, primal, tangent, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(primal, atom.aval)
+            stage.no_stage_typecheck(primal, core.primal_s.map(atom.aval))
             stage.no_stage_typecheck(tangent, core.tangent_s.map(atom.aval))
             self.primals[atom] = primal
             self.tangents[atom] = tangent
@@ -178,7 +178,11 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
     def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
         p_in, t_in = in_tree
-        if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
+        if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)) and all(
+            core.primal_s.map(atom.aval) == atom.aval
+            for atom in utils.tree.leaves((eqn.in_tree, eqn.out_tree))
+            if stage.is_var(atom)
+        ):
             with core.using_interpreter(parent):
                 p_out = eqn.bind(p_in, **eqn.params)
             return p_out, utils.tree.map(zero_tangent, p_out)
@@ -202,7 +206,11 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
     async def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
         p_in, t_in = in_tree
-        if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)):
+        if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_in)) and all(
+            core.primal_s.map(atom.aval) == atom.aval
+            for atom in utils.tree.leaves((eqn.in_tree, eqn.out_tree))
+            if stage.is_var(atom)
+        ):
             with core.using_interpreter(parent):
                 p_out = await eqn.abind(p_in, **eqn.params)
             return p_out, utils.tree.map(zero_tangent, p_out)
@@ -220,13 +228,18 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
 
 def abstract_pushforward_call(_: Tree, /, *, ir: stage.IR) -> TreePair:
-    def tangent_aval(atom):
+    def t_aval(atom):
         if stage.is_var(atom):
             return core.tangent_s.map(atom.aval)
         return core.Zero(core.tangent_s.map(core.avalof(atom)))
 
-    p_out = utils.tree.map(stage.aval_if_var, ir.out_tree)
-    t_out = utils.tree.map(tangent_aval, ir.out_tree)
+    def p_aval(atom):
+        if stage.is_var(atom):
+            return core.primal_s.map(atom.aval)
+        return atom
+
+    p_out = utils.tree.map(p_aval, ir.out_tree)
+    t_out = utils.tree.map(t_aval, ir.out_tree)
     return p_out, t_out
 
 
@@ -543,7 +556,7 @@ def pullback(ir: stage.IR, /) -> stage.IR:
 
     def make_p(atom):
         if stage.is_var(atom):
-            return stage.Var.fresh(aval=stage.aval_if_var(atom), source=atom)
+            return stage.Var.fresh(aval=core.primal_s.map(atom.aval), source=atom)
         return atom
 
     def make_c(atom):
@@ -572,12 +585,12 @@ class PBEnv:
         if not stage.is_var(atom):
             return atom
         value = self.primals[atom]
-        stage.no_stage_typecheck(value, atom.aval)
+        stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
         return value
 
     def write_p(self, atom, value, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(value, atom.aval)
+            stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
             self.primals[atom] = value
 
     def read_c(self, atom, /):
@@ -672,13 +685,18 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
 
 def abstract_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    def cotangent_aval(atom):
+    def c_aval(atom):
         if stage.is_var(atom):
             return core.cotangent_s.map(atom.aval)
         return core.Zero(core.cotangent_s.map(core.avalof(atom)))
 
-    p_out = utils.tree.map(stage.aval_if_var, ir.out_tree)
-    c_in = utils.tree.map(cotangent_aval, ir.in_tree)
+    def p_aval(atom):
+        if stage.is_var(atom):
+            return core.primal_s.map(atom.aval)
+        return atom
+
+    p_out = utils.tree.map(p_aval, ir.out_tree)
+    c_in = utils.tree.map(c_aval, ir.in_tree)
     return p_out, c_in
 
 

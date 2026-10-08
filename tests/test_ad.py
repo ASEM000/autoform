@@ -81,6 +81,7 @@ def test_pullback_checks_concrete_primal(executor):
                 raise TypeError("Expected a nonempty string")
 
     af.core.aval_types[NonemptyStrAVal] = lambda aval: aval
+    af.core.primal_s.set(NonemptyStrAVal, lambda aval: aval)
     af.core.cotangent_s.set(NonemptyStrAVal, lambda _: af.string.StrAVal())
     x = af.stage.Var(aval=NonemptyStrAVal())
     ir = af.pullback(af.stage.IR([], (x,), x))
@@ -137,6 +138,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
     af.core.aval_types[ValueAVal] = lambda aval: aval
     af.core.aval_types[Feedback] = lambda _: FeedbackAVal()
     af.core.aval_types[FeedbackAVal] = lambda aval: aval
+    af.core.primal_s.set(ValueAVal, lambda aval: aval)
     af.core.cotangent_s.set(ValueAVal, lambda _: FeedbackAVal())
 
     def program(x):
@@ -199,6 +201,7 @@ def test_pullback_maps_cotangent_once():
 
     for cls in (ValueAVal, FeedbackAVal, HigherFeedbackAVal):
         af.core.aval_types[cls] = lambda a: a
+    af.core.primal_s.set(ValueAVal, lambda aval: aval)
     af.core.cotangent_s.set(ValueAVal, lambda _: FeedbackAVal())
     af.core.cotangent_s.set(FeedbackAVal, lambda _: HigherFeedbackAVal())
     x, y = (af.stage.Var(aval=ValueAVal()) for _ in range(2))
@@ -376,6 +379,8 @@ def test_wrapper_uses_derivative_space(transform, space, change):
     af.core.aval_types[Change] = lambda _: ChangeAVal()
     af.core.aval_types[ChangeAVal] = lambda aval: aval
     af.stage.trace_types.add(Change)
+    af.core.primal_s.set(TextAVal, lambda aval: aval)
+    af.core.primal_s.set(ChangeAVal, lambda aval: aval)
     space.set(TextAVal, lambda _: ChangeAVal())
     space.set(ChangeAVal, lambda aval: aval)
     aval = TextAVal()
@@ -509,6 +514,7 @@ class TestCotangentHelpers:
         af.core.aval_types[TextFeedback] = lambda _: DerivedFeedbackAVal()
         af.core.aval_types[DerivedFeedbackAVal] = lambda aval: aval
         af.stage.trace_types.add(TextFeedback)
+        af.core.primal_s.set(TextAVal, lambda aval: aval)
         af.core.cotangent_s.set(TextAVal, lambda _: DerivedFeedbackAVal())
         var = af.stage.Var(aval=TextAVal())
         ir = af.stage.IR([], (var,), (var, var))
@@ -907,3 +913,72 @@ def test_composition(executor, program, transform, trace_args, args, expected):
     ir = transform(af.trace(program)(*trace_args))
     result = executor(ir, *args)
     assert result == expected
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_pushforward_preserves_batched_zero_structure(executor):
+    double = af.batch(af.trace(lambda x: x + x)(1.0))
+    add = af.batch(af.trace(lambda x, y: x + y)(1.0, 1.0))
+    x, y = [1.0, 2.0], [3.0, 4.0]
+    ir = af.trace(lambda x, y: add.call(double.call(x), y))(x, y)
+    zero = af.core.Zero(af.numeric.FloatAVal())
+
+    assert executor(af.pushforward(ir), (x, y), ([zero, zero], [1.0, 1.0])) == (
+        [5.0, 8.0],
+        [1.0, 1.0],
+    )
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("transform", [af.pushforward, af.pullback], ids=["pf", "pb"])
+def test_nonidentity_primal_space(executor, transform):
+    import autoform.check as check
+
+    class ValueAVal(af.core.AVal): ...
+
+    af.core.aval_types[ValueAVal] = lambda aval: aval
+    af.core.primal_s.set(ValueAVal, lambda _: af.numeric.FloatAVal())
+    af.core.tangent_s.set(ValueAVal, lambda _: af.string.StrAVal())
+    af.core.cotangent_s.set(ValueAVal, lambda _: af.string.StrAVal())
+    prim = af.extend.Prim("mapped_primal")
+
+    def forward(args):
+        p, t = args
+        return p * 2.0, t if isinstance(t, af.core.Zero) else t + t
+
+    af.extend.register_impl(prim, lambda x: x * 2.0)
+    af.extend.register_aimpl(prim, af.utils.asyncify(lambda x: x * 2.0))
+    af.extend.register_abstract(prim, lambda _: ValueAVal())
+    af.extend.register_pushforward(prim, forward)
+    af.extend.register_apushforward(prim, af.utils.asyncify(forward))
+    af.extend.register_pullback_fwd(prim, lambda x: (x * 2.0, None))
+    af.extend.register_apullback_fwd(prim, af.utils.asyncify(lambda x: (x * 2.0, None)))
+    af.extend.register_pullback_bwd(prim, lambda args: args[1] + args[1])
+    af.extend.register_apullback_bwd(prim, af.utils.asyncify(lambda args: args[1] + args[1]))
+    x, y, z = (af.stage.Var(aval=ValueAVal()) for _ in range(3))
+    source = af.stage.IR(
+        [
+            af.stage.Eqn(check.typecheck_p, x, y, dict(aval=ValueAVal())),
+            af.stage.Eqn(prim, y, z, {}),
+        ],
+        (x,),
+        (z, "literal"),
+    )
+    ir = transform(source)
+    zero = af.core.Zero(af.string.StrAVal())
+    assert ir.in_tree[0][0].aval == af.numeric.FloatAVal()
+    assert ir.out_tree[0][0].aval == af.numeric.FloatAVal()
+    if transform is af.pushforward:
+        args = ((2.0,), ("dx",))
+        expected = ((4.0, "literal"), ("dxdx", zero))
+        assert executor(ir, (2.0,), (zero,)) == ((4.0, "literal"), (zero, zero))
+    else:
+        args = ((2.0,), ("dy", zero))
+        expected = ((4.0, "literal"), ("dydy",))
+    assert executor(ir, *args) == expected
+    static = (False, (False, True)) if transform is af.pullback else False
+    traced = af.trace(lambda p, d: executor(ir, p, d), static=static)(*args)
+    assert traced.out_tree[0][0].aval == af.numeric.FloatAVal()
+    assert executor(traced, *args) == expected
+    with pytest.raises(TypeError, match="Expected FloatAVal"):
+        executor(ir, ("bad",), args[1])

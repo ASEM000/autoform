@@ -115,6 +115,7 @@ class TestBatchIRStructure:
     @pytest.mark.parametrize(
         "space",
         [
+            pytest.param(af.core.primal_s, id="primal"),
             pytest.param(af.core.tangent_s, id="tangent"),
             pytest.param(af.core.cotangent_s, id="cotangent"),
         ],

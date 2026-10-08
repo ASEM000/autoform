@@ -70,6 +70,7 @@ class BatchAVal(core.AVal):
 
 
 core.aval_types[BatchAVal] = lambda aval: aval
+core.primal_s.set(BatchAVal, lambda aval: BatchAVal(core.primal_s.map(aval.base)))
 core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.map(aval.base)))
 core.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(core.cotangent_s.map(aval.base)))
 
