@@ -1,8 +1,8 @@
 # Types and Spaces
 
-Programs often combine strings, numbers, and structured objects. To transform such a program, `autoform` needs to know how to represent each value and the changes or feedback associated with it. Abstract values describe the data in the program. Spaces describe how that data is represented for a particular transformation.
+Programs can combine strings, numbers, and structured objects, but a transformation needs more than the ability to store those values. It also needs a representation for the information carried through the transformed program. A numerical derivative and a written critique are different kinds of information. Abstract values describe the data in the original program, while spaces specify its representation for a particular role.
 
-Consider a program that formats a review. It prefixes a written comment and converts a score out of five to a score out of ten:
+A small review-formatting program makes the distinction concrete. The comment is text and the score is a number. The program adds a prefix to the comment and converts a score out of five into a score out of ten:
 
 ```python
 import autoform as af
@@ -18,15 +18,15 @@ assert ir.call("review text", 2.0) == ("Review: review text", 4.0)
 
 ## Abstract Values
 
-When `autoform` traces a program, it describes each runtime value with an abstract value. The comment has a string abstract value, and the score has a floating-point abstract value. These descriptions let operation rules determine the types of their results during tracing. Additional value types need their own abstract values and operation rules, as shown in [Array Extension](../recipes/extending/array-extension.md).
+During tracing, an abstract value describes a runtime value without requiring its concrete contents. The comment has a string abstract value, and the score has a floating-point abstract value. Operation rules use these descriptions to determine output types before execution. A new value type needs an abstract value and the appropriate operation rules, as illustrated by [Array Extension](../recipes/extending/array-extension.md).
 
 (spaces)=
 (defining-feedback-spaces)=
 ## Spaces
 
-A space maps an abstract value to a representation for a particular role. The primal space describes values in the original program. Tangent spaces describe changes carried forward by {py:func}`pushforward <autoform.pushforward>`, and cotangent spaces describe feedback carried backward by {py:func}`pullback <autoform.pullback>`. A custom leaf type may use different representations in each space.
+A space maps an abstract value to a representation for a particular role. The primal space describes the original values. Tangent spaces describe the changes carried forward by {py:func}`pushforward <autoform.pushforward>`, and cotangent spaces describe the feedback carried backward by {py:func}`pullback <autoform.pullback>`. These are examples of spaces, rather than a requirement that all information resemble a numerical gradient.
 
-The two outputs receive different kinds of feedback. The pullback passes text feedback to the comment and doubles the numerical feedback for the score:
+The review program has two outputs, so its pullback receives a pair of feedback values. Text feedback belongs to the formatted comment, and numerical feedback belongs to the converted score. The string rule passes the critique to the comment; the multiplication rule doubles the score feedback:
 
 ```python
 output, (comment_feedback, score_feedback) = af.pullback(ir).call(
@@ -38,12 +38,12 @@ assert comment_feedback == "comment feedback"
 assert score_feedback == 2.0
 ```
 
-In this example, the feedback (cotangent) type is the same as the primal (value) type. A custom type can use a different representation. For example, the cotangent for a document may be a critique of its structure and content.
+In this example, the cotangent has the same type as the primal value. A custom type can use a different representation: the cotangent for a document could be a critique of its structure and content.
 
 ## Zero and Accumulation
 
-A transform needs a zero when a value receives no feedback, and accumulation when several uses of a value contribute feedback. For the comment, zero is the empty string and accumulation concatenates text. For the score, zero is `0.0` and accumulation adds numbers.[^symbolic-zeros] These definitions belong to the cotangent type of each value.
+A value can contribute to several later operations, each returning its own feedback. Accumulation combines those contributions when the backward computation reaches the shared value. Zero represents the absence of a contribution. For the comment, zero is the empty string and accumulation concatenates text. For the score, zero is `0.0` and accumulation adds numbers.[^symbolic-zeros]
 
-An operation rule determines how feedback reaches each input. A custom cotangent type must define its own zero and accumulation.
+These definitions let the transform handle unused values and shared inputs without knowing the details of each feedback representation. The operation rules determine how feedback reaches the inputs, and the cotangent type supplies zero and accumulation. A custom critique type needs these definitions just as a numerical type does.
 
 [^symbolic-zeros]: `autoform` can keep zero symbolic until an operation needs a concrete value.

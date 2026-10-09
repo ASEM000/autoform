@@ -1,6 +1,6 @@
 # Rule Registration
 
-Register rules for running, abstracting, batching, doing AD, and doing DCE on a primitive. Separate functions for registering sync and async rules.
+Rule registration defines how a primitive executes, describes its outputs during tracing, and participates in transforms. The interfaces below cover batching, differentiation, and dead code elimination. Synchronous and asynchronous rules are registered separately so both execution paths can provide the required behavior.
 
 ```{eval-rst}
 .. autofunction:: autoform.extend.register_impl

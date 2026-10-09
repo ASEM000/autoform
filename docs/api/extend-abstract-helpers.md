@@ -1,6 +1,6 @@
 # Abstract Helpers
 
-Spaces map a primal abstract value to its primal, tangent, or cotangent type. Register each mapping for a user-defined abstract value. `materialize_zeros` replaces symbolic zeros with the concrete zeros defined by those types.
+Spaces map an abstract value to its representation for a particular role, such as primal values, tangents, or cotangents. An extension registers the mappings needed by its types. `materialize_zeros` converts symbolic zeros into the concrete zeros defined by the corresponding abstract values.
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.Space

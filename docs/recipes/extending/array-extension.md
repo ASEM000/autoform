@@ -1,6 +1,6 @@
 # Array Extension
 
-This example registers types and rules for NumPy arrays, then uses them in a program that does array arithmetic. The program is checked by comparing the execution, batch, and forward and reverse differentiation with NumPy.
+A domain extension needs to explain both its values and its operations to `autoform`. This recipe adds NumPy arrays as atomic leaves, registers arithmetic primitives, and supplies rules for batching and numerical differentiation. A small program then uses ordinary Python operators while the transforms work through the registered rules. NumPy calculations provide reference results for the examples.
 
 ```{admonition} Concept
 [Primitives and Rules](../../concepts/primitives-and-rules.md) · [Transforms](../../concepts/transforms.md) · [Types and Spaces](../../concepts/types-and-spaces.md)
@@ -10,7 +10,7 @@ This example only supports floating-point arrays, requires arrays to have the sa
 
 ## Abstract Value
 
-Describe an array by its shape and dtype:
+Tracing needs an array description before an operation has produced a concrete result. `ArrayAVal` records the shape and dtype and supplies the zero and accumulation behavior used by feedback. The primal, tangent, and cotangent spaces all use this same array representation in the example:
 
 ```python
 import functools as ft
@@ -60,8 +60,7 @@ afe.cotangent_s.set(ArrayAVal, lambda aval: aval)
 
 ## Operation Rules
 
-Each primitive needs rules for ordinary execution, abstraction, forward-mode AD,
-reverse-mode AD, and batching. The following helper registers those rules for one binary operation:
+Registering a value type does not define how array operations transform. Each operation also needs execution and abstract rules, followed by the rules required for batching and differentiation. The helper below collects these registrations for a binary operation. The forward pullback rule retains both inputs as residuals, and the backward rule uses those values with output feedback:
 
 ```python
 def array_aval(value):
@@ -125,7 +124,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
 ## Operators
 
-Register arithmetic and matrix multiplication, then connect these operations to Python operators:
+The helper can now describe several operations without repeating the registration code. Each definition provides the NumPy computation together with its pushforward and pullback formulas. Dunder registrations connect these primitives to the corresponding Python operators:
 
 ```python
 a_add = register_binary(
@@ -172,13 +171,11 @@ afe.register_dunder(afe.Dunder.DIV, ArrayAVal, a_div)
 afe.register_dunder(afe.Dunder.MATMUL, ArrayAVal, a_matmul)
 ```
 
-The final registrations connect traced Python syntax to the primitives through
-one dunder rule table. For example, `x + y` stages `a_add` when `x` has
-`ArrayAVal`.
+The final registrations connect traced Python syntax to the primitives through one dunder rule table. For example, `x + y` stages `a_add` when `x` has `ArrayAVal`.
 
 ## Execution and AD
 
-Check the output and derivatives of a two-input program:
+The first program combines addition, multiplication, and division. Its execution is compared with NumPy, then its pushforward and pullback are compared with the expected derivatives. These checks exercise the composition of the registered rules across several operations:
 
 ```python
 def f(x, y):
@@ -204,8 +201,7 @@ np.testing.assert_allclose(dx, -y * y / (x * x))
 np.testing.assert_allclose(dy, (x + 2 * y) / x)
 ```
 
-Batching uses an outer Python batch container. Each element is still a NumPy
-array leaf:
+Batching adds an outer Python container while preserving each NumPy array as one leaf. The two arrays at the same batch position form the inputs for one execution. This is distinct from treating an axis inside an array as the batch dimension:
 
 ```python
 batched = af.batch(ir, in_axes=(True, True))
@@ -215,7 +211,7 @@ np.testing.assert_allclose(outs[0], f(x, y))
 np.testing.assert_allclose(outs[1], f(x + 1, y + 1))
 ```
 
-Matrix multiplication works through the same primitive pattern:
+Matrix multiplication uses the same registration pattern, with transpose operations in its pullback formula. The following check compares both input gradients with the corresponding NumPy matrix products:
 
 ```python
 def mm(a, b):

@@ -1,6 +1,6 @@
 # Primitive Keys
 
-Primitive instances are the keys used by rule registries. Register rules against these exported instances; creating another primitive with the same name creates a different key.
+Rule registries use primitive instances as dispatch keys. Rules for an existing primitive must refer to the exported instance below. Constructing a new primitive with the same name creates a different key, so the new instance does not inherit the original registrations.
 
 ```{eval-rst}
 .. autodata:: autoform.string.concat_p

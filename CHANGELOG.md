@@ -89,8 +89,8 @@
     and a language model call, and to compose `pullback` and `batch`. The
     documentation home page includes the README.
 
-  - Consolidated [concept pages](docs/concepts/index.md) under Foundations,
-    Computation and Transforms, and Execution. [Pytrees](docs/concepts/pytrees.md)
+  - Consolidated [concept pages](docs/concepts/index.md) under Foundations
+    and Computation and Transforms. [Pytrees](docs/concepts/pytrees.md)
     have a separate page, and fixed points are covered under
     [Control Flow](docs/concepts/control-flow.md#fixed-points).
 
@@ -239,7 +239,7 @@
 
   - Reworked [Getting Started](docs/a-first-program.md), [Concepts](docs/concepts/index.md), [Recipes](docs/recipes/index.md), and [API Reference](docs/api/index.md) around the trace/transform/execute model, transform composition, schemas, pytrees, custom rules, and primitive authoring.
 
-  - Added [Path Weights](docs/concepts/path-weights.md) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/tool-ranking.md) documentation for using {py:func}`factor <autoform.factor>` with the path-weight transform to score candidate paths, including the probabilistic reading and independent batched scoring.
+  - Added [Path Weights](https://autoform.readthedocs.io/en/latest/concepts/transforms.html?transform=weight#weight) and [Rank Tool Candidates with Path Weights](docs/recipes/llm/tool-ranking.md) documentation for using {py:func}`factor <autoform.factor>` with the path-weight transform to score candidate paths, including the probabilistic reading and independent batched scoring.
 
   - Added an [array extension recipe](docs/recipes/extending/array-extension.md) showing how to use `autoform.extend` to register a non-text value space with trace types, avals, zeros, cotangent accumulation, primitive rules, and operator dispatch.
 

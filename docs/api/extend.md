@@ -1,6 +1,6 @@
 # Extend
 
-`autoform.extend` exposes the types, registration functions, and dispatch helpers used to add operations and value types. See [Array Extension](../recipes/extending/array-extension.md) for complete examples.
+`autoform.extend` contains the types, registrations, and dispatch helpers used to add value types and operations. The sections below separate these interfaces by purpose. [Array Extension](../recipes/extending/array-extension.md) combines them in a complete example with tracing, batching, and numerical differentiation. Transform support depends on registered rules.
 
 ```{toctree}
 :maxdepth: 2

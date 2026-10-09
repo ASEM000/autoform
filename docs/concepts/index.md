@@ -4,7 +4,7 @@ orphan: true
 
 # Concepts
 
-Concepts explain program structure, types and spaces, operation rules, and execution.
+The concepts pages explain how a Python function becomes a program that can be executed and transformed. Foundations introduces program structure, tracing, and values. Computation and Transforms covers primitive rules, control flow, transformation, and execution. The Execution page follows one program through calls, intermediate-value inspection, reuse, and custom runners.
 
 ## Foundations
 
@@ -18,8 +18,4 @@ Concepts explain program structure, types and spaces, operation rules, and execu
 - [Primitives and Rules](primitives-and-rules.md)
 - [Control Flow](control-flow.md)
 - [Transforms](transforms.md)
-
-## Execution
-
 - [Execution](execution.md)
-- [Path Weights](path-weights.md)

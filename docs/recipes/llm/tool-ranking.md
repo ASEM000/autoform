@@ -1,22 +1,18 @@
 # Tool Ranking
 
-A request may have several candidate tools. Score each candidate against the request and history, combine the scores with prior weights, and normalize the resulting weights. Select the best tool only when its decision score exceeds the threshold; otherwise request clarification.
+A request can match several available tools, and the strongest match may still be too weak to justify a choice. This recipe evaluates each candidate against the request and conversation history, combines those ratings with prior weights, and leaves the final decision to caller code. A threshold determines whether the highest-ranked tool is selected or clarification is requested.
 
 ```{admonition} Concept
-[Path Weights](../../concepts/path-weights.md) · [Language Models](../../language-models.md) · [Transforms](../../concepts/transforms.md)
+<a href="../../concepts/transforms.html?transform=weight#weight">Path Weights</a> · [Language Models](../../language-models.md) · [Transforms](../../concepts/transforms.md)
 ```
 
 ```{admonition} Model Setup
-`autoform` uses LiteLLM for model calls.
-Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
-Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
-Replace labels such as `"answer instructions"` with text for the task.
+`autoform` uses LiteLLM for model calls. The `"model-name"` placeholder stands for a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers), with the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys) configured in the environment. Labels such as `"answer instructions"` stand for task-specific instructions.
 ```
 
 ## Candidates
 
-The candidate set stays outside the traced function. The prior and normalization
-are ordinary NumPy arrays:
+The candidate tools and prior weights are fixed by the application before scoring. Keeping that choice outside the traced function allows the same scoring program to evaluate a different candidate set later. NumPy handles the prior weights and the final normalization:
 
 ```python
 import numpy as np
@@ -36,8 +32,7 @@ prior = np.array([0.3, 0.3, 0.2, 0.2])
 
 ## Scores
 
-The schema asks the LM for two values in `[0, 1]`. Each value becomes a factor,
-so the path weight is `request_fit * history_fit`:
+The model assesses two aspects of each candidate: its fit to the current request and its fit to the history. Both ratings are constrained to `[0, 1]`. Each becomes a factor in the traced program, so the path weight is the product of those ratings, `request_fit * history_fit`:
 
 ```python
 fit_schema = {
@@ -73,8 +68,7 @@ def judge_tool(tool: str, description: str, request: str, history: str):
 
 ## Batching
 
-Trace once with representative values, then compose {py:func}`batch
-<autoform.batch>` around {py:func}`weight <autoform.weight>`:
+The scoring function is traced once with representative inputs. Applying {py:func}`weight <autoform.weight>` adds a path weight to its result, and {py:func}`batch <autoform.batch>` runs that scoring program for every candidate. This order keeps each candidate's weight separate:
 
 ```python
 request = "request text"
@@ -93,7 +87,7 @@ outputs, path_weights = score_tools.call(
 
 ## Normalization
 
-The set of tools is enumerated only once, and the weights can be combined with the explicit prior mass over tools.
+Each tool appears once in the candidate set, so its path weight is multiplied by its explicit prior mass. Dividing the resulting masses by the total mass gives comparable decision scores. The calculation stays outside the IR because candidate selection and aggregation belong to the application.
 
 ```python
 masses = prior * np.array(path_weights)
@@ -107,11 +101,11 @@ best_tool = tools[best_idx]
 top_score = normalized_scores[best_idx]
 ```
 
-These LM ratings are heuristic fit scores. Read the normalized values as decision scores, not calibrated probabilities. A posterior interpretation requires factors that represent likelihoods.
+The model ratings are heuristic measures of fit. The normalized values are decision scores, not calibrated probabilities. A posterior interpretation would require factors with a likelihood meaning; normalization alone does not provide that meaning.
 
 ## Selection
 
-Use a threshold to decide whether to use a tool or ask for clarification:[^human-review]
+The selection threshold makes the application policy explicit. A score above the threshold selects the highest-ranked tool; a lower score leads to a clarification request.[^human-review]
 
 ```python
 threshold = 0.7
@@ -125,7 +119,7 @@ else:
     print("Route to a clarification step.")
 ```
 
-For example, if the LM returned these scores:
+The following illustrative ratings show how the policy behaves when one tool leads the ranking but does not clear the threshold:
 
 | Tool | `request_fit` | `history_fit` | Path weight | Unnormalized mass | Normalized score |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -134,9 +128,6 @@ For example, if the LM returned these scores:
 | `file_reader` | 0.6 | 0.8 | 0.48 | 0.096 | 0.293 |
 | `ask_user` | 0.1 | 0.5 | 0.05 | 0.010 | 0.030 |
 
-The top tool is `web_search`, but the normalized score is below `0.7`, so the
-caller asks for clarification instead of acting.
+The top tool is `web_search`, but the normalized score is below `0.7`, so the caller asks for clarification instead of acting.
 
-[^human-review]: The low-score branch can hand control to a human review runner. See
-    [Human Review](../execution/human-review.md) for the
-    pattern where execution pauses, collects feedback, and resumes.
+[^human-review]: The low-score branch can hand control to a human review runner. [Human Review](../execution/human-review.md) demonstrates execution that pauses, collects feedback, and resumes.

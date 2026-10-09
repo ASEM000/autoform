@@ -1,6 +1,6 @@
 # Types
 
-The package version and pytree namespace are public constants. Use the namespace for both Optree registration and traversal.
+The package exposes its version and the Optree namespace used for pytree registration. A shared namespace lets registration and traversal agree on which fields are leaves and which fields belong to fixed metadata.
 
 ```{eval-rst}
 .. py:data:: autoform.__version__
@@ -14,8 +14,7 @@ The package version and pytree namespace are public constants. Use the namespace
    The Optree namespace reserved by ``autoform``.
 ```
 
-Register a dataclass in the namespace, then use it for traversal:
-Use `optree.dataclasses.field(pytree_node=False)` for fields that remain fixed, such as the model name:
+In the dataclass below, `topic` is a leaf and `model` is fixed metadata. `optree.dataclasses.field(pytree_node=False)` excludes the model name from tree traversal, so mapping a string operation changes only the topic:
 
 ```python
 import optree
@@ -34,4 +33,4 @@ upper = optree.tree_map(str.upper, state, namespace=af.PYTREE_NAMESPACE)
 
 As a result, only the `topic` is changed to `"TOPIC TEXT"` while the `model` remains equal to `"model-name"`.
 
-See [Pytrees](../concepts/pytrees.md#pytrees) for the full pattern.
+[Pytrees](../concepts/pytrees.md#pytrees) explains how registration affects tracing, batching, and feedback.

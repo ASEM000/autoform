@@ -1,6 +1,6 @@
 # Active Contexts
 
-These context variables expose the active interpreter, equation tags, and model client to extension code. Use the public context managers to install temporary behavior.
+Extension code can inspect the active interpreter, equation tags, and model client through these context variables. The public context managers install temporary behavior and restore the previous setting on exit. These variables provide access to that active state rather than creating a new program.
 
 ```{eval-rst}
 .. autodata:: autoform.extend.active_interpreter

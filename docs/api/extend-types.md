@@ -1,6 +1,6 @@
 # Types
 
-These classes describe runtime values, primitive keys, equations, and interpreters. Extension authors use these classes to define behavior for new types and operations.
+These classes represent the values and program structure used by extension code: abstract values, primitive keys, equations, and interpreters. A domain extension combines these descriptions with registered rules to make new types and operations available to tracing and the transforms it supports.
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal

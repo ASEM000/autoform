@@ -1,12 +1,12 @@
 # Building Blocks
 
-`autoform` transforms programs that operate on text, numbers, and user-defined types. For example, a grading program can call a language model, take a text rubric as input, and perform arithmetic on its score. A `pullback` computes input feedback in the space defined for each type, and `batch` runs that feedback program across examples.
+A program transformation derives another computation from a program that has already been defined. For example, a grading program can combine a language model call with arithmetic. A pullback of that program can return text feedback for a rubric and numerical feedback for a points adjustment. Batching can then apply the feedback program across examples. `autoform` supports this pattern for text, numbers, and user-defined types.
 
 The framework provides three building blocks:
 
-1. **Types and spaces** represent values and their changes or feedback.
-2. **Operations** define computations on those values, with rules for execution and supported transforms.
-3. **Transformations** use spaces and operation rules to produce a new program, which can itself be transformed.
+1. **Types and spaces** describe the values in a program and the representations used for changes or feedback. These representations can differ: a document can receive a structured critique rather than another document.
+2. **Operations** describe computations on those values. Execution rules perform the work, while transformation rules define the corresponding batching, feedback, or other behavior.
+3. **Transformations** combine the rules for individual operations into a new program. A transformed program has the same IR interface and can participate in further supported transformations.
 
 ```{raw} html
 :file: assets/autoform-building-blocks.svg
@@ -14,12 +14,12 @@ The framework provides three building blocks:
 
 ## Programs
 
-Tracing converts a Python function into an intermediate representation (IR). The IR records operations and their data dependencies, and can be transformed and run synchronously or asynchronously. See [Programs and IR](concepts/programs-and-ir.md) for details.
+Tracing turns a Python function into an intermediate representation (IR) that records operations and dependencies. Transforms work with this representation, so the original function does not need a separate implementation for each behavior. The resulting IR can run synchronously or asynchronously. [Programs and IR](concepts/programs-and-ir.md) introduces that sequence.
 
 ## Composition
 
-Operations compose into programs, and transformations compose with each other. For example, `batch(pullback(ir))` computes input feedback for a batch of examples. Both transforms produce IR, so the result can be transformed again. Registered types, spaces, and operation rules determine how each transform handles values.
+Composition happens at two levels. Operations combine to form a program, and transforms combine to derive new programs. For example, `batch(pullback(ir))` first creates a feedback program and then applies it across examples. The available rules and the order of transformation determine which combinations are supported.
 
-These building blocks support higher-level methods, including program optimization. [Motivation and Applications](motivation-and-applications.md) describes their uses. [A First Program](a-first-program.md) traces, runs, and transforms a language model program.
+These building blocks support higher-level methods, including program optimization. [Motivation and Applications](motivation-and-applications.md) describes these applications. [A First Program](a-first-program.md) traces, runs, and transforms a language model program.
 
-Note that `autoform` is in early stages of development, and breaking API changes may be made that require changes to existing code.
+`autoform` is in early development. Breaking API changes may require updates to existing code.

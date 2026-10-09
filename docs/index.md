@@ -46,28 +46,28 @@
 :link: a-first-program
 :link-type: doc
 
-Trace, run, and transform a language model program.
+A complete example of tracing, executing, and transforming a language model program.
 ```
 
 ```{grid-item-card} Concepts
 :link: concepts/index
 :link-type: doc
 
-Programs, spaces, rules, and transforms.
+The program representation, types and spaces, primitive rules, transforms, and execution behavior.
 ```
 
 ```{grid-item-card} Recipes
 :link: recipes/index
 :link-type: doc
 
-Tool use, tool ranking, human review, and array extensions.
+Examples that combine concepts for tool use, tool ranking, human review, and array extensions.
 ```
 
 ```{grid-item-card} API Reference
 :link: api/index
 :link-type: doc
 
-API signatures, parameters, and return values.
+Public signatures, parameters, return values, and interfaces for extending the framework.
 ```
 
 ````
@@ -91,7 +91,6 @@ motivation-and-applications
 
 concepts/foundations
 concepts/computation-and-transforms
-concepts/execution-overview
 ```
 
 ```{toctree}
