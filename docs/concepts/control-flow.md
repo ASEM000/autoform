@@ -1,16 +1,10 @@
 # Control Flow
 
-Some programs require branching or looping based on runtime values. To support
-this, `autoform` includes [control-flow primitives](primitives-and-rules.md)
-represented in the [IR](programs-and-ir.md#the-ir). `switch` selects a branch,
-`while_loop` repeats a step while a condition holds, and `fixpoint` repeats a
-step until the state stabilizes. Both loops have a maximum number of iterations.[^loop-choice]
+A program may need to choose a branch or repeat a step using values that are only available during execution. [Control-flow primitives](primitives-and-rules.md) keep those choices visible in the [IR](programs-and-ir.md#the-ir). `switch` selects a branch, `while_loop` continues while a condition holds, and `fixpoint` repeats a step until the state is stable. Both loops also have an iteration limit.[^loop-choice]
 
 ## Branches
 
-The {py:func}`switch <autoform.switch>` primitive selects one of several traced
-branches based on a runtime value. Here, `kind` selects the format of a text
-label:
+A runtime branch has several possible computations with a common interface. The {py:func}`switch <autoform.switch>` primitive selects one traced branch using the supplied key. In this example, `kind` determines which format is applied to the text:
 
 ```python
 import autoform as af
@@ -38,23 +32,17 @@ ir = af.trace(route)("brief", "topic text")
 print(ir.call("detailed", "topic text"))
 ```
 
-The result is `detailed: topic text`. All branches must have the same input and
-output structure and types.
+The result is `detailed: topic text`. All branches must have the same input and output structure and types.
 
 ## Conditional Loops
 
-The {py:func}`while_loop <autoform.while_loop>` primitive repeatedly executes a
-step until a condition returns false or `max_iters` steps have run. The body
-does not run if the condition is false at the beginning.
+Some loops have an explicit stopping condition, such as a status flag that changes after a revision. The {py:func}`while_loop <autoform.while_loop>` primitive evaluates its condition before each step. Execution ends when the condition is false or `max_iters` steps have run. An initially false condition skips the body entirely.
 
 ```{raw} html
 :file: ../assets/loop-state.svg
 ```
 
-Here, the loop state is a dataclass with text and a status. The body modifies
-the state until the condition, defined by the status, becomes false. Optree
-registers the dataclass as a [pytree](pytrees.md#pytrees) so that `autoform` can
-access its fields:
+The loop carries a dataclass containing text and a status. The body returns an updated state, and the condition reads its status to decide whether another step is needed. Registering the dataclass as a [pytree](pytrees.md#pytrees) exposes those fields to tracing and transforms:
 
 ```python
 import optree
@@ -86,11 +74,9 @@ The result is `State(text="Revision: draft text", status="stable")`.
 
 ## Fixed Points
 
-The {py:func}`fixpoint <autoform.fixpoint>` primitive repeatedly applies a step program until the state becomes stable or the maximum number of iterations is reached. The step program must accept `(state, theta)` and must return a new state with the same pytree structure as the old state. The `theta` argument will be the same in every iteration.
+A different stopping criterion is stability: another application of the step no longer changes the state. The {py:func}`fixpoint <autoform.fixpoint>` primitive checks for this after each step. Its step program accepts `(state, theta)` and returns a state with the same pytree structure. The state changes during iteration, while `theta` supplies parameters that remain fixed throughout the loop.
 
-The same `State` dataclass is used here. The target text is `theta` because it
-stays fixed throughout the loop. This example takes two steps: the first sets
-the text to the target, and the second confirms that the state is unchanged.
+The example reuses the `State` dataclass. The target text is passed as `theta` because it stays fixed, while the text in the state is updated. Two steps are needed: the first installs the target text, and the second produces the same state again.
 
 ```python
 def rewrite_step(state: State, target: str) -> State:
@@ -114,7 +100,7 @@ The fixpoint will use structural equality by default to compare the previous sta
 
 ### State and Stability
 
-To customize how the fixpoint decides whether the state has converged, pass a program that determines whether the previous and new states are equivalent. This program will be called with the arguments `(previous_state, new_state)` after each call to the step program and must return a boolean. Here, the fixpoint will stop after the first step because the `status` field is the only field that the equivalence program checks.
+Stability can depend on the meaning of the state rather than equality of every field. An equivalence program receives `(previous_state, new_state)` after each step and returns a boolean. Here, it checks whether the new state has `status="stable"`, so the loop stops after the first step even though the text has changed.
 
 ```python
 def is_stable(prev: State, new: State) -> bool:
@@ -135,26 +121,20 @@ assert status_ir.call(example, "revised draft text").status == "stable"
 
 ### Pullback
 
-{py:func}`pullback <autoform.pullback>` does not treat `fixpoint` as a fully
-unrolled loop. The forward pass keeps the returned state and `theta`, including when the iteration limit is reached. The
-backward pass applies the step pullback at the fixed point and refines the
-adjoint equation for `adj_iters`.
+The two loop primitives also differ in backward behavior. The {py:func}`pullback <autoform.pullback>` of `fixpoint` uses an implicit fixed-point rule instead of reversing the full sequence of iterations. Its forward sweep retains the returned state and `theta`. Its backward sweep evaluates the step pullback at that state and refines an adjoint equation for `adj_iters` iterations.
 
-This pullback rule is an approximation of the feedback through the returned state.
+The state-to-state feedback is used to approximate the effect of the fixed-point relation. The rule has the following input-feedback behavior:
 
 - feedback to `init_val` is zero;
 - feedback to `theta` carries the output critique through the fixed-point step;
 - `adj_iters=0` uses the direct step transpose at the fixed point;
-- larger `adj_iters` include more state-to-state feedback before reading
-  feedback for `theta`.
+- larger `adj_iters` include more state-to-state feedback before reading feedback for `theta`.
 
 If the forward loop reaches its iteration limit, the returned state may not be a fixed point. The implicit rule is then an approximation at that state, rather than the derivative of the finite sequence of steps.
 
-Use {py:func}`while_loop <autoform.while_loop>` if the initial state should
-receive ordinary unrolled-iteration feedback, or if the loop must be allowed to
-run zero times.
+{py:func}`while_loop <autoform.while_loop>` uses feedback through the executed iterations, including feedback to the initial state. It also supports a body that is skipped when the initial condition is false.
 
-The pullback will return the feedback for `theta`, and the symbolic zero for the initial state. Here is an example using structured states.
+The following call illustrates the fixed-point boundary: the pullback returns feedback for `theta` and a symbolic zero for the initial state. The structure of the state remains visible in the result.
 
 ```python
 def final_text(init: State, target: str) -> str:
@@ -175,23 +155,17 @@ print(target_feedback)
 
 ### Transform Behavior
 
-`fixpoint` is a higher-order primitive, so transforms dispatch to rules for the
-nested `step_ir` and optional `equiv_ir`.
+`fixpoint` contains a nested step program and, optionally, an equivalence program. Transforming the outer program therefore also requires the appropriate rules for the operations inside `step_ir` and `equiv_ir`.
 
-- {py:func}`batch <autoform.batch>` runs an independent fixed-point iteration
-  for each batched item. `theta` can be batched or broadcast with `in_axes`.
-- {py:func}`pullback <autoform.pullback>` uses the implicit fixed-point rule
-  described above instead of storing every forward iteration.
-- {py:func}`dce <autoform.dce>` keeps the loop-carried state live through the
-  step, because the next iteration may need any state leaf.
+- {py:func}`batch <autoform.batch>` runs an independent fixed-point iteration for each batched item. `theta` can be batched or broadcast with `in_axes`.
+- {py:func}`pullback <autoform.pullback>` uses the implicit fixed-point rule described above instead of storing every forward iteration.
+- {py:func}`dce <autoform.dce>` keeps the loop-carried state live through the step, because the next iteration may need any state leaf.
 - `.acall(...)` uses the async execution path for the step and equivalence IRs.
 
-As with the other control-flow primitives, the step can include other
-primitives, including calls to language models. Each requested transform must
-have compatible rules for the operations in the step.
+As with the other control-flow primitives, the step can include other primitives, including calls to language models. Each requested transform must have compatible rules for the operations in the step.
 
 
-[^loop-choice]: **Loop Choice.** Choose the primitive according to the stopping condition and backward rule:
+[^loop-choice]: **Loop Choice.** The stopping condition and backward behavior distinguish the two loop primitives:
 
     ````{container}
 

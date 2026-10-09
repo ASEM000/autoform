@@ -1,6 +1,6 @@
 # Registration
 
-Register a concrete type for tracing, mark a primitive as something to keep during DCE (dead code elimination), or to not memoize, etc.
+These registrations connect concrete Python types to tracing and identify primitives that need special handling. A non-DCE registration preserves a primitive even when its output is unused. A non-memoizable registration prevents result reuse for that primitive. Execution and transform rules have separate registration interfaces.
 
 ```{eval-rst}
 .. autofunction:: autoform.extend.register_trace_type

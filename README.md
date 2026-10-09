@@ -15,14 +15,9 @@
 
 </div>
 
-`autoform` is an extensible framework for program transformations over user-defined types and operations.
-Rules for individual operations compose to transform entire programs.
-The result can be executed or transformed again.
+`autoform` is an extensible framework for program transformations over user-defined types and operations. Rules describe how each operation behaves under a transform. The framework combines those rules to produce a new program, which can be executed or transformed again.
 
-Programs can mix text, numbers, and user-defined structures.
-Extensions define how to represent changes or feedback for each type,
-and how transformations handle its operations.
-These building blocks support program optimization and other applications.
+Programs can combine text, numbers, and user-defined structures. Extensions define the spaces used to represent values, changes, and feedback, together with the rules for operations on those values. This makes the same program available to different computations, including program optimization.
 
 ## Installation
 
@@ -70,7 +65,7 @@ def loss_func(rubric, adjustment, x, y):
     return error * error
 ```
 
-Applying `pullback` to the loss program creates a feedback program for the rubric and points adjustment. Rubric feedback is text, and the adjustment gradient is a number. Both are computed using the same loss function and the rules for language model calls and numerical operations.
+Applying `pullback` to the loss program produces a program that returns the loss and feedback for its inputs. The rubric receives text feedback, while the points adjustment receives a numerical gradient. The example and reference grade have feedback blocked by `stop_gradient`. An update method can use the two remaining signals to propose a new rubric and adjustment.
 
 <picture id="mixed-feedback">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mixed-feedback-dark.svg">
@@ -91,7 +86,7 @@ program = af.trace(loss_func)(*sample_inputs)
 feedback_program = af.pullback(program)
 ```
 
-Finally, `batch` applies the feedback program to a batch of examples, holding the rubric, points adjustment, and loss seed constant, and returning the loss and feedback for each example.
+`batch` applies this feedback program across several examples. The rubric, points adjustment, and loss seed are shared, while the example text and reference grade vary together. The returned losses and feedback remain separate for each example, so an update method can decide how to combine them.
 
 <picture id="batched-feedback">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/batched-feedback-dark.svg">
@@ -118,9 +113,7 @@ rubric_feedback, adjustment_grad, _, _ = feedback
 print(losses, rubric_feedback, adjustment_grad)
 ```
 
-This example composes transformations on a mixed-type program with a language
-model call. The [transforms guide](https://autoform.readthedocs.io/en/latest/concepts/transforms.html)
-also covers:
+This example composes transformations on a mixed-type program with a language model call. The [transforms guide](https://autoform.readthedocs.io/en/latest/concepts/transforms.html) also covers:
 
 - `pushforward`: propagates input changes forward.
 - `sched`: groups independent operations for parallel execution.
@@ -129,15 +122,13 @@ also covers:
 
 ## More
 
-The [concepts guide](https://autoform.readthedocs.io/en/latest/concepts/index.html)
-explains tracing, types, spaces, and transformation rules.
+The [concepts guide](https://autoform.readthedocs.io/en/latest/concepts/index.html) explains tracing, types, spaces, and transformation rules.
 
-The [recipes](https://autoform.readthedocs.io/en/latest/recipes/index.html)
-cover tool use, tool ranking, human review, and array extensions.
+The [recipes](https://autoform.readthedocs.io/en/latest/recipes/index.html) cover tool use, tool ranking, human review, and array extensions.
 
 ## Citation
 
-Cite `autoform` in research that uses it:
+The citation below identifies `autoform` in research that uses the framework:
 
 ```bibtex
 @software{autoform,
@@ -153,4 +144,4 @@ Cite `autoform` in research that uses it:
 
 > **Warning**
 >
-> Early development. Expect API changes that break existing code.
+> `autoform` is in early development. API changes may require updates to existing code.

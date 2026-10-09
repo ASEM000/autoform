@@ -1,6 +1,6 @@
 # IR Transforms
 
-Functions which consume an IR and return a new IR. The rules which describe an operation will determine which combinations of transforms may be applied to an IR. See the [Transforms](../concepts/transforms.md) concept page for information about the shape and composition of transform calls.
+Each function below consumes an IR and returns another IR with different computation or execution behavior. Supported combinations depend on the operation rules and transform order. The [Transforms](../concepts/transforms.md) guide explains the call shapes, input axes, and composition patterns through examples.
 
 ```{eval-rst}
 .. autofunction:: autoform.batch

@@ -1,6 +1,6 @@
 # Programs and IR
 
-To run a program in `autoform`, trace a Python function to an intermediate representation (IR). Then, the IR can be transformed and executed for different inputs to take advantage of batched execution, feedback, and other transformations.
+A Python function describes the computation to perform. To change how that computation runs or derive another computation from it, `autoform` first records it as an intermediate representation (IR). This separates writing a program from executing and transforming it. The example below follows a short text-formatting function through tracing, execution, and composition.
 
 ```{raw} html
 :file: ../assets/program-lifecycle.svg
@@ -8,7 +8,7 @@ To run a program in `autoform`, trace a Python function to an intermediate repre
 
 ## Trace
 
-Trace a function by passing it to {py:func}`trace <autoform.trace>`:
+The function builds a prompt from a topic using two string concatenations. Passing it to {py:func}`trace <autoform.trace>` records these operations with a placeholder for the topic:
 
 ```python
 import autoform as af
@@ -22,7 +22,7 @@ def label(topic: str) -> str:
 ir = af.trace(label)("topic text")
 ```
 
-Here, the input `"topic text"` tells {py:func}`trace <autoform.trace>` to expect a string input. During tracing, the string is replaced with a placeholder and the function body is run to record the operations performed. Later, the traced program can be run with a different string. See [Tracing](tracing.md) for which inputs must be static or can be dynamic.
+Here, the input `"topic text"` tells {py:func}`trace <autoform.trace>` to expect a string input. During tracing, the string is replaced with a placeholder and the function body is run to record the operations performed. Later, the traced program can be run with a different string. [Tracing](tracing.md) explains which inputs must be static or can be dynamic.
 
 ## The IR
 
@@ -38,7 +38,7 @@ equations:
 output: output
 ```
 
-Here, the first equation produces the `prompt` and the second produces the `output` returned. Each equation represents a single operation.
+The first equation produces `prompt`, and the second uses that value to produce the result. This dependency is explicit in the IR, so a transform can work with the computation without inspecting Python source. Each equation has the following general form:
 
 ```text
 out_vars = primitive(in_vars; static_params)
@@ -48,11 +48,11 @@ out_vars = primitive(in_vars; static_params)
 :file: ../assets/ir-dataflow.svg
 ```
 
-The IR records primitive calls, and does not store source code or provider responses. Calling a language model is recorded as an equation, but the call is only performed when the IR is run. Programs generally obtain IRs using {py:func}`trace <autoform.trace>` and need not worry about the internal classes.
+The IR stores primitive calls rather than a copy of the Python source. Under ordinary tracing, a language model call is recorded without making a provider request; the request happens when the IR executes. The {py:func}`trace <autoform.trace>` interface constructs these records from the function.
 
 ## Execute
 
-Run an IR by calling its `.call(...)` method:
+Execution supplies a concrete value for the topic placeholder. The `.call(...)` method runs the recorded operations and returns the final result:
 
 ```python
 output = ir.call("another topic text")
@@ -62,11 +62,11 @@ print(output)
 
 At runtime, the input `"another topic text"` is provided, and the equations are walked to dispatch each primitive to its implementation rule.
 
-IRs can also be run asynchronously using the `.acall(...)` method, and other execution modes, checkpointing, caching, and manual stepping are available. See [Execution](execution.md) for details.
+IRs can also be run asynchronously using the `.acall(...)` method, and other execution modes, checkpointing, caching, and manual stepping are available. [Execution](execution.md) describes these runtime interfaces.
 
 ## Transform
 
-Transformations take an IR and return a new IR. Apply transforms to create multiple variants without needing to re-run `label`:
+A transform takes this recorded program and returns a new IR. For example, batching creates a version that accepts several topics together. The transform works from the existing IR and does not need to run the original Python function again:
 
 ```python
 batched = af.batch(ir)
@@ -80,17 +80,17 @@ print(outputs)
 # ]
 ```
 
-Here, to compute the feedback for the inputs, the transforms are composed.
+The same IR can also produce a feedback program. Composing the transforms below first creates a pullback, then batches that feedback computation:
 
 ```python
 feedback_batch = af.batch(af.pullback(ir))
 ```
 
-Notice that {py:func}`pullback <autoform.pullback>` returns an IR and {py:func}`batch <autoform.batch>` takes an IR, and neither is aware of the original Python function.
+{py:func}`pullback <autoform.pullback>` produces the IR that {py:func}`batch <autoform.batch>` consumes. The transforms share this representation rather than requiring separate versions of the original function. Supported combinations depend on the registered rules.
 
 ## Tags
 
-During tracing, use tags to attach metadata to equations for custom scheduling or running. Tags do not change the computation. Tag a region using {py:func}`tag <autoform.tag>`:
+Some runners need to recognize a particular part of a program, such as a draft that requires review. Tags attach this metadata to equations during tracing without changing the computed values. A {py:func}`tag <autoform.tag>` context marks the operations recorded inside its block:
 
 ```python
 def tagged_label(topic: str) -> str:
@@ -106,7 +106,7 @@ assert "draft" not in ir.eqns[1].tags
 
 Tags accumulate for nested blocks, but are not applied outside the block. Tags can be any hashable type, including strings, numbers, tuples of hashable types, and frozen dataclasses.
 
-Tags can be used as the `cond` argument to {py:func}`sched <autoform.sched>`:
+A scheduling condition can inspect those tags to select equations. Here, the `cond` argument to {py:func}`sched <autoform.sched>` selects the region marked as a draft:
 
 ```python
 scheduled = af.sched(ir, cond=lambda eqn: "draft" in eqn.tags)

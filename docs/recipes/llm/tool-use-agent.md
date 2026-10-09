@@ -1,16 +1,13 @@
 # Tool-Use Agent
 
-An agent may need to search for information, remember the information it has found, and know when it has found an answer to a question. The following program defines an agent with those capabilities by composing a structured model call, a search tool, and a loop. The agent can be run on multiple questions, or to produce feedback on an input question.
+A question may require information that is not available in the initial context. A tool-using program needs to choose a search, retain the result, and decide when to return an answer. This recipe combines a structured model decision, a search primitive, and a bounded loop into one traced program. The resulting IR can answer multiple questions or propagate answer feedback back to the input question.
 
 ```{admonition} Concept
 [Transforms](../../concepts/transforms.md) · [Pytrees](../../concepts/pytrees.md#pytrees) · [Language Models](../../language-models.md) · [Primitives and Rules](../../concepts/primitives-and-rules.md)
 ```
 
 ```{admonition} Model Setup
-`autoform` uses LiteLLM for model calls.
-Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
-Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
-Replace labels such as `"answer instructions"` with text for the task.
+`autoform` uses LiteLLM for model calls. The `"model-name"` placeholder stands for a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers), with the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys) configured in the environment. Labels such as `"answer instructions"` stand for task-specific instructions.
 ```
 
 ```{raw} html
@@ -18,6 +15,8 @@ Replace labels such as `"answer instructions"` with text for the task.
 ```
 
 ## Decision and State
+
+The model decision and the loop state have different roles. A `Decision` describes the next action: a search query or a final answer. `State` retains the history, latest result, and whether another step is needed. Both are registered pytrees so the model output and loop state can use structured values. The schema constrains the tool choice to `search` or `done`.
 
 ```python
 import asyncio
@@ -60,6 +59,8 @@ decision_schema = Decision(
 ```
 
 ## Search Tool
+
+An HTTP search requires a concrete query and cannot run on a tracing placeholder. The search is therefore exposed as a primitive. Its abstract rule reports a string output without making a request; its execution rule performs the request later. Batch and pullback rules explain how this external operation participates in the agent's transforms. The pullback rule supplies a simple textual suggestion for improving the query.
 
 ```python
 # primitive wrapper called by traced programs
@@ -155,6 +156,8 @@ afe.register_apullback_bwd(wikipedia_search_p, apull_bwd_wikipedia_search)
 
 ## Agent Loop
 
+Each step asks the model to choose an action from the question and accumulated history. A switch runs the selected tool branch, and the resulting history becomes part of the next state. Selecting `search` leaves the loop active; selecting `done` stores the answer and stops further steps. The condition and body are traced separately before being assembled into the bounded loop.
+
 ```python
 def search_tool(query: str, _answer: str, history: str) -> str:
     result = wikipedia_search(query)
@@ -220,11 +223,11 @@ answer = asyncio.run(agent_ir.acall("question text"))
 print(answer)
 ```
 
-The result is the answer from the final model call. `max_iters=4` bounds the loop, but reaching that limit does not guarantee a completed answer. The search tool runs asynchronously; model and HTTP requests occur during execution.[^synchronous-rules]
+The result is the answer field from the final model decision. The loop ends when the model selects `done` or reaches `max_iters=4`. The iteration bound limits execution; it does not guarantee that an answer is complete. Model requests and HTTP searches occur when the program executes, using the asynchronous rules registered above.[^synchronous-rules]
 
 ## Transforms
 
-Batch the agent IR to answer several questions:
+The complete agent is an IR, so {py:func}`batch <autoform.batch>` can apply it to several questions. Each question has its own loop state and can reach the stopping condition on a different iteration:
 
 ```python
 # batch runs the same agent ir over many questions
@@ -232,7 +235,7 @@ questions = ["question text 1", "question text 2"]
 answers = asyncio.run(af.batch(agent_ir).acall(questions))
 ```
 
-Compute question feedback through the executed loop:
+A {py:func}`pullback <autoform.pullback>` of the agent follows the computation performed by the loop to propagate answer feedback to the question. The registered search rule contributes text about the query and its result; the feedback has the meaning supplied by that rule, rather than a numerical derivative of the search service:
 
 ```python
 # pullback turns output feedback into question feedback
@@ -242,6 +245,6 @@ answer, (question_hint,) = asyncio.run(
 )
 ```
 
-For real tools, keep the branch signature stable: each branch here is `(query, answer, history) -> history`.
+Both tool branches have the signature `(query, answer, history) -> history`. Keeping this interface consistent allows the switch to select a branch at runtime while preserving the structure expected by the loop and its transforms.
 
-[^synchronous-rules]: This tool registers async rules. Synchronous execution also needs synchronous execution, batch, and pullback rules; see [Primitive Definitions](../../concepts/primitives-and-rules.md#primitive-definitions).
+[^synchronous-rules]: This tool registers async rules. Synchronous execution also needs synchronous execution, batch, and pullback rules. [Primitive Definitions](../../concepts/primitives-and-rules.md#primitive-definitions) describes these registrations.

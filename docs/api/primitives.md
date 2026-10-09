@@ -1,6 +1,6 @@
 # Primitives
 
-Functions which have registered execution and transform behavior. When traced, calls to these primitives will be recorded as equations in the IR. The string formatting helper is implemented by composing multiple concatenation operations.
+Primitives have registered behavior for execution and supported transforms. Tracing records calls to these operations as equations in the IR. The groups below cover strings, numbers, language models, control flow, and execution effects. The string formatting helper composes concatenations rather than defining another primitive.
 
 ```{eval-rst}
 .. autofunction:: autoform.lm.fill

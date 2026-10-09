@@ -1,12 +1,12 @@
 # Pytrees
 
-A pytree is a nested structure of containers and leaves. A string is a leaf; a tuple or registered dataclass is a container. `autoform` uses this structure to batch selected fields and return feedback in the same container shape.[^pytrees-and-schemas]
+Programs often pass related values together in a dictionary, tuple, or object. A *pytree* describes such data as a structure of containers and leaves. This gives `autoform` a consistent way to find the values inside a container, batch selected fields, and return feedback in the original shape. A string is a leaf; a tuple or registered dataclass is a container.[^pytrees-and-schemas]
 
 `autoform` uses [Optree's pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html) for traversal and registration.
 
 ## Registration
 
-Register a dataclass in {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` so `autoform` can work with its fields.[^manual-registration] For example, a review can contain a written comment, a numerical score, and a source label. The comment and score are leaves. The source label is fixed metadata, marked with `pytree_node=False`:
+A custom dataclass becomes a pytree when its fields are registered in {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`.[^manual-registration] The review below contains a written comment and a numerical score as leaves. Its source label is fixed metadata, marked with `pytree_node=False`, because the label identifies the review rather than a value to transform.
 
 ```python
 import optree
@@ -28,7 +28,7 @@ Static metadata stays in the tree structure. It is not mapped or batched and doe
 
 ## Structure
 
-Flattening separates the comment and score from the container structure and source label. Unflattening reconstructs the review from that structure and its leaves:
+Flattening separates the values from the structure that holds them. In this review, the comment and score become the leaves, while the dataclass type and source label remain in the tree structure. Unflattening combines that structure with the leaves to reconstruct the review:
 
 ```python
 leaves, structure = optree.tree_flatten(
@@ -45,7 +45,7 @@ assert optree.tree_unflatten(structure, leaves) == review
 
 ## Method-Bearing Pytrees
 
-Once a class is registered, it can be used as a module with parameters and methods that use those parameters. The pytree leaves can be batched or receive feedback, while static metadata stays fixed.
+A registered class can also group parameters with methods that use them. The `Explainer` below keeps instructions and style as transformable leaves, with the model name as fixed metadata. Its methods remain ordinary Python methods: tracing records the supported operations performed when a method is called.
 
 ```python
 @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
@@ -68,7 +68,7 @@ class Explainer:
 module = Explainer("answer instructions", "style instructions", "model-name")
 ```
 
-When the module is an explicit input, transforms can act on its fields. If the module is captured in a closure, its field values are fixed during tracing. This example traces the `prompt` method and runs without a model call:
+Passing the module as an explicit program input exposes its leaves to transforms. Capturing the module in a closure instead fixes its field values during tracing. The following wrapper makes the module an input and traces only the `prompt` method, so the example requires no model request:
 
 ```python
 def build_prompt(module: Explainer, topic: str) -> str:
@@ -81,7 +81,7 @@ print(module_ir.call(module, "topic text"))
 
 ## Transform Behavior
 
-The module can be broadcast to use the same parameter values for each topic, or its parameter leaves can be batched with the topics. Either way, the `model` metadata stays the same:
+Batching can share one module across many topics or pair each topic with a different set of parameter leaves. The first call below shares the module. The second provides a batch for each transformable field. The `model` metadata stays fixed in both cases:
 
 ```python
 topics = ["topic 1", "topic 2"]
@@ -113,6 +113,6 @@ Registered pytrees can carry state through [control flow](control-flow.md), as l
 
 The fields exposed as leaves must contain values that `autoform` can trace, or containers of such values. Open files, sockets, and closures do not become valid traced leaves through pytree registration. Registration also does not make an object serializable or safe to mutate.
 
-[^pytrees-and-schemas]: Schemas describe structured LM output. Pytrees describe how `autoform` walks data; see [Language Models](../language-models.md) for schema output.
+[^pytrees-and-schemas]: Schemas describe structured LM output. Pytrees describe how `autoform` walks data. [Language Models](../language-models.md) covers schema output.
 
-[^manual-registration]: For classes without Optree's dataclass decorator, register flatten and unflatten functions manually. Put transformable values among the children and fixed, hashable data in the metadata. Use the same namespace for registration and tree traversal.
+[^manual-registration]: Classes without Optree's dataclass decorator can supply flatten and unflatten functions directly. Transformable values belong among the children, and fixed, hashable values belong in the metadata. Registration and traversal use the same namespace.

@@ -1,18 +1,15 @@
 # A First Program
 
-This page follows a simple program that calls a language model to explain a topic. The examples run in order in one Python session, and assume familiarity with Python.
+A program can be written once and then used for several related computations. This example starts with a language model that explains a topic. The same program is then run on several topics and transformed to return feedback on its input. The code blocks build on one another in a single Python session and assume familiarity with Python.
 
 ```{admonition} Model Setup
-`autoform` uses LiteLLM for model calls.
-Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
-Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
-Replace labels such as `"explanation instructions"` with text for the task.
+`autoform` uses LiteLLM for model calls. The `"model-name"` placeholder stands for a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers), with the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys) configured in the environment. Labels such as `"explanation instructions"` stand for task-specific instructions.
 ```
 
 (getting-started-tracing)=
 ## Tracing
 
-The function uses a string specification to describe the answer the model should generate. Tracing records the model call without sending a request:
+The function describes what the model should generate with a string specification. The topic provides context, and the specification marks the answer to fill. Tracing records this model call as an equation in an intermediate representation (IR), without sending a request to the provider.
 
 ```python
 import autoform as af
@@ -32,11 +29,11 @@ ir = af.trace(explain)("topic text")
 print(ir)
 ```
 
-The IR can run for another topic. The model name and answer instructions remain fixed; see [Tracing](concepts/tracing.md) for details.
+The recorded program accepts a different topic on each call. The model name and answer instructions belong to the function configuration and remain fixed in this IR. [Tracing](concepts/tracing.md) explains how this distinction determines which values can change after a program is traced.
 
 ## Execution
 
-Run the IR to generate an explanation for a different topic:
+Execution supplies a concrete topic to the recorded program. The `.call(...)` method sends the model request and returns the generated explanation:
 
 ```python
 output = ir.call("another topic text")
@@ -47,7 +44,7 @@ Each run reuses the recorded equations but makes a new model request. Tracing do
 
 ## Batching
 
-The {py:func}`batch <autoform.batch>` transform runs the program for multiple topics:
+A collection of topics can use the same explanation program. The {py:func}`batch <autoform.batch>` transform creates an IR that accepts the topics together and runs the original computation for each input:
 
 ```python
 topics = ["topic text 1", "topic text 2", "topic text 3"]
@@ -56,11 +53,11 @@ outputs = batched.call(topics)
 print(outputs)
 ```
 
-The result contains one explanation per topic, in input order. `batch` returns an IR.
+The result contains one explanation per topic in input order. The batched program is another IR, so it can be called again or passed to a compatible transform.
 
 ## Feedback
 
-The {py:func}`pullback <autoform.pullback>` transform produces a program that propagates output feedback to the inputs:
+An explanation may need to change after receiving a critique. The {py:func}`pullback <autoform.pullback>` transform builds a program that propagates that output feedback back to the original inputs. The call below supplies both a topic and feedback on the generated answer:
 
 ```python
 feedback_program = af.pullback(ir)
@@ -72,11 +69,11 @@ print(output)
 print(topic_feedback)
 ```
 
-The registered LM rule returns text feedback for `topic`, the only runtime input. The feedback suggests a change to that input; applying the change requires a separate update step.
+The registered LM rule returns text feedback for `topic`, the only runtime input. The model name and fixed instructions receive no input feedback. The returned text suggests a change to the topic; a separate update step would apply that suggestion.
 
 ## Composition
 
-Batching the pullback computes input feedback for each topic from its corresponding answer critique:
+Feedback may be needed for several explanations at once. Batching the pullback pairs each topic with its corresponding answer critique and returns input feedback for every pair:
 
 ```python
 critiques = ["answer feedback 1", "answer feedback 2", "answer feedback 3"]
@@ -85,6 +82,6 @@ outputs, (topic_feedback,) = composed.call((topics,), critiques)
 print(topic_feedback)
 ```
 
-Both transforms take an IR and return an IR. This lets `batch` act on the result of `pullback`, and the composed program can be transformed again.
+Both transforms take an IR and return an IR. As a result, `batch` can act on the feedback program produced by `pullback`, without another implementation of the explanation function. Further composition depends on the registered rules for the operations in that program.
 
-See [Language Models](language-models.md) for structured output and client configuration, [Concepts](concepts/index.md) for the framework, and [Recipes](recipes/index.md) for examples that combine several features.
+[Language Models](language-models.md) covers structured output and client configuration. [Concepts](concepts/index.md) explains the underlying interfaces, while [Recipes](recipes/index.md) combines those interfaces to solve larger problems.

@@ -1,6 +1,6 @@
 # Recipes
 
-Each recipe explains a concrete problem and combines `autoform` concepts to solve it. The examples assume familiarity with [A First Program](../a-first-program.md). For API descriptions and small examples, see [Concepts](../concepts/index.md).
+Each recipe combines several `autoform` concepts to solve a concrete problem. The examples cover tool selection, a tool-using agent, human review, and support for a new value type. [A First Program](../a-first-program.md) introduces the basic workflow; [Concepts](../concepts/index.md) explains the individual interfaces used in the recipes.
 
 ```{toctree}
 :maxdepth: 1

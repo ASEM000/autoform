@@ -1,42 +1,40 @@
 # Primitives and Rules
 
-Primitives are named operations that can be recorded in the [IR](programs-and-ir.md#the-ir) when a function is [traced](tracing.md). Examples include {py:func}`concat <autoform.string.concat>`, {py:func}`fill <autoform.lm.fill>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
+A transform needs a defined meaning for each operation it encounters. Primitives provide those identifiable operations in a [traced](tracing.md) program. Each call becomes an equation in the [IR](programs-and-ir.md#the-ir), and registered rules describe how that primitive executes or transforms. Examples include {py:func}`concat <autoform.string.concat>`, {py:func}`fill <autoform.lm.fill>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
 
-Primitives are important because [transforms](transforms.md) need to select appropriate rules based on the identity of the primitive.[^primitive-identity] For example, the {py:func}`pullback <autoform.pullback>` transform needs to know how to push feedback through a {py:func}`fill <autoform.lm.fill>` primitive. If {py:func}`fill <autoform.lm.fill>` was written as a standard Python function, the function body may include operations for which {py:func}`pullback <autoform.pullback>` has no rules. These operations would need to either be executed when tracing the function body or throw an exception when a concrete runtime value is required.
+Primitive identity determines which rule a [transform](transforms.md) selects.[^primitive-identity] This is especially useful for work that cannot run on a tracing placeholder. A language model request, for example, needs concrete data and an external service. Treating {py:func}`fill <autoform.lm.fill>` as a primitive gives tracing an output description and gives {py:func}`pullback <autoform.pullback>` a defined feedback rule, without tracing the provider implementation.
 
 ## Rule Registries
 
-Rules for execution, tracing, and [transforms](transforms.md) are registered
-through `autoform.extend`. The following registries cover execution, tracing,
-batching, and differentiation:
+Rules for execution, tracing, and [transforms](transforms.md) are registered through `autoform.extend`. The following registries cover execution, tracing, batching, and differentiation:
 
 | Registry | Purpose |
 | --- | --- |
-| `impl_rules` | Run the primitive with concrete values. |
-| `abstract_rules` | Compute the abstract values of the outputs during tracing. |
-| `batch_rules` | Return outputs and their batch axes for {py:func}`batch <autoform.batch>`. |
-| `push_rules` | Return the output and its tangent for {py:func}`pushforward <autoform.pushforward>`. |
-| `pull_fwd_rules` | Return the output and saved residuals for {py:func}`pullback <autoform.pullback>`. |
-| `pull_bwd_rules` | Produce input feedback from residuals and output feedback. |
+| `impl_rules` | Execution with concrete input values. |
+| `abstract_rules` | Output abstract values used during tracing. |
+| `batch_rules` | Outputs and output batch axes for {py:func}`batch <autoform.batch>`. |
+| `push_rules` | The output and its tangent for {py:func}`pushforward <autoform.pushforward>`. |
+| `pull_fwd_rules` | The output and saved residuals for {py:func}`pullback <autoform.pullback>`. |
+| `pull_bwd_rules` | Input feedback computed from residuals and output feedback. |
 
-The forward sweep records residuals. The backward sweep uses those residuals and the output cotangent to produce input cotangents.
+A pullback separates the original computation from feedback propagation. Its forward rule returns both the result and any residuals needed later. The backward rule receives those residuals together with the output cotangent and returns input cotangents.
 
 ## Built-in Primitives
 
 | Group | Primitives | Purpose |
 | --- | --- | --- |
 | Strings | {py:func}`concat <autoform.string.concat>`, {py:func}`match <autoform.string.match>` | String concatenation and equality checks.[^string-format] |
-| Language models | {py:func}`fill <autoform.lm.fill>` | Replace specs in a pytree with generated values while retaining the surrounding context. See [Language Models](../language-models.md). |
+| Language models | {py:func}`fill <autoform.lm.fill>` | Generated values replacing specifications in a pytree, with surrounding context retained. [Language Models](../language-models.md) describes the interface. |
 | Numbers | [Numeric primitives](../api/primitives.md#numeric) | Scalar arithmetic and comparisons. |
-| Control flow | {py:func}`switch <autoform.switch>`, {py:func}`while_loop <autoform.while_loop>`, {py:func}`fixpoint <autoform.fixpoint>` | Select branches or run bounded loops. See [Control Flow](control-flow.md). |
-| Gradient flow | {py:func}`stop_gradient <autoform.stop_gradient>` | Preserve the input value while blocking tangents and cotangents. |
-| Dependencies | {py:func}`depends <autoform.depends>` | Add execution dependencies without changing the returned value. |
-| Intermediate values | {py:func}`checkpoint <autoform.checkpoint>` | Tag values for {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>`. |
-| Path weights | {py:func}`factor <autoform.factor>` | Multiply the path weight collected by {py:func}`weight <autoform.weight>`. |
+| Control flow | {py:func}`switch <autoform.switch>`, {py:func}`while_loop <autoform.while_loop>`, {py:func}`fixpoint <autoform.fixpoint>` | Runtime branch selection and bounded iteration, described in [Control Flow](control-flow.md). |
+| Gradient flow | {py:func}`stop_gradient <autoform.stop_gradient>` | An unchanged forward value with tangents and cotangents blocked. |
+| Dependencies | {py:func}`depends <autoform.depends>` | Execution dependencies added without changing the returned value. |
+| Intermediate values | {py:func}`checkpoint <autoform.checkpoint>` | Named values available to {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>`. |
+| Path weights | {py:func}`factor <autoform.factor>` | Contributions to the path weight returned by {py:func}`weight <autoform.weight>`. |
 
 ## Primitive Definitions
 
-Primitives handle runtime work that needs concrete values. A wrapper binds the primitive, an execution rule performs the work, and an abstract rule describes the output when tracing. These examples use the low-level `autoform.extend` API.
+A primitive definition separates its public call from its implementation. The wrapper binds the primitive, the execution rule performs work on concrete values, and the abstract rule describes the output during tracing. The example below uses `autoform.extend` to expose a lookup operation through these three interfaces.
 
 ```python
 import autoform as af
@@ -67,11 +65,11 @@ ir = af.trace(lookup)("seed")
 assert ir.call("query text") == "result for query text"
 ```
 
-The abstract rule describes the output without calling the runtime implementation. Here it returns the abstract value for a built-in string. A new runtime type needs its own abstract value and registered spaces; see [Array Extension](../recipes/extending/array-extension.md) for a complete example.
+The abstract rule describes the output without calling the runtime implementation. Here it returns the abstract value for a built-in string. A new runtime type needs its own abstract value and registered spaces. [Array Extension](../recipes/extending/array-extension.md) provides a complete example.
 
 ### Primitive Transform Rules
 
-Then rules need to be provided for each transform. For batching, a single rule is provided that is given the batch size, input axes, and input values, and must return the output and output axes. In this case, the rule supports either batching the queries or using a single shared one.
+Execution and tracing alone do not define transformation behavior. A batching rule receives the batch size, input axes, and input values, then returns the result and output axes. The lookup example supports either a batch of queries or one query shared across the batch.
 
 ```python
 def batch_lookup(in_tree, /):
@@ -92,7 +90,7 @@ afe.register_batch(lookup_p, batch_lookup)
 assert af.batch(ir).call(["a", "b"]) == ["result for a", "result for b"]
 ```
 
-For pullback, two rules are needed, one for each sweep. The forward sweep records the residuals, and the backward sweep takes the residuals and the output feedback and returns the input feedback. Note that the input and output must match those provided to the primitive boundary.
+A pullback needs a forward rule and a backward rule. The forward rule evaluates the lookup and retains the query and result as residuals. The backward rule uses those residuals and the output critique to return feedback shaped like the primitive input. The rule defines the meaning of that feedback for the lookup.
 
 ```python
 def pull_fwd_lookup(query: str, /):
@@ -133,7 +131,7 @@ afe.register_aimpl(lookup_p, aimpl_lookup)
 
 ## Custom Rules
 
-{py:func}`custom <autoform.custom>` creates a boundary around a function that can already be traced. Ordinary calls run the body. Transforms use registered rules when available and otherwise use the body.
+An existing traceable function can also have special transformation behavior. The {py:func}`custom <autoform.custom>` decorator preserves a boundary around that function. Ordinary calls still execute its body; supported transforms use a registered hook when one is available and otherwise transform the body.
 
 ```python
 @af.custom
@@ -202,17 +200,14 @@ assert af.batch(bracket_ir, in_axes=False).call("a") == "[a]"
 | `set_pullback` | `((primals, output), feedback)` | Input-shaped feedback. |
 | `set_batch` | `(batch_size, axes, values)` | `(output, output_axes)` |
 
-The pullback hook replaces the backward sweep, while the forward sweep records the primal inputs and output.
+The pullback hook replaces the backward sweep of the pullback transform. The forward sweep still records the primal inputs and output.
 
 ### Rule Correctness
 
-Transforms trust the registered rules. Incorrect rules can produce incorrect results or feedback even when the returned structure is valid. Check the intended behavior of the function, including shared inputs and async execution when applicable.
+Transforms rely on the meaning supplied by registered rules. A structurally valid result can still be mathematically or semantically wrong. Useful checks compare the rule with the intended operation behavior, including shared inputs, batched inputs, and asynchronous calls where supported.
 
 [^primitive-identity]: If two different primitives have the same name, the primitives remain different keys when selecting rules.
 
-[^string-format]: The {py:func}`format <autoform.string.format>` helper resolves `{name}` fields
-    from keyword arguments by composing {py:func}`concat <autoform.string.concat>`
-    calls. It has no primitive or transform rules of its own. Attributes or indexed
-    values must be selected before being passed as keyword arguments.
+[^string-format]: The {py:func}`format <autoform.string.format>` helper resolves `{name}` fields from keyword arguments by composing {py:func}`concat <autoform.string.concat>` calls. It has no primitive or transform rules of its own. Attributes or indexed values must be selected before being passed as keyword arguments.
 
-[^async-hooks]: The async hooks are `aset_pushforward`, `aset_pullback`, and `aset_batch`. Sync hooks do not replace async behavior; register both for matching behavior.
+[^async-hooks]: The async hooks are `aset_pushforward`, `aset_pullback`, and `aset_batch`. Matching synchronous and asynchronous behavior requires registrations for both paths.

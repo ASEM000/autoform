@@ -1,6 +1,6 @@
 # API Reference
 
-This reference lists the public functions, specifications, and extension interfaces. For an introduction to these interfaces, see [A First Program](../a-first-program.md).
+This reference gives the public signatures, parameters, and return values for tracing, transformation, execution, model specifications, and extension interfaces. The pages group related APIs for lookup. [A First Program](../a-first-program.md) introduces these interfaces, while the concept pages explain the behavior behind the signatures.
 
 ```{toctree}
 :maxdepth: 3

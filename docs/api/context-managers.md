@@ -1,6 +1,6 @@
 # Context Managers
 
-These context managers can be used to set up the tracing or execution within a `with` block. When exiting the context manager, the previous context is restored again. For an explanation of the difference between contexts and IR transforms see [Transforms](../concepts/transforms.md).
+Context managers select tracing or execution behavior within a `with` block and restore the previous context on exit. Some capture values or cache results; others select an interpreter or model client. The [Transforms](../concepts/transforms.md) page explains how these scoped policies differ from transformations that return a new IR.
 
 ```{eval-rst}
 .. autofunction:: autoform.fold
@@ -13,7 +13,7 @@ These context managers can be used to set up the tracing or execution within a `
 
 ## LM Clients
 
-A custom client supplies the synchronous and asynchronous Responses methods:
+A custom model client supplies both synchronous and asynchronous Responses methods, allowing the same client context to support either execution mode:
 
 ```{eval-rst}
 .. autoclass:: autoform.lm.Client

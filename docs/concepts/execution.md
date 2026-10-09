@@ -1,205 +1,118 @@
 # Execution
 
-IRs can be run synchronously or asynchronously, with execution contexts to capture or replace checkpointed intermediate values and reuse results. A custom runner can step through equations.
+Once a program has been traced, the same IR can run under different execution policies. An ordinary call returns a result, while execution contexts and runners can inspect intermediate values, reuse earlier computations, or control individual steps.
 
-## Execution Modes
+The following example generates a summary and an analogy of a topic, then combines both into an answer. A checkpoint and a tag mark the summary. Each section uses this same program, so the effect of an execution policy can be compared against the same computation.
 
-The execution mode is chosen at the call site: a function defined with `def` can be called with `.call(...)` or `.acall(...)` after tracing.
+```{admonition} Model Setup
+`autoform` uses LiteLLM for model calls. The `"model-name"` placeholder stands for a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers), with the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys) configured in the environment. Labels such as `"answer instructions"` stand for task-specific instructions.
+```
 
 ```python
 import asyncio
 import autoform as af
 
 
-def label(topic: str) -> str:
-    prompt = "Explain " + topic
-    return "Prompt: " + prompt
-
-
-ir = af.trace(label)("topic text")
-sync_result = ir.call("another topic text")
-async_result = asyncio.run(ir.acall("another topic text"))
-assert sync_result == async_result == "Prompt: Explain another topic text"
-```
-
-IRs transformed with {py:func}`sched <autoform.sched>` group together independent equations to permit overlapping execution when run asynchronously. IRs can also be executed asynchronously without scheduling, and scheduled IRs can be executed synchronously.
-
-### Concurrent Execution
-
-A question may be answered by creating a summary and an analogy of the topic, then combining those in a final pass. The parts can be generated concurrently, then passed together to a final model call.
-
-```{admonition} Model Setup
-`autoform` uses LiteLLM for model calls.
-Replace `"model-name"` with a model from [LiteLLM's provider reference](https://docs.litellm.ai/docs/providers).
-Set the provider's [API key](https://docs.litellm.ai/docs/set_keys#setting-api-keys).
-Replace labels such as `"answer instructions"` with text for the task.
-```
-
-```python
-model = "model-name"
-
-
 def explain(topic: str) -> str:
     content = dict(topic=topic, summary=af.lm.Str(desc="summary instructions"))
-    summary = af.lm.fill(content, model=model)["summary"]
+    summary = af.lm.fill(content, model="model-name")["summary"]
+    with af.tag("summary"):
+        summary = af.checkpoint(summary, key="summary", collection="review")
+
     content = dict(topic=topic, analogy=af.lm.Str(desc="analogy instructions"))
-    analogy = af.lm.fill(content, model=model)["analogy"]
+    analogy = af.lm.fill(content, model="model-name")["analogy"]
     content = dict(
         summary=summary,
         analogy=analogy,
-        answer=af.lm.Str(desc="response instructions"),
+        answer=af.lm.Str(desc="answer instructions"),
     )
-    return af.lm.fill(content, model=model)["answer"]
+    return af.lm.fill(content, model="model-name")["answer"]
 
 
 ir = af.trace(explain)("topic text")
-scheduled = af.sched(ir)
-output = asyncio.run(scheduled.acall("topic text"))
-print(output)
 ```
 
-The result is an answer about the supplied topic that uses both generated pieces.
-The final call waits for both inputs:[^concurrent-runtime]
+## Execution Modes
+
+Both `.call(...)` and `.acall(...)` execute the recorded equations. The first uses synchronous primitive rules; the second uses asynchronous rules. Each call below makes new model requests, so the answers may differ even though both calls supply the same topic to the same program.
+
+```python
+sync_result = ir.call("topic text")
+async_result = asyncio.run(ir.acall("topic text"))
+```
+
+### Concurrent Execution
+
+The summary and analogy can be computed independently. The {py:func}`sched <autoform.sched>` transform groups these calls so execution with `.acall(...)` can overlap them. The final model call waits for both results. The dependencies are preserved, but the independent calls no longer need to run one after the other.[^concurrent-runtime]
 
 ```{raw} html
 :file: ../assets/concurrent-calls.svg
 ```
 
+```python
+scheduled = af.sched(ir)
+result = asyncio.run(scheduled.acall("topic text"))
+```
+
 ## Checkpoints
 
-Checkpointing captures or replaces intermediate values in an [IR](programs-and-ir.md#the-ir) at runtime:
-
-There are three public functions:
-
-* {py:func}`checkpoint <autoform.checkpoint>` to mark a value for checkpointing,
-* {py:func}`collect <autoform.collect>` to capture checkpointed values during execution, and
-* {py:func}`inject <autoform.inject>` to replace checkpointed values during execution.
+An unexpected answer may originate in the summary, the analogy, or the final model call. A {py:func}`checkpoint <autoform.checkpoint>` marks an intermediate value for inspection and returns it unchanged during ordinary execution. Here, {py:func}`collect <autoform.collect>` captures the summary so the input to the final call can be inspected. The rest of the program still runs normally.
 
 ```{raw} html
 :file: ../assets/checkpoint-flow.svg
 ```
 
-Outside a {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>` context, a checkpoint returns its input.
-
 ### Capture and Replacement
 
-If the final answer is unsatisfactory, it may be due to a poor outline or a poor draft. To debug, the parts can be captured, then the final rewrite can be executed again with a known-good replacement draft.
-
 ```python
-import autoform as af
-
-model = "model-name"
-
-
-def draft_answer(topic: str) -> str:
-    content = dict(topic=topic, outline=af.lm.Str(desc="outline instructions"))
-    outline = af.lm.fill(content, model=model)["outline"]
-    outline = af.checkpoint(outline, key="outline", collection="debug")
-    content = dict(outline=outline, draft=af.lm.Str(desc="draft instructions"))
-    draft = af.lm.fill(content, model=model)["draft"]
-    draft = af.checkpoint(draft, key="draft", collection="debug")
-    content = dict(draft=draft, answer=af.lm.Str(desc="revision instructions"))
-    return af.lm.fill(content, model=model)["answer"]
-
-
-ir = af.trace(draft_answer)("topic text")
-with af.collect(collection="debug") as captured:
+with af.collect(collection="review") as captured:
     result = ir.call("topic text")
 
-print(result)
-print(captured["outline"])
-print(captured["draft"])
+print(captured["summary"])
 ```
 
-Values are stored in a list for each checkpoint key because a key may occur more than once. Inspect the captured values, then supply a replacement draft:
+Each checkpoint key maps to a list because a checkpoint may be encountered more than once, for example inside a loop or batch. The `"summary"` list contains one value for this run.
+
+A later run can substitute a chosen summary through {py:func}`inject <autoform.inject>`. Replacements are consumed in encounter order. The final model call receives the replacement summary and the analogy generated during that run.
 
 ```python
-replacements = {"draft": ["replacement draft"]}
-with af.inject(collection="debug", values=replacements):
+replacements = {"summary": ["replacement summary"]}
+with af.inject(collection="review", values=replacements):
     result = ir.call("topic text")
-print(result)
 ```
 
-Replacing the value of a checkpoint changes the input to downstream equations, but earlier equations are still executed. The model and rewrite instructions are fixed, but because the model is stochastic, repeated executions may produce different results.
+(runtime-contexts)=
+Replacement takes effect when execution reaches the checkpoint. The call that produces the summary still runs before its result is replaced. Both the analogy and final model call can also vary between executions, which matters when comparing answers.
 
-For {py:func}`inject <autoform.inject>`, the replacement values will be consumed in encounter order.
-
-### Runtime Contexts
-
-{py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` do not return new IRs. Both contexts are used as execution contexts wrapping a call to an IR:
+The {py:func}`collect <autoform.collect>` and {py:func}`inject <autoform.inject>` contexts do not create a new IR. These contexts can also wrap execution of a transformed program, such as a batch of explanations:
 
 ```python
-with af.collect(collection="debug") as captured:
+with af.collect(collection="review") as captured:
     af.batch(ir).call(["topic text 1", "topic text 2"])
 ```
 
-Checkpoint contexts also work on transformed IRs, for example after calling {py:func}`batch <autoform.batch>`, {py:func}`pullback <autoform.pullback>` or {py:func}`sched <autoform.sched>`.
-
 ## Memoization
 
-{py:func}`memoize <autoform.memoize>` creates a runtime context in which results from [primitives](primitives-and-rules.md) will be cached for the duration of the `with` block.
+Within a {py:func}`memoize <autoform.memoize>` context, matching primitive calls reuse recorded results. In this example, the second execution with the same topic reuses all three model responses without sending new requests. The cache lasts only for the enclosing block. The second answer is therefore a reused result, rather than an independent model sample.[^memoized-checkpoints]
 
 ```{raw} html
 :file: ../assets/memo-cache.svg
 ```
 
-### Runtime Reuse
-
-Here, repeated operations will be executed in the same cache context:
-
+(runtime-reuse)=
 ```python
-import autoform as af
-
-
-def program(text: str) -> str:
-    left = "<" + text + ">"
-    right = "<" + text + ">"
-    return left + right
-
-
-ir = af.trace(program)("seed")
-
-# building right repeats the two concat operations used for left
 with af.memoize():
-    result = ir.call("alpha")
+    first = ir.call("topic text")
+    second = ir.call("topic text")
 
-print(result)
+assert first == second
 ```
-
-Here, each addition leads to recording an equation calling {py:func}`concat <autoform.string.concat>`. The two equations for `right` use the same inputs as the two for `left`, so both read from the cache, and the output is `<alpha><alpha>`. The cache is discarded at the end of the context.
-
-### Trace-Time Reuse
-
-{py:func}`memoize <autoform.memoize>` can also be used during tracing, in which case repeated identical calls to a primitive will only record one equation:
-
-```python
-import autoform as af
-
-
-def duplicated(text: str) -> tuple[str, str]:
-    with af.memoize():
-        first = text + "!"
-        second = text + "!"
-        return first, second
-
-
-ir = af.trace(duplicated)("seed")
-print(ir.call("alpha"))
-```
-
-The program outputs `("alpha!", "alpha!")`, but only one concatenation is recorded. Use {py:func}`memoize <autoform.memoize>` when repeated calls with identical inputs should reuse a result.[^memoized-checkpoints] Memoized model calls do not produce independent samples.
 
 ## Manual Execution
 
-The `ir.walk(...)` method can be used to step through equations and input values with a custom runner. This step-by-step execution is performed under the hood when calling `ir.call(...)` or `await ir.acall(...)`, but it is exposed here for custom runtimes.
+Some execution policies need control over individual equations. The `ir.walk(...)` method returns a generator that yields each equation and its input values, then waits for the equation output. Sending that output back advances to the next equation. After the last equation, the generator yields `(None, result)`.
 
-The generator performs three steps:
-
-1. Calling `next(gen)` yields the first equation and input values.
-2. Calling `gen.send(output_values)` takes the output values from the previous equation, and yields the next equation and input values.
-3. Calling `gen.send(output_values)` with the last output values yields `None` and the output values of the program.
-
-An example of a custom runner which inspects equation tags before dispatching is below:
+The following runner records primitive names at the summary tag while executing the same explanation program:
 
 ```python
 def run_and_record_tags(ir, *inputs):
@@ -208,7 +121,7 @@ def run_and_record_tags(ir, *inputs):
     eqn, values = next(gen)
 
     while eqn is not None:
-        if "draft" in eqn.tags:
+        if "summary" in eqn.tags:
             tagged_prims.append(eqn.prim.name)
         output = eqn.bind(values, **eqn.params)
         eqn, values = gen.send(output)
@@ -217,96 +130,45 @@ def run_and_record_tags(ir, *inputs):
 
 
 output, tagged_prims = run_and_record_tags(ir, "topic text")
+assert tagged_prims == ["checkpoint"]
 ```
 
-Here, `eqn.bind(...)` calls the synchronous implementation of the equation.[^async-runner] Note that results must match the expected type and container structure of the equation. See [Tags](programs-and-ir.md#tags) for how to tag equations during tracing.
+The summary tag marks the checkpoint in this program, so `tagged_prims` contains `"checkpoint"`. Each equation runs through `eqn.bind(...)`; an asynchronous runner can await `eqn.abind(...)` instead. [Human Review](../recipes/execution/human-review.md) extends this pattern with a runner that pauses at a tagged result and continues with a reviewed value.
 
 ## Custom Interpreters
 
-Interpreters control primitive dispatch during `.call(...)` or `.acall(...)`. A [custom runner](#manual-execution) uses `ir.walk(...)` to access top-level equations; an interpreter can also control primitive dispatch inside those equations. This example records each primitive name, its active tags, and its output:
-
-```{admonition} Advanced
-:class: info
-
-This section uses `autoform.extend`.
-```
+An interpreter controls primitive dispatch, including calls made inside the equations exposed by a walk. This is useful for recording results across nested program calls or applying a common execution policy. The interpreter below delegates to the previously active interpreter, then records the primitive name, active tags, and output. Both synchronous and asynchronous execution follow this pattern.
 
 ```python
-from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Any
-
-import autoform as af
 import autoform.extend as afe
-
-
-def program(topic: str) -> str:
-    with af.tag("draft"):
-        draft = "draft for " + topic
-    return draft + "."
-
-
-ir = af.trace(program)("topic x")
-```
-
-Capture the previous interpreter before installing the new one, then delegate calls to that parent. Calling `prim.bind(...)` inside `interpret(...)` would dispatch to the active interpreter again and recurse. Recording after delegation captures the outputs; recording before delegation can inspect a call before it runs.
-
-```python
-@dataclass(frozen=True)
-class CallRecord:
-    prim_name: str
-    tags: frozenset[Any]
-    output: Any
 
 
 class RecordingInterpreter(afe.Interpreter):
     def __init__(self):
         self.parent = afe.active_interpreter.get()
-        self.records: list[CallRecord] = []
+        self.records = []
 
-    def interpret(self, prim: afe.Prim, in_tree: Any, /, **params):
+    def interpret(self, prim, in_tree, /, **params):
         output = self.parent.interpret(prim, in_tree, **params)
-        self.records.append(
-            CallRecord(
-                prim_name=prim.name,
-                tags=afe.active_tags.get(),
-                output=output,
-            )
-        )
+        self.records.append((prim.name, afe.active_tags.get(), output))
         return output
 
-    async def ainterpret(self, prim: afe.Prim, in_tree: Any, /, **params):
+    async def ainterpret(self, prim, in_tree, /, **params):
         output = await self.parent.ainterpret(prim, in_tree, **params)
-        self.records.append(
-            CallRecord(
-                prim_name=prim.name,
-                tags=afe.active_tags.get(),
-                output=output,
-            )
-        )
+        self.records.append((prim.name, afe.active_tags.get(), output))
         return output
 ```
 
-Each dispatch to `interpret(...)` (or `ainterpret(...)` for async calls) is provided the primitive being dispatched to, a pytree of inputs to that primitive, and any static parameters for the primitive. The function should return the output of the primitive. On exit, the context manager will restore the previous interpreter dispatch policy.
+Delegating to the parent preserves the dispatch behavior that was active before recording began. Calling `prim.bind(...)` from inside `interpret(...)` would instead dispatch back to the recording interpreter and recurse. The `using_interpreter` context temporarily installs the recorder and restores the previous interpreter when the block exits.
 
 ```python
-@contextmanager
-def record_calls():
-    with afe.using_interpreter(RecordingInterpreter()) as interpreter:
-        yield interpreter
+with afe.using_interpreter(RecordingInterpreter()) as recorder:
+    result = ir.call("topic text")
 
-
-with record_calls() as recorder:
-    result = ir.call("topic y")
-
-print(result)
 print(recorder.records)
 ```
 
-The result is `draft for topic y.` and a list of records for two concatenations. The `draft` tag is active during the first. Parent delegation preserves any earlier interpreter in the dispatch chain. Use [checkpoints](#checkpoints) to inspect named values and a [manual runner](#manual-execution) to pause or resume top-level execution.
+[^concurrent-runtime]: Inside an existing async function, the call is `await scheduled.acall("topic text")` rather than `asyncio.run(...)`. Latency also depends on the provider and its rate limits.
 
-[^concurrent-runtime]: To run within an existing async function, replace `asyncio.run(...)` with `await scheduled.acall("topic text")`. The actual latency of this program will depend on the model provider and its rate limits.
-
-[^memoized-checkpoints]: Note that {py:func}`checkpoint <autoform.checkpoint>` is not memoized, since repeated checkpoints are likely intended for {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>`.
-
-[^async-runner]: An asynchronous runner could instead call `await eqn.abind(...)`.
+(trace-time-reuse)=
+[^memoized-checkpoints]: Memoization can also be active during tracing. Matching primitive calls then share a recorded equation, rather than a model response: ordinary tracing makes no model request. Primitives excluded from memoization remain active during both tracing and execution. Checkpoints are excluded so collection and replacement still observe each encounter.
