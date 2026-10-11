@@ -12,114 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Autoform: Composable function transformations for text-space programs."""
-
-# ==================================================================================================
-# IMPORTS
-# ==================================================================================================
-
-import autoform.ad as ad
-import autoform.axis as axis
-import autoform.boundary as boundary
-import autoform.control as control
-import autoform.core as core
-import autoform.dead as dead
-import autoform.extend as extend
-import autoform.intercept as intercept
-import autoform.lm as lm
-import autoform.memo as memo
-import autoform.numeric as numeric
-import autoform.order as order
-import autoform.path as path
-import autoform.stage as stage
-import autoform.string as string
-import autoform.utils as utils
-
-# ==================================================================================================
-# METADATA
-# ==================================================================================================
+from autoform import extend as extend
+from autoform import lm as lm
+from autoform import numeric as numeric
+from autoform import string as string
+from autoform.src.ad import pullback as pullback
+from autoform.src.ad import pushforward as pushforward
+from autoform.src.axis import batch as batch
+from autoform.src.boundary import custom as custom
+from autoform.src.control import fixpoint as fixpoint
+from autoform.src.control import stop_gradient as stop_gradient
+from autoform.src.control import switch as switch
+from autoform.src.control import while_loop as while_loop
+from autoform.src.dead import dce as dce
+from autoform.src.intercept import checkpoint as checkpoint
+from autoform.src.intercept import collect as collect
+from autoform.src.intercept import inject as inject
+from autoform.src.memo import memoize as memoize
+from autoform.src.order import depends as depends
+from autoform.src.order import sched as sched
+from autoform.src.path import factor as factor
+from autoform.src.path import weight as weight
+from autoform.src.stage import fold as fold
+from autoform.src.stage import tag as tag
+from autoform.src.stage import trace as trace
+from autoform.src.utils import PYTREE_NAMESPACE as PYTREE_NAMESPACE
 
 __version__ = "0.3.0"
-
-# ==================================================================================================
-# CORE
-# ==================================================================================================
-
-trace = stage.trace
-fold = stage.fold
-tag = stage.tag
-
-# ==================================================================================================
-# TRANSFORMS
-# ==================================================================================================
-
-pushforward = ad.pushforward
-pullback = ad.pullback
-batch = axis.batch
-custom = boundary.custom
-collect = intercept.collect
-inject = intercept.inject
-checkpoint = intercept.checkpoint
-dce = dead.dce
-sched = order.sched
-memoize = memo.memoize
-weight = path.weight
-
-# ==================================================================================================
-# PRIMITIVES
-# ==================================================================================================
-
-stop_gradient = control.stop_gradient
-switch = control.switch
-while_loop = control.while_loop
-fixpoint = control.fixpoint
-depends = order.depends
-factor = path.factor
-
-# ==================================================================================================
-# TYPES
-# ==================================================================================================
-
-PYTREE_NAMESPACE = utils.PYTREE_NAMESPACE
-
-# ==================================================================================================
-# EXPORTS
-# ==================================================================================================
-
-__all__ = [
-    "__version__",
-    # core
-    "trace",
-    "fold",
-    # execution
-    "tag",
-    # transformations
-    "pushforward",
-    "pullback",
-    "custom",
-    "batch",
-    "collect",
-    "inject",
-    "dce",
-    "sched",
-    "memoize",
-    "weight",
-    # primitives
-    "stop_gradient",
-    "checkpoint",
-    "switch",
-    "while_loop",
-    "fixpoint",
-    "depends",
-    "factor",
-    # types
-    "PYTREE_NAMESPACE",
-    # modules
-    "extend",
-    "lm",
-    "numeric",
-    "string",
-    "path",
-    "stage",
-    "core",
-]

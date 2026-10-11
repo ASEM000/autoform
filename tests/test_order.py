@@ -15,31 +15,34 @@
 
 import pytest
 
-import autoform as af
-from autoform.order import depends_p, fanout_p
-from tests import (
-    aexecute,
-    dependent_formats,
-    execute,
-    switch_program,
-)
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.control as control
+import autoform.src.core as core
+import autoform.src.extend as extend
+import autoform.src.intercept as intercept
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.string as string
+import autoform.src.utils as utils
+from tests import aexecute, dependent_formats, execute, switch_program
 
 
 def parallel_formats(*, joined=False):
     def program(x):
-        a = af.string.format("[{x}]", x=x)
-        b = af.string.format("<{x}>", x=x)
-        return af.string.concat(a, b) if joined else (a, b)
+        a = string.format("[{x}]", x=x)
+        b = string.format("<{x}>", x=x)
+        return string.concat(a, b) if joined else (a, b)
 
     return program
 
 
 def format_switch_ir():
     branches = {
-        "x": af.trace(parallel_formats(joined=True))("x"),
-        "y": af.trace(lambda x: af.string.format("({x})", x=x))("x"),
+        "x": stage.trace(parallel_formats(joined=True))("x"),
+        "y": stage.trace(lambda x: string.format("({x})", x=x))("x"),
     }
-    return af.trace(switch_program(branches))("x", "inp")
+    return stage.trace(switch_program(branches))("x", "inp")
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -50,42 +53,42 @@ def format_switch_ir():
         pytest.param(True, lambda ir: ir, ("test",), "[test]<test>", id="joined"),
         pytest.param(
             False,
-            af.pushforward,
+            ad.pushforward,
             (("primal",), ("tangent",)),
             (("[primal]", "<primal>"), ("tangent", "tangent")),
             id="push",
         ),
         pytest.param(
             False,
-            af.pullback,
+            ad.pullback,
             (("primal",), ("grad1", "grad2")),
             (("[primal]", "<primal>"), ("grad1grad2",)),
             id="pull",
         ),
         pytest.param(
             False,
-            af.batch,
+            axis.batch,
             (["A", "B", "C"],),
             (["[A]", "[B]", "[C]"], ["<A>", "<B>", "<C>"]),
             id="batch",
         ),
         pytest.param(
             True,
-            af.pushforward,
+            ad.pushforward,
             (("test",), ("tangent",)),
             ("[test]<test>", "tangenttangent"),
             id="joined-push",
         ),
         pytest.param(
             True,
-            af.pullback,
+            ad.pullback,
             (("test",), "grad"),
             ("[test]<test>", ("gradgrad",)),
             id="joined-pull",
         ),
         pytest.param(
             True,
-            af.batch,
+            axis.batch,
             (["A", "B", "C"],),
             ["[A]<A>", "[B]<B>", "[C]<C>"],
             id="joined-batch",
@@ -93,8 +96,10 @@ def format_switch_ir():
     ],
 )
 def test_fanout_transforms(executor, joined, transform, args, expected):
-    scheduled = af.sched(af.trace(parallel_formats(joined=joined))("a"))
-    assert [e.prim for e in scheduled.eqns] == [fanout_p] + ([af.string.concat_p] if joined else [])
+    scheduled = order.sched(stage.trace(parallel_formats(joined=joined))("a"))
+    assert [e.prim for e in scheduled.eqns] == [order.fanout_p] + (
+        [string.concat_p] if joined else []
+    )
     ir = transform(scheduled)
     actual = executor(ir, *args)
     assert actual == expected
@@ -103,12 +108,12 @@ def test_fanout_transforms(executor, joined, transform, args, expected):
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("out_c", [(1.0, 0.0), (2.0, 3.0)], ids=["one-live", "both-live"])
 def test_fanout_pullback_repeated_operand(executor, out_c):
-    ir = af.trace(lambda x: (x * x, x + 1.0))(3.0)
-    scheduled = af.sched(ir)
-    assert [e.prim for e in scheduled.eqns] == [fanout_p]
+    ir = stage.trace(lambda x: (x * x, x + 1.0))(3.0)
+    scheduled = order.sched(ir)
+    assert [e.prim for e in scheduled.eqns] == [order.fanout_p]
     expected = ((9.0, 4.0), (6.0 * out_c[0] + out_c[1],))
-    assert af.pullback(ir).call((3.0,), out_c) == expected
-    pb = af.pullback(scheduled)
+    assert ad.pullback(ir).call((3.0,), out_c) == expected
+    pb = ad.pullback(scheduled)
     assert executor(pb, (3.0,), out_c) == expected
 
 
@@ -118,11 +123,11 @@ def test_fanout_exception(executor):
     def impl_error(x):
         raise ValueError("intentional error")
 
-    error_p = af.core.Prim("error")
-    af.extend.register_impl(error_p, impl_error)
-    af.extend.register_abstract(error_p, lambda x: af.string.StrAVal())
-    af.extend.register_aimpl(error_p, af.utils.asyncify(impl_error))
-    ir = af.sched(af.trace(lambda x: (af.string.format("[{x}]", x=x), error_p.bind(x)))("a"))
+    error_p = core.Prim("error")
+    extend.register_impl(error_p, impl_error)
+    extend.register_abstract(error_p, lambda x: string.StrAVal())
+    extend.register_aimpl(error_p, utils.asyncify(impl_error))
+    ir = order.sched(stage.trace(lambda x: (string.format("[{x}]", x=x), error_p.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):
         executor(ir, "A")
 
@@ -135,11 +140,11 @@ def test_fanout_exception(executor):
     ],
 )
 def test_fanout_mixed_axes(executor, values, expected):
-    ir = af.trace(lambda x, y: (af.string.format("[{x}]", x=x), af.string.format("<{y}>", y=y)))(
+    ir = stage.trace(lambda x, y: (string.format("[{x}]", x=x), string.format("<{y}>", y=y)))(
         "x",
         "y",
     )
-    ir = af.batch(af.sched(ir), in_axes=(True, False))
+    ir = axis.batch(order.sched(ir), in_axes=(True, False))
     result = executor(ir, values, "STATIC")
     assert result == (expected, ["<STATIC>"] * len(values))
 
@@ -149,118 +154,120 @@ def test_fanout_mixed_axes(executor, values, expected):
     "program, prims, expected",
     [
         pytest.param(
-            lambda x: af.string.format("[{x}]", x=x),
-            [af.string.concat_p],
+            lambda x: string.format("[{x}]", x=x),
+            [string.concat_p],
             "[test]",
             id="single",
         ),
         pytest.param(
-            lambda x: af.string.concat(af.string.format("[{x}]", x=x), "!"),
-            [af.string.concat_p] * 2,
+            lambda x: string.concat(string.format("[{x}]", x=x), "!"),
+            [string.concat_p] * 2,
             "[test]!",
             id="sequential",
         ),
         pytest.param(
-            lambda x: tuple((af.string.format(f, x=x) for f in ("[{x}]", "<{x}>", "{{{x}}}"))),
-            [fanout_p],
+            lambda x: tuple((string.format(f, x=x) for f in ("[{x}]", "<{x}>", "{{{x}}}"))),
+            [order.fanout_p],
             ("[test]", "<test>", "{test}"),
             id="three-independent",
         ),
     ],
 )
 def test_sched_levels(executor, program, prims, expected):
-    ir = af.sched(af.trace(program)("x"))
+    ir = order.sched(stage.trace(program)("x"))
     assert [e.prim for e in ir.eqns] == prims
     actual = executor(ir, "test")
     assert actual == expected
 
 
 def test_sched_filter():
-    ir = af.trace(lambda x: (af.string.format("[{x}]", x=x), af.string.concat(x, "!")))("x")
-    scheduled = af.sched(ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3)
-    assert [e.prim for e in scheduled.eqns] == [af.string.concat_p] * 2
+    ir = stage.trace(lambda x: (string.format("[{x}]", x=x), string.concat(x, "!")))("x")
+    scheduled = order.sched(ir, cond=lambda e: e.prim is string.concat_p and len(e.in_tree) == 3)
+    assert [e.prim for e in scheduled.eqns] == [string.concat_p] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
 def test_sched_filter_propagates_into_switch():
-    inner = af.trace(lambda x: (af.string.format("[{x}]", x=x), af.string.concat(x, "!")))("x")
-    ir = af.trace(lambda x: af.switch("a", {"a": inner}, x))("x")
-    scheduled = af.sched(ir, cond=lambda e: e.prim is af.string.concat_p and len(e.in_tree) == 3)
+    inner = stage.trace(lambda x: (string.format("[{x}]", x=x), string.concat(x, "!")))("x")
+    ir = stage.trace(lambda x: control.switch("a", {"a": inner}, x))("x")
+    scheduled = order.sched(ir, cond=lambda e: e.prim is string.concat_p and len(e.in_tree) == 3)
     checked = scheduled.eqns[0].params["branches"]["a"]
-    assert [e.prim for e in checked.eqns] == [af.string.concat_p] * 2
+    assert [e.prim for e in checked.eqns] == [string.concat_p] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
 def test_sched_parallel_checkpoints():
     def program(a, b):
-        x = af.checkpoint(af.string.format("{a}", a=a), key="x")
-        y = af.checkpoint(af.string.format("{b}", b=b), key="y")
+        x = intercept.checkpoint(string.format("{a}", a=a), key="x")
+        y = intercept.checkpoint(string.format("{b}", b=b), key="y")
         return x, y
 
-    ir = af.sched(af.trace(program)("a", "b"))
-    assert sum(e.prim is fanout_p for e in ir.eqns) == 2
+    ir = order.sched(stage.trace(program)("a", "b"))
+    assert sum(e.prim is order.fanout_p for e in ir.eqns) == 2
     assert ir.call("hello", "world") == ("hello", "world")
 
 
 def test_sched_dependent_checkpoints():
     def program(a, b):
-        x = af.checkpoint(af.string.format("{a}", a=a), key="x")
-        y = af.checkpoint(af.string.format("{b}", b=b), key="y")
-        return af.depends(y, x)
+        x = intercept.checkpoint(string.format("{a}", a=a), key="x")
+        y = intercept.checkpoint(string.format("{b}", b=b), key="y")
+        return order.depends(y, x)
 
-    ir = af.sched(af.trace(program)("a", "b"))
-    assert sum(e.prim is fanout_p for e in ir.eqns) == 2
+    ir = order.sched(stage.trace(program)("a", "b"))
+    assert sum(e.prim is order.fanout_p for e in ir.eqns) == 2
     assert ir.call("hello", "world") == "world"
 
 
 def test_sched_mixed_checkpoint():
     def program(a, b, c):
-        x = af.string.format("[{a}]", a=a)
-        y = af.string.format("<{b}>", b=b)
-        z = af.checkpoint(af.string.format("{{{c}}}", c=c), key="z")
+        x = string.format("[{a}]", a=a)
+        y = string.format("<{b}>", b=b)
+        z = intercept.checkpoint(string.format("{{{c}}}", c=c), key="z")
         return x, y, z
 
-    ir = af.sched(af.trace(program)("a", "b", "c"))
-    assert sum(e.prim is fanout_p for e in ir.eqns) == 1
+    ir = order.sched(stage.trace(program)("a", "b", "c"))
+    assert sum(e.prim is order.fanout_p for e in ir.eqns) == 1
     assert ir.call("a", "b", "c") == ("[a]", "<b>", "{c}")
 
 
 def test_fanout_collect():
     def program(a, b):
         return (
-            af.checkpoint(a, key="val", collection="debug"),
-            af.checkpoint(b, key="val", collection="debug"),
+            intercept.checkpoint(a, key="val", collection="debug"),
+            intercept.checkpoint(b, key="val", collection="debug"),
         )
 
-    ir = af.sched(af.trace(program)("a", "b"))
-    with af.collect(collection="debug") as collected:
+    ir = order.sched(stage.trace(program)("a", "b"))
+    with intercept.collect(collection="debug") as collected:
         assert ir.call("A", "B") == ("A", "B")
     assert set(collected["val"]) == {"A", "B"}
 
 
 def test_fanout_inject():
     def program(a, b):
-        x = af.checkpoint(af.string.format("[{a}]", a=a), key="val", collection="cache")
-        y = af.checkpoint(af.string.format("<{b}>", b=b), key="val", collection="cache")
+        x = intercept.checkpoint(string.format("[{a}]", a=a), key="val", collection="cache")
+        y = intercept.checkpoint(string.format("<{b}>", b=b), key="val", collection="cache")
         return x, y
 
-    ir = af.sched(af.trace(program)("a", "b"))
-    with af.inject(collection="cache", values={"val": ["CACHED1", "CACHED2"]}):
+    ir = order.sched(stage.trace(program)("a", "b"))
+    with intercept.inject(collection="cache", values={"val": ["CACHED1", "CACHED2"]}):
         assert ir.call("A", "B") == ("CACHED1", "CACHED2")
 
 
 def test_nested_fanout_collect():
     def inner(x):
-        return af.checkpoint(x, key="inner", collection="debug")
+        return intercept.checkpoint(x, key="inner", collection="debug")
 
-    branches = {key: af.sched(af.trace(lambda x: (inner(x), inner(x)))("x")) for key in ("a", "b")}
+    branches = {
+        key: order.sched(stage.trace(lambda x: (inner(x), inner(x)))("x")) for key in ("a", "b")
+    }
 
     def outer(key, x):
-        left, right = af.switch(key, branches, x)
-        return af.string.concat(left, right)
+        left, right = control.switch(key, branches, x)
+        return string.concat(left, right)
 
-    ir = af.sched(af.trace(outer)("a", "x"))
-    with af.collect(collection="debug") as collected:
+    ir = order.sched(stage.trace(outer)("a", "x"))
+    with intercept.collect(collection="debug") as collected:
         assert ir.call("a", "A") == "AA"
     assert collected == {"inner": ["A", "A"]}
 
@@ -274,8 +281,8 @@ def test_nested_fanout_collect():
     ],
 )
 def test_sched_switch(executor, args, expected):
-    scheduled = af.sched(format_switch_ir())
-    assert scheduled.eqns[0].params["branches"]["x"].eqns[0].prim is fanout_p
+    scheduled = order.sched(format_switch_ir())
+    assert scheduled.eqns[0].params["branches"]["x"].eqns[0].prim is order.fanout_p
     actual = executor(scheduled, *args)
     assert actual == expected
 
@@ -292,58 +299,60 @@ def test_sched_switch(executor, args, expected):
 def test_sched_nested_switch(executor, args, expected):
     branches = {
         "A": format_switch_ir(),
-        "B": af.trace(lambda key, inp: af.string.format("{key} {inp}", key=key, inp=inp))("k", "i"),
+        "B": stage.trace(lambda key, inp: string.format("{key} {inp}", key=key, inp=inp))("k", "i"),
     }
-    ir = af.trace(lambda key, inner_key, x: af.switch(key, branches, inner_key, x))(
+    ir = stage.trace(lambda key, inner_key, x: control.switch(key, branches, inner_key, x))(
         "A",
         "x",
         "test",
     )
-    scheduled = af.sched(ir)
+    scheduled = order.sched(ir)
     inner = scheduled.eqns[0].params["branches"]["A"]
-    assert inner.eqns[0].params["branches"]["x"].eqns[0].prim is fanout_p
+    assert inner.eqns[0].params["branches"]["x"].eqns[0].prim is order.fanout_p
     actual = executor(scheduled, *args)
     assert actual == expected
 
 
 def test_sched_nested_fanout():
-    branches1 = {"a": af.trace(parallel_formats(joined=True))("x")}
+    branches1 = {"a": stage.trace(parallel_formats(joined=True))("x")}
     branches2 = {
-        "a": af.trace(
-            lambda x: af.string.concat(
-                af.string.format("({x})", x=x),
-                af.string.format("{{{x}}}", x=x),
+        "a": stage.trace(
+            lambda x: string.concat(
+                string.format("({x})", x=x),
+                string.format("{{{x}}}", x=x),
             ),
         )("x")
     }
-    ir = af.trace(lambda key, a, b: (af.switch(key, branches1, a), af.switch(key, branches2, b)))(
+    ir = stage.trace(
+        lambda key, a, b: (control.switch(key, branches1, a), control.switch(key, branches2, b))
+    )(
         "a",
         "hello",
         "world",
     )
-    scheduled = af.sched(ir)
-    assert scheduled.eqns[0].prim is fanout_p
+    scheduled = order.sched(ir)
+    assert scheduled.eqns[0].prim is order.fanout_p
     for inner in scheduled.eqns[0].params["irs"]:
-        assert inner.eqns[0].params["branches"]["a"].eqns[0].prim is fanout_p
+        assert inner.eqns[0].params["branches"]["a"].eqns[0].prim is order.fanout_p
     assert scheduled.call("a", "hello", "world") == ("[hello]<hello>", "(world){world}")
 
 
 def no_dependencies(x):
-    return af.depends(af.string.format("A: {x}", x=x))
+    return order.depends(string.format("A: {x}", x=x))
 
 
 def chained_dependencies(x):
-    a = af.string.format("A: {x}", x=x)
-    b = af.string.format("B: {x}", x=x)
-    c = af.string.format("C: {x}", x=x)
-    return af.depends(c, af.depends(b, a))
+    a = string.format("A: {x}", x=x)
+    b = string.format("B: {x}", x=x)
+    c = string.format("C: {x}", x=x)
+    return order.depends(c, order.depends(b, a))
 
 
 def multiple_dependencies(x):
-    a = af.string.format("A: {x}", x=x)
-    b = af.string.format("B: {x}", x=x)
-    c = af.string.format("C: {x}", x=x)
-    return af.depends(c, a, b)
+    a = string.format("A: {x}", x=x)
+    b = string.format("B: {x}", x=x)
+    c = string.format("C: {x}", x=x)
+    return order.depends(c, a, b)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -351,53 +360,53 @@ def multiple_dependencies(x):
     "transform, args, expected",
     [
         pytest.param(lambda ir: ir, ("hello",), "B: hello", id="call"),
-        pytest.param(af.sched, ("hello",), "B: hello", id="sched"),
+        pytest.param(order.sched, ("hello",), "B: hello", id="sched"),
         pytest.param(
-            af.pushforward,
+            ad.pushforward,
             (("primal",), ("tangent",)),
             ("B: primal", "tangent"),
             id="push",
         ),
-        pytest.param(af.pullback, (("primal",), "grad"), ("B: primal", ("grad",)), id="pull"),
-        pytest.param(af.batch, (["x", "y", "z"],), ["B: x", "B: y", "B: z"], id="batch"),
+        pytest.param(ad.pullback, (("primal",), "grad"), ("B: primal", ("grad",)), id="pull"),
+        pytest.param(axis.batch, (["x", "y", "z"],), ["B: x", "B: y", "B: z"], id="batch"),
         pytest.param(
-            lambda ir: af.batch(af.pushforward(ir), in_axes=(True, True)),
+            lambda ir: axis.batch(ad.pushforward(ir), in_axes=(True, True)),
             ((["a", "b"],), (["da", "db"],)),
             (["B: a", "B: b"], ["da", "db"]),
             id="batch-push",
         ),
         pytest.param(
-            lambda ir: af.batch(af.pullback(ir), in_axes=(True, True)),
+            lambda ir: axis.batch(ad.pullback(ir), in_axes=(True, True)),
             ((["a", "b"],), ["g1", "g2"]),
             (["B: a", "B: b"], (["g1", "g2"],)),
             id="batch-pull",
         ),
         pytest.param(
-            lambda ir: af.pushforward(af.batch(ir)),
+            lambda ir: ad.pushforward(axis.batch(ir)),
             ((["a", "b"],), (["da", "db"],)),
             (["B: a", "B: b"], ["da", "db"]),
             id="push-batch",
         ),
         pytest.param(
-            lambda ir: af.pullback(af.batch(ir)),
+            lambda ir: ad.pullback(axis.batch(ir)),
             ((["a", "b"],), ["g1", "g2"]),
             (["B: a", "B: b"], (["g1", "g2"],)),
             id="pull-batch",
         ),
         pytest.param(
-            lambda ir: af.sched(af.pushforward(ir)),
+            lambda ir: order.sched(ad.pushforward(ir)),
             (("primal",), ("tangent",)),
             ("B: primal", "tangent"),
             id="sched-push",
         ),
         pytest.param(
-            lambda ir: af.sched(af.pullback(ir)),
+            lambda ir: order.sched(ad.pullback(ir)),
             (("primal",), "grad"),
             ("B: primal", ("grad",)),
             id="sched-pull",
         ),
         pytest.param(
-            lambda ir: af.sched(af.batch(ir)),
+            lambda ir: order.sched(axis.batch(ir)),
             (["x", "y", "z"],),
             ["B: x", "B: y", "B: z"],
             id="sched-batch",
@@ -405,9 +414,9 @@ def multiple_dependencies(x):
     ],
 )
 def test_depends_transforms(executor, transform, args, expected):
-    ir = af.trace(dependent_formats)("x")
-    [barrier] = [e for e in ir.eqns if e.prim is depends_p]
-    assert len(af.utils.tree.leaves(barrier.in_tree)) == 2
+    ir = stage.trace(dependent_formats)("x")
+    [barrier] = [e for e in ir.eqns if e.prim is order.depends_p]
+    assert len(utils.tree.leaves(barrier.in_tree)) == 2
     ir = transform(ir)
     actual = executor(ir, *args)
     assert actual == expected
@@ -421,42 +430,42 @@ def test_depends_transforms(executor, transform, args, expected):
         pytest.param(chained_dependencies, lambda ir: ir, ("hello",), "C: hello", id="chain"),
         pytest.param(
             multiple_dependencies,
-            af.pushforward,
+            ad.pushforward,
             (("primal",), ("tangent",)),
             ("C: primal", "tangent"),
             id="multiple-push",
         ),
         pytest.param(
             chained_dependencies,
-            af.pushforward,
+            ad.pushforward,
             (("primal",), ("tangent",)),
             ("C: primal", "tangent"),
             id="chain-push",
         ),
         pytest.param(
             multiple_dependencies,
-            af.pullback,
+            ad.pullback,
             (("primal",), "grad"),
             ("C: primal", ("grad",)),
             id="multiple-pull",
         ),
         pytest.param(
             chained_dependencies,
-            af.pullback,
+            ad.pullback,
             (("primal",), "grad"),
             ("C: primal", ("grad",)),
             id="chain-pull",
         ),
         pytest.param(
             multiple_dependencies,
-            af.batch,
+            axis.batch,
             (["x", "y"],),
             ["C: x", "C: y"],
             id="multiple-batch",
         ),
         pytest.param(
             chained_dependencies,
-            af.batch,
+            axis.batch,
             (["x", "y"],),
             ["C: x", "C: y"],
             id="chain-batch",
@@ -464,25 +473,25 @@ def test_depends_transforms(executor, transform, args, expected):
     ],
 )
 def test_depends_shapes(program, transform, args, expected):
-    assert transform(af.trace(program)("x")).call(*args) == expected
+    assert transform(stage.trace(program)("x")).call(*args) == expected
 
 
 def test_sched_data_dependency():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        return af.string.format("B: {a_barrier}", a_barrier=af.depends(a))
+        a = string.format("A: {x}", x=x)
+        return string.format("B: {a_barrier}", a_barrier=order.depends(a))
 
-    ir = af.sched(af.trace(program)("x"))
-    assert sum(e.prim is depends_p for e in ir.eqns) == 1
+    ir = order.sched(stage.trace(program)("x"))
+    assert sum(e.prim is order.depends_p for e in ir.eqns) == 1
     assert ir.call("hello") == "B: A: hello"
 
 
 def test_sched_shared_dependency():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.string.format("B: {x}", x=x)
-        return af.string.concat(a, af.depends(b, a))
+        a = string.format("A: {x}", x=x)
+        b = string.format("B: {x}", x=x)
+        return string.concat(a, order.depends(b, a))
 
-    ir = af.sched(af.trace(program)("x"))
-    assert sum(e.prim is depends_p for e in ir.eqns) == 1
+    ir = order.sched(stage.trace(program)("x"))
+    assert sum(e.prim is order.depends_p for e in ir.eqns) == 1
     assert ir.call("hello") == "A: helloB: hello"

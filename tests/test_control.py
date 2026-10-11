@@ -16,11 +16,20 @@
 import optree
 import pytest
 
-import autoform as af
-from autoform.stage import trace
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.boundary as boundary
+import autoform.src.control as control
+import autoform.src.core as core
+import autoform.src.intercept as intercept
+import autoform.src.memo as memo
+import autoform.src.numeric as numeric
+import autoform.src.stage as stage
+import autoform.src.string as string
+import autoform.src.utils as utils
 from tests import aexecute, always_true, execute, fixpoint_program, switch_program, while_program
 
-tree = optree.pytree.reexport(namespace=af.PYTREE_NAMESPACE)
+tree = optree.pytree.reexport(namespace=utils.PYTREE_NAMESPACE)
 
 
 def replace_state(state, instruction):
@@ -29,62 +38,62 @@ def replace_state(state, instruction):
 
 
 def stop_gradient(x):
-    return af.stop_gradient(x)
+    return control.stop_gradient(x)
 
 
 def is_empty(x):
-    return af.string.match(x, "")
+    return string.match(x, "")
 
 
 class TestFixpointImpl:
     def test_max_iters_bounds_nonconvergent_step(self):
         def step(state, instruction):
             del instruction
-            return af.string.concat(state, ".")
+            return string.concat(state, ".")
 
-        step_ir = af.trace(step)("x", "unused")
+        step_ir = stage.trace(step)("x", "unused")
 
-        assert af.fixpoint(step_ir, "x", "unused", max_iters=4) == "x...."
+        assert control.fixpoint(step_ir, "x", "unused", max_iters=4) == "x...."
 
     def test_custom_equiv_ir(self):
         def step(state, instruction):
             del instruction
-            return af.string.concat(state, "!")
+            return string.concat(state, "!")
 
-        step_ir = af.trace(step)("x", "unused")
-        equiv_ir = af.trace(lambda prev, new: af.string.match(new, "x!!"))("a", "b")
+        step_ir = stage.trace(step)("x", "unused")
+        equiv_ir = stage.trace(lambda prev, new: string.match(new, "x!!"))("a", "b")
 
-        assert af.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x!!"
+        assert control.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x!!"
 
     def test_max_iters_validation(self):
-        step_ir = af.trace(replace_state)("draft", "done")
+        step_ir = stage.trace(replace_state)("draft", "done")
 
         with pytest.raises(AssertionError, match="max_iters must be >= 1"):
-            af.fixpoint(step_ir, "draft", "done", max_iters=0)
+            control.fixpoint(step_ir, "draft", "done", max_iters=0)
 
     def test_arity_validation(self):
-        step_ir = af.trace(lambda state: state)("draft")
+        step_ir = stage.trace(lambda state: state)("draft")
 
         with pytest.raises(AssertionError, match="exactly two"):
-            af.fixpoint(step_ir, "draft", "done", max_iters=1)
+            control.fixpoint(step_ir, "draft", "done", max_iters=1)
 
     def test_state_structure_validation(self):
-        step_ir = af.trace(lambda state, instruction: (state, instruction))("draft", "done")
+        step_ir = stage.trace(lambda state, instruction: (state, instruction))("draft", "done")
 
         with pytest.raises(AssertionError, match="identical state"):
-            af.fixpoint(step_ir, "draft", "done", max_iters=1)
+            control.fixpoint(step_ir, "draft", "done", max_iters=1)
 
 
 def fixpoint_ir(step, args, **kwargs):
-    step_ir = af.trace(step)(*args)
-    return af.trace(fixpoint_program(step_ir, **kwargs))(*args)
+    step_ir = stage.trace(step)(*args)
+    return stage.trace(fixpoint_program(step_ir, **kwargs))(*args)
 
 
 class TestFixpointTraced:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_call(self, executor):
         ir = fixpoint_ir(replace_state, ("draft", "done"), max_iters=10)
-        assert [eqn.prim for eqn in ir.eqns] == [af.control.fixpoint_p]
+        assert [eqn.prim for eqn in ir.eqns] == [control.fixpoint_p]
         result = executor(ir, "draft", "done")
         assert result == "done"
 
@@ -101,10 +110,10 @@ class TestFixpointPushforward:
     )
     def test_matches_implicit_pullback(self, executor, adj_iters, expected):
         ir = fixpoint_ir(lambda x, y: 0.5 * x + y, (2.0, 1.0), max_iters=1, adj_iters=adj_iters)
-        assert executor(af.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, expected)
-        assert executor(af.pullback(ir), (2.0, 1.0), 1.0) == (
+        assert executor(ad.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, expected)
+        assert executor(ad.pullback(ir), (2.0, 1.0), 1.0) == (
             2.0,
-            (af.core.Zero(af.numeric.FloatAVal()), expected),
+            (core.Zero(numeric.FloatAVal()), expected),
         )
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -114,50 +123,50 @@ class TestFixpointPushforward:
             pytest.param(2.0, 3.0, id="parameter-tangent"),
             pytest.param(0.0, 0.0, id="concrete-zero"),
             pytest.param(
-                af.core.Zero(af.numeric.FloatAVal()),
-                af.core.Zero(af.numeric.FloatAVal()),
+                core.Zero(numeric.FloatAVal()),
+                core.Zero(numeric.FloatAVal()),
                 id="symbolic-zero",
             ),
         ],
     )
     def test_ignores_initial_tangent(self, executor, t, expected):
         ir = fixpoint_ir(lambda x, y: 0.5 * x + y, (2.0, 1.0), max_iters=1)
-        assert executor(af.pushforward(ir), (2.0, 1.0), (100.0, t)) == (2.0, expected)
+        assert executor(ad.pushforward(ir), (2.0, 1.0), (100.0, t)) == (2.0, expected)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_linearizes_at_returned_state(self, executor):
         ir = fixpoint_ir(lambda x, y: x * x / 4.0 + y, (0.0, 0.25), max_iters=1)
-        assert executor(af.pushforward(ir), (0.0, 0.25), (100.0, 2.0)) == (0.25, 2.25)
+        assert executor(ad.pushforward(ir), (0.0, 0.25), (100.0, 2.0)) == (0.25, 2.25)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_state_tree_and_equiv_ir(self, executor):
         def step(x, y):
-            return {"x": 0.5 * x["x"] + y["x"], "y": af.string.concat(x["y"], y["y"])}
+            return {"x": 0.5 * x["x"] + y["x"], "y": string.concat(x["y"], y["y"])}
 
         x, y = {"x": 2.0, "y": "a"}, {"x": 1.0, "y": "!"}
-        equiv_ir = trace(lambda x, y: True)(x, x)
+        equiv_ir = stage.trace(lambda x, y: True)(x, x)
         ir = fixpoint_ir(step, (x, y), max_iters=10, equiv_ir=equiv_ir)
-        zero = af.core.Zero(af.string.StrAVal())
+        zero = core.Zero(string.StrAVal())
         assert executor(
-            af.pushforward(ir), (x, y), ({"x": 100.0, "y": "ignored"}, {"x": 1.0, "y": zero})
+            ad.pushforward(ir), (x, y), ({"x": 100.0, "y": "ignored"}, {"x": 1.0, "y": zero})
         ) == ({"x": 2.0, "y": "a!"}, {"x": 1.5, "y": zero})
 
     def test_async_body_rule(self):
         calls = []
 
-        @af.custom
+        @boundary.custom
         def step(x, y):
             return 0.5 * x + y
 
         @step.aset_pushforward
         async def push(in_tree, /, *, call):
             p, t = in_tree
-            x, y = af.core.materialize_zeros(t)
+            x, y = core.materialize_zeros(t)
             calls.append("push")
             return call(*p), 0.5 * x + y
 
         ir = fixpoint_ir(step, (2.0, 1.0), max_iters=1)
-        assert aexecute(af.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, 1.5)
+        assert aexecute(ad.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, 1.5)
         assert calls == ["push", "push"]
 
 
@@ -187,7 +196,7 @@ class TestFixpointPullback:
             ),
             pytest.param(
                 execute,
-                af.string.concat,
+                string.concat,
                 ("s", "c"),
                 {"max_iters": 2, "adj_iters": 1},
                 "g",
@@ -197,55 +206,55 @@ class TestFixpointPullback:
             ),
             pytest.param(
                 execute,
-                af.string.concat,
+                string.concat,
                 ("s", "c"),
                 {"max_iters": 2},
-                af.core.Zero(af.core.primal_s.map(af.core.avalof("g"))),
+                core.Zero(core.primal_s.map(core.avalof("g"))),
                 "scc",
-                af.core.Zero(af.core.primal_s.map(af.core.avalof("c"))),
+                core.Zero(core.primal_s.map(core.avalof("c"))),
                 id="zero-cotangent",
             ),
         ],
     )
     def test_feedback(self, executor, step, args, options, c, expected, c_theta):
-        ir = af.pullback(fixpoint_ir(step, args, **options))
+        ir = ad.pullback(fixpoint_ir(step, args, **options))
         out, (c_init, actual_theta) = executor(ir, args, c)
         assert out == expected
-        assert isinstance(c_init, af.core.Zero)
+        assert isinstance(c_init, core.Zero)
         assert actual_theta == c_theta
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_pullback_static_step_literal_is_not_boxed(self, executor):
 
         def step(state, suffix):
-            return af.string.concat(state, suffix)
+            return string.concat(state, suffix)
 
-        step_ir = af.trace(step, static=(False, True))("s", "!")
+        step_ir = stage.trace(step, static=(False, True))("s", "!")
 
         def program(init):
-            return af.fixpoint(step_ir, init, "!", max_iters=2, adj_iters=1)
+            return control.fixpoint(step_ir, init, "!", max_iters=2, adj_iters=1)
 
-        ir = af.trace(program)("s")
-        out, (c_init,) = executor(af.pullback(ir), ("s",), "g")
+        ir = stage.trace(program)("s")
+        out, (c_init,) = executor(ad.pullback(ir), ("s",), "g")
         assert out == "s!!"
-        assert isinstance(c_init, af.core.Zero)
+        assert isinstance(c_init, core.Zero)
 
 
 class TestFixpointBatch:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batched_init_broadcast_theta(self, executor):
         ir = fixpoint_ir(replace_state, ("x", "done"), max_iters=10)
-        batched = af.batch(ir, in_axes=(True, False))
+        batched = axis.batch(ir, in_axes=(True, False))
         actual = executor(batched, ["a", "b"], "done")
         assert actual == ["done", "done"]
 
     def test_batch_of_pullback(self):
         ir = fixpoint_ir(replace_state, ("x", "done"), max_iters=10)
-        composed = af.batch(af.pullback(ir), in_axes=((True, False), True))
+        composed = axis.batch(ad.pullback(ir), in_axes=((True, False), True))
         out, (c_init, c_theta) = composed.call((["a", "b"], "done"), ["g1", "g2"])
 
         assert out == ["done", "done"]
-        assert all(isinstance(c, af.core.Zero) for c in c_init)
+        assert all(isinstance(c, core.Zero) for c in c_init)
         assert c_theta == ["g1", "g2"]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -253,10 +262,10 @@ class TestFixpointBatch:
 
         def step(state, instruction):
             left, right = state
-            return (af.string.concat(left, instruction), right)
+            return (string.concat(left, instruction), right)
 
         ir = fixpoint_ir(step, (("x", "y"), "!"), max_iters=1)
-        batched = af.batch(ir, in_axes=(False, False))
+        batched = axis.batch(ir, in_axes=(False, False))
         actual = executor(batched, ("x", "y"), "!")
         assert actual == ("x!", "y")
 
@@ -271,13 +280,13 @@ class TestFixpointBatch:
 
         def step(state, instruction):
             return State(
-                text=af.string.concat(state.text, instruction),
+                text=string.concat(state.text, instruction),
                 status=state.status,
                 label=state.label,
             )
 
         ir = fixpoint_ir(step, (State("x", "keep", label="state"), "!"), max_iters=1)
-        batched = af.batch(ir, in_axes=(State(True, False, label="state"), False))
+        batched = axis.batch(ir, in_axes=(State(True, False, label="state"), False))
         out = executor(batched, State(["a", "b"], "keep", label="state"), "!")
         assert isinstance(out, State)
         assert out == State(text=["a!", "b!"], status=["keep", "keep"], label="state")
@@ -287,88 +296,88 @@ class TestEquivIR:
     def test_judged_convergence_counts(self):
         counters = dict(step=0, judge=0)
 
-        @af.custom
+        @boundary.custom
         def step(state, instruction):
             del instruction
             counters["step"] += 1
-            return af.string.concat(state, ".")
+            return string.concat(state, ".")
 
-        @af.custom
+        @boundary.custom
         def probe(prev, new):
             del prev
             counters["judge"] += 1
             return new
 
-        step_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "unused")
-        equiv_ir = af.trace(lambda prev, new: af.string.match(probe(prev, new), "x.."))("a", "b")
+        step_ir = stage.trace(lambda state, instruction: step(state, instruction))("x", "unused")
+        equiv_ir = stage.trace(lambda prev, new: string.match(probe(prev, new), "x.."))("a", "b")
         counters["step"] = counters["judge"] = 0
 
-        assert af.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
+        assert control.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
         assert counters == dict(step=2, judge=2)
 
     def test_batched_equiv_ir(self):
         def step(state, instruction):
             del instruction
-            return af.string.concat(state, "!")
+            return string.concat(state, "!")
 
-        step_ir = af.trace(step)("x", "unused")
-        equiv_ir = af.trace(lambda prev, new: af.string.match(new, af.string.concat(prev, "!")))(
+        step_ir = stage.trace(step)("x", "unused")
+        equiv_ir = stage.trace(lambda prev, new: string.match(new, string.concat(prev, "!")))(
             "a",
             "b",
         )
 
         program = fixpoint_program(step_ir, max_iters=10, equiv_ir=equiv_ir)
 
-        ir = af.trace(program)("x", "unused")
-        batched = af.batch(ir, in_axes=(True, False))
+        ir = stage.trace(program)("x", "unused")
+        batched = axis.batch(ir, in_axes=(True, False))
 
         assert batched.call(["a", "b"], "unused") == ["a!", "b!"]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_equiv_ir(self, executor):
-        step_ir = af.trace(replace_state)("x", "done")
-        equiv_ir = af.trace(lambda prev, new: af.string.match(new, prev))("a", "b")
+        step_ir = stage.trace(replace_state)("x", "done")
+        equiv_ir = stage.trace(lambda prev, new: string.match(new, prev))("a", "b")
 
         program = fixpoint_program(step_ir, max_iters=10, equiv_ir=equiv_ir)
 
-        ir = af.trace(program)("x", "done")
+        ir = stage.trace(program)("x", "done")
 
         assert executor(ir, "x", "done") == "done"
 
     def test_equiv_ir_validation(self):
-        step_ir = af.trace(lambda state, instruction: af.string.concat(state, instruction))(
+        step_ir = stage.trace(lambda state, instruction: string.concat(state, instruction))(
             "x",
             "!",
         )
-        one_arg = af.trace(lambda prev: af.string.match(prev, "x"))("a")
+        one_arg = stage.trace(lambda prev: string.match(prev, "x"))("a")
 
         with pytest.raises(AssertionError, match="two positional"):
-            af.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=one_arg)
+            control.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=one_arg)
 
-        wrong_struct = af.trace(lambda prev, new: af.string.match(prev[0], new[0]))(
+        wrong_struct = stage.trace(lambda prev, new: string.match(prev[0], new[0]))(
             ("a", "b"),
             ("c", "d"),
         )
         with pytest.raises(AssertionError, match="state structure"):
-            af.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=wrong_struct)
+            control.fixpoint(step_ir, "x", "!", max_iters=3, equiv_ir=wrong_struct)
 
     def test_params_memoize_with_equiv_ir(self):
         counters = dict(step=0)
 
-        @af.custom
+        @boundary.custom
         def step(state, instruction):
             del state
             counters["step"] += 1
             return instruction
 
-        step_ir = af.trace(lambda state, instruction: step(state, instruction))("x", "done")
-        equiv_ir = af.trace(lambda prev, new: af.string.match(new, prev))("a", "b")
+        step_ir = stage.trace(lambda state, instruction: step(state, instruction))("x", "done")
+        equiv_ir = stage.trace(lambda prev, new: string.match(new, prev))("a", "b")
 
         program = fixpoint_program(step_ir, max_iters=10, equiv_ir=equiv_ir)
 
-        ir = af.trace(program)("x", "done")
+        ir = stage.trace(program)("x", "done")
 
-        with af.memoize():
+        with memo.memoize():
             first = ir.call("x", "done")
             after_first = counters["step"]
             second = ir.call("x", "done")
@@ -387,45 +396,45 @@ class TestStopGradient:
         ],
     )
     def test_identity(self, executor, sample, value):
-        ir = af.trace(stop_gradient)(sample)
-        assert [eqn.prim for eqn in ir.eqns] == [af.control.stop_gradient_p]
+        ir = stage.trace(stop_gradient)(sample)
+        assert [eqn.prim for eqn in ir.eqns] == [control.stop_gradient_p]
         result = executor(ir, value)
         assert result == value
 
     @pytest.mark.parametrize(
         "transform, p, feedback, expected",
         [
-            pytest.param(af.pushforward, ("primal",), ("tangent",), "primal", id="push"),
-            pytest.param(af.pullback, ("primal",), "cotangent", "primal", id="pull"),
-            pytest.param(af.pullback, (("p1", "p2"),), ("c1", "c2"), ("p1", "p2"), id="tree-pull"),
+            pytest.param(ad.pushforward, ("primal",), ("tangent",), "primal", id="push"),
+            pytest.param(ad.pullback, ("primal",), "cotangent", "primal", id="pull"),
+            pytest.param(ad.pullback, (("p1", "p2"),), ("c1", "c2"), ("p1", "p2"), id="tree-pull"),
         ],
     )
     def test_ad_zeros_feedback(self, transform, p, feedback, expected):
-        ir = af.trace(stop_gradient)(*p)
+        ir = stage.trace(stop_gradient)(*p)
         p, derivative = transform(ir).call(p, feedback)
         assert p == expected
-        assert all(isinstance(leaf, af.core.Zero) for leaf in tree.leaves(derivative))
+        assert all(isinstance(leaf, core.Zero) for leaf in tree.leaves(derivative))
 
     def test_batch(self):
-        ir = af.trace(stop_gradient)("a")
-        assert af.batch(ir).call(["a", "b", "c"]) == ["a", "b", "c"]
+        ir = stage.trace(stop_gradient)("a")
+        assert axis.batch(ir).call(["a", "b", "c"]) == ["a", "b", "c"]
 
     def test_in_chain_stops_gradient(self):
         def func(x, y):
-            stopped = af.stop_gradient(x)
-            return af.string.concat(stopped, y)
+            stopped = control.stop_gradient(x)
+            return string.concat(stopped, y)
 
-        ir = af.trace(func)("a", "b")
-        pb_ir = af.pullback(ir)
+        ir = stage.trace(func)("a", "b")
+        pb_ir = ad.pullback(ir)
         _, (c_x, c_y) = pb_ir.call(("a", "b"), "grad")
-        assert isinstance(c_x, af.core.Zero)
+        assert isinstance(c_x, core.Zero)
         assert c_y == "grad"
 
 
 def loop_ir(cond, suffix, max_iters):
-    cond_ir = trace(cond)("x")
-    body_ir = trace(lambda x: af.string.concat(x, suffix))("x")
-    return trace(while_program(cond_ir, body_ir, max_iters=max_iters))("")
+    cond_ir = stage.trace(cond)("x")
+    body_ir = stage.trace(lambda x: string.concat(x, suffix))("x")
+    return stage.trace(while_program(cond_ir, body_ir, max_iters=max_iters))("")
 
 
 class TestWhileLoop:
@@ -456,26 +465,26 @@ class TestWhileLoop:
             pytest.param(
                 lambda x: True,
                 2,
-                af.core.Zero(af.numeric.FloatAVal()),
-                (16.0, af.core.Zero(af.numeric.FloatAVal())),
+                core.Zero(numeric.FloatAVal()),
+                (16.0, core.Zero(numeric.FloatAVal())),
                 id="symbolic-zero",
             ),
         ],
     )
     def test_pushforward(self, executor, condition, max_iters, t, expected):
-        cond_ir = trace(condition)(2.0)
-        body_ir = trace(lambda x: x * x)(2.0)
-        ir = trace(while_program(cond_ir, body_ir, max_iters=max_iters))(2.0)
-        assert executor(af.pushforward(ir), (2.0,), (t,)) == expected
+        cond_ir = stage.trace(condition)(2.0)
+        body_ir = stage.trace(lambda x: x * x)(2.0)
+        ir = stage.trace(while_program(cond_ir, body_ir, max_iters=max_iters))(2.0)
+        assert executor(ad.pushforward(ir), (2.0,), (t,)) == expected
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_pushforward_preserves_state_tree(self, executor):
         x = {"x": 2.0, "y": "a"}
-        cond_ir = trace(lambda x: x["x"] < 10.0)(x)
-        body_ir = trace(lambda x: {"x": x["x"] * x["x"], "y": af.string.concat(x["y"], "!")})(x)
-        ir = trace(while_program(cond_ir, body_ir, max_iters=10))(x)
-        zero = af.core.Zero(af.string.StrAVal())
-        assert executor(af.pushforward(ir), (x,), ({"x": 1.0, "y": zero},)) == (
+        cond_ir = stage.trace(lambda x: x["x"] < 10.0)(x)
+        body_ir = stage.trace(lambda x: {"x": x["x"] * x["x"], "y": string.concat(x["y"], "!")})(x)
+        ir = stage.trace(while_program(cond_ir, body_ir, max_iters=10))(x)
+        zero = core.Zero(string.StrAVal())
+        assert executor(ad.pushforward(ir), (x,), ({"x": 1.0, "y": zero},)) == (
             {"x": 16.0, "y": "a!!"},
             {"x": 32.0, "y": zero},
         )
@@ -485,18 +494,18 @@ class TestWhileLoop:
         [pytest.param(execute, "t", id="sync"), pytest.param(aexecute, "t??", id="async")],
     )
     def test_pushforward_uses_async_body_rule(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def body(x):
-            return af.string.concat(x, "!")
+            return string.concat(x, "!")
 
         @body.aset_pushforward
         async def push(in_tree, /, *, call):
             (x,), (y,) = in_tree
-            return call(x), af.string.concat(y, "?")
+            return call(x), string.concat(y, "?")
 
-        cond_ir = trace(always_true)("x")
-        ir = trace(while_program(cond_ir, trace(body)("x"), max_iters=2))("x")
-        assert executor(af.pushforward(ir), ("x",), ("t",)) == ("x!!", expected)
+        cond_ir = stage.trace(always_true)("x")
+        ir = stage.trace(while_program(cond_ir, stage.trace(body)("x"), max_iters=2))("x")
+        assert executor(ad.pushforward(ir), ("x",), ("t",)) == ("x!!", expected)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
@@ -505,7 +514,7 @@ class TestWhileLoop:
             pytest.param(lambda x: False, "x", 10, ["a", "b", "c"], ["a", "b", "c"], id="all-exit"),
             pytest.param(lambda x: True, ".", 3, ["a", "b"], ["a...", "b..."], id="all-iterate"),
             pytest.param(
-                lambda x: af.string.match(x, ""),
+                lambda x: string.match(x, ""),
                 "x",
                 5,
                 ["", "", "already"],
@@ -513,7 +522,7 @@ class TestWhileLoop:
                 id="masked-exit",
             ),
             pytest.param(
-                lambda x: af.string.match(x, ""),
+                lambda x: string.match(x, ""),
                 "x",
                 3,
                 ("", "a"),
@@ -521,7 +530,7 @@ class TestWhileLoop:
                 id="tuple-container",
             ),
             pytest.param(
-                lambda x: af.string.match(x, "go"),
+                lambda x: string.match(x, "go"),
                 "!",
                 3,
                 ["go", "stop", "go"],
@@ -531,7 +540,7 @@ class TestWhileLoop:
         ],
     )
     def test_batch(self, executor, condition, suffix, max_iters, values, expected):
-        ir = af.batch(loop_ir(condition, suffix, max_iters), in_axes=True)
+        ir = axis.batch(loop_ir(condition, suffix, max_iters), in_axes=True)
         result = executor(ir, values)
         assert type(result) is type(values)
         assert result == expected
@@ -553,14 +562,14 @@ class TestWhileLoop:
         ],
     )
     def test_pullback(self, executor, condition, suffix, max_iters, p, c, expected):
-        ir = af.pullback(loop_ir(condition, suffix, max_iters))
+        ir = ad.pullback(loop_ir(condition, suffix, max_iters))
         args = ((p,), c)
         result = executor(ir, *args)
         assert result == (expected, (c,))
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_of_pullback(self, executor):
-        ir = af.batch(af.pullback(loop_ir(lambda x: True, ".", 2)), in_axes=(True, True))
+        ir = axis.batch(ad.pullback(loop_ir(lambda x: True, ".", 2)), in_axes=(True, True))
         args = ((["a", "b"],), ["g1", "g2"])
         result = executor(ir, *args)
         assert result == (["a..", "b.."], (["g1", "g2"],))
@@ -572,33 +581,35 @@ class TestWhileLoop:
     )
     def test_checkpoints_and_pullback(self, condition, max_iters, expected, checkpoints):
         def body(x):
-            return af.checkpoint(af.string.concat(x, "x"), key="state", collection="trace")
+            return intercept.checkpoint(string.concat(x, "x"), key="state", collection="trace")
 
-        cond_ir = trace(lambda x: condition)("x")
-        ir = trace(while_program(cond_ir, trace(body)("x"), max_iters=max_iters))("init")
-        with af.collect(collection="trace") as collected:
+        cond_ir = stage.trace(lambda x: condition)("x")
+        ir = stage.trace(while_program(cond_ir, stage.trace(body)("x"), max_iters=max_iters))(
+            "init"
+        )
+        with intercept.collect(collection="trace") as collected:
             assert ir.call("a") == expected
         assert collected.get("state", []) == checkpoints
-        assert af.pullback(ir).call(("a",), "feedback") == (expected, ("feedback",))
+        assert ad.pullback(ir).call(("a",), "feedback") == (expected, ("feedback",))
         assert collected.get("state", []) == checkpoints
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_nested_while_loop(self, executor):
 
         def inner_body(x):
-            return af.string.concat(x, "i")
+            return string.concat(x, "i")
 
-        inner_cond_ir = trace(is_empty)("x")
-        inner_body_ir = trace(inner_body)("x")
+        inner_cond_ir = stage.trace(is_empty)("x")
+        inner_body_ir = stage.trace(inner_body)("x")
 
         def outer_body(x):
-            inner_result = af.while_loop(inner_cond_ir, inner_body_ir, "", max_iters=2)
-            return af.string.concat(x, inner_result)
+            inner_result = control.while_loop(inner_cond_ir, inner_body_ir, "", max_iters=2)
+            return string.concat(x, inner_result)
 
-        outer_cond_ir = trace(always_true)("x")
-        outer_body_ir = trace(outer_body)("x")
+        outer_cond_ir = stage.trace(always_true)("x")
+        outer_body_ir = stage.trace(outer_body)("x")
         loop = while_program(outer_cond_ir, outer_body_ir, max_iters=3)
-        loop_ir = trace(loop)("")
+        loop_ir = stage.trace(loop)("")
         result = executor(loop_ir, "start")
         assert result == "startiii"
 
@@ -612,13 +623,13 @@ class TestWhileLoopValidation:
         ],
     )
     def test_rejects_literal_output_for_dynamic_state(self, condition, max_iters):
-        cond_ir = trace(lambda x: condition)("go")
-        body_ir = trace(lambda x: "stop")("go")
+        cond_ir = stage.trace(lambda x: condition)("go")
+        body_ir = stage.trace(lambda x: "stop")("go")
 
         loop = while_program(cond_ir, body_ir, max_iters=max_iters)
 
         with pytest.raises(AssertionError, match="initial state must match"):
-            trace(loop)("go")
+            stage.trace(loop)("go")
 
     @pytest.mark.parametrize(
         "initial, result",
@@ -628,36 +639,36 @@ class TestWhileLoopValidation:
         ],
     )
     def test_rejects_different_literal_state(self, initial, result):
-        cond_ir = trace(lambda x: False)(initial)
-        body_ir = trace(lambda x: result)(initial)
+        cond_ir = stage.trace(lambda x: False)(initial)
+        body_ir = stage.trace(lambda x: result)(initial)
 
         with pytest.raises(AssertionError, match="initial state must match"):
-            trace(lambda: af.while_loop(cond_ir, body_ir, initial, max_iters=0))()
+            stage.trace(lambda: control.while_loop(cond_ir, body_ir, initial, max_iters=0))()
 
     def test_accepts_matching_literal_state(self):
-        cond_ir = trace(lambda x: False)("stop")
-        body_ir = trace(lambda x: "stop")("stop")
-        ir = trace(lambda: af.while_loop(cond_ir, body_ir, "stop", max_iters=0))()
+        cond_ir = stage.trace(lambda x: False)("stop")
+        body_ir = stage.trace(lambda x: "stop")("stop")
+        ir = stage.trace(lambda: control.while_loop(cond_ir, body_ir, "stop", max_iters=0))()
 
         assert ir.call() == "stop"
 
     def test_rejects_untraced_condition(self):
         cond_ir = lambda x: False
-        body_ir = trace(lambda x: x)("x")
+        body_ir = stage.trace(lambda x: x)("x")
         with pytest.raises(AssertionError, match="cond_ir must be an IR"):
-            af.while_loop(cond_ir, body_ir, "init", max_iters=10)
+            control.while_loop(cond_ir, body_ir, "init", max_iters=10)
 
     def test_rejects_untraced_body(self):
-        cond_ir = trace(lambda x: False)("x")
+        cond_ir = stage.trace(lambda x: False)("x")
         body_ir = lambda x: x
         with pytest.raises(AssertionError, match="body_ir must be an IR"):
-            af.while_loop(cond_ir, body_ir, "init", max_iters=10)
+            control.while_loop(cond_ir, body_ir, "init", max_iters=10)
 
     def test_rejects_mismatched_body_structure(self):
-        cond_ir = trace(lambda x: False)("x")
-        body_ir = trace(lambda x: (x, x))("x")
+        cond_ir = stage.trace(lambda x: False)("x")
+        body_ir = stage.trace(lambda x: (x, x))("x")
         with pytest.raises(AssertionError, match="identical input/output structure"):
-            af.while_loop(cond_ir, body_ir, "init", max_iters=10)
+            control.while_loop(cond_ir, body_ir, "init", max_iters=10)
 
 
 @pytest.mark.parametrize(
@@ -670,10 +681,10 @@ class TestWhileLoopValidation:
     ],
 )
 def test_switch_accepts_matching_key_types(keys):
-    left = af.trace(lambda x: af.string.concat("L", x))("X")
-    right = af.trace(lambda x: af.string.concat("R", x))("X")
+    left = stage.trace(lambda x: string.concat("L", x))("X")
+    right = stage.trace(lambda x: string.concat("R", x))("X")
     branches = dict(zip(keys, (left, right), strict=True))
-    ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
+    ir = stage.trace(lambda key: control.switch(key, branches, "X"))(keys[0])
     assert ir.call(keys[0]) == "LX"
     assert ir.call(keys[1]) == "RX"
 
@@ -681,13 +692,13 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
-    af.core.aval_types[Key] = lambda _: af.string.StrAVal()
-    af.stage.trace_types.add(Key)
-    left = af.trace(lambda x: af.string.concat("L", x))("X")
-    right = af.trace(lambda x: af.string.concat("R", x))("X")
+    core.aval_types[Key] = lambda _: string.StrAVal()
+    stage.trace_types.add(Key)
+    left = stage.trace(lambda x: string.concat("L", x))("X")
+    right = stage.trace(lambda x: string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))
     branches = dict(zip(keys, (left, right), strict=True))
-    ir = af.trace(lambda key: af.switch(key, branches, "X"))(keys[0])
+    ir = stage.trace(lambda key: control.switch(key, branches, "X"))(keys[0])
     assert ir.call(keys[0]) == "LX"
     assert ir.call(keys[1]) == "RX"
 
@@ -705,25 +716,25 @@ def test_switch_accepts_registered_key_type():
     ],
 )
 def test_switch_rejects_invalid_key_types(keys, selector):
-    left = af.trace(lambda x: af.string.concat("L", x))("X")
-    right = af.trace(lambda x: af.string.concat("R", x))("X")
+    left = stage.trace(lambda x: string.concat("L", x))("X")
+    right = stage.trace(lambda x: string.concat("R", x))("X")
     branches = dict(zip(keys, (left, right), strict=True))
     with pytest.raises(AssertionError):
-        af.trace(lambda key: af.switch(key, branches, "X"))(selector)
+        stage.trace(lambda key: control.switch(key, branches, "X"))(selector)
 
 
 def test_switch_rejects_different_literal_branch_outputs():
-    branches = {"L": af.trace(lambda: "L")(), "R": af.trace(lambda: "R")()}
+    branches = {"L": stage.trace(lambda: "L")(), "R": stage.trace(lambda: "R")()}
     with pytest.raises(AssertionError):
-        af.trace(lambda key: af.switch(key, branches))("L")
+        stage.trace(lambda key: control.switch(key, branches))("L")
 
 
 def switch_ir(prefixes):
     branches = {
-        key: af.trace(lambda x, prefix=prefix: af.string.concat(prefix, x))("X")
+        key: stage.trace(lambda x, prefix=prefix: string.concat(prefix, x))("X")
         for key, prefix in prefixes.items()
     }
-    return af.trace(switch_program(branches))(next(iter(branches)), "hello")
+    return stage.trace(switch_program(branches))(next(iter(branches)), "hello")
 
 
 @pytest.fixture
@@ -733,10 +744,10 @@ def numbered_switch():
 
 class TestSwitch:
     def test_switch_rejects_kwargs(self):
-        branches = {"a": af.trace(lambda x: af.string.concat("A:", x))("X")}
+        branches = {"a": stage.trace(lambda x: string.concat("A:", x))("X")}
 
         with pytest.raises(AssertionError, match="switch.*keyword arguments"):
-            af.switch("a", branches, x="test")
+            control.switch("a", branches, x="test")
 
     @pytest.mark.parametrize(
         "executor, key, expected",
@@ -750,7 +761,7 @@ class TestSwitch:
     )
     def test_execution_and_structure(self, executor, key, expected, numbered_switch):
         ir = numbered_switch
-        assert [eqn.prim for eqn in ir.eqns] == [af.control.switch_p]
+        assert [eqn.prim for eqn in ir.eqns] == [control.switch_p]
         result = executor(ir, key, "hello")
         assert result == expected
 
@@ -767,7 +778,7 @@ class TestSwitch:
         ],
     )
     def test_pushforward(self, executor, key, expected, numbered_switch):
-        ir = af.pushforward(numbered_switch)
+        ir = ad.pushforward(numbered_switch)
         args = ((key, "hello"), ("", "world"))
         result = executor(ir, *args)
         assert result == (expected, "world")
@@ -781,10 +792,10 @@ class TestSwitch:
         ],
     )
     def test_pullback(self, executor, key, numbered_switch):
-        ir = af.pullback(numbered_switch)
+        ir = ad.pullback(numbered_switch)
         args = ((key, "hello"), "grad")
         _, (c_key, c_x) = executor(ir, *args)
-        assert isinstance(c_key, af.core.Zero)
+        assert isinstance(c_key, core.Zero)
         assert c_x == "grad"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -815,19 +826,19 @@ class TestSwitch:
         ],
     )
     def test_batch(self, executor, axes, key, value, expected, numbered_switch):
-        ir = af.batch(numbered_switch, in_axes=axes)
+        ir = axis.batch(numbered_switch, in_axes=axes)
         result = executor(ir, key, value)
         assert result == expected
 
     @pytest.mark.parametrize(
         "transform, feedback, expected",
         [
-            pytest.param(af.pushforward, ("", ["ta", "tb"]), ["ta", "tb"], id="push"),
+            pytest.param(ad.pushforward, ("", ["ta", "tb"]), ["ta", "tb"], id="push"),
             pytest.param(
-                af.pullback,
+                ad.pullback,
                 ["grad1", "grad2"],
                 (
-                    af.core.Zero(af.core.primal_s.map(af.core.avalof("a"))),
+                    core.Zero(core.primal_s.map(core.avalof("a"))),
                     ["grad1", "grad2"],
                 ),
                 id="pull",
@@ -835,21 +846,21 @@ class TestSwitch:
         ],
     )
     def test_ad_of_batch(self, transform, feedback, expected):
-        ir = transform(af.batch(switch_ir({"a": "A:", "b": "B:"}), in_axes=(False, True)))
+        ir = transform(axis.batch(switch_ir({"a": "A:", "b": "B:"}), in_axes=(False, True)))
         out, derivative = ir.call(("a", ["a", "b"]), feedback)
         assert out == ["A:a", "A:b"]
         assert derivative == expected
 
     def test_switch_with_multiple_operands(self):
         branches = {
-            "concat": af.trace(af.string.concat)("A", "B"),
-            "format": af.trace(lambda a, b: af.string.format("{a} - {b}", a=a, b=b))("A", "B"),
+            "concat": stage.trace(string.concat)("A", "B"),
+            "format": stage.trace(lambda a, b: string.format("{a} - {b}", a=a, b=b))("A", "B"),
         }
 
         def program(key, x, y):
-            return af.switch(key, branches, x, y)
+            return control.switch(key, branches, x, y)
 
-        ir = af.trace(program)("concat", "Hello", "World")
+        ir = stage.trace(program)("concat", "Hello", "World")
         result = ir.call("concat", "Hello", "World")
         assert result == "HelloWorld"
         result = ir.call("format", "Hello", "World")
@@ -857,22 +868,22 @@ class TestSwitch:
 
     def test_branches_with_multiple_ops(self):
         def make_branch0(x):
-            step1 = af.string.format("[{x}]", x=x)
-            step2 = af.string.concat(step1, "!")
+            step1 = string.format("[{x}]", x=x)
+            step2 = string.concat(step1, "!")
             return step2
 
         def make_branch1(x):
-            step1 = af.string.format("({x})", x=x)
-            step2 = af.string.concat(step1, "?")
+            step1 = string.format("({x})", x=x)
+            step2 = string.concat(step1, "?")
             return step2
 
         branches = {
-            "brackets": af.trace(make_branch0)("X"),
-            "parens": af.trace(make_branch1)("X"),
+            "brackets": stage.trace(make_branch0)("X"),
+            "parens": stage.trace(make_branch1)("X"),
         }
 
         program = switch_program(branches)
 
-        ir = af.trace(program)("brackets", "test")
+        ir = stage.trace(program)("brackets", "test")
         assert ir.call("brackets", "hello") == "[hello]!"
         assert ir.call("parens", "hello") == "(hello)?"

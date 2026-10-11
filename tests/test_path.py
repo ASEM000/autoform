@@ -16,7 +16,16 @@ import asyncio
 
 import pytest
 
-import autoform as af
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.control as control
+import autoform.src.core as core
+import autoform.src.dead as dead
+import autoform.src.extend as extend
+import autoform.src.intercept as intercept
+import autoform.src.path as path
+import autoform.src.stage as stage
+import autoform.src.string as string
 from tests import aexecute, execute
 
 
@@ -26,24 +35,24 @@ def delay():
         await asyncio.sleep(value)
         return value
 
-    prim = af.core.Prim("test_path_delay")
-    af.extend.register_impl(prim, lambda value: value)
-    af.extend.register_abstract(prim, lambda value: value)
-    af.extend.register_aimpl(prim, aimpl)
+    prim = core.Prim("test_path_delay")
+    extend.register_impl(prim, lambda value: value)
+    extend.register_abstract(prim, lambda value: value)
+    extend.register_aimpl(prim, aimpl)
     return prim.bind
 
 
 class TestFactor:
     def test_factor_is_noop_in_normal_execution(self):
-        assert af.factor(1.0, name="neutral") is None
+        assert path.factor(1.0, name="neutral") is None
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_factor_traces_to_primitive(self, executor):
         def program(x: str, weight: float):
-            af.factor(weight, name="score")
-            return af.string.concat(x, "!")
+            path.factor(weight, name="score")
+            return string.concat(x, "!")
 
-        ir = af.trace(program)("x", 1.0)
+        ir = stage.trace(program)("x", 1.0)
 
         assert [eqn.prim.name for eqn in ir.eqns] == ["factor", "concat"]
         assert ir.eqns[0].out_tree == ()
@@ -51,19 +60,19 @@ class TestFactor:
 
     def test_factor_rejects_negative_weight_in_normal_execution(self):
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
-            af.factor(-0.1)
+            path.factor(-0.1)
 
     def test_factor_rejects_bool_weight(self):
         with pytest.raises(AssertionError, match="numeric factor weight"):
-            af.factor(True)
+            path.factor(True)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_factor_rejects_negative_dynamic_weight_at_runtime(self, executor):
         def program(weight: float):
-            af.factor(weight, name="score")
+            path.factor(weight, name="score")
             return "done"
 
-        ir = af.trace(program)(1.0)
+        ir = stage.trace(program)(1.0)
 
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
             executor(ir, -0.1)
@@ -71,20 +80,20 @@ class TestFactor:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_factor_rejects_negative_traced_literal_at_runtime(self, executor):
         def program():
-            af.factor(-0.1, name="score")
+            path.factor(-0.1, name="score")
             return "done"
 
-        ir = af.trace(program)()
+        ir = stage.trace(program)()
 
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
             executor(ir)
 
     def test_dce_preserves_factor(self):
         def program(x: str, weight: float):
-            af.factor(weight, name="score")
-            return af.string.concat(x, "!")
+            path.factor(weight, name="score")
+            return string.concat(x, "!")
 
-        dced = af.dce(af.trace(program)("x", 1.0))
+        dced = dead.dce(stage.trace(program)("x", 1.0))
 
         assert [eqn.prim.name for eqn in dced.eqns] == ["factor", "concat"]
 
@@ -93,27 +102,27 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_ir_returns_output_and_path_weight(self, executor):
         def program(x: str, weight: float):
-            af.factor(weight, name="score")
-            return af.string.concat(x, "!")
+            path.factor(weight, name="score")
+            return string.concat(x, "!")
 
-        ir = af.trace(program)("x", 1.0)
-        weight_ir = af.weight(ir)
+        ir = stage.trace(program)("x", 1.0)
+        weight_ir = path.weight(ir)
 
         output, weight = executor(weight_ir, "hello", 0.5)
 
         assert len(weight_ir.eqns) == 1
-        assert weight_ir.eqns[0].prim is af.path.weight_call_p
+        assert weight_ir.eqns[0].prim is path.weight_call_p
         assert output == "hello!"
         assert weight == 0.5
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_multiplies_factors(self, executor):
         def program(x: str):
-            af.factor(0.5, name="a")
-            af.factor(0.25, name="b")
+            path.factor(0.5, name="a")
+            path.factor(0.25, name="b")
             return x
 
-        output, weight = executor(af.weight(af.trace(program)("x")), "done")
+        output, weight = executor(path.weight(stage.trace(program)("x")), "done")
 
         assert output == "done"
         assert weight == pytest.approx(0.125)
@@ -121,10 +130,10 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_zero_factor_returns_zero_weight(self, executor):
         def program(x: str):
-            af.factor(0.0, name="reject")
+            path.factor(0.0, name="reject")
             return x
 
-        output, weight = executor(af.weight(af.trace(program)("x")), "done")
+        output, weight = executor(path.weight(stage.trace(program)("x")), "done")
 
         assert output == "done"
         assert weight == 0.0
@@ -132,23 +141,23 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_normal_call_ignores_factor_weight(self, executor):
         def program(x: str):
-            af.factor(0.5, name="score")
+            path.factor(0.5, name="score")
             return x
 
-        assert executor(af.trace(program)("x"), "done") == "done"
+        assert executor(stage.trace(program)("x"), "done") == "done"
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_intercepts_nested_factor(self, executor):
         def branch():
-            af.factor(0.25, name="branch")
+            path.factor(0.25, name="branch")
             return "hit"
 
-        branches = {"hit": af.trace(branch)()}
+        branches = {"hit": stage.trace(branch)()}
 
         def program(key: str):
-            return af.switch(key, branches)
+            return control.switch(key, branches)
 
-        output, weight = executor(af.weight(af.trace(program)("hit")), "hit")
+        output, weight = executor(path.weight(stage.trace(program)("hit")), "hit")
 
         assert output == "hit"
         assert weight == 0.25
@@ -156,20 +165,20 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_validates_factor_weight(self, executor):
         def program():
-            af.factor(-0.1, name="bad")
+            path.factor(-0.1, name="bad")
             return "done"
 
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
-            executor(af.weight(af.trace(program)()))
+            executor(path.weight(stage.trace(program)()))
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_over_weight_ir_scores_candidate_paths(self, executor):
         def program(candidate: str, likelihood: float):
-            af.factor(likelihood, name="evidence")
+            path.factor(likelihood, name="evidence")
             return candidate
 
-        ir = af.trace(program)("x", 1.0)
-        batched = af.batch(af.weight(ir), in_axes=(True, True))
+        ir = stage.trace(program)("x", 1.0)
+        batched = axis.batch(path.weight(ir), in_axes=(True, True))
 
         outputs, weights = executor(batched, ["x1", "x2"], [0.9, 0.2])
 
@@ -180,14 +189,14 @@ class TestWeight:
     def test_batch_over_weight_collects_in_batch_order(self, executor, delay):
         def program(seconds: float):
             value = delay(seconds)
-            value = af.checkpoint(value, key="seen", collection="debug")
-            af.factor(1.0, name="score")
+            value = intercept.checkpoint(value, key="seen", collection="debug")
+            path.factor(1.0, name="score")
             return value
 
-        ir = af.trace(program)(0.0)
-        batched = af.batch(af.weight(ir), in_axes=True)
+        ir = stage.trace(program)(0.0)
+        batched = axis.batch(path.weight(ir), in_axes=True)
 
-        with af.collect(collection="debug") as collected:
+        with intercept.collect(collection="debug") as collected:
             outputs, weights = executor(batched, [0.03, 0.01, 0.02])
 
         assert outputs == [0.03, 0.01, 0.02]
@@ -198,14 +207,14 @@ class TestWeight:
     def test_batch_over_weight_injects_in_batch_order(self, executor, delay):
         def program(seconds: float):
             value = delay(seconds)
-            value = af.checkpoint(value, key="seen", collection="cache")
-            af.factor(1.0, name="score")
+            value = intercept.checkpoint(value, key="seen", collection="cache")
+            path.factor(1.0, name="score")
             return value
 
-        ir = af.trace(program)(0.0)
-        batched = af.batch(af.weight(ir), in_axes=True)
+        ir = stage.trace(program)(0.0)
+        batched = axis.batch(path.weight(ir), in_axes=True)
 
-        with af.inject(collection="cache", values={"seen": [3.0, 1.0, 2.0]}):
+        with intercept.inject(collection="cache", values={"seen": [3.0, 1.0, 2.0]}):
             outputs, weights = executor(batched, [0.03, 0.01, 0.02])
 
         assert outputs == [3.0, 1.0, 2.0]
@@ -214,12 +223,12 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_posterior_can_be_normalized_outside_core(self, executor):
         def program(candidate: str, likelihood: float):
-            af.factor(likelihood, name="e")
+            path.factor(likelihood, name="e")
             return candidate
 
-        ir = af.trace(program)("x", 1.0)
+        ir = stage.trace(program)("x", 1.0)
         outputs, path_weights = executor(
-            af.batch(af.weight(ir), in_axes=(True, True)),
+            axis.batch(path.weight(ir), in_axes=(True, True)),
             ["x1", "x2"],
             [0.9, 0.2],
         )
@@ -233,13 +242,13 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_after_batch_scores_whole_batched_trace(self, executor):
         def program(candidate: str, likelihood: float):
-            af.factor(likelihood, name="evidence")
+            path.factor(likelihood, name="evidence")
             return candidate
 
-        ir = af.trace(program)("x", 1.0)
-        batched = af.batch(ir, in_axes=(True, True))
+        ir = stage.trace(program)("x", 1.0)
+        batched = axis.batch(ir, in_axes=(True, True))
 
-        outputs, path_weight = executor(af.weight(batched), ["x1", "x2"], [0.9, 0.2])
+        outputs, path_weight = executor(path.weight(batched), ["x1", "x2"], [0.9, 0.2])
 
         assert outputs == ["x1", "x2"]
         assert path_weight == pytest.approx(0.9 * 0.2)
@@ -247,14 +256,14 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_after_pushforward_scores_primal_trace_once(self, executor):
         def program(x: str, likelihood: float):
-            af.factor(likelihood, name="evidence")
-            return af.string.concat(x, "!")
+            path.factor(likelihood, name="evidence")
+            return string.concat(x, "!")
 
-        ir = af.trace(program)("x", 1.0)
-        pushforward_ir = af.pushforward(ir)
+        ir = stage.trace(program)("x", 1.0)
+        pushforward_ir = ad.pushforward(ir)
 
         (output, t), path_weight = executor(
-            af.weight(pushforward_ir),
+            path.weight(pushforward_ir),
             ("hello", 0.5),
             ("dhello", 0.0),
         )
@@ -266,53 +275,53 @@ class TestWeight:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_weight_after_pullback_scores_forward_trace_once(self, executor):
         def program(x: str, likelihood: float):
-            af.factor(likelihood, name="evidence")
-            return af.string.concat(x, "!")
+            path.factor(likelihood, name="evidence")
+            return string.concat(x, "!")
 
-        ir = af.trace(program)("x", 1.0)
-        pullback_ir = af.pullback(ir)
+        ir = stage.trace(program)("x", 1.0)
+        pullback_ir = ad.pullback(ir)
 
         (output, c), path_weight = executor(
-            af.weight(pullback_ir),
+            path.weight(pullback_ir),
             ("hello", 0.5),
             "feedback",
         )
 
         assert output == "hello!"
         assert c[0] == "feedback"
-        assert isinstance(c[1], af.core.Zero)
+        assert isinstance(c[1], core.Zero)
         assert path_weight == 0.5
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_pushforward_of_weight_ir_raises_not_supported(self, executor):
         def program(x: str, likelihood: float):
-            af.factor(likelihood, name="evidence")
-            return af.string.concat(x, "!")
+            path.factor(likelihood, name="evidence")
+            return string.concat(x, "!")
 
-        weight_ir = af.weight(af.trace(program)("x", 1.0))
+        weight_ir = path.weight(stage.trace(program)("x", 1.0))
 
         with pytest.raises(NotImplementedError, match=r"pushforward\(af\.weight\(ir\)\)"):
-            executor(af.pushforward(weight_ir), ("hello", 0.5), ("dhello", 0.0))
+            executor(ad.pushforward(weight_ir), ("hello", 0.5), ("dhello", 0.0))
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_pullback_of_weight_ir_raises_not_supported(self, executor):
         def program(x: str, likelihood: float):
-            af.factor(likelihood, name="evidence")
-            return af.string.concat(x, "!")
+            path.factor(likelihood, name="evidence")
+            return string.concat(x, "!")
 
-        weight_ir = af.weight(af.trace(program)("x", 1.0))
+        weight_ir = path.weight(stage.trace(program)("x", 1.0))
 
         with pytest.raises(NotImplementedError, match=r"pullback\(af\.weight\(ir\)\)"):
-            executor(af.pullback(weight_ir), ("hello", 0.5), ("feedback", 1.0))
+            executor(ad.pullback(weight_ir), ("hello", 0.5), ("feedback", 1.0))
 
     def test_dce_weight_ir_optimizes_inner_trace(self):
         def program(x: str, likelihood: float):
-            output = af.string.concat(x, "!")
-            af.factor(likelihood, name="evidence")
+            output = string.concat(x, "!")
+            path.factor(likelihood, name="evidence")
             return output
 
-        weight_ir = af.weight(af.trace(program)("x", 1.0))
-        dced = af.dce(weight_ir, out_used=(False, True))
+        weight_ir = path.weight(stage.trace(program)("x", 1.0))
+        dced = dead.dce(weight_ir, out_used=(False, True))
         inner_ir = dced.eqns[0].params["ir"]
 
         assert [eqn.prim.name for eqn in inner_ir.eqns] == ["factor"]

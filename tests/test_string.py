@@ -16,14 +16,17 @@ from typing import NamedTuple
 
 import pytest
 
-import autoform as af
-from autoform.numeric import BoolAVal
-from autoform.string import StrAVal, abstract_match
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.core as core
+import autoform.src.numeric as numeric
+import autoform.src.stage as stage
+import autoform.src.string as string
 from tests import aexecute, execute
 
 
 def match_yes(x):
-    return af.string.match(x, "yes")
+    return string.match(x, "yes")
 
 
 @pytest.mark.parametrize(
@@ -37,7 +40,7 @@ def match_yes(x):
     ],
 )
 def test_match(left, right, expected):
-    assert af.string.match(left, right) is expected
+    assert string.match(left, right) is expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -45,7 +48,7 @@ def test_match(left, right, expected):
     "program, traced, equal, unequal",
     [
         pytest.param(
-            lambda x: af.string.match(x, "yes"),
+            lambda x: string.match(x, "yes"),
             ("dummy",),
             ("yes",),
             ("no",),
@@ -61,14 +64,14 @@ def test_match(left, right, expected):
             id="eq-two-inputs",
         ),
         pytest.param(
-            af.string.match,
+            string.match,
             ("a", "b"),
             ("hello", "hello"),
             ("hello", "world"),
             id="match-two-inputs",
         ),
         pytest.param(
-            lambda x: af.string.match(x, "target"),
+            lambda x: string.match(x, "target"),
             ("dummy",),
             ("target",),
             ("other",),
@@ -78,8 +81,8 @@ def test_match(left, right, expected):
 )
 @pytest.mark.parametrize("expected", [True, False], ids=["equal", "unequal"])
 def test_match_lowering(executor, program, traced, equal, unequal, expected):
-    ir = af.trace(program)(*traced)
-    assert [eqn.prim for eqn in ir.eqns] == [af.string.match_p]
+    ir = stage.trace(program)(*traced)
+    assert [eqn.prim for eqn in ir.eqns] == [string.match_p]
     args = equal if expected else unequal
     actual = executor(ir, *args)
     assert actual is expected
@@ -98,9 +101,9 @@ def test_match_lowering(executor, program, traced, equal, unequal, expected):
             "leftright",
             id="add-two-inputs",
         ),
-        pytest.param(af.string.concat, ("a", "b"), ("hello", " world"), "hello world", id="concat"),
+        pytest.param(string.concat, ("a", "b"), ("hello", " world"), "hello world", id="concat"),
         pytest.param(
-            lambda x: af.string.format("Value: {x}", x=x),
+            lambda x: string.format("Value: {x}", x=x),
             ("test",),
             ("hello",),
             "Value: hello",
@@ -109,8 +112,8 @@ def test_match_lowering(executor, program, traced, equal, unequal, expected):
     ],
 )
 def test_concat_lowering(executor, program, traced, args, expected):
-    ir = af.trace(program)(*traced)
-    assert [eqn.prim for eqn in ir.eqns] == [af.string.concat_p]
+    ir = stage.trace(program)(*traced)
+    assert [eqn.prim for eqn in ir.eqns] == [string.concat_p]
     actual = executor(ir, *args)
     assert actual == expected
 
@@ -118,7 +121,7 @@ def test_concat_lowering(executor, program, traced, args, expected):
 @pytest.mark.parametrize(
     "program, args, error, message",
     [
-        pytest.param(af.string.match, ("yes", 1), AssertionError, "Expected strings", id="match"),
+        pytest.param(string.match, ("yes", 1), AssertionError, "Expected strings", id="match"),
         pytest.param(
             lambda x: x == 1,
             ("yes",),
@@ -143,7 +146,7 @@ def test_concat_lowering(executor, program, traced, args, expected):
             id="add-integer",
         ),
         pytest.param(
-            af.string.concat,
+            string.concat,
             ("a", "b", 1),
             AssertionError,
             "Expected strings",
@@ -153,43 +156,43 @@ def test_concat_lowering(executor, program, traced, args, expected):
 )
 def test_invalid_traced_operands(program, args, error, message):
     with pytest.raises(error, match=message):
-        af.trace(program)(*args)
+        stage.trace(program)(*args)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "transform, args, expected",
     [
-        pytest.param(af.batch, (["yes", "yes", "yes"],), [True, True, True], id="batch-equal"),
-        pytest.param(af.batch, (["yes", "no", "yes"],), [True, False, True], id="batch-mixed"),
+        pytest.param(axis.batch, (["yes", "yes", "yes"],), [True, True, True], id="batch-equal"),
+        pytest.param(axis.batch, (["yes", "no", "yes"],), [True, False, True], id="batch-mixed"),
         pytest.param(
-            af.pushforward,
+            ad.pushforward,
             (("yes",), ("tangent_input",)),
-            (True, af.core.Zero(BoolAVal())),
+            (True, core.Zero(numeric.BoolAVal())),
             id="pushforward-true",
         ),
         pytest.param(
-            af.pushforward,
+            ad.pushforward,
             (("no",), ("tangent_input",)),
-            (False, af.core.Zero(BoolAVal())),
+            (False, core.Zero(numeric.BoolAVal())),
             id="pushforward-false",
         ),
         pytest.param(
-            af.pullback,
-            (("yes",), af.core.Zero(BoolAVal())),
-            (True, (af.core.Zero(StrAVal()),)),
+            ad.pullback,
+            (("yes",), core.Zero(numeric.BoolAVal())),
+            (True, (core.Zero(string.StrAVal()),)),
             id="pullback-true",
         ),
         pytest.param(
-            af.pullback,
-            (("no",), af.core.Zero(BoolAVal())),
-            (False, (af.core.Zero(StrAVal()),)),
+            ad.pullback,
+            (("no",), core.Zero(numeric.BoolAVal())),
+            (False, (core.Zero(string.StrAVal()),)),
             id="pullback-false",
         ),
     ],
 )
 def test_match_transforms(executor, transform, args, expected):
-    ir = transform(af.trace(match_yes)("dummy"))
+    ir = transform(stage.trace(match_yes)("dummy"))
     actual = executor(ir, *args)
     assert actual == expected
 
@@ -202,7 +205,7 @@ def test_match_transforms(executor, transform, args, expected):
     ],
 )
 def test_match_batch_axes(axes, args):
-    ir = af.batch(af.trace(af.string.match)("a", "b"), in_axes=axes)
+    ir = axis.batch(stage.trace(string.match)("a", "b"), in_axes=axes)
     assert ir.call(*args) == [True, False, True]
 
 
@@ -211,18 +214,18 @@ def test_match_batch_axes(axes, args):
     [
         pytest.param(("yes", "yes"), id="equal"),
         pytest.param(("yes", "no"), id="unequal"),
-        pytest.param((StrAVal(), "yes"), id="left-abstract"),
-        pytest.param(("yes", StrAVal()), id="right-abstract"),
-        pytest.param((StrAVal(), StrAVal()), id="both-abstract"),
+        pytest.param((string.StrAVal(), "yes"), id="left-abstract"),
+        pytest.param(("yes", string.StrAVal()), id="right-abstract"),
+        pytest.param((string.StrAVal(), string.StrAVal()), id="both-abstract"),
     ],
 )
 def test_match_abstract(operands):
-    assert abstract_match(operands) == BoolAVal()
+    assert string.abstract_match(operands) == numeric.BoolAVal()
 
 
 def test_match_abstract_rejects_nonstring():
     with pytest.raises(AssertionError, match="Expected strings"):
-        abstract_match(("yes", 1))
+        string.abstract_match(("yes", 1))
 
 
 @pytest.mark.parametrize(
@@ -231,12 +234,12 @@ def test_match_abstract_rejects_nonstring():
 )
 def test_match_in_larger_program(status, expected):
     def process(status, text):
-        return af.string.match(status, "active"), af.string.format(
+        return string.match(status, "active"), string.format(
             "Status check: {text}",
             text=text,
         )
 
-    assert af.trace(process)("status", "text").call(status, "hello") == (
+    assert stage.trace(process)("status", "text").call(status, "hello") == (
         expected,
         "Status check: hello",
     )
@@ -244,12 +247,12 @@ def test_match_in_larger_program(status, expected):
 
 def test_batch_match_with_format():
     def process(status):
-        return af.string.match(status, "yes"), af.string.format(
+        return string.match(status, "yes"), string.format(
             "Input was: {status}",
             status=status,
         )
 
-    ir = af.batch(af.trace(process)("status"))
+    ir = axis.batch(stage.trace(process)("status"))
     assert ir.call(["yes", "no", "yes"]) == (
         [True, False, True],
         ["Input was: yes", "Input was: no", "Input was: yes"],
@@ -264,26 +267,26 @@ def test_batch_match_with_format():
     ],
 )
 def test_concat(args, expected):
-    assert af.string.concat(*args) == expected
+    assert string.concat(*args) == expected
 
 
 def test_concat_rejects_nonstring():
     with pytest.raises(TypeError):
-        af.string.concat("A", 1)
+        string.concat("A", 1)
 
 
 def test_format_lowers_template_and_args_to_concat():
     def program(x):
-        return af.string.format("Hello, {x}!", x=x)
+        return string.format("Hello, {x}!", x=x)
 
-    ir = af.trace(program)("World")
+    ir = stage.trace(program)("World")
     assert len(ir.eqns) == 1
     eqn = ir.eqns[0]
-    assert eqn.prim is af.string.concat_p
+    assert eqn.prim is string.concat_p
     prefix, value, suffix = eqn.in_tree
     assert prefix == "Hello, "
     assert suffix == "!"
-    assert isinstance(value, af.stage.Var)
+    assert isinstance(value, stage.Var)
     assert ir.call("x0") == "Hello, x0!"
 
 
@@ -300,17 +303,17 @@ def test_format_lowers_template_and_args_to_concat():
     ],
 )
 def test_format(template, values, expected):
-    assert af.string.format(template, **values) == expected
+    assert string.format(template, **values) == expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_format_batch_broadcast(executor):
 
     def greet(greeting, name):
-        return af.string.format("{greeting}: {name}", greeting=greeting, name=name)
+        return string.format("{greeting}: {name}", greeting=greeting, name=name)
 
-    ir = af.trace(greet)("x", "y")
-    batched = af.batch(ir, in_axes=(False, True))
+    ir = stage.trace(greet)("x", "y")
+    batched = axis.batch(ir, in_axes=(False, True))
     expected = ["Hello: x0", "Hello: x1"]
     args = ("Hello", ["x0", "x1"])
     actual = executor(batched, *args)
@@ -344,21 +347,21 @@ def test_format_batch_broadcast(executor):
 def test_format_lowers_to_concat(executor, template, values, expected, feedback):
 
     def program(values):
-        return af.string.format(template, **values)
+        return string.format(template, **values)
 
-    ir = af.trace(program)(values)
+    ir = stage.trace(program)(values)
     assert len(ir.eqns) == 1
-    assert ir.eqns[0].prim is af.string.concat_p
+    assert ir.eqns[0].prim is string.concat_p
     p = template.format(**values)
     assert program(values) == p
     actual = executor(ir, values)
     assert actual == p
-    pf = af.pushforward(ir)
+    pf = ad.pushforward(ir)
     result = executor(pf, (values,), (values,))
-    assert af.core.materialize_zeros(result) == (p, expected)
-    pb = af.pullback(ir)
+    assert core.materialize_zeros(result) == (p, expected)
+    pb = ad.pullback(ir)
     result = executor(pb, (values,), "g")
-    assert af.core.materialize_zeros(result) == (p, (feedback,))
+    assert core.materialize_zeros(result) == (p, (feedback,))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -368,17 +371,17 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
         items: tuple[str, str]
 
     def program(row):
-        return af.string.format("{name}/{item}/{name}", name=row.name, item=row.items[0])
+        return string.format("{name}/{item}/{name}", name=row.name, item=row.items[0])
 
     row = Record("A", ("B", "C"))
-    ir = af.trace(program)(row)
-    assert ir.eqns[0].prim is af.string.concat_p
-    pf = af.pushforward(ir)
+    ir = stage.trace(program)(row)
+    assert ir.eqns[0].prim is string.concat_p
+    pf = ad.pushforward(ir)
     direction = Record("da", ("db", "dc"))
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")
-    pb = af.pullback(ir)
+    pb = ad.pullback(ir)
     expected = ("A/B/A", (Record("gg", ("g", "")),))
-    assert af.core.materialize_zeros(executor(pb, (row,), "g")) == expected
+    assert core.materialize_zeros(executor(pb, (row,), "g")) == expected
 
 
 @pytest.mark.parametrize(
@@ -392,23 +395,23 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
 )
 def test_format_rejects_unsupported_fields(template, unsupported):
     def program(x):
-        return af.string.format(template, x=x)
+        return string.format(template, x=x)
 
     with pytest.raises(AssertionError, match="`format` does not support " + unsupported):
         program("A")
     with pytest.raises(AssertionError, match="`format` does not support " + unsupported):
-        af.trace(program)("A")
+        stage.trace(program)("A")
 
 
 @pytest.mark.parametrize("field", ["", "0", "0.real", "0[0]", "x.name", "x[0]"])
 def test_format_does_not_resolve_field_paths(field):
     def program(x):
-        return af.string.format("{" + field + "}", x=x)
+        return string.format("{" + field + "}", x=x)
 
     with pytest.raises(AssertionError, match="Template field name is not found"):
         program("A")
     with pytest.raises(AssertionError, match="Template field name is not found"):
-        af.trace(program)("A")
+        stage.trace(program)("A")
 
 
 @pytest.mark.parametrize(
@@ -421,21 +424,21 @@ def test_format_does_not_resolve_field_paths(field):
 )
 def test_format_rejects_unused_arguments(template, values):
     def program(values):
-        return af.string.format(template, **values)
+        return string.format(template, **values)
 
     with pytest.raises(AssertionError, match="Unused format arguments"):
         program(values)
     with pytest.raises(AssertionError, match="Unused format arguments"):
-        af.trace(program)(values)
+        stage.trace(program)(values)
 
 
 def test_format_requires_keyword_arguments():
     with pytest.raises(TypeError):
-        af.string.format("{x}", "A")
+        string.format("{x}", "A")
 
 
 def test_format_requires_string_values():
     with pytest.raises(TypeError):
-        af.string.format("{value}", value=1)
+        string.format("{value}", value=1)
     with pytest.raises(AssertionError, match="Expected strings"):
-        af.trace(lambda x: af.string.format("{x}", x=x))(1)
+        stage.trace(lambda x: string.format("{x}", x=x))(1)

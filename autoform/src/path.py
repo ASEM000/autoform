@@ -20,14 +20,12 @@ import asyncio
 import math
 from collections.abc import Hashable
 
-import autoform.core as core
-import autoform.dead as dead
-import autoform.memo as memo
-import autoform.order as order
-import autoform.stage as stage
-import autoform.utils as utils
-
-__all__ = ["factor", "weight"]
+import autoform.src.core as core
+import autoform.src.dead as dead
+import autoform.src.memo as memo
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.utils as utils
 
 factor_p = core.Prim("factor")
 dead.non_dce_primitives.add(factor_p)

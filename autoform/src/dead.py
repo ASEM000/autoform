@@ -19,11 +19,9 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 
-import autoform.core as core
-import autoform.stage as stage
-import autoform.utils as utils
-
-__all__ = ["dce"]
+import autoform.src.core as core
+import autoform.src.stage as stage
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type UsedTree = Tree[bool]

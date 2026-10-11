@@ -20,16 +20,14 @@ import functools as ft
 from collections import defaultdict
 from typing import Any
 
-import autoform.core as core
-import autoform.dead as dead
-import autoform.order as order
-import autoform.stage as stage
-import autoform.utils as utils
+import autoform.src.core as core
+import autoform.src.dead as dead
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 
-
-__all__ = ["cot_accum", "pushforward", "pullback"]
 
 type TreePair = tuple[Tree, Tree]
 
@@ -377,7 +375,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.core.Zero(af.core.primal_s.map(af.core.avalof("")))
+        # >>> z = af.extend.Zero(af.extend.primal_s.map(af.extend.avalof("")))
         # >>> af.pullback(ir).call(("a",), (z, z))
         # (('a', 'a'), (Zero(StrAVal()),))
         first_zero, *rest_zero = cots
@@ -388,7 +386,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.core.Zero(af.core.primal_s.map(af.core.avalof("")))
+        # >>> z = af.extend.Zero(af.extend.primal_s.map(af.extend.avalof("")))
         # >>> af.pullback(ir).call(("a",), ("df", z))
         # (('a', 'a'), ('df',))
         return non_zero[0]

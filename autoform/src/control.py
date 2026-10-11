@@ -19,15 +19,13 @@ from __future__ import annotations
 import functools as ft
 from collections.abc import Hashable
 
-import autoform.ad as ad
-import autoform.axis as axis
-import autoform.core as core
-import autoform.dead as dead
-import autoform.order as order
-import autoform.stage as stage
-import autoform.utils as utils
-
-__all__ = ["stop_gradient", "switch", "while_loop", "fixpoint"]
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.core as core
+import autoform.src.dead as dead
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.utils as utils
 
 zip = utils.strict_zip
 

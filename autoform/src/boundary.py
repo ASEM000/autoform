@@ -20,14 +20,12 @@ import functools as ft
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-import autoform.ad as ad
-import autoform.axis as axis
-import autoform.core as core
-import autoform.dead as dead
-import autoform.stage as stage
-import autoform.utils as utils
-
-__all__ = ["custom"]
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.core as core
+import autoform.src.dead as dead
+import autoform.src.stage as stage
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
@@ -190,7 +188,7 @@ class CustomFunc:
             ...     p, t = in_tree
             ...     (dx,) = t
             ...     out_p = call(*p)
-            ...     out_t = "delta " + af.core.materialize_zeros(dx)
+            ...     out_t = "delta " + af.extend.materialize_zeros(dx)
             ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
             >>> af.pushforward(ir).call(("hello",), ("change",))
@@ -213,7 +211,7 @@ class CustomFunc:
             ...     p, t = in_tree
             ...     (dx,) = t
             ...     out_p = call(*p)
-            ...     out_t = "async delta " + af.core.materialize_zeros(dx)
+            ...     out_t = "async delta " + af.extend.materialize_zeros(dx)
             ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
             >>> asyncio.run(af.pushforward(ir).acall(("hello",), ("change",)))
@@ -325,6 +323,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     produce the same results as transforming the function body directly.
 
     The returned wrapper supports these rule registration decorators:
+
     - ``set_pushforward(rule)`` for a synchronous pushforward rule.
     - ``aset_pushforward(rule)`` for an asynchronous pushforward rule.
     - ``set_pullback(rule)`` for a synchronous pullback backward rule.
@@ -336,6 +335,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     available as the keyword-only ``call`` argument, so a rule can use
     ``call(*primals)`` when it wants to reuse the normal primal behavior.
     The rule signatures are:
+
     - Pushforward: ``rule((primals, tangents), /, *, call) -> (out_p, out_t)``.
     - Pullback backward:
       ``rule(((primals, output), cotangent), /, *, call) -> cotangents``.
@@ -383,7 +383,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     p, t = in_tree
         ...     (dx,) = t
         ...     out_p = call(*p)
-        ...     out_t = "delta: " + af.core.materialize_zeros(dx)
+        ...     out_t = "delta: " + af.extend.materialize_zeros(dx)
         ...     return out_p, out_t
         >>> af.pushforward(base).call(("hello",), ("change",))
         ('[hello]', 'delta: change')
@@ -414,7 +414,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         A common use is wrapping an LM call so the forward call remains normal,
         while pushforward and pullback use prompts written for that application.
 
-        >>> from autoform.core import materialize_zeros
+        >>> from autoform.extend import materialize_zeros
         >>> @af.custom
         ... def summarize(text, model):
         ...     message = "Summarize this in one sentence: " + text

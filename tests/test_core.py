@@ -14,53 +14,60 @@
 
 import pytest
 
-import autoform as af
-import autoform.check as check
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.check as check
+import autoform.src.core as core
+import autoform.src.extend as extend
+import autoform.src.numeric as numeric
+import autoform.src.stage as stage
+import autoform.src.string as string
+import autoform.src.utils as utils
 from tests import Blob, BlobAVal, aexecute, execute
 
 
 @pytest.mark.parametrize(
     "expected",
     [
-        pytest.param(af.numeric.FloatAVal(), id="aval"),
-        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="zero"),
+        pytest.param(numeric.FloatAVal(), id="aval"),
+        pytest.param(core.Zero(numeric.FloatAVal()), id="zero"),
         pytest.param(3.0, id="concrete"),
     ],
 )
 @pytest.mark.parametrize(
     "value",
     [
-        pytest.param(af.numeric.FloatAVal(), id="aval"),
-        pytest.param(af.core.Zero(af.numeric.FloatAVal()), id="zero"),
+        pytest.param(numeric.FloatAVal(), id="aval"),
+        pytest.param(core.Zero(numeric.FloatAVal()), id="zero"),
         pytest.param(3.0, id="concrete"),
     ],
 )
 def test_check_representations(expected, value):
-    af.core.avalof(expected).check(value)
+    core.avalof(expected).check(value)
     with pytest.raises(TypeError, match="Expected StrAVal"):
-        af.string.StrAVal().check(value)
+        string.StrAVal().check(value)
 
 
 def test_avalof_requires_explicit_subclass_registration():
-    class FloatAVal(af.numeric.FloatAVal): ...
+    class FloatAVal(numeric.FloatAVal): ...
 
     x = FloatAVal()
     with pytest.raises(TypeError, match="No aval rule registered"):
-        af.core.avalof(x)
+        core.avalof(x)
 
-    af.core.aval_types[FloatAVal] = lambda aval: aval
-    assert af.core.avalof(x) is x
-    assert af.core.avalof(af.core.Zero(x)) is x
-    af.core.avalof(x).check(x)
+    core.aval_types[FloatAVal] = lambda aval: aval
+    assert core.avalof(x) is x
+    assert core.avalof(core.Zero(x)) is x
+    core.avalof(x).check(x)
     with pytest.raises(TypeError, match="Expected FloatAVal"):
-        af.core.avalof(x).check(3.0)
+        core.avalof(x).check(3.0)
 
 
 class TestAVal:
     def test_default_equality_and_hash(self):
-        class X(af.core.AVal): ...
+        class X(core.AVal): ...
 
-        class Y(af.core.AVal): ...
+        class Y(core.AVal): ...
 
         assert X() == X()
         assert X() != Y()
@@ -72,26 +79,22 @@ class TestAVal:
         "aval, wrap",
         [
             pytest.param(BlobAVal(3), lambda x: x, id="value"),
-            pytest.param(BlobAVal(3), lambda x: af.ad.PushforwardBox(None, x, x), id="pushforward"),
-            pytest.param(
-                BlobAVal(3), lambda x: af.ad.PullbackFwdBox(None, x), id="pullback-forward"
-            ),
-            pytest.param(
-                BlobAVal(3), lambda x: af.ad.PullbackBwdBox(None, x), id="pullback-backward"
-            ),
-            pytest.param(BlobAVal(3), lambda x: af.axis.BatchBox(None, x, False), id="broadcast"),
-            pytest.param(BlobAVal(3), lambda x: af.axis.BatchBox(None, [x], True), id="batch"),
+            pytest.param(BlobAVal(3), lambda x: ad.PushforwardBox(None, x, x), id="pushforward"),
+            pytest.param(BlobAVal(3), lambda x: ad.PullbackFwdBox(None, x), id="pullback-forward"),
+            pytest.param(BlobAVal(3), lambda x: ad.PullbackBwdBox(None, x), id="pullback-backward"),
+            pytest.param(BlobAVal(3), lambda x: axis.BatchBox(None, x, False), id="broadcast"),
+            pytest.param(BlobAVal(3), lambda x: axis.BatchBox(None, [x], True), id="batch"),
         ],
     )
     def test_check_respects_metadata_equality(self, aval, wrap):
-        af.core.avalof(aval).check(wrap(af.core.Zero(BlobAVal(3))))
+        core.avalof(aval).check(wrap(core.Zero(BlobAVal(3))))
         with pytest.raises(TypeError, match="Expected"):
-            af.core.avalof(aval).check(wrap(af.core.Zero(BlobAVal(4))))
+            core.avalof(aval).check(wrap(core.Zero(BlobAVal(4))))
 
 
 class TestSpace:
     def test_registration_and_replacement(self):
-        space = af.core.Space("blob")
+        space = core.Space("blob")
         rule = lambda value: BlobAVal(value.size)
         replacement = lambda value: BlobAVal(value.size + 1)
         space.set(BlobAVal, rule)
@@ -100,11 +103,11 @@ class TestSpace:
             space.set(BlobAVal, replacement)
         space.set(BlobAVal, replacement, replace=True)
         assert space.map(BlobAVal(3)) == BlobAVal(4)
-        zero = af.core.Zero(space.map(BlobAVal(3)))
-        assert isinstance(zero, af.core.Zero)
+        zero = core.Zero(space.map(BlobAVal(3)))
+        assert isinstance(zero, core.Zero)
         assert zero.aval == BlobAVal(4)
         with pytest.raises(AssertionError, match="No concrete zero defined"):
-            af.core.materialize_zeros(zero)
+            core.materialize_zeros(zero)
 
     @pytest.mark.parametrize(
         "value_type, rule, replace, message",
@@ -116,40 +119,40 @@ class TestSpace:
     )
     def test_invalid_registration(self, value_type, rule, replace, message):
         with pytest.raises(AssertionError, match=message):
-            af.core.Space("blob").set(value_type, rule, replace=replace)
+            core.Space("blob").set(value_type, rule, replace=replace)
 
     def test_missing_rule(self):
         with pytest.raises(TypeError, match="No empty aval rule registered"):
-            af.core.Space("empty").map(BlobAVal(3))
+            core.Space("empty").map(BlobAVal(3))
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.primal_s, id="primal"),
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(core.primal_s, id="primal"),
+            pytest.param(core.tangent_s, id="tangent"),
+            pytest.param(core.cotangent_s, id="cotangent"),
         ],
     )
     @pytest.mark.parametrize(
         "aval",
         [
-            pytest.param(af.string.StrAVal(), id="string"),
-            pytest.param(af.numeric.FloatAVal(), id="float"),
-            pytest.param(af.numeric.BoolAVal(), id="boolean"),
+            pytest.param(string.StrAVal(), id="string"),
+            pytest.param(numeric.FloatAVal(), id="float"),
+            pytest.param(numeric.BoolAVal(), id="boolean"),
         ],
     )
     def test_builtin_ad_spaces_preserve_aval(self, space, aval):
         assert space.map(aval) is aval
 
     def test_custom_ad_spaces(self):
-        class TextAVal(af.core.AVal): ...
+        class TextAVal(core.AVal): ...
 
-        class TextEditAVal(af.core.AVal): ...
+        class TextEditAVal(core.AVal): ...
 
-        class TextFeedbackAVal(af.core.AVal): ...
+        class TextFeedbackAVal(core.AVal): ...
 
-        tangent_s = af.core.Space("tangent")
-        cotangent_s = af.core.Space("cotangent")
+        tangent_s = core.Space("tangent")
+        cotangent_s = core.Space("cotangent")
         tangent_s.set(TextAVal, lambda _: TextEditAVal())
         tangent_s.set(TextEditAVal, lambda aval: aval)
         cotangent_s.set(TextAVal, lambda _: TextFeedbackAVal())
@@ -162,50 +165,50 @@ class TestSpace:
         assert isinstance(c, TextFeedbackAVal)
         assert tangent_s.map(t) is t
         assert cotangent_s.map(c) is c
-        assert isinstance(af.core.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
-        assert isinstance(af.core.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
+        assert isinstance(core.Zero(tangent_s.map(TextAVal())).aval, TextEditAVal)
+        assert isinstance(core.Zero(cotangent_s.map(TextAVal())).aval, TextFeedbackAVal)
 
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(af.core.tangent_s, id="tangent"),
-            pytest.param(af.core.cotangent_s, id="cotangent"),
+            pytest.param(core.tangent_s, id="tangent"),
+            pytest.param(core.cotangent_s, id="cotangent"),
         ],
     )
     def test_missing_ad_space_rule(self, space):
-        class UnknownAVal(af.core.AVal): ...
+        class UnknownAVal(core.AVal): ...
 
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
             space.map(UnknownAVal())
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
-            af.core.Zero(space.map(UnknownAVal()))
+            core.Zero(space.map(UnknownAVal()))
 
 
 class TestZero:
     def test_zero_string_contract(self):
-        z = af.core.Zero(af.string.StrAVal())
-        assert isinstance(z, af.core.Zero)
-        assert z.aval == af.string.StrAVal()
-        assert z == af.core.Zero(af.string.StrAVal())
-        assert z != af.core.Zero(af.numeric.BoolAVal())
-        assert af.core.Zero(af.core.primal_s.map(af.core.avalof(z))) == z
-        assert af.core.materialize_zeros(z) == ""
-        assert af.core.avalof(z) == af.string.StrAVal()
-        assert not af.stage.is_traceable(z)
+        z = core.Zero(string.StrAVal())
+        assert isinstance(z, core.Zero)
+        assert z.aval == string.StrAVal()
+        assert z == core.Zero(string.StrAVal())
+        assert z != core.Zero(numeric.BoolAVal())
+        assert core.Zero(core.primal_s.map(core.avalof(z))) == z
+        assert core.materialize_zeros(z) == ""
+        assert core.avalof(z) == string.StrAVal()
+        assert not stage.is_traceable(z)
 
     def test_zero_requires_aval(self):
         with pytest.raises(AssertionError, match="Expected AVal"):
-            af.core.Zero(str)
+            core.Zero(str)
 
     def test_zero_non_differentiable_type(self):
-        z = af.core.Zero(af.numeric.BoolAVal())
-        assert isinstance(z, af.core.Zero)
-        assert z.aval == af.numeric.BoolAVal()
+        z = core.Zero(numeric.BoolAVal())
+        assert isinstance(z, core.Zero)
+        assert z.aval == numeric.BoolAVal()
         with pytest.raises(AssertionError, match="No concrete zero defined"):
-            af.core.materialize_zeros(z)
+            core.materialize_zeros(z)
 
     def test_zero_materializes_with_aval_metadata(self):
-        class BlobAVal(af.core.AVal):
+        class BlobAVal(core.AVal):
             __slots__ = ["size"]
 
             def __init__(self, size):
@@ -214,68 +217,68 @@ class TestZero:
             def zero(self):
                 return "zero", self.size
 
-        assert af.core.materialize_zeros(af.core.Zero(BlobAVal(3))) == ("zero", 3)
+        assert core.materialize_zeros(core.Zero(BlobAVal(3))) == ("zero", 3)
 
 
 class TestPrimitive:
     def test_creation(self):
-        p = af.core.Prim("test_prim")
+        p = core.Prim("test_prim")
         assert p.name == "test_prim"
         assert repr(p) == "test_prim"
 
 
 class TestBind:
     def test_bind_using(self):
-        p = af.core.Prim("custom_bind")
+        p = core.Prim("custom_bind")
 
         def impl(in_tree, *, multiplier):
             return in_tree * multiplier
 
         def abstract_rule(in_tree, *, multiplier):
-            return af.string.StrAVal()
+            return string.StrAVal()
 
-        af.extend.register_impl(p, impl)
-        af.extend.register_abstract(p, abstract_rule)
+        extend.register_impl(p, impl)
+        extend.register_abstract(p, abstract_rule)
 
         def func(x):
             return p.bind(x, multiplier=3)
 
-        ir = af.trace(func)("A")
+        ir = stage.trace(func)("A")
         result = ir.call("B")
         assert result == "BBB"
 
 
 def test_interpreter_context_restores_default():
-    assert type(af.core.active_interpreter.get()) is af.core.EvalInterpreter
-    tracer = af.stage.TraceInterpreter()
-    with af.core.using_interpreter(tracer) as active:
+    assert type(core.active_interpreter.get()) is core.EvalInterpreter
+    tracer = stage.TraceInterpreter()
+    with core.using_interpreter(tracer) as active:
         assert active is tracer
-        af.string.format("Hello, {value}!", value=af.stage.Var.fresh(aval=af.string.StrAVal()))
+        string.format("Hello, {value}!", value=stage.Var.fresh(aval=string.StrAVal()))
         assert len(tracer.eqns) == 1
-    assert type(af.core.active_interpreter.get()) is af.core.EvalInterpreter
-    assert af.string.concat("a", "b") == "ab"
+    assert type(core.active_interpreter.get()) is core.EvalInterpreter
+    assert string.concat("a", "b") == "ab"
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_custom_rule_interpreter(executor):
-    rules = af.extend.Rule("operation_count")
-    arules = af.extend.Rule("aoperation_count")
+    rules = core.Rule("operation_count")
+    arules = core.Rule("aoperation_count")
     rules.set(
-        af.extend.concat_p, lambda values: sum(v if isinstance(v, int) else 0 for v in values) + 1
+        string.concat_p, lambda values: sum(v if isinstance(v, int) else 0 for v in values) + 1
     )
-    arules.set(af.extend.concat_p, af.utils.asyncify(rules.get(af.extend.concat_p)))
+    arules.set(string.concat_p, utils.asyncify(rules.get(string.concat_p)))
     rules.set(check.typecheck_p, check.impl_check)
-    arules.set(check.typecheck_p, af.utils.asyncify(check.impl_check))
+    arules.set(check.typecheck_p, utils.asyncify(check.impl_check))
 
-    class OperationCountInterpreter(af.core.Interpreter):
+    class OperationCountInterpreter(core.Interpreter):
         def interpret(self, prim, in_tree, /, **params):
             return rules.get(prim)(in_tree, **params)
 
         async def ainterpret(self, prim, in_tree, /, **params):
             return await arules.get(prim)(in_tree, **params)
 
-    ir = af.trace(lambda x, y: (x + y) + y)("x", "y")
-    with af.core.using_interpreter(OperationCountInterpreter()):
+    ir = stage.trace(lambda x, y: (x + y) + y)("x", "y")
+    with core.using_interpreter(OperationCountInterpreter()):
         with pytest.raises(TypeError, match="Expected StrAVal"):
             executor(ir, "x", "y")
     assert executor(ir, "x", "y") == "xyy"

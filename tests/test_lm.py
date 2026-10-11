@@ -20,9 +20,15 @@ import optree
 import pytest
 from litellm import ResponsesAPIResponse
 
-import autoform as af
-from autoform.lm import describe, parse
-from autoform.utils import tree
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.control as control
+import autoform.src.core as core
+import autoform.src.lm as lm
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.string as string
+import autoform.src.utils as utils
 from tests import aexecute, execute
 
 
@@ -39,7 +45,7 @@ class RenderClient:
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_fill_uses_custom_spec_methods(executor):
-    class CustomSpec(af.lm.Spec):
+    class CustomSpec(lm.Spec):
         __slots__ = []
 
         def describe(self):
@@ -50,22 +56,22 @@ def test_fill_uses_custom_spec_methods(executor):
                 raise ValueError("Expected matching prefix")
             return value
 
-    af.core.aval_types[CustomSpec] = lambda _: af.core.avalof("")
+    core.aval_types[CustomSpec] = lambda _: core.avalof("")
 
     def program(x):
-        return af.lm.fill({"answer": CustomSpec() @ x}, model="m1")
+        return lm.fill({"answer": CustomSpec() @ x}, model="m1")
 
-    ir = af.trace(program)("seed")
-    with af.lm.client(RenderClient(lambda _: '{"answer": "ok: value"}')):
+    ir = stage.trace(program)("seed")
+    with lm.client(RenderClient(lambda _: '{"answer": "ok: value"}')):
         assert executor(ir, "description") == {"answer": "ok: value"}
-    with af.lm.client(RenderClient(lambda _: '{"answer": "wrong"}')):
+    with lm.client(RenderClient(lambda _: '{"answer": "wrong"}')):
         with pytest.raises(ValueError, match="Expected matching prefix"):
             executor(ir, "description")
 
 
 def fill_program(schema, *, model="m1"):
     def program(prompt, model=model):
-        return af.lm.fill({"prompt": prompt, "output": schema}, model=model)["output"]
+        return lm.fill({"prompt": prompt, "output": schema}, model=model)["output"]
 
     return program
 
@@ -151,7 +157,7 @@ class SchemaGradientRouter(EchoRouter):
                 {"text": "Recursion calls itself.", "score": 0.92},
                 text,
             )
-        if values["context"]["instruction"] == af.lm.PUSH_SYSTEM_PROMPT:
+        if values["context"]["instruction"] == lm.PUSH_SYSTEM_PROMPT:
             return schema_response(
                 {"output": {"text": "output change", "score": 0.25}},
                 text,
@@ -166,42 +172,42 @@ class SchemaGradientRouter(EchoRouter):
 @pytest.mark.parametrize(
     ("schema", "value"),
     [
-        pytest.param(af.lm.Str(), 'Hello "world"!', id="string"),
-        pytest.param(af.lm.Str(min=1) @ "Answer text.", "hello", id="described-string"),
-        pytest.param(af.lm.Int(), 2, id="integer"),
-        pytest.param(af.lm.Float(), 0.5, id="float"),
-        pytest.param(af.lm.Bool(), True, id="boolean"),
-        pytest.param(af.lm.Enum("yes", "no"), "yes", id="enum"),
+        pytest.param(lm.Str(), 'Hello "world"!', id="string"),
+        pytest.param(lm.Str(min=1) @ "Answer text.", "hello", id="described-string"),
+        pytest.param(lm.Int(), 2, id="integer"),
+        pytest.param(lm.Float(), 0.5, id="float"),
+        pytest.param(lm.Bool(), True, id="boolean"),
+        pytest.param(lm.Enum("yes", "no"), "yes", id="enum"),
     ],
 )
 def test_fill_passes_scalar_schemas_to_client(executor, schema, value):
     class ScalarClient(EchoRouter):
         def responses(self, *, text, **kwargs):
-            assert text["format"]["schema"] == describe({"output": schema})
+            assert text["format"]["schema"] == lm.describe({"output": schema})
             return schema_response(value, text)
 
     program = fill_program(schema, model="echo")
-    ir = af.trace(program)("seed")
-    assert af.core.avalof(schema) == ir.out_tree.aval
-    with af.lm.client(ScalarClient()):
+    ir = stage.trace(program)("seed")
+    assert core.avalof(schema) == ir.out_tree.aval
+    with lm.client(ScalarClient()):
         assert program("hello") == value
         assert executor(ir, "hello") == value
 
 
 def test_fill_uses_runtime_model_with_structured_output():
     answer = {
-        "text": af.lm.Str() @ "Short text.",
-        "score": af.lm.Float(),
+        "text": lm.Str() @ "Short text.",
+        "score": lm.Float(),
     }
 
     fill = fill_program(answer)
 
     def program(prompt, model):
-        return af.string.format("{text}", text=fill(prompt, model)["text"])
+        return string.format("{text}", text=fill(prompt, model)["text"])
 
-    ir = af.trace(program)("test", "gpt-5.5")
+    ir = stage.trace(program)("test", "gpt-5.5")
 
-    with af.lm.client(SchemaRouter()):
+    with lm.client(SchemaRouter()):
         assert ir.call("hello", "m1") == "m1|hello"
 
 
@@ -215,17 +221,17 @@ def test_fill_pushforward_preserves_non_string_literals(executor):
             return schema_response(value, text)
 
     def program(x):
-        return af.lm.fill(
-            {"prompt": x, "output": {"answer": af.lm.Str(), "fixed": 1.0}},
+        return lm.fill(
+            {"prompt": x, "output": {"answer": lm.Str(), "fixed": 1.0}},
             model="echo",
         )["output"]
 
-    ir = af.pushforward(af.trace(program)("seed"))
-    with af.lm.client(FillClient()):
+    ir = ad.pushforward(stage.trace(program)("seed"))
+    with lm.client(FillClient()):
         p, t = executor(ir, ("q",), ("dq",))
     assert p == {"answer": "filled", "fixed": 1.0}
     assert t["answer"] == "filled"
-    assert af.core.materialize_zeros(t["fixed"]) == 0.0
+    assert core.materialize_zeros(t["fixed"]) == 0.0
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -242,43 +248,43 @@ def test_fill_uses_values_schema_envelope(executor):
             return fake_response(json.dumps({"answer": "four", "score": 0.9}))
 
     def program(question):
-        return af.lm.fill(
+        return lm.fill(
             {
                 "question": question,
-                "answer": af.lm.Str() @ "Answer text.",
-                "score": af.lm.Float(min=0, max=1),
+                "answer": lm.Str() @ "Answer text.",
+                "score": lm.Float(min=0, max=1),
             },
             model="m1",
         )
 
-    ir = af.trace(program)("seed")
+    ir = stage.trace(program)("seed")
     assert [eqn.prim for eqn in ir.eqns] == [
-        af.control.stop_gradient_p,
-        af.lm.fill_p,
+        control.stop_gradient_p,
+        lm.fill_p,
     ]
     call = ir.eqns[-1]
     assert call.params == {
         "static_tree": {
             "question": None,
-            "answer": af.lm.Str(),
-            "score": af.lm.Float(min=0, max=1),
+            "answer": lm.Str(),
+            "score": lm.Float(min=0, max=1),
         }
     }
     assert call.in_tree == (
         {"question": ir.in_tree[0], "answer": None, "score": None},
         {
             "question": None,
-            "answer": af.lm.Str() @ "Answer text.",
-            "score": af.lm.Float(min=0, max=1),
+            "answer": lm.Str() @ "Answer text.",
+            "score": lm.Float(min=0, max=1),
         },
         ir.eqns[0].out_tree,
     )
     assert call.out_tree["question"] is None
     assert ir.out_tree["question"] is ir.in_tree[0]
-    assert all(isinstance(x, af.stage.Var) for x in tree.leaves(call.out_tree))
+    assert all(isinstance(x, stage.Var) for x in utils.tree.leaves(call.out_tree))
 
     client = FillClient()
-    with af.lm.client(client):
+    with lm.client(client):
         assert executor(ir, "1+1?") == {"question": "1+1?", "answer": "four", "score": 0.9}
 
     call = client.calls[-1]
@@ -310,9 +316,9 @@ def test_fill_uses_values_schema_envelope(executor):
 @pytest.mark.parametrize(
     "template, response, expected",
     [
-        pytest.param(af.lm.Str(), "filled", "filled", id="scalar"),
+        pytest.param(lm.Str(), "filled", "filled", id="scalar"),
         pytest.param(
-            ("fixed", [af.lm.Str(), None, {}]),
+            ("fixed", [lm.Str(), None, {}]),
             {"1": {"0": "filled"}},
             ("fixed", ["filled", None, {}]),
             id="nested",
@@ -328,8 +334,8 @@ def test_fill_preserves_tree_structure(executor, template, response, expected):
         calls.append(input)
         return json.dumps(response)
 
-    ir = af.trace(lambda: af.lm.fill(template, model="echo"))()
-    with af.lm.client(RenderClient(render=render)):
+    ir = stage.trace(lambda: lm.fill(template, model="echo"))()
+    with lm.client(RenderClient(render=render)):
         assert executor(ir) == expected
     assert len(calls) == (response is not None)
 
@@ -340,7 +346,7 @@ def test_fill_preserves_tree_structure(executor, template, response, expected):
     [("context", "string"), (0.5, "number"), (2, "integer"), (False, "boolean")],
 )
 def test_fill_preserves_custom_pytree_and_json_property_names(executor, x, json_type):
-    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+    @optree.dataclasses.dataclass(namespace=utils.PYTREE_NAMESPACE)
     class Answer:
         fields: object
         metadata: object
@@ -357,10 +363,10 @@ def test_fill_preserves_custom_pytree_and_json_property_names(executor, x, json_
             return fake_response(json.dumps({"fields": {"0_": "filled"}}))
 
     def program(x):
-        return af.lm.fill(Answer({0: x, "0": af.lm.Str()}, (None, [], {})), model="echo")
+        return lm.fill(Answer({0: x, "0": lm.Str()}, (None, [], {})), model="echo")
 
-    ir = af.trace(program)(x)
-    with af.lm.client(FillClient()):
+    ir = stage.trace(program)(x)
+    with lm.client(FillClient()):
         assert program(x) == Answer({0: x, "0": "filled"}, (None, [], {}))
         assert executor(ir, x) == Answer({0: x, "0": "filled"}, (None, [], {}))
 
@@ -383,11 +389,11 @@ def test_fill_batches_context(executor, values):
             return fake_response(json.dumps({"answer": f"filled:{question}"}))
 
     def program(question):
-        return af.lm.fill({"question": question, "answer": af.lm.Str()}, model="m1")
+        return lm.fill({"question": question, "answer": lm.Str()}, model="m1")
 
-    ir = af.batch(af.trace(program)(values[0]))
+    ir = axis.batch(stage.trace(program)(values[0]))
     client = FillClient()
-    with af.lm.client(client):
+    with lm.client(client):
         assert executor(ir, values) == {
             "question": values,
             "answer": [f"filled:{value}" for value in values],
@@ -426,28 +432,28 @@ def test_fill_pushforward_uses_tangent_context(
             return schema_response({"answer": f"filled:{question}"}, text)
 
     def program(question):
-        return af.lm.fill({"question": question, "answer": af.lm.Str()}, model="m1")
+        return lm.fill({"question": question, "answer": lm.Str()}, model="m1")
 
-    ir = af.trace(program)(question)
-    ir = af.pushforward(af.batch(ir) if batch_order == "before" else ir)
+    ir = stage.trace(program)(question)
+    ir = ad.pushforward(axis.batch(ir) if batch_order == "before" else ir)
     if batch_order == "after":
-        ir = af.batch(ir)
+        ir = axis.batch(ir)
     args = ((question,), (d_question,))
     expected = (
         {"question": question, "answer": f"filled:{question}"},
         {"question": d_question, "answer": f"filled:{question}->{d_question}"},
     )
     if batch_order is not None:
-        args, expected = tree.map(lambda x: [x, x], (args, expected))
+        args, expected = utils.tree.map(lambda x: [x, x], (args, expected))
     client = FillClient()
-    with af.lm.client(client):
+    with lm.client(client):
         assert executor(ir, *args) == expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("description", ["Score clarity", "Estimate price"])
 def test_fill_pushforward_preserves_task_schema(executor, description):
-    schema = af.lm.Float(min=0, max=10) @ description
+    schema = lm.Float(min=0, max=10) @ description
     calls = []
 
     class FillClient(EchoRouter):
@@ -456,7 +462,7 @@ def test_fill_pushforward_preserves_task_schema(executor, description):
             calls.append(input)
             values = fill_values(input)
             response_schema = text["format"]["schema"]
-            original_schema = describe({"y": schema})
+            original_schema = lm.describe({"y": schema})
             if "context" not in values:
                 assert response_schema == original_schema
                 return schema_response({"y": 8.0}, text)
@@ -466,38 +472,36 @@ def test_fill_pushforward_preserves_task_schema(executor, description):
             original, change = parse_change_prompt(context["request"])
             assert original["values"] == {"x": "x"}
             assert change["values"] == {"x": "dx"}
-            assert response_schema["properties"]["output"] == describe({"y": af.lm.Float()})
+            assert response_schema["properties"]["output"] == lm.describe({"y": lm.Float()})
             return schema_response({"y": -2.0}, text)
 
     def program(x):
-        return af.lm.fill({"x": x, "y": schema}, model="m1")
+        return lm.fill({"x": x, "y": schema}, model="m1")
 
-    ir = af.pushforward(af.trace(program)("seed"))
-    with af.lm.client(FillClient()):
+    ir = ad.pushforward(stage.trace(program)("seed"))
+    with lm.client(FillClient()):
         assert executor(ir, ("x",), ("dx",)) == (
             {"x": "x", "y": 8.0},
             {"x": "dx", "y": -2.0},
         )
     assert len(calls) == 2
-    assert schema == af.lm.Float(min=0, max=10) @ description
+    assert schema == lm.Float(min=0, max=10) @ description
 
 
 @pytest.mark.parametrize(
     "t_tree, error",
     [
         pytest.param(
-            {"x": "dx", "y": af.lm.Float(min=0) @ "Score clarity"}, ValueError, id="constraint"
+            {"x": "dx", "y": lm.Float(min=0) @ "Score clarity"}, ValueError, id="constraint"
         ),
-        pytest.param({"x": "dx", "y": af.lm.Str() @ "Score clarity"}, ValueError, id="schema-type"),
+        pytest.param({"x": "dx", "y": lm.Str() @ "Score clarity"}, ValueError, id="schema-type"),
         pytest.param({"x": "dx", "y": 0.0}, ValueError, id="schema-to-leaf"),
-        pytest.param(
-            {"x": ["dx"], "y": af.lm.Float() @ "Score clarity"}, TypeError, id="structure"
-        ),
+        pytest.param({"x": ["dx"], "y": lm.Float() @ "Score clarity"}, TypeError, id="structure"),
     ],
 )
 def test_fill_pushforward_rejects_mismatched_specs(t_tree, error):
-    p_tree = {"x": "x", "y": af.lm.Float() @ "Score clarity"}
-    ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
+    p_tree = {"x": "x", "y": lm.Float() @ "Score clarity"}
+    ir = ad.pushforward(stage.trace(lambda x: lm.fill(x, model="m1"))(p_tree))
     with pytest.raises(error):
         ir.call((p_tree,), (t_tree,))
 
@@ -516,14 +520,14 @@ def test_fill_pullback_retains_spec_constraints(executor, description):
                 value["2"] = {"answer": "revised"}
             return schema_response(value, text)
 
-    spec = af.lm.Str(min=1, max=100)
+    spec = lm.Str(min=1, max=100)
     if description is not None:
         spec = spec @ description
-    ir = af.pullback(af.trace(lambda x: af.lm.fill({"answer": x}, model="m1"))(spec))
-    expected = af.lm.Str(min=1, max=100)
+    ir = ad.pullback(stage.trace(lambda x: lm.fill({"answer": x}, model="m1"))(spec))
+    expected = lm.Str(min=1, max=100)
     if description is not None:
         expected = expected @ "revised"
-    with af.lm.client(FillClient()):
+    with lm.client(FillClient()):
         assert executor(ir, (spec,), {"answer": "feedback"}) == (
             {"answer": "generated"},
             (expected,),
@@ -544,24 +548,24 @@ def test_fill_pushforward_skips_generation_for_symbolic_zero(executor, source):
     def program(x):
         description = x if source in ("description", "both") else "description"
         template = {
-            "answer": af.lm.Str() @ description,
-            "score": af.lm.Float(min=0, max=1),
+            "answer": lm.Str() @ description,
+            "score": lm.Float(min=0, max=1),
         }
         if source in ("literal", "both"):
             template["x"] = x
-        return af.lm.fill(template, model="m1")
+        return lm.fill(template, model="m1")
 
-    ir = af.pushforward(af.trace(program)("description"))
-    zero = af.core.Zero(af.core.avalof(""))
-    with af.lm.client(FillClient()):
+    ir = ad.pushforward(stage.trace(program)("description"))
+    zero = core.Zero(core.avalof(""))
+    with lm.client(FillClient()):
         p, t = executor(ir, ("description",), (zero,))
     expected = {"answer": "generated", "score": 0.5}
     if source in ("literal", "both"):
         expected["x"] = "description"
     assert p == expected
-    assert all(isinstance(value, af.core.Zero) for value in tree.leaves(t))
-    assert af.core.materialize_zeros(t)["answer"] == ""
-    assert af.core.materialize_zeros(t)["score"] == 0.0
+    assert all(isinstance(value, core.Zero) for value in utils.tree.leaves(t))
+    assert core.materialize_zeros(t)["answer"] == ""
+    assert core.materialize_zeros(t)["score"] == 0.0
     assert len(calls) == 1
 
 
@@ -570,16 +574,16 @@ def test_fill_pushforward_accepts_equal_static_metadata():
         def responses(self, *, text, **kwargs):
             return schema_response({"y": 1.0}, text)
 
-    p_tree = {"x": "x", "y": af.lm.Float() @ "Score clarity"}
-    t_tree = {"x": "dx", "y": af.lm.Float() @ "Score clarity"}
+    p_tree = {"x": "x", "y": lm.Float() @ "Score clarity"}
+    t_tree = {"x": "dx", "y": lm.Float() @ "Score clarity"}
     assert p_tree["y"] is not t_tree["y"]
-    ir = af.pushforward(af.trace(lambda x: af.lm.fill(x, model="m1"))(p_tree))
-    with af.lm.client(FillClient()):
+    ir = ad.pushforward(stage.trace(lambda x: lm.fill(x, model="m1"))(p_tree))
+    with lm.client(FillClient()):
         assert ir.call((p_tree,), (t_tree,)) == ({"x": "x", "y": 1.0}, {"x": "dx", "y": 1.0})
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-@pytest.mark.parametrize("transform", [af.pushforward, af.pullback], ids=["pf", "pb"])
+@pytest.mark.parametrize("transform", [ad.pushforward, ad.pullback], ids=["pf", "pb"])
 @pytest.mark.parametrize("batch_order", [None, "before", "after"])
 def test_fill_transforms_traced_descriptions(executor, transform, batch_order):
     calls = []
@@ -597,7 +601,7 @@ def test_fill_transforms_traced_descriptions(executor, transform, batch_order):
                     "description": "description",
                 }
                 return schema_response({"answer": "generated"}, text)
-            if transform is af.pushforward:
+            if transform is ad.pushforward:
                 context = values["context"]
                 assert json.loads(context["desc_change"]) == {"answer": "change"}
                 assert (
@@ -612,21 +616,21 @@ def test_fill_transforms_traced_descriptions(executor, transform, batch_order):
             return schema_response({"1": "", "2": {"answer": "revised"}}, text)
 
     def program(prompt):
-        return af.lm.fill({"answer": af.lm.Str(min=1, max=100) @ prompt}, model="m1")["answer"]
+        return lm.fill({"answer": lm.Str(min=1, max=100) @ prompt}, model="m1")["answer"]
 
-    ir = af.trace(program)("description")
-    ir = transform(af.batch(ir) if batch_order == "before" else ir)
-    ir = af.batch(ir) if batch_order == "after" else ir
-    change = ("change",) if transform is af.pushforward else "feedback"
+    ir = stage.trace(program)("description")
+    ir = transform(axis.batch(ir) if batch_order == "before" else ir)
+    ir = axis.batch(ir) if batch_order == "after" else ir
+    change = ("change",) if transform is ad.pushforward else "feedback"
     args = (("description",), change)
-    expected = ("generated", "changed" if transform is af.pushforward else ("revised",))
+    expected = ("generated", "changed" if transform is ad.pushforward else ("revised",))
     if batch_order is not None:
-        args = tree.map(lambda x: [x, x], args)
-        expected = tree.map(lambda x: [x, x], expected)
-    with af.lm.client(FillClient()):
+        args = utils.tree.map(lambda x: [x, x], args)
+        expected = utils.tree.map(lambda x: [x, x], expected)
+    with lm.client(FillClient()):
         assert executor(ir, *args) == expected
     expected_calls = 2 if batch_order is None else 4
-    if batch_order == "before" and transform is af.pullback:
+    if batch_order == "before" and transform is ad.pullback:
         expected_calls = 6
     assert len(calls) == expected_calls
 
@@ -650,13 +654,13 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
         return json.dumps({"answer": "filled"})
 
     def program(question):
-        out = af.lm.fill({"question": question, "answer": af.lm.Str()}, model="m1")
+        out = lm.fill({"question": question, "answer": lm.Str()}, model="m1")
         return (out["question"], out["answer"]) if generated else out["question"]
 
-    ir = af.trace(program)("seed")
-    ir = af.pullback(af.batch(ir) if batch_order == "before" else ir)
+    ir = stage.trace(program)("seed")
+    ir = ad.pullback(axis.batch(ir) if batch_order == "before" else ir)
     if batch_order == "after":
-        ir = af.batch(ir)
+        ir = axis.batch(ir)
     c = ("direct feedback", "generated feedback") if generated else "direct feedback"
     expected = (
         ("q", "filled") if generated else "q",
@@ -664,8 +668,8 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
     )
     args = (("q",), c)
     if batch_order is not None:
-        args, expected = tree.map(lambda x: [x, x], (args, expected))
-    with af.lm.client(RenderClient(render=render)):
+        args, expected = utils.tree.map(lambda x: [x, x], (args, expected))
+    with lm.client(RenderClient(render=render)):
         assert executor(ir, *args) == expected
     # Pullback of batch_call replays the forward pass before transposing it.
     count = 1 + generated + (batch_order == "before")
@@ -701,20 +705,20 @@ def test_fill_pullback_uses_original_output_schema_for_feedback(executor):
             )
 
     def program(question):
-        filled = af.lm.fill(
+        filled = lm.fill(
             {
                 "question": question,
-                "answer": af.lm.Str(),
-                "flag": af.lm.Bool(),
-                "score": af.lm.Float(min=0, max=1),
+                "answer": lm.Str(),
+                "flag": lm.Bool(),
+                "score": lm.Float(min=0, max=1),
             },
             model="m1",
         )
-        return af.string.format("{answer}", answer=filled["answer"])
+        return string.format("{answer}", answer=filled["answer"])
 
-    ir = af.pullback(af.trace(program)("seed"))
+    ir = ad.pullback(stage.trace(program)("seed"))
     client = FillGradientClient()
-    with af.lm.client(client):
+    with lm.client(client):
         assert executor(ir, ("Explain recursion.",), "too terse") == (
             "Recursion calls itself.",
             ("question feedback",),
@@ -782,12 +786,12 @@ def test_fill_pullback_generates_input_cotangent_types(executor, generated):
             return schema_response({"0": {"x": -0.5}, "1": "model feedback"}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.lm.Str()}, model="m1")
+        out = lm.fill({"x": x, "y": lm.Str()}, model="m1")
         return out if generated else out["x"]
 
-    ir = af.pullback(af.trace(program)(0.5))
+    ir = ad.pullback(stage.trace(program)(0.5))
     c = {"x": 0.25, "y": "feedback"} if generated else 0.25
-    with af.lm.client(FeedbackClient()):
+    with lm.client(FeedbackClient()):
         out, (dx,) = executor(ir, (0.5,), c)
     assert out == ({"x": 0.5, "y": "filled"} if generated else 0.5)
     assert dx == (-0.25 if generated else 0.25)
@@ -809,7 +813,7 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, c):
 
             context = values["context"]
             instruction = context["instruction"]
-            assert instruction == af.lm.GRAD_SYSTEM_PROMPT
+            assert instruction == lm.GRAD_SYSTEM_PROMPT
             input_text, rest = context["request"].removeprefix("INPUT: ").split(" OUTPUT: ")
             output_text, feedback_text = rest.split(" OUTPUT FEEDBACK: ")
             original, output, feedback = map(json.loads, (input_text, output_text, feedback_text))
@@ -833,11 +837,11 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, c):
             return schema_response({"0": {"x": dx}, "1": "", "2": {"y": ""}}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.lm.Float(min=0, max=10) @ "Double x."}, model="m1")
+        out = lm.fill({"x": x, "y": lm.Float(min=0, max=10) @ "Double x."}, model="m1")
         return 3.0 * out["y"]
 
-    ir = af.pullback(af.trace(program)(1.0))
-    with af.lm.client(FillClient()):
+    ir = ad.pullback(stage.trace(program)(1.0))
+    with lm.client(FillClient()):
         assert executor(ir, (1.0,), c) == (6.0, (6.0 * c,))
     assert len(calls) == 2
 
@@ -845,7 +849,7 @@ def test_fill_pullback_propagates_numeric_sensitivities(executor, c):
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
     "transform",
-    [af.pushforward, af.pullback],
+    [ad.pushforward, ad.pullback],
     ids=["pushforward", "pullback"],
 )
 def test_fill_composes_through_float_context(executor, transform):
@@ -866,7 +870,7 @@ def test_fill_composes_through_float_context(executor, transform):
 
             prompt = values["context"]["request"]
             schema = text["format"]["schema"]["properties"]["output"]
-            if transform is af.pushforward:
+            if transform is ad.pushforward:
                 original, change = parse_change_prompt(prompt)
                 if "y" in schema["properties"]:
                     assert schema["properties"]["y"] == {"type": "number"}
@@ -888,41 +892,41 @@ def test_fill_composes_through_float_context(executor, transform):
             return schema_response({"0": {"x": "input feedback"}, "1": ""}, text)
 
     def program(x):
-        out = af.lm.fill({"x": x, "y": af.lm.Float()}, model="m1")
-        return af.lm.fill({"y": out["y"], "z": af.lm.Str()}, model="m1")["z"]
+        out = lm.fill({"x": x, "y": lm.Float()}, model="m1")
+        return lm.fill({"y": out["y"], "z": lm.Str()}, model="m1")["z"]
 
-    ir = transform(af.trace(program)("seed"))
-    change = ("dx",) if transform is af.pushforward else "feedback"
-    expected = "changed" if transform is af.pushforward else ("input feedback",)
-    with af.lm.client(FillClient()):
+    ir = transform(stage.trace(program)("seed"))
+    change = ("dx",) if transform is ad.pushforward else "feedback"
+    expected = "changed" if transform is ad.pushforward else ("input feedback",)
+    with lm.client(FillClient()):
         assert executor(ir, ("x",), change) == ("filled", expected)
     assert len(calls) == 4
 
 
 def test_fill_rejects_unsupported_context_and_non_string_model():
     with pytest.raises(TypeError, match="No aval rule registered"):
-        af.lm.fill({"x": object(), "y": af.lm.Str()}, model="m1")
+        lm.fill({"x": object(), "y": lm.Str()}, model="m1")
     with pytest.raises(AssertionError, match="Expected string model"):
-        af.lm.fill({"x": 0.5, "y": af.lm.Str()}, model=1.0)
+        lm.fill({"x": 0.5, "y": lm.Str()}, model=1.0)
     with pytest.raises(AssertionError, match="Expected string model"):
-        af.trace(lambda x: af.lm.fill_p.bind(x, static_tree={"y": af.lm.Str()}))(
-            ({"x": 0.5}, {"y": af.lm.Str()}, 1.0),
+        stage.trace(lambda x: lm.fill_p.bind(x, static_tree={"y": lm.Str()}))(
+            ({"x": 0.5}, {"y": lm.Str()}, 1.0),
         )
 
 
 def test_describe_rejects_non_json_enum_values():
-    enum = af.lm.Enum(object())
+    enum = lm.Enum(object())
 
     with pytest.raises(TypeError, match="Enum values must be str, int, float, or bool"):
-        describe({"kind": enum})
+        lm.describe({"kind": enum})
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_batch_supports_variable_models(executor):
-    program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
-    ir = af.batch(af.trace(program)("test", "gpt-5.5"), in_axes=(True, True))
+    program = fill_program({"text": lm.Str(), "score": lm.Float()})
+    ir = axis.batch(stage.trace(program)("test", "gpt-5.5"), in_axes=(True, True))
     args = (["hello", "goodbye"], ["m1", "m2"])
-    with af.lm.client(SchemaRouter()):
+    with lm.client(SchemaRouter()):
         assert executor(ir, *args) == {
             "text": ["m1|hello", "m2|goodbye"],
             "score": [0.5, 0.5],
@@ -931,7 +935,7 @@ def test_batch_supports_variable_models(executor):
 
 @pytest.fixture
 def gradient_client():
-    with af.lm.client(SchemaGradientRouter()) as client:
+    with lm.client(SchemaGradientRouter()) as client:
         yield client
 
 
@@ -958,14 +962,14 @@ def gradient_client():
 def test_fill_pullback_omits_unused_fields(
     executor, field, out_c, expected, feedback, gradient_client
 ):
-    schema = {"text": af.lm.Str(min=1), "score": af.lm.Float(min=0, max=1)}
+    schema = {"text": lm.Str(min=1), "score": lm.Float(min=0, max=1)}
     fill = fill_program(schema)
 
     def program(x):
         y = fill(x)[field]
-        return y * 2.0 if field == "score" else af.string.format("{text}", text=y)
+        return y * 2.0 if field == "score" else string.format("{text}", text=y)
 
-    ir = af.sched(af.pullback(af.trace(program)("seed")))
+    ir = order.sched(ad.pullback(stage.trace(program)("seed")))
     assert executor(ir, ("Explain recursion.",), out_c) == (
         expected,
         ("input feedback",),
@@ -983,10 +987,10 @@ def test_fill_pullback_omits_unused_fields(
     ],
 )
 def test_fill_pullback_requires_matching_cotangent_structure(out_c):
-    in_tree, static_tree = af.lm.fill_input(("seed", {"answer": af.lm.Str()}, "m1"))
+    in_tree, static_tree = lm.fill_input(("seed", {"answer": lm.Str()}, "m1"))
     residuals = (*in_tree, {"answer": "value"})
     with pytest.raises(ValueError, match="Output and cotangent must have identical pytree specs"):
-        af.lm.fill_pullback_request((residuals, out_c), static_tree=static_tree)
+        lm.fill_pullback_request((residuals, out_c), static_tree=static_tree)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -1000,8 +1004,8 @@ def test_fill_pullback_requires_matching_cotangent_structure(out_c):
     ],
 )
 def test_fill_pullback_rejects_wrong_schema_cotangent_type(executor, out_c, error, gradient_client):
-    program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
-    ir = af.pullback(af.trace(program)("seed"))
+    program = fill_program({"text": lm.Str(), "score": lm.Float()})
+    ir = ad.pullback(stage.trace(program)("seed"))
     with pytest.raises(TypeError, match=f"Expected {error}"):
         executor(ir, ("Explain recursion.",), out_c)
     assert len(gradient_client.calls) == 0
@@ -1026,8 +1030,8 @@ def test_fill_pullback_rejects_wrong_schema_cotangent_type(executor, out_c, erro
     ],
 )
 def test_schema_without_generated_fields(schema, expected):
-    assert describe(schema) is None
-    assert parse(schema, None) == expected
+    assert lm.describe(schema) is None
+    assert lm.parse(schema, None) == expected
 
 
 @pytest.mark.parametrize(
@@ -1043,28 +1047,28 @@ def test_schema_without_generated_fields(schema, expected):
 )
 def test_parse_rejects_invalid_objects(value):
     with pytest.raises(ValueError):
-        parse({"0": af.lm.Str()}, value)
+        lm.parse({"0": lm.Str()}, value)
 
 
 def test_parse_rebuilds_nested_containers_from_objects():
-    schema = (af.lm.Str(), {"score": af.lm.Float(), "source": "fixed"}, None)
-    assert parse(schema, {"1": {"score": 2}, "0": "x"}) == (
+    schema = (lm.Str(), {"score": lm.Float(), "source": "fixed"}, None)
+    assert lm.parse(schema, {"1": {"score": 2}, "0": "x"}) == (
         "x",
         {"score": 2.0, "source": "fixed"},
         None,
     )
     with pytest.raises(ValueError):
-        parse(schema, {"0": "x", "1": [2]})
+        lm.parse(schema, {"0": "x", "1": [2]})
 
 
 def test_schema_dsl_builds_described_schema():
     answer = {
-        "name": af.lm.Str() @ "Subject name.",
-        "kind": af.lm.Enum("summary", "definition") @ "Answer kind.",
-        "score": af.lm.Float() @ "Confidence score.",
+        "name": lm.Str() @ "Subject name.",
+        "kind": lm.Enum("summary", "definition") @ "Answer kind.",
+        "score": lm.Float() @ "Confidence score.",
     }
 
-    json_schema = describe(answer)
+    json_schema = lm.describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -1080,7 +1084,7 @@ def test_schema_dsl_builds_described_schema():
         "required": ["kind", "name", "score"],
         "additionalProperties": False,
     }
-    assert parse(
+    assert lm.parse(
         answer,
         {"name": "subject", "kind": "summary", "score": 1},
     ) == {
@@ -1091,7 +1095,7 @@ def test_schema_dsl_builds_described_schema():
 
 
 def test_schema_dsl_reconstructs_literal_subtree():
-    @optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+    @optree.dataclasses.dataclass(namespace=utils.PYTREE_NAMESPACE)
     class Answer:
         decision: object
         details: object
@@ -1100,9 +1104,9 @@ def test_schema_dsl_reconstructs_literal_subtree():
         "literal": "fixed",
         "nothing": None,
     }
-    answer = Answer(af.lm.Str(), details)
+    answer = Answer(lm.Str(), details)
 
-    json_schema = describe(answer)
+    json_schema = lm.describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -1110,31 +1114,31 @@ def test_schema_dsl_reconstructs_literal_subtree():
         "required": ["decision"],
         "additionalProperties": False,
     }
-    parsed = parse(answer, {"decision": "accept"})
+    parsed = lm.parse(answer, {"decision": "accept"})
     expected = Answer(
         "accept",
         {"literal": "fixed", "nothing": None},
     )
     assert parsed == expected
 
-    ir = af.trace(fill_program(answer))("test")
+    ir = stage.trace(fill_program(answer))("test")
     call = ir.eqns[-1]
-    assert isinstance(call.out_tree["output"].decision, af.stage.Var)
+    assert isinstance(call.out_tree["output"].decision, stage.Var)
 
     class FillClient(EchoRouter):
         def responses(self, *, text, **kwargs):
             return schema_response({"decision": "accept"}, text)
 
-    with af.lm.client(FillClient()):
+    with lm.client(FillClient()):
         assert ir.call("hello") == expected
 
 
 def test_schema_dsl_reconstructs_untraceable_static_leaf():
     metadata = object()
 
-    answer = {"decision": af.lm.Str(), "metadata": metadata}
+    answer = {"decision": lm.Str(), "metadata": metadata}
 
-    json_schema = describe(answer)
+    json_schema = lm.describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -1142,7 +1146,7 @@ def test_schema_dsl_reconstructs_untraceable_static_leaf():
         "required": ["decision"],
         "additionalProperties": False,
     }
-    parsed = parse(answer, {"decision": "accept"})
+    parsed = lm.parse(answer, {"decision": "accept"})
     assert parsed["decision"] == "accept"
     assert parsed["metadata"] is metadata
 
@@ -1150,16 +1154,16 @@ def test_schema_dsl_reconstructs_untraceable_static_leaf():
 def test_lm_schema_trace_rejects_untraceable_static_leaf():
     metadata = object()
 
-    program = fill_program({"decision": af.lm.Str(), "metadata": metadata})
+    program = fill_program({"decision": lm.Str(), "metadata": metadata})
 
     with pytest.raises(TypeError, match="No aval rule registered"):
-        af.trace(program)("test")
+        stage.trace(program)("test")
 
 
 def test_schema_dsl_builds_string_constraints():
-    answer = {"name": af.lm.Str(min=2, max=4, pattern=r"^[a-z]+$")}
+    answer = {"name": lm.Str(min=2, max=4, pattern=r"^[a-z]+$")}
 
-    json_schema = describe(answer)
+    json_schema = lm.describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -1174,22 +1178,22 @@ def test_schema_dsl_builds_string_constraints():
         "required": ["name"],
         "additionalProperties": False,
     }
-    assert parse(answer, {"name": "okay"}) == {"name": "okay"}
+    assert lm.parse(answer, {"name": "okay"}) == {"name": "okay"}
     with pytest.raises(ValueError, match="Expected string with length >= 2"):
-        parse(answer, {"name": "x"})
+        lm.parse(answer, {"name": "x"})
     with pytest.raises(ValueError, match="Expected string with length <= 4"):
-        parse(answer, {"name": "hello"})
+        lm.parse(answer, {"name": "hello"})
     with pytest.raises(ValueError, match="Expected string matching"):
-        parse(answer, {"name": "OK"})
+        lm.parse(answer, {"name": "OK"})
 
 
 def test_schema_dsl_builds_number_constraints():
     answer = {
-        "count": af.lm.Int(min=-2, max=2),
-        "score": af.lm.Float(min=0, max=1),
+        "count": lm.Int(min=-2, max=2),
+        "score": lm.Float(min=0, max=1),
     }
 
-    json_schema = describe(answer)
+    json_schema = lm.describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -1200,15 +1204,15 @@ def test_schema_dsl_builds_number_constraints():
         "required": ["count", "score"],
         "additionalProperties": False,
     }
-    assert parse(answer, {"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
+    assert lm.parse(answer, {"count": 0, "score": 1}) == {"count": 0, "score": 1.0}
     with pytest.raises(ValueError, match="Expected integer >= -2"):
-        parse(answer, {"count": -3, "score": 0.5})
+        lm.parse(answer, {"count": -3, "score": 0.5})
     with pytest.raises(ValueError, match="Expected integer <= 2"):
-        parse(answer, {"count": 3, "score": 0.5})
+        lm.parse(answer, {"count": 3, "score": 0.5})
     with pytest.raises(ValueError, match="Expected number >= 0"):
-        parse(answer, {"count": 0, "score": -0.1})
+        lm.parse(answer, {"count": 0, "score": -0.1})
     with pytest.raises(ValueError, match="Expected number <= 1"):
-        parse(answer, {"count": 0, "score": 1.1})
+        lm.parse(answer, {"count": 0, "score": 1.1})
 
 
 def test_schema_dsl_builds_custom_pytree_value():
@@ -1224,16 +1228,16 @@ def test_schema_dsl_builds_custom_pytree_value():
                 type(self) is type(other) and self.text == other.text and self.score == other.score
             )
 
-    tree.register_node(
+    utils.tree.register_node(
         Answer,
         lambda answer: ((answer.text, answer.score), None, ("text", "score")),
         lambda _, children: Answer(*children),
         path_entry_type=optree.GetAttrEntry,
     )
 
-    answer = Answer(af.lm.Str(), af.lm.Float())
+    answer = Answer(lm.Str(), lm.Float())
 
-    json_schema = describe(answer)
+    json_schema = lm.describe(answer)
 
     assert json_schema == {
         "type": "object",
@@ -1244,27 +1248,27 @@ def test_schema_dsl_builds_custom_pytree_value():
         "required": ["text", "score"],
         "additionalProperties": False,
     }
-    assert parse(answer, {"text": "hello", "score": 2}) == Answer("hello", 2.0)
+    assert lm.parse(answer, {"text": "hello", "score": 2}) == Answer("hello", 2.0)
 
 
 def test_schema_dsl_reports_value_errors():
-    count = {"count": af.lm.Int()}
-    score = {"score": af.lm.Float()}
+    count = {"count": lm.Int()}
+    score = {"score": lm.Float()}
 
     with pytest.raises(ValueError, match="Expected integer"):
-        parse(count, {"count": True})
+        lm.parse(count, {"count": True})
     with pytest.raises(ValueError, match="Expected number"):
-        parse(score, {"score": "bad"})
+        lm.parse(score, {"score": "bad"})
 
 
 @pytest.mark.parametrize(
     "transform, args, width",
     [
-        pytest.param(af.pushforward, (("hello",), ("change",)), 2, id="pushforward"),
+        pytest.param(ad.pushforward, (("hello",), ("change",)), 2, id="pushforward"),
         pytest.param(
-            af.pullback, (("hello",), {"text": "feedback", "score": -0.2}), 1, id="pullback"
+            ad.pullback, (("hello",), {"text": "feedback", "score": -0.2}), 1, id="pullback"
         ),
-        pytest.param(af.batch, (["hello", "world"],), 2, id="batch"),
+        pytest.param(axis.batch, (["hello", "world"],), 2, id="batch"),
     ],
 )
 @pytest.mark.parametrize("serial", [False, True], ids=["concurrent", "serial"])
@@ -1279,12 +1283,12 @@ def test_async_transforms_respect_fanout(transform, args, width, serial):
             events.append(-1)
             return response
 
-    program = fill_program({"text": af.lm.Str(), "score": af.lm.Float()})
-    ir = transform(af.trace(program)("seed"))
-    with af.lm.client(FillClient()) as client:
+    program = fill_program({"text": lm.Str(), "score": lm.Float()})
+    ir = transform(stage.trace(program)("seed"))
+    with lm.client(FillClient()) as client:
         expected = execute(ir, *args)
         client.calls.clear()
-        with af.order.serial_fanout() if serial else nullcontext():
+        with order.serial_fanout() if serial else nullcontext():
             assert aexecute(ir, *args) == expected
     active = peak = 0
     for event in events:
@@ -1297,18 +1301,18 @@ def test_async_transforms_respect_fanout(transform, args, width, serial):
 
 def test_client_restores_outer_client_after_exception():
     outer, inner = EchoRouter(), EchoRouter()
-    with af.lm.client(outer):
+    with lm.client(outer):
         with pytest.raises(ValueError, match="stop"):
-            with af.lm.client(inner):
-                assert af.extend.active_client.get() is inner
+            with lm.client(inner):
+                assert lm.active_client.get() is inner
                 raise ValueError("stop")
-        assert af.extend.active_client.get() is outer
+        assert lm.active_client.get() is outer
 
 
 @pytest.mark.parametrize(
     "executor",
     [
-        pytest.param(af.lm.LiteLLMClient.responses, id="sync"),
+        pytest.param(lm.LiteLLMClient.responses, id="sync"),
         pytest.param(
             lambda client, **kwargs: asyncio.run(client.aresponses(**kwargs)),
             id="async",
@@ -1326,9 +1330,9 @@ def test_litellm_client_forwards_request(executor, monkeypatch):
     async def acomplete(**kwargs):
         return complete(**kwargs)
 
-    monkeypatch.setattr(af.lm, "responses", complete)
-    monkeypatch.setattr(af.lm, "aresponses", acomplete)
-    client = af.lm.LiteLLMClient()
+    monkeypatch.setattr(lm, "responses", complete)
+    monkeypatch.setattr(lm, "aresponses", acomplete)
+    client = lm.LiteLLMClient()
     kwargs = dict(
         input="hello",
         model="m1",
