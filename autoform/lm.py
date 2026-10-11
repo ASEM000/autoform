@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from autoform.src.lm import Bool as Bool
-from autoform.src.lm import Client as Client
 from autoform.src.lm import Enum as Enum
 from autoform.src.lm import Float as Float
 from autoform.src.lm import Int as Int

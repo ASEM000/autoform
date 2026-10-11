@@ -13,9 +13,4 @@ Context managers select tracing or execution behavior within a `with` block and 
 
 ## LM Clients
 
-A custom model client supplies both synchronous and asynchronous Responses methods, allowing the same client context to support either execution mode:
-
-```{eval-rst}
-.. autoclass:: autoform.lm.Client
-   :members:
-```
+A custom model client supplies synchronous `responses()` and asynchronous `aresponses()` methods, allowing the same client context to support either execution mode.
