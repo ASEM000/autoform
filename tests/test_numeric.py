@@ -28,7 +28,7 @@ from tests import aexecute, execute
 @pytest.mark.parametrize(
     "x",
     [
-        pytest.param(core.Zero(numeric.FloatAVal()), id="symbolic-zero"),
+        pytest.param(core.Zero(numeric.AValFloat()), id="symbolic-zero"),
         pytest.param(lm.Float(), id="schema"),
     ],
 )
@@ -45,13 +45,13 @@ def test_numeric_dunders_form_one_scalar_program():
     ir = stage.trace(program)(1.0, 2.0)
 
     assert [eqn.prim for eqn in ir.eqns] == [
-        numeric.add_p,
-        numeric.neg_p,
-        numeric.mul_p,
-        numeric.div_p,
-        numeric.sub_p,
-        numeric.lt_p,
-        numeric.ne_p,
+        numeric.p_add,
+        numeric.p_neg,
+        numeric.p_mul,
+        numeric.p_div,
+        numeric.p_sub,
+        numeric.p_lt,
+        numeric.p_ne,
     ]
     assert ir.call(3.0, 4.0) == (-10.0, -1.0, True, True)
 
@@ -70,7 +70,7 @@ def test_comparison_blocks_pushforward():
     p, derivative = ir.call((1.0,), (1.0,))
     assert p is True
     assert isinstance(derivative, core.Zero)
-    assert derivative.aval == numeric.BoolAVal()
+    assert derivative.aval == numeric.AValBool()
 
 
 def test_comparison_blocks_pullback():
@@ -78,7 +78,7 @@ def test_comparison_blocks_pullback():
     p, (derivative,) = ir.call((1.0,), True)
     assert p is True
     assert isinstance(derivative, core.Zero)
-    assert derivative.aval == numeric.FloatAVal()
+    assert derivative.aval == numeric.AValFloat()
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

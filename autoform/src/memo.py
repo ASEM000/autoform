@@ -29,7 +29,7 @@ import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
-non_memoizable_primitives: set[core.Prim] = {intercept.checkpoint_p}
+non_memoizable_primitives: set[core.Prim] = {intercept.p_checkpoint}
 
 
 def is_non_memo(eqn: stage.Eqn, /) -> bool:

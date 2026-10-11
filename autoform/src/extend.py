@@ -39,15 +39,15 @@ import autoform.src.utils as utils
 # ==================================================================================================
 
 AVal = core.AVal
-StrAVal = string.StrAVal
-IntAVal = numeric.IntAVal
-FloatAVal = numeric.FloatAVal
-BoolAVal = numeric.BoolAVal
+AValStr = string.AValStr
+AValInt = numeric.AValInt
+AValFloat = numeric.AValFloat
+AValBool = numeric.AValBool
 Space = core.Space
 avalof = core.avalof
-primal_s = core.primal_s
-tangent_s = core.tangent_s
-cotangent_s = core.cotangent_s
+s_primal = core.s_primal
+s_tangent = core.s_tangent
+s_cotangent = core.s_cotangent
 Prim = core.Prim
 Rule = core.Rule
 Dunder = stage.Dunder
@@ -77,32 +77,32 @@ active_client = lm.active_client
 # PRIMITIVE KEYS
 # ==================================================================================================
 
-concat_p = string.concat_p
-match_p = string.match_p
-neg_p = numeric.neg_p
-add_p = numeric.add_p
-sub_p = numeric.sub_p
-mul_p = numeric.mul_p
-div_p = numeric.div_p
-eq_p = numeric.eq_p
-ne_p = numeric.ne_p
-lt_p = numeric.lt_p
-le_p = numeric.le_p
-gt_p = numeric.gt_p
-ge_p = numeric.ge_p
-fill_p = lm.fill_p
-factor_p = path.factor_p
-weight_call_p = path.weight_call_p
-checkpoint_p = intercept.checkpoint_p
-stop_gradient_p = control.stop_gradient_p
-switch_p = control.switch_p
-while_loop_p = control.while_loop_p
-fixpoint_p = control.fixpoint_p
-fanout_p = order.fanout_p
-depends_p = order.depends_p
-batch_call_p = axis.batch_call_p
-pushforward_call_p = ad.pushforward_call_p
-pullback_call_p = ad.pullback_call_p
+p_concat = string.p_concat
+p_match = string.p_match
+p_neg = numeric.p_neg
+p_add = numeric.p_add
+p_sub = numeric.p_sub
+p_mul = numeric.p_mul
+p_div = numeric.p_div
+p_eq = numeric.p_eq
+p_ne = numeric.p_ne
+p_lt = numeric.p_lt
+p_le = numeric.p_le
+p_gt = numeric.p_gt
+p_ge = numeric.p_ge
+p_fill = lm.p_fill
+p_factor = path.p_factor
+p_weight_call = path.p_weight_call
+p_checkpoint = intercept.p_checkpoint
+p_stop_gradient = control.p_stop_gradient
+p_switch = control.p_switch
+p_while_loop = control.p_while_loop
+p_fixpoint = control.p_fixpoint
+p_fanout = order.p_fanout
+p_depends = order.p_depends
+p_batch_call = axis.p_batch_call
+p_pushforward_call = ad.p_pushforward_call
+p_pullback_call = ad.p_pullback_call
 
 
 type AValRule = Callable[[Any], AVal]
@@ -174,10 +174,10 @@ def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
         >>> import functools as ft
         >>> import autoform.extend as afe
         >>> class Token: ...
-        >>> class TokenAVal(afe.AVal): ...
+        >>> class AValToken(afe.AVal): ...
         >>> @ft.partial(afe.register_trace_type, Token)
         ... def token_aval(value):
-        ...     return TokenAVal()
+        ...     return AValToken()
     """
     core.aval_types[type] = aval_rule
     stage.trace_types.add(type)

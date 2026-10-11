@@ -82,7 +82,7 @@ def test_match(left, right, expected):
 @pytest.mark.parametrize("expected", [True, False], ids=["equal", "unequal"])
 def test_match_lowering(executor, program, traced, equal, unequal, expected):
     ir = stage.trace(program)(*traced)
-    assert [eqn.prim for eqn in ir.eqns] == [string.match_p]
+    assert [eqn.prim for eqn in ir.eqns] == [string.p_match]
     args = equal if expected else unequal
     actual = executor(ir, *args)
     assert actual is expected
@@ -113,7 +113,7 @@ def test_match_lowering(executor, program, traced, equal, unequal, expected):
 )
 def test_concat_lowering(executor, program, traced, args, expected):
     ir = stage.trace(program)(*traced)
-    assert [eqn.prim for eqn in ir.eqns] == [string.concat_p]
+    assert [eqn.prim for eqn in ir.eqns] == [string.p_concat]
     actual = executor(ir, *args)
     assert actual == expected
 
@@ -133,7 +133,7 @@ def test_concat_lowering(executor, program, traced, args, expected):
             lambda x: x == 1,
             (1,),
             TypeError,
-            r"No trace rule for eq on values of type IntAVal\(\)",
+            r"No trace rule for eq on values of type AValInt\(\)",
             id="eq-integer",
         ),
         pytest.param(lambda x: x + 1, ("a",), AssertionError, "Expected strings", id="add"),
@@ -142,7 +142,7 @@ def test_concat_lowering(executor, program, traced, args, expected):
             lambda x: x + 1,
             (1,),
             TypeError,
-            r"No trace rule for add on values of type IntAVal\(\)",
+            r"No trace rule for add on values of type AValInt\(\)",
             id="add-integer",
         ),
         pytest.param(
@@ -168,25 +168,25 @@ def test_invalid_traced_operands(program, args, error, message):
         pytest.param(
             ad.pushforward,
             (("yes",), ("tangent_input",)),
-            (True, core.Zero(numeric.BoolAVal())),
+            (True, core.Zero(numeric.AValBool())),
             id="pushforward-true",
         ),
         pytest.param(
             ad.pushforward,
             (("no",), ("tangent_input",)),
-            (False, core.Zero(numeric.BoolAVal())),
+            (False, core.Zero(numeric.AValBool())),
             id="pushforward-false",
         ),
         pytest.param(
             ad.pullback,
-            (("yes",), core.Zero(numeric.BoolAVal())),
-            (True, (core.Zero(string.StrAVal()),)),
+            (("yes",), core.Zero(numeric.AValBool())),
+            (True, (core.Zero(string.AValStr()),)),
             id="pullback-true",
         ),
         pytest.param(
             ad.pullback,
-            (("no",), core.Zero(numeric.BoolAVal())),
-            (False, (core.Zero(string.StrAVal()),)),
+            (("no",), core.Zero(numeric.AValBool())),
+            (False, (core.Zero(string.AValStr()),)),
             id="pullback-false",
         ),
     ],
@@ -214,13 +214,13 @@ def test_match_batch_axes(axes, args):
     [
         pytest.param(("yes", "yes"), id="equal"),
         pytest.param(("yes", "no"), id="unequal"),
-        pytest.param((string.StrAVal(), "yes"), id="left-abstract"),
-        pytest.param(("yes", string.StrAVal()), id="right-abstract"),
-        pytest.param((string.StrAVal(), string.StrAVal()), id="both-abstract"),
+        pytest.param((string.AValStr(), "yes"), id="left-abstract"),
+        pytest.param(("yes", string.AValStr()), id="right-abstract"),
+        pytest.param((string.AValStr(), string.AValStr()), id="both-abstract"),
     ],
 )
 def test_match_abstract(operands):
-    assert string.abstract_match(operands) == numeric.BoolAVal()
+    assert string.abstract_match(operands) == numeric.AValBool()
 
 
 def test_match_abstract_rejects_nonstring():
@@ -282,7 +282,7 @@ def test_format_lowers_template_and_args_to_concat():
     ir = stage.trace(program)("World")
     assert len(ir.eqns) == 1
     eqn = ir.eqns[0]
-    assert eqn.prim is string.concat_p
+    assert eqn.prim is string.p_concat
     prefix, value, suffix = eqn.in_tree
     assert prefix == "Hello, "
     assert suffix == "!"
@@ -351,7 +351,7 @@ def test_format_lowers_to_concat(executor, template, values, expected, feedback)
 
     ir = stage.trace(program)(values)
     assert len(ir.eqns) == 1
-    assert ir.eqns[0].prim is string.concat_p
+    assert ir.eqns[0].prim is string.p_concat
     p = template.format(**values)
     assert program(values) == p
     actual = executor(ir, values)
@@ -375,7 +375,7 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
 
     row = Record("A", ("B", "C"))
     ir = stage.trace(program)(row)
-    assert ir.eqns[0].prim is string.concat_p
+    assert ir.eqns[0].prim is string.p_concat
     pf = ad.pushforward(ir)
     direction = Record("da", ("db", "dc"))
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")

@@ -36,7 +36,7 @@ type TreePair = tuple[Tree, Tree]
 # PUSHFORWARD
 # ==================================================================================================
 
-pushforward_call_p = core.Prim("pushforward_call")
+p_pushforward_call = core.Prim("pushforward_call")
 
 
 class PushforwardBox:
@@ -72,7 +72,7 @@ class PushforwardInterpreter(core.Interpreter):
         def t(v):
             if isinstance(v, PushforwardBox) and v.owner is self:
                 return v.tangent
-            return core.Zero(core.tangent_s.map(core.avalof(v)))
+            return core.Zero(core.s_tangent.map(core.avalof(v)))
 
         return utils.tree.map(p, values), utils.tree.map(t, values)
 
@@ -118,13 +118,13 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
 
     def make_p(atom):
         if stage.is_var(atom):
-            return stage.Var.fresh(aval=core.primal_s.map(atom.aval), source=atom)
+            return stage.Var.fresh(aval=core.s_primal.map(atom.aval), source=atom)
         return atom
 
     def make_t(atom):
         if stage.is_var(atom):
-            return stage.Var.fresh(aval=core.tangent_s.map(atom.aval), source=atom)
-        return core.Zero(core.tangent_s.map(core.avalof(atom)))
+            return stage.Var.fresh(aval=core.s_tangent.map(atom.aval), source=atom)
+        return core.Zero(core.s_tangent.map(core.avalof(atom)))
 
     in_p_ir = utils.tree.map(make_p, ir.in_tree)
     in_t_ir = utils.tree.map(make_t, ir.in_tree)
@@ -132,12 +132,12 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
     out_p_ir = utils.tree.map(make_p, ir.out_tree)
     out_t_ir = utils.tree.map(make_t, ir.out_tree)
     out_tree = (out_p_ir, out_t_ir)
-    eqn = stage.Eqn(pushforward_call_p, in_tree, out_tree, dict(ir=ir))
+    eqn = stage.Eqn(p_pushforward_call, in_tree, out_tree, dict(ir=ir))
     return stage.IR([eqn], in_tree, out_tree)
 
 
 def zero_tangent(x):
-    return core.Zero(core.tangent_s.map(core.avalof(x)))
+    return core.Zero(core.s_tangent.map(core.avalof(x)))
 
 
 class PFEnv:
@@ -151,24 +151,24 @@ class PFEnv:
         if not stage.is_var(atom):
             return atom
         value = self.primals[atom]
-        stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
+        stage.no_stage_typecheck(value, core.s_primal.map(atom.aval))
         return value
 
     def read_t(self, atom, /):
         if not stage.is_var(atom):
             return zero_tangent(atom)
         value = self.tangents[atom]
-        stage.no_stage_typecheck(value, core.tangent_s.map(atom.aval))
+        stage.no_stage_typecheck(value, core.s_tangent.map(atom.aval))
         return value
 
     def write_p(self, atom, value, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
+            stage.no_stage_typecheck(value, core.s_primal.map(atom.aval))
             self.primals[atom] = value
 
     def write_t(self, atom, value, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(value, core.tangent_s.map(atom.aval))
+            stage.no_stage_typecheck(value, core.s_tangent.map(atom.aval))
             self.tangents[atom] = value
 
 
@@ -180,7 +180,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
         in_p, in_t = in_tree
         if all(isinstance(x, core.Zero) for x in utils.tree.leaves(in_t)) and all(
-            core.primal_s.map(atom.aval) == atom.aval
+            core.s_primal.map(atom.aval) == atom.aval
             for atom in utils.tree.leaves((eqn.in_tree, eqn.out_tree))
             if stage.is_var(atom)
         ):
@@ -211,7 +211,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     async def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
         in_p, in_t = in_tree
         if all(isinstance(x, core.Zero) for x in utils.tree.leaves(in_t)) and all(
-            core.primal_s.map(atom.aval) == atom.aval
+            core.s_primal.map(atom.aval) == atom.aval
             for atom in utils.tree.leaves((eqn.in_tree, eqn.out_tree))
             if stage.is_var(atom)
         ):
@@ -237,12 +237,12 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 def abstract_pushforward_call(_: Tree, /, *, ir: stage.IR) -> TreePair:
     def t_aval(atom):
         if stage.is_var(atom):
-            return core.tangent_s.map(atom.aval)
-        return core.Zero(core.tangent_s.map(core.avalof(atom)))
+            return core.s_tangent.map(atom.aval)
+        return core.Zero(core.s_tangent.map(core.avalof(atom)))
 
     def p_aval(atom):
         if stage.is_var(atom):
-            return core.primal_s.map(atom.aval)
+            return core.s_primal.map(atom.aval)
         return atom
 
     out_p = utils.tree.map(p_aval, ir.out_tree)
@@ -332,7 +332,7 @@ async def abatch_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair
     pf_ir = pushforward(ir)
 
     inputs = [(unbatch_p(b), unbatch_t(b)) for b in range(bs)]
-    out_bi = await order.fanout_p.abind(inputs, irs=[pf_ir] * bs)
+    out_bi = await order.p_fanout.abind(inputs, irs=[pf_ir] * bs)
     out_batched = utils.tree.map(lambda _: True, pf_ir.out_tree)
     out_ib = utils.batch_transpose(bs, out_batched, spec.unflatten(out_bi))
     return out_ib, out_batched
@@ -345,26 +345,26 @@ def dce_pushforward_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCE
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(pushforward_call_p, impl_pushforward_call)
-core.aimpl_rules.set(pushforward_call_p, aimpl_pushforward_call)
-core.abstract_rules.set(pushforward_call_p, abstract_pushforward_call)
-core.batch_rules.set(pushforward_call_p, batch_pushforward_call)
-core.abatch_rules.set(pushforward_call_p, abatch_pushforward_call)
-core.push_rules.set(pushforward_call_p, pushforward_pushforward_call)
-core.apush_rules.set(pushforward_call_p, apushforward_pushforward_call)
-core.pull_fwd_rules.set(pushforward_call_p, pullback_fwd_pushforward_call)
-core.apull_fwd_rules.set(pushforward_call_p, apullback_fwd_pushforward_call)
-core.pull_bwd_rules.set(pushforward_call_p, pullback_bwd_pushforward_call)
-core.apull_bwd_rules.set(pushforward_call_p, apullback_bwd_pushforward_call)
-dead.dce_rules[pushforward_call_p] = dce_pushforward_call
+core.impl_rules.set(p_pushforward_call, impl_pushforward_call)
+core.aimpl_rules.set(p_pushforward_call, aimpl_pushforward_call)
+core.abstract_rules.set(p_pushforward_call, abstract_pushforward_call)
+core.batch_rules.set(p_pushforward_call, batch_pushforward_call)
+core.abatch_rules.set(p_pushforward_call, abatch_pushforward_call)
+core.push_rules.set(p_pushforward_call, pushforward_pushforward_call)
+core.apush_rules.set(p_pushforward_call, apushforward_pushforward_call)
+core.pull_fwd_rules.set(p_pushforward_call, pullback_fwd_pushforward_call)
+core.apull_fwd_rules.set(p_pushforward_call, apullback_fwd_pushforward_call)
+core.pull_bwd_rules.set(p_pushforward_call, pullback_bwd_pushforward_call)
+core.apull_bwd_rules.set(p_pushforward_call, apullback_bwd_pushforward_call)
+dead.dce_rules[p_pushforward_call] = dce_pushforward_call
 
 
 # ==================================================================================================
 # PULLBACK
 # ==================================================================================================
 
-pullback_call_p = core.Prim("pullback_call")
-cot_accum_p = core.Prim("cot_accum")
+p_pullback_call = core.Prim("pullback_call")
+p_cot_accum = core.Prim("cot_accum")
 
 
 def cot_accum(cots: list[Any | core.Zero]) -> Any:
@@ -375,9 +375,9 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.extend.Zero(af.extend.primal_s.map(af.extend.avalof("")))
+        # >>> z = af.extend.Zero(af.extend.s_primal.map(af.extend.avalof("")))
         # >>> af.pullback(ir).call(("a",), (z, z))
-        # (('a', 'a'), (Zero(StrAVal()),))
+        # (('a', 'a'), (Zero(AValStr()),))
         first_zero, *rest_zero = cots
         assert all(core.avalof(c) == core.avalof(first_zero) for c in rest_zero)
         return first_zero
@@ -386,7 +386,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> def f(x):
         # ...     return (x, x)
         # >>> ir = af.trace(f)("...")
-        # >>> z = af.extend.Zero(af.extend.primal_s.map(af.extend.avalof("")))
+        # >>> z = af.extend.Zero(af.extend.s_primal.map(af.extend.avalof("")))
         # >>> af.pullback(ir).call(("a",), ("df", z))
         # (('a', 'a'), ('df',))
         return non_zero[0]
@@ -405,7 +405,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
     # >>> ir = af.trace(f)("...")
     # >>> af.pullback(ir).call(("a",), "df")
     # ('aa', ('dfdf',))
-    return cot_accum_p.bind(non_zero)
+    return p_cot_accum.bind(non_zero)
 
 
 def impl_cot_accum(cots: list[Any], /) -> Any:
@@ -441,17 +441,17 @@ def batch_cot_accum(in_tree: Tree, /) -> TreePair:
     return spec.unflatten(out_bi), True
 
 
-core.impl_rules.set(cot_accum_p, impl_cot_accum)
-core.aimpl_rules.set(cot_accum_p, utils.asyncify(impl_cot_accum))
-core.abstract_rules.set(cot_accum_p, abstract_cot_accum)
-core.batch_rules.set(cot_accum_p, batch_cot_accum)
-core.abatch_rules.set(cot_accum_p, utils.asyncify(batch_cot_accum))
-core.push_rules.set(cot_accum_p, pushforward_cot_accum)
-core.apush_rules.set(cot_accum_p, utils.asyncify(pushforward_cot_accum))
-core.pull_fwd_rules.set(cot_accum_p, pullback_fwd_cot_accum)
-core.apull_fwd_rules.set(cot_accum_p, utils.asyncify(pullback_fwd_cot_accum))
-core.pull_bwd_rules.set(cot_accum_p, pullback_bwd_cot_accum)
-core.apull_bwd_rules.set(cot_accum_p, utils.asyncify(pullback_bwd_cot_accum))
+core.impl_rules.set(p_cot_accum, impl_cot_accum)
+core.aimpl_rules.set(p_cot_accum, utils.asyncify(impl_cot_accum))
+core.abstract_rules.set(p_cot_accum, abstract_cot_accum)
+core.batch_rules.set(p_cot_accum, batch_cot_accum)
+core.abatch_rules.set(p_cot_accum, utils.asyncify(batch_cot_accum))
+core.push_rules.set(p_cot_accum, pushforward_cot_accum)
+core.apush_rules.set(p_cot_accum, utils.asyncify(pushforward_cot_accum))
+core.pull_fwd_rules.set(p_cot_accum, pullback_fwd_cot_accum)
+core.apull_fwd_rules.set(p_cot_accum, utils.asyncify(pullback_fwd_cot_accum))
+core.pull_bwd_rules.set(p_cot_accum, pullback_bwd_cot_accum)
+core.apull_bwd_rules.set(p_cot_accum, utils.asyncify(pullback_bwd_cot_accum))
 
 
 class PullbackFwdBox:
@@ -563,13 +563,13 @@ def pullback(ir: stage.IR, /) -> stage.IR:
 
     def make_p(atom):
         if stage.is_var(atom):
-            return stage.Var.fresh(aval=core.primal_s.map(atom.aval), source=atom)
+            return stage.Var.fresh(aval=core.s_primal.map(atom.aval), source=atom)
         return atom
 
     def make_c(atom):
         if stage.is_var(atom):
-            return stage.Var.fresh(aval=core.cotangent_s.map(atom.aval), source=atom)
-        return core.Zero(core.cotangent_s.map(core.avalof(atom)))
+            return stage.Var.fresh(aval=core.s_cotangent.map(atom.aval), source=atom)
+        return core.Zero(core.s_cotangent.map(core.avalof(atom)))
 
     in_p_ir = utils.tree.map(make_p, ir.in_tree)
     out_c_ir = utils.tree.map(make_c, ir.out_tree)
@@ -577,7 +577,7 @@ def pullback(ir: stage.IR, /) -> stage.IR:
     out_p_ir = utils.tree.map(make_p, ir.out_tree)
     in_c_ir = utils.tree.map(make_c, ir.in_tree)
     out_tree = (out_p_ir, in_c_ir)
-    eqn = stage.Eqn(pullback_call_p, in_tree, out_tree, dict(ir=ir))
+    eqn = stage.Eqn(p_pullback_call, in_tree, out_tree, dict(ir=ir))
     return stage.IR([eqn], in_tree, out_tree)
 
 
@@ -592,16 +592,16 @@ class PBEnv:
         if not stage.is_var(atom):
             return atom
         value = self.primals[atom]
-        stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
+        stage.no_stage_typecheck(value, core.s_primal.map(atom.aval))
         return value
 
     def write_p(self, atom, value, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(value, core.primal_s.map(atom.aval))
+            stage.no_stage_typecheck(value, core.s_primal.map(atom.aval))
             self.primals[atom] = value
 
     def read_c(self, atom, /):
-        aval = core.cotangent_s.map(core.avalof(atom))
+        aval = core.s_cotangent.map(core.avalof(atom))
         if not stage.is_var(atom) or not (values := self.cotangents[atom]):
             value = core.Zero(aval)
         else:
@@ -613,7 +613,7 @@ class PBEnv:
 
     def write_c(self, atom, value, /):
         if stage.is_var(atom):
-            stage.no_stage_typecheck(value, core.cotangent_s.map(atom.aval))
+            stage.no_stage_typecheck(value, core.s_cotangent.map(atom.aval))
             self.cotangents[atom].append(value)
 
 
@@ -694,12 +694,12 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 def abstract_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     def c_aval(atom):
         if stage.is_var(atom):
-            return core.cotangent_s.map(atom.aval)
-        return core.Zero(core.cotangent_s.map(core.avalof(atom)))
+            return core.s_cotangent.map(atom.aval)
+        return core.Zero(core.s_cotangent.map(core.avalof(atom)))
 
     def p_aval(atom):
         if stage.is_var(atom):
-            return core.primal_s.map(atom.aval)
+            return core.s_primal.map(atom.aval)
         return atom
 
     out_p = utils.tree.map(p_aval, ir.out_tree)
@@ -791,7 +791,7 @@ async def abatch_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     pb_ir = pullback(ir)
 
     inputs = [(unbatch_p(b), unbatch_c(b)) for b in range(size)]
-    out_bi = await order.fanout_p.abind(inputs, irs=[pb_ir] * size)
+    out_bi = await order.p_fanout.abind(inputs, irs=[pb_ir] * size)
     out_batched = utils.tree.map(lambda _: True, pb_ir.out_tree)
     out_ib = utils.batch_transpose(size, out_batched, spec.unflatten(out_bi))
     return out_ib, out_batched
@@ -817,15 +817,15 @@ def dce_pullback_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCERes
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(pullback_call_p, impl_pullback_call)
-core.aimpl_rules.set(pullback_call_p, aimpl_pullback_call)
-core.abstract_rules.set(pullback_call_p, abstract_pullback_call)
-core.batch_rules.set(pullback_call_p, batch_pullback_call)
-core.abatch_rules.set(pullback_call_p, abatch_pullback_call)
-core.push_rules.set(pullback_call_p, pushforward_pullback_call)
-core.apush_rules.set(pullback_call_p, apushforward_pullback_call)
-core.pull_fwd_rules.set(pullback_call_p, pullback_fwd_pullback_call)
-core.apull_fwd_rules.set(pullback_call_p, apullback_fwd_pullback_call)
-core.pull_bwd_rules.set(pullback_call_p, pullback_bwd_pullback_call)
-core.apull_bwd_rules.set(pullback_call_p, apullback_bwd_pullback_call)
-dead.dce_rules[pullback_call_p] = dce_pullback_call
+core.impl_rules.set(p_pullback_call, impl_pullback_call)
+core.aimpl_rules.set(p_pullback_call, aimpl_pullback_call)
+core.abstract_rules.set(p_pullback_call, abstract_pullback_call)
+core.batch_rules.set(p_pullback_call, batch_pullback_call)
+core.abatch_rules.set(p_pullback_call, abatch_pullback_call)
+core.push_rules.set(p_pullback_call, pushforward_pullback_call)
+core.apush_rules.set(p_pullback_call, apushforward_pullback_call)
+core.pull_fwd_rules.set(p_pullback_call, pullback_fwd_pullback_call)
+core.apull_fwd_rules.set(p_pullback_call, apullback_fwd_pullback_call)
+core.pull_bwd_rules.set(p_pullback_call, pullback_bwd_pullback_call)
+core.apull_bwd_rules.set(p_pullback_call, apullback_bwd_pullback_call)
+dead.dce_rules[p_pullback_call] = dce_pullback_call

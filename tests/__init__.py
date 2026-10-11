@@ -100,7 +100,7 @@ class Blob:
         self.size = size
 
 
-class BlobAVal(core.AVal):
+class AValBlob(core.AVal):
     __slots__ = ["size"]
 
     def __init__(self, size: int):
@@ -113,4 +113,4 @@ class BlobAVal(core.AVal):
         return hash((type(self), self.size))
 
 
-core.aval_types[BlobAVal] = lambda aval: aval
+core.aval_types[AValBlob] = lambda aval: aval

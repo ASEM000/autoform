@@ -33,7 +33,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class StrAVal(core.AVal):
+class AValStr(core.AVal):
     """Abstract value for ``str`` leaves.
 
     Example:
@@ -41,7 +41,7 @@ class StrAVal(core.AVal):
         >>> ir = af.trace(lambda x: x)("x")
         >>> (x,) = ir.in_tree
         >>> x.aval
-        StrAVal()
+        AValStr()
     """
 
     __slots__ = []
@@ -56,18 +56,18 @@ class StrAVal(core.AVal):
         return "".join(values)
 
 
-core.aval_types[str] = lambda _: StrAVal()
-core.aval_types[StrAVal] = lambda aval: aval
+core.aval_types[str] = lambda _: AValStr()
+core.aval_types[AValStr] = lambda aval: aval
 stage.trace_types.add(str)
-core.primal_s.set(StrAVal, lambda aval: aval)
-core.tangent_s.set(StrAVal, lambda aval: aval)
-core.cotangent_s.set(StrAVal, lambda aval: aval)
+core.s_primal.set(AValStr, lambda aval: aval)
+core.s_tangent.set(AValStr, lambda aval: aval)
+core.s_cotangent.set(AValStr, lambda aval: aval)
 
 # ==================================================================================================
 # CONCAT
 # ==================================================================================================
 
-concat_p = core.Prim("concat")
+p_concat = core.Prim("concat")
 
 
 def concat(*args) -> str:
@@ -85,7 +85,7 @@ def concat(*args) -> str:
         >>> print(result)
         Hello, world!
     """
-    return concat_p.bind(args)
+    return p_concat.bind(args)
 
 
 def impl_concat(in_tree: Tree, /) -> str:
@@ -93,18 +93,18 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 
 def abstract_concat(in_tree: Tree, /) -> Any:
-    assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return StrAVal()
+    assert all(type(x) in (str, AValStr) for x in in_tree), f"Expected strings: {in_tree!r}"
+    return AValStr()
 
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     t = core.materialize_zeros(t)
-    return concat_p.bind(p), concat_p.bind(t)
+    return p_concat.bind(p), p_concat.bind(t)
 
 
 def pullback_fwd_concat(in_tree: Tree, /) -> TreePair:
-    out = concat_p.bind(in_tree)
+    out = p_concat.bind(in_tree)
     return out, len(in_tree)
 
 
@@ -117,33 +117,33 @@ def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
 def batch_concat(in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, in_values = in_tree
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return concat_p.bind(in_values), False
+        return p_concat.bind(in_values), False
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    result = [concat_p.bind(unbatch(b)) for b in range(batch_size)]
+    result = [p_concat.bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
-core.impl_rules.set(concat_p, impl_concat)
-core.aimpl_rules.set(concat_p, utils.asyncify(impl_concat))
-core.abstract_rules.set(concat_p, abstract_concat)
-core.batch_rules.set(concat_p, batch_concat)
-core.abatch_rules.set(concat_p, utils.asyncify(batch_concat))
-core.push_rules.set(concat_p, pushforward_concat)
-core.apush_rules.set(concat_p, utils.asyncify(pushforward_concat))
-core.pull_fwd_rules.set(concat_p, pullback_fwd_concat)
-core.apull_fwd_rules.set(concat_p, utils.asyncify(pullback_fwd_concat))
-core.pull_bwd_rules.set(concat_p, pullback_bwd_concat)
-core.apull_bwd_rules.set(concat_p, utils.asyncify(pullback_bwd_concat))
+core.impl_rules.set(p_concat, impl_concat)
+core.aimpl_rules.set(p_concat, utils.asyncify(impl_concat))
+core.abstract_rules.set(p_concat, abstract_concat)
+core.batch_rules.set(p_concat, batch_concat)
+core.abatch_rules.set(p_concat, utils.asyncify(batch_concat))
+core.push_rules.set(p_concat, pushforward_concat)
+core.apush_rules.set(p_concat, utils.asyncify(pushforward_concat))
+core.pull_fwd_rules.set(p_concat, pullback_fwd_concat)
+core.apull_fwd_rules.set(p_concat, utils.asyncify(pullback_fwd_concat))
+core.pull_bwd_rules.set(p_concat, pullback_bwd_concat)
+core.apull_bwd_rules.set(p_concat, utils.asyncify(pullback_bwd_concat))
 
 
-stage.dunder_rules[stage.Dunder.ADD, StrAVal] = concat
+stage.dunder_rules[stage.Dunder.ADD, AValStr] = concat
 
 
 # ==================================================================================================
 # MATCH
 # ==================================================================================================
 
-match_p = core.Prim("match")
+p_match = core.Prim("match")
 
 
 def match(a: str, b: str, /) -> bool:
@@ -165,7 +165,7 @@ def match(a: str, b: str, /) -> bool:
         >>> "yes" == "no"
         False
     """
-    return match_p.bind((a, b))
+    return p_match.bind((a, b))
 
 
 def impl_match(in_tree: Tree, /) -> bool:
@@ -174,18 +174,18 @@ def impl_match(in_tree: Tree, /) -> bool:
 
 
 def abstract_match(in_tree: Tree, /) -> Any:
-    assert all(type(x) in (str, StrAVal) for x in in_tree), f"Expected strings: {in_tree!r}"
+    assert all(type(x) in (str, AValStr) for x in in_tree), f"Expected strings: {in_tree!r}"
     return core.avalof(False)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     p, t = in_tree
-    out_p = match_p.bind(p)
-    return out_p, core.Zero(core.tangent_s.map(core.avalof(False)))
+    out_p = p_match.bind(p)
+    return out_p, core.Zero(core.s_tangent.map(core.avalof(False)))
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
-    out = match_p.bind(in_tree)
+    out = p_match.bind(in_tree)
     residuals = in_tree
     return out, residuals
 
@@ -194,7 +194,7 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+        return core.Zero(core.s_cotangent.map(core.avalof(x)))
 
     residuals, out_c = in_tree
     del out_c
@@ -204,26 +204,26 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     batch_size, in_batched, in_values = in_tree
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return match_p.bind(in_values), False
+        return p_match.bind(in_values), False
     unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    result = [match_p.bind(unbatch(b)) for b in range(batch_size)]
+    result = [p_match.bind(unbatch(b)) for b in range(batch_size)]
     return spec.unflatten(result), True
 
 
-core.impl_rules.set(match_p, impl_match)
-core.aimpl_rules.set(match_p, utils.asyncify(impl_match))
-core.abstract_rules.set(match_p, abstract_match)
-core.batch_rules.set(match_p, batch_match)
-core.abatch_rules.set(match_p, utils.asyncify(batch_match))
-core.push_rules.set(match_p, pushforward_match)
-core.apush_rules.set(match_p, utils.asyncify(pushforward_match))
-core.pull_fwd_rules.set(match_p, pullback_fwd_match)
-core.apull_fwd_rules.set(match_p, utils.asyncify(pullback_fwd_match))
-core.pull_bwd_rules.set(match_p, pullback_bwd_match)
-core.apull_bwd_rules.set(match_p, utils.asyncify(pullback_bwd_match))
+core.impl_rules.set(p_match, impl_match)
+core.aimpl_rules.set(p_match, utils.asyncify(impl_match))
+core.abstract_rules.set(p_match, abstract_match)
+core.batch_rules.set(p_match, batch_match)
+core.abatch_rules.set(p_match, utils.asyncify(batch_match))
+core.push_rules.set(p_match, pushforward_match)
+core.apush_rules.set(p_match, utils.asyncify(pushforward_match))
+core.pull_fwd_rules.set(p_match, pullback_fwd_match)
+core.apull_fwd_rules.set(p_match, utils.asyncify(pullback_fwd_match))
+core.pull_bwd_rules.set(p_match, pullback_bwd_match)
+core.apull_bwd_rules.set(p_match, utils.asyncify(pullback_bwd_match))
 
 
-stage.dunder_rules[stage.Dunder.EQ, StrAVal] = match
+stage.dunder_rules[stage.Dunder.EQ, AValStr] = match
 
 
 # ==================================================================================================

@@ -93,7 +93,7 @@ class TestFixpointTraced:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_call(self, executor):
         ir = fixpoint_ir(replace_state, ("draft", "done"), max_iters=10)
-        assert [eqn.prim for eqn in ir.eqns] == [control.fixpoint_p]
+        assert [eqn.prim for eqn in ir.eqns] == [control.p_fixpoint]
         result = executor(ir, "draft", "done")
         assert result == "done"
 
@@ -113,7 +113,7 @@ class TestFixpointPushforward:
         assert executor(ad.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, expected)
         assert executor(ad.pullback(ir), (2.0, 1.0), 1.0) == (
             2.0,
-            (core.Zero(numeric.FloatAVal()), expected),
+            (core.Zero(numeric.AValFloat()), expected),
         )
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -123,8 +123,8 @@ class TestFixpointPushforward:
             pytest.param(2.0, 3.0, id="parameter-tangent"),
             pytest.param(0.0, 0.0, id="concrete-zero"),
             pytest.param(
-                core.Zero(numeric.FloatAVal()),
-                core.Zero(numeric.FloatAVal()),
+                core.Zero(numeric.AValFloat()),
+                core.Zero(numeric.AValFloat()),
                 id="symbolic-zero",
             ),
         ],
@@ -146,7 +146,7 @@ class TestFixpointPushforward:
         x, y = {"x": 2.0, "y": "a"}, {"x": 1.0, "y": "!"}
         equiv_ir = stage.trace(lambda x, y: True)(x, x)
         ir = fixpoint_ir(step, (x, y), max_iters=10, equiv_ir=equiv_ir)
-        zero = core.Zero(string.StrAVal())
+        zero = core.Zero(string.AValStr())
         assert executor(
             ad.pushforward(ir), (x, y), ({"x": 100.0, "y": "ignored"}, {"x": 1.0, "y": zero})
         ) == ({"x": 2.0, "y": "a!"}, {"x": 1.5, "y": zero})
@@ -209,9 +209,9 @@ class TestFixpointPullback:
                 string.concat,
                 ("s", "c"),
                 {"max_iters": 2},
-                core.Zero(core.primal_s.map(core.avalof("g"))),
+                core.Zero(core.s_primal.map(core.avalof("g"))),
                 "scc",
-                core.Zero(core.primal_s.map(core.avalof("c"))),
+                core.Zero(core.s_primal.map(core.avalof("c"))),
                 id="zero-cotangent",
             ),
         ],
@@ -397,7 +397,7 @@ class TestStopGradient:
     )
     def test_identity(self, executor, sample, value):
         ir = stage.trace(stop_gradient)(sample)
-        assert [eqn.prim for eqn in ir.eqns] == [control.stop_gradient_p]
+        assert [eqn.prim for eqn in ir.eqns] == [control.p_stop_gradient]
         result = executor(ir, value)
         assert result == value
 
@@ -465,8 +465,8 @@ class TestWhileLoop:
             pytest.param(
                 lambda x: True,
                 2,
-                core.Zero(numeric.FloatAVal()),
-                (16.0, core.Zero(numeric.FloatAVal())),
+                core.Zero(numeric.AValFloat()),
+                (16.0, core.Zero(numeric.AValFloat())),
                 id="symbolic-zero",
             ),
         ],
@@ -483,7 +483,7 @@ class TestWhileLoop:
         cond_ir = stage.trace(lambda x: x["x"] < 10.0)(x)
         body_ir = stage.trace(lambda x: {"x": x["x"] * x["x"], "y": string.concat(x["y"], "!")})(x)
         ir = stage.trace(while_program(cond_ir, body_ir, max_iters=10))(x)
-        zero = core.Zero(string.StrAVal())
+        zero = core.Zero(string.AValStr())
         assert executor(ad.pushforward(ir), (x,), ({"x": 1.0, "y": zero},)) == (
             {"x": 16.0, "y": "a!!"},
             {"x": 32.0, "y": zero},
@@ -692,7 +692,7 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
-    core.aval_types[Key] = lambda _: string.StrAVal()
+    core.aval_types[Key] = lambda _: string.AValStr()
     stage.trace_types.add(Key)
     left = stage.trace(lambda x: string.concat("L", x))("X")
     right = stage.trace(lambda x: string.concat("R", x))("X")
@@ -761,7 +761,7 @@ class TestSwitch:
     )
     def test_execution_and_structure(self, executor, key, expected, numbered_switch):
         ir = numbered_switch
-        assert [eqn.prim for eqn in ir.eqns] == [control.switch_p]
+        assert [eqn.prim for eqn in ir.eqns] == [control.p_switch]
         result = executor(ir, key, "hello")
         assert result == expected
 
@@ -838,7 +838,7 @@ class TestSwitch:
                 ad.pullback,
                 ["grad1", "grad2"],
                 (
-                    core.Zero(core.primal_s.map(core.avalof("a"))),
+                    core.Zero(core.s_primal.map(core.avalof("a"))),
                     ["grad1", "grad2"],
                 ),
                 id="pull",

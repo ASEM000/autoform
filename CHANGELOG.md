@@ -4,6 +4,12 @@
 
 ### Breaking Changes
 
+  - Standardized extension names: primitive keys use the `p_` prefix
+    (`concat_p` to `p_concat`), and abstract value classes use `AVal` as a prefix
+    (`StrAVal` to `AValStr`,
+    `IntAVal` to `AValInt`, `FloatAVal` to `AValFloat`, `BoolAVal` to `AValBool`,
+    and `BatchAVal` to `AValBatch`). Primitive display names remain unchanged.
+
   - Moved string and LM operations out of the top-level API.
 
     | v0.3.0 | Now |
@@ -11,10 +17,10 @@
     | `af.format`, `af.concat`, `af.match` | `af.string.format`, `af.string.concat`, `af.string.match` |
     | `af.lm_call`, `af.lm_schema_call` | `af.lm.fill` |
     | `af.lm_client` | `af.lm.client` |
-    | `af.lm.LMClient` | `af.lm.Client` |
+    | `af.lm.LMClient` | Custom clients passed to `af.lm.client` |
 
     The extension primitives `lm_call_p` and `lm_schema_call_p` are replaced
-    by `fill_p`.
+    by `p_fill`.
 
   - `af.lm.fill` accepts a pytree containing literal inputs and specs, rather
     than separate messages and an output schema. It preserves literal inputs
@@ -50,11 +56,11 @@
   - Replaced the operator-specific `autoform.extend` helpers `register_add`,
     `register_sub`, `register_mul`, `register_div`, `register_matmul`, and
     `register_eq` with {py:func}`register_dunder <autoform.extend.register_dunder>`.
-    For example, use `register_dunder(Dunder.ADD, ArrayAVal, array_add)`.
+    For example, use `register_dunder(Dunder.ADD, AValArray, array_add)`.
     The separate `core.trace_*_rules` registries are replaced by `core.dunder_rules`.
 
   - Renamed `af.weighted` to `af.weight` and the extension primitive
-    `weighted_call_p` to `weight_call_p`.
+    `weighted_call_p` to `p_weight_call`.
 
   - Renamed `IRVar` to `Var`, `IREqn` to `Eqn`, and `IR.ir_eqns` to `IR.eqns`.
     IR and equation fields `in_ir_tree` and `out_ir_tree` are now `in_tree`

@@ -97,8 +97,8 @@ def format_switch_ir():
 )
 def test_fanout_transforms(executor, joined, transform, args, expected):
     scheduled = order.sched(stage.trace(parallel_formats(joined=joined))("a"))
-    assert [e.prim for e in scheduled.eqns] == [order.fanout_p] + (
-        [string.concat_p] if joined else []
+    assert [e.prim for e in scheduled.eqns] == [order.p_fanout] + (
+        [string.p_concat] if joined else []
     )
     ir = transform(scheduled)
     actual = executor(ir, *args)
@@ -110,7 +110,7 @@ def test_fanout_transforms(executor, joined, transform, args, expected):
 def test_fanout_pullback_repeated_operand(executor, out_c):
     ir = stage.trace(lambda x: (x * x, x + 1.0))(3.0)
     scheduled = order.sched(ir)
-    assert [e.prim for e in scheduled.eqns] == [order.fanout_p]
+    assert [e.prim for e in scheduled.eqns] == [order.p_fanout]
     expected = ((9.0, 4.0), (6.0 * out_c[0] + out_c[1],))
     assert ad.pullback(ir).call((3.0,), out_c) == expected
     pb = ad.pullback(scheduled)
@@ -123,11 +123,11 @@ def test_fanout_exception(executor):
     def impl_error(x):
         raise ValueError("intentional error")
 
-    error_p = core.Prim("error")
-    extend.register_impl(error_p, impl_error)
-    extend.register_abstract(error_p, lambda x: string.StrAVal())
-    extend.register_aimpl(error_p, utils.asyncify(impl_error))
-    ir = order.sched(stage.trace(lambda x: (string.format("[{x}]", x=x), error_p.bind(x)))("a"))
+    p_error = core.Prim("error")
+    extend.register_impl(p_error, impl_error)
+    extend.register_abstract(p_error, lambda x: string.AValStr())
+    extend.register_aimpl(p_error, utils.asyncify(impl_error))
+    ir = order.sched(stage.trace(lambda x: (string.format("[{x}]", x=x), p_error.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):
         executor(ir, "A")
 
@@ -155,19 +155,19 @@ def test_fanout_mixed_axes(executor, values, expected):
     [
         pytest.param(
             lambda x: string.format("[{x}]", x=x),
-            [string.concat_p],
+            [string.p_concat],
             "[test]",
             id="single",
         ),
         pytest.param(
             lambda x: string.concat(string.format("[{x}]", x=x), "!"),
-            [string.concat_p] * 2,
+            [string.p_concat] * 2,
             "[test]!",
             id="sequential",
         ),
         pytest.param(
             lambda x: tuple((string.format(f, x=x) for f in ("[{x}]", "<{x}>", "{{{x}}}"))),
-            [order.fanout_p],
+            [order.p_fanout],
             ("[test]", "<test>", "{test}"),
             id="three-independent",
         ),
@@ -182,17 +182,17 @@ def test_sched_levels(executor, program, prims, expected):
 
 def test_sched_filter():
     ir = stage.trace(lambda x: (string.format("[{x}]", x=x), string.concat(x, "!")))("x")
-    scheduled = order.sched(ir, cond=lambda e: e.prim is string.concat_p and len(e.in_tree) == 3)
-    assert [e.prim for e in scheduled.eqns] == [string.concat_p] * 2
+    scheduled = order.sched(ir, cond=lambda e: e.prim is string.p_concat and len(e.in_tree) == 3)
+    assert [e.prim for e in scheduled.eqns] == [string.p_concat] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
 def test_sched_filter_propagates_into_switch():
     inner = stage.trace(lambda x: (string.format("[{x}]", x=x), string.concat(x, "!")))("x")
     ir = stage.trace(lambda x: control.switch("a", {"a": inner}, x))("x")
-    scheduled = order.sched(ir, cond=lambda e: e.prim is string.concat_p and len(e.in_tree) == 3)
+    scheduled = order.sched(ir, cond=lambda e: e.prim is string.p_concat and len(e.in_tree) == 3)
     checked = scheduled.eqns[0].params["branches"]["a"]
-    assert [e.prim for e in checked.eqns] == [string.concat_p] * 2
+    assert [e.prim for e in checked.eqns] == [string.p_concat] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
@@ -203,7 +203,7 @@ def test_sched_parallel_checkpoints():
         return x, y
 
     ir = order.sched(stage.trace(program)("a", "b"))
-    assert sum(e.prim is order.fanout_p for e in ir.eqns) == 2
+    assert sum(e.prim is order.p_fanout for e in ir.eqns) == 2
     assert ir.call("hello", "world") == ("hello", "world")
 
 
@@ -214,7 +214,7 @@ def test_sched_dependent_checkpoints():
         return order.depends(y, x)
 
     ir = order.sched(stage.trace(program)("a", "b"))
-    assert sum(e.prim is order.fanout_p for e in ir.eqns) == 2
+    assert sum(e.prim is order.p_fanout for e in ir.eqns) == 2
     assert ir.call("hello", "world") == "world"
 
 
@@ -226,7 +226,7 @@ def test_sched_mixed_checkpoint():
         return x, y, z
 
     ir = order.sched(stage.trace(program)("a", "b", "c"))
-    assert sum(e.prim is order.fanout_p for e in ir.eqns) == 1
+    assert sum(e.prim is order.p_fanout for e in ir.eqns) == 1
     assert ir.call("a", "b", "c") == ("[a]", "<b>", "{c}")
 
 
@@ -282,7 +282,7 @@ def test_nested_fanout_collect():
 )
 def test_sched_switch(executor, args, expected):
     scheduled = order.sched(format_switch_ir())
-    assert scheduled.eqns[0].params["branches"]["x"].eqns[0].prim is order.fanout_p
+    assert scheduled.eqns[0].params["branches"]["x"].eqns[0].prim is order.p_fanout
     actual = executor(scheduled, *args)
     assert actual == expected
 
@@ -308,7 +308,7 @@ def test_sched_nested_switch(executor, args, expected):
     )
     scheduled = order.sched(ir)
     inner = scheduled.eqns[0].params["branches"]["A"]
-    assert inner.eqns[0].params["branches"]["x"].eqns[0].prim is order.fanout_p
+    assert inner.eqns[0].params["branches"]["x"].eqns[0].prim is order.p_fanout
     actual = executor(scheduled, *args)
     assert actual == expected
 
@@ -331,9 +331,9 @@ def test_sched_nested_fanout():
         "world",
     )
     scheduled = order.sched(ir)
-    assert scheduled.eqns[0].prim is order.fanout_p
+    assert scheduled.eqns[0].prim is order.p_fanout
     for inner in scheduled.eqns[0].params["irs"]:
-        assert inner.eqns[0].params["branches"]["a"].eqns[0].prim is order.fanout_p
+        assert inner.eqns[0].params["branches"]["a"].eqns[0].prim is order.p_fanout
     assert scheduled.call("a", "hello", "world") == ("[hello]<hello>", "(world){world}")
 
 
@@ -415,7 +415,7 @@ def multiple_dependencies(x):
 )
 def test_depends_transforms(executor, transform, args, expected):
     ir = stage.trace(dependent_formats)("x")
-    [barrier] = [e for e in ir.eqns if e.prim is order.depends_p]
+    [barrier] = [e for e in ir.eqns if e.prim is order.p_depends]
     assert len(utils.tree.leaves(barrier.in_tree)) == 2
     ir = transform(ir)
     actual = executor(ir, *args)
@@ -482,7 +482,7 @@ def test_sched_data_dependency():
         return string.format("B: {a_barrier}", a_barrier=order.depends(a))
 
     ir = order.sched(stage.trace(program)("x"))
-    assert sum(e.prim is order.depends_p for e in ir.eqns) == 1
+    assert sum(e.prim is order.p_depends for e in ir.eqns) == 1
     assert ir.call("hello") == "B: A: hello"
 
 
@@ -493,5 +493,5 @@ def test_sched_shared_dependency():
         return string.concat(a, order.depends(b, a))
 
     ir = order.sched(stage.trace(program)("x"))
-    assert sum(e.prim is order.depends_p for e in ir.eqns) == 1
+    assert sum(e.prim is order.p_depends for e in ir.eqns) == 1
     assert ir.call("hello") == "A: helloB: hello"

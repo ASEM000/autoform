@@ -94,7 +94,7 @@ def test_memoize_trace_preserves_nested_checkpoints(checkpoint_switch):
 
 def test_memoize_preserves_distinct_checkpoints():
     ir = stage.trace(distinct_checkpoints)("test")
-    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is intercept.checkpoint_p] == [
+    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is intercept.p_checkpoint] == [
         "first",
         "second",
     ]
@@ -106,7 +106,7 @@ def test_memoize_preserves_distinct_checkpoints():
 def test_memoize_trace_preserves_distinct_checkpoints():
     with memo.memoize():
         ir = stage.trace(distinct_checkpoints)("test")
-    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is intercept.checkpoint_p] == [
+    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is intercept.p_checkpoint] == [
         "first",
         "second",
     ]

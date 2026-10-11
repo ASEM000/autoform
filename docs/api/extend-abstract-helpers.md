@@ -6,8 +6,8 @@ Spaces map an abstract value to its representation for a particular role, such a
 .. autoclass:: autoform.extend.Space
     :members: map, set
 
-.. autodata:: autoform.extend.primal_s
-.. autodata:: autoform.extend.tangent_s
-.. autodata:: autoform.extend.cotangent_s
+.. autodata:: autoform.extend.s_primal
+.. autodata:: autoform.extend.s_tangent
+.. autodata:: autoform.extend.s_cotangent
 .. autofunction:: autoform.extend.materialize_zeros
 ```

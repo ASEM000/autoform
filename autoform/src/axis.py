@@ -38,8 +38,8 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class BatchAVal(core.AVal):
-    # NOTE(asem): no aval_type rule can infer BatchAVal from a concrete container
+class AValBatch(core.AVal):
+    # NOTE(asem): no aval_type rule can infer AValBatch from a concrete container
     # as containers are later introduced at the call site. unlike jax the atomic unit is not
     # the array object but any thing really.
     def __init__(self, base: core.AVal):
@@ -67,10 +67,10 @@ class BatchAVal(core.AVal):
         utils.tree.map(self.base.check, value, is_leaf=lambda x: x is not value)
 
 
-core.aval_types[BatchAVal] = lambda aval: aval
-core.primal_s.set(BatchAVal, lambda aval: BatchAVal(core.primal_s.map(aval.base)))
-core.tangent_s.set(BatchAVal, lambda aval: BatchAVal(core.tangent_s.map(aval.base)))
-core.cotangent_s.set(BatchAVal, lambda aval: BatchAVal(core.cotangent_s.map(aval.base)))
+core.aval_types[AValBatch] = lambda aval: aval
+core.s_primal.set(AValBatch, lambda aval: AValBatch(core.s_primal.map(aval.base)))
+core.s_tangent.set(AValBatch, lambda aval: AValBatch(core.s_tangent.map(aval.base)))
+core.s_cotangent.set(AValBatch, lambda aval: AValBatch(core.s_cotangent.map(aval.base)))
 
 
 def is_axis_spec(v) -> bool:
@@ -105,7 +105,7 @@ def broadcast_batch_out(spec, out_v: Tree, out_b: Tree[bool], /) -> Tree:
 
 def unbatch_zeros(in_v: Tree, in_b: Tree[bool], /) -> TreePair:
     def is_batched_zero(b, v):
-        return b and isinstance(v, core.Zero) and isinstance(core.avalof(v), BatchAVal)
+        return b and isinstance(v, core.Zero) and isinstance(core.avalof(v), AValBatch)
 
     is_zero = utils.tree.map(is_batched_zero, in_b, in_v)
     out_v = utils.tree.map(lambda z, v: core.Zero(v.aval.base) if z else v, is_zero, in_v)
@@ -113,7 +113,7 @@ def unbatch_zeros(in_v: Tree, in_b: Tree[bool], /) -> TreePair:
     return out_v, out_b
 
 
-batch_call_p = core.Prim("batch_call")
+p_batch_call = core.Prim("batch_call")
 
 
 def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
@@ -147,7 +147,7 @@ def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
     has_batched = any(utils.tree.leaves(in_b, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
-        return BatchAVal(aval) if is_batched else aval
+        return AValBatch(aval) if is_batched else aval
 
     def make_in(atom, is_batched: bool):
         if not stage.is_var(atom):
@@ -163,7 +163,7 @@ def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
 
     in_v_ir = utils.tree.map(make_in, ir.in_tree, in_b)
     out_v_ir = utils.tree.map(make_out, ir.out_tree)
-    eqn = stage.Eqn(batch_call_p, in_v_ir, out_v_ir, dict(ir=ir, in_axes=in_axes))
+    eqn = stage.Eqn(p_batch_call, in_v_ir, out_v_ir, dict(ir=ir, in_axes=in_axes))
     return stage.IR([eqn], in_v_ir, out_v_ir)
 
 
@@ -246,7 +246,7 @@ class BatchEnv:
         if not stage.is_var(atom):
             return atom
         value = self.values[atom]
-        aval = BatchAVal(atom.aval) if self.batched[atom] else atom.aval
+        aval = AValBatch(atom.aval) if self.batched[atom] else atom.aval
         stage.no_stage_typecheck(value, aval)
         return value
 
@@ -255,7 +255,7 @@ class BatchEnv:
 
     def write_v(self, atom, value, /):
         if stage.is_var(atom):
-            aval = BatchAVal(atom.aval) if self.batched[atom] else atom.aval
+            aval = AValBatch(atom.aval) if self.batched[atom] else atom.aval
             stage.no_stage_typecheck(value, aval)
             self.values[atom] = value
 
@@ -358,7 +358,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tre
     has_batched = any(utils.tree.leaves(in_b, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
-        return BatchAVal(aval) if is_batched else aval
+        return AValBatch(aval) if is_batched else aval
 
     def out_aval(atom):
         if stage.is_var(atom):
@@ -451,7 +451,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
     unbatch = ft.partial(utils.batch_index, in_v, in_b)
 
     inputs = [unbatch(b) for b in range(batch_size)]
-    v_bi = await order.fanout_p.abind(inputs, irs=[batched_ir] * batch_size)
+    v_bi = await order.p_fanout.abind(inputs, irs=[batched_ir] * batch_size)
     out_b = utils.tree.map(lambda _: True, ir.out_tree)
     out_v = utils.batch_transpose(batch_size, out_b, list(v_bi))
     return out_v, out_b
@@ -462,15 +462,15 @@ def dce_batch_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(batch_call_p, impl_batch_call)
-core.aimpl_rules.set(batch_call_p, aimpl_batch_call)
-core.abstract_rules.set(batch_call_p, abstract_batch_call)
-core.batch_rules.set(batch_call_p, batch_batch_call)
-core.abatch_rules.set(batch_call_p, abatch_batch_call)
-core.push_rules.set(batch_call_p, pushforward_batch_call)
-core.apush_rules.set(batch_call_p, apushforward_batch_call)
-core.pull_fwd_rules.set(batch_call_p, pullback_fwd_batch_call)
-core.apull_fwd_rules.set(batch_call_p, apullback_fwd_batch_call)
-core.pull_bwd_rules.set(batch_call_p, pullback_bwd_batch_call)
-core.apull_bwd_rules.set(batch_call_p, apullback_bwd_batch_call)
-dead.dce_rules[batch_call_p] = dce_batch_call
+core.impl_rules.set(p_batch_call, impl_batch_call)
+core.aimpl_rules.set(p_batch_call, aimpl_batch_call)
+core.abstract_rules.set(p_batch_call, abstract_batch_call)
+core.batch_rules.set(p_batch_call, batch_batch_call)
+core.abatch_rules.set(p_batch_call, abatch_batch_call)
+core.push_rules.set(p_batch_call, pushforward_batch_call)
+core.apush_rules.set(p_batch_call, apushforward_batch_call)
+core.pull_fwd_rules.set(p_batch_call, pullback_fwd_batch_call)
+core.apull_fwd_rules.set(p_batch_call, apullback_fwd_batch_call)
+core.pull_bwd_rules.set(p_batch_call, pullback_bwd_batch_call)
+core.apull_bwd_rules.set(p_batch_call, apullback_bwd_batch_call)
+dead.dce_rules[p_batch_call] = dce_batch_call

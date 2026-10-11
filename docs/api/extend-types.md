@@ -5,10 +5,10 @@ These classes represent the values and program structure used by extension code:
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal
    :members: check, zero, accum
-.. autoclass:: autoform.extend.StrAVal
-.. autoclass:: autoform.extend.IntAVal
-.. autoclass:: autoform.extend.FloatAVal
-.. autoclass:: autoform.extend.BoolAVal
+.. autoclass:: autoform.extend.AValStr
+.. autoclass:: autoform.extend.AValInt
+.. autoclass:: autoform.extend.AValFloat
+.. autoclass:: autoform.extend.AValBool
 ```
 
 ## Primitives

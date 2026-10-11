@@ -70,7 +70,7 @@ def test_removes_dead_code():
     ir = stage.trace(live_and_dead)("test")
     dced = dead.dce(ir)
     assert len(ir.eqns) == 2
-    assert [e.prim for e in dced.eqns] == [string.concat_p]
+    assert [e.prim for e in dced.eqns] == [string.p_concat]
     assert dced.call("x") == "x LIVE"
 
 
@@ -79,7 +79,7 @@ def test_removes_inlined_dead_code():
     ir = stage.trace(lambda x: inner.call(x))("input")
     dced = dead.dce(ir)
     assert len(ir.eqns) == 2
-    assert [e.prim for e in dced.eqns] == [string.concat_p]
+    assert [e.prim for e in dced.eqns] == [string.p_concat]
     assert dced.call("x") == "x LIVE"
 
 
@@ -145,7 +145,7 @@ def test_no_input_equation(used, count, expected):
 
 
 def test_dangling_used_output():
-    bad_ir = stage.IR([], in_tree=(), out_tree=stage.Var.fresh(aval=string.StrAVal()))
+    bad_ir = stage.IR([], in_tree=(), out_tree=stage.Var.fresh(aval=string.AValStr()))
     with pytest.raises(AssertionError):
         dead.dce(bad_ir, out_used=True)
 
@@ -157,7 +157,7 @@ def test_preserves_used_switch():
     }
     ir = stage.trace(switch_program(branches))("a", "input")
     dced = dead.dce(ir)
-    assert [e.prim for e in dced.eqns] == [control.switch_p]
+    assert [e.prim for e in dced.eqns] == [control.p_switch]
     assert dced.call("a", "input") == "input A"
 
 
@@ -173,7 +173,7 @@ def test_removes_unused_switch():
 
     ir = stage.trace(program)("a", "input")
     dced = dead.dce(ir)
-    assert [e.prim for e in dced.eqns] == [string.concat_p]
+    assert [e.prim for e in dced.eqns] == [string.p_concat]
     assert dced.call("a", "input") == "inputlive"
 
 
@@ -328,7 +328,7 @@ def test_output_masks(mask, expected, count):
 def test_fanout_output_masks(mask, expected):
     ir = order.sched(stage.trace(paired_outputs)("x"))
     dced = dead.dce(ir, out_used=mask)
-    assert [e.prim for e in dced.eqns] == [order.fanout_p]
+    assert [e.prim for e in dced.eqns] == [order.p_fanout]
     assert [len(branch.eqns) for branch in dced.eqns[0].params["irs"]] == list(map(int, mask))
     assert dced.call("X") == expected
 
@@ -397,7 +397,7 @@ def test_schedule_after_dce():
     ir = stage.trace(program)("x")
     result = order.sched(dead.dce(ir))
     assert result.call("test") == "[test]<test>"
-    assert [e.prim for e in result.eqns] == [order.fanout_p, string.concat_p]
+    assert [e.prim for e in result.eqns] == [order.p_fanout, string.p_concat]
 
 
 def test_dce_after_schedule():
@@ -411,7 +411,7 @@ def test_dce_after_schedule():
     ir = stage.trace(program)("x")
     result = dead.dce(order.sched(ir))
     assert result.call("test") == "[test]<test>"
-    assert [e.prim for e in result.eqns] == [order.fanout_p, string.concat_p]
+    assert [e.prim for e in result.eqns] == [order.p_fanout, string.p_concat]
 
 
 def test_preserves_checkpoint():
@@ -421,7 +421,7 @@ def test_preserves_checkpoint():
 
     dced = dead.dce(stage.trace(program)("test"))
     assert len(dced.eqns) == 1
-    assert dced.eqns[-1].prim is intercept.checkpoint_p
+    assert dced.eqns[-1].prim is intercept.p_checkpoint
     assert dced.eqns[-1].params["key"] == "save"
     with intercept.collect(collection="cache") as saved:
         assert dced.call("test") == "test"
@@ -436,7 +436,7 @@ def test_preserves_checkpoint_input():
 
     dced = dead.dce(stage.trace(program)("test"))
     assert len(dced.eqns) == 2
-    assert dced.eqns[-1].prim is intercept.checkpoint_p
+    assert dced.eqns[-1].prim is intercept.p_checkpoint
     assert dced.eqns[-1].params["key"] == "save"
     with intercept.collect(collection="cache") as saved:
         assert dced.call("test") == "test"
@@ -451,7 +451,7 @@ def test_removes_dead_code_around_checkpoint():
 
     dced = dead.dce(stage.trace(program)("test"))
     assert len(dced.eqns) == 1
-    assert dced.eqns[-1].prim is intercept.checkpoint_p
+    assert dced.eqns[-1].prim is intercept.p_checkpoint
     assert dced.eqns[-1].params["key"] == "save"
     with intercept.collect(collection="cache") as saved:
         assert dced.call("test") == "test"
@@ -465,8 +465,8 @@ def test_preserves_used_dependency():
         return order.depends(b, a)
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 2
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 2
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 1
     assert dced.call("x") == "B: x"
 
 
@@ -478,8 +478,8 @@ def test_removes_unused_dependency():
         return string.format("C: {x}", x=x)
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 1
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 0
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 1
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 0
     assert dced.call("x") == "C: x"
 
 
@@ -491,8 +491,8 @@ def test_removes_all_unused_dependencies():
         return x
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 0
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 0
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 0
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 0
     assert dced.call("x") == "x"
 
 
@@ -503,8 +503,8 @@ def test_preserves_dependency_chain():
         return order.depends(string.format("C: {x}", x=x), b)
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 3
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 2
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 3
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 2
     assert dced.call("x") == "C: x"
 
 
@@ -516,8 +516,8 @@ def test_prunes_dependency_chain():
         return b
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 2
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 2
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 1
     assert dced.call("x") == "B: x"
 
 
@@ -528,8 +528,8 @@ def test_preserves_multiple_dependencies():
         return order.depends(string.format("C: {x}", x=x), a, b)
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 3
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 3
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 1
     assert dced.call("x") == "C: x"
 
 
@@ -538,8 +538,8 @@ def test_preserves_barrier_without_dependencies():
         return order.depends(string.format("A: {x}", x=x))
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 1
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 1
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 1
     assert dced.call("x") == "A: x"
 
 
@@ -549,9 +549,9 @@ def test_preserves_checkpoint_dependency():
         return order.depends(string.format("B: {x}", x=x), a)
 
     dced = dead.dce(stage.trace(program)("x"))
-    assert sum(e.prim is string.concat_p for e in dced.eqns) == 1
-    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
-    assert sum(e.prim is intercept.checkpoint_p for e in dced.eqns) == 1
+    assert sum(e.prim is string.p_concat for e in dced.eqns) == 1
+    assert sum(e.prim is order.p_depends for e in dced.eqns) == 1
+    assert sum(e.prim is intercept.p_checkpoint for e in dced.eqns) == 1
     assert dced.call("x") == "B: x"
 
 
@@ -581,7 +581,7 @@ def test_partial_fanout_composes_with_dce_and_batch(executor):
 
 def test_partial_fanout_masks_nested_outputs():
     inner = stage.trace(lambda x: (x, string.concat(x, "!")))("x")
-    ir = stage.trace(lambda x: order.fanout_p.bind([(x,)], irs=[inner]))("x")
+    ir = stage.trace(lambda x: order.p_fanout.bind([(x,)], irs=[inner]))("x")
     dced = dead.dce(ir, out_used=[(False, True)])
 
     assert dead.dce(dced).call("x") == [(None, "x!")]

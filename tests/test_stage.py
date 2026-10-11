@@ -35,8 +35,8 @@ import autoform.src.stage as stage
 import autoform.src.string as string
 import autoform.src.utils as utils
 from tests import (
+    AValBlob,
     Blob,
-    BlobAVal,
     CountingInterpreter,
     aexecute,
     angle_text,
@@ -60,9 +60,9 @@ class TestBuildIR:
     @pytest.mark.parametrize(
         "traced, runtime, expected, aval",
         [
-            pytest.param(1, 2, 2, numeric.IntAVal(), id="integer"),
-            pytest.param(1.5, 2.5, 2.5, numeric.FloatAVal(), id="float"),
-            pytest.param(True, False, False, numeric.BoolAVal(), id="boolean"),
+            pytest.param(1, 2, 2, numeric.AValInt(), id="integer"),
+            pytest.param(1.5, 2.5, 2.5, numeric.AValFloat(), id="float"),
+            pytest.param(True, False, False, numeric.AValBool(), id="boolean"),
         ],
     )
     def test_trace_scalar_input_is_dynamic(self, traced, runtime, expected, aval):
@@ -99,12 +99,12 @@ class TestBuildIR:
         def program(x):
             return x
 
-        core.aval_types[TraceBlob] = lambda x: BlobAVal(x.size)
+        core.aval_types[TraceBlob] = lambda x: AValBlob(x.size)
         stage.trace_types.add(TraceBlob)
 
         ir = stage.trace(program)(TraceBlob(3))
 
-        assert ir.in_tree[0].aval == BlobAVal(3)
+        assert ir.in_tree[0].aval == AValBlob(3)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_avalof_live_trace_values(self, executor):
@@ -183,7 +183,7 @@ class TestBuildIR:
     [
         pytest.param(lambda ir: ir, (["x"],), "No aval rule registered", id="primal"),
         pytest.param(ad.pushforward, (("x",), (["dx"],)), "No aval rule registered", id="tangent"),
-        pytest.param(axis.batch, (["x", 1.0],), "Expected StrAVal", id="batch"),
+        pytest.param(axis.batch, (["x", 1.0],), "Expected AValStr", id="batch"),
     ],
 )
 def test_call_rejects_incompatible_input_aval(executor, transform, args, message):
@@ -292,30 +292,30 @@ class TestTags:
         assert stage.active_tags.get() == frozenset()
 
     def test_ireqn_tags_input_is_frozenset(self):
-        prim = core.Prim("tag_set")
-        eqn = stage.Eqn(prim, (), (), None, frozenset({Label("draft")}))
+        p_tag_set = core.Prim("tag_set")
+        eqn = stage.Eqn(p_tag_set, (), (), None, frozenset({Label("draft")}))
 
         assert eqn.tags == frozenset({Label("draft")})
 
         with pytest.raises(AssertionError):
-            stage.Eqn(prim, (), (), None, (Label("draft"),))
+            stage.Eqn(p_tag_set, (), (), None, (Label("draft"),))
 
     def test_bind_reinstalls_equation_tags(self):
         def abstract_probe(x):
             del x
-            return string.StrAVal()
+            return string.AValStr()
 
         def impl_probe(x):
             names = sorted(tag.name for tag in stage.active_tags.get() if isinstance(tag, Label))
             return f"{','.join(names)}|{x}"
 
-        probe_p = core.Prim("tag_probe")
-        extend.register_impl(probe_p, impl_probe)
-        extend.register_abstract(probe_p, abstract_probe)
+        p_probe = core.Prim("tag_probe")
+        extend.register_impl(p_probe, impl_probe)
+        extend.register_abstract(p_probe, abstract_probe)
 
         def program(x):
             with stage.tag(Label("draft"), Label("cost")):
-                return probe_p.bind(x)
+                return p_probe.bind(x)
 
         ir = stage.trace(program)("seed")
 
@@ -360,18 +360,18 @@ class TestRunIR:
             "hello"
         )
         with intercept.inject(collection="cache", values={"value": [1.0]}):
-            with pytest.raises(TypeError, match="Expected StrAVal"):
+            with pytest.raises(TypeError, match="Expected AValStr"):
                 executor(ir, "world")
 
     @pytest.mark.parametrize(
         "program, output, error, message",
         [
-            pytest.param(append_bang, 1.0, TypeError, "Expected StrAVal", id="dynamic"),
+            pytest.param(append_bang, 1.0, TypeError, "Expected AValStr", id="dynamic"),
             pytest.param(
                 lambda x: (append_bang(x), x)[1],
                 1.0,
                 TypeError,
-                "Expected StrAVal",
+                "Expected AValStr",
                 id="unused-output",
             ),
             pytest.param(
@@ -395,7 +395,7 @@ class TestRunIR:
     def test_walk_rechecks_mutated_values(self, use_in_equation):
         class Value(Blob): ...
 
-        extend.register_trace_type(Value, lambda value: BlobAVal(value.size))
+        extend.register_trace_type(Value, lambda value: AValBlob(value.size))
 
         def program(x):
             x = intercept.checkpoint(x, key="value")
@@ -413,14 +413,14 @@ class TestRunIR:
     def test_walk_with_supplied_output(self):
         gen = stage.trace(append_bang)("hello").walk("world")
         eqn, in_values = next(gen)
-        assert eqn.prim is string.concat_p
+        assert eqn.prim is string.p_concat
         assert in_values == ("world", "!")
         assert gen.send("world!") == (None, "world!")
 
     def test_walk_with_external_bind(self):
         gen = stage.trace(append_bang)("hello").walk("world")
         eqn, in_values = next(gen)
-        assert eqn.prim is string.concat_p
+        assert eqn.prim is string.p_concat
         assert in_values == ("world", "!")
         output = eqn.bind(("there", "!"), **eqn.params)
         assert gen.send(output) == (None, "there!")
@@ -469,11 +469,11 @@ def test_nested_primitive_inputs():
         name, options = inputs
         return f"{options['greeting']}, {name}{options['punctuation']}"
 
-    primitive = core.Prim("greet")
-    extend.register_impl(primitive, impl)
-    extend.register_abstract(primitive, lambda inputs: string.StrAVal())
+    p_greet = core.Prim("greet")
+    extend.register_impl(p_greet, impl)
+    extend.register_abstract(p_greet, lambda inputs: string.AValStr())
     greeting_ir = stage.trace(
-        lambda name: primitive.bind((name, dict(greeting="Hi", punctuation="?")))
+        lambda name: p_greet.bind((name, dict(greeting="Hi", punctuation="?")))
     )("World")
 
     (eqn,) = greeting_ir.eqns
@@ -520,7 +520,7 @@ def test_ir_and_equation_fields():
     ir = stage.trace(program)("test")
     match ir:
         case stage.IR(eqns=[stage.Eqn(prim=prim, in_tree=inputs, out_tree=output, params=params)]):
-            assert prim is intercept.checkpoint_p
+            assert prim is intercept.p_checkpoint
             assert inputs is ir.in_tree[0]
             assert output is ir.out_tree
             assert params == {"key": "x", "collection": "old"}
@@ -541,9 +541,9 @@ def test_ir_and_equation_fields():
 @pytest.mark.parametrize(
     "aval",
     [
-        pytest.param(string.StrAVal(), id="string"),
-        pytest.param(numeric.FloatAVal(), id="float"),
-        pytest.param(BlobAVal(3), id="custom-metadata"),
+        pytest.param(string.AValStr(), id="string"),
+        pytest.param(numeric.AValFloat(), id="float"),
+        pytest.param(AValBlob(3), id="custom-metadata"),
     ],
 )
 def test_variable_and_literal_boundary(aval):
@@ -635,7 +635,7 @@ class TestToposortLevelsWithCheckpoints:
             index
             for index, level in enumerate(levels)
             for eqn in level
-            if eqn.prim is intercept.checkpoint_p
+            if eqn.prim is intercept.p_checkpoint
         ]
         assert len(checkpoint_levels) == 2
         assert checkpoint_levels[0] == checkpoint_levels[1]
@@ -653,13 +653,13 @@ class TestToposortLevelsWithCheckpoints:
             index
             for index, level in enumerate(levels)
             for eqn in level
-            if eqn.prim is intercept.checkpoint_p
+            if eqn.prim is intercept.p_checkpoint
         ]
         assert checkpoint_levels[0] == checkpoint_levels[1]
         depends_level = next(
             index
             for index, level in enumerate(levels)
-            if any(eqn.prim is order.depends_p for eqn in level)
+            if any(eqn.prim is order.p_depends for eqn in level)
         )
         assert depends_level > checkpoint_levels[0]
 
@@ -806,7 +806,7 @@ class TestIrVarProducers:
         assert producers == {produced: ir.eqns[0]}
 
     def test_errors_if_same_var_is_produced_twice(self):
-        shared = stage.Var.fresh(aval=string.StrAVal())
+        shared = stage.Var.fresh(aval=string.AValStr())
         eqn_a = stage.Eqn(core.Prim("a"), (), shared, {})
         eqn_b = stage.Eqn(core.Prim("b"), (), shared, {})
         ir = stage.IR([eqn_a, eqn_b], in_tree=(), out_tree=shared)
@@ -965,43 +965,44 @@ class TestTraceValuePythonOps:
     ):
         class Value(Blob): ...
 
-        class ValueAVal(core.AVal): ...
+        class AValValue(core.AVal): ...
 
-        prim = core.Prim(dunder.value)
-        extend.register_trace_type(Value, lambda _: ValueAVal())
-        core.aval_types[ValueAVal] = lambda aval: aval
+        p_dunder = core.Prim(dunder.value)
+        extend.register_trace_type(Value, lambda _: AValValue())
+        core.aval_types[AValValue] = lambda aval: aval
         extend.register_impl(
-            prim, lambda inputs: operation(*(x.size if isinstance(x, Value) else x for x in inputs))
+            p_dunder,
+            lambda inputs: operation(*(x.size if isinstance(x, Value) else x for x in inputs)),
         )
-        extend.register_abstract(prim, lambda _: utils.tree.map(core.avalof, expected))
-        extend.register_dunder(dunder, ValueAVal, lambda *inputs: prim.bind(inputs))
+        extend.register_abstract(p_dunder, lambda _: utils.tree.map(core.avalof, expected))
+        extend.register_dunder(dunder, AValValue, lambda *inputs: p_dunder.bind(inputs))
 
         ir = stage.trace(program)(Value(5))
 
-        assert [eqn.prim for eqn in ir.eqns] == [prim]
+        assert [eqn.prim for eqn in ir.eqns] == [p_dunder]
         assert ir.call(Value(7)) == expected
 
     def test_call_preserves_positional_and_keyword_inputs(self):
         class Value(Blob): ...
 
-        class ValueAVal(core.AVal): ...
+        class AValValue(core.AVal): ...
 
-        prim = core.Prim("call_value")
-        extend.register_trace_type(Value, lambda _: ValueAVal())
-        core.aval_types[ValueAVal] = lambda aval: aval
+        p_call_value = core.Prim("call_value")
+        extend.register_trace_type(Value, lambda _: AValValue())
+        core.aval_types[AValValue] = lambda aval: aval
         extend.register_impl(
-            prim, lambda inputs: inputs[0].size + sum(inputs[1]) + sum(inputs[2].values())
+            p_call_value, lambda inputs: inputs[0].size + sum(inputs[1]) + sum(inputs[2].values())
         )
-        extend.register_abstract(prim, lambda _: numeric.IntAVal())
+        extend.register_abstract(p_call_value, lambda _: numeric.AValInt())
         extend.register_dunder(
             stage.Dunder.CALL,
-            ValueAVal,
-            lambda value, /, *args, **kwargs: prim.bind((value, args, kwargs)),
+            AValValue,
+            lambda value, /, *args, **kwargs: p_call_value.bind((value, args, kwargs)),
         )
 
         ir = stage.trace(lambda x, y: x(y, self=y, dunder=2, box=3))(Value(5), 1)
 
-        assert [eqn.prim for eqn in ir.eqns] == [prim]
+        assert [eqn.prim for eqn in ir.eqns] == [p_call_value]
         assert ir.eqns[0].in_tree == (
             ir.in_tree[0],
             (ir.in_tree[1],),
@@ -1014,18 +1015,18 @@ class TestTraceValuePythonOps:
             def __init__(self, values):
                 self.values = iter(values)
 
-        class ValuesAVal(core.AVal): ...
+        class AValValues(core.AVal): ...
 
-        prim = core.Prim("next_value")
-        extend.register_trace_type(Values, lambda _: ValuesAVal())
-        core.aval_types[ValuesAVal] = lambda aval: aval
-        extend.register_impl(prim, lambda value: next(value.values))
-        extend.register_abstract(prim, lambda _: numeric.IntAVal())
-        extend.register_dunder(stage.Dunder.NEXT, ValuesAVal, prim.bind)
+        p_next_value = core.Prim("next_value")
+        extend.register_trace_type(Values, lambda _: AValValues())
+        core.aval_types[AValValues] = lambda aval: aval
+        extend.register_impl(p_next_value, lambda value: next(value.values))
+        extend.register_abstract(p_next_value, lambda _: numeric.AValInt())
+        extend.register_dunder(stage.Dunder.NEXT, AValValues, p_next_value.bind)
 
         ir = stage.trace(lambda x: (next(x), next(x)))(Values([1, 2]))
 
-        assert [eqn.prim for eqn in ir.eqns] == [prim, prim]
+        assert [eqn.prim for eqn in ir.eqns] == [p_next_value, p_next_value]
         assert ir.call(Values([3, 4])) == (3, 4)
 
     def test_reversed_iterates_over_staged_elements(self):
@@ -1033,20 +1034,20 @@ class TestTraceValuePythonOps:
             def __init__(self, x, y):
                 self.values = (x, y)
 
-        class PairAVal(core.AVal): ...
+        class AValPair(core.AVal): ...
 
-        prim = core.Prim("pair_values")
-        extend.register_trace_type(Pair, lambda _: PairAVal())
-        core.aval_types[PairAVal] = lambda aval: aval
-        extend.register_impl(prim, lambda pair: pair.values)
-        extend.register_abstract(prim, lambda _: (numeric.IntAVal(), numeric.IntAVal()))
+        p_pair_values = core.Prim("pair_values")
+        extend.register_trace_type(Pair, lambda _: AValPair())
+        core.aval_types[AValPair] = lambda aval: aval
+        extend.register_impl(p_pair_values, lambda pair: pair.values)
+        extend.register_abstract(p_pair_values, lambda _: (numeric.AValInt(), numeric.AValInt()))
         extend.register_dunder(
-            stage.Dunder.REVERSED, PairAVal, lambda pair: reversed(prim.bind(pair))
+            stage.Dunder.REVERSED, AValPair, lambda pair: reversed(p_pair_values.bind(pair))
         )
 
         ir = stage.trace(lambda x: tuple(reversed(x)))(Pair(1, 2))
 
-        assert [eqn.prim for eqn in ir.eqns] == [prim]
+        assert [eqn.prim for eqn in ir.eqns] == [p_pair_values]
         assert ir.call(Pair(3, 4)) == (4, 3)
 
     @pytest.mark.parametrize(
@@ -1069,7 +1070,7 @@ class TestTraceValuePythonOps:
     def test_unregistered_python_operations_on_traced_values_error(self, dunder, program):
         with pytest.raises(
             TypeError,
-            match=rf"No trace rule for {re.escape(dunder)} on values of type StrAVal\(\)",
+            match=rf"No trace rule for {re.escape(dunder)} on values of type AValStr\(\)",
         ):
             stage.trace(program)("seed")
 
@@ -1119,14 +1120,14 @@ class TestFold:
 
     def test_fold_block_rejects_dynamic_trace_values_in_params(self):
         def param_probe(dynamic):
-            return param_probe_p.bind("literal", dynamic=dynamic)
+            return p_param_probe.bind("literal", dynamic=dynamic)
 
         def impl_param_probe(in_tree, *, dynamic):
             del in_tree
             return dynamic
 
-        param_probe_p = core.Prim("fold_param_probe")
-        extend.register_impl(param_probe_p, impl_param_probe)
+        p_param_probe = core.Prim("fold_param_probe")
+        extend.register_impl(p_param_probe, impl_param_probe)
 
         def program(x):
             with stage.fold():
@@ -1142,13 +1143,13 @@ class TestFold:
             del in_tree
             return captured["value"]
 
-        output_probe_p = core.Prim("fold_output_probe")
-        extend.register_impl(output_probe_p, impl_output_probe)
+        p_output_probe = core.Prim("fold_output_probe")
+        extend.register_impl(p_output_probe, impl_output_probe)
 
         def program(x):
             captured["value"] = x
             with stage.fold():
-                return output_probe_p.bind("literal")
+                return p_output_probe.bind("literal")
 
         with pytest.raises(AssertionError, match="depends on traced value"):
             stage.trace(program)("seed")
@@ -1207,13 +1208,13 @@ class TestFold:
     def test_async_dynamic_trace_dispatch_stages_primitive(self):
         def abstract_async_probe(in_tree):
             del in_tree
-            return string.StrAVal()
+            return string.AValStr()
 
-        async_probe_p = core.Prim("async_dynamic_fold_probe")
-        extend.register_abstract(async_probe_p, abstract_async_probe)
+        p_async_probe = core.Prim("async_dynamic_fold_probe")
+        extend.register_abstract(p_async_probe, abstract_async_probe)
 
         with core.using_interpreter(stage.TraceInterpreter()) as tracer:
-            result = asyncio.run(async_probe_p.abind("literal"))
+            result = asyncio.run(p_async_probe.abind("literal"))
 
         assert isinstance(result, stage.TraceBox)
         assert [eqn.prim.name for eqn in tracer.eqns] == ["async_dynamic_fold_probe"]
@@ -1222,12 +1223,12 @@ class TestFold:
         async def aimpl_async_probe(in_tree):
             return string.concat(in_tree, "!")
 
-        async_probe_p = core.Prim("async_fold_probe")
-        extend.register_aimpl(async_probe_p, aimpl_async_probe)
+        p_async_probe = core.Prim("async_fold_probe")
+        extend.register_aimpl(p_async_probe, aimpl_async_probe)
 
         with core.using_interpreter(stage.TraceInterpreter()) as tracer:
             with stage.fold():
-                result = asyncio.run(async_probe_p.abind("literal"))
+                result = asyncio.run(p_async_probe.abind("literal"))
 
         assert result == "literal!"
         assert tracer.eqns == []
@@ -1274,7 +1275,7 @@ def test_retracing_inlines_equations(program, trace_values, runtime, expected, e
     ir = stage.trace(program)(trace_values[0])
     for value in trace_values[1:]:
         ir = stage.trace(ir.call)(value)
-    assert [eqn.prim for eqn in ir.eqns] == [string.concat_p] * equations
+    assert [eqn.prim for eqn in ir.eqns] == [string.p_concat] * equations
     assert ir.call(runtime) == expected
 
 
