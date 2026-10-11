@@ -9,12 +9,3 @@ Specifications describe generated values and validate parsed results. The specif
 .. autoclass:: autoform.lm.Bool
 .. autoclass:: autoform.lm.Enum
 ```
-
-## Schema Utilities
-
-Functions for turning specification trees into a JSON Schema, and for parsing the returned value.
-
-```{eval-rst}
-.. autofunction:: autoform.lm.describe
-.. autofunction:: autoform.lm.parse
-```

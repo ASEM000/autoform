@@ -18,6 +18,4 @@ A custom model client supplies both synchronous and asynchronous Responses metho
 ```{eval-rst}
 .. autoclass:: autoform.lm.Client
    :members:
-.. autoclass:: autoform.lm.LiteLLMClient
-   :members:
 ```

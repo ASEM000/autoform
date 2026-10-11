@@ -109,7 +109,7 @@ async def aimpl_wikipedia_search(query: str, /) -> str:
 # tracing needs output shape without running the http call
 def abstract_wikipedia_search(query, /):
     del query
-    return af.string.StrAVal()
+    return af.extend.StrAVal()
 
 
 # async batch receives the batch size, input axes, and input values
@@ -122,9 +122,7 @@ async def abatch_wikipedia_search(in_tree, /):
     if not query_axis:
         return await wikipedia_search_p.abind(queries), False
 
-    results = await asyncio.gather(
-        *(wikipedia_search_p.abind(query) for query in queries)
-    )
+    results = await asyncio.gather(*(wikipedia_search_p.abind(query) for query in queries))
     return list(results), True
 
 
@@ -240,9 +238,7 @@ A {py:func}`pullback <autoform.pullback>` of the agent follows the computation p
 ```python
 # pullback turns output feedback into question feedback
 pb_agent = af.pullback(agent_ir)
-answer, (question_hint,) = asyncio.run(
-    pb_agent.acall(("question text",), "answer feedback")
-)
+answer, (question_hint,) = asyncio.run(pb_agent.acall(("question text",), "answer feedback"))
 ```
 
 Both tool branches have the signature `(query, answer, history) -> history`. Keeping this interface consistent allows the switch to select a branch at runtime while preserving the structure expected by the loop and its transforms.

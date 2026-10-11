@@ -5,5 +5,5 @@ Extension code can inspect the active interpreter, equation tags, and model clie
 ```{eval-rst}
 .. autodata:: autoform.extend.active_interpreter
 .. autodata:: autoform.extend.active_tags
-.. autodata:: autoform.lm.active_client
+.. autodata:: autoform.extend.active_client
 ```
