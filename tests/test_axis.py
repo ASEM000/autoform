@@ -24,14 +24,14 @@ import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
 import autoform.src.utils as utils
-from tests import BlobAVal, aexecute, angle_text, append_bang, bracket_text, execute
+from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, execute
 
 
 def greet(name, greeting):
     return string.format("{greeting}: {name}", greeting=greeting, name=name)
 
 
-class TaggedAVal(core.AVal):
+class AValTagged(core.AVal):
     def __init__(self, tag):
         self.tag = tag
 
@@ -39,21 +39,21 @@ class TaggedAVal(core.AVal):
 @pytest.mark.parametrize(
     "value",
     [
-        pytest.param(axis.BatchAVal(string.StrAVal()), id="aval"),
-        pytest.param(core.Zero(axis.BatchAVal(string.StrAVal())), id="zero"),
+        pytest.param(axis.AValBatch(string.AValStr()), id="aval"),
+        pytest.param(core.Zero(axis.AValBatch(string.AValStr())), id="zero"),
     ],
 )
 def test_check_batch_aval(value):
-    axis.BatchAVal(string.StrAVal()).check(value)
-    with pytest.raises(TypeError, match="Expected FloatAVal"):
-        axis.BatchAVal(numeric.FloatAVal()).check(value)
+    axis.AValBatch(string.AValStr()).check(value)
+    with pytest.raises(TypeError, match="Expected AValFloat"):
+        axis.AValBatch(numeric.AValFloat()).check(value)
 
 
 class TestBatchBasic:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_broadcast_symbolic_zero(self, executor):
         ir = axis.batch(stage.trace(lambda x, y: ad.cot_accum([x, y]))(1.0, 2.0))
-        zero = core.Zero(axis.BatchAVal(numeric.FloatAVal()))
+        zero = core.Zero(axis.AValBatch(numeric.AValFloat()))
 
         assert executor(ir, zero, [2.0, 3.0]) == [2.0, 3.0]
         with pytest.raises(TypeError, match="Cannot infer batch layout from symbolic zeros alone"):
@@ -61,11 +61,11 @@ class TestBatchBasic:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_valued_items(self, executor):
-        x = stage.Var(aval=axis.BatchAVal(string.StrAVal()))
+        x = stage.Var(aval=axis.AValBatch(string.AValStr()))
         ir = axis.batch(stage.IR([], (x,), x))
         values = [[], ["a", "b"]]
         assert executor(ir, values) == values
-        with pytest.raises(TypeError, match="Expected BatchAVal"):
+        with pytest.raises(TypeError, match="Expected AValBatch"):
             executor(ir, ["a", "b"])
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -130,24 +130,24 @@ class TestBatchIRStructure:
     @pytest.mark.parametrize(
         "space",
         [
-            pytest.param(core.primal_s, id="primal"),
-            pytest.param(core.tangent_s, id="tangent"),
-            pytest.param(core.cotangent_s, id="cotangent"),
+            pytest.param(core.s_primal, id="primal"),
+            pytest.param(core.s_tangent, id="tangent"),
+            pytest.param(core.s_cotangent, id="cotangent"),
         ],
     )
     def test_batch_aval_ad_space(self, space):
-        aval = axis.BatchAVal(string.StrAVal())
-        assert space.map(aval) == axis.BatchAVal(string.StrAVal())
+        aval = axis.AValBatch(string.AValStr())
+        assert space.map(aval) == axis.AValBatch(string.AValStr())
 
     def test_mapped_wrapper_aval(self):
-        aval = TaggedAVal("input")
+        aval = AValTagged("input")
         var = stage.Var(aval=aval)
         ir = axis.batch(stage.IR([], (var,), (var,)), in_axes=True)
         for wrapped in (ir.in_tree[0].aval, ir.out_tree[0].aval):
-            assert wrapped == axis.BatchAVal(aval)
+            assert wrapped == axis.AValBatch(aval)
 
     def test_broadcast_wrapper_aval(self):
-        aval = TaggedAVal("input")
+        aval = AValTagged("input")
         var = stage.Var(aval=aval)
         ir = axis.batch(stage.IR([], (var,), (var,)), in_axes=False)
         for wrapped in (ir.in_tree[0].aval, ir.out_tree[0].aval):
@@ -156,7 +156,7 @@ class TestBatchIRStructure:
     def test_mapped_constant_output(self):
         ir = axis.batch(stage.trace(lambda x: "c")("x"), in_axes=True)
         assert isinstance(ir.out_tree, stage.Var)
-        assert ir.out_tree.aval == axis.BatchAVal(string.StrAVal())
+        assert ir.out_tree.aval == axis.AValBatch(string.AValStr())
         assert ir.call(["a", "b"]) == ["c", "c"]
 
     def test_broadcast_constant_output(self):
@@ -188,10 +188,10 @@ class TestBatchIRStructure:
 )
 def test_nested_batch(executor, program, depth, values, expected):
     ir = stage.trace(program)("hello")
-    aval = string.StrAVal()
+    aval = string.AValStr()
     for _ in range(depth):
         ir = axis.batch(ir)
-        aval = axis.BatchAVal(aval)
+        aval = axis.AValBatch(aval)
     assert ir.in_tree[0].aval == aval
     assert ir.out_tree.aval == aval
     actual = executor(ir, values)
@@ -280,10 +280,10 @@ def test_numeric_program_with_broadcast_input():
 
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
-    prim = core.Prim("batch_output")
-    extend.register_abstract(prim, lambda _: utils.tree.map(core.avalof, sample_output))
-    extend.register_batch(prim, batch_rule)
-    return axis.batch(stage.trace(prim.bind)(traced))
+    p_batch_output = core.Prim("batch_output")
+    extend.register_abstract(p_batch_output, lambda _: utils.tree.map(core.avalof, sample_output))
+    extend.register_batch(p_batch_output, batch_rule)
+    return axis.batch(stage.trace(p_batch_output.bind)(traced))
 
 
 @pytest.mark.parametrize(
@@ -403,10 +403,10 @@ class TestBatchWithMixedAxes:
     "c, shared",
     [
         pytest.param(["g1", "g2"], "g1g2", id="strings"),
-        pytest.param([core.Zero(string.StrAVal()), "g2"], "g2", id="mixed-zero"),
+        pytest.param([core.Zero(string.AValStr()), "g2"], "g2", id="mixed-zero"),
         pytest.param(
-            [core.Zero(string.StrAVal()), core.Zero(string.StrAVal())],
-            core.Zero(string.StrAVal()),
+            [core.Zero(string.AValStr()), core.Zero(string.AValStr())],
+            core.Zero(string.AValStr()),
             id="all-zero",
         ),
     ],
@@ -457,7 +457,7 @@ def test_batch_box_treats_axis_spec_as_prefix():
     assert isinstance(boxed, axis.BatchBox)
     assert boxed.value == ["a", "b"]
     assert boxed.batched is True
-    assert core.avalof(boxed) == string.StrAVal()
+    assert core.avalof(boxed) == string.AValStr()
 
 
 @pytest.mark.parametrize(
@@ -472,12 +472,12 @@ def test_batch_box_avalof_container(values):
     batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
     box = batcher.box((values, True))
 
-    assert core.avalof(box) == string.StrAVal()
+    assert core.avalof(box) == string.AValStr()
     assert box.value is values
 
 
 def test_broadcast_box_avalof_zero_metadata():
-    aval = BlobAVal(3)
+    aval = AValBlob(3)
     x = core.Zero(aval)
     box = axis.BatchBox(object(), x, False)
 
@@ -485,7 +485,7 @@ def test_broadcast_box_avalof_zero_metadata():
 
 
 def test_batch_box_avalof_zero_metadata():
-    aval = BlobAVal(3)
+    aval = AValBlob(3)
     x = core.Zero(aval)
     box = axis.BatchBox(object(), [x, x], True)
     actual = core.avalof(box)
@@ -494,7 +494,7 @@ def test_batch_box_avalof_zero_metadata():
 
 
 def test_avalof_nested_batch_ad_and_trace_boxes():
-    aval = TaggedAVal("input")
+    aval = AValTagged("input")
     x = stage.TraceBox(owner=stage.TraceInterpreter(), var=stage.Var(aval=aval))
     x = ad.PushforwardBox(object(), x, object())
     x = axis.BatchBox(object(), (x, x), True)
@@ -514,7 +514,7 @@ def test_avalof_nested_batch_ad_and_trace_boxes():
         pytest.param("x", "Expected a batch container", id="scalar"),
         pytest.param(["x", 1], "different avals", id="mixed-types"),
         pytest.param(
-            [core.Zero(BlobAVal(3)), core.Zero(BlobAVal(4))],
+            [core.Zero(AValBlob(3)), core.Zero(AValBlob(4))],
             "different avals",
             id="mixed-metadata",
         ),

@@ -420,7 +420,7 @@ def test_specs_require_describe_method():
 def test_schema_constraints_do_not_apply_to_typed_feedback(schema, value):
     with pytest.raises(ValueError):
         lm.parse(schema, value)
-    aval = core.cotangent_s.map(core.avalof(schema))
+    aval = core.s_cotangent.map(core.avalof(schema))
     feedback_spec = lm.aval_to_spec(aval)
     assert lm.parse(feedback_spec, value) == value
     with pytest.raises(ValueError, match="Expected"):

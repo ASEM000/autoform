@@ -259,8 +259,8 @@ def test_fill_uses_values_schema_envelope(executor):
 
     ir = stage.trace(program)("seed")
     assert [eqn.prim for eqn in ir.eqns] == [
-        control.stop_gradient_p,
-        lm.fill_p,
+        control.p_stop_gradient,
+        lm.p_fill,
     ]
     call = ir.eqns[-1]
     assert call.params == {
@@ -909,7 +909,7 @@ def test_fill_rejects_unsupported_context_and_non_string_model():
     with pytest.raises(AssertionError, match="Expected string model"):
         lm.fill({"x": 0.5, "y": lm.Str()}, model=1.0)
     with pytest.raises(AssertionError, match="Expected string model"):
-        stage.trace(lambda x: lm.fill_p.bind(x, static_tree={"y": lm.Str()}))(
+        stage.trace(lambda x: lm.p_fill.bind(x, static_tree={"y": lm.Str()}))(
             ({"x": 0.5}, {"y": lm.Str()}, 1.0),
         )
 
@@ -998,9 +998,9 @@ def test_fill_pullback_requires_matching_cotangent_structure(out_c):
     "out_c, error",
     [
         pytest.param(
-            {"text": "too terse", "score": "overconfident"}, "FloatAVal", id="text-for-float"
+            {"text": "too terse", "score": "overconfident"}, "AValFloat", id="text-for-float"
         ),
-        pytest.param({"text": -0.2, "score": -0.2}, "StrAVal", id="float-for-text"),
+        pytest.param({"text": -0.2, "score": -0.2}, "AValStr", id="float-for-text"),
     ],
 )
 def test_fill_pullback_rejects_wrong_schema_cotangent_type(executor, out_c, error, gradient_client):

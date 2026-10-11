@@ -24,29 +24,29 @@ import autoform.src.dead as dead
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
-from tests import BlobAVal, aexecute, execute
+from tests import AValBlob, aexecute, execute
 
 
 class TestCheck:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
         "x",
-        ["x", core.Zero(string.StrAVal())],
+        ["x", core.Zero(string.AValStr())],
         ids=["literal", "zero"],
     )
     def test_literal_identity(self, executor, x):
-        aval = string.StrAVal()
+        aval = string.AValStr()
         assert check.typecheck(x, aval) is x
         ir = stage.trace(lambda: check.typecheck(x, aval))()
         assert ir.out_tree is x
         assert executor(ir) is x
 
-    @pytest.mark.parametrize("x", [1.0, core.Zero(numeric.FloatAVal())], ids=["value", "zero"])
+    @pytest.mark.parametrize("x", [1.0, core.Zero(numeric.AValFloat())], ids=["value", "zero"])
     def test_rejects_incompatible_value(self, x):
-        with pytest.raises(TypeError, match="Expected StrAVal"):
-            check.typecheck(x, string.StrAVal())
-        with pytest.raises(TypeError, match="Expected StrAVal"):
-            stage.trace(lambda: check.typecheck(x, string.StrAVal()))()
+        with pytest.raises(TypeError, match="Expected AValStr"):
+            check.typecheck(x, string.AValStr())
+        with pytest.raises(TypeError, match="Expected AValStr"):
+            stage.trace(lambda: check.typecheck(x, string.AValStr()))()
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
@@ -71,7 +71,7 @@ class TestCheck:
         ],
     )
     def test_transform_identity(self, executor, transform, args, expected):
-        ir = stage.trace(lambda x: check.typecheck(x, string.StrAVal()))("x")
+        ir = stage.trace(lambda x: check.typecheck(x, string.AValStr()))("x")
         assert executor(transform(ir), *args) == expected
 
     @pytest.mark.parametrize("outer", ["pushforward", "batch"])
@@ -85,18 +85,18 @@ class TestCheck:
             pusher = ad.PushforwardInterpreter(parent=parent)
             interpreter = axis.BatchInterpreter(batch_size=2, parent=pusher)
             x = interpreter.box(([pusher.box(("x", "dx")), pusher.box(("y", 1.0))], True))
-        aval = string.StrAVal()
+        aval = string.AValStr()
         aval.check(x)
         with core.using_interpreter(interpreter):
-            with pytest.raises(TypeError, match="Expected StrAVal"):
-                check.typecheck_p.bind(x, aval=aval)
+            with pytest.raises(TypeError, match="Expected AValStr"):
+                check.p_typecheck.bind(x, aval=aval)
 
     @pytest.mark.parametrize("batched", [False, True], ids=["broadcast-batch", "nested-batch"])
     def test_batch_value_metadata(self, batched):
         batcher = axis.BatchInterpreter(batch_size=1, parent=core.active_interpreter.get())
-        aval = axis.BatchAVal(BlobAVal(3))
+        aval = axis.AValBatch(AValBlob(3))
         for size in (3, 4):
-            value = [core.Zero(BlobAVal(size))]
+            value = [core.Zero(AValBlob(size))]
             box = batcher.box(([value] if batched else value, batched))
             with core.using_interpreter(batcher):
                 if size == 3:
@@ -110,23 +110,23 @@ class TestCheck:
         def program(x, y):
             batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
             with core.using_interpreter(batcher):
-                z = check.typecheck_p.bind(
+                z = check.p_typecheck.bind(
                     batcher.box(([x, y], [True, False])),
-                    aval=axis.BatchAVal(string.StrAVal()),
+                    aval=axis.AValBatch(string.AValStr()),
                 )
             values, batched = batcher.unbox(z)
             assert batched == [True, False]
             return values
 
         ir = dead.dce(stage.trace(program)(x, "z"))
-        assert [eqn.prim for eqn in ir.eqns] == [check.typecheck_p, check.typecheck_p]
+        assert [eqn.prim for eqn in ir.eqns] == [check.p_typecheck, check.p_typecheck]
         assert ir.call(x, "z") == [x, "z"]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize("used", [False, True], ids=["unused", "used"])
     def test_check_dce_and_retracing(self, executor, used):
         def program(x):
-            y = check.typecheck(x + "!", string.StrAVal())
+            y = check.typecheck(x + "!", string.AValStr())
             return y if used else x
 
         ir = dead.dce(stage.trace(program)("x"))
@@ -147,7 +147,7 @@ class TestCheck:
     def test_expanded_pullback_retracing(self, executor, explicit):
         def program(x):
             y = x + "!"
-            return check.typecheck(y, string.StrAVal()) if explicit else y
+            return check.typecheck(y, string.AValStr()) if explicit else y
 
         source = stage.trace(program)("x")
         ir = stage.trace(lambda x, df: executor(((x,), df), ir=source))("x", "df")

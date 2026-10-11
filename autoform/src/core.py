@@ -46,7 +46,7 @@ class AVal:
 
     Example:
         >>> import autoform.extend as afe
-        >>> class ArrayAVal(afe.AVal):
+        >>> class AValArray(afe.AVal):
         ...     def __init__(self, shape, dtype):
         ...         self.shape = shape
         ...         self.dtype = dtype
@@ -154,7 +154,7 @@ def materialize_zeros(x: Tree, /) -> Tree:
 
     Raises:
         AssertionError: If a ``Zero`` has a type with no concrete
-            zero (e.g. ``Zero(BoolAVal())``). This indicates an invalid gradient
+            zero (e.g. ``Zero(AValBool())``). This indicates an invalid gradient
             path through a non-differentiable type.
     """
 
@@ -166,9 +166,9 @@ def materialize_zeros(x: Tree, /) -> Tree:
     return utils.tree.map(map_func, x)
 
 
-primal_s = Space("primal")
-tangent_s = Space("tangent")
-cotangent_s = Space("cotangent")
+s_primal = Space("primal")
+s_tangent = Space("tangent")
+s_cotangent = Space("cotangent")
 
 aval_types[Zero] = lambda value: value.aval
 
@@ -188,7 +188,7 @@ class Prim:
 
     Example:
         >>> import autoform.extend as afe
-        >>> add = afe.Prim("add")
+        >>> p_add = afe.Prim("add")
     """
 
     __slots__ = ["name"]

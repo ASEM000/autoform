@@ -27,11 +27,11 @@ type Tree[T] = utils.Tree[T]
 # ==================================================================================================
 
 
-typecheck_p = core.Prim("typecheck")
+p_typecheck = core.Prim("typecheck")
 
 
 def typecheck(value, aval, /):
-    return typecheck_p.bind(value, aval=aval)
+    return p_typecheck.bind(value, aval=aval)
 
 
 def impl_check(value: Tree, /, *, aval: core.AVal) -> Tree:
@@ -41,46 +41,46 @@ def impl_check(value: Tree, /, *, aval: core.AVal) -> Tree:
 
 def pushforward_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
     p, t = in_tree
-    p = typecheck_p.bind(p, aval=core.primal_s.map(aval))
-    t = typecheck_p.bind(t, aval=core.tangent_s.map(aval))
+    p = p_typecheck.bind(p, aval=core.s_primal.map(aval))
+    t = p_typecheck.bind(t, aval=core.s_tangent.map(aval))
     return p, t
 
 
 async def apushforward_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
     p, t = in_tree
-    p = await typecheck_p.abind(p, aval=core.primal_s.map(aval))
-    t = await typecheck_p.abind(t, aval=core.tangent_s.map(aval))
+    p = await p_typecheck.abind(p, aval=core.s_primal.map(aval))
+    t = await p_typecheck.abind(t, aval=core.s_tangent.map(aval))
     return p, t
 
 
 def pullback_fwd_check(value: Tree, /, *, aval: core.AVal) -> tuple[Tree, None]:
-    return typecheck_p.bind(value, aval=core.primal_s.map(aval)), None
+    return p_typecheck.bind(value, aval=core.s_primal.map(aval)), None
 
 
 async def apullback_fwd_check(value: Tree, /, *, aval: core.AVal) -> tuple[Tree, None]:
-    return await typecheck_p.abind(value, aval=core.primal_s.map(aval)), None
+    return await p_typecheck.abind(value, aval=core.s_primal.map(aval)), None
 
 
 def pullback_bwd_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
     _, c = in_tree
-    return typecheck_p.bind(c, aval=core.cotangent_s.map(aval))
+    return p_typecheck.bind(c, aval=core.s_cotangent.map(aval))
 
 
 async def apullback_bwd_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
     _, c = in_tree
-    return await typecheck_p.abind(c, aval=core.cotangent_s.map(aval))
+    return await p_typecheck.abind(c, aval=core.s_cotangent.map(aval))
 
 
 def batch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
     size, batched, value = in_tree
     if (spec := utils.batch_spec(value, batched)) is None:
-        return typecheck_p.bind(value, aval=aval), batched
+        return p_typecheck.bind(value, aval=aval), batched
     if spec.is_leaf() or spec.num_children != size:
         raise TypeError(f"Expected a batch container with {size} items, got {value!r}")
     if not size:
         return value, batched
     checked = [
-        typecheck_p.bind(utils.batch_index(value, batched, b), aval=aval) for b in range(size)
+        p_typecheck.bind(utils.batch_index(value, batched, b), aval=aval) for b in range(size)
     ]
     out = utils.batch_transpose(size, batched, spec.unflatten(checked))
     return utils.tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
@@ -89,27 +89,27 @@ def batch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
 async def abatch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
     size, batched, value = in_tree
     if (spec := utils.batch_spec(value, batched)) is None:
-        return await typecheck_p.abind(value, aval=aval), batched
+        return await p_typecheck.abind(value, aval=aval), batched
     if spec.is_leaf() or spec.num_children != size:
         raise TypeError(f"Expected a batch container with {size} items, got {value!r}")
     if not size:
         return value, batched
     checked = [
-        await typecheck_p.abind(utils.batch_index(value, batched, b), aval=aval)
+        await p_typecheck.abind(utils.batch_index(value, batched, b), aval=aval)
         for b in range(size)
     ]
     out = utils.batch_transpose(size, batched, spec.unflatten(checked))
     return utils.tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
 
 
-core.impl_rules.set(typecheck_p, impl_check)
-core.aimpl_rules.set(typecheck_p, utils.asyncify(impl_check))
-core.abstract_rules.set(typecheck_p, impl_check)
-core.push_rules.set(typecheck_p, pushforward_check)
-core.apush_rules.set(typecheck_p, apushforward_check)
-core.pull_fwd_rules.set(typecheck_p, pullback_fwd_check)
-core.apull_fwd_rules.set(typecheck_p, apullback_fwd_check)
-core.pull_bwd_rules.set(typecheck_p, pullback_bwd_check)
-core.apull_bwd_rules.set(typecheck_p, apullback_bwd_check)
-core.batch_rules.set(typecheck_p, batch_check)
-core.abatch_rules.set(typecheck_p, abatch_check)
+core.impl_rules.set(p_typecheck, impl_check)
+core.aimpl_rules.set(p_typecheck, utils.asyncify(impl_check))
+core.abstract_rules.set(p_typecheck, impl_check)
+core.push_rules.set(p_typecheck, pushforward_check)
+core.apush_rules.set(p_typecheck, apushforward_check)
+core.pull_fwd_rules.set(p_typecheck, pullback_fwd_check)
+core.apull_fwd_rules.set(p_typecheck, apullback_fwd_check)
+core.pull_bwd_rules.set(p_typecheck, pullback_bwd_check)
+core.apull_bwd_rules.set(p_typecheck, apullback_bwd_check)
+core.batch_rules.set(p_typecheck, batch_check)
+core.abatch_rules.set(p_typecheck, abatch_check)

@@ -31,7 +31,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class IntAVal(core.AVal):
+class AValInt(core.AVal):
     """Abstract value for ``int`` leaves.
 
     Example:
@@ -39,7 +39,7 @@ class IntAVal(core.AVal):
         >>> ir = af.trace(lambda x: x)(1)
         >>> (x,) = ir.in_tree
         >>> x.aval
-        IntAVal()
+        AValInt()
     """
 
     __slots__ = []
@@ -48,13 +48,13 @@ class IntAVal(core.AVal):
         return f"{type(self).__name__}()"
 
 
-core.aval_types[int] = lambda _: IntAVal()
-core.aval_types[IntAVal] = lambda aval: aval
+core.aval_types[int] = lambda _: AValInt()
+core.aval_types[AValInt] = lambda aval: aval
 stage.trace_types.add(int)
-core.primal_s.set(IntAVal, lambda aval: aval)
+core.s_primal.set(AValInt, lambda aval: aval)
 
 
-class FloatAVal(core.AVal):
+class AValFloat(core.AVal):
     """Abstract value for ``float`` leaves.
 
     Example:
@@ -62,7 +62,7 @@ class FloatAVal(core.AVal):
         >>> ir = af.trace(lambda x: x)(1.0)
         >>> (x,) = ir.in_tree
         >>> x.aval
-        FloatAVal()
+        AValFloat()
     """
 
     __slots__ = []
@@ -77,15 +77,15 @@ class FloatAVal(core.AVal):
         return sum(values)
 
 
-core.aval_types[float] = lambda _: FloatAVal()
-core.aval_types[FloatAVal] = lambda aval: aval
+core.aval_types[float] = lambda _: AValFloat()
+core.aval_types[AValFloat] = lambda aval: aval
 stage.trace_types.add(float)
-core.primal_s.set(FloatAVal, lambda aval: aval)
-core.tangent_s.set(FloatAVal, lambda aval: aval)
-core.cotangent_s.set(FloatAVal, lambda aval: aval)
+core.s_primal.set(AValFloat, lambda aval: aval)
+core.s_tangent.set(AValFloat, lambda aval: aval)
+core.s_cotangent.set(AValFloat, lambda aval: aval)
 
 
-class BoolAVal(core.AVal):
+class AValBool(core.AVal):
     """Abstract value for ``bool`` leaves.
 
     Example:
@@ -93,7 +93,7 @@ class BoolAVal(core.AVal):
         >>> ir = af.trace(lambda x: x)(True)
         >>> (x,) = ir.in_tree
         >>> x.aval
-        BoolAVal()
+        AValBool()
     """
 
     __slots__ = []
@@ -102,12 +102,12 @@ class BoolAVal(core.AVal):
         return f"{type(self).__name__}()"
 
 
-core.aval_types[bool] = lambda _: BoolAVal()
-core.aval_types[BoolAVal] = lambda aval: aval
+core.aval_types[bool] = lambda _: AValBool()
+core.aval_types[AValBool] = lambda aval: aval
 stage.trace_types.add(bool)
-core.primal_s.set(BoolAVal, lambda aval: aval)
-core.tangent_s.set(BoolAVal, lambda aval: aval)
-core.cotangent_s.set(BoolAVal, lambda aval: aval)
+core.s_primal.set(AValBool, lambda aval: aval)
+core.s_tangent.set(AValBool, lambda aval: aval)
+core.s_cotangent.set(AValBool, lambda aval: aval)
 
 
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -131,13 +131,13 @@ def batch_binary(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
 # NEG
 # ==================================================================================================
 
-neg_p = core.Prim("neg")
+p_neg = core.Prim("neg")
 
 
 def neg(a, /):
     if type(a) is int:
         a = float(a)
-    return neg_p.bind(a)
+    return p_neg.bind(a)
 
 
 def impl_neg(in_tree: Tree, /):
@@ -145,9 +145,9 @@ def impl_neg(in_tree: Tree, /):
     return -in_tree
 
 
-def abstract_neg(in_tree: Tree, /) -> FloatAVal:
-    assert type(in_tree) in (float, FloatAVal), f"Expected float: {in_tree!r}"
-    return FloatAVal()
+def abstract_neg(in_tree: Tree, /) -> AValFloat:
+    assert type(in_tree) in (float, AValFloat), f"Expected float: {in_tree!r}"
+    return AValFloat()
 
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
@@ -165,27 +165,27 @@ def pullback_bwd_neg(in_tree: Tree, /) -> Tree:
 
 
 def batch_neg(in_tree: Tree, /) -> TreePair:
-    return batch_unary(neg_p, in_tree)
+    return batch_unary(p_neg, in_tree)
 
 
-core.impl_rules.set(neg_p, impl_neg)
-core.aimpl_rules.set(neg_p, utils.asyncify(impl_neg))
-core.abstract_rules.set(neg_p, abstract_neg)
-core.batch_rules.set(neg_p, batch_neg)
-core.abatch_rules.set(neg_p, utils.asyncify(batch_neg))
-core.push_rules.set(neg_p, pushforward_neg)
-core.apush_rules.set(neg_p, utils.asyncify(pushforward_neg))
-core.pull_fwd_rules.set(neg_p, pullback_fwd_neg)
-core.apull_fwd_rules.set(neg_p, utils.asyncify(pullback_fwd_neg))
-core.pull_bwd_rules.set(neg_p, pullback_bwd_neg)
-core.apull_bwd_rules.set(neg_p, utils.asyncify(pullback_bwd_neg))
+core.impl_rules.set(p_neg, impl_neg)
+core.aimpl_rules.set(p_neg, utils.asyncify(impl_neg))
+core.abstract_rules.set(p_neg, abstract_neg)
+core.batch_rules.set(p_neg, batch_neg)
+core.abatch_rules.set(p_neg, utils.asyncify(batch_neg))
+core.push_rules.set(p_neg, pushforward_neg)
+core.apush_rules.set(p_neg, utils.asyncify(pushforward_neg))
+core.pull_fwd_rules.set(p_neg, pullback_fwd_neg)
+core.apull_fwd_rules.set(p_neg, utils.asyncify(pullback_fwd_neg))
+core.pull_bwd_rules.set(p_neg, pullback_bwd_neg)
+core.apull_bwd_rules.set(p_neg, utils.asyncify(pullback_bwd_neg))
 
 
 # ==================================================================================================
 # ADD
 # ==================================================================================================
 
-add_p = core.Prim("add")
+p_add = core.Prim("add")
 
 
 def add(a, b, /):
@@ -193,7 +193,7 @@ def add(a, b, /):
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return add_p.bind((a, b))
+    return p_add.bind((a, b))
 
 
 def impl_add(in_tree: Tree, /):
@@ -202,19 +202,19 @@ def impl_add(in_tree: Tree, /):
     return a + b
 
 
-def abstract_add(in_tree: Tree, /) -> FloatAVal:
-    assert all(type(x) in (float, FloatAVal) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return FloatAVal()
+def abstract_add(in_tree: Tree, /) -> AValFloat:
+    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AValFloat()
 
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     t = core.materialize_zeros(t)
-    return add_p.bind(p), add_p.bind(t)
+    return p_add.bind(p), p_add.bind(t)
 
 
 def pullback_fwd_add(in_tree: Tree, /) -> TreePair:
-    return add_p.bind(in_tree), None
+    return p_add.bind(in_tree), None
 
 
 def pullback_bwd_add(in_tree: Tree, /) -> Tree:
@@ -223,27 +223,27 @@ def pullback_bwd_add(in_tree: Tree, /) -> Tree:
 
 
 def batch_add(in_tree: Tree, /) -> TreePair:
-    return batch_binary(add_p, in_tree)
+    return batch_binary(p_add, in_tree)
 
 
-core.impl_rules.set(add_p, impl_add)
-core.aimpl_rules.set(add_p, utils.asyncify(impl_add))
-core.abstract_rules.set(add_p, abstract_add)
-core.batch_rules.set(add_p, batch_add)
-core.abatch_rules.set(add_p, utils.asyncify(batch_add))
-core.push_rules.set(add_p, pushforward_add)
-core.apush_rules.set(add_p, utils.asyncify(pushforward_add))
-core.pull_fwd_rules.set(add_p, pullback_fwd_add)
-core.apull_fwd_rules.set(add_p, utils.asyncify(pullback_fwd_add))
-core.pull_bwd_rules.set(add_p, pullback_bwd_add)
-core.apull_bwd_rules.set(add_p, utils.asyncify(pullback_bwd_add))
+core.impl_rules.set(p_add, impl_add)
+core.aimpl_rules.set(p_add, utils.asyncify(impl_add))
+core.abstract_rules.set(p_add, abstract_add)
+core.batch_rules.set(p_add, batch_add)
+core.abatch_rules.set(p_add, utils.asyncify(batch_add))
+core.push_rules.set(p_add, pushforward_add)
+core.apush_rules.set(p_add, utils.asyncify(pushforward_add))
+core.pull_fwd_rules.set(p_add, pullback_fwd_add)
+core.apull_fwd_rules.set(p_add, utils.asyncify(pullback_fwd_add))
+core.pull_bwd_rules.set(p_add, pullback_bwd_add)
+core.apull_bwd_rules.set(p_add, utils.asyncify(pullback_bwd_add))
 
 
 # ==================================================================================================
 # SUB
 # ==================================================================================================
 
-sub_p = core.Prim("sub")
+p_sub = core.Prim("sub")
 
 
 def sub(a, b, /):
@@ -251,7 +251,7 @@ def sub(a, b, /):
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return sub_p.bind((a, b))
+    return p_sub.bind((a, b))
 
 
 def impl_sub(in_tree: Tree, /):
@@ -260,19 +260,19 @@ def impl_sub(in_tree: Tree, /):
     return a - b
 
 
-def abstract_sub(in_tree: Tree, /) -> FloatAVal:
-    assert all(type(x) in (float, FloatAVal) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return FloatAVal()
+def abstract_sub(in_tree: Tree, /) -> AValFloat:
+    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AValFloat()
 
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     t = core.materialize_zeros(t)
-    return sub_p.bind(p), sub_p.bind(t)
+    return p_sub.bind(p), p_sub.bind(t)
 
 
 def pullback_fwd_sub(in_tree: Tree, /) -> TreePair:
-    return sub_p.bind(in_tree), None
+    return p_sub.bind(in_tree), None
 
 
 def pullback_bwd_sub(in_tree: Tree, /) -> Tree:
@@ -281,27 +281,27 @@ def pullback_bwd_sub(in_tree: Tree, /) -> Tree:
 
 
 def batch_sub(in_tree: Tree, /) -> TreePair:
-    return batch_binary(sub_p, in_tree)
+    return batch_binary(p_sub, in_tree)
 
 
-core.impl_rules.set(sub_p, impl_sub)
-core.aimpl_rules.set(sub_p, utils.asyncify(impl_sub))
-core.abstract_rules.set(sub_p, abstract_sub)
-core.batch_rules.set(sub_p, batch_sub)
-core.abatch_rules.set(sub_p, utils.asyncify(batch_sub))
-core.push_rules.set(sub_p, pushforward_sub)
-core.apush_rules.set(sub_p, utils.asyncify(pushforward_sub))
-core.pull_fwd_rules.set(sub_p, pullback_fwd_sub)
-core.apull_fwd_rules.set(sub_p, utils.asyncify(pullback_fwd_sub))
-core.pull_bwd_rules.set(sub_p, pullback_bwd_sub)
-core.apull_bwd_rules.set(sub_p, utils.asyncify(pullback_bwd_sub))
+core.impl_rules.set(p_sub, impl_sub)
+core.aimpl_rules.set(p_sub, utils.asyncify(impl_sub))
+core.abstract_rules.set(p_sub, abstract_sub)
+core.batch_rules.set(p_sub, batch_sub)
+core.abatch_rules.set(p_sub, utils.asyncify(batch_sub))
+core.push_rules.set(p_sub, pushforward_sub)
+core.apush_rules.set(p_sub, utils.asyncify(pushforward_sub))
+core.pull_fwd_rules.set(p_sub, pullback_fwd_sub)
+core.apull_fwd_rules.set(p_sub, utils.asyncify(pullback_fwd_sub))
+core.pull_bwd_rules.set(p_sub, pullback_bwd_sub)
+core.apull_bwd_rules.set(p_sub, utils.asyncify(pullback_bwd_sub))
 
 
 # ==================================================================================================
 # MUL
 # ==================================================================================================
 
-mul_p = core.Prim("mul")
+p_mul = core.Prim("mul")
 
 
 def mul(a, b, /):
@@ -309,7 +309,7 @@ def mul(a, b, /):
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return mul_p.bind((a, b))
+    return p_mul.bind((a, b))
 
 
 def impl_mul(in_tree: Tree, /):
@@ -318,9 +318,9 @@ def impl_mul(in_tree: Tree, /):
     return a * b
 
 
-def abstract_mul(in_tree: Tree, /) -> FloatAVal:
-    assert all(type(x) in (float, FloatAVal) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return FloatAVal()
+def abstract_mul(in_tree: Tree, /) -> AValFloat:
+    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AValFloat()
 
 
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
@@ -331,7 +331,7 @@ def pushforward_mul(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_fwd_mul(in_tree: Tree, /) -> TreePair:
-    return mul_p.bind(in_tree), in_tree
+    return p_mul.bind(in_tree), in_tree
 
 
 def pullback_bwd_mul(in_tree: Tree, /) -> Tree:
@@ -340,27 +340,27 @@ def pullback_bwd_mul(in_tree: Tree, /) -> Tree:
 
 
 def batch_mul(in_tree: Tree, /) -> TreePair:
-    return batch_binary(mul_p, in_tree)
+    return batch_binary(p_mul, in_tree)
 
 
-core.impl_rules.set(mul_p, impl_mul)
-core.aimpl_rules.set(mul_p, utils.asyncify(impl_mul))
-core.abstract_rules.set(mul_p, abstract_mul)
-core.batch_rules.set(mul_p, batch_mul)
-core.abatch_rules.set(mul_p, utils.asyncify(batch_mul))
-core.push_rules.set(mul_p, pushforward_mul)
-core.apush_rules.set(mul_p, utils.asyncify(pushforward_mul))
-core.pull_fwd_rules.set(mul_p, pullback_fwd_mul)
-core.apull_fwd_rules.set(mul_p, utils.asyncify(pullback_fwd_mul))
-core.pull_bwd_rules.set(mul_p, pullback_bwd_mul)
-core.apull_bwd_rules.set(mul_p, utils.asyncify(pullback_bwd_mul))
+core.impl_rules.set(p_mul, impl_mul)
+core.aimpl_rules.set(p_mul, utils.asyncify(impl_mul))
+core.abstract_rules.set(p_mul, abstract_mul)
+core.batch_rules.set(p_mul, batch_mul)
+core.abatch_rules.set(p_mul, utils.asyncify(batch_mul))
+core.push_rules.set(p_mul, pushforward_mul)
+core.apush_rules.set(p_mul, utils.asyncify(pushforward_mul))
+core.pull_fwd_rules.set(p_mul, pullback_fwd_mul)
+core.apull_fwd_rules.set(p_mul, utils.asyncify(pullback_fwd_mul))
+core.pull_bwd_rules.set(p_mul, pullback_bwd_mul)
+core.apull_bwd_rules.set(p_mul, utils.asyncify(pullback_bwd_mul))
 
 
 # ==================================================================================================
 # DIV
 # ==================================================================================================
 
-div_p = core.Prim("div")
+p_div = core.Prim("div")
 
 
 def div(a, b, /):
@@ -368,7 +368,7 @@ def div(a, b, /):
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return div_p.bind((a, b))
+    return p_div.bind((a, b))
 
 
 def impl_div(in_tree: Tree, /):
@@ -377,9 +377,9 @@ def impl_div(in_tree: Tree, /):
     return a / b
 
 
-def abstract_div(in_tree: Tree, /) -> FloatAVal:
-    assert all(type(x) in (float, FloatAVal) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return FloatAVal()
+def abstract_div(in_tree: Tree, /) -> AValFloat:
+    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AValFloat()
 
 
 def pushforward_div(in_tree: Tree, /) -> TreePair:
@@ -390,7 +390,7 @@ def pushforward_div(in_tree: Tree, /) -> TreePair:
 
 
 def pullback_fwd_div(in_tree: Tree, /) -> TreePair:
-    return div_p.bind(in_tree), in_tree
+    return p_div.bind(in_tree), in_tree
 
 
 def pullback_bwd_div(in_tree: Tree, /) -> Tree:
@@ -401,20 +401,20 @@ def pullback_bwd_div(in_tree: Tree, /) -> Tree:
 
 
 def batch_div(in_tree: Tree, /) -> TreePair:
-    return batch_binary(div_p, in_tree)
+    return batch_binary(p_div, in_tree)
 
 
-core.impl_rules.set(div_p, impl_div)
-core.aimpl_rules.set(div_p, utils.asyncify(impl_div))
-core.abstract_rules.set(div_p, abstract_div)
-core.batch_rules.set(div_p, batch_div)
-core.abatch_rules.set(div_p, utils.asyncify(batch_div))
-core.push_rules.set(div_p, pushforward_div)
-core.apush_rules.set(div_p, utils.asyncify(pushforward_div))
-core.pull_fwd_rules.set(div_p, pullback_fwd_div)
-core.apull_fwd_rules.set(div_p, utils.asyncify(pullback_fwd_div))
-core.pull_bwd_rules.set(div_p, pullback_bwd_div)
-core.apull_bwd_rules.set(div_p, utils.asyncify(pullback_bwd_div))
+core.impl_rules.set(p_div, impl_div)
+core.aimpl_rules.set(p_div, utils.asyncify(impl_div))
+core.abstract_rules.set(p_div, abstract_div)
+core.batch_rules.set(p_div, batch_div)
+core.abatch_rules.set(p_div, utils.asyncify(batch_div))
+core.push_rules.set(p_div, pushforward_div)
+core.apush_rules.set(p_div, utils.asyncify(pushforward_div))
+core.pull_fwd_rules.set(p_div, pullback_fwd_div)
+core.apull_fwd_rules.set(p_div, utils.asyncify(pullback_fwd_div))
+core.pull_bwd_rules.set(p_div, pullback_bwd_div)
+core.apull_bwd_rules.set(p_div, utils.asyncify(pullback_bwd_div))
 
 
 # ==================================================================================================
@@ -422,14 +422,14 @@ core.apull_bwd_rules.set(div_p, utils.asyncify(pullback_bwd_div))
 # ==================================================================================================
 
 
-def abstract_compare(in_tree: Tree, /) -> BoolAVal:
-    assert all(type(x) in (float, FloatAVal) for x in in_tree)
-    return BoolAVal()
+def abstract_compare(in_tree: Tree, /) -> AValBool:
+    assert all(type(x) in (float, AValFloat) for x in in_tree)
+    return AValBool()
 
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     p, _ = in_tree
-    return prim.bind(p), core.Zero(core.tangent_s.map(BoolAVal()))
+    return prim.bind(p), core.Zero(core.s_tangent.map(AValBool()))
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -440,7 +440,7 @@ def pullback_bwd_compare(in_tree: Tree, /) -> Tree:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+        return core.Zero(core.s_cotangent.map(core.avalof(x)))
 
     p, _ = in_tree
     return utils.tree.map(make_c, p)
@@ -454,7 +454,7 @@ def batch_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
 # EQ
 # ==================================================================================================
 
-eq_p = core.Prim("eq")
+p_eq = core.Prim("eq")
 
 
 def eq(a, b, /) -> bool:
@@ -462,7 +462,7 @@ def eq(a, b, /) -> bool:
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return eq_p.bind((a, b))
+    return p_eq.bind((a, b))
 
 
 def impl_eq(in_tree: Tree, /) -> bool:
@@ -471,29 +471,29 @@ def impl_eq(in_tree: Tree, /) -> bool:
     return a == b
 
 
-pushforward_eq = ft.partial(pushforward_compare, eq_p)
-pullback_fwd_eq = ft.partial(pullback_fwd_compare, eq_p)
-batch_eq = ft.partial(batch_compare, eq_p)
+pushforward_eq = ft.partial(pushforward_compare, p_eq)
+pullback_fwd_eq = ft.partial(pullback_fwd_compare, p_eq)
+batch_eq = ft.partial(batch_compare, p_eq)
 
 
-core.impl_rules.set(eq_p, impl_eq)
-core.aimpl_rules.set(eq_p, utils.asyncify(impl_eq))
-core.abstract_rules.set(eq_p, abstract_compare)
-core.batch_rules.set(eq_p, batch_eq)
-core.abatch_rules.set(eq_p, utils.asyncify(batch_eq))
-core.push_rules.set(eq_p, pushforward_eq)
-core.apush_rules.set(eq_p, utils.asyncify(pushforward_eq))
-core.pull_fwd_rules.set(eq_p, pullback_fwd_eq)
-core.apull_fwd_rules.set(eq_p, utils.asyncify(pullback_fwd_eq))
-core.pull_bwd_rules.set(eq_p, pullback_bwd_compare)
-core.apull_bwd_rules.set(eq_p, utils.asyncify(pullback_bwd_compare))
+core.impl_rules.set(p_eq, impl_eq)
+core.aimpl_rules.set(p_eq, utils.asyncify(impl_eq))
+core.abstract_rules.set(p_eq, abstract_compare)
+core.batch_rules.set(p_eq, batch_eq)
+core.abatch_rules.set(p_eq, utils.asyncify(batch_eq))
+core.push_rules.set(p_eq, pushforward_eq)
+core.apush_rules.set(p_eq, utils.asyncify(pushforward_eq))
+core.pull_fwd_rules.set(p_eq, pullback_fwd_eq)
+core.apull_fwd_rules.set(p_eq, utils.asyncify(pullback_fwd_eq))
+core.pull_bwd_rules.set(p_eq, pullback_bwd_compare)
+core.apull_bwd_rules.set(p_eq, utils.asyncify(pullback_bwd_compare))
 
 
 # ==================================================================================================
 # NE
 # ==================================================================================================
 
-ne_p = core.Prim("ne")
+p_ne = core.Prim("ne")
 
 
 def ne(a, b, /) -> bool:
@@ -501,7 +501,7 @@ def ne(a, b, /) -> bool:
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return ne_p.bind((a, b))
+    return p_ne.bind((a, b))
 
 
 def impl_ne(in_tree: Tree, /) -> bool:
@@ -510,29 +510,29 @@ def impl_ne(in_tree: Tree, /) -> bool:
     return a != b
 
 
-pushforward_ne = ft.partial(pushforward_compare, ne_p)
-pullback_fwd_ne = ft.partial(pullback_fwd_compare, ne_p)
-batch_ne = ft.partial(batch_compare, ne_p)
+pushforward_ne = ft.partial(pushforward_compare, p_ne)
+pullback_fwd_ne = ft.partial(pullback_fwd_compare, p_ne)
+batch_ne = ft.partial(batch_compare, p_ne)
 
 
-core.impl_rules.set(ne_p, impl_ne)
-core.aimpl_rules.set(ne_p, utils.asyncify(impl_ne))
-core.abstract_rules.set(ne_p, abstract_compare)
-core.batch_rules.set(ne_p, batch_ne)
-core.abatch_rules.set(ne_p, utils.asyncify(batch_ne))
-core.push_rules.set(ne_p, pushforward_ne)
-core.apush_rules.set(ne_p, utils.asyncify(pushforward_ne))
-core.pull_fwd_rules.set(ne_p, pullback_fwd_ne)
-core.apull_fwd_rules.set(ne_p, utils.asyncify(pullback_fwd_ne))
-core.pull_bwd_rules.set(ne_p, pullback_bwd_compare)
-core.apull_bwd_rules.set(ne_p, utils.asyncify(pullback_bwd_compare))
+core.impl_rules.set(p_ne, impl_ne)
+core.aimpl_rules.set(p_ne, utils.asyncify(impl_ne))
+core.abstract_rules.set(p_ne, abstract_compare)
+core.batch_rules.set(p_ne, batch_ne)
+core.abatch_rules.set(p_ne, utils.asyncify(batch_ne))
+core.push_rules.set(p_ne, pushforward_ne)
+core.apush_rules.set(p_ne, utils.asyncify(pushforward_ne))
+core.pull_fwd_rules.set(p_ne, pullback_fwd_ne)
+core.apull_fwd_rules.set(p_ne, utils.asyncify(pullback_fwd_ne))
+core.pull_bwd_rules.set(p_ne, pullback_bwd_compare)
+core.apull_bwd_rules.set(p_ne, utils.asyncify(pullback_bwd_compare))
 
 
 # ==================================================================================================
 # LT
 # ==================================================================================================
 
-lt_p = core.Prim("lt")
+p_lt = core.Prim("lt")
 
 
 def lt(a, b, /) -> bool:
@@ -540,7 +540,7 @@ def lt(a, b, /) -> bool:
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return lt_p.bind((a, b))
+    return p_lt.bind((a, b))
 
 
 def impl_lt(in_tree: Tree, /) -> bool:
@@ -549,29 +549,29 @@ def impl_lt(in_tree: Tree, /) -> bool:
     return a < b
 
 
-pushforward_lt = ft.partial(pushforward_compare, lt_p)
-pullback_fwd_lt = ft.partial(pullback_fwd_compare, lt_p)
-batch_lt = ft.partial(batch_compare, lt_p)
+pushforward_lt = ft.partial(pushforward_compare, p_lt)
+pullback_fwd_lt = ft.partial(pullback_fwd_compare, p_lt)
+batch_lt = ft.partial(batch_compare, p_lt)
 
 
-core.impl_rules.set(lt_p, impl_lt)
-core.aimpl_rules.set(lt_p, utils.asyncify(impl_lt))
-core.abstract_rules.set(lt_p, abstract_compare)
-core.batch_rules.set(lt_p, batch_lt)
-core.abatch_rules.set(lt_p, utils.asyncify(batch_lt))
-core.push_rules.set(lt_p, pushforward_lt)
-core.apush_rules.set(lt_p, utils.asyncify(pushforward_lt))
-core.pull_fwd_rules.set(lt_p, pullback_fwd_lt)
-core.apull_fwd_rules.set(lt_p, utils.asyncify(pullback_fwd_lt))
-core.pull_bwd_rules.set(lt_p, pullback_bwd_compare)
-core.apull_bwd_rules.set(lt_p, utils.asyncify(pullback_bwd_compare))
+core.impl_rules.set(p_lt, impl_lt)
+core.aimpl_rules.set(p_lt, utils.asyncify(impl_lt))
+core.abstract_rules.set(p_lt, abstract_compare)
+core.batch_rules.set(p_lt, batch_lt)
+core.abatch_rules.set(p_lt, utils.asyncify(batch_lt))
+core.push_rules.set(p_lt, pushforward_lt)
+core.apush_rules.set(p_lt, utils.asyncify(pushforward_lt))
+core.pull_fwd_rules.set(p_lt, pullback_fwd_lt)
+core.apull_fwd_rules.set(p_lt, utils.asyncify(pullback_fwd_lt))
+core.pull_bwd_rules.set(p_lt, pullback_bwd_compare)
+core.apull_bwd_rules.set(p_lt, utils.asyncify(pullback_bwd_compare))
 
 
 # ==================================================================================================
 # LE
 # ==================================================================================================
 
-le_p = core.Prim("le")
+p_le = core.Prim("le")
 
 
 def le(a, b, /) -> bool:
@@ -579,7 +579,7 @@ def le(a, b, /) -> bool:
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return le_p.bind((a, b))
+    return p_le.bind((a, b))
 
 
 def impl_le(in_tree: Tree, /) -> bool:
@@ -588,29 +588,29 @@ def impl_le(in_tree: Tree, /) -> bool:
     return a <= b
 
 
-pushforward_le = ft.partial(pushforward_compare, le_p)
-pullback_fwd_le = ft.partial(pullback_fwd_compare, le_p)
-batch_le = ft.partial(batch_compare, le_p)
+pushforward_le = ft.partial(pushforward_compare, p_le)
+pullback_fwd_le = ft.partial(pullback_fwd_compare, p_le)
+batch_le = ft.partial(batch_compare, p_le)
 
 
-core.impl_rules.set(le_p, impl_le)
-core.aimpl_rules.set(le_p, utils.asyncify(impl_le))
-core.abstract_rules.set(le_p, abstract_compare)
-core.batch_rules.set(le_p, batch_le)
-core.abatch_rules.set(le_p, utils.asyncify(batch_le))
-core.push_rules.set(le_p, pushforward_le)
-core.apush_rules.set(le_p, utils.asyncify(pushforward_le))
-core.pull_fwd_rules.set(le_p, pullback_fwd_le)
-core.apull_fwd_rules.set(le_p, utils.asyncify(pullback_fwd_le))
-core.pull_bwd_rules.set(le_p, pullback_bwd_compare)
-core.apull_bwd_rules.set(le_p, utils.asyncify(pullback_bwd_compare))
+core.impl_rules.set(p_le, impl_le)
+core.aimpl_rules.set(p_le, utils.asyncify(impl_le))
+core.abstract_rules.set(p_le, abstract_compare)
+core.batch_rules.set(p_le, batch_le)
+core.abatch_rules.set(p_le, utils.asyncify(batch_le))
+core.push_rules.set(p_le, pushforward_le)
+core.apush_rules.set(p_le, utils.asyncify(pushforward_le))
+core.pull_fwd_rules.set(p_le, pullback_fwd_le)
+core.apull_fwd_rules.set(p_le, utils.asyncify(pullback_fwd_le))
+core.pull_bwd_rules.set(p_le, pullback_bwd_compare)
+core.apull_bwd_rules.set(p_le, utils.asyncify(pullback_bwd_compare))
 
 
 # ==================================================================================================
 # GT
 # ==================================================================================================
 
-gt_p = core.Prim("gt")
+p_gt = core.Prim("gt")
 
 
 def gt(a, b, /) -> bool:
@@ -618,7 +618,7 @@ def gt(a, b, /) -> bool:
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return gt_p.bind((a, b))
+    return p_gt.bind((a, b))
 
 
 def impl_gt(in_tree: Tree, /) -> bool:
@@ -627,29 +627,29 @@ def impl_gt(in_tree: Tree, /) -> bool:
     return a > b
 
 
-pushforward_gt = ft.partial(pushforward_compare, gt_p)
-pullback_fwd_gt = ft.partial(pullback_fwd_compare, gt_p)
-batch_gt = ft.partial(batch_compare, gt_p)
+pushforward_gt = ft.partial(pushforward_compare, p_gt)
+pullback_fwd_gt = ft.partial(pullback_fwd_compare, p_gt)
+batch_gt = ft.partial(batch_compare, p_gt)
 
 
-core.impl_rules.set(gt_p, impl_gt)
-core.aimpl_rules.set(gt_p, utils.asyncify(impl_gt))
-core.abstract_rules.set(gt_p, abstract_compare)
-core.batch_rules.set(gt_p, batch_gt)
-core.abatch_rules.set(gt_p, utils.asyncify(batch_gt))
-core.push_rules.set(gt_p, pushforward_gt)
-core.apush_rules.set(gt_p, utils.asyncify(pushforward_gt))
-core.pull_fwd_rules.set(gt_p, pullback_fwd_gt)
-core.apull_fwd_rules.set(gt_p, utils.asyncify(pullback_fwd_gt))
-core.pull_bwd_rules.set(gt_p, pullback_bwd_compare)
-core.apull_bwd_rules.set(gt_p, utils.asyncify(pullback_bwd_compare))
+core.impl_rules.set(p_gt, impl_gt)
+core.aimpl_rules.set(p_gt, utils.asyncify(impl_gt))
+core.abstract_rules.set(p_gt, abstract_compare)
+core.batch_rules.set(p_gt, batch_gt)
+core.abatch_rules.set(p_gt, utils.asyncify(batch_gt))
+core.push_rules.set(p_gt, pushforward_gt)
+core.apush_rules.set(p_gt, utils.asyncify(pushforward_gt))
+core.pull_fwd_rules.set(p_gt, pullback_fwd_gt)
+core.apull_fwd_rules.set(p_gt, utils.asyncify(pullback_fwd_gt))
+core.pull_bwd_rules.set(p_gt, pullback_bwd_compare)
+core.apull_bwd_rules.set(p_gt, utils.asyncify(pullback_bwd_compare))
 
 
 # ==================================================================================================
 # GE
 # ==================================================================================================
 
-ge_p = core.Prim("ge")
+p_ge = core.Prim("ge")
 
 
 def ge(a, b, /) -> bool:
@@ -657,7 +657,7 @@ def ge(a, b, /) -> bool:
         a = float(a)
     if type(b) is int:
         b = float(b)
-    return ge_p.bind((a, b))
+    return p_ge.bind((a, b))
 
 
 def impl_ge(in_tree: Tree, /) -> bool:
@@ -666,32 +666,32 @@ def impl_ge(in_tree: Tree, /) -> bool:
     return a >= b
 
 
-pushforward_ge = ft.partial(pushforward_compare, ge_p)
-pullback_fwd_ge = ft.partial(pullback_fwd_compare, ge_p)
-batch_ge = ft.partial(batch_compare, ge_p)
+pushforward_ge = ft.partial(pushforward_compare, p_ge)
+pullback_fwd_ge = ft.partial(pullback_fwd_compare, p_ge)
+batch_ge = ft.partial(batch_compare, p_ge)
 
 
-core.impl_rules.set(ge_p, impl_ge)
-core.aimpl_rules.set(ge_p, utils.asyncify(impl_ge))
-core.abstract_rules.set(ge_p, abstract_compare)
-core.batch_rules.set(ge_p, batch_ge)
-core.abatch_rules.set(ge_p, utils.asyncify(batch_ge))
-core.push_rules.set(ge_p, pushforward_ge)
-core.apush_rules.set(ge_p, utils.asyncify(pushforward_ge))
-core.pull_fwd_rules.set(ge_p, pullback_fwd_ge)
-core.apull_fwd_rules.set(ge_p, utils.asyncify(pullback_fwd_ge))
-core.pull_bwd_rules.set(ge_p, pullback_bwd_compare)
-core.apull_bwd_rules.set(ge_p, utils.asyncify(pullback_bwd_compare))
+core.impl_rules.set(p_ge, impl_ge)
+core.aimpl_rules.set(p_ge, utils.asyncify(impl_ge))
+core.abstract_rules.set(p_ge, abstract_compare)
+core.batch_rules.set(p_ge, batch_ge)
+core.abatch_rules.set(p_ge, utils.asyncify(batch_ge))
+core.push_rules.set(p_ge, pushforward_ge)
+core.apush_rules.set(p_ge, utils.asyncify(pushforward_ge))
+core.pull_fwd_rules.set(p_ge, pullback_fwd_ge)
+core.apull_fwd_rules.set(p_ge, utils.asyncify(pullback_fwd_ge))
+core.pull_bwd_rules.set(p_ge, pullback_bwd_compare)
+core.apull_bwd_rules.set(p_ge, utils.asyncify(pullback_bwd_compare))
 
 
-stage.dunder_rules[stage.Dunder.NEG, FloatAVal] = neg
-stage.dunder_rules[stage.Dunder.ADD, FloatAVal] = add
-stage.dunder_rules[stage.Dunder.SUB, FloatAVal] = sub
-stage.dunder_rules[stage.Dunder.MUL, FloatAVal] = mul
-stage.dunder_rules[stage.Dunder.DIV, FloatAVal] = div
-stage.dunder_rules[stage.Dunder.EQ, FloatAVal] = eq
-stage.dunder_rules[stage.Dunder.NE, FloatAVal] = ne
-stage.dunder_rules[stage.Dunder.LT, FloatAVal] = lt
-stage.dunder_rules[stage.Dunder.LE, FloatAVal] = le
-stage.dunder_rules[stage.Dunder.GT, FloatAVal] = gt
-stage.dunder_rules[stage.Dunder.GE, FloatAVal] = ge
+stage.dunder_rules[stage.Dunder.NEG, AValFloat] = neg
+stage.dunder_rules[stage.Dunder.ADD, AValFloat] = add
+stage.dunder_rules[stage.Dunder.SUB, AValFloat] = sub
+stage.dunder_rules[stage.Dunder.MUL, AValFloat] = mul
+stage.dunder_rules[stage.Dunder.DIV, AValFloat] = div
+stage.dunder_rules[stage.Dunder.EQ, AValFloat] = eq
+stage.dunder_rules[stage.Dunder.NE, AValFloat] = ne
+stage.dunder_rules[stage.Dunder.LT, AValFloat] = lt
+stage.dunder_rules[stage.Dunder.LE, AValFloat] = le
+stage.dunder_rules[stage.Dunder.GT, AValFloat] = gt
+stage.dunder_rules[stage.Dunder.GE, AValFloat] = ge

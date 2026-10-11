@@ -35,11 +35,11 @@ def delay():
         await asyncio.sleep(value)
         return value
 
-    prim = core.Prim("test_path_delay")
-    extend.register_impl(prim, lambda value: value)
-    extend.register_abstract(prim, lambda value: value)
-    extend.register_aimpl(prim, aimpl)
-    return prim.bind
+    p_test_path_delay = core.Prim("test_path_delay")
+    extend.register_impl(p_test_path_delay, lambda value: value)
+    extend.register_abstract(p_test_path_delay, lambda value: value)
+    extend.register_aimpl(p_test_path_delay, aimpl)
+    return p_test_path_delay.bind
 
 
 class TestFactor:
@@ -111,7 +111,7 @@ class TestWeight:
         output, weight = executor(weight_ir, "hello", 0.5)
 
         assert len(weight_ir.eqns) == 1
-        assert weight_ir.eqns[0].prim is path.weight_call_p
+        assert weight_ir.eqns[0].prim is path.p_weight_call
         assert output == "hello!"
         assert weight == 0.5
 

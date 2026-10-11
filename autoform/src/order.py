@@ -64,7 +64,7 @@ def serial_fanout() -> Generator[None, None, None]:
         serial_fanout_flag.reset(token)
 
 
-fanout_p = core.Prim("fanout")
+p_fanout = core.Prim("fanout")
 
 
 def impl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
@@ -90,7 +90,7 @@ def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
     p, t = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(p, t)]
-    results = fanout_p.bind(pf_inputs, irs=pf_irs)
+    results = p_fanout.bind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
@@ -99,19 +99,19 @@ async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
     p, t = in_tree
     pf_irs = [ad.pushforward(ir) for ir in irs]
     pf_inputs = [(p, t) for p, t in zip(p, t)]
-    results = await fanout_p.abind(pf_inputs, irs=pf_irs)
+    results = await p_fanout.abind(pf_inputs, irs=pf_irs)
     p_outs, t_outs = zip(*results)
     return list(p_outs), list(t_outs)
 
 
 def pull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
-    results = fanout_p.bind(in_tree, irs=irs)
+    results = p_fanout.bind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
 
 async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
-    results = await fanout_p.abind(in_tree, irs=irs)
+    results = await p_fanout.abind(in_tree, irs=irs)
     residuals = (in_tree, irs)
     return results, residuals
 
@@ -121,7 +121,7 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_c)]
-    results = fanout_p.bind(pb_inputs, irs=pb_irs)
+    results = p_fanout.bind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
@@ -130,7 +130,7 @@ async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     inputs, _ = residuals
     pb_irs = [ad.pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_c)]
-    results = await fanout_p.abind(pb_inputs, irs=pb_irs)
+    results = await p_fanout.abind(pb_inputs, irs=pb_irs)
     return [cot for _, cot in results]
 
 
@@ -189,18 +189,18 @@ def dce_fanout(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(fanout_p, impl_fanout)
-core.aimpl_rules.set(fanout_p, aimpl_fanout)
-core.abstract_rules.set(fanout_p, abstract_fanout)
-core.batch_rules.set(fanout_p, batch_fanout)
-core.abatch_rules.set(fanout_p, abatch_fanout)
-core.push_rules.set(fanout_p, push_fanout)
-core.apush_rules.set(fanout_p, apush_fanout)
-core.pull_fwd_rules.set(fanout_p, pull_fwd_fanout)
-core.apull_fwd_rules.set(fanout_p, apull_fwd_fanout)
-core.pull_bwd_rules.set(fanout_p, pull_bwd_fanout)
-core.apull_bwd_rules.set(fanout_p, apull_bwd_fanout)
-dead.dce_rules[fanout_p] = dce_fanout
+core.impl_rules.set(p_fanout, impl_fanout)
+core.aimpl_rules.set(p_fanout, aimpl_fanout)
+core.abstract_rules.set(p_fanout, abstract_fanout)
+core.batch_rules.set(p_fanout, batch_fanout)
+core.abatch_rules.set(p_fanout, abatch_fanout)
+core.push_rules.set(p_fanout, push_fanout)
+core.apush_rules.set(p_fanout, apush_fanout)
+core.pull_fwd_rules.set(p_fanout, pull_fwd_fanout)
+core.apull_fwd_rules.set(p_fanout, apull_fwd_fanout)
+core.pull_bwd_rules.set(p_fanout, pull_bwd_fanout)
+core.apull_bwd_rules.set(p_fanout, apull_bwd_fanout)
+dead.dce_rules[p_fanout] = dce_fanout
 
 
 # ==================================================================================================
@@ -260,7 +260,7 @@ def sched[*A, R](
         in_trees = [(tuple(dict.fromkeys(stage.var_leaves(eqn.in_tree))),) for eqn in eqns]
         irs = [stage.IR([eqn], inputs, eqn.out_tree) for eqn, inputs in zip(eqns, in_trees)]
         out_trees = [eqn.out_tree for eqn in eqns]
-        return stage.Eqn(fanout_p, in_trees, out_trees, dict(irs=irs))
+        return stage.Eqn(p_fanout, in_trees, out_trees, dict(irs=irs))
 
     for level in levels:
         eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
@@ -276,7 +276,7 @@ def sched[*A, R](
 # DEPENDS
 # ==================================================================================================
 
-depends_p = core.Prim("depends")
+p_depends = core.Prim("depends")
 
 
 def depends[T](value: T, /, *deps) -> T:
@@ -299,7 +299,7 @@ def depends[T](value: T, /, *deps) -> T:
         ...     b = "Second: " + x
         ...     return af.depends(b, a)  # return b after a has also run
     """
-    return depends_p.bind((value, deps))
+    return p_depends.bind((value, deps))
 
 
 def impl_depends[T](in_tree: DependsType[T], /) -> T:
@@ -314,21 +314,21 @@ def abstract_depends(in_tree: DependsType[Tree], /) -> Tree:
 
 def push_depends(in_tree: DependsPair, /) -> TreePair:
     (p_value, p_deps), (t_value, t_deps) = in_tree
-    out_p = depends_p.bind((p_value, p_deps))
-    out_t = depends_p.bind((t_value, t_deps))
+    out_p = p_depends.bind((p_value, p_deps))
+    out_t = p_depends.bind((t_value, t_deps))
     return out_p, out_t
 
 
 def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
     value, deps = in_tree
-    return depends_p.bind((value, deps)), in_tree
+    return p_depends.bind((value, deps)), in_tree
 
 
 def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
     def make_c(x):
         if isinstance(x, core.Zero):
             return x
-        return core.Zero(core.cotangent_s.map(core.avalof(x)))
+        return core.Zero(core.s_cotangent.map(core.avalof(x)))
 
     (_, deps), out_c = in_tree
     return out_c, utils.tree.map(make_c, deps)
@@ -336,17 +336,17 @@ def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
 
 def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:
     _, (value_batched, _), (value, deps) = in_tree
-    return depends_p.bind((value, deps)), value_batched
+    return p_depends.bind((value, deps)), value_batched
 
 
-core.impl_rules.set(depends_p, impl_depends)
-core.aimpl_rules.set(depends_p, utils.asyncify(impl_depends))
-core.abstract_rules.set(depends_p, abstract_depends)
-core.batch_rules.set(depends_p, batch_depends)
-core.abatch_rules.set(depends_p, utils.asyncify(batch_depends))
-core.push_rules.set(depends_p, push_depends)
-core.apush_rules.set(depends_p, utils.asyncify(push_depends))
-core.pull_fwd_rules.set(depends_p, pull_fwd_depends)
-core.apull_fwd_rules.set(depends_p, utils.asyncify(pull_fwd_depends))
-core.pull_bwd_rules.set(depends_p, pull_bwd_depends)
-core.apull_bwd_rules.set(depends_p, utils.asyncify(pull_bwd_depends))
+core.impl_rules.set(p_depends, impl_depends)
+core.aimpl_rules.set(p_depends, utils.asyncify(impl_depends))
+core.abstract_rules.set(p_depends, abstract_depends)
+core.batch_rules.set(p_depends, batch_depends)
+core.abatch_rules.set(p_depends, utils.asyncify(batch_depends))
+core.push_rules.set(p_depends, push_depends)
+core.apush_rules.set(p_depends, utils.asyncify(push_depends))
+core.pull_fwd_rules.set(p_depends, pull_fwd_depends)
+core.apull_fwd_rules.set(p_depends, utils.asyncify(pull_fwd_depends))
+core.pull_bwd_rules.set(p_depends, pull_bwd_depends)
+core.apull_bwd_rules.set(p_depends, utils.asyncify(pull_bwd_depends))

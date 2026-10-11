@@ -27,9 +27,9 @@ import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
-factor_p = core.Prim("factor")
-dead.non_dce_primitives.add(factor_p)
-memo.non_memoizable_primitives.add(factor_p)
+p_factor = core.Prim("factor")
+dead.non_dce_primitives.add(p_factor)
+memo.non_memoizable_primitives.add(p_factor)
 
 
 def factor(weight: float, /, *, name: Hashable | None = None) -> None:
@@ -40,7 +40,7 @@ def factor(weight: float, /, *, name: Hashable | None = None) -> None:
     weight.
     """
     hash(name)
-    factor_p.bind(weight, name=name)
+    p_factor.bind(weight, name=name)
     return None
 
 
@@ -62,30 +62,30 @@ def abstract_factor(weight, /, *, name: Hashable | None = None) -> None:
 
 def pushforward_factor(in_tree, /, *, name: Hashable | None = None):
     weight, _ = in_tree
-    factor_p.bind(weight, name=name)
+    p_factor.bind(weight, name=name)
     return (), ()
 
 
 def pullback_fwd_factor(weight, /, *, name: Hashable | None = None):
-    factor_p.bind(weight, name=name)
+    p_factor.bind(weight, name=name)
     return (), weight
 
 
 def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
     del name
     weight, _ = in_tree
-    return core.Zero(core.cotangent_s.map(core.avalof(weight)))
+    return core.Zero(core.s_cotangent.map(core.avalof(weight)))
 
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):
     batch_size, in_batched, weight = in_tree
 
     if utils.batch_spec(weight, in_batched) is None:
-        factor_p.bind(weight, name=name)
+        p_factor.bind(weight, name=name)
         return (), ()
 
     for b in range(batch_size):
-        factor_p.bind(utils.batch_index(weight, in_batched, b), name=name)
+        p_factor.bind(utils.batch_index(weight, in_batched, b), name=name)
     return (), ()
 
 
@@ -93,30 +93,30 @@ async def abatch_factor(in_tree, /, *, name: Hashable | None = None):
     batch_size, in_batched, weight = in_tree
 
     if utils.batch_spec(weight, in_batched) is None:
-        await factor_p.abind(weight, name=name)
+        await p_factor.abind(weight, name=name)
         return (), ()
 
     await asyncio.gather(*[
-        factor_p.abind(utils.batch_index(weight, in_batched, b), name=name)
+        p_factor.abind(utils.batch_index(weight, in_batched, b), name=name)
         for b in range(batch_size)
     ])
     return (), ()
 
 
-core.impl_rules.set(factor_p, impl_factor)
-core.aimpl_rules.set(factor_p, utils.asyncify(impl_factor))
-core.abstract_rules.set(factor_p, abstract_factor)
-core.batch_rules.set(factor_p, batch_factor)
-core.abatch_rules.set(factor_p, abatch_factor)
-core.push_rules.set(factor_p, pushforward_factor)
-core.apush_rules.set(factor_p, utils.asyncify(pushforward_factor))
-core.pull_fwd_rules.set(factor_p, pullback_fwd_factor)
-core.apull_fwd_rules.set(factor_p, utils.asyncify(pullback_fwd_factor))
-core.pull_bwd_rules.set(factor_p, pullback_bwd_factor)
-core.apull_bwd_rules.set(factor_p, utils.asyncify(pullback_bwd_factor))
+core.impl_rules.set(p_factor, impl_factor)
+core.aimpl_rules.set(p_factor, utils.asyncify(impl_factor))
+core.abstract_rules.set(p_factor, abstract_factor)
+core.batch_rules.set(p_factor, batch_factor)
+core.abatch_rules.set(p_factor, abatch_factor)
+core.push_rules.set(p_factor, pushforward_factor)
+core.apush_rules.set(p_factor, utils.asyncify(pushforward_factor))
+core.pull_fwd_rules.set(p_factor, pullback_fwd_factor)
+core.apull_fwd_rules.set(p_factor, utils.asyncify(pullback_fwd_factor))
+core.pull_bwd_rules.set(p_factor, pullback_bwd_factor)
+core.apull_bwd_rules.set(p_factor, utils.asyncify(pullback_bwd_factor))
 
 
-weight_call_p = core.Prim("weight_call")
+p_weight_call = core.Prim("weight_call")
 
 
 class WeightInterpreter(core.Interpreter):
@@ -130,14 +130,14 @@ class WeightInterpreter(core.Interpreter):
         self.log_weight += -math.inf if weight == 0 else math.log(weight)
 
     def interpret(self, prim: core.Prim, in_tree, /, **params):
-        if prim is factor_p:
+        if prim is p_factor:
             impl_factor(in_tree, **params)
             self.factor(in_tree)
             return ()
         return self.parent.interpret(prim, in_tree, **params)
 
     async def ainterpret(self, prim: core.Prim, in_tree, /, **params):
-        if prim is factor_p:
+        if prim is p_factor:
             impl_factor(in_tree, **params)
             self.factor(in_tree)
             return ()
@@ -158,7 +158,7 @@ def weight(ir: stage.IR, /) -> stage.IR:
         utils.tree.map(make_out, ir.out_tree),
         stage.Var.fresh(aval=core.avalof(0.0)),
     )
-    eqn = stage.Eqn(weight_call_p, in_tree, out_tree, dict(ir=ir))
+    eqn = stage.Eqn(p_weight_call, in_tree, out_tree, dict(ir=ir))
     return stage.IR([eqn], in_tree, out_tree)
 
 
@@ -209,11 +209,11 @@ def batch_weight_call(in_tree, /, *, ir: stage.IR):
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
-        return weight_call_p.bind(in_values, ir=ir), False
+        return p_weight_call.bind(in_values, ir=ir), False
 
     weight_ir = weight(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = order.fanout_p.bind(inputs, irs=[weight_ir] * batch_size)
+    out_bi = order.p_fanout.bind(inputs, irs=[weight_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -223,11 +223,11 @@ async def abatch_weight_call(in_tree, /, *, ir: stage.IR):
     batch_size, in_batched, in_values = in_tree
 
     if utils.batch_spec(in_values, in_batched) is None:
-        return await weight_call_p.abind(in_values, ir=ir), False
+        return await p_weight_call.abind(in_values, ir=ir), False
 
     weight_ir = weight(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = await order.fanout_p.abind(inputs, irs=[weight_ir] * batch_size)
+    out_bi = await order.p_fanout.abind(inputs, irs=[weight_ir] * batch_size)
     out_batched = utils.tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
@@ -239,15 +239,15 @@ def dce_weight_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResul
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(weight_call_p, impl_weight_call)
-core.aimpl_rules.set(weight_call_p, aimpl_weight_call)
-core.abstract_rules.set(weight_call_p, abstract_weight_call)
-core.batch_rules.set(weight_call_p, batch_weight_call)
-core.abatch_rules.set(weight_call_p, abatch_weight_call)
-core.push_rules.set(weight_call_p, pushforward_weight_call)
-core.apush_rules.set(weight_call_p, utils.asyncify(pushforward_weight_call))
-core.pull_fwd_rules.set(weight_call_p, pullback_fwd_weight_call)
-core.apull_fwd_rules.set(weight_call_p, utils.asyncify(pullback_fwd_weight_call))
-core.pull_bwd_rules.set(weight_call_p, pullback_bwd_weight_call)
-core.apull_bwd_rules.set(weight_call_p, utils.asyncify(pullback_bwd_weight_call))
-dead.dce_rules[weight_call_p] = dce_weight_call
+core.impl_rules.set(p_weight_call, impl_weight_call)
+core.aimpl_rules.set(p_weight_call, aimpl_weight_call)
+core.abstract_rules.set(p_weight_call, abstract_weight_call)
+core.batch_rules.set(p_weight_call, batch_weight_call)
+core.abatch_rules.set(p_weight_call, abatch_weight_call)
+core.push_rules.set(p_weight_call, pushforward_weight_call)
+core.apush_rules.set(p_weight_call, utils.asyncify(pushforward_weight_call))
+core.pull_fwd_rules.set(p_weight_call, pullback_fwd_weight_call)
+core.apull_fwd_rules.set(p_weight_call, utils.asyncify(pullback_fwd_weight_call))
+core.pull_bwd_rules.set(p_weight_call, pullback_bwd_weight_call)
+core.apull_bwd_rules.set(p_weight_call, utils.asyncify(pullback_bwd_weight_call))
+dead.dce_rules[p_weight_call] = dce_weight_call
