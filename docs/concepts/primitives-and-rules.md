@@ -41,11 +41,11 @@ import autoform as af
 import autoform.extend as afe
 
 
-lookup_p = afe.Prim("lookup")
+p_lookup = afe.Prim("lookup")
 
 
 def lookup(query: str) -> str:
-    return lookup_p.bind(query)
+    return p_lookup.bind(query)
 
 
 def impl_lookup(query: str, /) -> str:
@@ -54,11 +54,11 @@ def impl_lookup(query: str, /) -> str:
 
 def abstract_lookup(query, /):
     del query
-    return af.extend.StrAVal()
+    return af.extend.AValStr()
 
 
-afe.register_impl(lookup_p, impl_lookup)
-afe.register_abstract(lookup_p, abstract_lookup)
+afe.register_impl(p_lookup, impl_lookup)
+afe.register_abstract(p_lookup, abstract_lookup)
 
 
 ir = af.trace(lookup)("seed")
@@ -79,12 +79,12 @@ def batch_lookup(in_tree, /):
     queries = values
 
     if not query_axis:
-        return lookup_p.bind(queries), False
+        return p_lookup.bind(queries), False
 
-    return [lookup_p.bind(query) for query in queries], True
+    return [p_lookup.bind(query) for query in queries], True
 
 
-afe.register_batch(lookup_p, batch_lookup)
+afe.register_batch(p_lookup, batch_lookup)
 
 
 assert af.batch(ir).call(["a", "b"]) == ["result for a", "result for b"]
@@ -94,7 +94,7 @@ A pullback needs a forward rule and a backward rule. The forward rule evaluates 
 
 ```python
 def pull_fwd_lookup(query: str, /):
-    output = lookup_p.bind(query)
+    output = p_lookup.bind(query)
     return output, (query, output)
 
 
@@ -104,8 +104,8 @@ def pull_bwd_lookup(in_tree, /):
     return request + ". Result: " + output
 
 
-afe.register_pullback_fwd(lookup_p, pull_fwd_lookup)
-afe.register_pullback_bwd(lookup_p, pull_bwd_lookup)
+afe.register_pullback_fwd(p_lookup, pull_fwd_lookup)
+afe.register_pullback_bwd(p_lookup, pull_bwd_lookup)
 
 
 output, (query_feedback,) = af.pullback(ir).call(
@@ -126,7 +126,7 @@ async def aimpl_lookup(query: str, /) -> str:
     return impl_lookup(query)
 
 
-afe.register_aimpl(lookup_p, aimpl_lookup)
+afe.register_aimpl(p_lookup, aimpl_lookup)
 ```
 
 ## Custom Rules

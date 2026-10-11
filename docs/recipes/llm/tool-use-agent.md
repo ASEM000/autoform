@@ -64,11 +64,11 @@ An HTTP search requires a concrete query and cannot run on a tracing placeholder
 
 ```python
 # primitive wrapper called by traced programs
-wikipedia_search_p = afe.Prim("wikipedia_search")
+p_wikipedia_search = afe.Prim("wikipedia_search")
 
 
 def wikipedia_search(query: str) -> str:
-    return wikipedia_search_p.bind(query)
+    return p_wikipedia_search.bind(query)
 
 
 def wikipedia_url(query: str) -> str:
@@ -109,7 +109,7 @@ async def aimpl_wikipedia_search(query: str, /) -> str:
 # tracing needs output shape without running the http call
 def abstract_wikipedia_search(query, /):
     del query
-    return af.extend.StrAVal()
+    return af.extend.AValStr()
 
 
 # async batch receives the batch size, input axes, and input values
@@ -120,15 +120,15 @@ async def abatch_wikipedia_search(in_tree, /):
     queries = values
 
     if not query_axis:
-        return await wikipedia_search_p.abind(queries), False
+        return await p_wikipedia_search.abind(queries), False
 
-    results = await asyncio.gather(*(wikipedia_search_p.abind(query) for query in queries))
+    results = await asyncio.gather(*(p_wikipedia_search.abind(query) for query in queries))
     return list(results), True
 
 
 # async pullback forward sweep records the same residuals
 async def apull_fwd_wikipedia_search(query: str, /):
-    output = await wikipedia_search_p.abind(query)
+    output = await p_wikipedia_search.abind(query)
     return output, (query, output)
 
 
@@ -145,11 +145,11 @@ async def apull_bwd_wikipedia_search(in_tree, /):
     )
 
 
-afe.register_aimpl(wikipedia_search_p, aimpl_wikipedia_search)
-afe.register_abstract(wikipedia_search_p, abstract_wikipedia_search)
-afe.register_abatch(wikipedia_search_p, abatch_wikipedia_search)
-afe.register_apullback_fwd(wikipedia_search_p, apull_fwd_wikipedia_search)
-afe.register_apullback_bwd(wikipedia_search_p, apull_bwd_wikipedia_search)
+afe.register_aimpl(p_wikipedia_search, aimpl_wikipedia_search)
+afe.register_abstract(p_wikipedia_search, abstract_wikipedia_search)
+afe.register_abatch(p_wikipedia_search, abatch_wikipedia_search)
+afe.register_apullback_fwd(p_wikipedia_search, apull_fwd_wikipedia_search)
+afe.register_apullback_bwd(p_wikipedia_search, apull_bwd_wikipedia_search)
 ```
 
 ## Agent Loop

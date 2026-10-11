@@ -10,7 +10,7 @@ This example only supports floating-point arrays, requires arrays to have the sa
 
 ## Abstract Value
 
-Tracing needs an array description before an operation has produced a concrete result. `ArrayAVal` records the shape and dtype and supplies the zero and accumulation behavior used by feedback. The primal, tangent, and cotangent spaces all use this same array representation in the example:
+Tracing needs an array description before an operation has produced a concrete result. `AValArray` records the shape and dtype and supplies the zero and accumulation behavior used by feedback. The primal, tangent, and cotangent spaces all use this same array representation in the example:
 
 ```python
 import functools as ft
@@ -21,7 +21,7 @@ import autoform as af
 import autoform.extend as afe
 
 
-class ArrayAVal(afe.AVal):
+class AValArray(afe.AVal):
     __slots__ = ["shape", "dtype"]
 
     def __init__(self, shape, dtype):
@@ -29,7 +29,7 @@ class ArrayAVal(afe.AVal):
         self.dtype = np.dtype(dtype)
 
     def __repr__(self):
-        return f"ArrayAVal(shape={self.shape!r}, dtype={self.dtype!r})"
+        return f"AValArray(shape={self.shape!r}, dtype={self.dtype!r})"
 
     def __eq__(self, other):
         return (
@@ -49,13 +49,13 @@ class ArrayAVal(afe.AVal):
 
 
 def aval_rule(value):
-    return ArrayAVal(value.shape, value.dtype)
+    return AValArray(value.shape, value.dtype)
 
 
 afe.register_trace_type(np.ndarray, aval_rule)
-afe.primal_s.set(ArrayAVal, lambda aval: aval)
-afe.tangent_s.set(ArrayAVal, lambda aval: aval)
-afe.cotangent_s.set(ArrayAVal, lambda aval: aval)
+afe.s_primal.set(AValArray, lambda aval: aval)
+afe.s_tangent.set(AValArray, lambda aval: aval)
+afe.s_cotangent.set(AValArray, lambda aval: aval)
 ```
 
 ## Operation Rules
@@ -64,7 +64,7 @@ Registering a value type does not define how array operations transform. Each op
 
 ```python
 def array_aval(value):
-    return value if isinstance(value, ArrayAVal) else afe.avalof(value)
+    return value if isinstance(value, AValArray) else afe.avalof(value)
 
 
 def result_aval(x, y, op):
@@ -74,14 +74,14 @@ def result_aval(x, y, op):
         np.ones(ax.shape, dtype=ax.dtype),
         np.ones(ay.shape, dtype=ay.dtype),
     )
-    return ArrayAVal(result.shape, result.dtype)
+    return AValArray(result.shape, result.dtype)
 
 
 def register_binary(name, op, push_rule, pull_rule):
-    prim = afe.Prim(name)
+    p_op = afe.Prim(name)
 
     def bind(x, y):
-        return prim.bind((x, y))
+        return p_op.bind((x, y))
 
     def impl(in_tree):
         return op(*in_tree)
@@ -113,12 +113,12 @@ def register_binary(name, op, push_rule, pull_rule):
         y_at = ft.partial(afe.batch_index, y, by)
         return [bind(x_at(i), y_at(i)) for i in range(batch_size)], True
 
-    afe.register_impl(prim, impl)
-    afe.register_abstract(prim, abstract)
-    afe.register_pushforward(prim, push)
-    afe.register_pullback_fwd(prim, pull_fwd)
-    afe.register_pullback_bwd(prim, pull_bwd)
-    afe.register_batch(prim, batch_rule)
+    afe.register_impl(p_op, impl)
+    afe.register_abstract(p_op, abstract)
+    afe.register_pushforward(p_op, push)
+    afe.register_pullback_fwd(p_op, pull_fwd)
+    afe.register_pullback_bwd(p_op, pull_bwd)
+    afe.register_batch(p_op, batch_rule)
     return bind
 ```
 
@@ -164,14 +164,14 @@ a_matmul = register_binary(
     lambda x, y, g: (a_matmul(g, y.T), a_matmul(x.T, g)),
 )
 
-afe.register_dunder(afe.Dunder.ADD, ArrayAVal, a_add)
-afe.register_dunder(afe.Dunder.SUB, ArrayAVal, a_sub)
-afe.register_dunder(afe.Dunder.MUL, ArrayAVal, a_mul)
-afe.register_dunder(afe.Dunder.DIV, ArrayAVal, a_div)
-afe.register_dunder(afe.Dunder.MATMUL, ArrayAVal, a_matmul)
+afe.register_dunder(afe.Dunder.ADD, AValArray, a_add)
+afe.register_dunder(afe.Dunder.SUB, AValArray, a_sub)
+afe.register_dunder(afe.Dunder.MUL, AValArray, a_mul)
+afe.register_dunder(afe.Dunder.DIV, AValArray, a_div)
+afe.register_dunder(afe.Dunder.MATMUL, AValArray, a_matmul)
 ```
 
-The final registrations connect traced Python syntax to the primitives through one dunder rule table. For example, `x + y` stages `a_add` when `x` has `ArrayAVal`.
+The final registrations connect traced Python syntax to the primitives through one dunder rule table. For example, `x + y` stages `a_add` when `x` has `AValArray`.
 
 ## Execution and AD
 
