@@ -22,12 +22,10 @@ from contextlib import contextmanager
 
 from optree import PyTreeSpec
 
-import autoform.core as core
-import autoform.intercept as intercept
-import autoform.stage as stage
-import autoform.utils as utils
-
-__all__ = ["memoize"]
+import autoform.src.core as core
+import autoform.src.intercept as intercept
+import autoform.src.stage as stage
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]

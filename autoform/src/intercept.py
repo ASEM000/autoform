@@ -22,12 +22,10 @@ from collections.abc import Generator, Hashable
 from contextlib import contextmanager
 from typing import Any
 
-import autoform.core as core
-import autoform.dead as dead
-import autoform.order as order
-import autoform.utils as utils
-
-__all__ = ["checkpoint", "collect", "inject"]
+import autoform.src.core as core
+import autoform.src.dead as dead
+import autoform.src.order as order
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 

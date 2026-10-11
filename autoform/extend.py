@@ -12,325 +12,74 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Extension API for AutoForm."""
-
-from __future__ import annotations
-
-from collections.abc import Callable
-from typing import Any
-
-import autoform.ad as ad
-import autoform.axis as axis
-import autoform.control as control
-import autoform.core as core
-import autoform.dead as dead
-import autoform.intercept as intercept
-import autoform.lm as lm
-import autoform.memo as memo
-import autoform.numeric as numeric
-import autoform.order as order
-import autoform.path as path
-import autoform.stage as stage
-import autoform.string as string
-import autoform.utils as utils
-
-# ==================================================================================================
-# TYPES
-# ==================================================================================================
-
-AVal = core.AVal
-StrAVal = string.StrAVal
-IntAVal = numeric.IntAVal
-FloatAVal = numeric.FloatAVal
-BoolAVal = numeric.BoolAVal
-Space = core.Space
-avalof = core.avalof
-primal_s = core.primal_s
-tangent_s = core.tangent_s
-cotangent_s = core.cotangent_s
-Prim = core.Prim
-Rule = core.Rule
-Dunder = stage.Dunder
-Zero = core.Zero
-Interpreter = core.Interpreter
-IR = stage.IR
-Eqn = stage.Eqn
-Var = stage.Var
-
-# ==================================================================================================
-# HELPERS
-# ==================================================================================================
-
-materialize_zeros = core.materialize_zeros
-batch_index = utils.batch_index
-batch_spec = utils.batch_spec
-batch_transpose = utils.batch_transpose
-using_interpreter = core.using_interpreter
-serial_fanout = order.serial_fanout
-active_interpreter = core.active_interpreter
-active_tags = stage.active_tags
-is_var = stage.is_var
-aval_if_var = stage.aval_if_var
-active_client = lm.active_client
-
-# ==================================================================================================
-# PRIMITIVE KEYS
-# ==================================================================================================
-
-concat_p = string.concat_p
-match_p = string.match_p
-neg_p = numeric.neg_p
-add_p = numeric.add_p
-sub_p = numeric.sub_p
-mul_p = numeric.mul_p
-div_p = numeric.div_p
-eq_p = numeric.eq_p
-ne_p = numeric.ne_p
-lt_p = numeric.lt_p
-le_p = numeric.le_p
-gt_p = numeric.gt_p
-ge_p = numeric.ge_p
-fill_p = lm.fill_p
-factor_p = path.factor_p
-weight_call_p = path.weight_call_p
-checkpoint_p = intercept.checkpoint_p
-stop_gradient_p = control.stop_gradient_p
-switch_p = control.switch_p
-while_loop_p = control.while_loop_p
-fixpoint_p = control.fixpoint_p
-fanout_p = order.fanout_p
-depends_p = order.depends_p
-batch_call_p = axis.batch_call_p
-pushforward_call_p = ad.pushforward_call_p
-pullback_call_p = ad.pullback_call_p
-
-__all__ = [
-    "AVal",
-    "StrAVal",
-    "IntAVal",
-    "FloatAVal",
-    "BoolAVal",
-    "Space",
-    "avalof",
-    "primal_s",
-    "tangent_s",
-    "cotangent_s",
-    "Prim",
-    "Rule",
-    "Dunder",
-    "Zero",
-    "Interpreter",
-    "IR",
-    "Eqn",
-    "Var",
-    "register_impl",
-    "register_aimpl",
-    "register_abstract",
-    "register_batch",
-    "register_abatch",
-    "register_pushforward",
-    "register_apushforward",
-    "register_pullback_fwd",
-    "register_apullback_fwd",
-    "register_pullback_bwd",
-    "register_apullback_bwd",
-    "register_trace_type",
-    "register_dce",
-    "register_non_dce",
-    "register_non_memoizable",
-    "register_dunder",
-    "materialize_zeros",
-    "batch_index",
-    "batch_spec",
-    "batch_transpose",
-    "using_interpreter",
-    "serial_fanout",
-    "active_interpreter",
-    "active_tags",
-    "is_var",
-    "aval_if_var",
-    "active_client",
-    "concat_p",
-    "match_p",
-    "neg_p",
-    "add_p",
-    "sub_p",
-    "mul_p",
-    "div_p",
-    "eq_p",
-    "ne_p",
-    "lt_p",
-    "le_p",
-    "gt_p",
-    "ge_p",
-    "fill_p",
-    "factor_p",
-    "weight_call_p",
-    "checkpoint_p",
-    "stop_gradient_p",
-    "switch_p",
-    "while_loop_p",
-    "fixpoint_p",
-    "fanout_p",
-    "depends_p",
-    "batch_call_p",
-    "pushforward_call_p",
-    "pullback_call_p",
-]
-
-type AValRule = Callable[[Any], AVal]
-
-# ==================================================================================================
-# REGISTRATION
-# ==================================================================================================
-
-
-def register_impl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.impl_rules.set(prim, rule)
-
-
-def register_aimpl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.aimpl_rules.set(prim, rule)
-
-
-def register_abstract[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.abstract_rules.set(prim, rule)
-
-
-def register_batch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.batch_rules.set(prim, rule)
-
-
-def register_abatch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.abatch_rules.set(prim, rule)
-
-
-def register_pushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.push_rules.set(prim, rule)
-
-
-def register_apushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.apush_rules.set(prim, rule)
-
-
-def register_pullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.pull_fwd_rules.set(prim, rule)
-
-
-def register_apullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.apull_fwd_rules.set(prim, rule)
-
-
-def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.pull_bwd_rules.set(prim, rule)
-
-
-def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.apull_bwd_rules.set(prim, rule)
-
-
-def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
-    """Register a Python type as a traceable input type.
-
-    :func:`autoform.trace` treats registered Python types as dynamic leaves. During
-    tracing, each concrete value is passed to ``aval_rule`` and replaced by an
-    :class:`AVal` that carries the abstract information needed by primitive rules.
-
-    Args:
-        type: Concrete Python type accepted as a dynamic input leaf.
-        aval_rule: Function from a concrete value to its abstract value.
-
-    Returns:
-        The registered rule.
-
-    Example:
-        >>> import functools as ft
-        >>> import autoform.extend as afe
-        >>> class Token: ...
-        >>> class TokenAVal(afe.AVal): ...
-        >>> @ft.partial(afe.register_trace_type, Token)
-        ... def token_aval(value):
-        ...     return TokenAVal()
-    """
-    core.aval_types[type] = aval_rule
-    stage.trace_types.add(type)
-    return aval_rule
-
-
-def register_dce[R: dead.DCERule](prim: Prim, rule: R, /) -> R:
-    """Register a dead-code elimination rule for a primitive."""
-    assert isinstance(prim, Prim)
-    dead.dce_rules[prim] = rule
-    return rule
-
-
-def register_non_dce[T: Prim](prim: T, /) -> T:
-    """Register a primitive as preserved during dead-code elimination.
-
-    Marks an extension primitive as semantically relevant even when its output is unused,
-    such as a scoring, logging, or collection boundary.
-
-    Args:
-        prim: Primitive preserved by :func:`autoform.dce`.
-
-    Returns:
-        The registered primitive.
-    """
-    assert isinstance(prim, Prim)
-    rules = dead.non_dce_primitives
-    assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
-    rules.add(prim)
-    return prim
-
-
-def register_non_memoizable[T: Prim](prim: T, /) -> T:
-    """Register a primitive as excluded from :func:`autoform.memoize`.
-
-    Marks an extension primitive as requiring repeated execution, such as stochastic sampling,
-    scoring, logging, or calls that observe runtime state.
-
-    Args:
-        prim: Primitive excluded from memoization.
-
-    Returns:
-        The registered primitive.
-    """
-    assert isinstance(prim, Prim)
-    rules = memo.non_memoizable_primitives
-    assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
-    rules.add(prim)
-    return prim
-
-
-# ==================================================================================================
-# DUNDER REGISTRATION
-# ==================================================================================================
-
-
-def register_dunder[T: Callable[..., Any]](
-    dunder: Dunder,
-    aval_type: type[AVal],
-    rule: T,
-    /,
-    *,
-    replace: bool = False,
-) -> T:
-    """Register Python :class:`autoform.extend.Dunder` behavior for a traced abstract value type.
-
-    Args:
-        dunder: :class:`autoform.extend.Dunder` being staged.
-        aval_type: Abstract value type that selects the rule.
-        rule: Callable implementing the trace-time dunder behavior.
-        replace: Whether to replace an existing rule explicitly.
-
-    Returns:
-        The registered rule.
-    """
-    assert isinstance(dunder, Dunder), f"Expected Dunder, got {dunder!r}"
-    assert issubclass(aval_type, AVal), f"Expected AVal type, got {aval_type!r}"
-    assert callable(rule), f"Expected callable, got {rule!r}"
-    assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
-    key = dunder, aval_type
-    assert replace or key not in stage.dunder_rules, f"Dunder rule is already defined"
-    stage.dunder_rules[key] = rule
-    return rule
+from autoform.src.extend import IR as IR
+from autoform.src.extend import AVal as AVal
+from autoform.src.extend import BoolAVal as BoolAVal
+from autoform.src.extend import Dunder as Dunder
+from autoform.src.extend import Eqn as Eqn
+from autoform.src.extend import FloatAVal as FloatAVal
+from autoform.src.extend import IntAVal as IntAVal
+from autoform.src.extend import Interpreter as Interpreter
+from autoform.src.extend import Prim as Prim
+from autoform.src.extend import Rule as Rule
+from autoform.src.extend import Space as Space
+from autoform.src.extend import StrAVal as StrAVal
+from autoform.src.extend import Var as Var
+from autoform.src.extend import Zero as Zero
+from autoform.src.extend import active_client as active_client
+from autoform.src.extend import active_interpreter as active_interpreter
+from autoform.src.extend import active_tags as active_tags
+from autoform.src.extend import add_p as add_p
+from autoform.src.extend import aval_if_var as aval_if_var
+from autoform.src.extend import avalof as avalof
+from autoform.src.extend import batch_call_p as batch_call_p
+from autoform.src.extend import batch_index as batch_index
+from autoform.src.extend import batch_spec as batch_spec
+from autoform.src.extend import batch_transpose as batch_transpose
+from autoform.src.extend import checkpoint_p as checkpoint_p
+from autoform.src.extend import concat_p as concat_p
+from autoform.src.extend import cotangent_s as cotangent_s
+from autoform.src.extend import depends_p as depends_p
+from autoform.src.extend import div_p as div_p
+from autoform.src.extend import eq_p as eq_p
+from autoform.src.extend import factor_p as factor_p
+from autoform.src.extend import fanout_p as fanout_p
+from autoform.src.extend import fill_p as fill_p
+from autoform.src.extend import fixpoint_p as fixpoint_p
+from autoform.src.extend import ge_p as ge_p
+from autoform.src.extend import gt_p as gt_p
+from autoform.src.extend import is_var as is_var
+from autoform.src.extend import le_p as le_p
+from autoform.src.extend import lt_p as lt_p
+from autoform.src.extend import match_p as match_p
+from autoform.src.extend import materialize_zeros as materialize_zeros
+from autoform.src.extend import mul_p as mul_p
+from autoform.src.extend import ne_p as ne_p
+from autoform.src.extend import neg_p as neg_p
+from autoform.src.extend import primal_s as primal_s
+from autoform.src.extend import pullback_call_p as pullback_call_p
+from autoform.src.extend import pushforward_call_p as pushforward_call_p
+from autoform.src.extend import register_abatch as register_abatch
+from autoform.src.extend import register_abstract as register_abstract
+from autoform.src.extend import register_aimpl as register_aimpl
+from autoform.src.extend import register_apullback_bwd as register_apullback_bwd
+from autoform.src.extend import register_apullback_fwd as register_apullback_fwd
+from autoform.src.extend import register_apushforward as register_apushforward
+from autoform.src.extend import register_batch as register_batch
+from autoform.src.extend import register_dce as register_dce
+from autoform.src.extend import register_dunder as register_dunder
+from autoform.src.extend import register_impl as register_impl
+from autoform.src.extend import register_non_dce as register_non_dce
+from autoform.src.extend import register_non_memoizable as register_non_memoizable
+from autoform.src.extend import register_pullback_bwd as register_pullback_bwd
+from autoform.src.extend import register_pullback_fwd as register_pullback_fwd
+from autoform.src.extend import register_pushforward as register_pushforward
+from autoform.src.extend import register_trace_type as register_trace_type
+from autoform.src.extend import serial_fanout as serial_fanout
+from autoform.src.extend import stop_gradient_p as stop_gradient_p
+from autoform.src.extend import sub_p as sub_p
+from autoform.src.extend import switch_p as switch_p
+from autoform.src.extend import tangent_s as tangent_s
+from autoform.src.extend import using_interpreter as using_interpreter
+from autoform.src.extend import weight_call_p as weight_call_p
+from autoform.src.extend import while_loop_p as while_loop_p

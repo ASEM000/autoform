@@ -14,66 +14,72 @@
 
 import pytest
 
-import autoform as af
-from autoform.intercept import checkpoint_p
-from autoform.order import depends_p, fanout_p
-from autoform.stage import IR, Var
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.control as control
+import autoform.src.dead as dead
+import autoform.src.intercept as intercept
+import autoform.src.order as order
+import autoform.src.path as path
+import autoform.src.stage as stage
+import autoform.src.string as string
+import autoform.src.utils as utils
 from tests import aexecute, execute, fixpoint_program, switch_program, while_program
 
 
 def live_and_dead(x):
-    af.string.concat(x, " DEAD")
-    return af.string.concat(x, " LIVE")
+    string.concat(x, " DEAD")
+    return string.concat(x, " LIVE")
 
 
 def paired_outputs(x):
-    return af.string.concat(x, "a"), af.string.concat(x, "b")
+    return string.concat(x, "a"), string.concat(x, "b")
 
 
 def pair_with_dead(x):
     result = paired_outputs(x)
-    af.string.concat(x, "dead")
+    string.concat(x, "dead")
     return result
 
 
 def carry_state(state, theta):
     visible, hidden = state
-    return af.string.concat(visible, hidden), af.string.concat(hidden, theta)
+    return string.concat(visible, hidden), string.concat(hidden, theta)
 
 
 def checkpoint_then_bang(x):
-    x = af.checkpoint(x, key="save", collection="cache")
-    return af.string.concat(x, "!")
+    x = intercept.checkpoint(x, key="save", collection="cache")
+    return string.concat(x, "!")
 
 
 def unused_checkpoint_switch_ir():
     def save(x):
-        af.string.concat(x, "dead")
-        return af.checkpoint(x, key="save", collection="cache")
+        string.concat(x, "dead")
+        return intercept.checkpoint(x, key="save", collection="cache")
 
-    branch = af.trace(save)("x")
+    branch = stage.trace(save)("x")
 
     def program(x):
-        af.switch("a", {"a": branch}, af.string.concat(x, "!"))
+        control.switch("a", {"a": branch}, string.concat(x, "!"))
         return x
 
-    return af.trace(program)("x")
+    return stage.trace(program)("x")
 
 
 def test_removes_dead_code():
-    ir = af.trace(live_and_dead)("test")
-    dced = af.dce(ir)
+    ir = stage.trace(live_and_dead)("test")
+    dced = dead.dce(ir)
     assert len(ir.eqns) == 2
-    assert [e.prim for e in dced.eqns] == [af.string.concat_p]
+    assert [e.prim for e in dced.eqns] == [string.concat_p]
     assert dced.call("x") == "x LIVE"
 
 
 def test_removes_inlined_dead_code():
-    inner = af.trace(live_and_dead)("test")
-    ir = af.trace(lambda x: inner.call(x))("input")
-    dced = af.dce(ir)
+    inner = stage.trace(live_and_dead)("test")
+    ir = stage.trace(lambda x: inner.call(x))("input")
+    dced = dead.dce(ir)
     assert len(ir.eqns) == 2
-    assert [e.prim for e in dced.eqns] == [af.string.concat_p]
+    assert [e.prim for e in dced.eqns] == [string.concat_p]
     assert dced.call("x") == "x LIVE"
 
 
@@ -82,14 +88,14 @@ def test_removes_inlined_dead_code():
     [
         pytest.param(lambda x: x, 0, 0, "x", id="empty"),
         pytest.param(
-            lambda x: (af.string.concat(x, "dead1"), af.string.concat(x, "dead2"), x)[-1],
+            lambda x: (string.concat(x, "dead1"), string.concat(x, "dead2"), x)[-1],
             2,
             0,
             "x",
             id="all-dead",
         ),
         pytest.param(
-            lambda x: af.string.concat(af.stop_gradient(x), "!"),
+            lambda x: string.concat(control.stop_gradient(x), "!"),
             2,
             2,
             "x!",
@@ -98,8 +104,8 @@ def test_removes_inlined_dead_code():
     ],
 )
 def test_dce_edges(program, before, after, expected):
-    ir = af.trace(program)("x")
-    dced = af.dce(ir)
+    ir = stage.trace(program)("x")
+    dced = dead.dce(ir)
     assert len(ir.eqns) == before
     assert len(dced.eqns) == after
     assert dced.call("x") == expected
@@ -107,23 +113,23 @@ def test_dce_edges(program, before, after, expected):
 
 def test_preserves_dependency_order():
     def program(x):
-        y = af.string.concat(x, "a")
-        z = af.string.concat(y, "b")
-        return af.string.concat(z, "c")
+        y = string.concat(x, "a")
+        z = string.concat(y, "b")
+        return string.concat(z, "c")
 
-    dced = af.dce(af.trace(program)("x"))
+    dced = dead.dce(stage.trace(program)("x"))
     assert len(dced.eqns) == 3
     for current, following in zip(dced.eqns, dced.eqns[1:]):
-        assert current.out_tree in af.utils.tree.leaves(following.in_tree)
+        assert current.out_tree in utils.tree.leaves(following.in_tree)
     assert dced.call("x") == "xabc"
 
 
 def test_diamond_dependency():
     def program(x):
-        a = af.string.concat(x, "a")
-        return af.string.concat(af.string.concat(a, "b"), af.string.concat(a, "c"))
+        a = string.concat(x, "a")
+        return string.concat(string.concat(a, "b"), string.concat(a, "c"))
 
-    dced = af.dce(af.trace(program)("x"))
+    dced = dead.dce(stage.trace(program)("x"))
     assert len(dced.eqns) == 4
     assert dced.call("x") == "xabxac"
 
@@ -133,51 +139,51 @@ def test_diamond_dependency():
     [pytest.param(True, 1, "", id="used"), pytest.param(False, 0, None, id="unused")],
 )
 def test_no_input_equation(used, count, expected):
-    dced = af.dce(af.trace(lambda: af.string.concat())(), out_used=used)
+    dced = dead.dce(stage.trace(lambda: string.concat())(), out_used=used)
     assert len(dced.eqns) == count
     assert dced.call() == expected
 
 
 def test_dangling_used_output():
-    bad_ir = IR([], in_tree=(), out_tree=Var.fresh(aval=af.string.StrAVal()))
+    bad_ir = stage.IR([], in_tree=(), out_tree=stage.Var.fresh(aval=string.StrAVal()))
     with pytest.raises(AssertionError):
-        af.dce(bad_ir, out_used=True)
+        dead.dce(bad_ir, out_used=True)
 
 
 def test_preserves_used_switch():
     branches = {
-        key: af.trace(lambda x: af.string.concat(x, suffix))("x")
+        key: stage.trace(lambda x: string.concat(x, suffix))("x")
         for key, suffix in (("a", " A"), ("b", " B"))
     }
-    ir = af.trace(switch_program(branches))("a", "input")
-    dced = af.dce(ir)
-    assert [e.prim for e in dced.eqns] == [af.control.switch_p]
+    ir = stage.trace(switch_program(branches))("a", "input")
+    dced = dead.dce(ir)
+    assert [e.prim for e in dced.eqns] == [control.switch_p]
     assert dced.call("a", "input") == "input A"
 
 
 def test_removes_unused_switch():
     branches = {
-        key: af.trace(lambda x: af.string.concat(x, suffix))("x")
+        key: stage.trace(lambda x: string.concat(x, suffix))("x")
         for key, suffix in (("a", " A"), ("b", " B"))
     }
 
     def program(key, x):
-        af.switch(key, branches, x)
-        return af.string.concat(x, "live")
+        control.switch(key, branches, x)
+        return string.concat(x, "live")
 
-    ir = af.trace(program)("a", "input")
-    dced = af.dce(ir)
-    assert [e.prim for e in dced.eqns] == [af.string.concat_p]
+    ir = stage.trace(program)("a", "input")
+    dced = dead.dce(ir)
+    assert [e.prim for e in dced.eqns] == [string.concat_p]
     assert dced.call("a", "input") == "inputlive"
 
 
 @pytest.mark.parametrize(
     "transform, mask, count, args, expected",
     [
-        pytest.param(af.batch, None, 1, (["x"],), ["x LIVE"], id="batch"),
-        pytest.param(af.pushforward, None, 1, (("x",), ("t",)), ("x LIVE", "t"), id="push"),
+        pytest.param(axis.batch, None, 1, (["x"],), ["x LIVE"], id="batch"),
+        pytest.param(ad.pushforward, None, 1, (("x",), ("t",)), ("x LIVE", "t"), id="push"),
         pytest.param(
-            af.pullback,
+            ad.pullback,
             (True, (False,)),
             1,
             (("x",), "cot"),
@@ -185,7 +191,7 @@ def test_removes_unused_switch():
             id="pull-primal",
         ),
         pytest.param(
-            af.pullback,
+            ad.pullback,
             (False, (True,)),
             2,
             (("x",), "cot"),
@@ -195,27 +201,27 @@ def test_removes_unused_switch():
     ],
 )
 def test_dce_inside_transform(transform, mask, count, args, expected):
-    inner = af.trace(live_and_dead)("test")
-    dced = af.dce(transform(inner), out_used=mask)
+    inner = stage.trace(live_and_dead)("test")
+    dced = dead.dce(transform(inner), out_used=mask)
     assert len(dced.eqns[0].params["ir"].eqns) == count
     assert len(inner.eqns) == 2
     assert dced.call(*args) == expected
 
 
 def test_nested_switch():
-    branch = af.trace(live_and_dead)("test")
-    branches = {"a": branch, "b": af.trace(lambda x: af.string.concat(x, " B"))("test")}
-    ir = af.trace(switch_program(branches))("a", "input")
-    dced = af.dce(ir)
+    branch = stage.trace(live_and_dead)("test")
+    branches = {"a": branch, "b": stage.trace(lambda x: string.concat(x, " B"))("test")}
+    ir = stage.trace(switch_program(branches))("a", "input")
+    dced = dead.dce(ir)
     assert len(dced.eqns[0].params["branches"]["a"].eqns) == 1
     assert dced.call("a", "hello") == "hello LIVE"
 
 
 def test_batched_nested_switch():
-    branch = af.trace(live_and_dead)("test")
-    branches = {"a": branch, "b": af.trace(lambda x: af.string.concat(x, " B"))("test")}
-    ir = af.trace(switch_program(branches))("a", "input")
-    dced = af.dce(af.batch(ir, in_axes=(False, True)))
+    branch = stage.trace(live_and_dead)("test")
+    branches = {"a": branch, "b": stage.trace(lambda x: string.concat(x, " B"))("test")}
+    ir = stage.trace(switch_program(branches))("a", "input")
+    dced = dead.dce(axis.batch(ir, in_axes=(False, True)))
     inner = dced.eqns[0].params["ir"]
     assert len(inner.eqns[0].params["branches"]["a"].eqns) == 1
     assert dced.call("a", ["hello"]) == ["hello LIVE"]
@@ -223,13 +229,13 @@ def test_batched_nested_switch():
 
 def test_dce_inside_while_condition():
     def cond(state):
-        af.string.concat(state, " DEAD")
-        return af.string.match(state, "go")
+        string.concat(state, " DEAD")
+        return string.match(state, "go")
 
-    cond_ir = af.trace(cond)("go")
-    body_ir = af.trace(lambda state: af.string.concat(state, "!"))("go")
-    ir = af.trace(while_program(cond_ir, body_ir, max_iters=1))("go")
-    dced = af.dce(ir)
+    cond_ir = stage.trace(cond)("go")
+    body_ir = stage.trace(lambda state: string.concat(state, "!"))("go")
+    ir = stage.trace(while_program(cond_ir, body_ir, max_iters=1))("go")
+    dced = dead.dce(ir)
     assert len(ir.eqns[0].params["cond_ir"].eqns) == 2
     assert len(dced.eqns[0].params["cond_ir"].eqns) == 1
     assert dced.call("go") == "go!"
@@ -237,13 +243,13 @@ def test_dce_inside_while_condition():
 
 def test_dce_inside_while_body():
     def body(state):
-        af.string.concat(state, " DEAD")
-        return af.string.concat(state, "!")
+        string.concat(state, " DEAD")
+        return string.concat(state, "!")
 
-    cond_ir = af.trace(lambda state: af.string.match(state, "go"))("go")
-    body_ir = af.trace(body)("go")
-    ir = af.trace(while_program(cond_ir, body_ir, max_iters=1))("go")
-    dced = af.dce(ir)
+    cond_ir = stage.trace(lambda state: string.match(state, "go"))("go")
+    body_ir = stage.trace(body)("go")
+    ir = stage.trace(while_program(cond_ir, body_ir, max_iters=1))("go")
+    dced = dead.dce(ir)
     assert len(ir.eqns[0].params["body_ir"].eqns) == 2
     assert len(dced.eqns[0].params["body_ir"].eqns) == 1
     assert dced.call("go") == "go!"
@@ -251,12 +257,12 @@ def test_dce_inside_while_body():
 
 def test_dce_inside_fixpoint_step():
     def step(state, theta):
-        af.string.concat(theta, " DEAD")
-        return af.string.concat(state, theta)
+        string.concat(theta, " DEAD")
+        return string.concat(state, theta)
 
-    program = fixpoint_program(af.trace(step)("x", "!"), max_iters=1)
-    ir = af.trace(program)("x", "!")
-    dced = af.dce(ir)
+    program = fixpoint_program(stage.trace(step)("x", "!"), max_iters=1)
+    ir = stage.trace(program)("x", "!")
+    dced = dead.dce(ir)
     assert len(ir.eqns[0].params["step_ir"].eqns) == 2
     assert len(dced.eqns[0].params["step_ir"].eqns) == 1
     assert dced.call("x", "!") == "x!"
@@ -264,33 +270,33 @@ def test_dce_inside_fixpoint_step():
 
 def test_dce_inside_fixpoint_equivalence():
     def stable(prev, new):
-        af.string.concat(prev, " DEAD")
-        return af.string.match(new, "x!")
+        string.concat(prev, " DEAD")
+        return string.match(new, "x!")
 
     program = fixpoint_program(
-        af.trace(af.string.concat)("x", "!"),
+        stage.trace(string.concat)("x", "!"),
         max_iters=2,
-        equiv_ir=af.trace(stable)("x", "x!"),
+        equiv_ir=stage.trace(stable)("x", "x!"),
     )
-    ir = af.trace(program)("x", "!")
-    dced = af.dce(ir)
+    ir = stage.trace(program)("x", "!")
+    dced = dead.dce(ir)
     assert len(ir.eqns[0].params["equiv_ir"].eqns) == 2
     assert len(dced.eqns[0].params["equiv_ir"].eqns) == 1
     assert dced.call("x", "!") == "x!"
 
 
 def test_while_carried_state():
-    cond = af.trace(lambda state: af.string.match(state[0], "v"))(("v", "h"))
-    body = af.trace(lambda state: carry_state(state, "!"))(("v", "h"))
+    cond = stage.trace(lambda state: string.match(state[0], "v"))(("v", "h"))
+    body = stage.trace(lambda state: carry_state(state, "!"))(("v", "h"))
     program = while_program(cond, body, max_iters=1)
-    dced = af.dce(af.trace(program)(("v", "h")), out_used=(True, False))
+    dced = dead.dce(stage.trace(program)(("v", "h")), out_used=(True, False))
     assert dced.eqns[0].params["body_ir"].out_tree[1] is not None
     assert dced.call(("v", "h")) == ("vh", "h!")
 
 
 def test_fixpoint_carried_state():
-    program = fixpoint_program(af.trace(carry_state)(("v", "h"), "!"), max_iters=2)
-    dced = af.dce(af.trace(program)(("v", "h"), "!"), out_used=(True, False))
+    program = fixpoint_program(stage.trace(carry_state)(("v", "h"), "!"), max_iters=2)
+    dced = dead.dce(stage.trace(program)(("v", "h"), "!"), out_used=(True, False))
     assert dced.eqns[0].params["step_ir"].out_tree[1] is not None
     assert dced.call(("v", "h"), "!") == ("vhh!", "h!!")
 
@@ -305,8 +311,8 @@ def test_fixpoint_carried_state():
     ],
 )
 def test_output_masks(mask, expected, count):
-    ir = af.trace(paired_outputs)("x")
-    dced = af.dce(ir, out_used=mask)
+    ir = stage.trace(paired_outputs)("x")
+    dced = dead.dce(ir, out_used=mask)
     assert len(dced.eqns) == count
     assert dced.call("X") == expected
 
@@ -320,34 +326,34 @@ def test_output_masks(mask, expected, count):
     ],
 )
 def test_fanout_output_masks(mask, expected):
-    ir = af.sched(af.trace(paired_outputs)("x"))
-    dced = af.dce(ir, out_used=mask)
-    assert [e.prim for e in dced.eqns] == [fanout_p]
+    ir = order.sched(stage.trace(paired_outputs)("x"))
+    dced = dead.dce(ir, out_used=mask)
+    assert [e.prim for e in dced.eqns] == [order.fanout_p]
     assert [len(branch.eqns) for branch in dced.eqns[0].params["irs"]] == list(map(int, mask))
     assert dced.call("X") == expected
 
 
 def test_removes_fanout_with_unused_outputs():
-    ir = af.sched(af.trace(paired_outputs)("x"))
-    dced = af.dce(ir, out_used=(False, False))
+    ir = order.sched(stage.trace(paired_outputs)("x"))
+    dced = dead.dce(ir, out_used=(False, False))
     assert len(dced.eqns) == 0
     assert dced.call("X") == (None, None)
 
 
 def test_mask_shared_dependency():
     def program(x):
-        shared = af.string.concat(x, "shared")
-        return af.string.concat(shared, "a"), af.string.concat(shared, "b")
+        shared = string.concat(x, "shared")
+        return string.concat(shared, "a"), string.concat(shared, "b")
 
-    dced = af.dce(af.trace(program)("x"), out_used=(True, False))
+    dced = dead.dce(stage.trace(program)("x"), out_used=(True, False))
     assert len(dced.eqns) == 2
     assert dced.call("x") == ("xshareda", None)
 
 
 def test_batched_output_masks():
-    inner = af.trace(pair_with_dead)("x")
-    ir = af.batch(inner)
-    dced = af.dce(ir, out_used=(True, True))
+    inner = stage.trace(pair_with_dead)("x")
+    ir = axis.batch(inner)
+    dced = dead.dce(ir, out_used=(True, True))
     nested = dced.eqns[0].params["ir"]
     assert len(inner.eqns) == 3
     assert len(nested.eqns) == 2
@@ -355,9 +361,9 @@ def test_batched_output_masks():
 
 
 def test_switch_output_masks():
-    inner = af.trace(pair_with_dead)("x")
-    ir = af.trace(lambda x: af.switch("a", {"a": inner, "b": inner}, x))("x")
-    dced = af.dce(ir, out_used=(True, True))
+    inner = stage.trace(pair_with_dead)("x")
+    ir = stage.trace(lambda x: control.switch("a", {"a": inner, "b": inner}, x))("x")
+    dced = dead.dce(ir, out_used=(True, True))
     nested = dced.eqns[0].params["branches"]["a"]
     assert len(inner.eqns) == 3
     assert len(nested.eqns) == 2
@@ -365,246 +371,246 @@ def test_switch_output_masks():
 
 
 def test_unused_fanout_structured_branch():
-    live = af.trace(lambda x: af.string.concat(x, "!"))("x")
-    dead = af.trace(lambda x: (af.string.concat(x, "a"), af.string.concat(x, "b")))("x")
+    live = stage.trace(lambda x: string.concat(x, "!"))("x")
+    dead_ir = stage.trace(lambda x: (string.concat(x, "a"), string.concat(x, "b")))("x")
 
     def program(x):
-        result = af.switch("live", {"live": live}, x)
-        af.switch("dead", {"dead": dead}, x)
+        result = control.switch("live", {"live": live}, x)
+        control.switch("dead", {"dead": dead_ir}, x)
         return result
 
-    dced = af.dce(af.sched(af.trace(program)("x")))
+    dced = dead.dce(order.sched(stage.trace(program)("x")))
     assert dced.call("X") == "X!"
     inner = dced.eqns[0].params["irs"][1]
     assert not inner.eqns
-    assert all(leaf is None for leaf in af.utils.tree.leaves(inner.out_tree))
+    assert all(leaf is None for leaf in utils.tree.leaves(inner.out_tree))
 
 
 def test_schedule_after_dce():
     def program(x):
-        a = af.string.format("[{x}]", x=x)
-        b = af.string.format("<{x}>", x=x)
-        c = af.string.concat(a, b)
-        af.string.format("dead: {x}", x=x)
+        a = string.format("[{x}]", x=x)
+        b = string.format("<{x}>", x=x)
+        c = string.concat(a, b)
+        string.format("dead: {x}", x=x)
         return c
 
-    ir = af.trace(program)("x")
-    result = af.sched(af.dce(ir))
+    ir = stage.trace(program)("x")
+    result = order.sched(dead.dce(ir))
     assert result.call("test") == "[test]<test>"
-    assert [e.prim for e in result.eqns] == [fanout_p, af.string.concat_p]
+    assert [e.prim for e in result.eqns] == [order.fanout_p, string.concat_p]
 
 
 def test_dce_after_schedule():
     def program(x):
-        a = af.string.format("[{x}]", x=x)
-        b = af.string.format("<{x}>", x=x)
-        c = af.string.concat(a, b)
-        af.string.format("dead: {x}", x=c)
+        a = string.format("[{x}]", x=x)
+        b = string.format("<{x}>", x=x)
+        c = string.concat(a, b)
+        string.format("dead: {x}", x=c)
         return c
 
-    ir = af.trace(program)("x")
-    result = af.dce(af.sched(ir))
+    ir = stage.trace(program)("x")
+    result = dead.dce(order.sched(ir))
     assert result.call("test") == "[test]<test>"
-    assert [e.prim for e in result.eqns] == [fanout_p, af.string.concat_p]
+    assert [e.prim for e in result.eqns] == [order.fanout_p, string.concat_p]
 
 
 def test_preserves_checkpoint():
     def program(x):
-        af.checkpoint(x, key="save", collection="cache")
+        intercept.checkpoint(x, key="save", collection="cache")
         return x
 
-    dced = af.dce(af.trace(program)("test"))
+    dced = dead.dce(stage.trace(program)("test"))
     assert len(dced.eqns) == 1
-    assert dced.eqns[-1].prim is checkpoint_p
+    assert dced.eqns[-1].prim is intercept.checkpoint_p
     assert dced.eqns[-1].params["key"] == "save"
-    with af.collect(collection="cache") as saved:
+    with intercept.collect(collection="cache") as saved:
         assert dced.call("test") == "test"
     assert saved == {"save": ["test"]}
 
 
 def test_preserves_checkpoint_input():
     def program(x):
-        value = af.string.concat(x, "!")
-        af.checkpoint(value, key="save", collection="cache")
+        value = string.concat(x, "!")
+        intercept.checkpoint(value, key="save", collection="cache")
         return x
 
-    dced = af.dce(af.trace(program)("test"))
+    dced = dead.dce(stage.trace(program)("test"))
     assert len(dced.eqns) == 2
-    assert dced.eqns[-1].prim is checkpoint_p
+    assert dced.eqns[-1].prim is intercept.checkpoint_p
     assert dced.eqns[-1].params["key"] == "save"
-    with af.collect(collection="cache") as saved:
+    with intercept.collect(collection="cache") as saved:
         assert dced.call("test") == "test"
     assert saved == {"save": ["test!"]}
 
 
 def test_removes_dead_code_around_checkpoint():
     def program(x):
-        af.string.concat(x, "dead")
-        af.checkpoint(x, key="save", collection="cache")
+        string.concat(x, "dead")
+        intercept.checkpoint(x, key="save", collection="cache")
         return x
 
-    dced = af.dce(af.trace(program)("test"))
+    dced = dead.dce(stage.trace(program)("test"))
     assert len(dced.eqns) == 1
-    assert dced.eqns[-1].prim is checkpoint_p
+    assert dced.eqns[-1].prim is intercept.checkpoint_p
     assert dced.eqns[-1].params["key"] == "save"
-    with af.collect(collection="cache") as saved:
+    with intercept.collect(collection="cache") as saved:
         assert dced.call("test") == "test"
     assert saved == {"save": ["test"]}
 
 
 def test_preserves_used_dependency():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.string.format("B: {x}", x=x)
-        return af.depends(b, a)
+        a = string.format("A: {x}", x=x)
+        b = string.format("B: {x}", x=x)
+        return order.depends(b, a)
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 2
-    assert sum(e.prim is depends_p for e in dced.eqns) == 1
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 2
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
     assert dced.call("x") == "B: x"
 
 
 def test_removes_unused_dependency():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.string.format("B: {x}", x=x)
-        af.depends(b, a)
-        return af.string.format("C: {x}", x=x)
+        a = string.format("A: {x}", x=x)
+        b = string.format("B: {x}", x=x)
+        order.depends(b, a)
+        return string.format("C: {x}", x=x)
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 1
-    assert sum(e.prim is depends_p for e in dced.eqns) == 0
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 1
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 0
     assert dced.call("x") == "C: x"
 
 
 def test_removes_all_unused_dependencies():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.string.format("B: {x}", x=x)
-        af.depends(b, a)
+        a = string.format("A: {x}", x=x)
+        b = string.format("B: {x}", x=x)
+        order.depends(b, a)
         return x
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 0
-    assert sum(e.prim is depends_p for e in dced.eqns) == 0
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 0
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 0
     assert dced.call("x") == "x"
 
 
 def test_preserves_dependency_chain():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.depends(af.string.format("B: {x}", x=x), a)
-        return af.depends(af.string.format("C: {x}", x=x), b)
+        a = string.format("A: {x}", x=x)
+        b = order.depends(string.format("B: {x}", x=x), a)
+        return order.depends(string.format("C: {x}", x=x), b)
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 3
-    assert sum(e.prim is depends_p for e in dced.eqns) == 2
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 3
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 2
     assert dced.call("x") == "C: x"
 
 
 def test_prunes_dependency_chain():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.depends(af.string.format("B: {x}", x=x), a)
-        af.depends(af.string.format("C: {x}", x=x), b)
+        a = string.format("A: {x}", x=x)
+        b = order.depends(string.format("B: {x}", x=x), a)
+        order.depends(string.format("C: {x}", x=x), b)
         return b
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 2
-    assert sum(e.prim is depends_p for e in dced.eqns) == 1
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 2
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
     assert dced.call("x") == "B: x"
 
 
 def test_preserves_multiple_dependencies():
     def program(x):
-        a = af.string.format("A: {x}", x=x)
-        b = af.string.format("B: {x}", x=x)
-        return af.depends(af.string.format("C: {x}", x=x), a, b)
+        a = string.format("A: {x}", x=x)
+        b = string.format("B: {x}", x=x)
+        return order.depends(string.format("C: {x}", x=x), a, b)
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 3
-    assert sum(e.prim is depends_p for e in dced.eqns) == 1
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 3
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
     assert dced.call("x") == "C: x"
 
 
 def test_preserves_barrier_without_dependencies():
     def program(x):
-        return af.depends(af.string.format("A: {x}", x=x))
+        return order.depends(string.format("A: {x}", x=x))
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 1
-    assert sum(e.prim is depends_p for e in dced.eqns) == 1
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 1
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
     assert dced.call("x") == "A: x"
 
 
 def test_preserves_checkpoint_dependency():
     def program(x):
-        a = af.checkpoint(x, key="a")
-        return af.depends(af.string.format("B: {x}", x=x), a)
+        a = intercept.checkpoint(x, key="a")
+        return order.depends(string.format("B: {x}", x=x), a)
 
-    dced = af.dce(af.trace(program)("x"))
-    assert sum(e.prim is af.string.concat_p for e in dced.eqns) == 1
-    assert sum(e.prim is depends_p for e in dced.eqns) == 1
-    assert sum(e.prim is checkpoint_p for e in dced.eqns) == 1
+    dced = dead.dce(stage.trace(program)("x"))
+    assert sum(e.prim is string.concat_p for e in dced.eqns) == 1
+    assert sum(e.prim is order.depends_p for e in dced.eqns) == 1
+    assert sum(e.prim is intercept.checkpoint_p for e in dced.eqns) == 1
     assert dced.call("x") == "B: x"
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_partial_pullback_preserves_cotangent_structure(executor):
-    ir = af.trace(lambda x: (af.string.concat(x, "!"), af.string.concat(x, "?")))("x")
-    pb = af.pullback(ir)
-    dced = af.dce(pb, out_used=((True, False), (False,)))
+    ir = stage.trace(lambda x: (string.concat(x, "!"), string.concat(x, "?")))("x")
+    pb = ad.pullback(ir)
+    dced = dead.dce(pb, out_used=((True, False), (False,)))
     args = (("x",), ("g", "h"))
     expected = pb.call(*args)
 
     assert executor(dced, *args) == expected
-    assert executor(af.dce(dced), *args) == expected
+    assert executor(dead.dce(dced), *args) == expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_partial_fanout_composes_with_dce_and_batch(executor):
-    ir = af.sched(af.trace(lambda x: (af.string.concat(x, "!"), af.string.concat(x, "?")))("x"))
-    dced = af.dce(ir, out_used=(True, False))
+    ir = order.sched(stage.trace(lambda x: (string.concat(x, "!"), string.concat(x, "?")))("x"))
+    dced = dead.dce(ir, out_used=(True, False))
 
     assert executor(dced, "x") == ("x!", None)
-    assert executor(af.dce(dced), "x") == ("x!", None)
-    batched = af.batch(dced)
+    assert executor(dead.dce(dced), "x") == ("x!", None)
+    batched = axis.batch(dced)
     assert executor(batched, ["x", "y"]) == (["x!", "y!"], None)
     assert ir.call("x") == ("x!", "x?")
 
 
 def test_partial_fanout_masks_nested_outputs():
-    inner = af.trace(lambda x: (x, af.string.concat(x, "!")))("x")
-    ir = af.trace(lambda x: af.order.fanout_p.bind([(x,)], irs=[inner]))("x")
-    dced = af.dce(ir, out_used=[(False, True)])
+    inner = stage.trace(lambda x: (x, string.concat(x, "!")))("x")
+    ir = stage.trace(lambda x: order.fanout_p.bind([(x,)], irs=[inner]))("x")
+    dced = dead.dce(ir, out_used=[(False, True)])
 
-    assert af.dce(dced).call("x") == [(None, "x!")]
+    assert dead.dce(dced).call("x") == [(None, "x!")]
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_partial_switch_keeps_branch_outputs_consistent(executor):
     branches = {
-        "a": af.trace(lambda x: (af.string.concat(x, "!"), x))("x"),
-        "b": af.trace(lambda x: (af.string.concat(x, "?"), af.string.concat(x, ".")))("x"),
+        "a": stage.trace(lambda x: (string.concat(x, "!"), x))("x"),
+        "b": stage.trace(lambda x: (string.concat(x, "?"), string.concat(x, ".")))("x"),
     }
-    ir = af.trace(lambda key, x: af.switch(key, branches, x))("a", "x")
-    dced = af.dce(ir, out_used=(True, False))
+    ir = stage.trace(lambda key, x: control.switch(key, branches, x))("a", "x")
+    dced = dead.dce(ir, out_used=(True, False))
 
     assert executor(dced, "a", "x") == ("x!", None)
-    assert executor(af.dce(dced), "b", "x") == ("x?", None)
-    batched = af.batch(dced)
+    assert executor(dead.dce(dced), "b", "x") == ("x?", None)
+    batched = axis.batch(dced)
     assert executor(batched, ["a", "b"], ["x", "y"]) == (["x!", "y?"], None)
     assert ir.call("b", "x") == ("x?", "x.")
 
 
 def test_partial_switch_keeps_shared_dependencies():
     def branch(x):
-        shared = af.string.concat(x, "!")
-        return af.string.concat(shared, "?"), shared
+        shared = string.concat(x, "!")
+        return string.concat(shared, "?"), shared
 
-    branch_ir = af.trace(branch)("x")
-    ir = af.trace(lambda x: af.switch("a", {"a": branch_ir}, x))("x")
-    dced = af.dce(ir, out_used=(True, False))
+    branch_ir = stage.trace(branch)("x")
+    ir = stage.trace(lambda x: control.switch("a", {"a": branch_ir}, x))("x")
+    dced = dead.dce(ir, out_used=(True, False))
 
     assert dced.call("x") == ("x!?", None)
 
@@ -613,48 +619,48 @@ def test_partial_switch_keeps_shared_dependencies():
 @pytest.mark.parametrize(
     "transform, args",
     [
-        pytest.param(af.batch, (["x"],), id="batch"),
-        pytest.param(af.pushforward, (("x",), ("t",)), id="pushforward"),
-        pytest.param(af.weight, ("x",), id="weight"),
+        pytest.param(axis.batch, (["x"],), id="batch"),
+        pytest.param(ad.pushforward, (("x",), ("t",)), id="pushforward"),
+        pytest.param(path.weight, ("x",), id="weight"),
     ],
 )
 def test_unused_wrapper_keeps_checkpoint(executor, transform, args):
-    wrapped = transform(af.trace(checkpoint_then_bang)("x"))
+    wrapped = transform(stage.trace(checkpoint_then_bang)("x"))
 
     def program(*xs):
         wrapped.call(*xs)
         return "done"
 
-    ir = af.trace(program)(*args)
-    with af.collect(collection="cache") as expected:
+    ir = stage.trace(program)(*args)
+    with intercept.collect(collection="cache") as expected:
         executor(ir, *args)
     assert expected
-    dced = af.dce(ir)
+    dced = dead.dce(ir)
     assert len(dced.eqns[0].params["ir"].eqns) == 1
     assert len(wrapped.eqns[0].params["ir"].eqns) == 2
-    for candidate in (dced, af.dce(dced)):
-        with af.collect(collection="cache") as saved:
+    for candidate in (dced, dead.dce(dced)):
+        with intercept.collect(collection="cache") as saved:
             assert executor(candidate, *args) == "done"
         assert saved == expected
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_unused_pullback_keeps_checkpoint(executor):
-    wrapped = af.pullback(af.trace(checkpoint_then_bang)("x"))
+    wrapped = ad.pullback(stage.trace(checkpoint_then_bang)("x"))
 
     def program(*xs):
         wrapped.call(*xs)
         return "done"
 
     args = (("x",), "g")
-    ir = af.trace(program)(*args)
-    with af.collect(collection="cache") as expected:
+    ir = stage.trace(program)(*args)
+    with intercept.collect(collection="cache") as expected:
         executor(ir, *args)
     assert expected
-    dced = af.dce(ir)
+    dced = dead.dce(ir)
     assert len(wrapped.eqns[0].params["ir"].eqns) == 2
-    for candidate in (dced, af.dce(dced)):
-        with af.collect(collection="cache") as saved:
+    for candidate in (dced, dead.dce(dced)):
+        with intercept.collect(collection="cache") as saved:
             assert executor(candidate, *args) == "done"
         assert saved == expected
 
@@ -662,15 +668,15 @@ def test_unused_pullback_keeps_checkpoint(executor):
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_partial_batch_keeps_checkpoint_and_live_output(executor):
     def save(x):
-        af.checkpoint(x, key="save", collection="cache")
-        return af.string.concat(x, "!"), af.string.concat(x, "?")
+        intercept.checkpoint(x, key="save", collection="cache")
+        return string.concat(x, "!"), string.concat(x, "?")
 
-    ir = af.batch(af.trace(save)("x"))
-    dced = af.dce(ir, out_used=(True, False))
+    ir = axis.batch(stage.trace(save)("x"))
+    dced = dead.dce(ir, out_used=(True, False))
     assert dced.eqns[0].out_tree[0] is ir.eqns[0].out_tree[0]
     assert len(dced.eqns[0].params["ir"].eqns) == 2
-    for candidate in (dced, af.dce(dced)):
-        with af.collect(collection="cache") as saved:
+    for candidate in (dced, dead.dce(dced)):
+        with intercept.collect(collection="cache") as saved:
             assert executor(candidate, ["x"]) == (["x!"], None)
             assert executor(candidate, ["y"]) == (["y!"], None)
         assert saved == {"save": ["x", "y"]}
@@ -678,10 +684,10 @@ def test_partial_batch_keeps_checkpoint_and_live_output(executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_unused_switch_keeps_checkpoint(executor):
-    dced = af.dce(unused_checkpoint_switch_ir())
+    dced = dead.dce(unused_checkpoint_switch_ir())
     assert len(dced.eqns[-1].params["branches"]["a"].eqns) == 1
-    for candidate in (dced, af.dce(dced)):
-        with af.collect(collection="cache") as saved:
+    for candidate in (dced, dead.dce(dced)):
+        with intercept.collect(collection="cache") as saved:
             assert executor(candidate, "x") == "x"
             assert executor(candidate, "y") == "y"
         assert saved == {"save": ["x!", "y!"]}
@@ -689,9 +695,9 @@ def test_unused_switch_keeps_checkpoint(executor):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_unused_scheduled_switch_keeps_checkpoint(executor):
-    dced = af.dce(af.sched(unused_checkpoint_switch_ir()))
-    for candidate in (dced, af.dce(dced)):
-        with af.collect(collection="cache") as saved:
+    dced = dead.dce(order.sched(unused_checkpoint_switch_ir()))
+    for candidate in (dced, dead.dce(dced)):
+        with intercept.collect(collection="cache") as saved:
             assert executor(candidate, "x") == "x"
             assert executor(candidate, "y") == "y"
         assert saved == {"save": ["x!", "y!"]}

@@ -24,8 +24,6 @@ from typing import Any, cast
 import optree.pytree
 from optree import PyTreeSpec
 
-__all__ = ["PYTREE_NAMESPACE", "tree", "tree_equal", "batch_index", "batch_spec", "batch_transpose"]
-
 
 def strict_zip(*iterables):
     return builtins.zip(*iterables, strict=True)

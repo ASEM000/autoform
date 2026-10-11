@@ -54,7 +54,7 @@ def impl_lookup(query: str, /) -> str:
 
 def abstract_lookup(query, /):
     del query
-    return af.string.StrAVal()
+    return af.extend.StrAVal()
 
 
 afe.register_impl(lookup_p, impl_lookup)

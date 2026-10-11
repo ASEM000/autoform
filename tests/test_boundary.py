@@ -14,55 +14,60 @@
 
 import pytest
 
-import autoform as af
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.boundary as boundary
+import autoform.src.core as core
+import autoform.src.stage as stage
+import autoform.src.string as string
 from tests import aexecute, execute
 
 
 class TestCustomFunction:
     def test_traced_call_composes_with_primitives(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
-        ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
+        ir = stage.trace(lambda x: string.concat(bracket(x), "!"))("seed")
         assert ir.call("hello") == "[hello]!"
 
     def test_direct_call_behaves_like_function(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         assert bracket("hello") == "[hello]"
 
     def test_undefined_pushforward_falls_back_to_body_ir(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        out, t = af.pushforward(ir).call(("hello",), ("change",))
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        out, t = ad.pushforward(ir).call(("hello",), ("change",))
 
         assert out == "[hello]"
         assert t == "change"
 
     def test_undefined_pullback_falls_back_to_body_ir(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        out, c = af.pullback(ir).call(("hello",), "feedback")
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        out, c = ad.pullback(ir).call(("hello",), "feedback")
 
         assert out == "[hello]"
         assert c == ("feedback",)
 
     def test_undefined_batch_falls_back_to_body_ir(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        batched = af.batch(ir)
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        batched = axis.batch(ir)
 
         assert batched.call(["a", "b"]) == ["[a]", "[b]"]
 
@@ -73,12 +78,12 @@ class TestCustomPushforward:
             return x.upper()
 
         with pytest.raises(AttributeError):
-            af.trace(lambda x: python_only_upper(x))("seed")
+            stage.trace(lambda x: python_only_upper(x))("seed")
 
-        @af.custom
+        @boundary.custom
         def pair_program(x, y):
-            left = af.string.format("left {x}", x=x)
-            right = af.string.concat(y, "!")
+            left = string.format("left {x}", x=x)
+            right = string.concat(y, "!")
             return left, right
 
         @pair_program.set_pushforward
@@ -95,28 +100,28 @@ class TestCustomPushforward:
                 python_only_upper(dy),
             )
 
-        ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
-        out, t = af.pushforward(ir).call(("hello", "world"), ("small", "change"))
+        ir = stage.trace(lambda x, y: pair_program(x, y))("x", "y")
+        out, t = ad.pushforward(ir).call(("hello", "world"), ("small", "change"))
 
         assert out == ("HELLO", "WORLD")
         assert t == ("SMALL", "CHANGE")
 
     def test_custom_pushforward_rule_matches_mapping_signature(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
             p, t = in_tree
             (dx,) = t
-            return call(*p), af.string.format(
+            return call(*p), string.format(
                 "custom delta: {value}",
-                value=af.core.materialize_zeros(dx),
+                value=core.materialize_zeros(dx),
             )
 
-        ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
-        out, t = af.pushforward(ir).call(("hello",), ("small change",))
+        ir = stage.trace(lambda x: string.concat(bracket(x), "!"))("seed")
+        out, t = ad.pushforward(ir).call(("hello",), ("small change",))
 
         assert out == "[hello]!"
         assert t == "custom delta: small change"
@@ -129,38 +134,38 @@ class TestCustomPushforward:
         ],
     )
     def test_aset_pushforward_dispatches_by_executor(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.aset_pushforward
         async def bracket_pushforward(in_tree, /, *, call):
             p, t = in_tree
             (dx,) = t
-            return call(*p), af.string.format(
+            return call(*p), string.format(
                 "async delta: {value}",
-                value=af.core.materialize_zeros(dx),
+                value=core.materialize_zeros(dx),
             )
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        out, t = executor(af.pushforward(ir), ("hello",), ("change",))
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        out, t = executor(ad.pushforward(ir), ("hello",), ("change",))
 
         assert out == "[hello]"
         assert t == expected
 
     def test_set_pushforward_replaces_default_rule(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
             p, t = in_tree
             (dx,) = t
-            return call(*p), af.string.format("push {value}", value=af.core.materialize_zeros(dx))
+            return call(*p), string.format("push {value}", value=core.materialize_zeros(dx))
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        _, t = af.pushforward(ir).call(("hello",), ("change",))
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        _, t = ad.pushforward(ir).call(("hello",), ("change",))
 
         assert t == "push change"
 
@@ -172,21 +177,21 @@ class TestCustomPushforward:
         ],
     )
     def test_set_pushforward_dispatches_by_executor(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_pushforward
         def bracket_pushforward(in_tree, /, *, call):
             p, t = in_tree
             (dx,) = t
-            return call(*p), af.string.format(
+            return call(*p), string.format(
                 "sync push {value}",
-                value=af.core.materialize_zeros(dx),
+                value=core.materialize_zeros(dx),
             )
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        _, t = executor(af.pushforward(ir), ("hello",), ("change",))
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        _, t = executor(ad.pushforward(ir), ("hello",), ("change",))
 
         assert t == expected
 
@@ -197,12 +202,12 @@ class TestCustomPullback:
             return x.lower()
 
         with pytest.raises(AttributeError):
-            af.trace(lambda x: python_only_lower(x))("seed")
+            stage.trace(lambda x: python_only_lower(x))("seed")
 
-        @af.custom
+        @boundary.custom
         def pair_program(x, y):
-            left = af.string.format("left {x}", x=x)
-            right = af.string.concat(y, "!")
+            left = string.format("left {x}", x=x)
+            right = string.concat(y, "!")
             return left, right
 
         @pair_program.set_pullback
@@ -217,16 +222,16 @@ class TestCustomPullback:
                 f"{python_only_lower(y)} <- {python_only_lower(out_right)} <- {c_right}",
             )
 
-        ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
-        out, c = af.pullback(ir).call(("HELLO", "WORLD"), ("L", "R"))
+        ir = stage.trace(lambda x, y: pair_program(x, y))("x", "y")
+        out, c = ad.pullback(ir).call(("HELLO", "WORLD"), ("L", "R"))
 
         assert out == ("left HELLO", "WORLD!")
         assert c == ("hello <- left hello <- L", "world <- world! <- R")
 
     def test_custom_pullback_rule_uses_mlx_argument_order(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
@@ -234,7 +239,7 @@ class TestCustomPullback:
             (p, output), c = in_tree
             (x,) = p
             return (
-                af.string.format(
+                string.format(
                     "{cotangent} via {output} from {x}",
                     cotangent=c,
                     output=output,
@@ -242,8 +247,8 @@ class TestCustomPullback:
                 ),
             )
 
-        ir = af.trace(lambda x: af.string.concat(bracket(x), "!"))("seed")
-        out, c = af.pullback(ir).call(("hello",), "feedback")
+        ir = stage.trace(lambda x: string.concat(bracket(x), "!"))("seed")
+        out, c = ad.pullback(ir).call(("hello",), "feedback")
 
         assert out == "[hello]!"
         assert c == ("feedback via [hello] from hello",)
@@ -256,9 +261,9 @@ class TestCustomPullback:
         ],
     )
     def test_aset_pullback_dispatches_by_executor(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.aset_pullback
         async def bracket_pullback(in_tree, /, *, call):
@@ -266,33 +271,33 @@ class TestCustomPullback:
             (p, output), c = in_tree
             del p
             return (
-                af.string.format(
+                string.format(
                     "async {cotangent} via {output}",
                     cotangent=c,
                     output=output,
                 ),
             )
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        out, c = executor(af.pullback(ir), ("hello",), "feedback")
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        out, c = executor(ad.pullback(ir), ("hello",), "feedback")
 
         assert out == "[hello]"
         assert c == expected
 
     def test_set_pullback_replaces_default_rule(self):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
             del call
             (p, output), c = in_tree
             del p
-            return (af.string.format("pull {output} {cotangent}", output=output, cotangent=c),)
+            return (string.format("pull {output} {cotangent}", output=output, cotangent=c),)
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        _, c = af.pullback(ir).call(("hello",), "feedback")
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        _, c = ad.pullback(ir).call(("hello",), "feedback")
 
         assert c == ("pull [hello] feedback",)
 
@@ -304,9 +309,9 @@ class TestCustomPullback:
         ],
     )
     def test_set_pullback_dispatches_by_executor(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_pullback
         def bracket_pullback(in_tree, /, *, call):
@@ -314,15 +319,15 @@ class TestCustomPullback:
             (p, output), c = in_tree
             del p
             return (
-                af.string.format(
+                string.format(
                     "sync pull {output} {cotangent}",
                     output=output,
                     cotangent=c,
                 ),
             )
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        _, c = executor(af.pullback(ir), ("hello",), "feedback")
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        _, c = executor(ad.pullback(ir), ("hello",), "feedback")
 
         assert c == expected
 
@@ -333,12 +338,12 @@ class TestCustomBatch:
             return x.title()
 
         with pytest.raises(AttributeError):
-            af.trace(lambda x: python_only_title(x))("seed")
+            stage.trace(lambda x: python_only_title(x))("seed")
 
-        @af.custom
+        @boundary.custom
         def pair_program(x, y):
-            left = af.string.format("left {x}", x=x)
-            right = af.string.concat(y, "!")
+            left = string.format("left {x}", x=x)
+            right = string.concat(y, "!")
             return left, right
 
         @pair_program.set_batch
@@ -355,8 +360,8 @@ class TestCustomBatch:
                 [python_only_title(y) for y in ys],
             ), (True, True)
 
-        ir = af.trace(lambda x, y: pair_program(x, y))("x", "y")
-        batched = af.batch(ir)
+        ir = stage.trace(lambda x, y: pair_program(x, y))("x", "y")
+        batched = axis.batch(ir)
 
         assert batched.call(["hello", "goodbye"], ["world", "moon"]) == (
             ["Hello", "Goodbye"],
@@ -376,9 +381,9 @@ class TestCustomBatch:
         ],
     )
     def test_custom_batch_rule(self, template, expected_a, expected_b):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_batch
         def bracket_batch(in_tree, /, *, call):
@@ -388,10 +393,10 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return ([af.string.format(template, x=x) for x in xs], True)
+            return ([string.format(template, x=x) for x in xs], True)
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        batched = af.batch(ir)
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        batched = axis.batch(ir)
         assert batched.call(["a", "b"]) == [expected_a, expected_b]
 
     @pytest.mark.parametrize(
@@ -402,9 +407,9 @@ class TestCustomBatch:
         ],
     )
     def test_aset_batch_dispatches_by_executor(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.aset_batch
         async def bracket_batch(in_tree, /, *, call):
@@ -414,10 +419,10 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.string.format("async <{x}>", x=x) for x in xs], True
+            return [string.format("async <{x}>", x=x) for x in xs], True
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        batched = af.batch(ir)
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        batched = axis.batch(ir)
 
         assert executor(batched, ["a", "b"]) == expected
 
@@ -429,9 +434,9 @@ class TestCustomBatch:
         ],
     )
     def test_set_batch_dispatches_by_executor(self, executor, expected):
-        @af.custom
+        @boundary.custom
         def bracket(x):
-            return af.string.format("[{x}]", x=x)
+            return string.format("[{x}]", x=x)
 
         @bracket.set_batch
         def bracket_batch(in_tree, /, *, call):
@@ -441,9 +446,9 @@ class TestCustomBatch:
             (xs,) = values
             (x_axis,) = axes
             assert x_axis is True
-            return [af.string.format("sync batch <{x}>", x=x) for x in xs], True
+            return [string.format("sync batch <{x}>", x=x) for x in xs], True
 
-        ir = af.trace(lambda x: bracket(x))("seed")
-        batched = af.batch(ir)
+        ir = stage.trace(lambda x: bracket(x))("seed")
+        batched = axis.batch(ir)
 
         assert executor(batched, ["a", "b"]) == expected

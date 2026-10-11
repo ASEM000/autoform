@@ -25,9 +25,9 @@ from contextvars import ContextVar
 from enum import Enum
 from typing import Any, ClassVar, Self, TypeGuard, cast
 
-import autoform.check as check
-import autoform.core as core
-import autoform.utils as utils
+import autoform.src.check as check
+import autoform.src.core as core
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 

@@ -16,8 +16,8 @@
 
 from __future__ import annotations
 
-import autoform.core as core
-import autoform.utils as utils
+import autoform.src.core as core
+import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 

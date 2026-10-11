@@ -18,22 +18,29 @@ from types import SimpleNamespace
 
 import pytest
 
-import autoform as af
-from autoform.core import using_interpreter
-from autoform.intercept import checkpoint, checkpoint_p
+import autoform.src.ad as ad
+import autoform.src.axis as axis
+import autoform.src.control as control
+import autoform.src.core as core
+import autoform.src.intercept as intercept
+import autoform.src.lm as lm
+import autoform.src.memo as memo
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.string as string
 from tests import CountingInterpreter, aexecute, append_bang, execute
 
 
 @pytest.fixture
 def checkpoint_switch():
-    branch = af.trace(lambda x: checkpoint(x, key="save", collection="cache"))("x")
-    return af.trace(lambda x: af.switch("a", {"a": branch}, x))("x")
+    branch = stage.trace(lambda x: intercept.checkpoint(x, key="save", collection="cache"))("x")
+    return stage.trace(lambda x: control.switch("a", {"a": branch}, x))("x")
 
 
 def distinct_checkpoints(x):
-    a = checkpoint(x, key="first", collection="debug")
-    b = checkpoint(x, key="second", collection="debug")
-    return af.string.concat(a, b)
+    a = intercept.checkpoint(x, key="first", collection="debug")
+    b = intercept.checkpoint(x, key="second", collection="debug")
+    return string.concat(a, b)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -41,12 +48,12 @@ def test_memoize_duplicate_primitives(executor):
     counter = CountingInterpreter()
 
     def program(x):
-        a = af.string.concat(x, "!")
-        b = af.string.concat(x, "!")
-        return af.string.concat(a, b)
+        a = string.concat(x, "!")
+        b = string.concat(x, "!")
+        return string.concat(a, b)
 
-    ir = af.trace(program)("test")
-    with using_interpreter(counter), af.memoize():
+    ir = stage.trace(program)("test")
+    with core.using_interpreter(counter), memo.memoize():
         actual = executor(ir, "hello")
         assert actual == "hello!hello!"
     assert counter.calls == 2
@@ -54,19 +61,21 @@ def test_memoize_duplicate_primitives(executor):
 
 def test_memoize_scope():
     counter = CountingInterpreter()
-    ir = af.trace(append_bang)("test")
-    with using_interpreter(counter):
+    ir = stage.trace(append_bang)("test")
+    with core.using_interpreter(counter):
         for _ in range(2):
-            with af.memoize():
+            with memo.memoize():
                 assert ir.call("hello") == "hello!"
     assert counter.calls == 2
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-@pytest.mark.parametrize("transform", [lambda ir: ir, af.sched], ids=["switch", "scheduled-switch"])
+@pytest.mark.parametrize(
+    "transform", [lambda ir: ir, order.sched], ids=["switch", "scheduled-switch"]
+)
 def test_memoize_preserves_nested_checkpoints(executor, checkpoint_switch, transform):
     ir = transform(checkpoint_switch)
-    with af.collect(collection="cache") as saved, af.memoize():
+    with intercept.collect(collection="cache") as saved, memo.memoize():
         for _ in range(4):
             assert executor(ir, "x") == "x"
     assert saved == {"save": ["x"] * 4}
@@ -74,35 +83,41 @@ def test_memoize_preserves_nested_checkpoints(executor, checkpoint_switch, trans
 
 def test_memoize_trace_preserves_nested_checkpoints(checkpoint_switch):
     def program(x):
-        with af.memoize():
+        with memo.memoize():
             return checkpoint_switch.call(x), checkpoint_switch.call(x)
 
-    ir = af.trace(program)("x")
-    with af.collect(collection="cache") as saved:
+    ir = stage.trace(program)("x")
+    with intercept.collect(collection="cache") as saved:
         assert ir.call("x") == ("x", "x")
     assert saved == {"save": ["x", "x"]}
 
 
 def test_memoize_preserves_distinct_checkpoints():
-    ir = af.trace(distinct_checkpoints)("test")
-    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is checkpoint_p] == ["first", "second"]
-    with af.collect(collection="debug") as saved, af.memoize():
+    ir = stage.trace(distinct_checkpoints)("test")
+    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is intercept.checkpoint_p] == [
+        "first",
+        "second",
+    ]
+    with intercept.collect(collection="debug") as saved, memo.memoize():
         assert ir.call("hi") == "hihi"
     assert saved == {"first": ["hi"], "second": ["hi"]}
 
 
 def test_memoize_trace_preserves_distinct_checkpoints():
-    with af.memoize():
-        ir = af.trace(distinct_checkpoints)("test")
-    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is checkpoint_p] == ["first", "second"]
-    with af.collect(collection="debug") as saved:
+    with memo.memoize():
+        ir = stage.trace(distinct_checkpoints)("test")
+    assert [eqn.params["key"] for eqn in ir.eqns if eqn.prim is intercept.checkpoint_p] == [
+        "first",
+        "second",
+    ]
+    with intercept.collect(collection="debug") as saved:
         assert ir.call("hi") == "hihi"
     assert saved == {"first": ["hi"], "second": ["hi"]}
 
 
 def test_memoize_preserves_repeated_checkpoint():
-    ir = af.trace(lambda x: checkpoint(x, key="val", collection="debug"))("test")
-    with af.collect(collection="debug") as saved, af.memoize():
+    ir = stage.trace(lambda x: intercept.checkpoint(x, key="val", collection="debug"))("test")
+    with intercept.collect(collection="debug") as saved, memo.memoize():
         assert ir.call("hello") == ir.call("hello") == "hello"
     assert saved == {"val": ["hello", "hello"]}
 
@@ -127,7 +142,7 @@ def test_memoize_preserves_repeated_checkpoint():
             id="different-input",
         ),
         pytest.param(
-            af.batch,
+            axis.batch,
             (["a", "b"],),
             (["a", "b"],),
             (["a!", "b!"], ["a!", "b!"]),
@@ -135,7 +150,7 @@ def test_memoize_preserves_repeated_checkpoint():
             id="batch-cache-hit",
         ),
         pytest.param(
-            af.pushforward,
+            ad.pushforward,
             (("primal",), ("tangent",)),
             (("primal",), ("tangent",)),
             (("primal!", "tangent"), ("primal!", "tangent")),
@@ -143,7 +158,7 @@ def test_memoize_preserves_repeated_checkpoint():
             id="pushforward-cache-hit",
         ),
         pytest.param(
-            af.pullback,
+            ad.pullback,
             (("primal",), "cotangent"),
             (("primal",), "cotangent"),
             (("primal!", ("cotangent",)), ("primal!", ("cotangent",))),
@@ -151,7 +166,7 @@ def test_memoize_preserves_repeated_checkpoint():
             id="pullback-cache-hit",
         ),
         pytest.param(
-            af.batch,
+            axis.batch,
             (["a", "b"],),
             (["c", "d"],),
             (["a!", "b!"], ["c!", "d!"]),
@@ -162,8 +177,8 @@ def test_memoize_preserves_repeated_checkpoint():
 )
 def test_memoize_transformed_ir(transform, first_args, second_args, expected, misses):
     counter = CountingInterpreter()
-    ir = transform(af.trace(append_bang)("test"))
-    with using_interpreter(counter), af.memoize():
+    ir = transform(stage.trace(append_bang)("test"))
+    with core.using_interpreter(counter), memo.memoize():
         results = ir.call(*first_args), ir.call(*second_args)
     assert results == expected
     assert counter.calls == misses
@@ -194,17 +209,17 @@ def waiting_client():
 
 
 def fill_text(x, *, model="m1"):
-    return af.lm.fill({"prompt": x, "output": af.lm.Str()}, model=model)["output"]
+    return lm.fill({"prompt": x, "output": lm.Str()}, model=model)["output"]
 
 
 @pytest.mark.parametrize(
     "transform, args, model, expected, misses",
     [
-        pytest.param(af.sched, ("x", "x"), "m1", ("m1|x", "m1|x"), 1, id="scheduled-duplicates"),
-        pytest.param(af.sched, ("x", "y"), "m1", ("m1|x", "m1|y"), 2, id="different-inputs"),
-        pytest.param(af.sched, ("x", "x"), "m2", ("m1|x", "m2|x"), 2, id="different-models"),
+        pytest.param(order.sched, ("x", "x"), "m1", ("m1|x", "m1|x"), 1, id="scheduled-duplicates"),
+        pytest.param(order.sched, ("x", "y"), "m1", ("m1|x", "m1|y"), 2, id="different-inputs"),
+        pytest.param(order.sched, ("x", "x"), "m2", ("m1|x", "m2|x"), 2, id="different-models"),
         pytest.param(
-            af.batch,
+            axis.batch,
             (["x", "x"], ["x", "x"]),
             "m1",
             (["m1|x", "m1|x"], ["m1|x", "m1|x"]),
@@ -214,10 +229,10 @@ def fill_text(x, *, model="m1"):
     ],
 )
 def test_memoize_concurrent_fill(transform, args, model, expected, misses, waiting_client):
-    ir = transform(af.trace(lambda x, y: (fill_text(x), fill_text(y, model=model)))("x", "y"))
+    ir = transform(stage.trace(lambda x, y: (fill_text(x), fill_text(y, model=model)))("x", "y"))
 
     async def run():
-        with af.lm.client(waiting_client), af.memoize():
+        with lm.client(waiting_client), memo.memoize():
             task = asyncio.create_task(ir.acall(*args))
             await waiting_client.started.wait()
             await asyncio.sleep(0)
@@ -231,10 +246,10 @@ def test_memoize_concurrent_fill(transform, args, model, expected, misses, waiti
 
 
 def test_memoize_concurrent_failure_retries(waiting_client):
-    ir = af.trace(fill_text)("x")
+    ir = stage.trace(fill_text)("x")
 
     async def run():
-        with af.lm.client(waiting_client), af.memoize():
+        with lm.client(waiting_client), memo.memoize():
             first = asyncio.create_task(ir.acall("x"))
             await waiting_client.started.wait()
             second = asyncio.create_task(ir.acall("x"))
@@ -252,10 +267,10 @@ def test_memoize_concurrent_failure_retries(waiting_client):
 
 @pytest.mark.parametrize("cancel_original", [True, False], ids=["original", "duplicate"])
 def test_memoize_concurrent_cancellation(cancel_original, waiting_client):
-    ir = af.trace(fill_text)("x")
+    ir = stage.trace(fill_text)("x")
 
     async def run():
-        with af.lm.client(waiting_client), af.memoize():
+        with lm.client(waiting_client), memo.memoize():
             first = asyncio.create_task(ir.acall("x"))
             await waiting_client.started.wait()
             second = asyncio.create_task(ir.acall("x"))

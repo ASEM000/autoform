@@ -14,13 +14,12 @@
 
 import pytest
 
-import autoform as af
-from autoform.utils import batch_spec, batch_transpose, tree
+import autoform.src.utils as utils
 
 
 @pytest.fixture
 def point_type():
-    @tree.dataclasses.dataclass
+    @utils.tree.dataclasses.dataclass
     class Point:
         x: int
         y: int
@@ -37,7 +36,7 @@ def point_type():
     ],
 )
 def test_batch_size(columns, axes, expected):
-    spec = batch_spec(columns, axes)
+    spec = utils.batch_spec(columns, axes)
     assert (spec.num_children if spec is not None else None) == expected
 
 
@@ -50,7 +49,7 @@ def test_batch_size(columns, axes, expected):
     ],
 )
 def test_tree_equal(right, expected):
-    assert af.utils.tree_equal(("a", ["b", "c"]), right) is expected
+    assert utils.tree_equal(("a", ["b", "c"]), right) is expected
 
 
 @pytest.mark.parametrize(
@@ -72,12 +71,12 @@ def test_tree_equal(right, expected):
     ],
 )
 def test_batch_transpose(rows, axes, expected):
-    assert batch_transpose(len(rows), axes, rows) == expected
+    assert utils.batch_transpose(len(rows), axes, rows) == expected
 
 
 def test_batch_transpose_custom_pytree(point_type):
     point = point_type
-    result = batch_transpose(2, point(True, True), [point(1, 2), point(3, 4)])
+    result = utils.batch_transpose(2, point(True, True), [point(1, 2), point(3, 4)])
     assert result == point([1, 3], [2, 4])
 
 
@@ -97,11 +96,11 @@ def test_batch_transpose_custom_pytree(point_type):
     ],
 )
 def test_batch_spec_container(columns, axes, values, expected):
-    assert batch_spec(columns, axes).unflatten(values) == expected
+    assert utils.batch_spec(columns, axes).unflatten(values) == expected
 
 
 def test_batch_spec_custom_container(point_type):
     point = point_type
     columns = ([point(1, 2), point(3, 4)],)
     values = [point(10, 20), point(30, 40)]
-    assert batch_spec(columns, (True,)).unflatten(values) == values
+    assert utils.batch_spec(columns, (True,)).unflatten(values) == values

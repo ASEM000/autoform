@@ -17,7 +17,11 @@ import os
 
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-import autoform as af
+import autoform.src.control as control
+import autoform.src.core as core
+import autoform.src.order as order
+import autoform.src.stage as stage
+import autoform.src.string as string
 
 
 def execute(ir, *args):
@@ -29,25 +33,25 @@ def aexecute(ir, *args):
 
 
 def prefix_name(prefix, name):
-    return af.string.format("{prefix} {name}", prefix=prefix, name=name)
+    return string.format("{prefix} {name}", prefix=prefix, name=name)
 
 
 def append_bang(x):
-    return af.string.concat(x, "!")
+    return string.concat(x, "!")
 
 
 def bracket_text(x):
-    return af.string.format("[{x}]", x=x)
+    return string.format("[{x}]", x=x)
 
 
 def angle_text(x):
-    return af.string.format("<{x}>", x=x)
+    return string.format("<{x}>", x=x)
 
 
 def dependent_formats(x):
-    a = af.string.format("A: {x}", x=x)
-    b = af.string.format("B: {x}", x=x)
-    return af.depends(b, a)
+    a = string.format("A: {x}", x=x)
+    b = string.format("B: {x}", x=x)
+    return order.depends(b, a)
 
 
 def always_true(x):
@@ -56,37 +60,37 @@ def always_true(x):
 
 def switch_program(branches):
     def program(key, x):
-        return af.switch(key, branches, x)
+        return control.switch(key, branches, x)
 
     return program
 
 
 def while_program(cond_ir, body_ir, *, max_iters):
     def program(init):
-        return af.while_loop(cond_ir, body_ir, init, max_iters=max_iters)
+        return control.while_loop(cond_ir, body_ir, init, max_iters=max_iters)
 
     return program
 
 
 def fixpoint_program(step_ir, **kwargs):
     def program(init, parameter):
-        return af.fixpoint(step_ir, init, parameter, **kwargs)
+        return control.fixpoint(step_ir, init, parameter, **kwargs)
 
     return program
 
 
-class CountingInterpreter(af.core.Interpreter):
+class CountingInterpreter(core.Interpreter):
     def __init__(self):
-        self.parent = af.core.active_interpreter.get()
+        self.parent = core.active_interpreter.get()
         self.calls = 0
 
     def interpret(self, prim, in_tree, /, **params):
-        if not af.stage.no_stage_flag.get():
+        if not stage.no_stage_flag.get():
             self.calls += 1
         return self.parent.interpret(prim, in_tree, **params)
 
     async def ainterpret(self, prim, in_tree, /, **params):
-        if not af.stage.no_stage_flag.get():
+        if not stage.no_stage_flag.get():
             self.calls += 1
         return await self.parent.ainterpret(prim, in_tree, **params)
 
@@ -96,7 +100,7 @@ class Blob:
         self.size = size
 
 
-class BlobAVal(af.core.AVal):
+class BlobAVal(core.AVal):
     __slots__ = ["size"]
 
     def __init__(self, size: int):
@@ -109,4 +113,4 @@ class BlobAVal(af.core.AVal):
         return hash((type(self), self.size))
 
 
-af.core.aval_types[BlobAVal] = lambda aval: aval
+core.aval_types[BlobAVal] = lambda aval: aval
