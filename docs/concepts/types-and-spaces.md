@@ -49,8 +49,8 @@ These definitions let the transform handle unused values and shared inputs witho
 [^symbolic-zeros]: `autoform` can keep zero symbolic until an operation needs a concrete value.
 
 Algebra is a separate capability from the AVal description. Register a callable
-in `afe.algebra_rules`, such as
-`afe.algebra_rules[AValFloat] = lambda aval: AlgebraFloat(aval)`.
+with `afe.register_algebra`, such as
+`afe.register_algebra(AValFloat, lambda aval: AlgebraFloat(aval))`.
 To look up the algebra for an aval, use `afe.algebraof(aval)`. It calls the rule
 for the exact AVal type, so subclasses need their own registration. The returned
 `Algebra` stores the aval at `self.aval`; its `zero()` and `accum(values)` methods

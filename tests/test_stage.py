@@ -183,7 +183,7 @@ class TestBuildIR:
     [
         pytest.param(lambda ir: ir, (["x"],), "No aval rule registered", id="primal"),
         pytest.param(ad.pushforward, (("x",), (["dx"],)), "No aval rule registered", id="tangent"),
-        pytest.param(axis.batch, (["x", 1.0],), "Expected AValStr", id="batch"),
+        pytest.param(axis.batch, (["x", 1.0],), "Expected AValBatch", id="batch"),
     ],
 )
 def test_call_rejects_incompatible_input_aval(executor, transform, args, message):

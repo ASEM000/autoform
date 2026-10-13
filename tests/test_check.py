@@ -86,7 +86,7 @@ class TestCheck:
             interpreter = axis.BatchInterpreter(batch_size=2, parent=pusher)
             x = interpreter.box(([pusher.box(("x", "dx")), pusher.box(("y", 1.0))], True))
         aval = string.AValStr()
-        aval.check(x)
+        assert core.domainof(aval).accepts(x)
         with core.using_interpreter(interpreter):
             with pytest.raises(TypeError, match="Expected AValStr"):
                 check.p_typecheck.bind(x, aval=aval)

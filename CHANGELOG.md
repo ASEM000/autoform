@@ -7,7 +7,7 @@
   - Replaced `autoform.extend.register_zero` and
     `register_cotangent_accumulator` with standalone `Algebra` implementations.
     Register both operations with
-    `algebra_rules[AValType] = lambda aval: AlgebraType(aval)` and access them
+    `register_algebra(AValType, lambda aval: AlgebraType(aval))` and access them
     through `algebraof(aval).zero()` and `algebraof(aval).accum(values)`.
     Registrations remain keyed by exact AVal type; the algebra stores metadata
     through `self.aval`.

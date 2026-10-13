@@ -39,9 +39,10 @@ import autoform.src.utils as utils
 # ==================================================================================================
 
 AVal = core.AVal
+Domain = core.Domain
+domainof = core.domainof
 Algebra = core.Algebra
 algebraof = core.algebraof
-algebra_rules = core.algebra_rules
 AValStr = string.AValStr
 AValInt = numeric.AValInt
 AValFloat = numeric.AValFloat
@@ -156,6 +157,18 @@ def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
 
 def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
     return core.apull_bwd_rules.set(prim, rule)
+
+
+def register_algebra[R: Callable[[AVal], Algebra]](aval_type: type[AVal], rule: R, /) -> R:
+    """Register zero construction and accumulation for an exact AVal type."""
+    core.algebra_rules[aval_type] = rule
+    return rule
+
+
+def register_domain[R: Callable[[AVal], Domain]](aval_type: type[AVal], rule: R, /) -> R:
+    """Register acceptance and joining for an exact AVal type."""
+    core.domain_rules[aval_type] = rule
+    return rule
 
 
 def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
