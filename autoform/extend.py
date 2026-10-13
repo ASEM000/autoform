@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from autoform.src.extend import IR as IR
+from autoform.src.extend import Algebra as Algebra
 from autoform.src.extend import AVal as AVal
 from autoform.src.extend import AValBool as AValBool
 from autoform.src.extend import AValFloat as AValFloat
@@ -29,13 +30,14 @@ from autoform.src.extend import Zero as Zero
 from autoform.src.extend import active_client as active_client
 from autoform.src.extend import active_interpreter as active_interpreter
 from autoform.src.extend import active_tags as active_tags
+from autoform.src.extend import algebra_rules as algebra_rules
+from autoform.src.extend import algebraof as algebraof
 from autoform.src.extend import aval_if_var as aval_if_var
 from autoform.src.extend import avalof as avalof
 from autoform.src.extend import batch_index as batch_index
 from autoform.src.extend import batch_spec as batch_spec
 from autoform.src.extend import batch_transpose as batch_transpose
 from autoform.src.extend import is_var as is_var
-from autoform.src.extend import materialize_zeros as materialize_zeros
 from autoform.src.extend import p_add as p_add
 from autoform.src.extend import p_batch_call as p_batch_call
 from autoform.src.extend import p_checkpoint as p_checkpoint

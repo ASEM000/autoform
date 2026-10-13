@@ -70,6 +70,10 @@ class AValFloat(core.AVal):
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
+
+class AlgebraFloat(core.Algebra):
+    __slots__ = []
+
     def zero(self) -> float:
         return 0.0
 
@@ -77,6 +81,7 @@ class AValFloat(core.AVal):
         return sum(values)
 
 
+core.algebra_rules[AValFloat] = lambda aval: AlgebraFloat(aval)
 core.aval_types[float] = lambda _: AValFloat()
 core.aval_types[AValFloat] = lambda aval: aval
 stage.trace_types.add(float)
@@ -152,7 +157,8 @@ def abstract_neg(in_tree: Tree, /) -> AValFloat:
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    return neg(p), neg(core.materialize_zeros(t))
+    t = core.algebraof(t.aval).zero() if isinstance(t, core.Zero) else t
+    return neg(p), neg(t)
 
 
 def pullback_fwd_neg(in_tree: Tree, /) -> TreePair:
@@ -209,7 +215,8 @@ def abstract_add(in_tree: Tree, /) -> AValFloat:
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    t = core.materialize_zeros(t)
+    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    t = utils.tree.map(zero, t)
     return p_add.bind(p), p_add.bind(t)
 
 
@@ -267,7 +274,8 @@ def abstract_sub(in_tree: Tree, /) -> AValFloat:
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    t = core.materialize_zeros(t)
+    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    t = utils.tree.map(zero, t)
     return p_sub.bind(p), p_sub.bind(t)
 
 
@@ -326,7 +334,8 @@ def abstract_mul(in_tree: Tree, /) -> AValFloat:
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     a, b = p
-    da, db = core.materialize_zeros(t)
+    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    da, db = utils.tree.map(zero, t)
     return mul(a, b), add(mul(da, b), mul(a, db))
 
 
@@ -385,7 +394,8 @@ def abstract_div(in_tree: Tree, /) -> AValFloat:
 def pushforward_div(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     a, b = p
-    da, db = core.materialize_zeros(t)
+    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    da, db = utils.tree.map(zero, t)
     return div(a, b), div(sub(mul(da, b), mul(a, db)), mul(b, b))
 
 

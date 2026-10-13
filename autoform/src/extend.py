@@ -39,6 +39,9 @@ import autoform.src.utils as utils
 # ==================================================================================================
 
 AVal = core.AVal
+Algebra = core.Algebra
+algebraof = core.algebraof
+algebra_rules = core.algebra_rules
 AValStr = string.AValStr
 AValInt = numeric.AValInt
 AValFloat = numeric.AValFloat
@@ -61,7 +64,6 @@ Var = stage.Var
 # HELPERS
 # ==================================================================================================
 
-materialize_zeros = core.materialize_zeros
 batch_index = utils.batch_index
 batch_spec = utils.batch_spec
 batch_transpose = utils.batch_transpose
