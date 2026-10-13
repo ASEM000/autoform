@@ -4,7 +4,15 @@ These classes represent the values and program structure used by extension code:
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal
-   :members: check, zero, accum
+   :members: check
+.. autoclass:: autoform.extend.Algebra
+   :members: zero, accum
+.. autofunction:: autoform.extend.algebraof
+.. py:data:: autoform.extend.algebra_rules
+   :type: dict[type[AVal], Callable[[AVal], Algebra]]
+
+   Registers callables by exact AVal type for zero construction and accumulation.
+
 .. autoclass:: autoform.extend.AValStr
 .. autoclass:: autoform.extend.AValInt
 .. autoclass:: autoform.extend.AValFloat

@@ -44,6 +44,20 @@ In this example, the cotangent has the same type as the primal value. A custom t
 
 A value can contribute to several later operations, each returning its own feedback. Accumulation combines those contributions when the backward computation reaches the shared value. Zero represents the absence of a contribution. For the comment, zero is the empty string and accumulation concatenates text. For the score, zero is `0.0` and accumulation adds numbers.[^symbolic-zeros]
 
-These definitions let the transform handle unused values and shared inputs without knowing the details of each feedback representation. The operation rules determine how feedback reaches the inputs, and the cotangent type supplies zero and accumulation. A custom critique type needs these definitions just as a numerical type does.
+These definitions let the transform handle unused values and shared inputs without knowing the details of each feedback representation. The operation rules determine how feedback reaches the inputs, and the cotangent type's registered algebra supplies zero and accumulation. A custom critique type needs these definitions just as a numerical type does.
 
 [^symbolic-zeros]: `autoform` can keep zero symbolic until an operation needs a concrete value.
+
+Algebra is a separate capability from the AVal description. Register a callable
+in `afe.algebra_rules`, such as
+`afe.algebra_rules[AValFloat] = lambda aval: AlgebraFloat(aval)`.
+To look up the algebra for an aval, use `afe.algebraof(aval)`. It calls the rule
+for the exact AVal type, so subclasses need their own registration. The returned
+`Algebra` stores the aval at `self.aval`; its `zero()` and `accum(values)` methods
+can use metadata such as shape and dtype. A missing registration raises
+`TypeError` when concrete zero construction or accumulation is required.
+Symbolic zeros and single live cotangents can pass through without invoking
+an algebra.
+
+Transform rules construct concrete zeros locally with `afe.algebraof(zero.aval).zero()`;
+see [Array Extension](../recipes/extending/array-extension.md) for a complete example.
