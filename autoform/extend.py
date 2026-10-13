@@ -19,6 +19,7 @@ from autoform.src.extend import AValBool as AValBool
 from autoform.src.extend import AValFloat as AValFloat
 from autoform.src.extend import AValInt as AValInt
 from autoform.src.extend import AValStr as AValStr
+from autoform.src.extend import Domain as Domain
 from autoform.src.extend import Dunder as Dunder
 from autoform.src.extend import Eqn as Eqn
 from autoform.src.extend import Interpreter as Interpreter
@@ -30,13 +31,13 @@ from autoform.src.extend import Zero as Zero
 from autoform.src.extend import active_client as active_client
 from autoform.src.extend import active_interpreter as active_interpreter
 from autoform.src.extend import active_tags as active_tags
-from autoform.src.extend import algebra_rules as algebra_rules
 from autoform.src.extend import algebraof as algebraof
 from autoform.src.extend import aval_if_var as aval_if_var
 from autoform.src.extend import avalof as avalof
 from autoform.src.extend import batch_index as batch_index
 from autoform.src.extend import batch_spec as batch_spec
 from autoform.src.extend import batch_transpose as batch_transpose
+from autoform.src.extend import domainof as domainof
 from autoform.src.extend import is_var as is_var
 from autoform.src.extend import p_add as p_add
 from autoform.src.extend import p_batch_call as p_batch_call
@@ -67,11 +68,13 @@ from autoform.src.extend import p_while_loop as p_while_loop
 from autoform.src.extend import register_abatch as register_abatch
 from autoform.src.extend import register_abstract as register_abstract
 from autoform.src.extend import register_aimpl as register_aimpl
+from autoform.src.extend import register_algebra as register_algebra
 from autoform.src.extend import register_apullback_bwd as register_apullback_bwd
 from autoform.src.extend import register_apullback_fwd as register_apullback_fwd
 from autoform.src.extend import register_apushforward as register_apushforward
 from autoform.src.extend import register_batch as register_batch
 from autoform.src.extend import register_dce as register_dce
+from autoform.src.extend import register_domain as register_domain
 from autoform.src.extend import register_dunder as register_dunder
 from autoform.src.extend import register_impl as register_impl
 from autoform.src.extend import register_non_dce as register_non_dce

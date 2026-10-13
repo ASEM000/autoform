@@ -57,16 +57,28 @@ class AValBatch(core.AVal):
     def __hash__(self) -> int:
         return hash((type(self), self.base))
 
-    def check(self, value, /) -> None:
+
+class DomainBatch(core.Domain):
+    __slots__ = []
+
+    def base(self):
+        return AValBatch(core.domainof(self.aval.base).base())
+
+    def accepts(self, value, /):
+        domain = core.domainof(self.aval.base)
         if utils.tree.is_leaf(value):
             actual = core.avalof(value)
-            if not isinstance(actual, type(self)):
-                raise TypeError(f"Expected {self!r}, got {actual!r}")
-            self.base.check(actual.base)
-            return
-        utils.tree.map(self.base.check, value, is_leaf=lambda x: x is not value)
+            return type(actual) is AValBatch and domain.accepts(actual.base)
+        values = utils.tree.leaves(value, is_leaf=lambda x: x is not value)
+        return all(domain.accepts(x) for x in values)
+
+    def join(self, other, /):
+        if type(other) is AValBatch:
+            return AValBatch(core.domainof(self.aval.base).join(other.base))
+        return super().join(other)
 
 
+core.domain_rules[AValBatch] = lambda aval: DomainBatch(aval)
 core.aval_types[AValBatch] = lambda aval: aval
 core.s_primal.set(AValBatch, lambda aval: AValBatch(core.s_primal.map(aval.base)))
 core.s_tangent.set(AValBatch, lambda aval: AValBatch(core.s_tangent.map(aval.base)))

@@ -60,12 +60,6 @@ class AVal:
     def __hash__(self) -> int:
         return hash(type(self))
 
-    def check(self, value, /) -> None:
-        """Reject an aval or value incompatible with this abstract value."""
-        actual = avalof(value)
-        if self != actual:
-            raise TypeError(f"Expected {self!r}, got {actual!r} for value {value!r}")
-
 
 def avalof(value, /) -> AVal:
     if (rule := aval_types.get(type(value))) is None:
@@ -81,8 +75,6 @@ def avalof(value, /) -> AVal:
 
 
 class Algebra(ABC):
-    """Value-level zero construction and accumulation for a registered AVal."""
-
     __slots__ = ["aval"]
 
     def __init__(self, aval: AVal, /):
@@ -105,6 +97,51 @@ def algebraof(aval: AVal, /) -> Algebra:
     algebra = rule(aval)
     assert isinstance(algebra, Algebra), f"Algebra rule returned {algebra!r}"
     return algebra
+
+
+# ==================================================================================================
+# DOMAIN
+# ==================================================================================================
+
+
+class Domain:
+    __slots__ = ["aval"]
+
+    def __init__(self, aval: AVal, /):
+        self.aval = aval
+
+    def base(self) -> AVal:
+        return self.aval
+
+    def accepts(self, value, /) -> bool:
+        actual = avalof(value)
+        if self.aval == actual:
+            return True
+        base = domainof(actual).base()
+        return base != actual and self.accepts(base)
+
+    def join(self, other: AVal, /) -> AVal:
+        if self.accepts(other):
+            return self.aval
+        domain = domainof(other)
+        if domain.accepts(self.aval):
+            return other
+        left, right = self.base(), domain.base()
+        if left != self.aval or right != other:
+            return domainof(left).join(right)
+        raise TypeError(f"No common domain for {self.aval!r} and {other!r}")
+
+
+domain_rules: dict[type[AVal], Callable[[AVal], Domain]] = {}
+
+
+def domainof(aval: AVal, /) -> Domain:
+    """Return domain of input abstract value"""
+    if (rule := domain_rules.get(type(aval))) is None:
+        return Domain(aval)
+    domain = rule(aval)
+    assert isinstance(domain, Domain), f"Domain rule returned {domain!r}"
+    return domain
 
 
 # ==================================================================================================
