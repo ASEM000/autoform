@@ -22,6 +22,7 @@ import autoform.src.core as core
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.utils as utils
 from tests import aexecute, execute
 
 
@@ -358,10 +359,11 @@ def test_format_lowers_to_concat(executor, template, values, expected, feedback)
     assert actual == p
     pf = ad.pushforward(ir)
     result = executor(pf, (values,), (values,))
-    assert core.materialize_zeros(result) == (p, expected)
+    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    assert utils.tree.map(zero, result) == (p, expected)
     pb = ad.pullback(ir)
     result = executor(pb, (values,), "g")
-    assert core.materialize_zeros(result) == (p, (feedback,))
+    assert utils.tree.map(zero, result) == (p, (feedback,))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -381,7 +383,8 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")
     pb = ad.pullback(ir)
     expected = ("A/B/A", (Record("gg", ("g", "")),))
-    assert core.materialize_zeros(executor(pb, (row,), "g")) == expected
+    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    assert utils.tree.map(zero, executor(pb, (row,), "g")) == expected
 
 
 @pytest.mark.parametrize(

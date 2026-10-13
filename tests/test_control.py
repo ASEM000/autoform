@@ -161,7 +161,8 @@ class TestFixpointPushforward:
         @step.aset_pushforward
         async def push(in_tree, /, *, call):
             p, t = in_tree
-            x, y = core.materialize_zeros(t)
+            zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+            x, y = utils.tree.map(zero, t)
             calls.append("push")
             return call(*p), 0.5 * x + y
 

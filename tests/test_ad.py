@@ -143,8 +143,18 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
     class AValValue(core.AVal): ...
 
     class AValFeedback(core.AVal):
+        __slots__ = []
+
+    class AlgebraFeedback(core.Algebra):
+        __slots__ = []
+
+        def zero(self):
+            return Feedback()
+
         def accum(self, c):
             return 1.0
+
+    core.algebra_rules[AValFeedback] = lambda aval: AlgebraFeedback(aval)
 
     extend.register_trace_type(Value, lambda _: AValValue())
     core.aval_types[AValValue] = lambda aval: aval
@@ -468,12 +478,12 @@ class TestCotangentHelpers:
 
     def test_cot_accum_unsupported_type_raises(self):
         with pytest.raises(
-            AssertionError,
-            match=r"No accumulation defined for AValBool\(\)",
+            TypeError,
+            match=r"No algebra registered for AValBool\(\)",
         ):
             ad.cot_accum([True, False])
         ir = stage.trace(lambda x, y: ad.cot_accum([x, y]))(True, False)
-        with pytest.raises(AssertionError, match="No accumulation defined"):
+        with pytest.raises(TypeError, match="No algebra registered"):
             ir.call(True, False)
 
     def test_cot_accum_unregistered_leaf_raises(self):
@@ -482,14 +492,24 @@ class TestCotangentHelpers:
         with pytest.raises(TypeError, match="No aval rule registered"):
             ad.cot_accum([Blob(), Blob()])
 
-    def test_cot_accum_uses_aval_method(self):
+    def test_cot_accum_uses_registered_algebra(self):
         class Text:
             def __init__(self, value):
                 self.value = value
 
         class AValText(core.AVal):
+            __slots__ = []
+
+        class AlgebraText(core.Algebra):
+            __slots__ = []
+
+            def zero(self):
+                return Text("")
+
             def accum(self, c):
                 return Text("|".join(c.value for c in c))
+
+        core.algebra_rules[AValText] = lambda aval: AlgebraText(aval)
 
         core.aval_types[Text] = lambda _: AValText()
         stage.trace_types.add(Text)
@@ -510,13 +530,22 @@ class TestCotangentHelpers:
         class AValText(core.AVal): ...
 
         class AValTextFeedback(core.AVal):
+            __slots__ = []
+
+        class AlgebraTextFeedback(core.Algebra):
+            __slots__ = []
+
             def zero(self):
                 return TextFeedback("")
 
             def accum(self, c):
                 return TextFeedback(" | ".join(c.value for c in c))
 
+        core.algebra_rules[AValTextFeedback] = lambda aval: AlgebraTextFeedback(aval)
+
         class AValDerivedFeedback(AValTextFeedback): ...
+
+        core.algebra_rules[AValDerivedFeedback] = lambda aval: AlgebraTextFeedback(aval)
 
         core.aval_types[Text] = lambda _: AValText()
         core.aval_types[AValText] = lambda aval: aval
@@ -536,7 +565,7 @@ class TestCotangentHelpers:
         assert isinstance(in_c[0], TextFeedback)
         assert in_c[0].value == "left | right"
         zero = core.Zero(core.s_cotangent.map(core.avalof(text)))
-        assert core.materialize_zeros(zero).value == ""
+        assert core.algebraof(zero.aval).zero().value == ""
 
 
 @pytest.mark.parametrize(
