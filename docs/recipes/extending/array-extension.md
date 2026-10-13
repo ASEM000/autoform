@@ -48,7 +48,7 @@ class AlgebraArray(afe.Algebra):
         return sum(c[1:], c[0])
 
 
-afe.algebra_rules[AValArray] = lambda aval: AlgebraArray(aval)
+afe.register_algebra(AValArray, lambda aval: AlgebraArray(aval))
 
 
 def aval_rule(value):

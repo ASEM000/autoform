@@ -4,6 +4,8 @@ These registrations connect concrete Python types to tracing and identify primit
 
 ```{eval-rst}
 .. autofunction:: autoform.extend.register_trace_type
+.. autofunction:: autoform.extend.register_algebra
+.. autofunction:: autoform.extend.register_domain
 .. autofunction:: autoform.extend.register_non_dce
 .. autofunction:: autoform.extend.register_non_memoizable
 ```
