@@ -43,9 +43,9 @@ from tests import AValBlob, Blob, aexecute, execute
     ],
 )
 def test_check_representations(expected, value):
-    core.avalof(expected).check(value)
+    check.typecheck(value, core.avalof(expected))
     with pytest.raises(TypeError, match="Expected AValStr"):
-        string.AValStr().check(value)
+        check.typecheck(value, string.AValStr())
 
 
 def test_avalof_requires_explicit_subclass_registration():
@@ -54,13 +54,15 @@ def test_avalof_requires_explicit_subclass_registration():
     x = AValFloat()
     with pytest.raises(TypeError, match="No aval rule registered"):
         core.avalof(x)
+    with pytest.raises(TypeError, match="No aval rule registered"):
+        core.domainof(x).accepts(x)
 
     core.aval_types[AValFloat] = lambda aval: aval
     assert core.avalof(x) is x
     assert core.avalof(core.Zero(x)) is x
-    core.avalof(x).check(x)
+    check.typecheck(x, core.avalof(x))
     with pytest.raises(TypeError, match="Expected AValFloat"):
-        core.avalof(x).check(3.0)
+        check.typecheck(3.0, core.avalof(x))
 
 
 class TestAVal:
@@ -87,9 +89,9 @@ class TestAVal:
         ],
     )
     def test_check_respects_metadata_equality(self, aval, wrap):
-        core.avalof(aval).check(wrap(core.Zero(AValBlob(3))))
+        check.typecheck(wrap(core.Zero(AValBlob(3))), core.avalof(aval))
         with pytest.raises(TypeError, match="Expected"):
-            core.avalof(aval).check(wrap(core.Zero(AValBlob(4))))
+            check.typecheck(wrap(core.Zero(AValBlob(4))), core.avalof(aval))
 
 
 class TestSpace:
@@ -223,7 +225,7 @@ class TestZero:
             def accum(self, values, /):
                 return "accum", self.aval.size, values
 
-        core.algebra_rules[AValBlob] = lambda aval: AlgebraBlob(aval)
+        extend.register_algebra(AValBlob, lambda aval: AlgebraBlob(aval))
 
         assert core.algebraof(AValBlob(3)).zero() == ("zero", 3)
         assert core.algebraof(AValBlob(4)).accum([1, 2]) == ("accum", 4, [1, 2])
@@ -240,7 +242,7 @@ class TestZero:
             core.algebraof(aval)
         with pytest.raises(TypeError, match="No algebra registered"):
             ad.cot_accum([Text("a"), Text("b")])
-        core.algebra_rules[AValText] = lambda aval: string.AlgebraStr(aval)
+        extend.register_algebra(AValText, lambda aval: string.AlgebraStr(aval))
         assert core.algebraof(aval).aval is aval
         assert core.algebraof(aval).zero() == ""
         assert ad.cot_accum([Text("a"), Text("b")]) == "ab"
@@ -308,3 +310,47 @@ def test_custom_rule_interpreter(executor):
         with pytest.raises(TypeError, match="Expected AValStr"):
             executor(ir, "x", "y")
     assert executor(ir, "x", "y") == "xyy"
+
+
+class TestDomain:
+    def test_default_acceptance_and_join(self):
+        x = AValBlob(3)
+        domain = core.domainof(x)
+        assert domain.base() is x
+        assert domain.accepts(core.Zero(AValBlob(3)))
+        assert not domain.accepts(core.Zero(AValBlob(4)))
+        assert domain.join(AValBlob(3)) is x
+        with pytest.raises(TypeError, match="No common domain"):
+            domain.join(AValBlob(4))
+
+    def test_exact_registration(self):
+        class AValText(core.AVal): ...
+
+        class AValOther(AValText): ...
+
+        class DomainText(core.Domain):
+            def accepts(self, value):
+                return isinstance(value, str) or super().accepts(value)
+
+        core.aval_types[AValText] = lambda aval: aval
+        extend.register_domain(AValText, lambda aval: DomainText(aval))
+        x, y = AValText(), AValOther()
+        assert core.domainof(x).aval is x
+        assert core.domainof(x).accepts("x")
+        assert core.domainof(x).accepts(core.Zero(x))
+        assert core.domainof(x).join(x) is x
+        assert type(core.domainof(y)) is core.Domain
+        assert not core.domainof(y).accepts("x")
+        with pytest.raises(TypeError, match="No algebra registered"):
+            core.algebraof(x)
+
+    def test_batch_domain(self):
+        x = axis.AValBatch(string.AValStr())
+        domain = core.domainof(x)
+        assert domain.base() == x
+        assert domain.accepts(["x", "y"])
+        assert domain.accepts([])
+        assert not domain.accepts(["x", 1.0])
+        assert domain.join(x) == x
+        with pytest.raises(TypeError, match="No common domain"):
+            domain.join(axis.AValBatch(numeric.AValFloat()))

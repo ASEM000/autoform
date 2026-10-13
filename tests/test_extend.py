@@ -47,7 +47,7 @@ def make_box_domain():
         def accum(self, c):
             return Box(sum(c.value for c in c))
 
-    core.algebra_rules[AValBox] = lambda aval: AlgebraBox(aval)
+    extend.register_algebra(AValBox, lambda aval: AlgebraBox(aval))
 
     core.aval_types[AValBox] = lambda aval: aval
     return Box, AValBox

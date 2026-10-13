@@ -18,6 +18,7 @@ import pytest
 
 import autoform.src.ad as ad
 import autoform.src.axis as axis
+import autoform.src.check as check
 import autoform.src.core as core
 import autoform.src.extend as extend
 import autoform.src.numeric as numeric
@@ -44,9 +45,9 @@ class AValTagged(core.AVal):
     ],
 )
 def test_check_batch_aval(value):
-    axis.AValBatch(string.AValStr()).check(value)
-    with pytest.raises(TypeError, match="Expected AValFloat"):
-        axis.AValBatch(numeric.AValFloat()).check(value)
+    check.typecheck(value, axis.AValBatch(string.AValStr()))
+    with pytest.raises(TypeError, match="Expected AValBatch"):
+        check.typecheck(value, axis.AValBatch(numeric.AValFloat()))
 
 
 class TestBatchBasic:

@@ -87,11 +87,13 @@ def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_pullback_checks_concrete_primal(executor):
-    class AValNonemptyStr(string.AValStr):
-        def check(self, value):
-            if not isinstance(value, str) or not value:
-                raise TypeError("Expected a nonempty string")
+    class AValNonemptyStr(string.AValStr): ...
 
+    class DomainNonemptyStr(core.Domain):
+        def accepts(self, value):
+            return bool(value) if isinstance(value, str) else super().accepts(value)
+
+    extend.register_domain(AValNonemptyStr, lambda aval: DomainNonemptyStr(aval))
     core.aval_types[AValNonemptyStr] = lambda aval: aval
     core.s_primal.set(AValNonemptyStr, lambda aval: aval)
     core.s_cotangent.set(AValNonemptyStr, lambda _: string.AValStr())
@@ -99,7 +101,7 @@ def test_pullback_checks_concrete_primal(executor):
     ir = ad.pullback(stage.IR([], (x,), x))
 
     assert executor(ir, ("x",), "df") == ("x", ("df",))
-    with pytest.raises(TypeError, match="Expected a nonempty string"):
+    with pytest.raises(TypeError, match="Expected AValNonemptyStr"):
         executor(ir, ("",), "df")
 
 
@@ -154,7 +156,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
         def accum(self, c):
             return 1.0
 
-    core.algebra_rules[AValFeedback] = lambda aval: AlgebraFeedback(aval)
+    extend.register_algebra(AValFeedback, lambda aval: AlgebraFeedback(aval))
 
     extend.register_trace_type(Value, lambda _: AValValue())
     core.aval_types[AValValue] = lambda aval: aval
@@ -297,8 +299,8 @@ def test_batched_pullback_rejects_shared_list_cotangent(executor):
     "c, error",
     [
         pytest.param("o", "AValBatch", id="scalar"),
-        pytest.param(["o", 1.0], "AValStr", id="mixed-elements"),
-        pytest.param(core.Zero(axis.AValBatch(numeric.AValFloat())), "AValStr", id="wrong-zero"),
+        pytest.param(["o", 1.0], "AValBatch", id="mixed-elements"),
+        pytest.param(core.Zero(axis.AValBatch(numeric.AValFloat())), "AValBatch", id="wrong-zero"),
     ],
 )
 def test_pullback_of_batch_rejects_incompatible_cotangent(executor, c, error):
@@ -509,7 +511,7 @@ class TestCotangentHelpers:
             def accum(self, c):
                 return Text("|".join(c.value for c in c))
 
-        core.algebra_rules[AValText] = lambda aval: AlgebraText(aval)
+        extend.register_algebra(AValText, lambda aval: AlgebraText(aval))
 
         core.aval_types[Text] = lambda _: AValText()
         stage.trace_types.add(Text)
@@ -541,11 +543,11 @@ class TestCotangentHelpers:
             def accum(self, c):
                 return TextFeedback(" | ".join(c.value for c in c))
 
-        core.algebra_rules[AValTextFeedback] = lambda aval: AlgebraTextFeedback(aval)
+        extend.register_algebra(AValTextFeedback, lambda aval: AlgebraTextFeedback(aval))
 
         class AValDerivedFeedback(AValTextFeedback): ...
 
-        core.algebra_rules[AValDerivedFeedback] = lambda aval: AlgebraTextFeedback(aval)
+        extend.register_algebra(AValDerivedFeedback, lambda aval: AlgebraTextFeedback(aval))
 
         core.aval_types[Text] = lambda _: AValText()
         core.aval_types[AValText] = lambda aval: aval
