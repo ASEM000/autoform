@@ -38,11 +38,16 @@ def make_box_domain():
         def __hash__(self):
             return hash(type(self))
 
+    class AlgebraBox(core.Algebra):
+        __slots__ = []
+
         def zero(self):
             return Box(0)
 
         def accum(self, c):
             return Box(sum(c.value for c in c))
+
+    core.algebra_rules[AValBox] = lambda aval: AlgebraBox(aval)
 
     core.aval_types[AValBox] = lambda aval: aval
     return Box, AValBox
@@ -62,7 +67,7 @@ def test_aval_zero_and_accumulation():
     Box, AValBox = make_box_domain()
     extend.register_trace_type(Box, lambda value: AValBox())
 
-    assert core.materialize_zeros(core.Zero(AValBox())) == Box(0)
+    assert core.algebraof(AValBox()).zero() == Box(0)
     assert ad.cot_accum([Box(1), Box(2)]) == Box(3)
 
 

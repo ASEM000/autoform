@@ -231,7 +231,7 @@ def test_fill_pushforward_preserves_non_string_literals(executor):
         p, t = executor(ir, ("q",), ("dq",))
     assert p == {"answer": "filled", "fixed": 1.0}
     assert t["answer"] == "filled"
-    assert core.materialize_zeros(t["fixed"]) == 0.0
+    assert core.algebraof(t["fixed"].aval).zero() == 0.0
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -564,8 +564,8 @@ def test_fill_pushforward_skips_generation_for_symbolic_zero(executor, source):
         expected["x"] = "description"
     assert p == expected
     assert all(isinstance(value, core.Zero) for value in utils.tree.leaves(t))
-    assert core.materialize_zeros(t)["answer"] == ""
-    assert core.materialize_zeros(t)["score"] == 0.0
+    assert core.algebraof(t["answer"].aval).zero() == ""
+    assert core.algebraof(t["score"].aval).zero() == 0.0
     assert len(calls) == 1
 
 

@@ -4,6 +4,19 @@
 
 ### Breaking Changes
 
+  - Replaced `autoform.extend.register_zero` and
+    `register_cotangent_accumulator` with standalone `Algebra` implementations.
+    Register both operations with
+    `algebra_rules[AValType] = lambda aval: AlgebraType(aval)` and access them
+    through `algebraof(aval).zero()` and `algebraof(aval).accum(values)`.
+    Registrations remain keyed by exact AVal type; the algebra stores metadata
+    through `self.aval`.
+
+  - Removed the extension helpers `materialize`, `zeroof`, and `is_zero`.
+    Construct symbolic zeros with `Zero(avalof(value))`, check them with
+    `isinstance(value, Zero)`, and materialize each zero locally with
+    `algebraof(zero.aval).zero()`.
+
   - Standardized extension names: primitive keys use the `p_` prefix
     (`concat_p` to `p_concat`), and abstract value classes use `AVal` as a prefix
     (`StrAVal` to `AValStr`,

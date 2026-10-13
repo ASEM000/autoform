@@ -399,7 +399,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> af.pullback(ir).call((["a", "b"],), (["G0", "G1"], ["H0", "H1"]))
         # ((['a', 'b'], ['a', 'b']), (['G0H0', 'G1H1'],))
         return utils.tree.map(lambda *cs: cot_accum(list(cs)), *non_zero)
-    # NOTE(asem): leaf cotangents use their aval's accumulation method.
+    # NOTE(asem): leaf cotangents use their registered algebra.
     # >>> def f(x):
     # ...     return x + x
     # >>> ir = af.trace(f)("...")
@@ -410,7 +410,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
 
 def impl_cot_accum(cots: list[Any], /) -> Any:
     aval = core.avalof(cots[0])
-    return aval.accum(cots)
+    return core.algebraof(aval).accum(cots)
 
 
 def abstract_cot_accum(cots: list[Any], /) -> core.AVal:

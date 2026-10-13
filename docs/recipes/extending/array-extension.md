@@ -10,7 +10,7 @@ This example only supports floating-point arrays, requires arrays to have the sa
 
 ## Abstract Value
 
-Tracing needs an array description before an operation has produced a concrete result. `AValArray` records the shape and dtype and supplies the zero and accumulation behavior used by feedback. The primal, tangent, and cotangent spaces all use this same array representation in the example:
+Tracing needs an array description before an operation has produced a concrete result. `AValArray` records the shape and dtype. A separate `AlgebraArray` supplies zero construction and accumulation when feedback on an array is required. The primal, tangent, and cotangent spaces all use this same array representation in the example:
 
 ```python
 import functools as ft
@@ -32,20 +32,23 @@ class AValArray(afe.AVal):
         return f"AValArray(shape={self.shape!r}, dtype={self.dtype!r})"
 
     def __eq__(self, other):
-        return (
-            type(self) is type(other)
-            and self.shape == other.shape
-            and self.dtype == other.dtype
-        )
+        return type(self) is type(other) and self.shape == other.shape and self.dtype == other.dtype
 
     def __hash__(self):
         return hash((type(self), self.shape, self.dtype.str))
 
+
+class AlgebraArray(afe.Algebra):
+    __slots__ = []
+
     def zero(self):
-        return np.zeros(self.shape, dtype=self.dtype)
+        return np.zeros(self.aval.shape, dtype=self.aval.dtype)
 
     def accum(self, c):
         return sum(c[1:], c[0])
+
+
+afe.algebra_rules[AValArray] = lambda aval: AlgebraArray(aval)
 
 
 def aval_rule(value):
@@ -91,7 +94,8 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def push(in_tree):
         (x, y), (tx, ty) = in_tree
-        tx, ty = afe.materialize_zeros((tx, ty))
+        tx = afe.algebraof(tx.aval).zero() if isinstance(tx, afe.Zero) else tx
+        ty = afe.algebraof(ty.aval).zero() if isinstance(ty, afe.Zero) else ty
         return bind(x, y), push_rule(x, y, tx, ty)
 
     def pull_fwd(in_tree):
@@ -100,7 +104,8 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def pull_bwd(in_tree):
         (x, y), g = in_tree
-        return pull_rule(x, y, afe.materialize_zeros(g))
+        g = afe.algebraof(g.aval).zero() if isinstance(g, afe.Zero) else g
+        return pull_rule(x, y, g)
 
     def batch_rule(in_tree):
         batch_size, in_batched, in_values = in_tree

@@ -106,8 +106,8 @@ class TestSpace:
         zero = core.Zero(s_blob.map(AValBlob(3)))
         assert isinstance(zero, core.Zero)
         assert zero.aval == AValBlob(4)
-        with pytest.raises(AssertionError, match="No concrete zero defined"):
-            core.materialize_zeros(zero)
+        with pytest.raises(TypeError, match="No algebra registered"):
+            core.algebraof(zero.aval).zero()
 
     @pytest.mark.parametrize(
         "value_type, rule, replace, message",
@@ -192,7 +192,7 @@ class TestZero:
         assert z == core.Zero(string.AValStr())
         assert z != core.Zero(numeric.AValBool())
         assert core.Zero(core.s_primal.map(core.avalof(z))) == z
-        assert core.materialize_zeros(z) == ""
+        assert core.algebraof(z.aval).zero() == ""
         assert core.avalof(z) == string.AValStr()
         assert not stage.is_traceable(z)
 
@@ -204,8 +204,8 @@ class TestZero:
         z = core.Zero(numeric.AValBool())
         assert isinstance(z, core.Zero)
         assert z.aval == numeric.AValBool()
-        with pytest.raises(AssertionError, match="No concrete zero defined"):
-            core.materialize_zeros(z)
+        with pytest.raises(TypeError, match="No algebra registered"):
+            core.algebraof(z.aval).zero()
 
     def test_zero_materializes_with_aval_metadata(self):
         class AValBlob(core.AVal):
@@ -214,10 +214,36 @@ class TestZero:
             def __init__(self, size):
                 self.size = size
 
-            def zero(self):
-                return "zero", self.size
+        class AlgebraBlob(core.Algebra):
+            __slots__ = []
 
-        assert core.materialize_zeros(core.Zero(AValBlob(3))) == ("zero", 3)
+            def zero(self):
+                return "zero", self.aval.size
+
+            def accum(self, values, /):
+                return "accum", self.aval.size, values
+
+        core.algebra_rules[AValBlob] = lambda aval: AlgebraBlob(aval)
+
+        assert core.algebraof(AValBlob(3)).zero() == ("zero", 3)
+        assert core.algebraof(AValBlob(4)).accum([1, 2]) == ("accum", 4, [1, 2])
+
+    def test_algebra_registration_is_not_inherited(self):
+        class AValText(string.AValStr):
+            __slots__ = []
+
+        class Text(str): ...
+
+        aval = AValText()
+        core.aval_types[Text] = lambda _: aval
+        with pytest.raises(TypeError, match="No algebra registered"):
+            core.algebraof(aval)
+        with pytest.raises(TypeError, match="No algebra registered"):
+            ad.cot_accum([Text("a"), Text("b")])
+        core.algebra_rules[AValText] = lambda aval: string.AlgebraStr(aval)
+        assert core.algebraof(aval).aval is aval
+        assert core.algebraof(aval).zero() == ""
+        assert ad.cot_accum([Text("a"), Text("b")]) == "ab"
 
 
 class TestPrimitive:
