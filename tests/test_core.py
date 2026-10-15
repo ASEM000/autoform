@@ -264,27 +264,29 @@ class TestRule:
         rules.set(x, str)
         rules.set(y, str)
 
-        with rules.using({x: repr, z: repr}) as active:
+        with rules.override((x, repr), (z, repr)) as active:
             assert active is rules
             assert rules.get(x) is repr
             assert rules.get(y) is str
             assert rules.get(z) is repr
+            rules.set(y, ascii)
+            assert rules.get(y) is ascii
             with pytest.raises(ValueError, match="stop"):
-                with rules.using({x: ascii}):
+                with rules.override((x, ascii)):
                     assert rules.get(x) is ascii
                     assert rules.get(z) is repr
                     raise ValueError("stop")
             assert rules.get(x) is repr
 
         assert rules.get(x) is str
-        assert rules.get(y) is str
+        assert rules.get(y) is ascii
         with pytest.raises(KeyError):
             rules.get(z)
 
     @pytest.mark.parametrize("prim, rule", [("invalid", str), (core.Prim("x"), None)])
     def test_invalid_override(self, prim, rule):
         rules = core.Rule("text")
-        with pytest.raises(AssertionError), rules.using({prim: rule}):
+        with pytest.raises(AssertionError), rules.override((prim, rule)):
             pytest.fail("Invalid overrides must not enter the context")
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -292,8 +294,8 @@ class TestRule:
         ir = stage.trace(lambda x, y: x + y)("x", "y")
         reverse = lambda values: "".join(reversed(values))
         with (
-            core.impl_rules.using({string.p_concat: reverse}),
-            core.aimpl_rules.using({string.p_concat: utils.asyncify(reverse)}),
+            core.impl_rules.override((string.p_concat, reverse)),
+            core.aimpl_rules.override((string.p_concat, utils.asyncify(reverse))),
         ):
             assert executor(ir, "a", "b") == "ba"
         assert executor(ir, "a", "b") == "ab"
@@ -304,7 +306,7 @@ class TestRule:
 
             async def worker(value, entered):
                 rule = utils.asyncify(lambda values: value)
-                with core.aimpl_rules.using({string.p_concat: rule}):
+                with core.aimpl_rules.override((string.p_concat, rule)):
                     entered.set()
                     await release.wait()
                     return await string.p_concat.abind(("a", "b"))

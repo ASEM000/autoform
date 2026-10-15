@@ -21,7 +21,7 @@ These classes represent the values and program structure used by extension code:
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.Rule
-   :members: set, get
+   :members: set, get, override
 .. autoclass:: autoform.extend.Prim
 .. autoclass:: autoform.extend.Zero
 ```
