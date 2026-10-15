@@ -21,7 +21,6 @@ import functools as ft
 import json as jsonlib
 import math
 import re
-from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Hashable, Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -154,7 +153,7 @@ def slotted_values(node: Any) -> tuple[Any, ...]:
     return tuple(getattr(node, name) for name in type(node).__slots__)
 
 
-class Spec(Hashable, ABC):
+class Spec(Hashable):
     __slots__ = ["desc"]
 
     def __init__(self, *, desc: str | None = None) -> None:
@@ -162,11 +161,11 @@ class Spec(Hashable, ABC):
             raise TypeError(f"desc must be a string, got {desc!r}")
         self.desc = desc
 
-    @abstractmethod
-    def describe(self) -> JsonSchema: ...
+    def describe(self) -> JsonSchema:
+        raise NotImplementedError
 
-    @abstractmethod
-    def parse(self, value: Any) -> Any: ...
+    def parse(self, value: Any) -> Any:
+        raise NotImplementedError
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

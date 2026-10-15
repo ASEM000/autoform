@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections import ChainMap
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
@@ -75,17 +74,17 @@ def avalof(value, /) -> AVal:
 # ==================================================================================================
 
 
-class Algebra(ABC):
+class Algebra:
     __slots__ = ["aval"]
 
     def __init__(self, aval: AVal, /):
         self.aval = aval
 
-    @abstractmethod
-    def zero(self): ...
+    def zero(self):
+        raise NotImplementedError
 
-    @abstractmethod
-    def accum(self, values: list[Any], /): ...
+    def accum(self, values: list[Any], /):
+        raise NotImplementedError
 
 
 algebra_rules: dict[type[AVal], Callable[[AVal], Algebra]] = {}
@@ -296,14 +295,14 @@ apull_bwd_rules: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
 # ==================================================================================================
 
 
-class Interpreter(ABC):
+class Interpreter:
     __slots__ = []
 
-    @abstractmethod
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
+    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        raise NotImplementedError
 
-    @abstractmethod
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
+    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
+        raise NotImplementedError
 
 
 @contextmanager
