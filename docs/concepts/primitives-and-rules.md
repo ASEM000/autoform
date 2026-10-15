@@ -19,6 +19,25 @@ Rules for execution, tracing, and [transforms](transforms.md) are registered thr
 
 A pullback separates the original computation from feedback propagation. Its forward rule returns both the result and any residuals needed later. The backward rule receives those residuals together with the output cotangent and returns input cotangents.
 
+### Scoped Rule Overrides
+
+An `autoform.extend.Rule` table supports temporary overrides through `using`:
+
+```python
+import autoform.extend as afe
+
+rules = afe.Rule("text")
+p_text = afe.Prim("text")
+rules.set(p_text, str)
+
+with rules.using({p_text: repr}):
+    assert rules.get(p_text)("hello") == "'hello'"
+
+assert rules.get(p_text)("hello") == "hello"
+```
+
+Overrides take precedence over permanent registrations. Nested scopes inherit outer overrides, and leaving a scope restores the previous overrides even when an exception occurs. An override can also temporarily supply a rule for an unregistered primitive. Overrides belong to the current context; async tasks inherit the overrides active when they are created, and changes in one task do not affect other tasks. Synchronous and asynchronous rule tables are overridden separately.
+
 ## Built-in Primitives
 
 | Group | Primitives | Purpose |

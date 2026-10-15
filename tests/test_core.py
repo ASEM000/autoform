@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
+
 import pytest
 
 import autoform.src.ad as ad
@@ -253,6 +255,72 @@ class TestPrimitive:
         p_test_prim = core.Prim("test_prim")
         assert p_test_prim.name == "test_prim"
         assert repr(p_test_prim) == "test_prim"
+
+
+class TestRule:
+    def test_nested_overrides_restore_after_exception(self):
+        rules = core.Rule("text")
+        x, y, z = core.Prim("x"), core.Prim("y"), core.Prim("z")
+        rules.set(x, str)
+        rules.set(y, str)
+
+        with rules.using({x: repr, z: repr}) as active:
+            assert active is rules
+            assert rules.get(x) is repr
+            assert rules.get(y) is str
+            assert rules.get(z) is repr
+            with pytest.raises(ValueError, match="stop"):
+                with rules.using({x: ascii}):
+                    assert rules.get(x) is ascii
+                    assert rules.get(z) is repr
+                    raise ValueError("stop")
+            assert rules.get(x) is repr
+
+        assert rules.get(x) is str
+        assert rules.get(y) is str
+        with pytest.raises(KeyError):
+            rules.get(z)
+
+    @pytest.mark.parametrize("prim, rule", [("invalid", str), (core.Prim("x"), None)])
+    def test_invalid_override(self, prim, rule):
+        rules = core.Rule("text")
+        with pytest.raises(AssertionError), rules.using({prim: rule}):
+            pytest.fail("Invalid overrides must not enter the context")
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_execution_uses_overrides(self, executor):
+        ir = stage.trace(lambda x, y: x + y)("x", "y")
+        reverse = lambda values: "".join(reversed(values))
+        with (
+            core.impl_rules.using({string.p_concat: reverse}),
+            core.aimpl_rules.using({string.p_concat: utils.asyncify(reverse)}),
+        ):
+            assert executor(ir, "a", "b") == "ba"
+        assert executor(ir, "a", "b") == "ab"
+
+    def test_async_overrides_are_isolated(self):
+        async def run():
+            left, right, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+            async def worker(value, entered):
+                rule = utils.asyncify(lambda values: value)
+                with core.aimpl_rules.using({string.p_concat: rule}):
+                    entered.set()
+                    await release.wait()
+                    return await string.p_concat.abind(("a", "b"))
+
+            tasks = [
+                asyncio.create_task(worker("left", left)),
+                asyncio.create_task(worker("right", right)),
+            ]
+            await left.wait()
+            await right.wait()
+            assert await string.p_concat.abind(("a", "b")) == "ab"
+            release.set()
+            assert await asyncio.gather(*tasks) == ["left", "right"]
+            assert await string.p_concat.abind(("a", "b")) == "ab"
+
+        asyncio.run(asyncio.wait_for(run(), timeout=5))
 
 
 class TestBind:
