@@ -21,7 +21,7 @@ A pullback separates the original computation from feedback propagation. Its for
 
 ### Scoped Rule Overrides
 
-An `autoform.extend.Rule` table supports temporary overrides through `using`:
+An `autoform.extend.Rule` table supports temporary overrides through `override`, which accepts `(prim, rule)` pairs:
 
 ```python
 import autoform.extend as afe
@@ -30,7 +30,7 @@ rules = afe.Rule("text")
 p_text = afe.Prim("text")
 rules.set(p_text, str)
 
-with rules.using({p_text: repr}):
+with rules.override((p_text, repr)):
     assert rules.get(p_text)("hello") == "'hello'"
 
 assert rules.get(p_text)("hello") == "hello"

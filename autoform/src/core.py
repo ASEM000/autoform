@@ -17,10 +17,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import ChainMap
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, Self
 
 import autoform.src.utils as utils
 
@@ -245,13 +246,13 @@ class Prim:
 
 
 class Rule[T]:
-    __slots__ = ["name", "map", "overrides"]
+    __slots__ = ["name", "base", "active"]
 
     def __init__(self, name: str):
         assert isinstance(name, str), f"Invalid name type: {type(name)=}"
         self.name = name
-        self.map: dict[Prim, Callable[..., T]] = {}
-        self.overrides = ContextVar(f"{name} overrides", default={})
+        self.base: ChainMap[Prim, Callable[..., T]] = ChainMap()
+        self.active = ContextVar(f"{name} rules", default=self.base)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
@@ -259,24 +260,22 @@ class Rule[T]:
     def set[R: Callable[..., T]](self, prim: Prim, rule: R, /) -> R:
         assert isinstance(prim, Prim)
         assert callable(rule)
-        self.map[prim] = rule
+        self.base[prim] = rule
         return rule
 
     def get(self, prim: Prim, /) -> Callable[..., T]:
-        if (rule := self.overrides.get().get(prim)) is not None:
-            return rule
-        return self.map[prim]
+        return self.active.get()[prim]
 
     @contextmanager
-    def using(self, overrides, /):
-        for prim, rule in overrides.items():
+    def override(self, *overrides: tuple[Prim, Callable[..., T]]) -> Generator[Self, None, None]:
+        for prim, rule in overrides:
             assert isinstance(prim, Prim)
             assert callable(rule)
-        token = self.overrides.set(self.overrides.get() | overrides)
+        token = self.active.set(self.active.get().new_child(dict(overrides)))
         try:
             yield self
         finally:
-            self.overrides.reset(token)
+            self.active.reset(token)
 
 
 impl_rules: Rule[Tree] = Rule("impl")
