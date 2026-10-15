@@ -17,12 +17,12 @@ import asyncio
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.check as check
 import autoform.src.control as control
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.intercept as intercept
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
@@ -76,9 +76,9 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
 def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
     p_bad_tangent = core.Prim("bad_tangent")
     forward = lambda args: (args[0], t)
-    extend.register_abstract(p_bad_tangent, lambda x: x)
-    extend.register_pushforward(p_bad_tangent, forward)
-    extend.register_apushforward(p_bad_tangent, utils.asyncify(forward))
+    extend.r_abstract.set(p_bad_tangent, lambda x: x)
+    extend.r_push.set(p_bad_tangent, forward)
+    extend.r_apush.set(p_bad_tangent, utils.asyncify(forward))
     ir = ad.pushforward(stage.trace(lambda x: control.stop_gradient(p_bad_tangent.bind(x)))("x"))
 
     with pytest.raises(TypeError, match="Expected AValStr"):
@@ -125,11 +125,11 @@ def test_pullback_rejects_invalid_intermediate_cotangent(executor):
     p_bad_cotangent = core.Prim("bad_cotangent")
     forward = lambda x: (x, None)
     backward = lambda args: 1.0
-    extend.register_abstract(p_bad_cotangent, lambda x: x)
-    extend.register_pullback_fwd(p_bad_cotangent, forward)
-    extend.register_apullback_fwd(p_bad_cotangent, utils.asyncify(forward))
-    extend.register_pullback_bwd(p_bad_cotangent, backward)
-    extend.register_apullback_bwd(p_bad_cotangent, utils.asyncify(backward))
+    extend.r_abstract.set(p_bad_cotangent, lambda x: x)
+    extend.r_pull_fwd.set(p_bad_cotangent, forward)
+    extend.r_apull_fwd.set(p_bad_cotangent, utils.asyncify(forward))
+    extend.r_pull_bwd.set(p_bad_cotangent, backward)
+    extend.r_apull_bwd.set(p_bad_cotangent, utils.asyncify(backward))
     ir = ad.pullback(stage.trace(lambda x: p_bad_cotangent.bind(control.stop_gradient(x)))("x"))
 
     with pytest.raises(TypeError, match="Expected AValStr"):
@@ -203,9 +203,9 @@ def test_pullback_rechecks_mutated_contribution():
         seed.aval = numeric.AValFloat()
         return args[1]
 
-    extend.register_abstract(p_mutate_cotangent, lambda x: x)
-    extend.register_pullback_fwd(p_mutate_cotangent, lambda x: (x, None))
-    extend.register_pullback_bwd(p_mutate_cotangent, backward)
+    extend.r_abstract.set(p_mutate_cotangent, lambda x: x)
+    extend.r_pull_fwd.set(p_mutate_cotangent, lambda x: (x, None))
+    extend.r_pull_bwd.set(p_mutate_cotangent, backward)
 
     def program(x):
         y = x + "!"
@@ -1023,15 +1023,15 @@ def test_nonidentity_primal_space(executor, transform):
         p, t = args
         return p * 2.0, t if isinstance(t, core.Zero) else t + t
 
-    extend.register_impl(p_mapped_primal, lambda x: x * 2.0)
-    extend.register_aimpl(p_mapped_primal, utils.asyncify(lambda x: x * 2.0))
-    extend.register_abstract(p_mapped_primal, lambda _: AValValue())
-    extend.register_pushforward(p_mapped_primal, forward)
-    extend.register_apushforward(p_mapped_primal, utils.asyncify(forward))
-    extend.register_pullback_fwd(p_mapped_primal, lambda x: (x * 2.0, None))
-    extend.register_apullback_fwd(p_mapped_primal, utils.asyncify(lambda x: (x * 2.0, None)))
-    extend.register_pullback_bwd(p_mapped_primal, lambda args: args[1] + args[1])
-    extend.register_apullback_bwd(p_mapped_primal, utils.asyncify(lambda args: args[1] + args[1]))
+    extend.r_impl.set(p_mapped_primal, lambda x: x * 2.0)
+    extend.r_aimpl.set(p_mapped_primal, utils.asyncify(lambda x: x * 2.0))
+    extend.r_abstract.set(p_mapped_primal, lambda _: AValValue())
+    extend.r_push.set(p_mapped_primal, forward)
+    extend.r_apush.set(p_mapped_primal, utils.asyncify(forward))
+    extend.r_pull_fwd.set(p_mapped_primal, lambda x: (x * 2.0, None))
+    extend.r_apull_fwd.set(p_mapped_primal, utils.asyncify(lambda x: (x * 2.0, None)))
+    extend.r_pull_bwd.set(p_mapped_primal, lambda args: args[1] + args[1])
+    extend.r_apull_bwd.set(p_mapped_primal, utils.asyncify(lambda args: args[1] + args[1]))
     x, y, z = (stage.Var(aval=AValValue()) for _ in range(3))
     source = stage.IR(
         [

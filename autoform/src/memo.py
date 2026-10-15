@@ -32,6 +32,15 @@ type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
 non_memoizable_primitives: set[core.Prim] = {intercept.p_checkpoint}
 
 
+def register_non_memoizable[T: core.Prim](prim: T, /) -> T:
+    """Exclude a primitive from memoization."""
+    assert isinstance(prim, core.Prim)
+    rules = non_memoizable_primitives
+    assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
+    rules.add(prim)
+    return prim
+
+
 def is_non_memo(eqn: stage.Eqn, /) -> bool:
     # NOTE(asem): input is eqn to match `is_non_dce` signature, even though the
     # memoizing interpreter works on primitve level. The following is an example of

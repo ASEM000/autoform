@@ -90,6 +90,12 @@ class Algebra:
 algebra_rules: dict[type[AVal], Callable[[AVal], Algebra]] = {}
 
 
+def register_algebra[R: Callable[[AVal], Algebra]](aval_type: type[AVal], rule: R, /) -> R:
+    """Register zero construction and accumulation for an exact AVal type."""
+    algebra_rules[aval_type] = rule
+    return rule
+
+
 def algebraof(aval: AVal, /) -> Algebra:
     """Look up algebra behavior by exact AVal type, without inheritance."""
     if (rule := algebra_rules.get(type(aval))) is None:
@@ -133,6 +139,12 @@ class Domain:
 
 
 domain_rules: dict[type[AVal], Callable[[AVal], Domain]] = {}
+
+
+def register_domain[R: Callable[[AVal], Domain]](aval_type: type[AVal], rule: R, /) -> R:
+    """Register acceptance and joining for an exact AVal type."""
+    domain_rules[aval_type] = rule
+    return rule
 
 
 def domainof(aval: AVal, /) -> Domain:
@@ -305,6 +317,9 @@ class Interpreter:
         raise NotImplementedError
 
 
+active_interpreter: ContextVar[Interpreter]
+
+
 @contextmanager
 def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
     """Run primitive dispatch through an interpreter inside the context."""
@@ -314,21 +329,3 @@ def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None
         yield interpreter
     finally:
         active_interpreter.reset(token)
-
-
-# ==================================================================================================
-# EVAL
-# ==================================================================================================
-
-
-class EvalInterpreter(Interpreter):
-    __slots__ = []
-
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return r_impl.get(prim)(in_tree, **params)
-
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await r_aimpl.get(prim)(in_tree, **params)
-
-
-active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())

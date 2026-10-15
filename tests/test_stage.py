@@ -22,10 +22,10 @@ from types import SimpleNamespace
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.intercept as intercept
 import autoform.src.lm as lm
 import autoform.src.memo as memo
@@ -310,8 +310,8 @@ class TestTags:
             return f"{','.join(names)}|{x}"
 
         p_probe = core.Prim("tag_probe")
-        extend.register_impl(p_probe, impl_probe)
-        extend.register_abstract(p_probe, abstract_probe)
+        extend.r_impl.set(p_probe, impl_probe)
+        extend.r_abstract.set(p_probe, abstract_probe)
 
         def program(x):
             with stage.tag(Label("draft"), Label("cost")):
@@ -470,8 +470,8 @@ def test_nested_primitive_inputs():
         return f"{options['greeting']}, {name}{options['punctuation']}"
 
     p_greet = core.Prim("greet")
-    extend.register_impl(p_greet, impl)
-    extend.register_abstract(p_greet, lambda inputs: string.AValStr())
+    extend.r_impl.set(p_greet, impl)
+    extend.r_abstract.set(p_greet, lambda inputs: string.AValStr())
     greeting_ir = stage.trace(
         lambda name: p_greet.bind((name, dict(greeting="Hi", punctuation="?")))
     )("World")
@@ -970,11 +970,11 @@ class TestTraceValuePythonOps:
         p_dunder = core.Prim(dunder.value)
         extend.register_trace_type(Value, lambda _: AValValue())
         core.aval_types[AValValue] = lambda aval: aval
-        extend.register_impl(
+        extend.r_impl.set(
             p_dunder,
             lambda inputs: operation(*(x.size if isinstance(x, Value) else x for x in inputs)),
         )
-        extend.register_abstract(p_dunder, lambda _: utils.tree.map(core.avalof, expected))
+        extend.r_abstract.set(p_dunder, lambda _: utils.tree.map(core.avalof, expected))
         extend.register_dunder(dunder, AValValue, lambda *inputs: p_dunder.bind(inputs))
 
         ir = stage.trace(program)(Value(5))
@@ -990,10 +990,10 @@ class TestTraceValuePythonOps:
         p_call_value = core.Prim("call_value")
         extend.register_trace_type(Value, lambda _: AValValue())
         core.aval_types[AValValue] = lambda aval: aval
-        extend.register_impl(
+        extend.r_impl.set(
             p_call_value, lambda inputs: inputs[0].size + sum(inputs[1]) + sum(inputs[2].values())
         )
-        extend.register_abstract(p_call_value, lambda _: numeric.AValInt())
+        extend.r_abstract.set(p_call_value, lambda _: numeric.AValInt())
         extend.register_dunder(
             stage.Dunder.CALL,
             AValValue,
@@ -1020,8 +1020,8 @@ class TestTraceValuePythonOps:
         p_next_value = core.Prim("next_value")
         extend.register_trace_type(Values, lambda _: AValValues())
         core.aval_types[AValValues] = lambda aval: aval
-        extend.register_impl(p_next_value, lambda value: next(value.values))
-        extend.register_abstract(p_next_value, lambda _: numeric.AValInt())
+        extend.r_impl.set(p_next_value, lambda value: next(value.values))
+        extend.r_abstract.set(p_next_value, lambda _: numeric.AValInt())
         extend.register_dunder(stage.Dunder.NEXT, AValValues, p_next_value.bind)
 
         ir = stage.trace(lambda x: (next(x), next(x)))(Values([1, 2]))
@@ -1039,8 +1039,8 @@ class TestTraceValuePythonOps:
         p_pair_values = core.Prim("pair_values")
         extend.register_trace_type(Pair, lambda _: AValPair())
         core.aval_types[AValPair] = lambda aval: aval
-        extend.register_impl(p_pair_values, lambda pair: pair.values)
-        extend.register_abstract(p_pair_values, lambda _: (numeric.AValInt(), numeric.AValInt()))
+        extend.r_impl.set(p_pair_values, lambda pair: pair.values)
+        extend.r_abstract.set(p_pair_values, lambda _: (numeric.AValInt(), numeric.AValInt()))
         extend.register_dunder(
             stage.Dunder.REVERSED, AValPair, lambda pair: reversed(p_pair_values.bind(pair))
         )
@@ -1127,7 +1127,7 @@ class TestFold:
             return dynamic
 
         p_param_probe = core.Prim("fold_param_probe")
-        extend.register_impl(p_param_probe, impl_param_probe)
+        extend.r_impl.set(p_param_probe, impl_param_probe)
 
         def program(x):
             with stage.fold():
@@ -1144,7 +1144,7 @@ class TestFold:
             return captured["value"]
 
         p_output_probe = core.Prim("fold_output_probe")
-        extend.register_impl(p_output_probe, impl_output_probe)
+        extend.r_impl.set(p_output_probe, impl_output_probe)
 
         def program(x):
             captured["value"] = x
@@ -1211,7 +1211,7 @@ class TestFold:
             return string.AValStr()
 
         p_async_probe = core.Prim("async_dynamic_fold_probe")
-        extend.register_abstract(p_async_probe, abstract_async_probe)
+        extend.r_abstract.set(p_async_probe, abstract_async_probe)
 
         with core.using_interpreter(stage.TraceInterpreter()) as tracer:
             result = asyncio.run(p_async_probe.abind("literal"))
@@ -1224,7 +1224,7 @@ class TestFold:
             return string.concat(in_tree, "!")
 
         p_async_probe = core.Prim("async_fold_probe")
-        extend.register_aimpl(p_async_probe, aimpl_async_probe)
+        extend.r_aimpl.set(p_async_probe, aimpl_async_probe)
 
         with core.using_interpreter(stage.TraceInterpreter()) as tracer:
             with stage.fold():

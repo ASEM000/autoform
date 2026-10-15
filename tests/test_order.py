@@ -15,11 +15,11 @@
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.control as control
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.intercept as intercept
 import autoform.src.order as order
 import autoform.src.stage as stage
@@ -124,9 +124,9 @@ def test_fanout_exception(executor):
         raise ValueError("intentional error")
 
     p_error = core.Prim("error")
-    extend.register_impl(p_error, impl_error)
-    extend.register_abstract(p_error, lambda x: string.AValStr())
-    extend.register_aimpl(p_error, utils.asyncify(impl_error))
+    extend.r_impl.set(p_error, impl_error)
+    extend.r_abstract.set(p_error, lambda x: string.AValStr())
+    extend.r_aimpl.set(p_error, utils.asyncify(impl_error))
     ir = order.sched(stage.trace(lambda x: (string.format("[{x}]", x=x), p_error.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):
         executor(ir, "A")

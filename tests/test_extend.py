@@ -13,9 +13,9 @@
 # limitations under the License.
 
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.stage as stage
 
 
@@ -84,8 +84,8 @@ def test_register_dunder_with_primitive_rules():
     extend.register_trace_type(Box, lambda value: AValBox())
     extend.register_dunder(stage.Dunder.ADD, AValBox, box_add)
     p_box_add = core.Prim("test_box_add")
-    extend.register_impl(p_box_add, impl_add)
-    extend.register_abstract(p_box_add, lambda _: AValBox())
+    extend.r_impl.set(p_box_add, impl_add)
+    extend.r_abstract.set(p_box_add, lambda _: AValBox())
 
     ir = stage.trace(lambda x, y: x + y)(Box(1), Box(2))
 

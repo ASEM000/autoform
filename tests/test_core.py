@@ -16,11 +16,12 @@ import asyncio
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.check as check
 import autoform.src.core as core
-import autoform.src.extend as extend
+import autoform.src.impl as impl
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
@@ -335,8 +336,8 @@ class TestBind:
         def abstract_rule(in_tree, *, multiplier):
             return string.AValStr()
 
-        extend.register_impl(p_custom_bind, impl)
-        extend.register_abstract(p_custom_bind, abstract_rule)
+        extend.r_impl.set(p_custom_bind, impl)
+        extend.r_abstract.set(p_custom_bind, abstract_rule)
 
         def func(x):
             return p_custom_bind.bind(x, multiplier=3)
@@ -347,13 +348,13 @@ class TestBind:
 
 
 def test_interpreter_context_restores_default():
-    assert type(core.active_interpreter.get()) is core.EvalInterpreter
+    assert type(core.active_interpreter.get()) is impl.ImplInterpreter
     tracer = stage.TraceInterpreter()
     with core.using_interpreter(tracer) as active:
         assert active is tracer
         string.format("Hello, {value}!", value=stage.Var.fresh(aval=string.AValStr()))
         assert len(tracer.eqns) == 1
-    assert type(core.active_interpreter.get()) is core.EvalInterpreter
+    assert type(core.active_interpreter.get()) is impl.ImplInterpreter
     assert string.concat("a", "b") == "ab"
 
 

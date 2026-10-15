@@ -27,6 +27,7 @@ from typing import Any, ClassVar, Self, TypeGuard, cast
 
 import autoform.src.check as check
 import autoform.src.core as core
+import autoform.src.impl as impl
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -513,7 +514,16 @@ def liveness(ir: IR, /, *, out_used: UsedTree | None = None) -> Liveness:
 # TRACING
 # ==================================================================================================
 
+type AValRule = Callable[[Any], core.AVal]
+
 trace_types: set[type] = set()
+
+
+def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
+    """Register a Python type and its abstract-value rule for tracing."""
+    core.aval_types[type] = aval_rule
+    trace_types.add(type)
+    return aval_rule
 
 
 def is_traceable(x) -> TypeGuard[str | int | float | bool]:
@@ -599,6 +609,25 @@ class Dunder(Enum):
 type DunderRule = Callable[..., Any]
 
 dunder_rules: dict[tuple[Dunder, type[core.AVal]], DunderRule] = {}
+
+
+def register_dunder[T: Callable[..., Any]](
+    dunder: Dunder,
+    aval_type: type[core.AVal],
+    rule: T,
+    /,
+    *,
+    replace: bool = False,
+) -> T:
+    """Register traced dunder behavior for an exact AVal type."""
+    assert isinstance(dunder, Dunder), f"Expected Dunder, got {dunder!r}"
+    assert issubclass(aval_type, core.AVal), f"Expected AVal type, got {aval_type!r}"
+    assert callable(rule), f"Expected callable, got {rule!r}"
+    assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+    key = dunder, aval_type
+    assert replace or key not in dunder_rules, f"Dunder rule is already defined"
+    dunder_rules[key] = rule
+    return rule
 
 
 class TraceBox:
@@ -851,14 +880,14 @@ class TraceInterpreter(core.Interpreter):
 
     def eval(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         assert_foldable(prim, (in_tree, params))
-        with core.using_interpreter(core.EvalInterpreter()):
+        with core.using_interpreter(impl.ImplInterpreter()):
             out_tree = prim.bind(in_tree, **params)
         assert_foldable(prim, out_tree)
         return out_tree
 
     async def aeval(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         assert_foldable(prim, (in_tree, params))
-        with core.using_interpreter(core.EvalInterpreter()):
+        with core.using_interpreter(impl.ImplInterpreter()):
             out_tree = await prim.abind(in_tree, **params)
         assert_foldable(prim, out_tree)
         return out_tree

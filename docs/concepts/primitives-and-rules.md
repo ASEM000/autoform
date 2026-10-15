@@ -76,8 +76,8 @@ def abstract_lookup(query, /):
     return af.extend.AValStr()
 
 
-afe.register_impl(p_lookup, impl_lookup)
-afe.register_abstract(p_lookup, abstract_lookup)
+afe.r_impl.set(p_lookup, impl_lookup)
+afe.r_abstract.set(p_lookup, abstract_lookup)
 
 
 ir = af.trace(lookup)("seed")
@@ -103,7 +103,7 @@ def batch_lookup(in_tree, /):
     return [p_lookup.bind(query) for query in queries], True
 
 
-afe.register_batch(p_lookup, batch_lookup)
+afe.r_batch.set(p_lookup, batch_lookup)
 
 
 assert af.batch(ir).call(["a", "b"]) == ["result for a", "result for b"]
@@ -123,8 +123,8 @@ def pull_bwd_lookup(in_tree, /):
     return request + ". Result: " + output
 
 
-afe.register_pullback_fwd(p_lookup, pull_fwd_lookup)
-afe.register_pullback_bwd(p_lookup, pull_bwd_lookup)
+afe.r_pull_fwd.set(p_lookup, pull_fwd_lookup)
+afe.r_pull_bwd.set(p_lookup, pull_bwd_lookup)
 
 
 output, (query_feedback,) = af.pullback(ir).call(
@@ -138,14 +138,14 @@ assert (
 )
 ```
 
-Sync and async implementations are registered separately. An async implementation lets the containing IR use `.acall(...)`. Transforms used during async execution need matching async rules, such as `register_abatch` and `register_apullback_bwd`.
+Sync and async implementations are registered separately. An async implementation lets the containing IR use `.acall(...)`. Transforms used during async execution need matching async rule tables, such as `r_abatch` and `r_apull_bwd`.
 
 ```python
 async def aimpl_lookup(query: str, /) -> str:
     return impl_lookup(query)
 
 
-afe.register_aimpl(p_lookup, aimpl_lookup)
+afe.r_aimpl.set(p_lookup, aimpl_lookup)
 ```
 
 ## Custom Rules

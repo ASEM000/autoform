@@ -47,6 +47,22 @@ dce_rules: dict[core.Prim, DCERule] = {}
 non_dce_primitives: set[core.Prim] = set()
 
 
+def register_dce[R: DCERule](prim: core.Prim, rule: R, /) -> R:
+    """Register a dead-code elimination rule for a primitive."""
+    assert isinstance(prim, core.Prim)
+    dce_rules[prim] = rule
+    return rule
+
+
+def register_non_dce[T: core.Prim](prim: T, /) -> T:
+    """Preserve a primitive even when its outputs are unused."""
+    assert isinstance(prim, core.Prim)
+    rules = non_dce_primitives
+    assert prim not in rules, f"Primitive {prim} is already registered as non-DCE."
+    rules.add(prim)
+    return prim
+
+
 def is_non_dce(eqn: stage.Eqn, /) -> bool:
     # NOTE(asem): recursively check if any nested irs contains non-dce prim
     # for example

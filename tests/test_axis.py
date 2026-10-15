@@ -16,11 +16,11 @@ from collections import namedtuple
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.check as check
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
@@ -282,8 +282,8 @@ def test_numeric_program_with_broadcast_input():
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
     p_batch_output = core.Prim("batch_output")
-    extend.register_abstract(p_batch_output, lambda _: utils.tree.map(core.avalof, sample_output))
-    extend.register_batch(p_batch_output, batch_rule)
+    extend.r_abstract.set(p_batch_output, lambda _: utils.tree.map(core.avalof, sample_output))
+    extend.r_batch.set(p_batch_output, batch_rule)
     return axis.batch(stage.trace(p_batch_output.bind)(traced))
 
 

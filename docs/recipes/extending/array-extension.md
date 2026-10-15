@@ -118,12 +118,12 @@ def register_binary(name, op, push_rule, pull_rule):
         y_at = ft.partial(afe.batch_index, y, by)
         return [bind(x_at(i), y_at(i)) for i in range(batch_size)], True
 
-    afe.register_impl(p_op, impl)
-    afe.register_abstract(p_op, abstract)
-    afe.register_pushforward(p_op, push)
-    afe.register_pullback_fwd(p_op, pull_fwd)
-    afe.register_pullback_bwd(p_op, pull_bwd)
-    afe.register_batch(p_op, batch_rule)
+    afe.r_impl.set(p_op, impl)
+    afe.r_abstract.set(p_op, abstract)
+    afe.r_push.set(p_op, push)
+    afe.r_pull_fwd.set(p_op, pull_fwd)
+    afe.r_pull_bwd.set(p_op, pull_bwd)
+    afe.r_batch.set(p_op, batch_rule)
     return bind
 ```
 
