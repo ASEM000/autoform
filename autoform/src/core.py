@@ -245,12 +245,13 @@ class Prim:
 
 
 class Rule[T]:
-    __slots__ = ["name", "map"]
+    __slots__ = ["name", "map", "overrides"]
 
     def __init__(self, name: str):
         assert isinstance(name, str), f"Invalid name type: {type(name)=}"
         self.name = name
         self.map: dict[Prim, Callable[..., T]] = {}
+        self.overrides = ContextVar(f"{name} overrides", default={})
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
@@ -262,7 +263,20 @@ class Rule[T]:
         return rule
 
     def get(self, prim: Prim, /) -> Callable[..., T]:
+        if (rule := self.overrides.get().get(prim)) is not None:
+            return rule
         return self.map[prim]
+
+    @contextmanager
+    def using(self, overrides, /):
+        for prim, rule in overrides.items():
+            assert isinstance(prim, Prim)
+            assert callable(rule)
+        token = self.overrides.set(self.overrides.get() | overrides)
+        try:
+            yield self
+        finally:
+            self.overrides.reset(token)
 
 
 impl_rules: Rule[Tree] = Rule("impl")
