@@ -294,8 +294,8 @@ class TestRule:
         ir = stage.trace(lambda x, y: x + y)("x", "y")
         reverse = lambda values: "".join(reversed(values))
         with (
-            core.impl_rules.override((string.p_concat, reverse)),
-            core.aimpl_rules.override((string.p_concat, utils.asyncify(reverse))),
+            core.r_impl.override((string.p_concat, reverse)),
+            core.r_aimpl.override((string.p_concat, utils.asyncify(reverse))),
         ):
             assert executor(ir, "a", "b") == "ba"
         assert executor(ir, "a", "b") == "ab"
@@ -306,7 +306,7 @@ class TestRule:
 
             async def worker(value, entered):
                 rule = utils.asyncify(lambda values: value)
-                with core.aimpl_rules.override((string.p_concat, rule)):
+                with core.r_aimpl.override((string.p_concat, rule)):
                     entered.set()
                     await release.wait()
                     return await string.p_concat.abind(("a", "b"))

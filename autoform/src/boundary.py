@@ -146,21 +146,6 @@ def dce_custom_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResul
     return dead.default_dce(eqn, out_used)
 
 
-def install_custom_call_rules(prim: core.Prim, /) -> None:
-    core.impl_rules.set(prim, impl_custom_call)
-    core.aimpl_rules.set(prim, aimpl_custom_call)
-    core.abstract_rules.set(prim, abstract_custom_call)
-    core.batch_rules.set(prim, batch_custom_call)
-    core.abatch_rules.set(prim, abatch_custom_call)
-    core.push_rules.set(prim, pushforward_custom_call)
-    core.apush_rules.set(prim, apushforward_custom_call)
-    core.pull_fwd_rules.set(prim, pullback_fwd_custom_call)
-    core.apull_fwd_rules.set(prim, apullback_fwd_custom_call)
-    core.pull_bwd_rules.set(prim, pullback_bwd_custom_call)
-    core.apull_bwd_rules.set(prim, apullback_bwd_custom_call)
-    dead.dce_rules[prim] = dce_custom_call
-
-
 def custom_prim_name(func: Callable[..., Any]) -> str:
     return f"custom_call_p<{func.__name__}-{id(func):x}>"
 
@@ -169,7 +154,18 @@ class CustomFunc:
     def __init__(self, func: Callable[..., Any], /):
         self.func = func
         self.prim = core.Prim(custom_prim_name(func))
-        install_custom_call_rules(self.prim)
+        core.r_impl.set(self.prim, impl_custom_call)
+        core.r_aimpl.set(self.prim, aimpl_custom_call)
+        core.r_abstract.set(self.prim, abstract_custom_call)
+        core.r_batch.set(self.prim, batch_custom_call)
+        core.r_abatch.set(self.prim, abatch_custom_call)
+        core.r_push.set(self.prim, pushforward_custom_call)
+        core.r_apush.set(self.prim, apushforward_custom_call)
+        core.r_pull_fwd.set(self.prim, pullback_fwd_custom_call)
+        core.r_apull_fwd.set(self.prim, apullback_fwd_custom_call)
+        core.r_pull_bwd.set(self.prim, pullback_bwd_custom_call)
+        core.r_apull_bwd.set(self.prim, apullback_bwd_custom_call)
+        dead.dce_rules[self.prim] = dce_custom_call
         ft.update_wrapper(self, func)
 
     def __call__(self, *args):
@@ -195,7 +191,7 @@ class CustomFunc:
             ('[hello]', 'delta change')
         """
 
-        return core.push_rules.set(self.prim, rule)
+        return core.r_push.set(self.prim, rule)
 
     def aset_pushforward[R: Callable[..., Awaitable[tuple[Tree, Tree]]]](self, rule: R, /) -> R:
         """Register an async custom pushforward rule.
@@ -218,7 +214,7 @@ class CustomFunc:
             ('[hello]', 'async delta change')
         """
 
-        return core.apush_rules.set(self.prim, rule)
+        return core.r_apush.set(self.prim, rule)
 
     def set_pullback[R: Callable[..., Tree]](self, rule: R, /) -> R:
         """Register ``rule(in_tree, *, call) -> in_c``.
@@ -239,7 +235,7 @@ class CustomFunc:
             ('[hello]', ('feedback via [hello]',))
         """
 
-        return core.pull_bwd_rules.set(self.prim, rule)
+        return core.r_pull_bwd.set(self.prim, rule)
 
     def aset_pullback[R: Callable[..., Awaitable[Tree]]](self, rule: R, /) -> R:
         """Register an async custom pullback rule.
@@ -261,7 +257,7 @@ class CustomFunc:
             ('[hello]', ('async feedback via [hello]',))
         """
 
-        return core.apull_bwd_rules.set(self.prim, rule)
+        return core.r_apull_bwd.set(self.prim, rule)
 
     def set_batch[R: Callable[..., tuple[Tree, Tree[bool]]]](self, rule: R, /) -> R:
         """Register ``rule(in_tree, *, call) -> (outputs, output_axes)``.
@@ -285,7 +281,7 @@ class CustomFunc:
             ['<a>', '<b>']
         """
 
-        return core.batch_rules.set(self.prim, rule)
+        return core.r_batch.set(self.prim, rule)
 
     def aset_batch[R: Callable[..., Awaitable[tuple[Tree, Tree[bool]]]]](self, rule: R, /) -> R:
         """Register an async custom batch rule.
@@ -310,7 +306,7 @@ class CustomFunc:
             ['async <a>', 'async <b>']
         """
 
-        return core.abatch_rules.set(self.prim, rule)
+        return core.r_abatch.set(self.prim, rule)
 
 
 def custom(func: Callable[..., Any], /) -> CustomFunc:

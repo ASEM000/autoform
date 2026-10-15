@@ -879,7 +879,7 @@ class TraceInterpreter(core.Interpreter):
 
         in_tree = utils.tree.map(to_in_ir_atom, in_tree)
         in_aval_tree = utils.tree.map(aval_if_var, in_tree)
-        out_aval_tree = core.abstract_rules.get(prim)(in_aval_tree, **params)
+        out_aval_tree = core.r_abstract.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x: Any) -> Any:
             # NOTE(asem): abstract rules return `AVal`/ python leaves.

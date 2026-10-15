@@ -95,17 +95,17 @@ async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable |
     return out_ib, out_batched
 
 
-core.impl_rules.set(p_checkpoint, impl_checkpoint)
-core.aimpl_rules.set(p_checkpoint, utils.asyncify(impl_checkpoint))
-core.abstract_rules.set(p_checkpoint, abstract_checkpoint)
-core.batch_rules.set(p_checkpoint, batch_checkpoint)
-core.abatch_rules.set(p_checkpoint, abatch_checkpoint)
-core.push_rules.set(p_checkpoint, push_checkpoint)
-core.apush_rules.set(p_checkpoint, utils.asyncify(push_checkpoint))
-core.pull_fwd_rules.set(p_checkpoint, pull_fwd_checkpoint)
-core.apull_fwd_rules.set(p_checkpoint, utils.asyncify(pull_fwd_checkpoint))
-core.pull_bwd_rules.set(p_checkpoint, pull_bwd_checkpoint)
-core.apull_bwd_rules.set(p_checkpoint, utils.asyncify(pull_bwd_checkpoint))
+core.r_impl.set(p_checkpoint, impl_checkpoint)
+core.r_aimpl.set(p_checkpoint, utils.asyncify(impl_checkpoint))
+core.r_abstract.set(p_checkpoint, abstract_checkpoint)
+core.r_batch.set(p_checkpoint, batch_checkpoint)
+core.r_abatch.set(p_checkpoint, abatch_checkpoint)
+core.r_push.set(p_checkpoint, push_checkpoint)
+core.r_apush.set(p_checkpoint, utils.asyncify(push_checkpoint))
+core.r_pull_fwd.set(p_checkpoint, pull_fwd_checkpoint)
+core.r_apull_fwd.set(p_checkpoint, utils.asyncify(pull_fwd_checkpoint))
+core.r_pull_bwd.set(p_checkpoint, pull_bwd_checkpoint)
+core.r_apull_bwd.set(p_checkpoint, utils.asyncify(pull_bwd_checkpoint))
 
 
 def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = None) -> Tree:

@@ -116,47 +116,47 @@ type AValRule = Callable[[Any], AVal]
 
 
 def register_impl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.impl_rules.set(prim, rule)
+    return core.r_impl.set(prim, rule)
 
 
 def register_aimpl[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.aimpl_rules.set(prim, rule)
+    return core.r_aimpl.set(prim, rule)
 
 
 def register_abstract[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.abstract_rules.set(prim, rule)
+    return core.r_abstract.set(prim, rule)
 
 
 def register_batch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.batch_rules.set(prim, rule)
+    return core.r_batch.set(prim, rule)
 
 
 def register_abatch[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.abatch_rules.set(prim, rule)
+    return core.r_abatch.set(prim, rule)
 
 
 def register_pushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.push_rules.set(prim, rule)
+    return core.r_push.set(prim, rule)
 
 
 def register_apushforward[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.apush_rules.set(prim, rule)
+    return core.r_apush.set(prim, rule)
 
 
 def register_pullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.pull_fwd_rules.set(prim, rule)
+    return core.r_pull_fwd.set(prim, rule)
 
 
 def register_apullback_fwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.apull_fwd_rules.set(prim, rule)
+    return core.r_apull_fwd.set(prim, rule)
 
 
 def register_pullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.pull_bwd_rules.set(prim, rule)
+    return core.r_pull_bwd.set(prim, rule)
 
 
 def register_apullback_bwd[R: Callable[..., Any]](prim: Prim, rule: R, /) -> R:
-    return core.apull_bwd_rules.set(prim, rule)
+    return core.r_apull_bwd.set(prim, rule)
 
 
 def register_algebra[R: Callable[[AVal], Algebra]](aval_type: type[AVal], rule: R, /) -> R:

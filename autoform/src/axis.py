@@ -235,7 +235,7 @@ class BatchInterpreter(core.Interpreter):
         in_v, in_b = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            out_v, out_b = core.batch_rules.get(prim)((b_sz, in_b, in_v), **params)
+            out_v, out_b = core.r_batch.get(prim)((b_sz, in_b, in_v), **params)
         return self.box((out_v, out_b))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
@@ -243,7 +243,7 @@ class BatchInterpreter(core.Interpreter):
         in_v, in_b = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interpreter(self.parent):
-            out_v, out_b = await core.abatch_rules.get(prim)((b_sz, in_b, in_v), **params)
+            out_v, out_b = await core.r_abatch.get(prim)((b_sz, in_b, in_v), **params)
         return self.box((out_v, out_b))
 
 
@@ -474,15 +474,15 @@ def dce_batch_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(p_batch_call, impl_batch_call)
-core.aimpl_rules.set(p_batch_call, aimpl_batch_call)
-core.abstract_rules.set(p_batch_call, abstract_batch_call)
-core.batch_rules.set(p_batch_call, batch_batch_call)
-core.abatch_rules.set(p_batch_call, abatch_batch_call)
-core.push_rules.set(p_batch_call, pushforward_batch_call)
-core.apush_rules.set(p_batch_call, apushforward_batch_call)
-core.pull_fwd_rules.set(p_batch_call, pullback_fwd_batch_call)
-core.apull_fwd_rules.set(p_batch_call, apullback_fwd_batch_call)
-core.pull_bwd_rules.set(p_batch_call, pullback_bwd_batch_call)
-core.apull_bwd_rules.set(p_batch_call, apullback_bwd_batch_call)
+core.r_impl.set(p_batch_call, impl_batch_call)
+core.r_aimpl.set(p_batch_call, aimpl_batch_call)
+core.r_abstract.set(p_batch_call, abstract_batch_call)
+core.r_batch.set(p_batch_call, batch_batch_call)
+core.r_abatch.set(p_batch_call, abatch_batch_call)
+core.r_push.set(p_batch_call, pushforward_batch_call)
+core.r_apush.set(p_batch_call, apushforward_batch_call)
+core.r_pull_fwd.set(p_batch_call, pullback_fwd_batch_call)
+core.r_apull_fwd.set(p_batch_call, apullback_fwd_batch_call)
+core.r_pull_bwd.set(p_batch_call, pullback_bwd_batch_call)
+core.r_apull_bwd.set(p_batch_call, apullback_bwd_batch_call)
 dead.dce_rules[p_batch_call] = dce_batch_call

@@ -277,17 +277,17 @@ class Rule[T]:
             self.active.reset(token)
 
 
-impl_rules: Rule[Tree] = Rule("impl")
-aimpl_rules: Rule[Awaitable[Tree]] = Rule("aimpl")
-abstract_rules: Rule[Tree] = Rule("abstract")
-batch_rules: Rule[tuple[Tree, Tree[bool]]] = Rule("batch")
-abatch_rules: Rule[Awaitable[tuple[Tree, Tree[bool]]]] = Rule("abatch")
-push_rules: Rule[tuple[Tree, Tree]] = Rule("pushforward")
-apush_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apushforward")
-pull_fwd_rules: Rule[tuple[Tree, Tree]] = Rule("pullback_fwd")
-apull_fwd_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apullback_fwd")
-pull_bwd_rules: Rule[Tree] = Rule("pullback_bwd")
-apull_bwd_rules: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
+r_impl: Rule[Tree] = Rule("impl")
+r_aimpl: Rule[Awaitable[Tree]] = Rule("aimpl")
+r_abstract: Rule[Tree] = Rule("abstract")
+r_batch: Rule[tuple[Tree, Tree[bool]]] = Rule("batch")
+r_abatch: Rule[Awaitable[tuple[Tree, Tree[bool]]]] = Rule("abatch")
+r_push: Rule[tuple[Tree, Tree]] = Rule("pushforward")
+r_apush: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apushforward")
+r_pull_fwd: Rule[tuple[Tree, Tree]] = Rule("pullback_fwd")
+r_apull_fwd: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apullback_fwd")
+r_pull_bwd: Rule[Tree] = Rule("pullback_bwd")
+r_apull_bwd: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
 
 
 # ==================================================================================================
@@ -325,10 +325,10 @@ class EvalInterpreter(Interpreter):
     __slots__ = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return impl_rules.get(prim)(in_tree, **params)
+        return r_impl.get(prim)(in_tree, **params)
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await aimpl_rules.get(prim)(in_tree, **params)
+        return await r_aimpl.get(prim)(in_tree, **params)
 
 
 active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())

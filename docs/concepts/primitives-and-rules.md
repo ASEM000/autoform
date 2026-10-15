@@ -10,12 +10,12 @@ Rules for execution, tracing, and [transforms](transforms.md) are registered thr
 
 | Registry | Purpose |
 | --- | --- |
-| `impl_rules` | Execution with concrete input values. |
-| `abstract_rules` | Output abstract values used during tracing. |
-| `batch_rules` | Outputs and output batch axes for {py:func}`batch <autoform.batch>`. |
-| `push_rules` | The output and its tangent for {py:func}`pushforward <autoform.pushforward>`. |
-| `pull_fwd_rules` | The output and saved residuals for {py:func}`pullback <autoform.pullback>`. |
-| `pull_bwd_rules` | Input feedback computed from residuals and output feedback. |
+| `r_impl` | Execution with concrete input values. |
+| `r_abstract` | Output abstract values used during tracing. |
+| `r_batch` | Outputs and output batch axes for {py:func}`batch <autoform.batch>`. |
+| `r_push` | The output and its tangent for {py:func}`pushforward <autoform.pushforward>`. |
+| `r_pull_fwd` | The output and saved residuals for {py:func}`pullback <autoform.pullback>`. |
+| `r_pull_bwd` | Input feedback computed from residuals and output feedback. |
 
 A pullback separates the original computation from feedback propagation. Its forward rule returns both the result and any residuals needed later. The backward rule receives those residuals together with the output cotangent and returns input cotangents.
 
