@@ -16,11 +16,12 @@ import asyncio
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.check as check
 import autoform.src.core as core
-import autoform.src.extend as extend
+import autoform.src.impl as impl
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
@@ -294,8 +295,8 @@ class TestRule:
         ir = stage.trace(lambda x, y: x + y)("x", "y")
         reverse = lambda values: "".join(reversed(values))
         with (
-            core.impl_rules.override((string.p_concat, reverse)),
-            core.aimpl_rules.override((string.p_concat, utils.asyncify(reverse))),
+            core.r_impl.override((string.p_concat, reverse)),
+            core.r_aimpl.override((string.p_concat, utils.asyncify(reverse))),
         ):
             assert executor(ir, "a", "b") == "ba"
         assert executor(ir, "a", "b") == "ab"
@@ -306,7 +307,7 @@ class TestRule:
 
             async def worker(value, entered):
                 rule = utils.asyncify(lambda values: value)
-                with core.aimpl_rules.override((string.p_concat, rule)):
+                with core.r_aimpl.override((string.p_concat, rule)):
                     entered.set()
                     await release.wait()
                     return await string.p_concat.abind(("a", "b"))
@@ -335,8 +336,8 @@ class TestBind:
         def abstract_rule(in_tree, *, multiplier):
             return string.AValStr()
 
-        extend.register_impl(p_custom_bind, impl)
-        extend.register_abstract(p_custom_bind, abstract_rule)
+        extend.r_impl.set(p_custom_bind, impl)
+        extend.r_abstract.set(p_custom_bind, abstract_rule)
 
         def func(x):
             return p_custom_bind.bind(x, multiplier=3)
@@ -347,13 +348,13 @@ class TestBind:
 
 
 def test_interpreter_context_restores_default():
-    assert type(core.active_interpreter.get()) is core.EvalInterpreter
-    tracer = stage.TraceInterpreter()
-    with core.using_interpreter(tracer) as active:
+    assert type(core.active_interp.get()) is impl.ImplInterp
+    tracer = stage.TraceInterp()
+    with core.using_interp(tracer) as active:
         assert active is tracer
         string.format("Hello, {value}!", value=stage.Var.fresh(aval=string.AValStr()))
         assert len(tracer.eqns) == 1
-    assert type(core.active_interpreter.get()) is core.EvalInterpreter
+    assert type(core.active_interp.get()) is impl.ImplInterp
     assert string.concat("a", "b") == "ab"
 
 
@@ -368,7 +369,7 @@ def test_custom_rule_interpreter(executor):
     rules.set(check.p_typecheck, check.impl_check)
     arules.set(check.p_typecheck, utils.asyncify(check.impl_check))
 
-    class OperationCountInterpreter(core.Interpreter):
+    class OperationCountInterp(core.Interp):
         def interpret(self, prim, in_tree, /, **params):
             return rules.get(prim)(in_tree, **params)
 
@@ -376,7 +377,7 @@ def test_custom_rule_interpreter(executor):
             return await arules.get(prim)(in_tree, **params)
 
     ir = stage.trace(lambda x, y: (x + y) + y)("x", "y")
-    with core.using_interpreter(OperationCountInterpreter()):
+    with core.using_interp(OperationCountInterp()):
         with pytest.raises(TypeError, match="Expected AValStr"):
             executor(ir, "x", "y")
     assert executor(ir, "x", "y") == "xyy"

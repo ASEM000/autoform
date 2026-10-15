@@ -148,11 +148,6 @@ def test_schema_constraints_are_static_during_tracing(schema):
     assert ir.call(schema, "hello") == (schema, "hello")
 
 
-def test_spec_base_cannot_be_instantiated():
-    with pytest.raises(TypeError, match="abstract.*Spec"):
-        lm.Spec()
-
-
 def test_new_spec_subclasses_register_description_children():
     class CustomSpec(lm.Spec):
         __slots__ = []
@@ -206,14 +201,6 @@ def test_keyword_description_matches_matmul(constructor, args):
     assert ir.call("changed") == schema @ "changed"
     with pytest.raises(TypeError, match="desc must be a string"):
         constructor(*args, desc=1.0)
-
-
-def test_specs_require_description_and_parse_methods():
-    class CustomSpec(lm.Spec):
-        __slots__ = []
-
-    with pytest.raises(TypeError, match="abstract.*CustomSpec"):
-        CustomSpec()
 
 
 @pytest.mark.parametrize(
@@ -385,28 +372,6 @@ def test_spec_methods_support_custom_pytrees():
     )
     with pytest.raises(ValueError, match="Expected matching prefix"):
         lm.parse(schema, {"x": "wrong"})
-
-
-def test_specs_require_parse_method():
-    class Node(lm.Spec):
-        __slots__ = []
-
-        def describe(self):
-            return dict(type="string")
-
-    with pytest.raises(TypeError, match="abstract.*Node.*parse"):
-        Node()
-
-
-def test_specs_require_describe_method():
-    class Node(lm.Spec):
-        __slots__ = []
-
-        def parse(self, value):
-            return value
-
-    with pytest.raises(TypeError, match="abstract.*Node.*describe"):
-        Node()
 
 
 @pytest.mark.parametrize(

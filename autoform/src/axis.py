@@ -205,7 +205,7 @@ def avalof_batch_box(box: BatchBox, /) -> core.AVal:
 core.aval_types[BatchBox] = avalof_batch_box
 
 
-class BatchInterpreter(core.Interpreter):
+class BatchInterp(core.Interp):
     __slots__ = ["parent", "batch_size"]
 
     def __init__(self, *, batch_size: int, parent):
@@ -234,16 +234,16 @@ class BatchInterpreter(core.Interpreter):
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_v, in_b = self.unbox(in_tree)
         b_sz = self.batch_size
-        with core.using_interpreter(self.parent):
-            out_v, out_b = core.batch_rules.get(prim)((b_sz, in_b, in_v), **params)
+        with core.using_interp(self.parent):
+            out_v, out_b = core.r_batch.get(prim)((b_sz, in_b, in_v), **params)
         return self.box((out_v, out_b))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         # NOTE(asem): async batch rules must be explicitly seted - no fallback to sync.
         in_v, in_b = self.unbox(in_tree)
         b_sz = self.batch_size
-        with core.using_interpreter(self.parent):
-            out_v, out_b = await core.abatch_rules.get(prim)((b_sz, in_b, in_v), **params)
+        with core.using_interp(self.parent):
+            out_v, out_b = await core.r_abatch.get(prim)((b_sz, in_b, in_v), **params)
         return self.box((out_v, out_b))
 
 
@@ -303,12 +303,12 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     # >>> batched.call([])
     assert batch_size, "batch size must be > 0"
 
-    batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
+    batcher = BatchInterp(batch_size=batch_size, parent=core.active_interp.get())
 
     env = BatchEnv()
 
     def batch_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
-        with core.using_interpreter(batcher):
+        with core.using_interp(batcher):
             out_boxed = eqn.bind(batcher.box(in_tree), **eqn.params)
         out_v, out_b = batcher.unbox(out_boxed)
         return out_v, assert_trees(out_b, eqn.out_tree, eqn.prim.name)
@@ -341,12 +341,12 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
     batch_size = spec.num_children
     assert batch_size, "batch size must be > 0"
 
-    batcher = BatchInterpreter(batch_size=batch_size, parent=core.active_interpreter.get())
+    batcher = BatchInterp(batch_size=batch_size, parent=core.active_interp.get())
 
     env = BatchEnv()
 
     async def batch_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
-        with core.using_interpreter(batcher):
+        with core.using_interp(batcher):
             out_boxed = await eqn.abind(batcher.box(in_tree), **eqn.params)
         out_v, out_b = batcher.unbox(out_boxed)
         return out_v, assert_trees(out_b, eqn.out_tree, eqn.prim.name)
@@ -474,15 +474,15 @@ def dce_batch_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(p_batch_call, impl_batch_call)
-core.aimpl_rules.set(p_batch_call, aimpl_batch_call)
-core.abstract_rules.set(p_batch_call, abstract_batch_call)
-core.batch_rules.set(p_batch_call, batch_batch_call)
-core.abatch_rules.set(p_batch_call, abatch_batch_call)
-core.push_rules.set(p_batch_call, pushforward_batch_call)
-core.apush_rules.set(p_batch_call, apushforward_batch_call)
-core.pull_fwd_rules.set(p_batch_call, pullback_fwd_batch_call)
-core.apull_fwd_rules.set(p_batch_call, apullback_fwd_batch_call)
-core.pull_bwd_rules.set(p_batch_call, pullback_bwd_batch_call)
-core.apull_bwd_rules.set(p_batch_call, apullback_bwd_batch_call)
+core.r_impl.set(p_batch_call, impl_batch_call)
+core.r_aimpl.set(p_batch_call, aimpl_batch_call)
+core.r_abstract.set(p_batch_call, abstract_batch_call)
+core.r_batch.set(p_batch_call, batch_batch_call)
+core.r_abatch.set(p_batch_call, abatch_batch_call)
+core.r_push.set(p_batch_call, pushforward_batch_call)
+core.r_apush.set(p_batch_call, apushforward_batch_call)
+core.r_pull_fwd.set(p_batch_call, pullback_fwd_batch_call)
+core.r_apull_fwd.set(p_batch_call, apullback_fwd_batch_call)
+core.r_pull_bwd.set(p_batch_call, pullback_bwd_batch_call)
+core.r_apull_bwd.set(p_batch_call, apullback_bwd_batch_call)
 dead.dce_rules[p_batch_call] = dce_batch_call

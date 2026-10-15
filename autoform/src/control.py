@@ -104,17 +104,17 @@ def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
     return x, in_batched
 
 
-core.impl_rules.set(p_stop_gradient, impl_stop_gradient)
-core.aimpl_rules.set(p_stop_gradient, utils.asyncify(impl_stop_gradient))
-core.abstract_rules.set(p_stop_gradient, abstract_stop_gradient)
-core.batch_rules.set(p_stop_gradient, batch_stop_gradient)
-core.abatch_rules.set(p_stop_gradient, utils.asyncify(batch_stop_gradient))
-core.push_rules.set(p_stop_gradient, pushforward_stop_gradient)
-core.apush_rules.set(p_stop_gradient, utils.asyncify(pushforward_stop_gradient))
-core.pull_fwd_rules.set(p_stop_gradient, pullback_fwd_stop_gradient)
-core.apull_fwd_rules.set(p_stop_gradient, utils.asyncify(pullback_fwd_stop_gradient))
-core.pull_bwd_rules.set(p_stop_gradient, pullback_bwd_stop_gradient)
-core.apull_bwd_rules.set(p_stop_gradient, utils.asyncify(pullback_bwd_stop_gradient))
+core.r_impl.set(p_stop_gradient, impl_stop_gradient)
+core.r_aimpl.set(p_stop_gradient, utils.asyncify(impl_stop_gradient))
+core.r_abstract.set(p_stop_gradient, abstract_stop_gradient)
+core.r_batch.set(p_stop_gradient, batch_stop_gradient)
+core.r_abatch.set(p_stop_gradient, utils.asyncify(batch_stop_gradient))
+core.r_push.set(p_stop_gradient, pushforward_stop_gradient)
+core.r_apush.set(p_stop_gradient, utils.asyncify(pushforward_stop_gradient))
+core.r_pull_fwd.set(p_stop_gradient, pullback_fwd_stop_gradient)
+core.r_apull_fwd.set(p_stop_gradient, utils.asyncify(pullback_fwd_stop_gradient))
+core.r_pull_bwd.set(p_stop_gradient, pullback_bwd_stop_gradient)
+core.r_apull_bwd.set(p_stop_gradient, utils.asyncify(pullback_bwd_stop_gradient))
 
 
 # ==================================================================================================
@@ -287,17 +287,17 @@ def dce_switch(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(p_switch, impl_switch)
-core.aimpl_rules.set(p_switch, aimpl_switch)
-core.abstract_rules.set(p_switch, abstract_switch)
-core.batch_rules.set(p_switch, batch_switch)
-core.abatch_rules.set(p_switch, abatch_switch)
-core.push_rules.set(p_switch, pushforward_switch)
-core.apush_rules.set(p_switch, apushforward_switch)
-core.pull_fwd_rules.set(p_switch, pullback_fwd_switch)
-core.apull_fwd_rules.set(p_switch, apull_fwd_switch)
-core.pull_bwd_rules.set(p_switch, pullback_bwd_switch)
-core.apull_bwd_rules.set(p_switch, apull_bwd_switch)
+core.r_impl.set(p_switch, impl_switch)
+core.r_aimpl.set(p_switch, aimpl_switch)
+core.r_abstract.set(p_switch, abstract_switch)
+core.r_batch.set(p_switch, batch_switch)
+core.r_abatch.set(p_switch, abatch_switch)
+core.r_push.set(p_switch, pushforward_switch)
+core.r_apush.set(p_switch, apushforward_switch)
+core.r_pull_fwd.set(p_switch, pullback_fwd_switch)
+core.r_apull_fwd.set(p_switch, apull_fwd_switch)
+core.r_pull_bwd.set(p_switch, pullback_bwd_switch)
+core.r_apull_bwd.set(p_switch, apull_bwd_switch)
 dead.dce_rules[p_switch] = dce_switch
 
 
@@ -715,17 +715,17 @@ def dce_while_loop(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(p_while_loop, impl_while_loop)
-core.aimpl_rules.set(p_while_loop, aimpl_while_loop)
-core.abstract_rules.set(p_while_loop, abstract_while_loop)
-core.batch_rules.set(p_while_loop, batch_while_loop)
-core.abatch_rules.set(p_while_loop, abatch_while_loop)
-core.push_rules.set(p_while_loop, pushforward_while_loop)
-core.apush_rules.set(p_while_loop, apushforward_while_loop)
-core.pull_fwd_rules.set(p_while_loop, pullback_fwd_while_loop)
-core.apull_fwd_rules.set(p_while_loop, apull_fwd_while_loop)
-core.pull_bwd_rules.set(p_while_loop, pullback_bwd_while_loop)
-core.apull_bwd_rules.set(p_while_loop, apull_bwd_while_loop)
+core.r_impl.set(p_while_loop, impl_while_loop)
+core.r_aimpl.set(p_while_loop, aimpl_while_loop)
+core.r_abstract.set(p_while_loop, abstract_while_loop)
+core.r_batch.set(p_while_loop, batch_while_loop)
+core.r_abatch.set(p_while_loop, abatch_while_loop)
+core.r_push.set(p_while_loop, pushforward_while_loop)
+core.r_apush.set(p_while_loop, apushforward_while_loop)
+core.r_pull_fwd.set(p_while_loop, pullback_fwd_while_loop)
+core.r_apull_fwd.set(p_while_loop, apull_fwd_while_loop)
+core.r_pull_bwd.set(p_while_loop, pullback_bwd_while_loop)
+core.r_apull_bwd.set(p_while_loop, apull_bwd_while_loop)
 dead.dce_rules[p_while_loop] = dce_while_loop
 
 
@@ -967,21 +967,21 @@ def pullback_bwd_fixpoint(
         return dx0, utils.tree.map(make_c, theta)
 
     res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interpreter.get()
-    fwd = ad.PullbackFwdInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    fwd = ad.PullFwdInterp(parent=parent)
 
     def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interpreter(fwd):
+        with core.using_interp(fwd):
             out_boxed, residuals = eqn.bind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
         return fwd.unbox(out_boxed)
 
     def transpose_eq(cot: Tree, /) -> Tree:
-        bwd = ad.PullbackBwdInterpreter(parent=parent)
+        bwd = ad.PullBwdInterp(parent=parent)
 
         def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
             residuals = res[eqn]
-            with core.using_interpreter(bwd):
+            with core.using_interp(bwd):
                 in_boxed_c = eqn.bind((residuals, bwd.box(out_c)), **eqn.params)
             return bwd.unbox(in_boxed_c)
 
@@ -1039,21 +1039,21 @@ async def apull_bwd_fixpoint(
         return dx0, utils.tree.map(make_c, theta)
 
     res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interpreter.get()
-    fwd = ad.PullbackFwdInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    fwd = ad.PullFwdInterp(parent=parent)
 
     async def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interpreter(fwd):
+        with core.using_interp(fwd):
             out_boxed, residuals = await eqn.abind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
         return fwd.unbox(out_boxed)
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
-        bwd = ad.PullbackBwdInterpreter(parent=parent)
+        bwd = ad.PullBwdInterp(parent=parent)
 
         async def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
             residuals = res[eqn]
-            with core.using_interpreter(bwd):
+            with core.using_interp(bwd):
                 in_boxed_c = await eqn.abind((residuals, bwd.box(out_c)), **eqn.params)
             return bwd.unbox(in_boxed_c)
 
@@ -1228,15 +1228,15 @@ def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(p_fixpoint, impl_fixpoint)
-core.aimpl_rules.set(p_fixpoint, aimpl_fixpoint)
-core.abstract_rules.set(p_fixpoint, abstract_fixpoint)
-core.push_rules.set(p_fixpoint, pushforward_fixpoint)
-core.apush_rules.set(p_fixpoint, apushforward_fixpoint)
-core.batch_rules.set(p_fixpoint, batch_fixpoint)
-core.abatch_rules.set(p_fixpoint, abatch_fixpoint)
-core.pull_fwd_rules.set(p_fixpoint, pullback_fwd_fixpoint)
-core.apull_fwd_rules.set(p_fixpoint, apull_fwd_fixpoint)
-core.pull_bwd_rules.set(p_fixpoint, pullback_bwd_fixpoint)
-core.apull_bwd_rules.set(p_fixpoint, apull_bwd_fixpoint)
+core.r_impl.set(p_fixpoint, impl_fixpoint)
+core.r_aimpl.set(p_fixpoint, aimpl_fixpoint)
+core.r_abstract.set(p_fixpoint, abstract_fixpoint)
+core.r_push.set(p_fixpoint, pushforward_fixpoint)
+core.r_apush.set(p_fixpoint, apushforward_fixpoint)
+core.r_batch.set(p_fixpoint, batch_fixpoint)
+core.r_abatch.set(p_fixpoint, abatch_fixpoint)
+core.r_pull_fwd.set(p_fixpoint, pullback_fwd_fixpoint)
+core.r_apull_fwd.set(p_fixpoint, apull_fwd_fixpoint)
+core.r_pull_bwd.set(p_fixpoint, pullback_bwd_fixpoint)
+core.r_apull_bwd.set(p_fixpoint, apull_bwd_fixpoint)
 dead.dce_rules[p_fixpoint] = dce_fixpoint

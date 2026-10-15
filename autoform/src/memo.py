@@ -32,6 +32,15 @@ type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
 non_memoizable_primitives: set[core.Prim] = {intercept.p_checkpoint}
 
 
+def register_non_memoizable[T: core.Prim](prim: T, /) -> T:
+    """Exclude a primitive from memoization."""
+    assert isinstance(prim, core.Prim)
+    rules = non_memoizable_primitives
+    assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
+    rules.add(prim)
+    return prim
+
+
 def is_non_memo(eqn: stage.Eqn, /) -> bool:
     # NOTE(asem): input is eqn to match `is_non_dce` signature, even though the
     # memoizing interpreter works on primitve level. The following is an example of
@@ -55,11 +64,11 @@ def make_key(prim: core.Prim, in_tree: Tree, /, **params) -> CacheKey:
     return (prim, tuple(flat), struct)
 
 
-class MemoizingInterpreter(core.Interpreter):
+class MemoizingInterp(core.Interp):
     __slots__ = ["parent", "cache", "pending"]
 
     def __init__(self):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.cache: dict[CacheKey, Tree] = {}
         self.pending: dict[CacheKey, asyncio.Future] = {}
 
@@ -158,5 +167,5 @@ def memoize() -> Generator[None, None, None]:
         >>> len(ir.eqns)
         1
     """
-    with core.using_interpreter(MemoizingInterpreter()):
+    with core.using_interp(MemoizingInterp()):
         yield

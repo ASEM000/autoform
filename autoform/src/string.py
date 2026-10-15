@@ -129,17 +129,17 @@ def batch_concat(in_tree: Tree, /) -> TreePair:
     return spec.unflatten(result), True
 
 
-core.impl_rules.set(p_concat, impl_concat)
-core.aimpl_rules.set(p_concat, utils.asyncify(impl_concat))
-core.abstract_rules.set(p_concat, abstract_concat)
-core.batch_rules.set(p_concat, batch_concat)
-core.abatch_rules.set(p_concat, utils.asyncify(batch_concat))
-core.push_rules.set(p_concat, pushforward_concat)
-core.apush_rules.set(p_concat, utils.asyncify(pushforward_concat))
-core.pull_fwd_rules.set(p_concat, pullback_fwd_concat)
-core.apull_fwd_rules.set(p_concat, utils.asyncify(pullback_fwd_concat))
-core.pull_bwd_rules.set(p_concat, pullback_bwd_concat)
-core.apull_bwd_rules.set(p_concat, utils.asyncify(pullback_bwd_concat))
+core.r_impl.set(p_concat, impl_concat)
+core.r_aimpl.set(p_concat, utils.asyncify(impl_concat))
+core.r_abstract.set(p_concat, abstract_concat)
+core.r_batch.set(p_concat, batch_concat)
+core.r_abatch.set(p_concat, utils.asyncify(batch_concat))
+core.r_push.set(p_concat, pushforward_concat)
+core.r_apush.set(p_concat, utils.asyncify(pushforward_concat))
+core.r_pull_fwd.set(p_concat, pullback_fwd_concat)
+core.r_apull_fwd.set(p_concat, utils.asyncify(pullback_fwd_concat))
+core.r_pull_bwd.set(p_concat, pullback_bwd_concat)
+core.r_apull_bwd.set(p_concat, utils.asyncify(pullback_bwd_concat))
 
 
 stage.dunder_rules[stage.Dunder.ADD, AValStr] = concat
@@ -216,17 +216,17 @@ def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     return spec.unflatten(result), True
 
 
-core.impl_rules.set(p_match, impl_match)
-core.aimpl_rules.set(p_match, utils.asyncify(impl_match))
-core.abstract_rules.set(p_match, abstract_match)
-core.batch_rules.set(p_match, batch_match)
-core.abatch_rules.set(p_match, utils.asyncify(batch_match))
-core.push_rules.set(p_match, pushforward_match)
-core.apush_rules.set(p_match, utils.asyncify(pushforward_match))
-core.pull_fwd_rules.set(p_match, pullback_fwd_match)
-core.apull_fwd_rules.set(p_match, utils.asyncify(pullback_fwd_match))
-core.pull_bwd_rules.set(p_match, pullback_bwd_match)
-core.apull_bwd_rules.set(p_match, utils.asyncify(pullback_bwd_match))
+core.r_impl.set(p_match, impl_match)
+core.r_aimpl.set(p_match, utils.asyncify(impl_match))
+core.r_abstract.set(p_match, abstract_match)
+core.r_batch.set(p_match, batch_match)
+core.r_abatch.set(p_match, utils.asyncify(batch_match))
+core.r_push.set(p_match, pushforward_match)
+core.r_apush.set(p_match, utils.asyncify(pushforward_match))
+core.r_pull_fwd.set(p_match, pullback_fwd_match)
+core.r_apull_fwd.set(p_match, utils.asyncify(pullback_fwd_match))
+core.r_pull_bwd.set(p_match, pullback_bwd_match)
+core.r_apull_bwd.set(p_match, utils.asyncify(pullback_bwd_match))
 
 
 stage.dunder_rules[stage.Dunder.EQ, AValStr] = match

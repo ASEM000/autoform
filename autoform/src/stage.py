@@ -27,6 +27,7 @@ from typing import Any, ClassVar, Self, TypeGuard, cast
 
 import autoform.src.check as check
 import autoform.src.core as core
+import autoform.src.impl as impl
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -513,7 +514,16 @@ def liveness(ir: IR, /, *, out_used: UsedTree | None = None) -> Liveness:
 # TRACING
 # ==================================================================================================
 
+type AValRule = Callable[[Any], core.AVal]
+
 trace_types: set[type] = set()
+
+
+def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
+    """Register a Python type and its abstract-value rule for tracing."""
+    core.aval_types[type] = aval_rule
+    trace_types.add(type)
+    return aval_rule
 
 
 def is_traceable(x) -> TypeGuard[str | int | float | bool]:
@@ -601,11 +611,30 @@ type DunderRule = Callable[..., Any]
 dunder_rules: dict[tuple[Dunder, type[core.AVal]], DunderRule] = {}
 
 
+def register_dunder[T: Callable[..., Any]](
+    dunder: Dunder,
+    aval_type: type[core.AVal],
+    rule: T,
+    /,
+    *,
+    replace: bool = False,
+) -> T:
+    """Register traced dunder behavior for an exact AVal type."""
+    assert isinstance(dunder, Dunder), f"Expected Dunder, got {dunder!r}"
+    assert issubclass(aval_type, core.AVal), f"Expected AVal type, got {aval_type!r}"
+    assert callable(rule), f"Expected callable, got {rule!r}"
+    assert isinstance(replace, bool), f"Expected bool for replace, got {type(replace)}"
+    key = dunder, aval_type
+    assert replace or key not in dunder_rules, f"Dunder rule is already defined"
+    dunder_rules[key] = rule
+    return rule
+
+
 class TraceBox:
     __slots__ = ["owner", "var"]
 
-    def __init__(self, /, *, owner: TraceInterpreter, var: Var):
-        assert isinstance(owner, TraceInterpreter)
+    def __init__(self, /, *, owner: TraceInterp, var: Var):
+        assert isinstance(owner, TraceInterp)
         assert is_var(var)
         self.owner = owner
         self.var = var
@@ -811,7 +840,7 @@ def assert_foldable(prim: core.Prim, value: Tree) -> None:
     )
 
 
-class TraceInterpreter(core.Interpreter):
+class TraceInterp(core.Interp):
     __slots__ = ["eqns"]
 
     def __init__(self):
@@ -851,14 +880,14 @@ class TraceInterpreter(core.Interpreter):
 
     def eval(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         assert_foldable(prim, (in_tree, params))
-        with core.using_interpreter(core.EvalInterpreter()):
+        with core.using_interp(impl.ImplInterp()):
             out_tree = prim.bind(in_tree, **params)
         assert_foldable(prim, out_tree)
         return out_tree
 
     async def aeval(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         assert_foldable(prim, (in_tree, params))
-        with core.using_interpreter(core.EvalInterpreter()):
+        with core.using_interp(impl.ImplInterp()):
             out_tree = await prim.abind(in_tree, **params)
         assert_foldable(prim, out_tree)
         return out_tree
@@ -879,7 +908,7 @@ class TraceInterpreter(core.Interpreter):
 
         in_tree = utils.tree.map(to_in_ir_atom, in_tree)
         in_aval_tree = utils.tree.map(aval_if_var, in_tree)
-        out_aval_tree = core.abstract_rules.get(prim)(in_aval_tree, **params)
+        out_aval_tree = core.r_abstract.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x: Any) -> Any:
             # NOTE(asem): abstract rules return `AVal`/ python leaves.
@@ -947,7 +976,7 @@ def trace[*A, R](
         arg_tree = args
         in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
         in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
-        with core.using_interpreter(TraceInterpreter()) as tracer:
+        with core.using_interp(TraceInterp()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
         out_tree = tracer.unbox(out_trace_tree)
         return IR(eqns=tracer.eqns, in_tree=in_tree, out_tree=out_tree)

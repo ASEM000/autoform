@@ -143,9 +143,9 @@ An interpreter controls primitive dispatch, including calls made inside the equa
 import autoform.extend as afe
 
 
-class RecordingInterpreter(afe.Interpreter):
+class RecordingInterp(afe.Interp):
     def __init__(self):
-        self.parent = afe.active_interpreter.get()
+        self.parent = afe.active_interp.get()
         self.records = []
 
     def interpret(self, prim, in_tree, /, **params):
@@ -159,10 +159,10 @@ class RecordingInterpreter(afe.Interpreter):
         return output
 ```
 
-Delegating to the parent preserves the dispatch behavior that was active before recording began. Calling `prim.bind(...)` from inside `interpret(...)` would instead dispatch back to the recording interpreter and recurse. The `using_interpreter` context temporarily installs the recorder and restores the previous interpreter when the block exits.
+Delegating to the parent preserves the dispatch behavior that was active before recording began. Calling `prim.bind(...)` from inside `interpret(...)` would instead dispatch back to the recording interpreter and recurse. The `using_interp` context temporarily installs the recorder and restores the previous interpreter when the block exits.
 
 ```python
-with afe.using_interpreter(RecordingInterpreter()) as recorder:
+with afe.using_interp(RecordingInterp()) as recorder:
     result = ir.call("topic text")
 
 print(recorder.records)

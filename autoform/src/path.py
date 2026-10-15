@@ -103,27 +103,27 @@ async def abatch_factor(in_tree, /, *, name: Hashable | None = None):
     return (), ()
 
 
-core.impl_rules.set(p_factor, impl_factor)
-core.aimpl_rules.set(p_factor, utils.asyncify(impl_factor))
-core.abstract_rules.set(p_factor, abstract_factor)
-core.batch_rules.set(p_factor, batch_factor)
-core.abatch_rules.set(p_factor, abatch_factor)
-core.push_rules.set(p_factor, pushforward_factor)
-core.apush_rules.set(p_factor, utils.asyncify(pushforward_factor))
-core.pull_fwd_rules.set(p_factor, pullback_fwd_factor)
-core.apull_fwd_rules.set(p_factor, utils.asyncify(pullback_fwd_factor))
-core.pull_bwd_rules.set(p_factor, pullback_bwd_factor)
-core.apull_bwd_rules.set(p_factor, utils.asyncify(pullback_bwd_factor))
+core.r_impl.set(p_factor, impl_factor)
+core.r_aimpl.set(p_factor, utils.asyncify(impl_factor))
+core.r_abstract.set(p_factor, abstract_factor)
+core.r_batch.set(p_factor, batch_factor)
+core.r_abatch.set(p_factor, abatch_factor)
+core.r_push.set(p_factor, pushforward_factor)
+core.r_apush.set(p_factor, utils.asyncify(pushforward_factor))
+core.r_pull_fwd.set(p_factor, pullback_fwd_factor)
+core.r_apull_fwd.set(p_factor, utils.asyncify(pullback_fwd_factor))
+core.r_pull_bwd.set(p_factor, pullback_bwd_factor)
+core.r_apull_bwd.set(p_factor, utils.asyncify(pullback_bwd_factor))
 
 
 p_weight_call = core.Prim("weight_call")
 
 
-class WeightInterpreter(core.Interpreter):
+class WeightInterp(core.Interp):
     __slots__ = ["log_weight", "parent"]
 
     def __init__(self):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.log_weight = 0.0
 
     def factor(self, weight: float, /) -> None:
@@ -163,16 +163,16 @@ def weight(ir: stage.IR, /) -> stage.IR:
 
 
 def impl_weight_call(in_tree, /, *, ir: stage.IR):
-    interpreter = WeightInterpreter()
-    with core.using_interpreter(interpreter):
+    interpreter = WeightInterp()
+    with core.using_interp(interpreter):
         output = ir.call(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
     return output, weight
 
 
 async def aimpl_weight_call(in_tree, /, *, ir: stage.IR):
-    interpreter = WeightInterpreter()
-    with core.using_interpreter(interpreter):
+    interpreter = WeightInterp()
+    with core.using_interp(interpreter):
         output = await ir.acall(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
     return output, weight
@@ -239,15 +239,15 @@ def dce_weight_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResul
     return dead.default_dce(new_eqn, out_used)
 
 
-core.impl_rules.set(p_weight_call, impl_weight_call)
-core.aimpl_rules.set(p_weight_call, aimpl_weight_call)
-core.abstract_rules.set(p_weight_call, abstract_weight_call)
-core.batch_rules.set(p_weight_call, batch_weight_call)
-core.abatch_rules.set(p_weight_call, abatch_weight_call)
-core.push_rules.set(p_weight_call, pushforward_weight_call)
-core.apush_rules.set(p_weight_call, utils.asyncify(pushforward_weight_call))
-core.pull_fwd_rules.set(p_weight_call, pullback_fwd_weight_call)
-core.apull_fwd_rules.set(p_weight_call, utils.asyncify(pullback_fwd_weight_call))
-core.pull_bwd_rules.set(p_weight_call, pullback_bwd_weight_call)
-core.apull_bwd_rules.set(p_weight_call, utils.asyncify(pullback_bwd_weight_call))
+core.r_impl.set(p_weight_call, impl_weight_call)
+core.r_aimpl.set(p_weight_call, aimpl_weight_call)
+core.r_abstract.set(p_weight_call, abstract_weight_call)
+core.r_batch.set(p_weight_call, batch_weight_call)
+core.r_abatch.set(p_weight_call, abatch_weight_call)
+core.r_push.set(p_weight_call, pushforward_weight_call)
+core.r_apush.set(p_weight_call, utils.asyncify(pushforward_weight_call))
+core.r_pull_fwd.set(p_weight_call, pullback_fwd_weight_call)
+core.r_apull_fwd.set(p_weight_call, utils.asyncify(pullback_fwd_weight_call))
+core.r_pull_bwd.set(p_weight_call, pullback_bwd_weight_call)
+core.r_apull_bwd.set(p_weight_call, utils.asyncify(pullback_bwd_weight_call))
 dead.dce_rules[p_weight_call] = dce_weight_call

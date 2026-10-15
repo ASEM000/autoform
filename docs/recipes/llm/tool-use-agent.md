@@ -145,11 +145,11 @@ async def apull_bwd_wikipedia_search(in_tree, /):
     )
 
 
-afe.register_aimpl(p_wikipedia_search, aimpl_wikipedia_search)
-afe.register_abstract(p_wikipedia_search, abstract_wikipedia_search)
-afe.register_abatch(p_wikipedia_search, abatch_wikipedia_search)
-afe.register_apullback_fwd(p_wikipedia_search, apull_fwd_wikipedia_search)
-afe.register_apullback_bwd(p_wikipedia_search, apull_bwd_wikipedia_search)
+afe.r_aimpl.set(p_wikipedia_search, aimpl_wikipedia_search)
+afe.r_abstract.set(p_wikipedia_search, abstract_wikipedia_search)
+afe.r_abatch.set(p_wikipedia_search, abatch_wikipedia_search)
+afe.r_apull_fwd.set(p_wikipedia_search, apull_fwd_wikipedia_search)
+afe.r_apull_bwd.set(p_wikipedia_search, apull_bwd_wikipedia_search)
 ```
 
 ## Agent Loop

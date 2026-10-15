@@ -16,12 +16,12 @@ import asyncio
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.control as control
 import autoform.src.core as core
 import autoform.src.dead as dead
-import autoform.src.extend as extend
 import autoform.src.intercept as intercept
 import autoform.src.path as path
 import autoform.src.stage as stage
@@ -36,9 +36,9 @@ def delay():
         return value
 
     p_test_path_delay = core.Prim("test_path_delay")
-    extend.register_impl(p_test_path_delay, lambda value: value)
-    extend.register_abstract(p_test_path_delay, lambda value: value)
-    extend.register_aimpl(p_test_path_delay, aimpl)
+    extend.r_impl.set(p_test_path_delay, lambda value: value)
+    extend.r_abstract.set(p_test_path_delay, lambda value: value)
+    extend.r_aimpl.set(p_test_path_delay, aimpl)
     return p_test_path_delay.bind
 
 

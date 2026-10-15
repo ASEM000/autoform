@@ -16,11 +16,11 @@ from collections import namedtuple
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.check as check
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
@@ -282,8 +282,8 @@ def test_numeric_program_with_broadcast_input():
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
     p_batch_output = core.Prim("batch_output")
-    extend.register_abstract(p_batch_output, lambda _: utils.tree.map(core.avalof, sample_output))
-    extend.register_batch(p_batch_output, batch_rule)
+    extend.r_abstract.set(p_batch_output, lambda _: utils.tree.map(core.avalof, sample_output))
+    extend.r_batch.set(p_batch_output, batch_rule)
     return axis.batch(stage.trace(p_batch_output.bind)(traced))
 
 
@@ -453,7 +453,7 @@ def test_pullback_of_nested_batch_accumulates_shared_batch(executor):
 
 
 def test_batch_box_treats_axis_spec_as_prefix():
-    batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
+    batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
     boxed = batcher.box((["a", "b"], True))
     assert isinstance(boxed, axis.BatchBox)
     assert boxed.value == ["a", "b"]
@@ -470,7 +470,7 @@ def test_batch_box_treats_axis_spec_as_prefix():
     ],
 )
 def test_batch_box_avalof_container(values):
-    batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
+    batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
     box = batcher.box((values, True))
 
     assert core.avalof(box) == string.AValStr()
@@ -496,7 +496,7 @@ def test_batch_box_avalof_zero_metadata():
 
 def test_avalof_nested_batch_ad_and_trace_boxes():
     aval = AValTagged("input")
-    x = stage.TraceBox(owner=stage.TraceInterpreter(), var=stage.Var(aval=aval))
+    x = stage.TraceBox(owner=stage.TraceInterp(), var=stage.Var(aval=aval))
     x = ad.PushforwardBox(object(), x, object())
     x = axis.BatchBox(object(), (x, x), True)
     x = axis.BatchBox(object(), {"x": x, "y": x}, True)

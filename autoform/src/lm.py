@@ -21,7 +21,6 @@ import functools as ft
 import json as jsonlib
 import math
 import re
-from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Hashable, Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -154,7 +153,7 @@ def slotted_values(node: Any) -> tuple[Any, ...]:
     return tuple(getattr(node, name) for name in type(node).__slots__)
 
 
-class Spec(Hashable, ABC):
+class Spec(Hashable):
     __slots__ = ["desc"]
 
     def __init__(self, *, desc: str | None = None) -> None:
@@ -162,11 +161,11 @@ class Spec(Hashable, ABC):
             raise TypeError(f"desc must be a string, got {desc!r}")
         self.desc = desc
 
-    @abstractmethod
-    def describe(self) -> JsonSchema: ...
+    def describe(self) -> JsonSchema:
+        raise NotImplementedError
 
-    @abstractmethod
-    def parse(self, value: Any) -> Any: ...
+    def parse(self, value: Any) -> Any:
+        raise NotImplementedError
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -884,14 +883,14 @@ def cotangent_spec(node: Spec, feedback: str | None) -> Spec:
     return node @ feedback
 
 
-core.impl_rules.set(p_fill, impl_fill)
-core.aimpl_rules.set(p_fill, aimpl_fill)
-core.abstract_rules.set(p_fill, abstract_fill)
-core.batch_rules.set(p_fill, batch_fill)
-core.abatch_rules.set(p_fill, abatch_fill)
-core.push_rules.set(p_fill, pushforward_fill)
-core.apush_rules.set(p_fill, apush_fill)
-core.pull_fwd_rules.set(p_fill, pullback_fwd_fill)
-core.apull_fwd_rules.set(p_fill, apull_fwd_fill)
-core.pull_bwd_rules.set(p_fill, pullback_bwd_fill)
-core.apull_bwd_rules.set(p_fill, apull_bwd_fill)
+core.r_impl.set(p_fill, impl_fill)
+core.r_aimpl.set(p_fill, aimpl_fill)
+core.r_abstract.set(p_fill, abstract_fill)
+core.r_batch.set(p_fill, batch_fill)
+core.r_abatch.set(p_fill, abatch_fill)
+core.r_push.set(p_fill, pushforward_fill)
+core.r_apush.set(p_fill, apush_fill)
+core.r_pull_fwd.set(p_fill, pullback_fwd_fill)
+core.r_apull_fwd.set(p_fill, apull_fwd_fill)
+core.r_pull_bwd.set(p_fill, pullback_bwd_fill)
+core.r_apull_bwd.set(p_fill, apull_bwd_fill)

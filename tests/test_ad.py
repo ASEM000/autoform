@@ -17,12 +17,12 @@ import asyncio
 
 import pytest
 
+import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.check as check
 import autoform.src.control as control
 import autoform.src.core as core
-import autoform.src.extend as extend
 import autoform.src.intercept as intercept
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
@@ -32,16 +32,16 @@ from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, exe
 
 
 def test_pushforward_checker_rejects_nested_tangent_without_equations():
-    active = core.active_interpreter.get()
-    parent = ad.PushforwardInterpreter(parent=active)
-    pusher = ad.PushforwardInterpreter(parent=parent)
+    active = core.active_interp.get()
+    parent = ad.PushInterp(parent=active)
+    pusher = ad.PushInterp(parent=parent)
     x = pusher.box((parent.box(("x", "dx")), parent.box(("dy", 1.0))))
     ir = stage.trace(lambda x: x)("x")
 
-    with core.using_interpreter(pusher):
+    with core.using_interp(pusher):
         with pytest.raises(TypeError, match="Expected AValStr"):
             next(ir.walk(x))
-    assert core.active_interpreter.get() is active
+    assert core.active_interp.get() is active
 
 
 @pytest.mark.parametrize("use_in_equation", [False, True], ids=["final-output", "equation-input"])
@@ -50,19 +50,19 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
         intercept.checkpoint("pause", key="pause")
         return intercept.checkpoint(x, key="next") if use_in_equation else x
 
-    active = core.active_interpreter.get()
-    pusher = ad.PushforwardInterpreter(parent=active)
+    active = core.active_interp.get()
+    pusher = ad.PushInterp(parent=active)
     x = pusher.box(("x", "dx"))
     ir = stage.trace(program)("x")
     gen = ir.walk(x)
-    with core.using_interpreter(pusher):
+    with core.using_interp(pusher):
         eqn, inputs = next(gen)
         x.tangent = 1.0
         output = eqn.bind(inputs, **eqn.params)
 
         with pytest.raises(TypeError, match="Expected AValStr"):
             gen.send(output)
-    assert core.active_interpreter.get() is active
+    assert core.active_interp.get() is active
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -76,9 +76,9 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
 def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
     p_bad_tangent = core.Prim("bad_tangent")
     forward = lambda args: (args[0], t)
-    extend.register_abstract(p_bad_tangent, lambda x: x)
-    extend.register_pushforward(p_bad_tangent, forward)
-    extend.register_apushforward(p_bad_tangent, utils.asyncify(forward))
+    extend.r_abstract.set(p_bad_tangent, lambda x: x)
+    extend.r_push.set(p_bad_tangent, forward)
+    extend.r_apush.set(p_bad_tangent, utils.asyncify(forward))
     ir = ad.pushforward(stage.trace(lambda x: control.stop_gradient(p_bad_tangent.bind(x)))("x"))
 
     with pytest.raises(TypeError, match="Expected AValStr"):
@@ -125,11 +125,11 @@ def test_pullback_rejects_invalid_intermediate_cotangent(executor):
     p_bad_cotangent = core.Prim("bad_cotangent")
     forward = lambda x: (x, None)
     backward = lambda args: 1.0
-    extend.register_abstract(p_bad_cotangent, lambda x: x)
-    extend.register_pullback_fwd(p_bad_cotangent, forward)
-    extend.register_apullback_fwd(p_bad_cotangent, utils.asyncify(forward))
-    extend.register_pullback_bwd(p_bad_cotangent, backward)
-    extend.register_apullback_bwd(p_bad_cotangent, utils.asyncify(backward))
+    extend.r_abstract.set(p_bad_cotangent, lambda x: x)
+    extend.r_pull_fwd.set(p_bad_cotangent, forward)
+    extend.r_apull_fwd.set(p_bad_cotangent, utils.asyncify(forward))
+    extend.r_pull_bwd.set(p_bad_cotangent, backward)
+    extend.r_apull_bwd.set(p_bad_cotangent, utils.asyncify(backward))
     ir = ad.pullback(stage.trace(lambda x: p_bad_cotangent.bind(control.stop_gradient(x)))("x"))
 
     with pytest.raises(TypeError, match="Expected AValStr"):
@@ -203,9 +203,9 @@ def test_pullback_rechecks_mutated_contribution():
         seed.aval = numeric.AValFloat()
         return args[1]
 
-    extend.register_abstract(p_mutate_cotangent, lambda x: x)
-    extend.register_pullback_fwd(p_mutate_cotangent, lambda x: (x, None))
-    extend.register_pullback_bwd(p_mutate_cotangent, backward)
+    extend.r_abstract.set(p_mutate_cotangent, lambda x: x)
+    extend.r_pull_fwd.set(p_mutate_cotangent, lambda x: (x, None))
+    extend.r_pull_bwd.set(p_mutate_cotangent, backward)
 
     def program(x):
         y = x + "!"
@@ -230,7 +230,7 @@ def test_pullback_maps_cotangent_once():
     core.s_cotangent.set(AValFeedback, lambda _: AValHigherFeedback())
     x, y = (stage.Var(aval=AValValue()) for _ in range(2))
     ir = stage.IR([], (x, y), x)
-    parent = core.active_interpreter.get()
+    parent = core.active_interp.get()
     no_stage = stage.no_stage_flag.get()
     value = core.Zero(AValValue())
     feedback = core.Zero(AValFeedback())
@@ -240,7 +240,7 @@ def test_pullback_maps_cotangent_once():
     )
     with pytest.raises(TypeError, match="Expected"):
         ad.impl_pullback_call(((value, value), core.Zero(AValHigherFeedback())), ir=ir)
-    assert core.active_interpreter.get() is parent
+    assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
 
 
@@ -254,32 +254,32 @@ def test_pullback_preserves_original_ir(executor):
 
 
 def test_pullback_checks_under_caller_interpreter():
-    parent = core.active_interpreter.get()
+    parent = core.active_interp.get()
     no_stage = stage.no_stage_flag.get()
     x, y = (stage.Var(aval=string.AValStr()) for _ in range(2))
     ir = stage.IR([], (x, y), (x, x))
 
-    with core.using_interpreter(parent):
+    with core.using_interp(parent):
         _, c = ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
         assert c == ("ab", core.Zero(string.AValStr()))
         with pytest.raises(TypeError, match="Expected AValStr"):
             ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
-    assert core.active_interpreter.get() is parent
+    assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
 
 
 def test_pullback_preserves_parent_pushforward_values():
-    parent = core.active_interpreter.get()
-    pusher = ad.PushforwardInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    pusher = ad.PushInterp(parent=parent)
     x, y = (stage.Var(aval=string.AValStr()) for _ in range(2))
     ir = stage.IR([], (x, y), (x, x))
     zero = core.Zero(string.AValStr())
 
-    with core.using_interpreter(pusher):
+    with core.using_interp(pusher):
         values = pusher.box((("a", "b"), ("da", "db")))
         _, c = ad.impl_pullback_call((("x", "y"), values), ir=ir)
         assert pusher.unbox(c) == (("ab", zero), ("dadb", zero))
-    assert core.active_interpreter.get() is parent
+    assert core.active_interp.get() is parent
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -347,7 +347,7 @@ def test_ad_box_avalof_preserves_zero_metadata(box_type, kwargs):
 
 def test_avalof_nested_ad_and_trace_boxes():
     aval = AValBlob(3)
-    x = stage.TraceBox(owner=stage.TraceInterpreter(), var=stage.Var(aval=aval))
+    x = stage.TraceBox(owner=stage.TraceInterp(), var=stage.Var(aval=aval))
     x = ad.PullbackFwdBox(object(), x)
     x = ad.PushforwardBox(object(), x, object())
     x = ad.PullbackBwdBox(object(), x)
@@ -1023,15 +1023,15 @@ def test_nonidentity_primal_space(executor, transform):
         p, t = args
         return p * 2.0, t if isinstance(t, core.Zero) else t + t
 
-    extend.register_impl(p_mapped_primal, lambda x: x * 2.0)
-    extend.register_aimpl(p_mapped_primal, utils.asyncify(lambda x: x * 2.0))
-    extend.register_abstract(p_mapped_primal, lambda _: AValValue())
-    extend.register_pushforward(p_mapped_primal, forward)
-    extend.register_apushforward(p_mapped_primal, utils.asyncify(forward))
-    extend.register_pullback_fwd(p_mapped_primal, lambda x: (x * 2.0, None))
-    extend.register_apullback_fwd(p_mapped_primal, utils.asyncify(lambda x: (x * 2.0, None)))
-    extend.register_pullback_bwd(p_mapped_primal, lambda args: args[1] + args[1])
-    extend.register_apullback_bwd(p_mapped_primal, utils.asyncify(lambda args: args[1] + args[1]))
+    extend.r_impl.set(p_mapped_primal, lambda x: x * 2.0)
+    extend.r_aimpl.set(p_mapped_primal, utils.asyncify(lambda x: x * 2.0))
+    extend.r_abstract.set(p_mapped_primal, lambda _: AValValue())
+    extend.r_push.set(p_mapped_primal, forward)
+    extend.r_apush.set(p_mapped_primal, utils.asyncify(forward))
+    extend.r_pull_fwd.set(p_mapped_primal, lambda x: (x * 2.0, None))
+    extend.r_apull_fwd.set(p_mapped_primal, utils.asyncify(lambda x: (x * 2.0, None)))
+    extend.r_pull_bwd.set(p_mapped_primal, lambda args: args[1] + args[1])
+    extend.r_apull_bwd.set(p_mapped_primal, utils.asyncify(lambda args: args[1] + args[1]))
     x, y, z = (stage.Var(aval=AValValue()) for _ in range(3))
     source = stage.IR(
         [

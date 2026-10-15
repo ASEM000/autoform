@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections import ChainMap
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
@@ -75,20 +74,26 @@ def avalof(value, /) -> AVal:
 # ==================================================================================================
 
 
-class Algebra(ABC):
+class Algebra:
     __slots__ = ["aval"]
 
     def __init__(self, aval: AVal, /):
         self.aval = aval
 
-    @abstractmethod
-    def zero(self): ...
+    def zero(self):
+        raise NotImplementedError
 
-    @abstractmethod
-    def accum(self, values: list[Any], /): ...
+    def accum(self, values: list[Any], /):
+        raise NotImplementedError
 
 
 algebra_rules: dict[type[AVal], Callable[[AVal], Algebra]] = {}
+
+
+def register_algebra[R: Callable[[AVal], Algebra]](aval_type: type[AVal], rule: R, /) -> R:
+    """Register zero construction and accumulation for an exact AVal type."""
+    algebra_rules[aval_type] = rule
+    return rule
 
 
 def algebraof(aval: AVal, /) -> Algebra:
@@ -134,6 +139,12 @@ class Domain:
 
 
 domain_rules: dict[type[AVal], Callable[[AVal], Domain]] = {}
+
+
+def register_domain[R: Callable[[AVal], Domain]](aval_type: type[AVal], rule: R, /) -> R:
+    """Register acceptance and joining for an exact AVal type."""
+    domain_rules[aval_type] = rule
+    return rule
 
 
 def domainof(aval: AVal, /) -> Domain:
@@ -234,10 +245,10 @@ class Prim:
         return self.name
 
     def bind(self, value: Tree, /, **params):
-        return active_interpreter.get().interpret(self, value, **params)
+        return active_interp.get().interpret(self, value, **params)
 
     async def abind(self, value: Tree, /, **params):
-        return await active_interpreter.get().ainterpret(self, value, **params)
+        return await active_interp.get().ainterpret(self, value, **params)
 
 
 # ==================================================================================================
@@ -278,17 +289,17 @@ class Rule[T]:
             self.active.reset(token)
 
 
-impl_rules: Rule[Tree] = Rule("impl")
-aimpl_rules: Rule[Awaitable[Tree]] = Rule("aimpl")
-abstract_rules: Rule[Tree] = Rule("abstract")
-batch_rules: Rule[tuple[Tree, Tree[bool]]] = Rule("batch")
-abatch_rules: Rule[Awaitable[tuple[Tree, Tree[bool]]]] = Rule("abatch")
-push_rules: Rule[tuple[Tree, Tree]] = Rule("pushforward")
-apush_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apushforward")
-pull_fwd_rules: Rule[tuple[Tree, Tree]] = Rule("pullback_fwd")
-apull_fwd_rules: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apullback_fwd")
-pull_bwd_rules: Rule[Tree] = Rule("pullback_bwd")
-apull_bwd_rules: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
+r_impl: Rule[Tree] = Rule("impl")
+r_aimpl: Rule[Awaitable[Tree]] = Rule("aimpl")
+r_abstract: Rule[Tree] = Rule("abstract")
+r_batch: Rule[tuple[Tree, Tree[bool]]] = Rule("batch")
+r_abatch: Rule[Awaitable[tuple[Tree, Tree[bool]]]] = Rule("abatch")
+r_push: Rule[tuple[Tree, Tree]] = Rule("pushforward")
+r_apush: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apushforward")
+r_pull_fwd: Rule[tuple[Tree, Tree]] = Rule("pullback_fwd")
+r_apull_fwd: Rule[Awaitable[tuple[Tree, Tree]]] = Rule("apullback_fwd")
+r_pull_bwd: Rule[Tree] = Rule("pullback_bwd")
+r_apull_bwd: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
 
 
 # ==================================================================================================
@@ -296,40 +307,25 @@ apull_bwd_rules: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
 # ==================================================================================================
 
 
-class Interpreter(ABC):
-    __slots__ = []
-
-    @abstractmethod
-    def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
-
-    @abstractmethod
-    async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree: ...
-
-
-@contextmanager
-def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
-    """Run primitive dispatch through an interpreter inside the context."""
-
-    token = active_interpreter.set(interpreter)
-    try:
-        yield interpreter
-    finally:
-        active_interpreter.reset(token)
-
-
-# ==================================================================================================
-# EVAL
-# ==================================================================================================
-
-
-class EvalInterpreter(Interpreter):
+class Interp:
     __slots__ = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return impl_rules.get(prim)(in_tree, **params)
+        raise NotImplementedError
 
     async def ainterpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
-        return await aimpl_rules.get(prim)(in_tree, **params)
+        raise NotImplementedError
 
 
-active_interpreter = ContextVar[Interpreter]("active_interpreter", default=EvalInterpreter())
+active_interp: ContextVar[Interp]
+
+
+@contextmanager
+def using_interp[T: Interp](interp: T) -> Generator[T, None, None]:
+    """Run primitive dispatch through an interpreter inside the context."""
+
+    token = active_interp.set(interp)
+    try:
+        yield interp
+    finally:
+        active_interp.reset(token)

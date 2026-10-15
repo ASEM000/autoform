@@ -95,17 +95,17 @@ async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable |
     return out_ib, out_batched
 
 
-core.impl_rules.set(p_checkpoint, impl_checkpoint)
-core.aimpl_rules.set(p_checkpoint, utils.asyncify(impl_checkpoint))
-core.abstract_rules.set(p_checkpoint, abstract_checkpoint)
-core.batch_rules.set(p_checkpoint, batch_checkpoint)
-core.abatch_rules.set(p_checkpoint, abatch_checkpoint)
-core.push_rules.set(p_checkpoint, push_checkpoint)
-core.apush_rules.set(p_checkpoint, utils.asyncify(push_checkpoint))
-core.pull_fwd_rules.set(p_checkpoint, pull_fwd_checkpoint)
-core.apull_fwd_rules.set(p_checkpoint, utils.asyncify(pull_fwd_checkpoint))
-core.pull_bwd_rules.set(p_checkpoint, pull_bwd_checkpoint)
-core.apull_bwd_rules.set(p_checkpoint, utils.asyncify(pull_bwd_checkpoint))
+core.r_impl.set(p_checkpoint, impl_checkpoint)
+core.r_aimpl.set(p_checkpoint, utils.asyncify(impl_checkpoint))
+core.r_abstract.set(p_checkpoint, abstract_checkpoint)
+core.r_batch.set(p_checkpoint, batch_checkpoint)
+core.r_abatch.set(p_checkpoint, abatch_checkpoint)
+core.r_push.set(p_checkpoint, push_checkpoint)
+core.r_apush.set(p_checkpoint, utils.asyncify(push_checkpoint))
+core.r_pull_fwd.set(p_checkpoint, pull_fwd_checkpoint)
+core.r_apull_fwd.set(p_checkpoint, utils.asyncify(pull_fwd_checkpoint))
+core.r_pull_bwd.set(p_checkpoint, pull_bwd_checkpoint)
+core.r_apull_bwd.set(p_checkpoint, utils.asyncify(pull_bwd_checkpoint))
 
 
 def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = None) -> Tree:
@@ -148,11 +148,11 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
 type Collected = dict[Hashable, list[Tree]]
 
 
-class CollectingInterpreter(core.Interpreter):
+class CollectingInterp(core.Interp):
     __slots__ = ["parent", "collection", "collected"]
 
     def __init__(self, *, collection: Hashable):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.collection = collection
         self.collected: Collected = defaultdict(list)
 
@@ -171,11 +171,11 @@ class CollectingInterpreter(core.Interpreter):
         return result
 
 
-class InjectingInterpreter(core.Interpreter):
+class InjectingInterp(core.Interp):
     __slots__ = ["parent", "collection", "cache"]
 
     def __init__(self, *, collection: Hashable, values: Collected):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.collection = collection
         self.cache = {k: deque(values[k]) for k in values}
 
@@ -236,8 +236,8 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Yields:
         A dict that maps keys to lists of collected values.
     """
-    interpreter = CollectingInterpreter(collection=collection)
-    with order.serial_fanout(), core.using_interpreter(interpreter):
+    interpreter = CollectingInterp(collection=collection)
+    with order.serial_fanout(), core.using_interp(interpreter):
         yield interpreter.collected
 
 
@@ -299,6 +299,6 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
-    interpreter = InjectingInterpreter(collection=collection, values=values)
-    with order.serial_fanout(), core.using_interpreter(interpreter):
+    interpreter = InjectingInterp(collection=collection, values=values)
+    with order.serial_fanout(), core.using_interp(interpreter):
         yield
