@@ -31,6 +31,7 @@ def strict_zip(*iterables):
 
 zip = strict_zip
 
+
 # ==================================================================================================
 # ASYNC UTILITIES
 # ==================================================================================================
@@ -51,6 +52,23 @@ def asyncify[**P, R](func: Callable[P, R], /) -> Callable[P, Awaitable[R]]:
 PYTREE_NAMESPACE = "OPTREE_AUTOFORM_NAMESPACE"
 tree = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
 type Tree[T] = Any
+
+
+class Dispatch:
+    __slots__ = ["rules"]
+
+    def __init__(self):
+        self.rules = {}
+
+    def register(self, types, rule, /):
+        leaves, spec = tree.flatten(types)
+        self.rules[spec, tuple(leaves)] = rule
+        return rule
+
+    def __call__(self, values, /, **params):
+        leaves, spec = tree.flatten(values)
+        key = spec, tuple(type(x) for x in leaves)
+        return self.rules[key](values, **params)
 
 
 def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R]:

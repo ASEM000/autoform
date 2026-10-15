@@ -17,6 +17,50 @@ import pytest
 import autoform.src.utils as utils
 
 
+@pytest.mark.parametrize(
+    "values, expected",
+    [pytest.param((1, 2), 6, id="numbers"), pytest.param(("a", "b"), "abab", id="text")],
+)
+def test_dispatch(values, expected):
+    dispatch = utils.Dispatch()
+    dispatch.register((int, int), lambda values, *, scale: sum(values) * scale)
+    dispatch.register((str, str), lambda values, *, scale: "".join(values) * scale)
+    assert dispatch(values, scale=2) == expected
+
+
+@pytest.mark.parametrize(
+    "types, values",
+    [
+        pytest.param((int, int), (True, 2), id="subclass"),
+        pytest.param((int, float), (2.0, 1), id="order"),
+        pytest.param((int, str), [1, "x"], id="structure"),
+        pytest.param(None, (), id="empty-structure"),
+    ],
+)
+def test_dispatch_missing(types, values):
+    dispatch = utils.Dispatch()
+    dispatch.register(types, lambda values: values)
+    with pytest.raises(KeyError):
+        dispatch(values)
+
+
+@pytest.mark.parametrize(
+    "types, values",
+    [
+        pytest.param(int, 1, id="scalar"),
+        pytest.param((bool, int), (True, 2), id="explicit-subclass"),
+        pytest.param([int, str], [1, "x"], id="list"),
+        pytest.param({"x": [int], "y": (str, None)}, {"y": ("x", None), "x": [1]}, id="nested"),
+        pytest.param(None, None, id="none"),
+        pytest.param((), (), id="empty"),
+    ],
+)
+def test_dispatch_pytrees(types, values):
+    dispatch = utils.Dispatch()
+    dispatch.register(types, lambda values: values)
+    assert dispatch(values) is values
+
+
 @pytest.fixture
 def point_type():
     @utils.tree.dataclasses.dataclass
@@ -25,6 +69,14 @@ def point_type():
         y: int
 
     return Point
+
+
+def test_dispatch_custom_pytree(point_type):
+    dispatch = utils.Dispatch()
+    dispatch.register(point_type(int, float), lambda values: values.x + values.y)
+    assert dispatch(point_type(1, 2.0)) == 3.0
+    with pytest.raises(KeyError):
+        dispatch((1, 2.0))
 
 
 @pytest.mark.parametrize(
