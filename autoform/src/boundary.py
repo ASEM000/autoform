@@ -42,7 +42,7 @@ def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> stage.IR:
         return stage.Var.fresh(aval=core.avalof(x))
 
     in_tree = utils.tree.map(to_ir_input, in_tree)
-    with core.using_interpreter(stage.TraceInterpreter()) as trace_interpreter:
+    with core.using_interp(stage.TraceInterp()) as trace_interpreter:
         out_trace_tree = func(*trace_interpreter.box(in_tree))
     out_tree = trace_interpreter.unbox(out_trace_tree)
     return stage.IR(trace_interpreter.eqns, in_tree=in_tree, out_tree=out_tree)

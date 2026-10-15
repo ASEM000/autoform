@@ -19,7 +19,7 @@ from contextvars import ContextVar
 import autoform.src.core as core
 
 
-class ImplInterpreter(core.Interpreter):
+class ImplInterp(core.Interp):
     __slots__ = []
 
     def interpret(self, prim: core.Prim, in_tree: core.Tree, /, **params) -> core.Tree:
@@ -29,4 +29,4 @@ class ImplInterpreter(core.Interpreter):
         return await core.r_aimpl.get(prim)(in_tree, **params)
 
 
-core.active_interpreter = ContextVar("active_interpreter", default=ImplInterpreter())
+core.active_interp = ContextVar("active_interp", default=ImplInterp())

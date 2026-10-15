@@ -51,7 +51,7 @@ class PushforwardBox:
 core.aval_types[PushforwardBox] = lambda value: core.avalof(value.primal)
 
 
-class PushforwardInterpreter(core.Interpreter):
+class PushInterp(core.Interp):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -78,13 +78,13 @@ class PushforwardInterpreter(core.Interpreter):
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_p, in_t = self.unbox(in_tree)
-        with core.using_interpreter(self.parent):
+        with core.using_interp(self.parent):
             out_p, out_t = core.r_push.get(prim)((in_p, in_t), **params)
         return self.box((out_p, out_t))
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_p, in_t = self.unbox(in_tree)
-        with core.using_interpreter(self.parent):
+        with core.using_interp(self.parent):
             out_p, out_t = await core.r_apush.get(prim)((in_p, in_t), **params)
         return self.box((out_p, out_t))
 
@@ -173,8 +173,8 @@ class PFEnv:
 
 
 def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    parent = core.active_interpreter.get()
-    pusher = PushforwardInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    pusher = PushInterp(parent=parent)
     env = PFEnv()
 
     def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
@@ -184,10 +184,10 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
             for atom in utils.tree.leaves((eqn.in_tree, eqn.out_tree))
             if stage.is_var(atom)
         ):
-            with core.using_interpreter(parent):
+            with core.using_interp(parent):
                 out_p = eqn.bind(in_p, **eqn.params)
             return out_p, utils.tree.map(zero_tangent, out_p)
-        with core.using_interpreter(pusher):
+        with core.using_interp(pusher):
             out_boxed = eqn.bind(pusher.box((in_p, in_t)), **eqn.params)
         return pusher.unbox(out_boxed)
 
@@ -204,8 +204,8 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
 
 async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    parent = core.active_interpreter.get()
-    pusher = PushforwardInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    pusher = PushInterp(parent=parent)
     env = PFEnv()
 
     async def fwd_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
@@ -215,10 +215,10 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
             for atom in utils.tree.leaves((eqn.in_tree, eqn.out_tree))
             if stage.is_var(atom)
         ):
-            with core.using_interpreter(parent):
+            with core.using_interp(parent):
                 out_p = await eqn.abind(in_p, **eqn.params)
             return out_p, utils.tree.map(zero_tangent, out_p)
-        with core.using_interpreter(pusher):
+        with core.using_interp(pusher):
             out_boxed = await eqn.abind(pusher.box((in_p, in_t)), **eqn.params)
         return pusher.unbox(out_boxed)
 
@@ -251,16 +251,16 @@ def abstract_pushforward_call(_: Tree, /, *, ir: stage.IR) -> TreePair:
 
 
 def pushforward_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    parent = core.active_interpreter.get()
-    pusher = PushforwardInterpreter(parent=parent)
-    with core.using_interpreter(pusher):
+    parent = core.active_interp.get()
+    pusher = PushInterp(parent=parent)
+    with core.using_interp(pusher):
         return pusher.unbox(impl_pushforward_call(pusher.box(in_tree), ir=ir))
 
 
 async def apushforward_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    parent = core.active_interpreter.get()
-    pusher = PushforwardInterpreter(parent=parent)
-    with core.using_interpreter(pusher):
+    parent = core.active_interp.get()
+    pusher = PushInterp(parent=parent)
+    with core.using_interp(pusher):
         return pusher.unbox(await aimpl_pushforward_call(pusher.box(in_tree), ir=ir))
 
 
@@ -465,7 +465,7 @@ class PullbackFwdBox:
 core.aval_types[PullbackFwdBox] = lambda value: core.avalof(value.primal)
 
 
-class PullbackFwdInterpreter(core.Interpreter):
+class PullFwdInterp(core.Interp):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -482,13 +482,13 @@ class PullbackFwdInterpreter(core.Interpreter):
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_p = self.unbox(in_tree)
-        with core.using_interpreter(self.parent):
+        with core.using_interp(self.parent):
             out_p, residuals = core.r_pull_fwd.get(prim)(in_p, **params)
         return self.box(out_p), residuals
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_p = self.unbox(in_tree)
-        with core.using_interpreter(self.parent):
+        with core.using_interp(self.parent):
             out_p, residuals = await core.r_apull_fwd.get(prim)(in_p, **params)
         return self.box(out_p), residuals
 
@@ -504,7 +504,7 @@ class PullbackBwdBox:
 core.aval_types[PullbackBwdBox] = lambda value: core.avalof(value.cotangent)
 
 
-class PullbackBwdInterpreter(core.Interpreter):
+class PullBwdInterp(core.Interp):
     __slots__ = ["parent"]
 
     def __init__(self, *, parent):
@@ -522,14 +522,14 @@ class PullbackBwdInterpreter(core.Interpreter):
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         residuals, out_c = in_tree
         out_c = self.unbox(out_c)
-        with core.using_interpreter(self.parent):
+        with core.using_interp(self.parent):
             in_c = core.r_pull_bwd.get(prim)((residuals, out_c), **params)
         return self.box(in_c)
 
     async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         residuals, out_c = in_tree
         out_c = self.unbox(out_c)
-        with core.using_interpreter(self.parent):
+        with core.using_interp(self.parent):
             in_c = await core.r_apull_bwd.get(prim)((residuals, out_c), **params)
         return self.box(in_c)
 
@@ -621,19 +621,19 @@ def impl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     (in_p, out_c) = in_tree
 
     res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interpreter.get()
-    fwd = PullbackFwdInterpreter(parent=parent)
-    bwd = PullbackBwdInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    fwd = PullFwdInterp(parent=parent)
+    bwd = PullBwdInterp(parent=parent)
 
     def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interpreter(fwd):
+        with core.using_interp(fwd):
             out_boxed, residuals = eqn.bind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
         return fwd.unbox(out_boxed)
 
     def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
         residuals = res[eqn]
-        with core.using_interpreter(bwd):
+        with core.using_interp(bwd):
             in_boxed_c = eqn.bind((residuals, bwd.box(out_c)), **eqn.params)
         return bwd.unbox(in_boxed_c)
 
@@ -658,19 +658,19 @@ async def aimpl_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     (in_p, out_c) = in_tree
 
     res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interpreter.get()
-    fwd = PullbackFwdInterpreter(parent=parent)
-    bwd = PullbackBwdInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    fwd = PullFwdInterp(parent=parent)
+    bwd = PullBwdInterp(parent=parent)
 
     async def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interpreter(fwd):
+        with core.using_interp(fwd):
             out_boxed, residuals = await eqn.abind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
         return fwd.unbox(out_boxed)
 
     async def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
         residuals = res[eqn]
-        with core.using_interpreter(bwd):
+        with core.using_interp(bwd):
             in_boxed_c = await eqn.abind((residuals, bwd.box(out_c)), **eqn.params)
         return bwd.unbox(in_boxed_c)
 
@@ -708,16 +708,16 @@ def abstract_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
 
 
 def pushforward_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    parent = core.active_interpreter.get()
-    pusher = PushforwardInterpreter(parent=parent)
-    with core.using_interpreter(pusher):
+    parent = core.active_interp.get()
+    pusher = PushInterp(parent=parent)
+    with core.using_interp(pusher):
         return pusher.unbox(impl_pullback_call(pusher.box(in_tree), ir=ir))
 
 
 async def apushforward_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
-    parent = core.active_interpreter.get()
-    pusher = PushforwardInterpreter(parent=parent)
-    with core.using_interpreter(pusher):
+    parent = core.active_interp.get()
+    pusher = PushInterp(parent=parent)
+    with core.using_interp(pusher):
         return pusher.unbox(await aimpl_pullback_call(pusher.box(in_tree), ir=ir))
 
 

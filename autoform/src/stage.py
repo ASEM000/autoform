@@ -633,8 +633,8 @@ def register_dunder[T: Callable[..., Any]](
 class TraceBox:
     __slots__ = ["owner", "var"]
 
-    def __init__(self, /, *, owner: TraceInterpreter, var: Var):
-        assert isinstance(owner, TraceInterpreter)
+    def __init__(self, /, *, owner: TraceInterp, var: Var):
+        assert isinstance(owner, TraceInterp)
         assert is_var(var)
         self.owner = owner
         self.var = var
@@ -840,7 +840,7 @@ def assert_foldable(prim: core.Prim, value: Tree) -> None:
     )
 
 
-class TraceInterpreter(core.Interpreter):
+class TraceInterp(core.Interp):
     __slots__ = ["eqns"]
 
     def __init__(self):
@@ -880,14 +880,14 @@ class TraceInterpreter(core.Interpreter):
 
     def eval(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         assert_foldable(prim, (in_tree, params))
-        with core.using_interpreter(impl.ImplInterpreter()):
+        with core.using_interp(impl.ImplInterp()):
             out_tree = prim.bind(in_tree, **params)
         assert_foldable(prim, out_tree)
         return out_tree
 
     async def aeval(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         assert_foldable(prim, (in_tree, params))
-        with core.using_interpreter(impl.ImplInterpreter()):
+        with core.using_interp(impl.ImplInterp()):
             out_tree = await prim.abind(in_tree, **params)
         assert_foldable(prim, out_tree)
         return out_tree
@@ -976,7 +976,7 @@ def trace[*A, R](
         arg_tree = args
         in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
         in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
-        with core.using_interpreter(TraceInterpreter()) as tracer:
+        with core.using_interp(TraceInterp()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
         out_tree = tracer.unbox(out_trace_tree)
         return IR(eqns=tracer.eqns, in_tree=in_tree, out_tree=out_tree)

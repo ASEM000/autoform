@@ -148,11 +148,11 @@ def checkpoint(value: Tree, /, *, key: Hashable, collection: Hashable | None = N
 type Collected = dict[Hashable, list[Tree]]
 
 
-class CollectingInterpreter(core.Interpreter):
+class CollectingInterp(core.Interp):
     __slots__ = ["parent", "collection", "collected"]
 
     def __init__(self, *, collection: Hashable):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.collection = collection
         self.collected: Collected = defaultdict(list)
 
@@ -171,11 +171,11 @@ class CollectingInterpreter(core.Interpreter):
         return result
 
 
-class InjectingInterpreter(core.Interpreter):
+class InjectingInterp(core.Interp):
     __slots__ = ["parent", "collection", "cache"]
 
     def __init__(self, *, collection: Hashable, values: Collected):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.collection = collection
         self.cache = {k: deque(values[k]) for k in values}
 
@@ -236,8 +236,8 @@ def collect(*, collection: Hashable) -> Generator[Collected, None, None]:
     Yields:
         A dict that maps keys to lists of collected values.
     """
-    interpreter = CollectingInterpreter(collection=collection)
-    with order.serial_fanout(), core.using_interpreter(interpreter):
+    interpreter = CollectingInterp(collection=collection)
+    with order.serial_fanout(), core.using_interp(interpreter):
         yield interpreter.collected
 
 
@@ -299,6 +299,6 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
     for key in values:
         assert isinstance(values[key], list), f"{type(values[key])} for key {key} is not a list."
 
-    interpreter = InjectingInterpreter(collection=collection, values=values)
-    with order.serial_fanout(), core.using_interpreter(interpreter):
+    interpreter = InjectingInterp(collection=collection, values=values)
+    with order.serial_fanout(), core.using_interp(interpreter):
         yield

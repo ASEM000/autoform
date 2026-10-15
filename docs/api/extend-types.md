@@ -44,5 +44,5 @@ These classes represent the values and program structure used by extension code:
 ## Interpreters
 
 ```{eval-rst}
-.. autoclass:: autoform.extend.Interpreter
+.. autoclass:: autoform.extend.Interp
 ```

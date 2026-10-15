@@ -245,10 +245,10 @@ class Prim:
         return self.name
 
     def bind(self, value: Tree, /, **params):
-        return active_interpreter.get().interpret(self, value, **params)
+        return active_interp.get().interpret(self, value, **params)
 
     async def abind(self, value: Tree, /, **params):
-        return await active_interpreter.get().ainterpret(self, value, **params)
+        return await active_interp.get().ainterpret(self, value, **params)
 
 
 # ==================================================================================================
@@ -307,7 +307,7 @@ r_apull_bwd: Rule[Awaitable[Tree]] = Rule("apullback_bwd")
 # ==================================================================================================
 
 
-class Interpreter:
+class Interp:
     __slots__ = []
 
     def interpret(self, prim: Prim, in_tree: Tree, /, **params) -> Tree:
@@ -317,15 +317,15 @@ class Interpreter:
         raise NotImplementedError
 
 
-active_interpreter: ContextVar[Interpreter]
+active_interp: ContextVar[Interp]
 
 
 @contextmanager
-def using_interpreter[T: Interpreter](interpreter: T) -> Generator[T, None, None]:
+def using_interp[T: Interp](interp: T) -> Generator[T, None, None]:
     """Run primitive dispatch through an interpreter inside the context."""
 
-    token = active_interpreter.set(interpreter)
+    token = active_interp.set(interp)
     try:
-        yield interpreter
+        yield interp
     finally:
-        active_interpreter.reset(token)
+        active_interp.reset(token)

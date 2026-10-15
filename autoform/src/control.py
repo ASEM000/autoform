@@ -967,21 +967,21 @@ def pullback_bwd_fixpoint(
         return dx0, utils.tree.map(make_c, theta)
 
     res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interpreter.get()
-    fwd = ad.PullbackFwdInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    fwd = ad.PullFwdInterp(parent=parent)
 
     def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interpreter(fwd):
+        with core.using_interp(fwd):
             out_boxed, residuals = eqn.bind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
         return fwd.unbox(out_boxed)
 
     def transpose_eq(cot: Tree, /) -> Tree:
-        bwd = ad.PullbackBwdInterpreter(parent=parent)
+        bwd = ad.PullBwdInterp(parent=parent)
 
         def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
             residuals = res[eqn]
-            with core.using_interpreter(bwd):
+            with core.using_interp(bwd):
                 in_boxed_c = eqn.bind((residuals, bwd.box(out_c)), **eqn.params)
             return bwd.unbox(in_boxed_c)
 
@@ -1039,21 +1039,21 @@ async def apull_bwd_fixpoint(
         return dx0, utils.tree.map(make_c, theta)
 
     res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interpreter.get()
-    fwd = ad.PullbackFwdInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    fwd = ad.PullFwdInterp(parent=parent)
 
     async def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interpreter(fwd):
+        with core.using_interp(fwd):
             out_boxed, residuals = await eqn.abind(fwd.box(in_p), **eqn.params)
         res[eqn] = residuals
         return fwd.unbox(out_boxed)
 
     async def atranspose_eq(cot: Tree, /) -> Tree:
-        bwd = ad.PullbackBwdInterpreter(parent=parent)
+        bwd = ad.PullBwdInterp(parent=parent)
 
         async def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
             residuals = res[eqn]
-            with core.using_interpreter(bwd):
+            with core.using_interp(bwd):
                 in_boxed_c = await eqn.abind((residuals, bwd.box(out_c)), **eqn.params)
             return bwd.unbox(in_boxed_c)
 

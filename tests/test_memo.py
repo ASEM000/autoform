@@ -28,7 +28,7 @@ import autoform.src.memo as memo
 import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.string as string
-from tests import CountingInterpreter, aexecute, append_bang, execute
+from tests import CountingInterp, aexecute, append_bang, execute
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def distinct_checkpoints(x):
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_memoize_duplicate_primitives(executor):
-    counter = CountingInterpreter()
+    counter = CountingInterp()
 
     def program(x):
         a = string.concat(x, "!")
@@ -53,16 +53,16 @@ def test_memoize_duplicate_primitives(executor):
         return string.concat(a, b)
 
     ir = stage.trace(program)("test")
-    with core.using_interpreter(counter), memo.memoize():
+    with core.using_interp(counter), memo.memoize():
         actual = executor(ir, "hello")
         assert actual == "hello!hello!"
     assert counter.calls == 2
 
 
 def test_memoize_scope():
-    counter = CountingInterpreter()
+    counter = CountingInterp()
     ir = stage.trace(append_bang)("test")
-    with core.using_interpreter(counter):
+    with core.using_interp(counter):
         for _ in range(2):
             with memo.memoize():
                 assert ir.call("hello") == "hello!"
@@ -176,9 +176,9 @@ def test_memoize_preserves_repeated_checkpoint():
     ],
 )
 def test_memoize_transformed_ir(transform, first_args, second_args, expected, misses):
-    counter = CountingInterpreter()
+    counter = CountingInterp()
     ir = transform(stage.trace(append_bang)("test"))
-    with core.using_interpreter(counter), memo.memoize():
+    with core.using_interp(counter), memo.memoize():
         results = ir.call(*first_args), ir.call(*second_args)
     assert results == expected
     assert counter.calls == misses

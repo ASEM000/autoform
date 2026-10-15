@@ -453,7 +453,7 @@ def test_pullback_of_nested_batch_accumulates_shared_batch(executor):
 
 
 def test_batch_box_treats_axis_spec_as_prefix():
-    batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
+    batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
     boxed = batcher.box((["a", "b"], True))
     assert isinstance(boxed, axis.BatchBox)
     assert boxed.value == ["a", "b"]
@@ -470,7 +470,7 @@ def test_batch_box_treats_axis_spec_as_prefix():
     ],
 )
 def test_batch_box_avalof_container(values):
-    batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
+    batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
     box = batcher.box((values, True))
 
     assert core.avalof(box) == string.AValStr()
@@ -496,7 +496,7 @@ def test_batch_box_avalof_zero_metadata():
 
 def test_avalof_nested_batch_ad_and_trace_boxes():
     aval = AValTagged("input")
-    x = stage.TraceBox(owner=stage.TraceInterpreter(), var=stage.Var(aval=aval))
+    x = stage.TraceBox(owner=stage.TraceInterp(), var=stage.Var(aval=aval))
     x = ad.PushforwardBox(object(), x, object())
     x = axis.BatchBox(object(), (x, x), True)
     x = axis.BatchBox(object(), {"x": x, "y": x}, True)

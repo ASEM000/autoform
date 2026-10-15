@@ -32,16 +32,16 @@ from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, exe
 
 
 def test_pushforward_checker_rejects_nested_tangent_without_equations():
-    active = core.active_interpreter.get()
-    parent = ad.PushforwardInterpreter(parent=active)
-    pusher = ad.PushforwardInterpreter(parent=parent)
+    active = core.active_interp.get()
+    parent = ad.PushInterp(parent=active)
+    pusher = ad.PushInterp(parent=parent)
     x = pusher.box((parent.box(("x", "dx")), parent.box(("dy", 1.0))))
     ir = stage.trace(lambda x: x)("x")
 
-    with core.using_interpreter(pusher):
+    with core.using_interp(pusher):
         with pytest.raises(TypeError, match="Expected AValStr"):
             next(ir.walk(x))
-    assert core.active_interpreter.get() is active
+    assert core.active_interp.get() is active
 
 
 @pytest.mark.parametrize("use_in_equation", [False, True], ids=["final-output", "equation-input"])
@@ -50,19 +50,19 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
         intercept.checkpoint("pause", key="pause")
         return intercept.checkpoint(x, key="next") if use_in_equation else x
 
-    active = core.active_interpreter.get()
-    pusher = ad.PushforwardInterpreter(parent=active)
+    active = core.active_interp.get()
+    pusher = ad.PushInterp(parent=active)
     x = pusher.box(("x", "dx"))
     ir = stage.trace(program)("x")
     gen = ir.walk(x)
-    with core.using_interpreter(pusher):
+    with core.using_interp(pusher):
         eqn, inputs = next(gen)
         x.tangent = 1.0
         output = eqn.bind(inputs, **eqn.params)
 
         with pytest.raises(TypeError, match="Expected AValStr"):
             gen.send(output)
-    assert core.active_interpreter.get() is active
+    assert core.active_interp.get() is active
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -230,7 +230,7 @@ def test_pullback_maps_cotangent_once():
     core.s_cotangent.set(AValFeedback, lambda _: AValHigherFeedback())
     x, y = (stage.Var(aval=AValValue()) for _ in range(2))
     ir = stage.IR([], (x, y), x)
-    parent = core.active_interpreter.get()
+    parent = core.active_interp.get()
     no_stage = stage.no_stage_flag.get()
     value = core.Zero(AValValue())
     feedback = core.Zero(AValFeedback())
@@ -240,7 +240,7 @@ def test_pullback_maps_cotangent_once():
     )
     with pytest.raises(TypeError, match="Expected"):
         ad.impl_pullback_call(((value, value), core.Zero(AValHigherFeedback())), ir=ir)
-    assert core.active_interpreter.get() is parent
+    assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
 
 
@@ -254,32 +254,32 @@ def test_pullback_preserves_original_ir(executor):
 
 
 def test_pullback_checks_under_caller_interpreter():
-    parent = core.active_interpreter.get()
+    parent = core.active_interp.get()
     no_stage = stage.no_stage_flag.get()
     x, y = (stage.Var(aval=string.AValStr()) for _ in range(2))
     ir = stage.IR([], (x, y), (x, x))
 
-    with core.using_interpreter(parent):
+    with core.using_interp(parent):
         _, c = ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
         assert c == ("ab", core.Zero(string.AValStr()))
         with pytest.raises(TypeError, match="Expected AValStr"):
             ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
-    assert core.active_interpreter.get() is parent
+    assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
 
 
 def test_pullback_preserves_parent_pushforward_values():
-    parent = core.active_interpreter.get()
-    pusher = ad.PushforwardInterpreter(parent=parent)
+    parent = core.active_interp.get()
+    pusher = ad.PushInterp(parent=parent)
     x, y = (stage.Var(aval=string.AValStr()) for _ in range(2))
     ir = stage.IR([], (x, y), (x, x))
     zero = core.Zero(string.AValStr())
 
-    with core.using_interpreter(pusher):
+    with core.using_interp(pusher):
         values = pusher.box((("a", "b"), ("da", "db")))
         _, c = ad.impl_pullback_call((("x", "y"), values), ir=ir)
         assert pusher.unbox(c) == (("ab", zero), ("dadb", zero))
-    assert core.active_interpreter.get() is parent
+    assert core.active_interp.get() is parent
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -347,7 +347,7 @@ def test_ad_box_avalof_preserves_zero_metadata(box_type, kwargs):
 
 def test_avalof_nested_ad_and_trace_boxes():
     aval = AValBlob(3)
-    x = stage.TraceBox(owner=stage.TraceInterpreter(), var=stage.Var(aval=aval))
+    x = stage.TraceBox(owner=stage.TraceInterp(), var=stage.Var(aval=aval))
     x = ad.PullbackFwdBox(object(), x)
     x = ad.PushforwardBox(object(), x, object())
     x = ad.PullbackBwdBox(object(), x)

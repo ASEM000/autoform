@@ -76,29 +76,29 @@ class TestCheck:
 
     @pytest.mark.parametrize("outer", ["pushforward", "batch"])
     def test_nested_interpreters_reject_invalid_tangent(self, outer):
-        parent = core.active_interpreter.get()
+        parent = core.active_interp.get()
         if outer == "pushforward":
-            batcher = axis.BatchInterpreter(batch_size=2, parent=parent)
-            interpreter = ad.PushforwardInterpreter(parent=batcher)
+            batcher = axis.BatchInterp(batch_size=2, parent=parent)
+            interpreter = ad.PushInterp(parent=batcher)
             x = interpreter.box((batcher.box((["x", "y"], True)), batcher.box((["dx", 1.0], True))))
         else:
-            pusher = ad.PushforwardInterpreter(parent=parent)
-            interpreter = axis.BatchInterpreter(batch_size=2, parent=pusher)
+            pusher = ad.PushInterp(parent=parent)
+            interpreter = axis.BatchInterp(batch_size=2, parent=pusher)
             x = interpreter.box(([pusher.box(("x", "dx")), pusher.box(("y", 1.0))], True))
         aval = string.AValStr()
         assert core.domainof(aval).accepts(x)
-        with core.using_interpreter(interpreter):
+        with core.using_interp(interpreter):
             with pytest.raises(TypeError, match="Expected AValStr"):
                 check.p_typecheck.bind(x, aval=aval)
 
     @pytest.mark.parametrize("batched", [False, True], ids=["broadcast-batch", "nested-batch"])
     def test_batch_value_metadata(self, batched):
-        batcher = axis.BatchInterpreter(batch_size=1, parent=core.active_interpreter.get())
+        batcher = axis.BatchInterp(batch_size=1, parent=core.active_interp.get())
         aval = axis.AValBatch(AValBlob(3))
         for size in (3, 4):
             value = [core.Zero(AValBlob(size))]
             box = batcher.box(([value] if batched else value, batched))
-            with core.using_interpreter(batcher):
+            with core.using_interp(batcher):
                 if size == 3:
                     check.typecheck(box, aval)
                 else:
@@ -108,8 +108,8 @@ class TestCheck:
     @pytest.mark.parametrize("x", [("x", "y"), {"a": "x", "b": "y"}], ids=["tuple", "dict"])
     def test_traced_batch_preserves_used_checks_and_broadcast(self, x):
         def program(x, y):
-            batcher = axis.BatchInterpreter(batch_size=2, parent=core.active_interpreter.get())
-            with core.using_interpreter(batcher):
+            batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
+            with core.using_interp(batcher):
                 z = check.p_typecheck.bind(
                     batcher.box(([x, y], [True, False])),
                     aval=axis.AValBatch(string.AValStr()),

@@ -37,7 +37,7 @@ import autoform.src.utils as utils
 from tests import (
     AValBlob,
     Blob,
-    CountingInterpreter,
+    CountingInterp,
     aexecute,
     angle_text,
     append_bang,
@@ -553,7 +553,7 @@ def test_variable_and_literal_boundary(aval):
     assert core.avalof(var) is var.aval
     assert not stage.is_traceable(var)
     assert not stage.is_var("hello")
-    box = stage.TraceBox(owner=stage.TraceInterpreter(), var=var)
+    box = stage.TraceBox(owner=stage.TraceInterp(), var=var)
     assert box.aval is var.aval
     assert core.avalof(box) is aval
     assert {box: var}[box] is var
@@ -1077,9 +1077,9 @@ class TestTraceValuePythonOps:
 
 class TestFold:
     def test_fold_block_is_noop_outside_trace(self):
-        counter = CountingInterpreter()
+        counter = CountingInterp()
 
-        with core.using_interpreter(counter):
+        with core.using_interp(counter):
             with stage.fold():
                 result = string.concat("A", "B")
 
@@ -1213,7 +1213,7 @@ class TestFold:
         p_async_probe = core.Prim("async_dynamic_fold_probe")
         extend.r_abstract.set(p_async_probe, abstract_async_probe)
 
-        with core.using_interpreter(stage.TraceInterpreter()) as tracer:
+        with core.using_interp(stage.TraceInterp()) as tracer:
             result = asyncio.run(p_async_probe.abind("literal"))
 
         assert isinstance(result, stage.TraceBox)
@@ -1226,7 +1226,7 @@ class TestFold:
         p_async_probe = core.Prim("async_fold_probe")
         extend.r_aimpl.set(p_async_probe, aimpl_async_probe)
 
-        with core.using_interpreter(stage.TraceInterpreter()) as tracer:
+        with core.using_interp(stage.TraceInterp()) as tracer:
             with stage.fold():
                 result = asyncio.run(p_async_probe.abind("literal"))
 

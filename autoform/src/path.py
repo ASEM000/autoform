@@ -119,11 +119,11 @@ core.r_apull_bwd.set(p_factor, utils.asyncify(pullback_bwd_factor))
 p_weight_call = core.Prim("weight_call")
 
 
-class WeightInterpreter(core.Interpreter):
+class WeightInterp(core.Interp):
     __slots__ = ["log_weight", "parent"]
 
     def __init__(self):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.log_weight = 0.0
 
     def factor(self, weight: float, /) -> None:
@@ -163,16 +163,16 @@ def weight(ir: stage.IR, /) -> stage.IR:
 
 
 def impl_weight_call(in_tree, /, *, ir: stage.IR):
-    interpreter = WeightInterpreter()
-    with core.using_interpreter(interpreter):
+    interpreter = WeightInterp()
+    with core.using_interp(interpreter):
         output = ir.call(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
     return output, weight
 
 
 async def aimpl_weight_call(in_tree, /, *, ir: stage.IR):
-    interpreter = WeightInterpreter()
-    with core.using_interpreter(interpreter):
+    interpreter = WeightInterp()
+    with core.using_interp(interpreter):
         output = await ir.acall(*in_tree)
     weight = 0.0 if interpreter.log_weight == -math.inf else math.exp(interpreter.log_weight)
     return output, weight

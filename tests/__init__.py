@@ -79,9 +79,9 @@ def fixpoint_program(step_ir, **kwargs):
     return program
 
 
-class CountingInterpreter(core.Interpreter):
+class CountingInterp(core.Interp):
     def __init__(self):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.calls = 0
 
     def interpret(self, prim, in_tree, /, **params):

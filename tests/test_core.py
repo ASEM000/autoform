@@ -348,13 +348,13 @@ class TestBind:
 
 
 def test_interpreter_context_restores_default():
-    assert type(core.active_interpreter.get()) is impl.ImplInterpreter
-    tracer = stage.TraceInterpreter()
-    with core.using_interpreter(tracer) as active:
+    assert type(core.active_interp.get()) is impl.ImplInterp
+    tracer = stage.TraceInterp()
+    with core.using_interp(tracer) as active:
         assert active is tracer
         string.format("Hello, {value}!", value=stage.Var.fresh(aval=string.AValStr()))
         assert len(tracer.eqns) == 1
-    assert type(core.active_interpreter.get()) is impl.ImplInterpreter
+    assert type(core.active_interp.get()) is impl.ImplInterp
     assert string.concat("a", "b") == "ab"
 
 
@@ -369,7 +369,7 @@ def test_custom_rule_interpreter(executor):
     rules.set(check.p_typecheck, check.impl_check)
     arules.set(check.p_typecheck, utils.asyncify(check.impl_check))
 
-    class OperationCountInterpreter(core.Interpreter):
+    class OperationCountInterp(core.Interp):
         def interpret(self, prim, in_tree, /, **params):
             return rules.get(prim)(in_tree, **params)
 
@@ -377,7 +377,7 @@ def test_custom_rule_interpreter(executor):
             return await arules.get(prim)(in_tree, **params)
 
     ir = stage.trace(lambda x, y: (x + y) + y)("x", "y")
-    with core.using_interpreter(OperationCountInterpreter()):
+    with core.using_interp(OperationCountInterp()):
         with pytest.raises(TypeError, match="Expected AValStr"):
             executor(ir, "x", "y")
     assert executor(ir, "x", "y") == "xyy"

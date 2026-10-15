@@ -22,12 +22,12 @@ from autoform.src.control import p_while_loop as p_while_loop
 from autoform.src.core import Algebra as Algebra
 from autoform.src.core import AVal as AVal
 from autoform.src.core import Domain as Domain
-from autoform.src.core import Interpreter as Interpreter
+from autoform.src.core import Interp as Interp
 from autoform.src.core import Prim as Prim
 from autoform.src.core import Rule as Rule
 from autoform.src.core import Space as Space
 from autoform.src.core import Zero as Zero
-from autoform.src.core import active_interpreter as active_interpreter
+from autoform.src.core import active_interp as active_interp
 from autoform.src.core import algebraof as algebraof
 from autoform.src.core import avalof as avalof
 from autoform.src.core import domainof as domainof
@@ -47,7 +47,7 @@ from autoform.src.core import register_domain as register_domain
 from autoform.src.core import s_cotangent as s_cotangent
 from autoform.src.core import s_primal as s_primal
 from autoform.src.core import s_tangent as s_tangent
-from autoform.src.core import using_interpreter as using_interpreter
+from autoform.src.core import using_interp as using_interp
 from autoform.src.dead import register_dce as register_dce
 from autoform.src.dead import register_non_dce as register_non_dce
 from autoform.src.intercept import p_checkpoint as p_checkpoint

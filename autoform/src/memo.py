@@ -64,11 +64,11 @@ def make_key(prim: core.Prim, in_tree: Tree, /, **params) -> CacheKey:
     return (prim, tuple(flat), struct)
 
 
-class MemoizingInterpreter(core.Interpreter):
+class MemoizingInterp(core.Interp):
     __slots__ = ["parent", "cache", "pending"]
 
     def __init__(self):
-        self.parent = core.active_interpreter.get()
+        self.parent = core.active_interp.get()
         self.cache: dict[CacheKey, Tree] = {}
         self.pending: dict[CacheKey, asyncio.Future] = {}
 
@@ -167,5 +167,5 @@ def memoize() -> Generator[None, None, None]:
         >>> len(ir.eqns)
         1
     """
-    with core.using_interpreter(MemoizingInterpreter()):
+    with core.using_interp(MemoizingInterp()):
         yield
