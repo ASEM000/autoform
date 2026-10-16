@@ -28,7 +28,7 @@ from tests import aexecute, execute
 @pytest.mark.parametrize(
     "x",
     [
-        pytest.param(core.Zero(numeric.AValFloat()), id="symbolic-zero"),
+        pytest.param(core.Zero(numeric.AFloat()), id="symbolic-zero"),
         pytest.param(lm.Float(), id="schema"),
     ],
 )
@@ -70,7 +70,7 @@ def test_comparison_blocks_pushforward():
     p, derivative = ir.call((1.0,), (1.0,))
     assert p is True
     assert isinstance(derivative, core.Zero)
-    assert derivative.aval == numeric.AValBool()
+    assert derivative.aval == numeric.ABool()
 
 
 def test_comparison_blocks_pullback():
@@ -78,7 +78,7 @@ def test_comparison_blocks_pullback():
     p, (derivative,) = ir.call((1.0,), True)
     assert p is True
     assert isinstance(derivative, core.Zero)
-    assert derivative.aval == numeric.AValFloat()
+    assert derivative.aval == numeric.AFloat()
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

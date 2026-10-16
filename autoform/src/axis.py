@@ -38,8 +38,8 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class AValBatch(core.AVal):
-    # NOTE(asem): no aval_type rule can infer AValBatch from a concrete container
+class ABatch(core.AVal):
+    # NOTE(asem): no aval_type rule can infer ABatch from a concrete container
     # as containers are later introduced at the call site. unlike jax the atomic unit is not
     # the array object but any thing really.
     def __init__(self, base: core.AVal):
@@ -59,11 +59,11 @@ class AValBatch(core.AVal):
 
     def join(self, other, /):
         match self, other:
-            case AValBatch(base=lhs), AValBatch(base=rhs) | core.Zero(aval=AValBatch(base=rhs)):
+            case ABatch(base=lhs), ABatch(base=rhs) | core.Zero(aval=ABatch(base=rhs)):
                 return type(self)(lhs.join(rhs))
             case _, core.AVal():
                 raise TypeError(f"Cannot join {self!r} and {other!r}")
-            case AValBatch(base=base), _:
+            case ABatch(base=base), _:
                 if utils.tree.is_leaf(other):
                     raise TypeError(f"Cannot join {self!r} and {other!r}")
                 for x in utils.tree.leaves(other, is_leaf=lambda x: x is not other):
@@ -71,10 +71,10 @@ class AValBatch(core.AVal):
                 return type(self)(base)
 
 
-core.aval_types[AValBatch] = lambda aval: aval
-core.s_primal.set(AValBatch, lambda aval: AValBatch(core.s_primal.map(aval.base)))
-core.s_tangent.set(AValBatch, lambda aval: AValBatch(core.s_tangent.map(aval.base)))
-core.s_cotangent.set(AValBatch, lambda aval: AValBatch(core.s_cotangent.map(aval.base)))
+stage.register_trace_type(ABatch, lambda aval: aval)
+core.s_primal.set(ABatch, lambda aval: ABatch(core.s_primal.map(aval.base)))
+core.s_tangent.set(ABatch, lambda aval: ABatch(core.s_tangent.map(aval.base)))
+core.s_cotangent.set(ABatch, lambda aval: ABatch(core.s_cotangent.map(aval.base)))
 
 
 def is_axis_spec(v) -> bool:
@@ -109,7 +109,7 @@ def broadcast_batch_out(spec, out_v: Tree, out_b: Tree[bool], /) -> Tree:
 
 def unbatch_zeros(in_v: Tree, in_b: Tree[bool], /) -> TreePair:
     def is_batched_zero(b, v):
-        return b and isinstance(v, core.Zero) and isinstance(core.avalof(v), AValBatch)
+        return b and isinstance(v, core.Zero) and isinstance(core.avalof(v), ABatch)
 
     is_zero = utils.tree.map(is_batched_zero, in_b, in_v)
     out_v = utils.tree.map(lambda z, v: core.Zero(v.aval.base) if z else v, is_zero, in_v)
@@ -151,7 +151,7 @@ def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
     has_batched = any(utils.tree.leaves(in_b, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
-        return AValBatch(aval) if is_batched else aval
+        return ABatch(aval) if is_batched else aval
 
     def make_in(atom, is_batched: bool):
         if not stage.is_var(atom):
@@ -250,7 +250,7 @@ class BatchEnv:
         if not stage.is_var(atom):
             return atom
         value = self.values[atom]
-        aval = AValBatch(atom.aval) if self.batched[atom] else atom.aval
+        aval = ABatch(atom.aval) if self.batched[atom] else atom.aval
         stage.no_stage_typecheck(value, aval)
         return value
 
@@ -259,7 +259,7 @@ class BatchEnv:
 
     def write_v(self, atom, value, /):
         if stage.is_var(atom):
-            aval = AValBatch(atom.aval) if self.batched[atom] else atom.aval
+            aval = ABatch(atom.aval) if self.batched[atom] else atom.aval
             stage.no_stage_typecheck(value, aval)
             self.values[atom] = value
 
@@ -362,7 +362,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tre
     has_batched = any(utils.tree.leaves(in_b, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
-        return AValBatch(aval) if is_batched else aval
+        return ABatch(aval) if is_batched else aval
 
     def out_aval(atom):
         if stage.is_var(atom):
@@ -477,4 +477,4 @@ core.r_pull_fwd.set(p_batch_call, pullback_fwd_batch_call)
 core.r_apull_fwd.set(p_batch_call, apullback_fwd_batch_call)
 core.r_pull_bwd.set(p_batch_call, pullback_bwd_batch_call)
 core.r_apull_bwd.set(p_batch_call, apullback_bwd_batch_call)
-dead.dce_rules[p_batch_call] = dce_batch_call
+dead.register_dce(p_batch_call, dce_batch_call)

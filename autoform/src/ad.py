@@ -356,7 +356,7 @@ core.r_pull_fwd.set(p_pushforward_call, pullback_fwd_pushforward_call)
 core.r_apull_fwd.set(p_pushforward_call, apullback_fwd_pushforward_call)
 core.r_pull_bwd.set(p_pushforward_call, pullback_bwd_pushforward_call)
 core.r_apull_bwd.set(p_pushforward_call, apullback_bwd_pushforward_call)
-dead.dce_rules[p_pushforward_call] = dce_pushforward_call
+dead.register_dce(p_pushforward_call, dce_pushforward_call)
 
 
 # ==================================================================================================
@@ -377,7 +377,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> ir = af.trace(f)("...")
         # >>> z = af.extend.Zero(af.extend.s_primal.map(af.extend.avalof("")))
         # >>> af.pullback(ir).call(("a",), (z, z))
-        # (('a', 'a'), (Zero(AValStr()),))
+        # (('a', 'a'), (Zero(AStr()),))
         first_zero, *rest_zero = cots
         assert all(core.avalof(c) == core.avalof(first_zero) for c in rest_zero)
         return first_zero
@@ -828,4 +828,4 @@ core.r_pull_fwd.set(p_pullback_call, pullback_fwd_pullback_call)
 core.r_apull_fwd.set(p_pullback_call, apullback_fwd_pullback_call)
 core.r_pull_bwd.set(p_pullback_call, pullback_bwd_pullback_call)
 core.r_apull_bwd.set(p_pullback_call, apullback_bwd_pullback_call)
-dead.dce_rules[p_pullback_call] = dce_pullback_call
+dead.register_dce(p_pullback_call, dce_pullback_call)

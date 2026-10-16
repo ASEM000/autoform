@@ -39,7 +39,7 @@ def test_pushforward_checker_rejects_nested_tangent_without_equations():
     ir = stage.trace(lambda x: x)("x")
 
     with core.using_interp(pusher):
-        with pytest.raises(TypeError, match="Cannot join AValStr"):
+        with pytest.raises(TypeError, match="Cannot join AStr"):
             next(ir.walk(x))
     assert core.active_interp.get() is active
 
@@ -60,7 +60,7 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
         x.tangent = 1.0
         output = eqn.bind(inputs, **eqn.params)
 
-        with pytest.raises(TypeError, match="Cannot join AValStr"):
+        with pytest.raises(TypeError, match="Cannot join AStr"):
             gen.send(output)
     assert core.active_interp.get() is active
 
@@ -70,7 +70,7 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
     "t",
     [
         pytest.param(1.0, id="float"),
-        pytest.param(core.Zero(numeric.AValFloat()), id="wrong-zero"),
+        pytest.param(core.Zero(numeric.AFloat()), id="wrong-zero"),
     ],
 )
 def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
@@ -81,28 +81,28 @@ def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
     extend.r_apush.set(p_bad_tangent, utils.asyncify(forward))
     ir = ad.pushforward(stage.trace(lambda x: control.stop_gradient(p_bad_tangent.bind(x)))("x"))
 
-    with pytest.raises(TypeError, match="AValStr"):
+    with pytest.raises(TypeError, match="AStr"):
         executor(ir, ("x",), ("dx",))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_pullback_checks_concrete_primal(executor):
-    class AValNonemptyStr(string.AValStr):
+    class AValNonemptyStr(string.AStr):
         def join(self, other):
             match other:
-                case core.Zero(aval=string.AValStr() as aval):
+                case core.Zero(aval=string.AStr() as aval):
                     return self.join(aval)
             if type(other) is str:
-                return self if other else string.AValStr()
-            if type(other) is string.AValStr:
+                return self if other else string.AStr()
+            if type(other) is string.AStr:
                 return other
-            if isinstance(other, (str, string.AValStr)):
+            if isinstance(other, (str, string.AStr)):
                 return self
             raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     core.aval_types[AValNonemptyStr] = lambda aval: aval
     core.s_primal.set(AValNonemptyStr, lambda aval: aval)
-    core.s_cotangent.set(AValNonemptyStr, lambda _: string.AValStr())
+    core.s_cotangent.set(AValNonemptyStr, lambda _: string.AStr())
     x = stage.Var(aval=AValNonemptyStr())
     ir = ad.pullback(stage.IR([], (x,), x))
 
@@ -115,9 +115,9 @@ def test_pullback_checks_concrete_primal(executor):
 @pytest.mark.parametrize(
     "c, message",
     [
-        pytest.param(["x", "y"], "Cannot join AValStr", id="list"),
-        pytest.param(1.0, "Cannot join AValStr", id="float"),
-        pytest.param(core.Zero(numeric.AValFloat()), "Cannot join AValStr", id="wrong-zero"),
+        pytest.param(["x", "y"], "Cannot join AStr", id="list"),
+        pytest.param(1.0, "Cannot join AStr", id="float"),
+        pytest.param(core.Zero(numeric.AFloat()), "Cannot join AStr", id="wrong-zero"),
     ],
 )
 def test_pullback_rejects_incompatible_cotangent(executor, c, message):
@@ -138,7 +138,7 @@ def test_pullback_rejects_invalid_intermediate_cotangent(executor):
     extend.r_apull_bwd.set(p_bad_cotangent, utils.asyncify(backward))
     ir = ad.pullback(stage.trace(lambda x: p_bad_cotangent.bind(control.stop_gradient(x)))("x"))
 
-    with pytest.raises(TypeError, match="Cannot join AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AStr"):
         executor(ir, ("x",), "df")
 
 
@@ -195,10 +195,10 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
     "c, expected",
     [
         pytest.param(("a", "b"), "ab", id="accum"),
-        pytest.param(("a", core.Zero(string.AValStr())), "a", id="mixed-zero"),
+        pytest.param(("a", core.Zero(string.AStr())), "a", id="mixed-zero"),
         pytest.param(
-            (core.Zero(string.AValStr()), core.Zero(string.AValStr())),
-            core.Zero(string.AValStr()),
+            (core.Zero(string.AStr()), core.Zero(string.AStr())),
+            core.Zero(string.AStr()),
             id="all-zero",
         ),
     ],
@@ -207,16 +207,16 @@ def test_pullback_accumulates_cotangents_and_zeros_unused_inputs(executor, c, ex
     ir = ad.pullback(stage.trace(lambda x, y: (x, x))("x", "y"))
     assert executor(ir, ("x", "y"), c) == (
         ("x", "x"),
-        (expected, core.Zero(string.AValStr())),
+        (expected, core.Zero(string.AStr())),
     )
 
 
 def test_pullback_rechecks_mutated_contribution():
-    seed = core.Zero(string.AValStr())
+    seed = core.Zero(string.AStr())
     p_mutate_cotangent = core.Prim("mutate_cotangent")
 
     def backward(args):
-        seed.aval = numeric.AValFloat()
+        seed.aval = numeric.AFloat()
         return args[1]
 
     extend.r_abstract.set(p_mutate_cotangent, lambda x: x)
@@ -228,7 +228,7 @@ def test_pullback_rechecks_mutated_contribution():
         return y, p_mutate_cotangent.bind(y)
 
     ir = ad.pullback(stage.trace(program)("x"))
-    with pytest.raises(TypeError, match="Cannot join AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AStr"):
         ir.call(("x",), (seed, "df"))
 
 
@@ -279,13 +279,13 @@ def test_pullback_preserves_original_ir(executor):
 def test_pullback_checks_under_caller_interpreter():
     parent = core.active_interp.get()
     no_stage = stage.no_stage_flag.get()
-    x, y = (stage.Var(aval=string.AValStr()) for _ in range(2))
+    x, y = (stage.Var(aval=string.AStr()) for _ in range(2))
     ir = stage.IR([], (x, y), (x, x))
 
     with core.using_interp(parent):
         _, c = ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
-        assert c == ("ab", core.Zero(string.AValStr()))
-        with pytest.raises(TypeError, match="Cannot join AValStr"):
+        assert c == ("ab", core.Zero(string.AStr()))
+        with pytest.raises(TypeError, match="Cannot join AStr"):
             ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
     assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
@@ -294,9 +294,9 @@ def test_pullback_checks_under_caller_interpreter():
 def test_pullback_preserves_parent_pushforward_values():
     parent = core.active_interp.get()
     pusher = ad.PushInterp(parent=parent)
-    x, y = (stage.Var(aval=string.AValStr()) for _ in range(2))
+    x, y = (stage.Var(aval=string.AStr()) for _ in range(2))
     ir = stage.IR([], (x, y), (x, x))
-    zero = core.Zero(string.AValStr())
+    zero = core.Zero(string.AStr())
 
     with core.using_interp(pusher):
         values = pusher.box((("a", "b"), ("da", "db")))
@@ -309,7 +309,7 @@ def test_pullback_preserves_parent_pushforward_values():
 def test_batched_pullback_rejects_shared_list_cotangent(executor):
     ir = ad.pullback(stage.trace(lambda x, y: x + y)("x", "y"))
     ir = axis.batch(ir, in_axes=((False, True), False))
-    with pytest.raises(TypeError, match="Cannot join AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AStr"):
         executor(ir, ("x", ["y1", "y2"]), ["o1", "o2"])
     assert executor(ir, ("x", ["y1", "y2"]), "o") == (
         ["xy1", "xy2"],
@@ -321,11 +321,9 @@ def test_batched_pullback_rejects_shared_list_cotangent(executor):
 @pytest.mark.parametrize(
     "c, error",
     [
-        pytest.param("o", "Cannot join AValBatch", id="scalar"),
-        pytest.param(["o", 1.0], "Cannot join AValStr", id="mixed-elements"),
-        pytest.param(
-            core.Zero(axis.AValBatch(numeric.AValFloat())), "Cannot join AValStr", id="wrong-zero"
-        ),
+        pytest.param("o", "Cannot join ABatch", id="scalar"),
+        pytest.param(["o", 1.0], "Cannot join AStr", id="mixed-elements"),
+        pytest.param(core.Zero(axis.ABatch(numeric.AFloat())), "Cannot join AStr", id="wrong-zero"),
     ],
 )
 def test_pullback_of_batch_rejects_incompatible_cotangent(executor, c, error):
@@ -345,8 +343,8 @@ def test_pullback_of_batch_rejects_incompatible_cotangent(executor, c, error):
 @pytest.mark.parametrize(
     "value, aval",
     [
-        pytest.param("x", string.AValStr(), id="string"),
-        pytest.param(1.5, numeric.AValFloat(), id="float"),
+        pytest.param("x", string.AStr(), id="string"),
+        pytest.param(1.5, numeric.AFloat(), id="float"),
     ],
 )
 def test_ad_box_avalof(box_type, kwargs, value, aval):
@@ -472,15 +470,15 @@ class TestCotangentHelpers:
             pytest.param([["a", "b"], ["c", "d"]], ["ac", "bd"], id="lists"),
             pytest.param(
                 [
-                    {"x": ["1", core.Zero(string.AValStr())], "y": "a"},
+                    {"x": ["1", core.Zero(string.AStr())], "y": "a"},
                     {"x": ["2", "b"], "y": "c"},
                 ],
                 {"x": ["12", "b"], "y": "ac"},
                 id="nested-with-zero",
             ),
             pytest.param(
-                [core.Zero(string.AValStr()), core.Zero(string.AValStr())],
-                core.Zero(string.AValStr()),
+                [core.Zero(string.AStr()), core.Zero(string.AStr())],
+                core.Zero(string.AStr()),
                 id="all-zero",
             ),
         ],
@@ -513,8 +511,8 @@ class TestCotangentHelpers:
     def test_cot_accum_all_zeros_must_match_aval(self):
         with pytest.raises(AssertionError):
             ad.cot_accum([
-                core.Zero(string.AValStr()),
-                core.Zero(numeric.AValInt()),
+                core.Zero(string.AStr()),
+                core.Zero(numeric.AInt()),
             ])
 
     def test_cot_accum_unsupported_type_raises(self):
@@ -625,11 +623,11 @@ class TestCotangentHelpers:
     ],
 )
 def test_literal_input_derivatives_are_zero(transform, literal, derivative_side):
-    var = stage.Var(aval=string.AValStr())
+    var = stage.Var(aval=string.AStr())
     ir = stage.IR([], (literal, var), (var,))
     zero, variable = getattr(transform(ir), derivative_side)[1]
     assert isinstance(zero, core.Zero)
-    assert zero.aval == string.AValStr()
+    assert zero.aval == string.AStr()
     assert isinstance(variable, stage.Var)
 
 
@@ -644,7 +642,7 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
     ir = stage.trace(lambda x: (x, "constant_output"))("input")
     variable, zero = getattr(transform(ir), derivative_side)[1]
     assert isinstance(zero, core.Zero)
-    assert zero.aval == string.AValStr()
+    assert zero.aval == string.AStr()
     assert isinstance(variable, stage.Var)
 
 
@@ -1009,7 +1007,7 @@ def test_pushforward_preserves_batched_zero_structure(executor):
     add = axis.batch(stage.trace(lambda x, y: x + y)(1.0, 1.0))
     x, y = [1.0, 2.0], [3.0, 4.0]
     ir = stage.trace(lambda x, y: add.call(double.call(x), y))(x, y)
-    zero = core.Zero(numeric.AValFloat())
+    zero = core.Zero(numeric.AFloat())
 
     assert executor(ad.pushforward(ir), (x, y), ([zero, zero], [1.0, 1.0])) == (
         [5.0, 8.0],
@@ -1033,7 +1031,7 @@ def test_traced_pushforward_preserves_batched_zero_structure(executor, forward):
     add = axis.batch(stage.trace(lambda x, y: x + y)(1.0, 1.0))
     x, y = [1.0, 2.0], [3.0, 4.0]
     source = stage.trace(lambda x, y: add.call(double.call(x), y))(x, y)
-    zero = core.Zero(numeric.AValFloat())
+    zero = core.Zero(numeric.AFloat())
     ir = stage.trace(lambda x, y: forward(((x, y), ([zero, zero], [1.0, 1.0])), ir=source))(x, y)
 
     assert executor(ir, x, y) == ([5.0, 8.0], [1.0, 1.0])
@@ -1049,7 +1047,7 @@ def test_pullback_unused_batched_output(executor):
 
     x, y = [1.0, 2.0], [3.0, 4.0]
     ir = ad.pullback(stage.trace(program)(x, y))
-    zero = core.Zero(numeric.AValFloat())
+    zero = core.Zero(numeric.AFloat())
 
     assert executor(ir, (x, y), [1.0, 1.0]) == (y, ([zero, zero], [1.0, 1.0]))
 
@@ -1068,9 +1066,9 @@ def test_nonidentity_primal_space(executor, transform):
             raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     core.aval_types[AValValue] = lambda aval: aval
-    core.s_primal.set(AValValue, lambda _: numeric.AValFloat())
-    core.s_tangent.set(AValValue, lambda _: string.AValStr())
-    core.s_cotangent.set(AValValue, lambda _: string.AValStr())
+    core.s_primal.set(AValValue, lambda _: numeric.AFloat())
+    core.s_tangent.set(AValValue, lambda _: string.AStr())
+    core.s_cotangent.set(AValValue, lambda _: string.AStr())
     p_mapped_primal = core.Prim("mapped_primal")
 
     def forward(args):
@@ -1096,9 +1094,9 @@ def test_nonidentity_primal_space(executor, transform):
         (z, "literal"),
     )
     ir = transform(source)
-    zero = core.Zero(string.AValStr())
-    assert ir.in_tree[0][0].aval == numeric.AValFloat()
-    assert ir.out_tree[0][0].aval == numeric.AValFloat()
+    zero = core.Zero(string.AStr())
+    assert ir.in_tree[0][0].aval == numeric.AFloat()
+    assert ir.out_tree[0][0].aval == numeric.AFloat()
     if transform is ad.pushforward:
         args = ((2.0,), ("dx",))
         expected = ((4.0, "literal"), ("dxdx", zero))
@@ -1109,7 +1107,7 @@ def test_nonidentity_primal_space(executor, transform):
     assert executor(ir, *args) == expected
     static = (False, (False, True)) if transform is ad.pullback else False
     traced = stage.trace(lambda p, d: executor(ir, p, d), static=static)(*args)
-    assert traced.out_tree[0][0].aval == numeric.AValFloat()
+    assert traced.out_tree[0][0].aval == numeric.AFloat()
     assert executor(traced, *args) == expected
-    with pytest.raises(TypeError, match="Cannot join AValFloat"):
+    with pytest.raises(TypeError, match="Cannot join AFloat"):
         executor(ir, ("bad",), args[1])

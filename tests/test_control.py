@@ -113,7 +113,7 @@ class TestFixpointPushforward:
         assert executor(ad.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, expected)
         assert executor(ad.pullback(ir), (2.0, 1.0), 1.0) == (
             2.0,
-            (core.Zero(numeric.AValFloat()), expected),
+            (core.Zero(numeric.AFloat()), expected),
         )
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -123,8 +123,8 @@ class TestFixpointPushforward:
             pytest.param(2.0, 3.0, id="parameter-tangent"),
             pytest.param(0.0, 0.0, id="concrete-zero"),
             pytest.param(
-                core.Zero(numeric.AValFloat()),
-                core.Zero(numeric.AValFloat()),
+                core.Zero(numeric.AFloat()),
+                core.Zero(numeric.AFloat()),
                 id="symbolic-zero",
             ),
         ],
@@ -146,7 +146,7 @@ class TestFixpointPushforward:
         x, y = {"x": 2.0, "y": "a"}, {"x": 1.0, "y": "!"}
         equiv_ir = stage.trace(lambda x, y: True)(x, x)
         ir = fixpoint_ir(step, (x, y), max_iters=10, equiv_ir=equiv_ir)
-        zero = core.Zero(string.AValStr())
+        zero = core.Zero(string.AStr())
         assert executor(
             ad.pushforward(ir), (x, y), ({"x": 100.0, "y": "ignored"}, {"x": 1.0, "y": zero})
         ) == ({"x": 2.0, "y": "a!"}, {"x": 1.5, "y": zero})
@@ -466,8 +466,8 @@ class TestWhileLoop:
             pytest.param(
                 lambda x: True,
                 2,
-                core.Zero(numeric.AValFloat()),
-                (16.0, core.Zero(numeric.AValFloat())),
+                core.Zero(numeric.AFloat()),
+                (16.0, core.Zero(numeric.AFloat())),
                 id="symbolic-zero",
             ),
         ],
@@ -484,7 +484,7 @@ class TestWhileLoop:
         cond_ir = stage.trace(lambda x: x["x"] < 10.0)(x)
         body_ir = stage.trace(lambda x: {"x": x["x"] * x["x"], "y": string.concat(x["y"], "!")})(x)
         ir = stage.trace(while_program(cond_ir, body_ir, max_iters=10))(x)
-        zero = core.Zero(string.AValStr())
+        zero = core.Zero(string.AStr())
         assert executor(ad.pushforward(ir), (x,), ({"x": 1.0, "y": zero},)) == (
             {"x": 16.0, "y": "a!!"},
             {"x": 32.0, "y": zero},
@@ -693,7 +693,7 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
-    class AValKey(string.AValStr):
+    class AValKey(string.AStr):
         def join(self, other):
             match other:
                 case core.Zero(aval=AValKey() as aval):
@@ -708,7 +708,7 @@ def test_switch_accepts_registered_key_type():
     left = stage.trace(lambda x: string.concat("L", x))("X")
     right = stage.trace(lambda x: string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))
-    assert string.AValStr().join(keys[0]) == string.AValStr()
+    assert string.AStr().join(keys[0]) == string.AStr()
     branches = dict(zip(keys, (left, right), strict=True))
     ir = stage.trace(lambda key: control.switch(key, branches, "X"))(keys[0])
     assert ir.call(keys[0]) == "LX"

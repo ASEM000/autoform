@@ -33,24 +33,24 @@ from tests import AValBlob, Blob, aexecute, execute
 @pytest.mark.parametrize(
     "value",
     [
-        pytest.param(numeric.AValFloat(), id="aval"),
-        pytest.param(core.Zero(numeric.AValFloat()), id="zero"),
+        pytest.param(numeric.AFloat(), id="aval"),
+        pytest.param(core.Zero(numeric.AFloat()), id="zero"),
         pytest.param(3.0, id="concrete"),
     ],
 )
 def test_check_representations(value):
-    assert check.typecheck(value, numeric.AValFloat()) is value
-    with pytest.raises(TypeError, match="AValStr"):
-        check.typecheck(value, string.AValStr())
+    assert check.typecheck(value, numeric.AFloat()) is value
+    with pytest.raises(TypeError, match="AStr"):
+        check.typecheck(value, string.AStr())
 
 
 def test_avalof_requires_explicit_subclass_registration():
-    class AValFloat(numeric.AValFloat): ...
+    class AFloat(numeric.AFloat): ...
 
-    x = AValFloat()
+    x = AFloat()
     with pytest.raises(TypeError, match="No aval rule registered"):
         core.avalof(x)
-    core.aval_types[AValFloat] = lambda aval: aval
+    core.aval_types[AFloat] = lambda aval: aval
     assert core.avalof(x) is x
     assert core.avalof(core.Zero(x)) is x
 
@@ -73,10 +73,10 @@ class TestAVal:
     @pytest.mark.parametrize(
         "aval, values, expected",
         [
-            pytest.param(numeric.AValFloat(), [], 0.0, id="empty-float"),
-            pytest.param(numeric.AValFloat(), [1.0, 2.0, 3.0], 6.0, id="float"),
-            pytest.param(string.AValStr(), [], "", id="empty-string"),
-            pytest.param(string.AValStr(), ["a", "b", "c"], "abc", id="string"),
+            pytest.param(numeric.AFloat(), [], 0.0, id="empty-float"),
+            pytest.param(numeric.AFloat(), [1.0, 2.0, 3.0], 6.0, id="float"),
+            pytest.param(string.AStr(), [], "", id="empty-string"),
+            pytest.param(string.AStr(), ["a", "b", "c"], "abc", id="string"),
         ],
     )
     def test_add_reduction(self, aval, values, expected):
@@ -146,9 +146,9 @@ class TestSpace:
     @pytest.mark.parametrize(
         "aval",
         [
-            pytest.param(string.AValStr(), id="string"),
-            pytest.param(numeric.AValFloat(), id="float"),
-            pytest.param(numeric.AValBool(), id="boolean"),
+            pytest.param(string.AStr(), id="string"),
+            pytest.param(numeric.AFloat(), id="float"),
+            pytest.param(numeric.ABool(), id="boolean"),
         ],
     )
     def test_builtin_ad_spaces_preserve_aval(self, space, aval):
@@ -196,14 +196,14 @@ class TestSpace:
 
 class TestZero:
     def test_zero_string_contract(self):
-        z = core.Zero(string.AValStr())
+        z = core.Zero(string.AStr())
         assert isinstance(z, core.Zero)
-        assert z.aval == string.AValStr()
-        assert z == core.Zero(string.AValStr())
-        assert z != core.Zero(numeric.AValBool())
+        assert z.aval == string.AStr()
+        assert z == core.Zero(string.AStr())
+        assert z != core.Zero(numeric.ABool())
         assert core.Zero(core.s_primal.map(core.avalof(z))) == z
         assert z.aval.zero() == ""
-        assert core.avalof(z) == string.AValStr()
+        assert core.avalof(z) == string.AStr()
         assert not stage.is_traceable(z)
 
     def test_zero_requires_aval(self):
@@ -211,9 +211,9 @@ class TestZero:
             core.Zero(str)
 
     def test_zero_non_differentiable_type(self):
-        z = core.Zero(numeric.AValBool())
+        z = core.Zero(numeric.ABool())
         assert isinstance(z, core.Zero)
-        assert z.aval == numeric.AValBool()
+        assert z.aval == numeric.ABool()
         with pytest.raises(NotImplementedError):
             z.aval.zero()
 
@@ -234,7 +234,7 @@ class TestZero:
         assert AValBlob(4).add(1, 2) == ("add", 4, 1, 2)
 
     def test_zero_and_add_are_inherited(self):
-        class AValText(string.AValStr):
+        class AValText(string.AStr):
             __slots__ = []
 
         class Text(str): ...
@@ -328,7 +328,7 @@ class TestBind:
             return in_tree * multiplier
 
         def abstract_rule(in_tree, *, multiplier):
-            return string.AValStr()
+            return string.AStr()
 
         extend.r_impl.set(p_custom_bind, impl)
         extend.r_abstract.set(p_custom_bind, abstract_rule)
@@ -346,7 +346,7 @@ def test_interpreter_context_restores_default():
     tracer = stage.TraceInterp()
     with core.using_interp(tracer) as active:
         assert active is tracer
-        string.format("Hello, {value}!", value=stage.Var.fresh(aval=string.AValStr()))
+        string.format("Hello, {value}!", value=stage.Var.fresh(aval=string.AStr()))
         assert len(tracer.eqns) == 1
     assert type(core.active_interp.get()) is impl.ImplInterp
     assert string.concat("a", "b") == "ab"
@@ -372,7 +372,7 @@ def test_custom_rule_interpreter(executor):
 
     ir = stage.trace(lambda x, y: (x + y) + y)("x", "y")
     with core.using_interp(OperationCountInterp()):
-        with pytest.raises(TypeError, match="Cannot join AValStr"):
+        with pytest.raises(TypeError, match="Cannot join AStr"):
             executor(ir, "x", "y")
     assert executor(ir, "x", "y") == "xyy"
 
@@ -381,15 +381,15 @@ class TestChecking:
     @pytest.mark.parametrize(
         "aval, value, expected",
         [
-            pytest.param(numeric.AValFloat(), 1.0, True, id="float"),
-            pytest.param(numeric.AValFloat(), "x", False, id="wrong-float"),
-            pytest.param(numeric.AValFloat(), numeric.AValFloat(), True, id="aval"),
-            pytest.param(numeric.AValFloat(), core.Zero(numeric.AValFloat()), True, id="zero"),
-            pytest.param(numeric.AValInt(), 1, True, id="int"),
-            pytest.param(numeric.AValInt(), True, False, id="bool-is-not-int"),
-            pytest.param(numeric.AValBool(), True, True, id="bool"),
-            pytest.param(numeric.AValBool(), 1, False, id="int-is-not-bool"),
-            pytest.param(string.AValStr(), "x", True, id="string"),
+            pytest.param(numeric.AFloat(), 1.0, True, id="float"),
+            pytest.param(numeric.AFloat(), "x", False, id="wrong-float"),
+            pytest.param(numeric.AFloat(), numeric.AFloat(), True, id="aval"),
+            pytest.param(numeric.AFloat(), core.Zero(numeric.AFloat()), True, id="zero"),
+            pytest.param(numeric.AInt(), 1, True, id="int"),
+            pytest.param(numeric.AInt(), True, False, id="bool-is-not-int"),
+            pytest.param(numeric.ABool(), True, True, id="bool"),
+            pytest.param(numeric.ABool(), 1, False, id="int-is-not-bool"),
+            pytest.param(string.AStr(), "x", True, id="string"),
         ],
     )
     def test_scalar(self, aval, value, expected):
@@ -405,14 +405,14 @@ class TestChecking:
             pytest.param(["x", "y"], True, id="strings"),
             pytest.param([], True, id="empty"),
             pytest.param(["x", 1.0], False, id="mixed"),
-            pytest.param([string.AValStr()], True, id="aval-element"),
-            pytest.param([core.Zero(string.AValStr())], True, id="zero-element"),
-            pytest.param(axis.AValBatch(string.AValStr()), True, id="aval"),
-            pytest.param(core.Zero(axis.AValBatch(string.AValStr())), True, id="zero"),
+            pytest.param([string.AStr()], True, id="aval-element"),
+            pytest.param([core.Zero(string.AStr())], True, id="zero-element"),
+            pytest.param(axis.ABatch(string.AStr()), True, id="aval"),
+            pytest.param(core.Zero(axis.ABatch(string.AStr())), True, id="zero"),
         ],
     )
     def test_batch(self, value, expected):
-        aval = axis.AValBatch(string.AValStr())
+        aval = axis.ABatch(string.AStr())
         if expected:
             assert check.typecheck(value, aval) is value
         else:
@@ -424,10 +424,10 @@ class TestJoin:
     @pytest.mark.parametrize(
         "cls, value",
         [
-            (numeric.AValFloat, 1.0),
-            (numeric.AValInt, 1),
-            (numeric.AValBool, True),
-            (string.AValStr, "x"),
+            (numeric.AFloat, 1.0),
+            (numeric.AInt, 1),
+            (numeric.ABool, True),
+            (string.AStr, "x"),
         ],
         ids=["float", "int", "bool", "string"],
     )
@@ -465,18 +465,16 @@ class TestJoin:
             x.join(AValBlob(4))
 
     def test_join_uses_left_method(self):
-        class AValBound(numeric.AValFloat):
+        class AValBound(numeric.AFloat):
             def join(self, other):
                 match other:
-                    case (numeric.AValFloat() as aval) | core.Zero(
-                        aval=numeric.AValFloat() as aval
-                    ):
+                    case (numeric.AFloat() as aval) | core.Zero(aval=numeric.AFloat() as aval):
                         return aval
                     case float():
                         return self
                 raise TypeError(f"Cannot join {self!r} and {other!r}")
 
-        x, y = AValBound(), numeric.AValFloat()
+        x, y = AValBound(), numeric.AFloat()
         assert x.join(y) is y
         assert y.join(x) is y
         with pytest.raises(TypeError, match="Expected"):
@@ -485,18 +483,18 @@ class TestJoin:
     @pytest.mark.parametrize(
         "x, y",
         [
-            pytest.param(numeric.AValFloat(), string.AValStr(), id="different-types"),
-            pytest.param(numeric.AValInt(), core.Zero(numeric.AValBool()), id="wrong-zero"),
+            pytest.param(numeric.AFloat(), string.AStr(), id="different-types"),
+            pytest.param(numeric.AInt(), core.Zero(numeric.ABool()), id="wrong-zero"),
         ],
     )
     def test_unsupported_join(self, x, y):
         with pytest.raises(TypeError):
             x.join(y)
 
-    @pytest.mark.parametrize("wrap", [lambda x: x, axis.AValBatch], ids=["single", "nested"])
+    @pytest.mark.parametrize("wrap", [lambda x: x, axis.ABatch], ids=["single", "nested"])
     @pytest.mark.parametrize("make", [lambda x: x, core.Zero], ids=["aval", "zero"])
     def test_batch_join(self, wrap, make):
-        x = wrap(axis.AValBatch(string.AValStr()))
+        x = wrap(axis.ABatch(string.AStr()))
         assert x.join(make(x)) == x
         with pytest.raises(TypeError):
-            x.join(make(wrap(axis.AValBatch(numeric.AValFloat()))))
+            x.join(make(wrap(axis.ABatch(numeric.AFloat()))))

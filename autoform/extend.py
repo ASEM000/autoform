@@ -14,6 +14,7 @@
 
 from autoform.src.ad import p_pullback_call as p_pullback_call
 from autoform.src.ad import p_pushforward_call as p_pushforward_call
+from autoform.src.axis import ABatch as ABatch
 from autoform.src.axis import p_batch_call as p_batch_call
 from autoform.src.control import p_fixpoint as p_fixpoint
 from autoform.src.control import p_stop_gradient as p_stop_gradient
@@ -48,9 +49,9 @@ from autoform.src.intercept import p_checkpoint as p_checkpoint
 from autoform.src.lm import active_client as active_client
 from autoform.src.lm import p_fill as p_fill
 from autoform.src.memo import register_non_memoizable as register_non_memoizable
-from autoform.src.numeric import AValBool as AValBool
-from autoform.src.numeric import AValFloat as AValFloat
-from autoform.src.numeric import AValInt as AValInt
+from autoform.src.numeric import ABool as ABool
+from autoform.src.numeric import AFloat as AFloat
+from autoform.src.numeric import AInt as AInt
 from autoform.src.numeric import p_add as p_add
 from autoform.src.numeric import p_div as p_div
 from autoform.src.numeric import p_eq as p_eq
@@ -76,7 +77,7 @@ from autoform.src.stage import aval_if_var as aval_if_var
 from autoform.src.stage import is_var as is_var
 from autoform.src.stage import register_dunder as register_dunder
 from autoform.src.stage import register_trace_type as register_trace_type
-from autoform.src.string import AValStr as AValStr
+from autoform.src.string import AStr as AStr
 from autoform.src.string import p_concat as p_concat
 from autoform.src.string import p_match as p_match
 from autoform.src.utils import batch_index as batch_index

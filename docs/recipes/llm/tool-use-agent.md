@@ -109,7 +109,7 @@ async def aimpl_wikipedia_search(query: str, /) -> str:
 # tracing needs output shape without running the http call
 def abstract_wikipedia_search(query, /):
     del query
-    return af.extend.AValStr()
+    return af.extend.AStr()
 
 
 # async batch receives the batch size, input axes, and input values

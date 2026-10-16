@@ -22,10 +22,46 @@ import autoform.src.utils as utils
     [pytest.param((1, 2), 6, id="numbers"), pytest.param(("a", "b"), "abab", id="text")],
 )
 def test_dispatch(values, expected):
-    dispatch = utils.Dispatch()
+    dispatch = utils.dispatch()
     dispatch.register((int, int), lambda values, *, scale: sum(values) * scale)
     dispatch.register((str, str), lambda values, *, scale: "".join(values) * scale)
     assert dispatch(values, scale=2) == expected
+
+
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        pytest.param((1, 2), "exact", id="exact"),
+        pytest.param(("a", "b"), "default", id="types"),
+        pytest.param([1, 2], "default", id="structure"),
+    ],
+)
+def test_dispatch_default(values, expected):
+    @utils.dispatch
+    def dispatch(values, *, scale):
+        return "default", values, scale
+
+    assert dispatch.__name__ == "dispatch"
+    dispatch.register((int, int), lambda values, *, scale: ("exact", values, scale))
+    selected, actual, scale = dispatch(values, scale=2)
+    assert (selected, scale) == (expected, 2)
+    assert actual is values
+
+
+@pytest.mark.parametrize("error", [KeyError, TypeError], ids=["key", "type"])
+@pytest.mark.parametrize("registered", [False, True], ids=["default", "exact"])
+def test_dispatch_handler_errors(error, registered):
+    failure = error("handler failed")
+
+    def fail(values):
+        raise failure
+
+    dispatch = utils.dispatch((lambda values: values) if registered else fail)
+    if registered:
+        dispatch.register(int, fail)
+    with pytest.raises(error) as raised:
+        dispatch(1)
+    assert raised.value is failure
 
 
 @pytest.mark.parametrize(
@@ -38,9 +74,9 @@ def test_dispatch(values, expected):
     ],
 )
 def test_dispatch_missing(types, values):
-    dispatch = utils.Dispatch()
+    dispatch = utils.dispatch()
     dispatch.register(types, lambda values: values)
-    with pytest.raises(KeyError):
+    with pytest.raises(TypeError, match="No dispatch rule for"):
         dispatch(values)
 
 
@@ -56,7 +92,7 @@ def test_dispatch_missing(types, values):
     ],
 )
 def test_dispatch_pytrees(types, values):
-    dispatch = utils.Dispatch()
+    dispatch = utils.dispatch()
     dispatch.register(types, lambda values: values)
     assert dispatch(values) is values
 
@@ -72,10 +108,10 @@ def point_type():
 
 
 def test_dispatch_custom_pytree(point_type):
-    dispatch = utils.Dispatch()
+    dispatch = utils.dispatch()
     dispatch.register(point_type(int, float), lambda values: values.x + values.y)
     assert dispatch(point_type(1, 2.0)) == 3.0
-    with pytest.raises(KeyError):
+    with pytest.raises(TypeError, match="No dispatch rule for"):
         dispatch((1, 2.0))
 
 

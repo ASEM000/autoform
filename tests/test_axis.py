@@ -40,14 +40,14 @@ class AValTagged(core.AVal):
 @pytest.mark.parametrize(
     "value",
     [
-        pytest.param(axis.AValBatch(string.AValStr()), id="aval"),
-        pytest.param(core.Zero(axis.AValBatch(string.AValStr())), id="zero"),
+        pytest.param(axis.ABatch(string.AStr()), id="aval"),
+        pytest.param(core.Zero(axis.ABatch(string.AStr())), id="zero"),
     ],
 )
 def test_check_batch_aval(value):
-    assert check.typecheck(value, axis.AValBatch(string.AValStr())) is value
-    with pytest.raises(TypeError, match="Cannot join AValFloat"):
-        check.typecheck(value, axis.AValBatch(numeric.AValFloat()))
+    assert check.typecheck(value, axis.ABatch(string.AStr())) is value
+    with pytest.raises(TypeError, match="Cannot join AFloat"):
+        check.typecheck(value, axis.ABatch(numeric.AFloat()))
 
 
 def test_join_custom_container():
@@ -56,26 +56,26 @@ def test_join_custom_container():
         x: object
         y: object
 
-    aval = axis.AValBatch(string.AValStr())
-    value = Pair("x", core.Zero(string.AValStr()))
+    aval = axis.ABatch(string.AStr())
+    value = Pair("x", core.Zero(string.AStr()))
     assert check.typecheck(value, aval) is value
-    with pytest.raises(TypeError, match="Cannot join AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AStr"):
         check.typecheck(Pair("x", 1.0), aval)
 
 
 @pytest.mark.parametrize("abstract", [False, True], ids=["concrete", "abstract"])
 def test_inherited_batch_join(abstract):
-    class AValCustom(axis.AValBatch): ...
+    class AValCustom(axis.ABatch): ...
 
-    aval = AValCustom(string.AValStr())
-    value = axis.AValBatch(aval.base) if abstract else ["x"]
+    aval = AValCustom(string.AStr())
+    value = axis.ABatch(aval.base) if abstract else ["x"]
     result = aval.join(value)
     assert type(result) is AValCustom
     assert result == aval
     if abstract:
         assert aval.join(aval) == aval
         result = value.join(aval)
-        assert type(result) is axis.AValBatch
+        assert type(result) is axis.ABatch
         assert result == value
 
 
@@ -83,7 +83,7 @@ class TestBatchBasic:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_broadcast_symbolic_zero(self, executor):
         ir = axis.batch(stage.trace(lambda x, y: ad.cot_accum([x, y]))(1.0, 2.0))
-        zero = core.Zero(axis.AValBatch(numeric.AValFloat()))
+        zero = core.Zero(axis.ABatch(numeric.AFloat()))
 
         assert executor(ir, zero, [2.0, 3.0]) == [2.0, 3.0]
         with pytest.raises(TypeError, match="Cannot infer batch layout from symbolic zeros alone"):
@@ -91,11 +91,11 @@ class TestBatchBasic:
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batch_valued_items(self, executor):
-        x = stage.Var(aval=axis.AValBatch(string.AValStr()))
+        x = stage.Var(aval=axis.ABatch(string.AStr()))
         ir = axis.batch(stage.IR([], (x,), x))
         values = [[], ["a", "b"]]
         assert executor(ir, values) == values
-        with pytest.raises(TypeError, match="Cannot join AValBatch"):
+        with pytest.raises(TypeError, match="Cannot join ABatch"):
             executor(ir, ["a", "b"])
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -166,15 +166,15 @@ class TestBatchIRStructure:
         ],
     )
     def test_batch_aval_ad_space(self, space):
-        aval = axis.AValBatch(string.AValStr())
-        assert space.map(aval) == axis.AValBatch(string.AValStr())
+        aval = axis.ABatch(string.AStr())
+        assert space.map(aval) == axis.ABatch(string.AStr())
 
     def test_mapped_wrapper_aval(self):
         aval = AValTagged("input")
         var = stage.Var(aval=aval)
         ir = axis.batch(stage.IR([], (var,), (var,)), in_axes=True)
         for wrapped in (ir.in_tree[0].aval, ir.out_tree[0].aval):
-            assert wrapped == axis.AValBatch(aval)
+            assert wrapped == axis.ABatch(aval)
 
     def test_broadcast_wrapper_aval(self):
         aval = AValTagged("input")
@@ -186,7 +186,7 @@ class TestBatchIRStructure:
     def test_mapped_constant_output(self):
         ir = axis.batch(stage.trace(lambda x: "c")("x"), in_axes=True)
         assert isinstance(ir.out_tree, stage.Var)
-        assert ir.out_tree.aval == axis.AValBatch(string.AValStr())
+        assert ir.out_tree.aval == axis.ABatch(string.AStr())
         assert ir.call(["a", "b"]) == ["c", "c"]
 
     def test_broadcast_constant_output(self):
@@ -218,10 +218,10 @@ class TestBatchIRStructure:
 )
 def test_nested_batch(executor, program, depth, values, expected):
     ir = stage.trace(program)("hello")
-    aval = string.AValStr()
+    aval = string.AStr()
     for _ in range(depth):
         ir = axis.batch(ir)
-        aval = axis.AValBatch(aval)
+        aval = axis.ABatch(aval)
     assert ir.in_tree[0].aval == aval
     assert ir.out_tree.aval == aval
     actual = executor(ir, values)
@@ -433,10 +433,10 @@ class TestBatchWithMixedAxes:
     "c, shared",
     [
         pytest.param(["g1", "g2"], "g1g2", id="strings"),
-        pytest.param([core.Zero(string.AValStr()), "g2"], "g2", id="mixed-zero"),
+        pytest.param([core.Zero(string.AStr()), "g2"], "g2", id="mixed-zero"),
         pytest.param(
-            [core.Zero(string.AValStr()), core.Zero(string.AValStr())],
-            core.Zero(string.AValStr()),
+            [core.Zero(string.AStr()), core.Zero(string.AStr())],
+            core.Zero(string.AStr()),
             id="all-zero",
         ),
     ],
@@ -487,7 +487,7 @@ def test_batch_box_treats_axis_spec_as_prefix():
     assert isinstance(boxed, axis.BatchBox)
     assert boxed.value == ["a", "b"]
     assert boxed.batched is True
-    assert core.avalof(boxed) == string.AValStr()
+    assert core.avalof(boxed) == string.AStr()
 
 
 @pytest.mark.parametrize(
@@ -502,7 +502,7 @@ def test_batch_box_avalof_container(values):
     batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
     box = batcher.box((values, True))
 
-    assert core.avalof(box) == string.AValStr()
+    assert core.avalof(box) == string.AStr()
     assert box.value is values
 
 

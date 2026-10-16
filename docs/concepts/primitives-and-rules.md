@@ -73,7 +73,7 @@ def impl_lookup(query: str, /) -> str:
 
 def abstract_lookup(query, /):
     del query
-    return af.extend.AValStr()
+    return af.extend.AStr()
 
 
 afe.r_impl.set(p_lookup, impl_lookup)

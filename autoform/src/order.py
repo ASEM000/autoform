@@ -200,7 +200,7 @@ core.r_pull_fwd.set(p_fanout, pull_fwd_fanout)
 core.r_apull_fwd.set(p_fanout, apull_fwd_fanout)
 core.r_pull_bwd.set(p_fanout, pull_bwd_fanout)
 core.r_apull_bwd.set(p_fanout, apull_bwd_fanout)
-dead.dce_rules[p_fanout] = dce_fanout
+dead.register_dce(p_fanout, dce_fanout)
 
 
 # ==================================================================================================

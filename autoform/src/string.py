@@ -33,7 +33,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class AValStr(core.AVal):
+class AStr(core.AVal):
     """Abstract value for ``str`` leaves.
 
     Example:
@@ -41,7 +41,7 @@ class AValStr(core.AVal):
         >>> ir = af.trace(lambda x: x)("x")
         >>> (x,) = ir.in_tree
         >>> x.aval
-        AValStr()
+        AStr()
     """
 
     __slots__ = []
@@ -57,17 +57,16 @@ class AValStr(core.AVal):
 
     def join(self, other, /):
         match self, other:
-            case AValStr(), str() | AValStr() | core.Zero(aval=AValStr()):
+            case AStr(), str() | AStr() | core.Zero(aval=AStr()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.aval_types[str] = lambda _: AValStr()
-core.aval_types[AValStr] = lambda aval: aval
-stage.trace_types.add(str)
-core.s_primal.set(AValStr, lambda aval: aval)
-core.s_tangent.set(AValStr, lambda aval: aval)
-core.s_cotangent.set(AValStr, lambda aval: aval)
+stage.register_trace_type(str, lambda value: AStr())
+stage.register_trace_type(AStr, lambda aval: aval)
+core.s_primal.set(AStr, lambda aval: aval)
+core.s_tangent.set(AStr, lambda aval: aval)
+core.s_cotangent.set(AStr, lambda aval: aval)
 
 # ==================================================================================================
 # CONCAT
@@ -99,8 +98,8 @@ def impl_concat(in_tree: Tree, /) -> str:
 
 
 def abstract_concat(in_tree: Tree, /) -> Any:
-    assert all(type(x) in (str, AValStr) for x in in_tree), f"Expected strings: {in_tree!r}"
-    return AValStr()
+    assert all(type(x) in (str, AStr) for x in in_tree), f"Expected strings: {in_tree!r}"
+    return AStr()
 
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
@@ -143,7 +142,7 @@ core.r_pull_bwd.set(p_concat, pullback_bwd_concat)
 core.r_apull_bwd.set(p_concat, utils.asyncify(pullback_bwd_concat))
 
 
-stage.dunder_rules[stage.Dunder.ADD, AValStr] = concat
+stage.register_dunder(stage.Dunder.ADD, AStr, concat)
 
 
 # ==================================================================================================
@@ -180,9 +179,19 @@ def impl_match(in_tree: Tree, /) -> bool:
     return a == b
 
 
-def abstract_match(in_tree: Tree, /) -> Any:
-    assert all(type(x) in (str, AValStr) for x in in_tree), f"Expected strings: {in_tree!r}"
+def abstract_bool(values: Tree, /) -> Any:
     return core.avalof(False)
+
+
+@utils.dispatch
+def abstract_match(values: Tree, /) -> Any:
+    assert False, f"Expected strings: {values!r}"
+
+
+abstract_match.register((str, str), abstract_bool)
+abstract_match.register((str, AStr), abstract_bool)
+abstract_match.register((AStr, str), abstract_bool)
+abstract_match.register((AStr, AStr), abstract_bool)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -230,7 +239,7 @@ core.r_pull_bwd.set(p_match, pullback_bwd_match)
 core.r_apull_bwd.set(p_match, utils.asyncify(pullback_bwd_match))
 
 
-stage.dunder_rules[stage.Dunder.EQ, AValStr] = match
+stage.register_dunder(stage.Dunder.EQ, AStr, match)
 
 
 # ==================================================================================================

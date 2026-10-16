@@ -998,9 +998,9 @@ def test_fill_pullback_requires_matching_cotangent_structure(out_c):
     "out_c, error",
     [
         pytest.param(
-            {"text": "too terse", "score": "overconfident"}, "AValFloat", id="text-for-float"
+            {"text": "too terse", "score": "overconfident"}, "AFloat", id="text-for-float"
         ),
-        pytest.param({"text": -0.2, "score": -0.2}, "AValStr", id="float-for-text"),
+        pytest.param({"text": -0.2, "score": -0.2}, "AStr", id="float-for-text"),
     ],
 )
 def test_fill_pullback_rejects_wrong_schema_cotangent_type(executor, out_c, error, gradient_client):

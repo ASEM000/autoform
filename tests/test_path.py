@@ -47,16 +47,17 @@ class TestFactor:
         assert path.factor(1.0, name="neutral") is None
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_factor_traces_to_primitive(self, executor):
+    @pytest.mark.parametrize("weight", [1, 1.0], ids=["int", "float"])
+    def test_factor_traces_to_primitive(self, executor, weight):
         def program(x: str, weight: float):
             path.factor(weight, name="score")
             return string.concat(x, "!")
 
-        ir = stage.trace(program)("x", 1.0)
+        ir = stage.trace(program)("x", weight)
 
         assert [eqn.prim.name for eqn in ir.eqns] == ["factor", "concat"]
         assert ir.eqns[0].out_tree == ()
-        assert executor(ir, "hello", 0.5) == "hello!"
+        assert executor(ir, "hello", weight) == "hello!"
 
     def test_factor_rejects_negative_weight_in_normal_execution(self):
         with pytest.raises(AssertionError, match="finite non-negative factor weight"):
@@ -65,6 +66,8 @@ class TestFactor:
     def test_factor_rejects_bool_weight(self):
         with pytest.raises(AssertionError, match="numeric factor weight"):
             path.factor(True)
+        with pytest.raises(AssertionError, match="Expected number"):
+            stage.trace(path.factor)(True)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_factor_rejects_negative_dynamic_weight_at_runtime(self, executor):

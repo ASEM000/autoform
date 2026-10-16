@@ -23,13 +23,14 @@ from collections.abc import Hashable
 import autoform.src.core as core
 import autoform.src.dead as dead
 import autoform.src.memo as memo
+import autoform.src.numeric as numeric
 import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
 p_factor = core.Prim("factor")
-dead.non_dce_primitives.add(p_factor)
-memo.non_memoizable_primitives.add(p_factor)
+dead.register_non_dce(p_factor)
+memo.register_non_memoizable(p_factor)
 
 
 def factor(weight: float, /, *, name: Hashable | None = None) -> None:
@@ -53,11 +54,19 @@ def impl_factor(weight: float, /, *, name: Hashable | None = None) -> None:
     return ()
 
 
-def abstract_factor(weight, /, *, name: Hashable | None = None) -> None:
-    del name
-    number_type = (int, float, type(core.avalof(0)), type(core.avalof(0.0)))
-    assert type(weight) in number_type, f"Expected number: {weight!r}"
+def abstract_unit(weight, /, *, name: Hashable | None = None):
     return ()
+
+
+@utils.dispatch
+def abstract_factor(weight, /, *, name: Hashable | None = None) -> tuple[()]:
+    assert False, f"Expected number: {weight!r}"
+
+
+abstract_factor.register(int, abstract_unit)
+abstract_factor.register(float, abstract_unit)
+abstract_factor.register(numeric.AInt, abstract_unit)
+abstract_factor.register(numeric.AFloat, abstract_unit)
 
 
 def pushforward_factor(in_tree, /, *, name: Hashable | None = None):
@@ -250,4 +259,4 @@ core.r_pull_fwd.set(p_weight_call, pullback_fwd_weight_call)
 core.r_apull_fwd.set(p_weight_call, utils.asyncify(pullback_fwd_weight_call))
 core.r_pull_bwd.set(p_weight_call, pullback_bwd_weight_call)
 core.r_apull_bwd.set(p_weight_call, utils.asyncify(pullback_bwd_weight_call))
-dead.dce_rules[p_weight_call] = dce_weight_call
+dead.register_dce(p_weight_call, dce_weight_call)
