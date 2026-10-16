@@ -134,7 +134,7 @@ def test_concat_lowering(executor, program, traced, args, expected):
             lambda x: x == 1,
             (1,),
             TypeError,
-            r"No trace rule for eq on values of type AValInt\(\)",
+            r"No trace rule for eq on values of type AInt\(\)",
             id="eq-integer",
         ),
         pytest.param(lambda x: x + 1, ("a",), AssertionError, "Expected strings", id="add"),
@@ -143,7 +143,7 @@ def test_concat_lowering(executor, program, traced, args, expected):
             lambda x: x + 1,
             (1,),
             TypeError,
-            r"No trace rule for add on values of type AValInt\(\)",
+            r"No trace rule for add on values of type AInt\(\)",
             id="add-integer",
         ),
         pytest.param(
@@ -169,25 +169,25 @@ def test_invalid_traced_operands(program, args, error, message):
         pytest.param(
             ad.pushforward,
             (("yes",), ("tangent_input",)),
-            (True, core.Zero(numeric.AValBool())),
+            (True, core.Zero(numeric.ABool())),
             id="pushforward-true",
         ),
         pytest.param(
             ad.pushforward,
             (("no",), ("tangent_input",)),
-            (False, core.Zero(numeric.AValBool())),
+            (False, core.Zero(numeric.ABool())),
             id="pushforward-false",
         ),
         pytest.param(
             ad.pullback,
-            (("yes",), core.Zero(numeric.AValBool())),
-            (True, (core.Zero(string.AValStr()),)),
+            (("yes",), core.Zero(numeric.ABool())),
+            (True, (core.Zero(string.AStr()),)),
             id="pullback-true",
         ),
         pytest.param(
             ad.pullback,
-            (("no",), core.Zero(numeric.AValBool())),
-            (False, (core.Zero(string.AValStr()),)),
+            (("no",), core.Zero(numeric.ABool())),
+            (False, (core.Zero(string.AStr()),)),
             id="pullback-false",
         ),
     ],
@@ -215,13 +215,13 @@ def test_match_batch_axes(axes, args):
     [
         pytest.param(("yes", "yes"), id="equal"),
         pytest.param(("yes", "no"), id="unequal"),
-        pytest.param((string.AValStr(), "yes"), id="left-abstract"),
-        pytest.param(("yes", string.AValStr()), id="right-abstract"),
-        pytest.param((string.AValStr(), string.AValStr()), id="both-abstract"),
+        pytest.param((string.AStr(), "yes"), id="left-abstract"),
+        pytest.param(("yes", string.AStr()), id="right-abstract"),
+        pytest.param((string.AStr(), string.AStr()), id="both-abstract"),
     ],
 )
 def test_match_abstract(operands):
-    assert string.abstract_match(operands) == numeric.AValBool()
+    assert string.abstract_match(operands) == numeric.ABool()
 
 
 def test_match_abstract_rejects_nonstring():

@@ -4,10 +4,11 @@
 .. autoclass:: autoform.extend.AVal
    :members: zero, add, join
    :undoc-members:
-.. autoclass:: autoform.extend.AValStr
-.. autoclass:: autoform.extend.AValInt
-.. autoclass:: autoform.extend.AValFloat
-.. autoclass:: autoform.extend.AValBool
+.. autoclass:: autoform.extend.AStr
+.. autoclass:: autoform.extend.AInt
+.. autoclass:: autoform.extend.AFloat
+.. autoclass:: autoform.extend.ABool
+.. autoclass:: autoform.extend.ABatch
 ```
 
 ## Primitives

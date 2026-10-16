@@ -14,9 +14,9 @@
     `Zero(avalof(value))`, and `isinstance(value, Zero)`, respectively.
 
   - Standardized extension names: primitive keys use the `p_` prefix
-    (`concat_p` to `p_concat`), and abstract value classes use `AVal` as a prefix
-    (`StrAVal` to `AValStr`, `IntAVal` to `AValInt`, `FloatAVal` to `AValFloat`,
-    `BoolAVal` to `AValBool`, and `BatchAVal` to `AValBatch`).
+    (`concat_p` to `p_concat`), and built-in abstract value classes use the `A` prefix
+    (`StrAVal` to `AStr`, `IntAVal` to `AInt`, `FloatAVal` to `AFloat`,
+    `BoolAVal` to `ABool`, and `BatchAVal` to `ABatch`).
 
   - Moved string and LM operations out of the top-level API.
 

@@ -60,9 +60,9 @@ class TestBuildIR:
     @pytest.mark.parametrize(
         "traced, runtime, expected, aval",
         [
-            pytest.param(1, 2, 2, numeric.AValInt(), id="integer"),
-            pytest.param(1.5, 2.5, 2.5, numeric.AValFloat(), id="float"),
-            pytest.param(True, False, False, numeric.AValBool(), id="boolean"),
+            pytest.param(1, 2, 2, numeric.AInt(), id="integer"),
+            pytest.param(1.5, 2.5, 2.5, numeric.AFloat(), id="float"),
+            pytest.param(True, False, False, numeric.ABool(), id="boolean"),
         ],
     )
     def test_trace_scalar_input_is_dynamic(self, traced, runtime, expected, aval):
@@ -80,13 +80,13 @@ class TestBuildIR:
     @pytest.mark.parametrize(
         "aval, value, invalid",
         [
-            pytest.param(extend.AValFloat(), 1.5, 1, id="float"),
-            pytest.param(extend.AValInt(), 1, True, id="integer"),
-            pytest.param(extend.AValStr(), "x", 1, id="string"),
-            pytest.param(extend.AValBool(), True, 1, id="boolean"),
-            pytest.param(axis.AValBatch(extend.AValStr()), ["a", "b"], ["a", 1], id="batch"),
+            pytest.param(extend.AFloat(), 1.5, 1, id="float"),
+            pytest.param(extend.AInt(), 1, True, id="integer"),
+            pytest.param(extend.AStr(), "x", 1, id="string"),
+            pytest.param(extend.ABool(), True, 1, id="boolean"),
+            pytest.param(extend.ABatch(extend.AStr()), ["a", "b"], ["a", 1], id="batch"),
             pytest.param(
-                axis.AValBatch(axis.AValBatch(extend.AValStr())),
+                extend.ABatch(extend.ABatch(extend.AStr())),
                 [["a"], ["b", "c"]],
                 ["a"],
                 id="nested-batch",
@@ -205,9 +205,9 @@ class TestBuildIR:
 @pytest.mark.parametrize(
     "transform, args, message",
     [
-        pytest.param(lambda ir: ir, (["x"],), "Cannot join AValStr", id="primal"),
-        pytest.param(ad.pushforward, (("x",), (["dx"],)), "Cannot join AValStr", id="tangent"),
-        pytest.param(axis.batch, (["x", 1.0],), "Cannot join AValStr", id="batch"),
+        pytest.param(lambda ir: ir, (["x"],), "Cannot join AStr", id="primal"),
+        pytest.param(ad.pushforward, (("x",), (["dx"],)), "Cannot join AStr", id="tangent"),
+        pytest.param(axis.batch, (["x", 1.0],), "Cannot join AStr", id="batch"),
     ],
 )
 def test_call_rejects_incompatible_input_aval(executor, transform, args, message):
@@ -218,7 +218,7 @@ def test_call_rejects_incompatible_input_aval(executor, transform, args, message
 
 def test_walk_rejects_incompatible_input_aval():
     ir = stage.trace(lambda x: x)("x")
-    with pytest.raises(TypeError, match="Cannot join AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AStr"):
         next(ir.walk(["x"]))
 
 
@@ -327,7 +327,7 @@ class TestTags:
     def test_bind_reinstalls_equation_tags(self):
         def abstract_probe(x):
             del x
-            return string.AValStr()
+            return string.AStr()
 
         def impl_probe(x):
             names = sorted(tag.name for tag in stage.active_tags.get() if isinstance(tag, Label))
@@ -384,18 +384,18 @@ class TestRunIR:
             "hello"
         )
         with intercept.inject(collection="cache", values={"value": [1.0]}):
-            with pytest.raises(TypeError, match="Cannot join AValStr"):
+            with pytest.raises(TypeError, match="Cannot join AStr"):
                 executor(ir, "world")
 
     @pytest.mark.parametrize(
         "program, output, error, message",
         [
-            pytest.param(append_bang, 1.0, TypeError, "Cannot join AValStr", id="dynamic"),
+            pytest.param(append_bang, 1.0, TypeError, "Cannot join AStr", id="dynamic"),
             pytest.param(
                 lambda x: (append_bang(x), x)[1],
                 1.0,
                 TypeError,
-                "Cannot join AValStr",
+                "Cannot join AStr",
                 id="unused-output",
             ),
             pytest.param(
@@ -495,7 +495,7 @@ def test_nested_primitive_inputs():
 
     p_greet = core.Prim("greet")
     extend.r_impl.set(p_greet, impl)
-    extend.r_abstract.set(p_greet, lambda inputs: string.AValStr())
+    extend.r_abstract.set(p_greet, lambda inputs: string.AStr())
     greeting_ir = stage.trace(
         lambda name: p_greet.bind((name, dict(greeting="Hi", punctuation="?")))
     )("World")
@@ -565,8 +565,8 @@ def test_ir_and_equation_fields():
 @pytest.mark.parametrize(
     "aval",
     [
-        pytest.param(string.AValStr(), id="string"),
-        pytest.param(numeric.AValFloat(), id="float"),
+        pytest.param(string.AStr(), id="string"),
+        pytest.param(numeric.AFloat(), id="float"),
         pytest.param(AValBlob(3), id="custom-metadata"),
     ],
 )
@@ -830,7 +830,7 @@ class TestIrVarProducers:
         assert producers == {produced: ir.eqns[0]}
 
     def test_errors_if_same_var_is_produced_twice(self):
-        shared = stage.Var.fresh(aval=string.AValStr())
+        shared = stage.Var.fresh(aval=string.AStr())
         eqn_a = stage.Eqn(core.Prim("a"), (), shared, {})
         eqn_b = stage.Eqn(core.Prim("b"), (), shared, {})
         ir = stage.IR([eqn_a, eqn_b], in_tree=(), out_tree=shared)
@@ -1031,7 +1031,7 @@ class TestTraceValuePythonOps:
         extend.r_impl.set(
             p_call_value, lambda inputs: inputs[0].size + sum(inputs[1]) + sum(inputs[2].values())
         )
-        extend.r_abstract.set(p_call_value, lambda _: numeric.AValInt())
+        extend.r_abstract.set(p_call_value, lambda _: numeric.AInt())
         extend.register_dunder(
             stage.Dunder.CALL,
             AValValue,
@@ -1066,7 +1066,7 @@ class TestTraceValuePythonOps:
         extend.register_trace_type(Values, lambda _: AValValues())
         core.aval_types[AValValues] = lambda aval: aval
         extend.r_impl.set(p_next_value, lambda value: next(value.values))
-        extend.r_abstract.set(p_next_value, lambda _: numeric.AValInt())
+        extend.r_abstract.set(p_next_value, lambda _: numeric.AInt())
         extend.register_dunder(stage.Dunder.NEXT, AValValues, p_next_value.bind)
 
         ir = stage.trace(lambda x: (next(x), next(x)))(Values([1, 2]))
@@ -1092,7 +1092,7 @@ class TestTraceValuePythonOps:
         extend.register_trace_type(Pair, lambda _: AValPair())
         core.aval_types[AValPair] = lambda aval: aval
         extend.r_impl.set(p_pair_values, lambda pair: pair.values)
-        extend.r_abstract.set(p_pair_values, lambda _: (numeric.AValInt(), numeric.AValInt()))
+        extend.r_abstract.set(p_pair_values, lambda _: (numeric.AInt(), numeric.AInt()))
         extend.register_dunder(
             stage.Dunder.REVERSED, AValPair, lambda pair: reversed(p_pair_values.bind(pair))
         )
@@ -1122,7 +1122,7 @@ class TestTraceValuePythonOps:
     def test_unregistered_python_operations_on_traced_values_error(self, dunder, program):
         with pytest.raises(
             TypeError,
-            match=rf"No trace rule for {re.escape(dunder)} on values of type AValStr\(\)",
+            match=rf"No trace rule for {re.escape(dunder)} on values of type AStr\(\)",
         ):
             stage.trace(program)("seed")
 
@@ -1260,7 +1260,7 @@ class TestFold:
     def test_async_dynamic_trace_dispatch_stages_primitive(self):
         def abstract_async_probe(in_tree):
             del in_tree
-            return string.AValStr()
+            return string.AStr()
 
         p_async_probe = core.Prim("async_dynamic_fold_probe")
         extend.r_abstract.set(p_async_probe, abstract_async_probe)

@@ -31,7 +31,7 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 
 
-class AValInt(core.AVal):
+class AInt(core.AVal):
     """Abstract value for ``int`` leaves.
 
     Example:
@@ -39,7 +39,7 @@ class AValInt(core.AVal):
         >>> ir = af.trace(lambda x: x)(1)
         >>> (x,) = ir.in_tree
         >>> x.aval
-        AValInt()
+        AInt()
     """
 
     __slots__ = []
@@ -49,19 +49,19 @@ class AValInt(core.AVal):
 
     def join(self, other, /):
         match self, other:
-            case AValInt(), bool():
+            case AInt(), bool():
                 raise TypeError(f"Cannot join {self!r} and {other!r}")
-            case AValInt(), int() | AValInt() | core.Zero(aval=AValInt()):
+            case AInt(), int() | AInt() | core.Zero(aval=AInt()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-stage.register_trace_type(int, lambda value: AValInt())
-stage.register_trace_type(AValInt, lambda aval: aval)
-core.s_primal.set(AValInt, lambda aval: aval)
+stage.register_trace_type(int, lambda value: AInt())
+stage.register_trace_type(AInt, lambda aval: aval)
+core.s_primal.set(AInt, lambda aval: aval)
 
 
-class AValFloat(core.AVal):
+class AFloat(core.AVal):
     """Abstract value for ``float`` leaves.
 
     Example:
@@ -69,7 +69,7 @@ class AValFloat(core.AVal):
         >>> ir = af.trace(lambda x: x)(1.0)
         >>> (x,) = ir.in_tree
         >>> x.aval
-        AValFloat()
+        AFloat()
     """
 
     __slots__ = []
@@ -85,19 +85,19 @@ class AValFloat(core.AVal):
 
     def join(self, other, /):
         match self, other:
-            case AValFloat(), float() | AValFloat() | core.Zero(aval=AValFloat()):
+            case AFloat(), float() | AFloat() | core.Zero(aval=AFloat()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-stage.register_trace_type(float, lambda value: AValFloat())
-stage.register_trace_type(AValFloat, lambda aval: aval)
-core.s_primal.set(AValFloat, lambda aval: aval)
-core.s_tangent.set(AValFloat, lambda aval: aval)
-core.s_cotangent.set(AValFloat, lambda aval: aval)
+stage.register_trace_type(float, lambda value: AFloat())
+stage.register_trace_type(AFloat, lambda aval: aval)
+core.s_primal.set(AFloat, lambda aval: aval)
+core.s_tangent.set(AFloat, lambda aval: aval)
+core.s_cotangent.set(AFloat, lambda aval: aval)
 
 
-class AValBool(core.AVal):
+class ABool(core.AVal):
     """Abstract value for ``bool`` leaves.
 
     Example:
@@ -105,7 +105,7 @@ class AValBool(core.AVal):
         >>> ir = af.trace(lambda x: x)(True)
         >>> (x,) = ir.in_tree
         >>> x.aval
-        AValBool()
+        ABool()
     """
 
     __slots__ = []
@@ -115,16 +115,16 @@ class AValBool(core.AVal):
 
     def join(self, other, /):
         match self, other:
-            case AValBool(), bool() | AValBool() | core.Zero(aval=AValBool()):
+            case ABool(), bool() | ABool() | core.Zero(aval=ABool()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-stage.register_trace_type(bool, lambda value: AValBool())
-stage.register_trace_type(AValBool, lambda aval: aval)
-core.s_primal.set(AValBool, lambda aval: aval)
-core.s_tangent.set(AValBool, lambda aval: aval)
-core.s_cotangent.set(AValBool, lambda aval: aval)
+stage.register_trace_type(bool, lambda value: ABool())
+stage.register_trace_type(ABool, lambda aval: aval)
+core.s_primal.set(ABool, lambda aval: aval)
+core.s_tangent.set(ABool, lambda aval: aval)
+core.s_cotangent.set(ABool, lambda aval: aval)
 
 
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -162,9 +162,9 @@ def impl_neg(in_tree: Tree, /):
     return -in_tree
 
 
-def abstract_neg(in_tree: Tree, /) -> AValFloat:
-    assert type(in_tree) in (float, AValFloat), f"Expected float: {in_tree!r}"
-    return AValFloat()
+def abstract_neg(in_tree: Tree, /) -> AFloat:
+    assert type(in_tree) in (float, AFloat), f"Expected float: {in_tree!r}"
+    return AFloat()
 
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
@@ -220,9 +220,9 @@ def impl_add(in_tree: Tree, /):
     return a + b
 
 
-def abstract_add(in_tree: Tree, /) -> AValFloat:
-    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AValFloat()
+def abstract_add(in_tree: Tree, /) -> AFloat:
+    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AFloat()
 
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
@@ -279,9 +279,9 @@ def impl_sub(in_tree: Tree, /):
     return a - b
 
 
-def abstract_sub(in_tree: Tree, /) -> AValFloat:
-    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AValFloat()
+def abstract_sub(in_tree: Tree, /) -> AFloat:
+    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AFloat()
 
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
@@ -338,9 +338,9 @@ def impl_mul(in_tree: Tree, /):
     return a * b
 
 
-def abstract_mul(in_tree: Tree, /) -> AValFloat:
-    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AValFloat()
+def abstract_mul(in_tree: Tree, /) -> AFloat:
+    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AFloat()
 
 
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
@@ -398,9 +398,9 @@ def impl_div(in_tree: Tree, /):
     return a / b
 
 
-def abstract_div(in_tree: Tree, /) -> AValFloat:
-    assert all(type(x) in (float, AValFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AValFloat()
+def abstract_div(in_tree: Tree, /) -> AFloat:
+    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
+    return AFloat()
 
 
 def pushforward_div(in_tree: Tree, /) -> TreePair:
@@ -444,14 +444,14 @@ core.r_apull_bwd.set(p_div, utils.asyncify(pullback_bwd_div))
 # ==================================================================================================
 
 
-def abstract_compare(in_tree: Tree, /) -> AValBool:
-    assert all(type(x) in (float, AValFloat) for x in in_tree)
-    return AValBool()
+def abstract_compare(in_tree: Tree, /) -> ABool:
+    assert all(type(x) in (float, AFloat) for x in in_tree)
+    return ABool()
 
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     p, _ = in_tree
-    return prim.bind(p), core.Zero(core.s_tangent.map(AValBool()))
+    return prim.bind(p), core.Zero(core.s_tangent.map(ABool()))
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -706,14 +706,14 @@ core.r_pull_bwd.set(p_ge, pullback_bwd_compare)
 core.r_apull_bwd.set(p_ge, utils.asyncify(pullback_bwd_compare))
 
 
-stage.register_dunder(stage.Dunder.NEG, AValFloat, neg)
-stage.register_dunder(stage.Dunder.ADD, AValFloat, add)
-stage.register_dunder(stage.Dunder.SUB, AValFloat, sub)
-stage.register_dunder(stage.Dunder.MUL, AValFloat, mul)
-stage.register_dunder(stage.Dunder.DIV, AValFloat, div)
-stage.register_dunder(stage.Dunder.EQ, AValFloat, eq)
-stage.register_dunder(stage.Dunder.NE, AValFloat, ne)
-stage.register_dunder(stage.Dunder.LT, AValFloat, lt)
-stage.register_dunder(stage.Dunder.LE, AValFloat, le)
-stage.register_dunder(stage.Dunder.GT, AValFloat, gt)
-stage.register_dunder(stage.Dunder.GE, AValFloat, ge)
+stage.register_dunder(stage.Dunder.NEG, AFloat, neg)
+stage.register_dunder(stage.Dunder.ADD, AFloat, add)
+stage.register_dunder(stage.Dunder.SUB, AFloat, sub)
+stage.register_dunder(stage.Dunder.MUL, AFloat, mul)
+stage.register_dunder(stage.Dunder.DIV, AFloat, div)
+stage.register_dunder(stage.Dunder.EQ, AFloat, eq)
+stage.register_dunder(stage.Dunder.NE, AFloat, ne)
+stage.register_dunder(stage.Dunder.LT, AFloat, lt)
+stage.register_dunder(stage.Dunder.LE, AFloat, le)
+stage.register_dunder(stage.Dunder.GT, AFloat, gt)
+stage.register_dunder(stage.Dunder.GE, AFloat, ge)

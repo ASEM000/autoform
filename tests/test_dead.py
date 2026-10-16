@@ -145,7 +145,7 @@ def test_no_input_equation(used, count, expected):
 
 
 def test_dangling_used_output():
-    bad_ir = stage.IR([], in_tree=(), out_tree=stage.Var.fresh(aval=string.AValStr()))
+    bad_ir = stage.IR([], in_tree=(), out_tree=stage.Var.fresh(aval=string.AStr()))
     with pytest.raises(AssertionError):
         dead.dce(bad_ir, out_used=True)
 

@@ -54,7 +54,7 @@ class TestCheck:
         core.aval_types[AValBound] = lambda aval: aval
         aval, x = AValBound(3), make(AValBound(size))
         if batched:
-            aval, x = axis.AValBatch(aval), [x]
+            aval, x = axis.ABatch(aval), [x]
         rule = core.r_abstract.get(check.p_typecheck)
         if valid:
             assert rule(x, aval=aval) is x
@@ -63,29 +63,29 @@ class TestCheck:
                 rule(x, aval=aval)
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    @pytest.mark.parametrize("x", ["x", core.Zero(string.AValStr())], ids=["literal", "zero"])
+    @pytest.mark.parametrize("x", ["x", core.Zero(string.AStr())], ids=["literal", "zero"])
     def test_literal_identity(self, executor, x):
-        aval = string.AValStr()
+        aval = string.AStr()
         assert check.typecheck(x, aval) is x
         ir = stage.trace(lambda: check.typecheck(x, aval))()
         assert ir.out_tree is x
         assert executor(ir) is x
 
-    @pytest.mark.parametrize("x", [1.0, core.Zero(numeric.AValFloat())], ids=["value", "zero"])
+    @pytest.mark.parametrize("x", [1.0, core.Zero(numeric.AFloat())], ids=["value", "zero"])
     def test_rejects_incompatible_value(self, x):
-        with pytest.raises(TypeError, match="AValStr"):
-            check.typecheck(x, string.AValStr())
-        with pytest.raises(TypeError, match="AValStr"):
-            stage.trace(lambda: check.typecheck(x, string.AValStr()))()
+        with pytest.raises(TypeError, match="AStr"):
+            check.typecheck(x, string.AStr())
+        with pytest.raises(TypeError, match="AStr"):
+            stage.trace(lambda: check.typecheck(x, string.AStr()))()
 
     @pytest.mark.parametrize("depth", [0, 1, 2], ids=["scalar", "batch", "nested-batch"])
     @pytest.mark.parametrize("wrap", [lambda x: x, core.Zero], ids=["aval", "zero"])
     def test_nested_representations(self, depth, wrap):
-        aval = numeric.AValFloat()
+        aval = numeric.AFloat()
         x, concrete = wrap(aval), 0.5
         for _ in range(depth):
             x, concrete = [x, concrete], [concrete, concrete]
-            aval = axis.AValBatch(aval)
+            aval = axis.ABatch(aval)
         assert check.typecheck(x, aval) is x
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -111,7 +111,7 @@ class TestCheck:
         ],
     )
     def test_transform_identity(self, executor, transform, args, expected):
-        ir = stage.trace(lambda x: check.typecheck(x, string.AValStr()))("x")
+        ir = stage.trace(lambda x: check.typecheck(x, string.AStr()))("x")
         assert executor(transform(ir), *args) == expected
 
     @pytest.mark.parametrize("outer", ["pushforward", "batch"])
@@ -125,16 +125,16 @@ class TestCheck:
             pusher = ad.PushInterp(parent=parent)
             interpreter = axis.BatchInterp(batch_size=2, parent=pusher)
             x = interpreter.box(([pusher.box(("x", "dx")), pusher.box(("y", 1.0))], True))
-        aval = string.AValStr()
+        aval = string.AStr()
         assert core.avalof(x) == aval
         with core.using_interp(interpreter):
-            with pytest.raises(TypeError, match="Cannot join AValStr"):
+            with pytest.raises(TypeError, match="Cannot join AStr"):
                 check.p_typecheck.bind(x, aval=aval)
 
     @pytest.mark.parametrize("batched", [False, True], ids=["broadcast-batch", "nested-batch"])
     def test_batch_value_metadata(self, batched):
         batcher = axis.BatchInterp(batch_size=1, parent=core.active_interp.get())
-        aval = axis.AValBatch(AValBlob(3))
+        aval = axis.ABatch(AValBlob(3))
         for size in (3, 4):
             value = [core.Zero(AValBlob(size))]
             box = batcher.box(([value] if batched else value, batched))
@@ -152,7 +152,7 @@ class TestCheck:
             with core.using_interp(batcher):
                 z = check.p_typecheck.bind(
                     batcher.box(([x, y], [True, False])),
-                    aval=axis.AValBatch(string.AValStr()),
+                    aval=axis.ABatch(string.AStr()),
                 )
             values, batched = batcher.unbox(z)
             assert batched == [True, False]
@@ -166,7 +166,7 @@ class TestCheck:
     @pytest.mark.parametrize("used", [False, True], ids=["unused", "used"])
     def test_check_dce_and_retracing(self, executor, used):
         def program(x):
-            y = check.typecheck(x + "!", string.AValStr())
+            y = check.typecheck(x + "!", string.AStr())
             return y if used else x
 
         ir = dead.dce(stage.trace(program)("x"))
@@ -187,7 +187,7 @@ class TestCheck:
     def test_expanded_pullback_retracing(self, executor, explicit):
         def program(x):
             y = x + "!"
-            return check.typecheck(y, string.AValStr()) if explicit else y
+            return check.typecheck(y, string.AStr()) if explicit else y
 
         source = stage.trace(program)("x")
         ir = stage.trace(lambda x, df: executor(((x,), df), ir=source))("x", "df")

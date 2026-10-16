@@ -473,10 +473,10 @@ core.aval_types[Enum] = lambda spec: core.avalof(spec.values[0])
 type AValSpecRule = Callable[[core.AVal], Spec]
 
 aval_spec_rules: dict[type[core.AVal], AValSpecRule] = {}
-aval_spec_rules[string.AValStr] = lambda _: Str()
-aval_spec_rules[numeric.AValInt] = lambda _: Int()
-aval_spec_rules[numeric.AValFloat] = lambda _: Float()
-aval_spec_rules[numeric.AValBool] = lambda _: Bool()
+aval_spec_rules[string.AStr] = lambda _: Str()
+aval_spec_rules[numeric.AInt] = lambda _: Int()
+aval_spec_rules[numeric.AFloat] = lambda _: Float()
+aval_spec_rules[numeric.ABool] = lambda _: Bool()
 
 
 def aval_to_spec(aval: core.AVal) -> Spec:

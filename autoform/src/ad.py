@@ -377,7 +377,7 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
         # >>> ir = af.trace(f)("...")
         # >>> z = af.extend.Zero(af.extend.s_primal.map(af.extend.avalof("")))
         # >>> af.pullback(ir).call(("a",), (z, z))
-        # (('a', 'a'), (Zero(AValStr()),))
+        # (('a', 'a'), (Zero(AStr()),))
         first_zero, *rest_zero = cots
         assert all(core.avalof(c) == core.avalof(first_zero) for c in rest_zero)
         return first_zero

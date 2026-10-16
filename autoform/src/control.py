@@ -58,7 +58,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         >>> pb_ir = af.pullback(ir)
         >>> _, (c_x, c_y) = pb_ir.call(("a", "b"), "grad")
         >>> c_x
-        Zero(AValStr())
+        Zero(AStr())
         >>> c_y
         'grad'
     """

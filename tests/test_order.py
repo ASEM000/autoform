@@ -125,7 +125,7 @@ def test_fanout_exception(executor):
 
     p_error = core.Prim("error")
     extend.r_impl.set(p_error, impl_error)
-    extend.r_abstract.set(p_error, lambda x: string.AValStr())
+    extend.r_abstract.set(p_error, lambda x: string.AStr())
     extend.r_aimpl.set(p_error, utils.asyncify(impl_error))
     ir = order.sched(stage.trace(lambda x: (string.format("[{x}]", x=x), p_error.bind(x)))("a"))
     with pytest.raises(ValueError, match="intentional error"):
