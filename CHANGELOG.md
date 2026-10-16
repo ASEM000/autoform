@@ -4,24 +4,19 @@
 
 ### Breaking Changes
 
-  - Replaced `autoform.extend.register_zero` and
-    `register_cotangent_accumulator` with standalone `Algebra` implementations.
-    Register both operations with
-    `register_algebra(AValType, lambda aval: AlgebraType(aval))` and access them
-    through `algebraof(aval).zero()` and `algebraof(aval).accum(values)`.
-    Registrations remain keyed by exact AVal type; the algebra stores metadata
-    through `self.aval`.
+  - Added `AVal.join(other)` to compute an abstract value covering both operands,
+    where `other` can be a concrete value, an abstract value, or a symbolic zero.
 
-  - Removed the extension helpers `materialize`, `zeroof`, and `is_zero`.
-    Construct symbolic zeros with `Zero(avalof(value))`, check them with
-    `isinstance(value, Zero)`, and materialize each zero locally with
-    `algebraof(zero.aval).zero()`.
+  - Replaced `register_zero` and `register_cotangent_accumulator` with
+    `AVal.zero()` and `AVal.add(left, right)`.
+
+  - Removed `materialize`, `zeroof`, and `is_zero`. Use `zero.aval.zero()`,
+    `Zero(avalof(value))`, and `isinstance(value, Zero)`, respectively.
 
   - Standardized extension names: primitive keys use the `p_` prefix
     (`concat_p` to `p_concat`), and abstract value classes use `AVal` as a prefix
-    (`StrAVal` to `AValStr`,
-    `IntAVal` to `AValInt`, `FloatAVal` to `AValFloat`, `BoolAVal` to `AValBool`,
-    and `BatchAVal` to `AValBatch`). Primitive display names remain unchanged.
+    (`StrAVal` to `AValStr`, `IntAVal` to `AValInt`, `FloatAVal` to `AValFloat`,
+    `BoolAVal` to `AValBool`, and `BatchAVal` to `AValBatch`).
 
   - Moved string and LM operations out of the top-level API.
 
@@ -35,25 +30,14 @@
     The extension primitives `lm_call_p` and `lm_schema_call_p` are replaced
     by `p_fill`.
 
-  - `af.lm.fill` accepts a pytree containing literal inputs and specs, rather
-    than separate messages and an output schema. It preserves literal inputs
-    and replaces specs with filled values.
-
-    ```python
-    import autoform as af
-
-    out = af.lm.fill(
-        {"text": text, "summary": af.lm.Str() @ "Summarize the text."},
-        model="model-name",
-    )
-    summary = out["summary"]
-    ```
+    `af.lm.fill` takes a pytree of literal inputs and specs, preserves the
+    literals, and replaces specs with filled values.
 
   - Moved `Str`, `Int`, `Float`, `Bool`, and `Enum` from the top-level API
     and `autoform.schemas` into `af.lm`. Removed `Doc` and `Docd`; attach
     descriptions directly with `af.lm.Str() @ "description"` or keyword `desc=`.
-    Descriptions are dynamic pytree children; constraints remain static.
-    Custom specs subclass `af.lm.Spec` and implement `describe` and `parse`.
+    Descriptions are now dynamic pytree children.
+    Custom specs subclass `autoform.src.lm.Spec` and implement `describe` and `parse`.
 
   - LM clients now expose `responses` and `aresponses`, replacing `completion`
     and `acompletion`. Requests use `input` and `text.format`; responses provide
@@ -61,7 +45,8 @@
 
   - Formatting now lowers to `concat`; `format_p` is removed.
 
-  - Renamed modules: `batch` to `axis`, `checkpoint` to `intercept`,
+  - Moved implementation modules under `autoform.src` and renamed
+    `batch` to `axis`, `checkpoint` to `intercept`,
     `custom` to `boundary`, `dce` to `dead`, `memoize` to `memo`,
     `scheduling` to `order`, and `prob` to `path`. The corresponding
     top-level functions remain available.
@@ -69,11 +54,13 @@
   - Replaced the operator-specific `autoform.extend` helpers `register_add`,
     `register_sub`, `register_mul`, `register_div`, `register_matmul`, and
     `register_eq` with {py:func}`register_dunder <autoform.extend.register_dunder>`.
-    For example, use `register_dunder(Dunder.ADD, AValArray, array_add)`.
-    The separate `core.trace_*_rules` registries are replaced by `core.dunder_rules`.
+    The separate `autoform.core.trace_*_rules` registries are replaced by
+    `autoform.src.stage.dunder_rules`.
 
   - Renamed `af.weighted` to `af.weight` and the extension primitive
     `weighted_call_p` to `p_weight_call`.
+
+  - Renamed the extension primitive `gather_p` to `p_fanout`.
 
   - Renamed `IRVar` to `Var`, `IREqn` to `Eqn`, and `IR.ir_eqns` to `IR.eqns`.
     IR and equation fields `in_ir_tree` and `out_ir_tree` are now `in_tree`
@@ -87,45 +74,19 @@
   - Added `af.numeric` with scalar arithmetic and comparisons, including
     dispatch through Python operators such as `+`, `*`, and `<`.
 
-  - Added {py:func}`fixpoint <autoform.fixpoint>`, a bounded control-flow
-    primitive for iterating `(State, Theta) -> State` to structural convergence,
-    with implicit pullback support.
+  - Added {py:func}`fixpoint <autoform.fixpoint>` for bounded iteration to
+    structural convergence, with implicit pullback support.
 
 ### Fixed
 
-  - Fixed boxed transforms over IRs with static input literals. `batch`,
-    `pushforward`, and `pullback` preserve static-input checks while allowing
-    internal IR walks to use boxed dynamic values.
+  - Fixed `batch`, `pushforward`, and `pullback` on IRs with static input literals.
 
 ### Documentation
 
-  - Reorganized the introduction into [A First Program](docs/a-first-program.md),
-    [Building Blocks](docs/building-blocks.md), and
-    [Motivation and Applications](docs/motivation-and-applications.md), each
-    on its own page.
+  - Reorganized the introduction, concept pages, and recipes, with dedicated
+    coverage of pytrees, fixed points, and language models.
 
-  - Reworked the README example to combine a text rubric, a numerical adjustment,
-    and a language model call, and to compose `pullback` and `batch`. The
-    documentation home page includes the README.
-
-  - Consolidated [concept pages](docs/concepts/index.md) under Foundations
-    and Computation and Transforms. [Pytrees](docs/concepts/pytrees.md)
-    have a separate page, and fixed points are covered under
-    [Control Flow](docs/concepts/control-flow.md#fixed-points).
-
-  - Reworked the [recipes](docs/recipes/index.md) to focus on complete tasks that
-    combine several concepts. Examples of concurrent execution, static context,
-    intermediate values, and feedback updates are part of the concept pages.
-    Specifications and model clients are covered in
-    [Language Models](docs/language-models.md).
-
-  - Replaced several diagrams with TikZ figures for program structure,
-    transformations, input axes, and loop feedback. The figures share drawing
-    styles.
-
-  - Updated examples to use descriptive placeholders and Python operators such
-    as `+` and `==` where supported. Moved supplementary explanations into
-    footnotes.
+  - Updated the README, examples, and diagrams for the new API.
 
 ## v0.3.0 (May 30, 2026)
 
