@@ -359,7 +359,7 @@ def test_format_lowers_to_concat(executor, template, values, expected, feedback)
     assert actual == p
     pf = ad.pushforward(ir)
     result = executor(pf, (values,), (values,))
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     assert utils.tree.map(zero, result) == (p, expected)
     pb = ad.pullback(ir)
     result = executor(pb, (values,), "g")
@@ -383,7 +383,7 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")
     pb = ad.pullback(ir)
     expected = ("A/B/A", (Record("gg", ("g", "")),))
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     assert utils.tree.map(zero, executor(pb, (row,), "g")) == expected
 
 

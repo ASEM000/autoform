@@ -49,18 +49,19 @@ class AValStr(core.AVal):
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
-
-class AlgebraStr(core.Algebra):
-    __slots__ = []
-
     def zero(self) -> str:
         return ""
 
-    def accum(self, values: list[str], /) -> str:
-        return "".join(values)
+    def add(self, left, right, /):
+        return left + right
+
+    def join(self, other, /):
+        match self, other:
+            case AValStr(), str() | AValStr() | core.Zero(aval=AValStr()):
+                return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.algebra_rules[AValStr] = lambda aval: AlgebraStr(aval)
 core.aval_types[str] = lambda _: AValStr()
 core.aval_types[AValStr] = lambda aval: aval
 stage.trace_types.add(str)
@@ -104,7 +105,7 @@ def abstract_concat(in_tree: Tree, /) -> Any:
 
 def pushforward_concat(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     t = utils.tree.map(zero, t)
     return p_concat.bind(p), p_concat.bind(t)
 

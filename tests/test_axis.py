@@ -45,9 +45,38 @@ class AValTagged(core.AVal):
     ],
 )
 def test_check_batch_aval(value):
-    check.typecheck(value, axis.AValBatch(string.AValStr()))
-    with pytest.raises(TypeError, match="Expected AValBatch"):
+    assert check.typecheck(value, axis.AValBatch(string.AValStr())) is value
+    with pytest.raises(TypeError, match="Cannot join AValFloat"):
         check.typecheck(value, axis.AValBatch(numeric.AValFloat()))
+
+
+def test_join_custom_container():
+    @utils.tree.dataclasses.dataclass
+    class Pair:
+        x: object
+        y: object
+
+    aval = axis.AValBatch(string.AValStr())
+    value = Pair("x", core.Zero(string.AValStr()))
+    assert check.typecheck(value, aval) is value
+    with pytest.raises(TypeError, match="Cannot join AValStr"):
+        check.typecheck(Pair("x", 1.0), aval)
+
+
+@pytest.mark.parametrize("abstract", [False, True], ids=["concrete", "abstract"])
+def test_inherited_batch_join(abstract):
+    class AValCustom(axis.AValBatch): ...
+
+    aval = AValCustom(string.AValStr())
+    value = axis.AValBatch(aval.base) if abstract else ["x"]
+    result = aval.join(value)
+    assert type(result) is AValCustom
+    assert result == aval
+    if abstract:
+        assert aval.join(aval) == aval
+        result = value.join(aval)
+        assert type(result) is axis.AValBatch
+        assert result == value
 
 
 class TestBatchBasic:
@@ -66,7 +95,7 @@ class TestBatchBasic:
         ir = axis.batch(stage.IR([], (x,), x))
         values = [[], ["a", "b"]]
         assert executor(ir, values) == values
-        with pytest.raises(TypeError, match="Expected AValBatch"):
+        with pytest.raises(TypeError, match="Cannot join AValBatch"):
             executor(ir, ["a", "b"])
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

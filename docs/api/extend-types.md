@@ -1,16 +1,9 @@
 # Types
 
-These classes represent the values and program structure used by extension code: abstract values, primitive keys, equations, and interpreters. A domain extension combines these descriptions with registered rules to make new types and operations available to tracing and the transforms it supports.
-
 ```{eval-rst}
 .. autoclass:: autoform.extend.AVal
-.. autoclass:: autoform.extend.Domain
-   :members: base, accepts, join
+   :members: zero, add, join
    :undoc-members:
-.. autofunction:: autoform.extend.domainof
-.. autoclass:: autoform.extend.Algebra
-   :members: zero, accum
-.. autofunction:: autoform.extend.algebraof
 .. autoclass:: autoform.extend.AValStr
 .. autoclass:: autoform.extend.AValInt
 .. autoclass:: autoform.extend.AValFloat

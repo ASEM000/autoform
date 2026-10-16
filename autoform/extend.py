@@ -19,18 +19,14 @@ from autoform.src.control import p_fixpoint as p_fixpoint
 from autoform.src.control import p_stop_gradient as p_stop_gradient
 from autoform.src.control import p_switch as p_switch
 from autoform.src.control import p_while_loop as p_while_loop
-from autoform.src.core import Algebra as Algebra
 from autoform.src.core import AVal as AVal
-from autoform.src.core import Domain as Domain
 from autoform.src.core import Interp as Interp
 from autoform.src.core import Prim as Prim
 from autoform.src.core import Rule as Rule
 from autoform.src.core import Space as Space
 from autoform.src.core import Zero as Zero
 from autoform.src.core import active_interp as active_interp
-from autoform.src.core import algebraof as algebraof
 from autoform.src.core import avalof as avalof
-from autoform.src.core import domainof as domainof
 from autoform.src.core import r_abatch as r_abatch
 from autoform.src.core import r_abstract as r_abstract
 from autoform.src.core import r_aimpl as r_aimpl
@@ -42,8 +38,6 @@ from autoform.src.core import r_impl as r_impl
 from autoform.src.core import r_pull_bwd as r_pull_bwd
 from autoform.src.core import r_pull_fwd as r_pull_fwd
 from autoform.src.core import r_push as r_push
-from autoform.src.core import register_algebra as register_algebra
-from autoform.src.core import register_domain as register_domain
 from autoform.src.core import s_cotangent as s_cotangent
 from autoform.src.core import s_primal as s_primal
 from autoform.src.core import s_tangent as s_tangent

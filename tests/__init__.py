@@ -112,5 +112,13 @@ class AValBlob(core.AVal):
     def __hash__(self):
         return hash((type(self), self.size))
 
+    def join(self, other):
+        match other:
+            case core.Zero(aval=AValBlob() as aval):
+                return self.join(aval)
+        if (isinstance(other, Blob) or type(other) is type(self)) and self.size == other.size:
+            return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
+
 
 core.aval_types[AValBlob] = lambda aval: aval

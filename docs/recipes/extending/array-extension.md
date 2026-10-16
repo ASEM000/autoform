@@ -1,16 +1,16 @@
 # Array Extension
 
-A domain extension needs to explain both its values and its operations to `autoform`. This recipe adds NumPy arrays as atomic leaves, registers arithmetic primitives, and supplies rules for batching and numerical differentiation. A small program then uses ordinary Python operators while the transforms work through the registered rules. NumPy calculations provide reference results for the examples.
+To extend the domain of `autoform`, one needs to explain to `autoform` what the new values are and how to operate on them. In this recipe, a new array domain is registered as an atomic leaf, along with a few simple arithmetic primitives. These primitives are then extended to support batching and numerical differentiation, allowing the following examples to work.
 
 ```{admonition} Concept
 [Primitives and Rules](../../concepts/primitives-and-rules.md) · [Transforms](../../concepts/transforms.md) · [Types and Spaces](../../concepts/types-and-spaces.md)
 ```
 
-This example only supports floating-point arrays, requires arrays to have the same shape, and only supports matrix multiply in 2D. The arrays are treated as atomic leaves, and the batches are Python lists of arrays. Supporting other dtypes, broadcasting shapes, reduction operations, and scalar promotion would require additional rules.
+This example is very simple: it only supports floating-point arrays, arrays need to have the same shape, and matmul is only supported for 2D arrays. Arrays will be treated as atomic values, so they will appear as leaves and batches will be made by constructing Python lists of arrays. Making this extension more fully featured would require support for other dtypes, broadcasting rules for shape, rules for reductions, and rules for promoting scalars.
 
 ## Abstract Value
 
-Tracing needs an array description before an operation has produced a concrete result. `AValArray` records the shape and dtype. A separate `AlgebraArray` supplies zero construction and accumulation when feedback on an array is required. The primal, tangent, and cotangent spaces all use this same array representation in the example:
+To trace a function, `autoform` needs to know what an array looks like before the function is actually run. The following AVal describes arrays to `autoform`. It also describes how to construct a zero, and how to add two values together, which are both needed for handling feedback. In this case, the primal, tangent, and cotangent spaces use the same array representation.
 
 ```python
 import functools as ft
@@ -37,18 +37,22 @@ class AValArray(afe.AVal):
     def __hash__(self):
         return hash((type(self), self.shape, self.dtype.str))
 
-
-class AlgebraArray(afe.Algebra):
-    __slots__ = []
-
     def zero(self):
-        return np.zeros(self.aval.shape, dtype=self.aval.dtype)
+        return np.zeros(self.shape, dtype=self.dtype)
 
-    def accum(self, c):
-        return sum(c[1:], c[0])
+    def add(self, left, right):
+        return left + right
 
-
-afe.register_algebra(AValArray, lambda aval: AlgebraArray(aval))
+    def join(self, other):
+        match other:
+            case (
+                np.ndarray(shape=shape, dtype=dtype)
+                | AValArray(shape=shape, dtype=dtype)
+                | afe.Zero(aval=AValArray(shape=shape, dtype=dtype))
+            ):
+                if self.shape == shape and self.dtype == dtype:
+                    return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
 def aval_rule(value):
@@ -56,14 +60,17 @@ def aval_rule(value):
 
 
 afe.register_trace_type(np.ndarray, aval_rule)
+afe.register_trace_type(AValArray, lambda aval: aval)
 afe.s_primal.set(AValArray, lambda aval: aval)
 afe.s_tangent.set(AValArray, lambda aval: aval)
 afe.s_cotangent.set(AValArray, lambda aval: aval)
 ```
 
+Finally, `join` needs to be able to handle concrete arrays, array AVals, and symbolic zeros carrying array AVals. In this example, the shape and dtype of the array must match exactly, since there is no broader array description. A mismatch raises `TypeError`. The checker calls `expected.join(value)` directly to make sure the result matches the expected AVal. Under the hood, `autoform` accumulates concrete contributions by doing a `reduce(add, ..., zero())`, producing an array of the correct shape and dtype.
+
 ## Operation Rules
 
-Registering a value type does not define how array operations transform. Each operation also needs execution and abstract rules, followed by the rules required for batching and differentiation. The helper below collects these registrations for a binary operation. The forward pullback rule retains both inputs as residuals, and the backward rule uses those values with output feedback:
+Now that values have been registered, the operations need to be registered. Every operation has an execution rule and an abstract rule, and then additional rules for each transform. For brevity, a helper function is used to register binary operations. This example always uses both inputs as residuals in the forward pullback, so the backward rule will be given both of those values as well as the feedback from the output.
 
 ```python
 def array_aval(value):
@@ -94,8 +101,8 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def push(in_tree):
         (x, y), (tx, ty) = in_tree
-        tx = afe.algebraof(tx.aval).zero() if isinstance(tx, afe.Zero) else tx
-        ty = afe.algebraof(ty.aval).zero() if isinstance(ty, afe.Zero) else ty
+        tx = tx.aval.zero() if isinstance(tx, afe.Zero) else tx
+        ty = ty.aval.zero() if isinstance(ty, afe.Zero) else ty
         return bind(x, y), push_rule(x, y, tx, ty)
 
     def pull_fwd(in_tree):
@@ -104,7 +111,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def pull_bwd(in_tree):
         (x, y), g = in_tree
-        g = afe.algebraof(g.aval).zero() if isinstance(g, afe.Zero) else g
+        g = g.aval.zero() if isinstance(g, afe.Zero) else g
         return pull_rule(x, y, g)
 
     def batch_rule(in_tree):
@@ -129,7 +136,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
 ## Operators
 
-The helper can now describe several operations without repeating the registration code. Each definition provides the NumPy computation together with its pushforward and pullback formulas. Dunder registrations connect these primitives to the corresponding Python operators:
+With this, a few operations can be registered, along with their pushforward/pullback rules. The dunder rules will allow these primitives to be used with Python operators on traceable values.
 
 ```python
 a_add = register_binary(
@@ -176,11 +183,11 @@ afe.register_dunder(afe.Dunder.DIV, AValArray, a_div)
 afe.register_dunder(afe.Dunder.MATMUL, AValArray, a_matmul)
 ```
 
-The final registrations connect traced Python syntax to the primitives through one dunder rule table. For example, `x + y` stages `a_add` when `x` has `AValArray`.
+In fact, these are the last rules that need to be registered. Thanks to the dunder rule table, a registered Python operator used on a traceable value with an `AValArray` stages a call to the corresponding primitive operation.
 
 ## Execution and AD
 
-The first program combines addition, multiplication, and division. Its execution is compared with NumPy, then its pushforward and pullback are compared with the expected derivatives. These checks exercise the composition of the registered rules across several operations:
+Now, let’s see if execution and autodiff work! For brevity, expected values are computed with NumPy.
 
 ```python
 def f(x, y):
@@ -206,7 +213,7 @@ np.testing.assert_allclose(dx, -y * y / (x * x))
 np.testing.assert_allclose(dy, (x + 2 * y) / x)
 ```
 
-Batching adds an outer Python container while preserving each NumPy array as one leaf. The two arrays at the same batch position form the inputs for one execution. This is distinct from treating an axis inside an array as the batch dimension:
+For this example, batches are made by putting arrays into Python containers. To batch two executions, one supplies two arrays for each input, and the arrays at the same index will be passed to the function together.
 
 ```python
 batched = af.batch(ir, in_axes=(True, True))
@@ -216,7 +223,7 @@ np.testing.assert_allclose(outs[0], f(x, y))
 np.testing.assert_allclose(outs[1], f(x + 1, y + 1))
 ```
 
-Matrix multiplication uses the same registration pattern, with transpose operations in its pullback formula. The following check compares both input gradients with the corresponding NumPy matrix products:
+Let’s also try out matrix multiplication, making sure the gradients of both inputs are correct.
 
 ```python
 def mm(a, b):
@@ -232,5 +239,3 @@ np.testing.assert_allclose(out_pb, a @ b)
 np.testing.assert_allclose(da, np.ones((2, 2)) @ b.T)
 np.testing.assert_allclose(db, a.T @ np.ones((2, 2)))
 ```
-
-The assertions check the output, the numerical values of the tangents and cotangents, the values of the batched executions, and the derivatives of the matrix product.

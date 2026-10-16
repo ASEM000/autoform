@@ -35,7 +35,7 @@ def typecheck(value, aval, /):
 
 
 def impl_check(value: Tree, /, *, aval: core.AVal) -> Tree:
-    if not core.domainof(aval).accepts(value):
+    if aval.join(value) != aval:
         raise TypeError(f"Expected {aval!r}, got {value!r}")
     return value
 

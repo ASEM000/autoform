@@ -60,6 +60,21 @@ class AVal:
     def __hash__(self) -> int:
         return hash(type(self))
 
+    def zero(self):
+        # NOTE(asem): returns concrete zero of this type. for example empty string for string type
+        # or 0.0 for float type.
+        raise NotImplementedError
+
+    def add(self, left, right, /):
+        # NOTE(asem): how to add two pieces of this types. for example concatenations for string
+        # type or addition for float type.
+        raise NotImplementedError
+
+    def join(self, other, /) -> AVal:
+        # NOTE(asem): computing the abstract value covering both operands. other can be abstract,
+        # concrete, or a symbolic zero. join is used in typechecking
+        raise NotImplementedError
+
 
 def avalof(value, /) -> AVal:
     if (rule := aval_types.get(type(value))) is None:
@@ -67,93 +82,6 @@ def avalof(value, /) -> AVal:
     aval = rule(value)
     assert isinstance(aval, AVal), f"Aval rule returned {aval!r}"
     return aval
-
-
-# ==================================================================================================
-# ALGEBRA
-# ==================================================================================================
-
-
-class Algebra:
-    __slots__ = ["aval"]
-
-    def __init__(self, aval: AVal, /):
-        self.aval = aval
-
-    def zero(self):
-        raise NotImplementedError
-
-    def accum(self, values: list[Any], /):
-        raise NotImplementedError
-
-
-algebra_rules: dict[type[AVal], Callable[[AVal], Algebra]] = {}
-
-
-def register_algebra[R: Callable[[AVal], Algebra]](aval_type: type[AVal], rule: R, /) -> R:
-    """Register zero construction and accumulation for an exact AVal type."""
-    algebra_rules[aval_type] = rule
-    return rule
-
-
-def algebraof(aval: AVal, /) -> Algebra:
-    """Look up algebra behavior by exact AVal type, without inheritance."""
-    if (rule := algebra_rules.get(type(aval))) is None:
-        raise TypeError(f"No algebra registered for {aval!r}")
-    algebra = rule(aval)
-    assert isinstance(algebra, Algebra), f"Algebra rule returned {algebra!r}"
-    return algebra
-
-
-# ==================================================================================================
-# DOMAIN
-# ==================================================================================================
-
-
-class Domain:
-    __slots__ = ["aval"]
-
-    def __init__(self, aval: AVal, /):
-        self.aval = aval
-
-    def base(self) -> AVal:
-        return self.aval
-
-    def accepts(self, value, /) -> bool:
-        actual = avalof(value)
-        if self.aval == actual:
-            return True
-        base = domainof(actual).base()
-        return base != actual and self.accepts(base)
-
-    def join(self, other: AVal, /) -> AVal:
-        if self.accepts(other):
-            return self.aval
-        domain = domainof(other)
-        if domain.accepts(self.aval):
-            return other
-        left, right = self.base(), domain.base()
-        if left != self.aval or right != other:
-            return domainof(left).join(right)
-        raise TypeError(f"No common domain for {self.aval!r} and {other!r}")
-
-
-domain_rules: dict[type[AVal], Callable[[AVal], Domain]] = {}
-
-
-def register_domain[R: Callable[[AVal], Domain]](aval_type: type[AVal], rule: R, /) -> R:
-    """Register acceptance and joining for an exact AVal type."""
-    domain_rules[aval_type] = rule
-    return rule
-
-
-def domainof(aval: AVal, /) -> Domain:
-    """Return domain of input abstract value"""
-    if (rule := domain_rules.get(type(aval))) is None:
-        return Domain(aval)
-    domain = rule(aval)
-    assert isinstance(domain, Domain), f"Domain rule returned {domain!r}"
-    return domain
 
 
 # ==================================================================================================

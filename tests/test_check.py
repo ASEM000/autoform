@@ -24,16 +24,46 @@ import autoform.src.dead as dead
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
-from tests import AValBlob, aexecute, execute
+from tests import AValBlob, Blob, aexecute, execute
 
 
 class TestCheck:
-    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
-        "x",
-        ["x", core.Zero(string.AValStr())],
-        ids=["literal", "zero"],
+        "make",
+        [
+            lambda aval: Blob(aval.size),
+            lambda aval: aval,
+            core.Zero,
+        ],
+        ids=["concrete", "aval", "zero"],
     )
+    @pytest.mark.parametrize("size, valid", [(2, True), (4, False)], ids=["within", "outside"])
+    @pytest.mark.parametrize("batched", [False, True], ids=["scalar", "batch"])
+    def test_refined_membership(self, make, size, valid, batched):
+        class AValBound(AValBlob):
+            def join(self, other):
+                match other:
+                    case (
+                        Blob(size=size)
+                        | AValBound(size=size)
+                        | core.Zero(aval=AValBound(size=size))
+                    ):
+                        return AValBound(max(self.size, size))
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
+
+        core.aval_types[AValBound] = lambda aval: aval
+        aval, x = AValBound(3), make(AValBound(size))
+        if batched:
+            aval, x = axis.AValBatch(aval), [x]
+        rule = core.r_abstract.get(check.p_typecheck)
+        if valid:
+            assert rule(x, aval=aval) is x
+        else:
+            with pytest.raises(TypeError, match="Expected"):
+                rule(x, aval=aval)
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize("x", ["x", core.Zero(string.AValStr())], ids=["literal", "zero"])
     def test_literal_identity(self, executor, x):
         aval = string.AValStr()
         assert check.typecheck(x, aval) is x
@@ -43,10 +73,20 @@ class TestCheck:
 
     @pytest.mark.parametrize("x", [1.0, core.Zero(numeric.AValFloat())], ids=["value", "zero"])
     def test_rejects_incompatible_value(self, x):
-        with pytest.raises(TypeError, match="Expected AValStr"):
+        with pytest.raises(TypeError, match="AValStr"):
             check.typecheck(x, string.AValStr())
-        with pytest.raises(TypeError, match="Expected AValStr"):
+        with pytest.raises(TypeError, match="AValStr"):
             stage.trace(lambda: check.typecheck(x, string.AValStr()))()
+
+    @pytest.mark.parametrize("depth", [0, 1, 2], ids=["scalar", "batch", "nested-batch"])
+    @pytest.mark.parametrize("wrap", [lambda x: x, core.Zero], ids=["aval", "zero"])
+    def test_nested_representations(self, depth, wrap):
+        aval = numeric.AValFloat()
+        x, concrete = wrap(aval), 0.5
+        for _ in range(depth):
+            x, concrete = [x, concrete], [concrete, concrete]
+            aval = axis.AValBatch(aval)
+        assert check.typecheck(x, aval) is x
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     @pytest.mark.parametrize(
@@ -86,9 +126,9 @@ class TestCheck:
             interpreter = axis.BatchInterp(batch_size=2, parent=pusher)
             x = interpreter.box(([pusher.box(("x", "dx")), pusher.box(("y", 1.0))], True))
         aval = string.AValStr()
-        assert core.domainof(aval).accepts(x)
+        assert core.avalof(x) == aval
         with core.using_interp(interpreter):
-            with pytest.raises(TypeError, match="Expected AValStr"):
+            with pytest.raises(TypeError, match="Cannot join AValStr"):
                 check.p_typecheck.bind(x, aval=aval)
 
     @pytest.mark.parametrize("batched", [False, True], ids=["broadcast-batch", "nested-batch"])
@@ -102,7 +142,7 @@ class TestCheck:
                 if size == 3:
                     check.typecheck(box, aval)
                 else:
-                    with pytest.raises(TypeError, match="Expected"):
+                    with pytest.raises(TypeError, match="AValBlob"):
                         check.typecheck(box, aval)
 
     @pytest.mark.parametrize("x", [("x", "y"), {"a": "x", "b": "y"}], ids=["tuple", "dict"])
@@ -119,7 +159,7 @@ class TestCheck:
             return values
 
         ir = dead.dce(stage.trace(program)(x, "z"))
-        assert [eqn.prim for eqn in ir.eqns] == [check.p_typecheck, check.p_typecheck]
+        assert [eqn.prim for eqn in ir.eqns] == [check.p_typecheck] * 2
         assert ir.call(x, "z") == [x, "z"]
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

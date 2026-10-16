@@ -117,7 +117,7 @@ class TestCustomPushforward:
             (dx,) = t
             return call(*p), string.format(
                 "custom delta: {value}",
-                value=(core.algebraof(dx.aval).zero() if isinstance(dx, core.Zero) else dx),
+                value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
 
         ir = stage.trace(lambda x: string.concat(bracket(x), "!"))("seed")
@@ -144,7 +144,7 @@ class TestCustomPushforward:
             (dx,) = t
             return call(*p), string.format(
                 "async delta: {value}",
-                value=(core.algebraof(dx.aval).zero() if isinstance(dx, core.Zero) else dx),
+                value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
 
         ir = stage.trace(lambda x: bracket(x))("seed")
@@ -164,7 +164,7 @@ class TestCustomPushforward:
             (dx,) = t
             return call(*p), string.format(
                 "push {value}",
-                value=(core.algebraof(dx.aval).zero() if isinstance(dx, core.Zero) else dx),
+                value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
 
         ir = stage.trace(lambda x: bracket(x))("seed")
@@ -190,7 +190,7 @@ class TestCustomPushforward:
             (dx,) = t
             return call(*p), string.format(
                 "sync push {value}",
-                value=(core.algebraof(dx.aval).zero() if isinstance(dx, core.Zero) else dx),
+                value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
 
         ir = stage.trace(lambda x: bracket(x))("seed")

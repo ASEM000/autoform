@@ -47,6 +47,14 @@ class AValInt(core.AVal):
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
+    def join(self, other, /):
+        match self, other:
+            case AValInt(), bool():
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
+            case AValInt(), int() | AValInt() | core.Zero(aval=AValInt()):
+                return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
+
 
 core.aval_types[int] = lambda _: AValInt()
 core.aval_types[AValInt] = lambda aval: aval
@@ -70,18 +78,19 @@ class AValFloat(core.AVal):
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
-
-class AlgebraFloat(core.Algebra):
-    __slots__ = []
-
     def zero(self) -> float:
         return 0.0
 
-    def accum(self, values: list[float], /) -> float:
-        return sum(values)
+    def add(self, left, right, /):
+        return left + right
+
+    def join(self, other, /):
+        match self, other:
+            case AValFloat(), float() | AValFloat() | core.Zero(aval=AValFloat()):
+                return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.algebra_rules[AValFloat] = lambda aval: AlgebraFloat(aval)
 core.aval_types[float] = lambda _: AValFloat()
 core.aval_types[AValFloat] = lambda aval: aval
 stage.trace_types.add(float)
@@ -105,6 +114,12 @@ class AValBool(core.AVal):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
+
+    def join(self, other, /):
+        match self, other:
+            case AValBool(), bool() | AValBool() | core.Zero(aval=AValBool()):
+                return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
 core.aval_types[bool] = lambda _: AValBool()
@@ -157,7 +172,7 @@ def abstract_neg(in_tree: Tree, /) -> AValFloat:
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    t = core.algebraof(t.aval).zero() if isinstance(t, core.Zero) else t
+    t = t.aval.zero() if isinstance(t, core.Zero) else t
     return neg(p), neg(t)
 
 
@@ -215,7 +230,7 @@ def abstract_add(in_tree: Tree, /) -> AValFloat:
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     t = utils.tree.map(zero, t)
     return p_add.bind(p), p_add.bind(t)
 
@@ -274,7 +289,7 @@ def abstract_sub(in_tree: Tree, /) -> AValFloat:
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     t = utils.tree.map(zero, t)
     return p_sub.bind(p), p_sub.bind(t)
 
@@ -334,7 +349,7 @@ def abstract_mul(in_tree: Tree, /) -> AValFloat:
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     a, b = p
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     da, db = utils.tree.map(zero, t)
     return mul(a, b), add(mul(da, b), mul(a, db))
 
@@ -394,7 +409,7 @@ def abstract_div(in_tree: Tree, /) -> AValFloat:
 def pushforward_div(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     a, b = p
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     da, db = utils.tree.map(zero, t)
     return div(a, b), div(sub(mul(da, b), mul(a, db)), mul(b, b))
 
