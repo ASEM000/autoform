@@ -54,21 +54,28 @@ tree = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
 type Tree[T] = Any
 
 
-class Dispatch:
-    __slots__ = ["rules"]
+def dispatch[R](default: Callable[..., R] | None = None):
+    # NOTE(asem): dispatch using optree tree spec with leaves exact type. unlike single dispatch
+    # this dispatch on exact type, allow pytrees. however its a bit slower.
+    rules: dict[tuple[PyTreeSpec, tuple[type, ...]], Callable[..., R]] = {}
 
-    def __init__(self):
-        self.rules = {}
-
-    def register(self, types, rule, /):
+    def register[**P](types: Tree[type], rule: Callable[P, R], /) -> Callable[P, R]:
         leaves, spec = tree.flatten(types)
-        self.rules[spec, tuple(leaves)] = rule
+        rules[spec, tuple(leaves)] = rule
         return rule
 
-    def __call__(self, values, /, **params):
+    def call(values: Tree, /, **params: Any) -> R:
         leaves, spec = tree.flatten(values)
         key = spec, tuple(type(x) for x in leaves)
-        return self.rules[key](values, **params)
+        if (rule := rules.get(key, default)) is None:
+            raise TypeError(f"No dispatch rule for {key!r}")
+        return rule(values, **params)
+
+    if default is not None:
+        call = ft.wraps(default)(call)
+    call.register = register
+    call.rules = rules
+    return call
 
 
 def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R]:
