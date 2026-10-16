@@ -553,7 +553,7 @@ GRAD_PROMPT = """INPUT: {input} OUTPUT: {output} OUTPUT FEEDBACK: {out_c}"""
 
 
 def spec_content(value: Tree, spec_tree: Tree) -> str:
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     value = dict(values=json_value(utils.tree.map(zero, value)), schema=describe(spec_tree))
     return jsonlib.dumps(value, allow_nan=False)
 
@@ -728,7 +728,7 @@ def fill_pushforward_request(in_tree: Tree, /, *, static_tree: Tree) -> TreePair
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves((t_lit_tree, t_dynamic_tree))):
         return None
 
-    zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
     t_lit_tree, t_dynamic_tree = utils.tree.map(zero, (t_lit_tree, t_dynamic_tree))
     spec_tree = reconstruct_spec_tree(p_dynamic_tree, static_tree)
     t_spec_tree = reconstruct_spec_tree(t_dynamic_tree, static_tree)
