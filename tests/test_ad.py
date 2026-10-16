@@ -39,7 +39,7 @@ def test_pushforward_checker_rejects_nested_tangent_without_equations():
     ir = stage.trace(lambda x: x)("x")
 
     with core.using_interp(pusher):
-        with pytest.raises(TypeError, match="Expected AValStr"):
+        with pytest.raises(TypeError, match="Cannot join AValStr"):
             next(ir.walk(x))
     assert core.active_interp.get() is active
 
@@ -60,7 +60,7 @@ def test_pushforward_checker_rechecks_mutated_tangent(use_in_equation):
         x.tangent = 1.0
         output = eqn.bind(inputs, **eqn.params)
 
-        with pytest.raises(TypeError, match="Expected AValStr"):
+        with pytest.raises(TypeError, match="Cannot join AValStr"):
             gen.send(output)
     assert core.active_interp.get() is active
 
@@ -81,19 +81,25 @@ def test_pushforward_rejects_invalid_intermediate_tangent(executor, t):
     extend.r_apush.set(p_bad_tangent, utils.asyncify(forward))
     ir = ad.pushforward(stage.trace(lambda x: control.stop_gradient(p_bad_tangent.bind(x)))("x"))
 
-    with pytest.raises(TypeError, match="Expected AValStr"):
+    with pytest.raises(TypeError, match="AValStr"):
         executor(ir, ("x",), ("dx",))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 def test_pullback_checks_concrete_primal(executor):
-    class AValNonemptyStr(string.AValStr): ...
+    class AValNonemptyStr(string.AValStr):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=string.AValStr() as aval):
+                    return self.join(aval)
+            if type(other) is str:
+                return self if other else string.AValStr()
+            if type(other) is string.AValStr:
+                return other
+            if isinstance(other, (str, string.AValStr)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
-    class DomainNonemptyStr(core.Domain):
-        def accepts(self, value):
-            return bool(value) if isinstance(value, str) else super().accepts(value)
-
-    extend.register_domain(AValNonemptyStr, lambda aval: DomainNonemptyStr(aval))
     core.aval_types[AValNonemptyStr] = lambda aval: aval
     core.s_primal.set(AValNonemptyStr, lambda aval: aval)
     core.s_cotangent.set(AValNonemptyStr, lambda _: string.AValStr())
@@ -109,9 +115,9 @@ def test_pullback_checks_concrete_primal(executor):
 @pytest.mark.parametrize(
     "c, message",
     [
-        pytest.param(["x", "y"], "No aval rule registered", id="list"),
-        pytest.param(1.0, "Expected AValStr", id="float"),
-        pytest.param(core.Zero(numeric.AValFloat()), "Expected AValStr", id="wrong-zero"),
+        pytest.param(["x", "y"], "Cannot join AValStr", id="list"),
+        pytest.param(1.0, "Cannot join AValStr", id="float"),
+        pytest.param(core.Zero(numeric.AValFloat()), "Cannot join AValStr", id="wrong-zero"),
     ],
 )
 def test_pullback_rejects_incompatible_cotangent(executor, c, message):
@@ -132,7 +138,7 @@ def test_pullback_rejects_invalid_intermediate_cotangent(executor):
     extend.r_apull_bwd.set(p_bad_cotangent, utils.asyncify(backward))
     ir = ad.pullback(stage.trace(lambda x: p_bad_cotangent.bind(control.stop_gradient(x)))("x"))
 
-    with pytest.raises(TypeError, match="Expected AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AValStr"):
         executor(ir, ("x",), "df")
 
 
@@ -142,21 +148,31 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
 
     class Feedback: ...
 
-    class AValValue(core.AVal): ...
+    class AValValue(core.AVal):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValValue() as aval):
+                    return self.join(aval)
+            if type(other) in (Value, type(self)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     class AValFeedback(core.AVal):
-        __slots__ = []
-
-    class AlgebraFeedback(core.Algebra):
         __slots__ = []
 
         def zero(self):
             return Feedback()
 
-        def accum(self, c):
+        def add(self, left, right):
             return 1.0
 
-    extend.register_algebra(AValFeedback, lambda aval: AlgebraFeedback(aval))
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValFeedback() as aval):
+                    return self.join(aval)
+            if type(other) in (Feedback, type(self)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     extend.register_trace_type(Value, lambda _: AValValue())
     core.aval_types[AValValue] = lambda aval: aval
@@ -170,7 +186,7 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
         return y, y
 
     ir = ad.pullback(stage.trace(program)(Value()))
-    with pytest.raises(TypeError, match="Expected"):
+    with pytest.raises(TypeError, match="Cannot join .*AValFeedback"):
         executor(ir, (Value(),), (Feedback(), Feedback()))
 
 
@@ -212,16 +228,23 @@ def test_pullback_rechecks_mutated_contribution():
         return y, p_mutate_cotangent.bind(y)
 
     ir = ad.pullback(stage.trace(program)("x"))
-    with pytest.raises(TypeError, match="Expected AValStr"):
+    with pytest.raises(TypeError, match="Cannot join AValStr"):
         ir.call(("x",), (seed, "df"))
 
 
 def test_pullback_maps_cotangent_once():
-    class AValValue(core.AVal): ...
+    class AValValue(core.AVal):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValValue() as aval):
+                    return self.join(aval)
+            if type(other) is type(self):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
-    class AValFeedback(core.AVal): ...
+    class AValFeedback(AValValue): ...
 
-    class AValHigherFeedback(core.AVal): ...
+    class AValHigherFeedback(AValValue): ...
 
     for cls in (AValValue, AValFeedback, AValHigherFeedback):
         core.aval_types[cls] = lambda a: a
@@ -238,7 +261,7 @@ def test_pullback_maps_cotangent_once():
         value,
         (feedback, feedback),
     )
-    with pytest.raises(TypeError, match="Expected"):
+    with pytest.raises(TypeError, match="Cannot join"):
         ad.impl_pullback_call(((value, value), core.Zero(AValHigherFeedback())), ir=ir)
     assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
@@ -262,7 +285,7 @@ def test_pullback_checks_under_caller_interpreter():
     with core.using_interp(parent):
         _, c = ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
         assert c == ("ab", core.Zero(string.AValStr()))
-        with pytest.raises(TypeError, match="Expected AValStr"):
+        with pytest.raises(TypeError, match="Cannot join AValStr"):
             ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
     assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
@@ -286,7 +309,7 @@ def test_pullback_preserves_parent_pushforward_values():
 def test_batched_pullback_rejects_shared_list_cotangent(executor):
     ir = ad.pullback(stage.trace(lambda x, y: x + y)("x", "y"))
     ir = axis.batch(ir, in_axes=((False, True), False))
-    with pytest.raises(TypeError, match="No aval rule registered"):
+    with pytest.raises(TypeError, match="Cannot join AValStr"):
         executor(ir, ("x", ["y1", "y2"]), ["o1", "o2"])
     assert executor(ir, ("x", ["y1", "y2"]), "o") == (
         ["xy1", "xy2"],
@@ -298,14 +321,16 @@ def test_batched_pullback_rejects_shared_list_cotangent(executor):
 @pytest.mark.parametrize(
     "c, error",
     [
-        pytest.param("o", "AValBatch", id="scalar"),
-        pytest.param(["o", 1.0], "AValBatch", id="mixed-elements"),
-        pytest.param(core.Zero(axis.AValBatch(numeric.AValFloat())), "AValBatch", id="wrong-zero"),
+        pytest.param("o", "Cannot join AValBatch", id="scalar"),
+        pytest.param(["o", 1.0], "Cannot join AValStr", id="mixed-elements"),
+        pytest.param(
+            core.Zero(axis.AValBatch(numeric.AValFloat())), "Cannot join AValStr", id="wrong-zero"
+        ),
     ],
 )
 def test_pullback_of_batch_rejects_incompatible_cotangent(executor, c, error):
     ir = ad.pullback(axis.batch(stage.trace(lambda x: x)("x")))
-    with pytest.raises(TypeError, match=f"Expected {error}"):
+    with pytest.raises(TypeError, match=error):
         executor(ir, (["x", "y"],), c)
 
 
@@ -391,9 +416,23 @@ def test_wrapper_uses_derivative_space(transform, space, change):
         def __init__(self, value):
             self.value = value
 
-    class AValText(core.AVal): ...
+    class AValText(core.AVal):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValText() as aval):
+                    return self.join(aval)
+            if type(other) in (Text, type(self)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
-    class AValChange(core.AVal): ...
+    class AValChange(core.AVal):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValChange() as aval):
+                    return self.join(aval)
+            if type(other) in (Change, type(self)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     core.aval_types[Text] = lambda _: AValText()
     core.aval_types[AValText] = lambda aval: aval
@@ -479,13 +518,10 @@ class TestCotangentHelpers:
             ])
 
     def test_cot_accum_unsupported_type_raises(self):
-        with pytest.raises(
-            TypeError,
-            match=r"No algebra registered for AValBool\(\)",
-        ):
+        with pytest.raises(NotImplementedError):
             ad.cot_accum([True, False])
         ir = stage.trace(lambda x, y: ad.cot_accum([x, y]))(True, False)
-        with pytest.raises(TypeError, match="No algebra registered"):
+        with pytest.raises(NotImplementedError):
             ir.call(True, False)
 
     def test_cot_accum_unregistered_leaf_raises(self):
@@ -494,7 +530,7 @@ class TestCotangentHelpers:
         with pytest.raises(TypeError, match="No aval rule registered"):
             ad.cot_accum([Blob(), Blob()])
 
-    def test_cot_accum_uses_registered_algebra(self):
+    def test_cot_accum_uses_aval_method(self):
         class Text:
             def __init__(self, value):
                 self.value = value
@@ -502,16 +538,19 @@ class TestCotangentHelpers:
         class AValText(core.AVal):
             __slots__ = []
 
-        class AlgebraText(core.Algebra):
-            __slots__ = []
-
             def zero(self):
                 return Text("")
 
-            def accum(self, c):
-                return Text("|".join(c.value for c in c))
+            def add(self, left, right):
+                return Text("|".join(x.value for x in (left, right) if x.value))
 
-        extend.register_algebra(AValText, lambda aval: AlgebraText(aval))
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValText() as aval):
+                        return self.join(aval)
+                if type(other) in (Text, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         core.aval_types[Text] = lambda _: AValText()
         stage.trace_types.add(Text)
@@ -529,25 +568,33 @@ class TestCotangentHelpers:
             def __init__(self, value):
                 self.value = value
 
-        class AValText(core.AVal): ...
+        class AValText(core.AVal):
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValText() as aval):
+                        return self.join(aval)
+                if type(other) in (Text, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         class AValTextFeedback(core.AVal):
-            __slots__ = []
-
-        class AlgebraTextFeedback(core.Algebra):
             __slots__ = []
 
             def zero(self):
                 return TextFeedback("")
 
-            def accum(self, c):
-                return TextFeedback(" | ".join(c.value for c in c))
+            def add(self, left, right):
+                return TextFeedback(" | ".join(x.value for x in (left, right) if x.value))
 
-        extend.register_algebra(AValTextFeedback, lambda aval: AlgebraTextFeedback(aval))
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValTextFeedback() as aval):
+                        return self.join(aval)
+                if type(other) in (TextFeedback, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         class AValDerivedFeedback(AValTextFeedback): ...
-
-        extend.register_algebra(AValDerivedFeedback, lambda aval: AlgebraTextFeedback(aval))
 
         core.aval_types[Text] = lambda _: AValText()
         core.aval_types[AValText] = lambda aval: aval
@@ -567,7 +614,7 @@ class TestCotangentHelpers:
         assert isinstance(in_c[0], TextFeedback)
         assert in_c[0].value == "left | right"
         zero = core.Zero(core.s_cotangent.map(core.avalof(text)))
-        assert core.algebraof(zero.aval).zero().value == ""
+        assert zero.aval.zero().value == ""
 
 
 @pytest.mark.parametrize(
@@ -1011,7 +1058,14 @@ def test_pullback_unused_batched_output(executor):
 @pytest.mark.parametrize("transform", [ad.pushforward, ad.pullback], ids=["pf", "pb"])
 def test_nonidentity_primal_space(executor, transform):
 
-    class AValValue(core.AVal): ...
+    class AValValue(core.AVal):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValValue() as aval):
+                    return self.join(aval)
+            if type(other) is type(self):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     core.aval_types[AValValue] = lambda aval: aval
     core.s_primal.set(AValValue, lambda _: numeric.AValFloat())
@@ -1057,5 +1111,5 @@ def test_nonidentity_primal_space(executor, transform):
     traced = stage.trace(lambda p, d: executor(ir, p, d), static=static)(*args)
     assert traced.out_tree[0][0].aval == numeric.AValFloat()
     assert executor(traced, *args) == expected
-    with pytest.raises(TypeError, match="Expected AValFloat"):
+    with pytest.raises(TypeError, match="Cannot join AValFloat"):
         executor(ir, ("bad",), args[1])

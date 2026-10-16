@@ -231,7 +231,7 @@ def test_fill_pushforward_preserves_non_string_literals(executor):
         p, t = executor(ir, ("q",), ("dq",))
     assert p == {"answer": "filled", "fixed": 1.0}
     assert t["answer"] == "filled"
-    assert core.algebraof(t["fixed"].aval).zero() == 0.0
+    assert t["fixed"].aval.zero() == 0.0
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -564,8 +564,8 @@ def test_fill_pushforward_skips_generation_for_symbolic_zero(executor, source):
         expected["x"] = "description"
     assert p == expected
     assert all(isinstance(value, core.Zero) for value in utils.tree.leaves(t))
-    assert core.algebraof(t["answer"].aval).zero() == ""
-    assert core.algebraof(t["score"].aval).zero() == 0.0
+    assert t["answer"].aval.zero() == ""
+    assert t["score"].aval.zero() == 0.0
     assert len(calls) == 1
 
 
@@ -1006,7 +1006,7 @@ def test_fill_pullback_requires_matching_cotangent_structure(out_c):
 def test_fill_pullback_rejects_wrong_schema_cotangent_type(executor, out_c, error, gradient_client):
     program = fill_program({"text": lm.Str(), "score": lm.Float()})
     ir = ad.pullback(stage.trace(program)("seed"))
-    with pytest.raises(TypeError, match=f"Expected {error}"):
+    with pytest.raises(TypeError, match=f"Cannot join {error}"):
         executor(ir, ("Explain recursion.",), out_c)
     assert len(gradient_client.calls) == 0
 

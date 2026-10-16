@@ -181,9 +181,9 @@ class TestBuildIR:
 @pytest.mark.parametrize(
     "transform, args, message",
     [
-        pytest.param(lambda ir: ir, (["x"],), "No aval rule registered", id="primal"),
-        pytest.param(ad.pushforward, (("x",), (["dx"],)), "No aval rule registered", id="tangent"),
-        pytest.param(axis.batch, (["x", 1.0],), "Expected AValBatch", id="batch"),
+        pytest.param(lambda ir: ir, (["x"],), "Cannot join AValStr", id="primal"),
+        pytest.param(ad.pushforward, (("x",), (["dx"],)), "Cannot join AValStr", id="tangent"),
+        pytest.param(axis.batch, (["x", 1.0],), "Cannot join AValStr", id="batch"),
     ],
 )
 def test_call_rejects_incompatible_input_aval(executor, transform, args, message):
@@ -194,7 +194,7 @@ def test_call_rejects_incompatible_input_aval(executor, transform, args, message
 
 def test_walk_rejects_incompatible_input_aval():
     ir = stage.trace(lambda x: x)("x")
-    with pytest.raises(TypeError, match="No aval rule registered"):
+    with pytest.raises(TypeError, match="Cannot join AValStr"):
         next(ir.walk(["x"]))
 
 
@@ -360,18 +360,18 @@ class TestRunIR:
             "hello"
         )
         with intercept.inject(collection="cache", values={"value": [1.0]}):
-            with pytest.raises(TypeError, match="Expected AValStr"):
+            with pytest.raises(TypeError, match="Cannot join AValStr"):
                 executor(ir, "world")
 
     @pytest.mark.parametrize(
         "program, output, error, message",
         [
-            pytest.param(append_bang, 1.0, TypeError, "Expected AValStr", id="dynamic"),
+            pytest.param(append_bang, 1.0, TypeError, "Cannot join AValStr", id="dynamic"),
             pytest.param(
                 lambda x: (append_bang(x), x)[1],
                 1.0,
                 TypeError,
-                "Expected AValStr",
+                "Cannot join AValStr",
                 id="unused-output",
             ),
             pytest.param(
@@ -407,7 +407,7 @@ class TestRunIR:
         eqn, inputs = next(gen)
         eqn, inputs = gen.send(eqn.bind(inputs, **eqn.params))
         value.size = 4
-        with pytest.raises(TypeError, match="Expected"):
+        with pytest.raises(TypeError, match="Cannot join .*AValBlob"):
             gen.send(eqn.bind(inputs, **eqn.params))
 
     def test_walk_with_supplied_output(self):
@@ -965,7 +965,14 @@ class TestTraceValuePythonOps:
     ):
         class Value(Blob): ...
 
-        class AValValue(core.AVal): ...
+        class AValValue(core.AVal):
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValValue() as aval):
+                        return self.join(aval)
+                if type(other) in (Value, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         p_dunder = core.Prim(dunder.value)
         extend.register_trace_type(Value, lambda _: AValValue())
@@ -985,7 +992,14 @@ class TestTraceValuePythonOps:
     def test_call_preserves_positional_and_keyword_inputs(self):
         class Value(Blob): ...
 
-        class AValValue(core.AVal): ...
+        class AValValue(core.AVal):
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValValue() as aval):
+                        return self.join(aval)
+                if type(other) in (Value, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         p_call_value = core.Prim("call_value")
         extend.register_trace_type(Value, lambda _: AValValue())
@@ -1015,7 +1029,14 @@ class TestTraceValuePythonOps:
             def __init__(self, values):
                 self.values = iter(values)
 
-        class AValValues(core.AVal): ...
+        class AValValues(core.AVal):
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValValues() as aval):
+                        return self.join(aval)
+                if type(other) in (Values, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         p_next_value = core.Prim("next_value")
         extend.register_trace_type(Values, lambda _: AValValues())
@@ -1034,7 +1055,14 @@ class TestTraceValuePythonOps:
             def __init__(self, x, y):
                 self.values = (x, y)
 
-        class AValPair(core.AVal): ...
+        class AValPair(core.AVal):
+            def join(self, other):
+                match other:
+                    case core.Zero(aval=AValPair() as aval):
+                        return self.join(aval)
+                if type(other) in (Pair, type(self)):
+                    return self
+                raise TypeError(f"Cannot join {self!r} and {other!r}")
 
         p_pair_values = core.Prim("pair_values")
         extend.register_trace_type(Pair, lambda _: AValPair())

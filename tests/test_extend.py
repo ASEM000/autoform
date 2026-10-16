@@ -38,16 +38,19 @@ def make_box_domain():
         def __hash__(self):
             return hash(type(self))
 
-    class AlgebraBox(core.Algebra):
-        __slots__ = []
-
         def zero(self):
             return Box(0)
 
-        def accum(self, c):
-            return Box(sum(c.value for c in c))
+        def add(self, left, right):
+            return Box(left.value + right.value)
 
-    extend.register_algebra(AValBox, lambda aval: AlgebraBox(aval))
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValBox() as aval):
+                    return self.join(aval)
+            if type(other) in (Box, type(self)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     core.aval_types[AValBox] = lambda aval: aval
     return Box, AValBox
@@ -67,7 +70,7 @@ def test_aval_zero_and_accumulation():
     Box, AValBox = make_box_domain()
     extend.register_trace_type(Box, lambda value: AValBox())
 
-    assert core.algebraof(AValBox()).zero() == Box(0)
+    assert AValBox().zero() == Box(0)
     assert ad.cot_accum([Box(1), Box(2)]) == Box(3)
 
 

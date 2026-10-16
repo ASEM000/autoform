@@ -161,7 +161,7 @@ class TestFixpointPushforward:
         @step.aset_pushforward
         async def push(in_tree, /, *, call):
             p, t = in_tree
-            zero = lambda x: core.algebraof(x.aval).zero() if isinstance(x, core.Zero) else x
+            zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
             x, y = utils.tree.map(zero, t)
             calls.append("push")
             return call(*p), 0.5 * x + y
@@ -693,11 +693,22 @@ def test_switch_accepts_matching_key_types(keys):
 def test_switch_accepts_registered_key_type():
     class Key(str): ...
 
-    core.aval_types[Key] = lambda _: string.AValStr()
+    class AValKey(string.AValStr):
+        def join(self, other):
+            match other:
+                case core.Zero(aval=AValKey() as aval):
+                    return self.join(aval)
+            if type(other) in (Key, type(self)):
+                return self
+            raise TypeError(f"Cannot join {self!r} and {other!r}")
+
+    core.aval_types[Key] = lambda _: AValKey()
+    core.aval_types[AValKey] = lambda aval: aval
     stage.trace_types.add(Key)
     left = stage.trace(lambda x: string.concat("L", x))("X")
     right = stage.trace(lambda x: string.concat("R", x))("X")
     keys = (Key("L"), Key("R"))
+    assert string.AValStr().join(keys[0]) == string.AValStr()
     branches = dict(zip(keys, (left, right), strict=True))
     ir = stage.trace(lambda key: control.switch(key, branches, "X"))(keys[0])
     assert ir.call(keys[0]) == "LX"
