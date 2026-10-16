@@ -165,7 +165,7 @@ class CustomFunc:
         core.r_apull_fwd.set(self.prim, apullback_fwd_custom_call)
         core.r_pull_bwd.set(self.prim, pullback_bwd_custom_call)
         core.r_apull_bwd.set(self.prim, apullback_bwd_custom_call)
-        dead.dce_rules[self.prim] = dce_custom_call
+        dead.register_dce(self.prim, dce_custom_call)
         ft.update_wrapper(self, func)
 
     def __call__(self, *args):

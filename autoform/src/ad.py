@@ -356,7 +356,7 @@ core.r_pull_fwd.set(p_pushforward_call, pullback_fwd_pushforward_call)
 core.r_apull_fwd.set(p_pushforward_call, apullback_fwd_pushforward_call)
 core.r_pull_bwd.set(p_pushforward_call, pullback_bwd_pushforward_call)
 core.r_apull_bwd.set(p_pushforward_call, apullback_bwd_pushforward_call)
-dead.dce_rules[p_pushforward_call] = dce_pushforward_call
+dead.register_dce(p_pushforward_call, dce_pushforward_call)
 
 
 # ==================================================================================================
@@ -828,4 +828,4 @@ core.r_pull_fwd.set(p_pullback_call, pullback_fwd_pullback_call)
 core.r_apull_fwd.set(p_pullback_call, apullback_fwd_pullback_call)
 core.r_pull_bwd.set(p_pullback_call, pullback_bwd_pullback_call)
 core.r_apull_bwd.set(p_pullback_call, apullback_bwd_pullback_call)
-dead.dce_rules[p_pullback_call] = dce_pullback_call
+dead.register_dce(p_pullback_call, dce_pullback_call)

@@ -56,9 +56,8 @@ class AValInt(core.AVal):
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.aval_types[int] = lambda _: AValInt()
+stage.register_trace_type(int, lambda value: AValInt())
 core.aval_types[AValInt] = lambda aval: aval
-stage.trace_types.add(int)
 core.s_primal.set(AValInt, lambda aval: aval)
 
 
@@ -91,9 +90,8 @@ class AValFloat(core.AVal):
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.aval_types[float] = lambda _: AValFloat()
+stage.register_trace_type(float, lambda value: AValFloat())
 core.aval_types[AValFloat] = lambda aval: aval
-stage.trace_types.add(float)
 core.s_primal.set(AValFloat, lambda aval: aval)
 core.s_tangent.set(AValFloat, lambda aval: aval)
 core.s_cotangent.set(AValFloat, lambda aval: aval)
@@ -122,9 +120,8 @@ class AValBool(core.AVal):
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.aval_types[bool] = lambda _: AValBool()
+stage.register_trace_type(bool, lambda value: AValBool())
 core.aval_types[AValBool] = lambda aval: aval
-stage.trace_types.add(bool)
 core.s_primal.set(AValBool, lambda aval: aval)
 core.s_tangent.set(AValBool, lambda aval: aval)
 core.s_cotangent.set(AValBool, lambda aval: aval)
@@ -709,14 +706,14 @@ core.r_pull_bwd.set(p_ge, pullback_bwd_compare)
 core.r_apull_bwd.set(p_ge, utils.asyncify(pullback_bwd_compare))
 
 
-stage.dunder_rules[stage.Dunder.NEG, AValFloat] = neg
-stage.dunder_rules[stage.Dunder.ADD, AValFloat] = add
-stage.dunder_rules[stage.Dunder.SUB, AValFloat] = sub
-stage.dunder_rules[stage.Dunder.MUL, AValFloat] = mul
-stage.dunder_rules[stage.Dunder.DIV, AValFloat] = div
-stage.dunder_rules[stage.Dunder.EQ, AValFloat] = eq
-stage.dunder_rules[stage.Dunder.NE, AValFloat] = ne
-stage.dunder_rules[stage.Dunder.LT, AValFloat] = lt
-stage.dunder_rules[stage.Dunder.LE, AValFloat] = le
-stage.dunder_rules[stage.Dunder.GT, AValFloat] = gt
-stage.dunder_rules[stage.Dunder.GE, AValFloat] = ge
+stage.register_dunder(stage.Dunder.NEG, AValFloat, neg)
+stage.register_dunder(stage.Dunder.ADD, AValFloat, add)
+stage.register_dunder(stage.Dunder.SUB, AValFloat, sub)
+stage.register_dunder(stage.Dunder.MUL, AValFloat, mul)
+stage.register_dunder(stage.Dunder.DIV, AValFloat, div)
+stage.register_dunder(stage.Dunder.EQ, AValFloat, eq)
+stage.register_dunder(stage.Dunder.NE, AValFloat, ne)
+stage.register_dunder(stage.Dunder.LT, AValFloat, lt)
+stage.register_dunder(stage.Dunder.LE, AValFloat, le)
+stage.register_dunder(stage.Dunder.GT, AValFloat, gt)
+stage.register_dunder(stage.Dunder.GE, AValFloat, ge)

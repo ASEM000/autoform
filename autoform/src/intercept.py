@@ -35,7 +35,7 @@ type Tree[T] = utils.Tree[T]
 
 
 p_checkpoint = core.Prim("checkpoint")
-dead.non_dce_primitives.add(p_checkpoint)
+dead.register_non_dce(p_checkpoint)
 
 
 def impl_checkpoint(x, /, *, key: Hashable, collection: Hashable | None):

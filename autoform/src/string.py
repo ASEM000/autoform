@@ -62,9 +62,8 @@ class AValStr(core.AVal):
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
-core.aval_types[str] = lambda _: AValStr()
+stage.register_trace_type(str, lambda value: AValStr())
 core.aval_types[AValStr] = lambda aval: aval
-stage.trace_types.add(str)
 core.s_primal.set(AValStr, lambda aval: aval)
 core.s_tangent.set(AValStr, lambda aval: aval)
 core.s_cotangent.set(AValStr, lambda aval: aval)
@@ -143,7 +142,7 @@ core.r_pull_bwd.set(p_concat, pullback_bwd_concat)
 core.r_apull_bwd.set(p_concat, utils.asyncify(pullback_bwd_concat))
 
 
-stage.dunder_rules[stage.Dunder.ADD, AValStr] = concat
+stage.register_dunder(stage.Dunder.ADD, AValStr, concat)
 
 
 # ==================================================================================================
@@ -230,7 +229,7 @@ core.r_pull_bwd.set(p_match, pullback_bwd_match)
 core.r_apull_bwd.set(p_match, utils.asyncify(pullback_bwd_match))
 
 
-stage.dunder_rules[stage.Dunder.EQ, AValStr] = match
+stage.register_dunder(stage.Dunder.EQ, AValStr, match)
 
 
 # ==================================================================================================

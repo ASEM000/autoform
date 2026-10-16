@@ -28,8 +28,8 @@ import autoform.src.stage as stage
 import autoform.src.utils as utils
 
 p_factor = core.Prim("factor")
-dead.non_dce_primitives.add(p_factor)
-memo.non_memoizable_primitives.add(p_factor)
+dead.register_non_dce(p_factor)
+memo.register_non_memoizable(p_factor)
 
 
 def factor(weight: float, /, *, name: Hashable | None = None) -> None:
@@ -250,4 +250,4 @@ core.r_pull_fwd.set(p_weight_call, pullback_fwd_weight_call)
 core.r_apull_fwd.set(p_weight_call, utils.asyncify(pullback_fwd_weight_call))
 core.r_pull_bwd.set(p_weight_call, pullback_bwd_weight_call)
 core.r_apull_bwd.set(p_weight_call, utils.asyncify(pullback_bwd_weight_call))
-dead.dce_rules[p_weight_call] = dce_weight_call
+dead.register_dce(p_weight_call, dce_weight_call)

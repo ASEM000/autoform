@@ -29,7 +29,7 @@ import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
-non_memoizable_primitives: set[core.Prim] = {intercept.p_checkpoint}
+non_memoizable_primitives: set[core.Prim] = set()
 
 
 def register_non_memoizable[T: core.Prim](prim: T, /) -> T:
@@ -39,6 +39,9 @@ def register_non_memoizable[T: core.Prim](prim: T, /) -> T:
     assert prim not in rules, f"Primitive {prim} is already registered as non-memoizable."
     rules.add(prim)
     return prim
+
+
+register_non_memoizable(intercept.p_checkpoint)
 
 
 def is_non_memo(eqn: stage.Eqn, /) -> bool:

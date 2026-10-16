@@ -477,4 +477,4 @@ core.r_pull_fwd.set(p_batch_call, pullback_fwd_batch_call)
 core.r_apull_fwd.set(p_batch_call, apullback_fwd_batch_call)
 core.r_pull_bwd.set(p_batch_call, pullback_bwd_batch_call)
 core.r_apull_bwd.set(p_batch_call, apullback_bwd_batch_call)
-dead.dce_rules[p_batch_call] = dce_batch_call
+dead.register_dce(p_batch_call, dce_batch_call)

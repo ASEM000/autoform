@@ -298,7 +298,7 @@ core.r_pull_fwd.set(p_switch, pullback_fwd_switch)
 core.r_apull_fwd.set(p_switch, apull_fwd_switch)
 core.r_pull_bwd.set(p_switch, pullback_bwd_switch)
 core.r_apull_bwd.set(p_switch, apull_bwd_switch)
-dead.dce_rules[p_switch] = dce_switch
+dead.register_dce(p_switch, dce_switch)
 
 
 # ==================================================================================================
@@ -726,7 +726,7 @@ core.r_pull_fwd.set(p_while_loop, pullback_fwd_while_loop)
 core.r_apull_fwd.set(p_while_loop, apull_fwd_while_loop)
 core.r_pull_bwd.set(p_while_loop, pullback_bwd_while_loop)
 core.r_apull_bwd.set(p_while_loop, apull_bwd_while_loop)
-dead.dce_rules[p_while_loop] = dce_while_loop
+dead.register_dce(p_while_loop, dce_while_loop)
 
 
 # ==================================================================================================
@@ -1239,4 +1239,4 @@ core.r_pull_fwd.set(p_fixpoint, pullback_fwd_fixpoint)
 core.r_apull_fwd.set(p_fixpoint, apull_fwd_fixpoint)
 core.r_pull_bwd.set(p_fixpoint, pullback_bwd_fixpoint)
 core.r_apull_bwd.set(p_fixpoint, apull_bwd_fixpoint)
-dead.dce_rules[p_fixpoint] = dce_fixpoint
+dead.register_dce(p_fixpoint, dce_fixpoint)
