@@ -1,6 +1,19 @@
 # Abstract Helpers
 
-Spaces map an abstract value to its representation for a particular role, such as primal values, tangents, or cotangents. An extension registers the mappings needed by its types. Transform rules materialize a symbolic zero locally with `algebraof(zero.aval).zero()`.
+The method `AVal.join(other)` should either return an `AVal` describing abstract value covering
+both operands.
+
+The method `AVal.zero()` should construct the concrete value for the additive
+identity of that abstract type, and `AVal.add(left, right)` should be able to add
+two concrete contributions of that abstract type. These are used by AutoForm to
+combine many contributions of the same abstract type with
+`ft.reduce(aval.add, values, aval.zero())`.
+
+Each space describes how each abstract value should be represented in that space,
+e.g. for primals, tangents, cotangents, etc. When writing an extension, these are
+the mappings that need to be registered in order to tell AutoForm how to work
+with the new types. Transform rules can materialize a local symbolic zero into
+a concrete value by calling `zero.aval.zero()`.
 
 ```{eval-rst}
 .. autoclass:: autoform.extend.Space
