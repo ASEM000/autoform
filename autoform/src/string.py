@@ -63,7 +63,7 @@ class AValStr(core.AVal):
 
 
 stage.register_trace_type(str, lambda value: AValStr())
-core.aval_types[AValStr] = lambda aval: aval
+stage.register_trace_type(AValStr, lambda aval: aval)
 core.s_primal.set(AValStr, lambda aval: aval)
 core.s_tangent.set(AValStr, lambda aval: aval)
 core.s_cotangent.set(AValStr, lambda aval: aval)

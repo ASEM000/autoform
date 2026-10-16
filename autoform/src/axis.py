@@ -71,7 +71,7 @@ class AValBatch(core.AVal):
                 return type(self)(base)
 
 
-core.aval_types[AValBatch] = lambda aval: aval
+stage.register_trace_type(AValBatch, lambda aval: aval)
 core.s_primal.set(AValBatch, lambda aval: AValBatch(core.s_primal.map(aval.base)))
 core.s_tangent.set(AValBatch, lambda aval: AValBatch(core.s_tangent.map(aval.base)))
 core.s_cotangent.set(AValBatch, lambda aval: AValBatch(core.s_cotangent.map(aval.base)))

@@ -57,7 +57,7 @@ class AValInt(core.AVal):
 
 
 stage.register_trace_type(int, lambda value: AValInt())
-core.aval_types[AValInt] = lambda aval: aval
+stage.register_trace_type(AValInt, lambda aval: aval)
 core.s_primal.set(AValInt, lambda aval: aval)
 
 
@@ -91,7 +91,7 @@ class AValFloat(core.AVal):
 
 
 stage.register_trace_type(float, lambda value: AValFloat())
-core.aval_types[AValFloat] = lambda aval: aval
+stage.register_trace_type(AValFloat, lambda aval: aval)
 core.s_primal.set(AValFloat, lambda aval: aval)
 core.s_tangent.set(AValFloat, lambda aval: aval)
 core.s_cotangent.set(AValFloat, lambda aval: aval)
@@ -121,7 +121,7 @@ class AValBool(core.AVal):
 
 
 stage.register_trace_type(bool, lambda value: AValBool())
-core.aval_types[AValBool] = lambda aval: aval
+stage.register_trace_type(AValBool, lambda aval: aval)
 core.s_primal.set(AValBool, lambda aval: aval)
 core.s_tangent.set(AValBool, lambda aval: aval)
 core.s_cotangent.set(AValBool, lambda aval: aval)

@@ -76,6 +76,30 @@ class TestBuildIR:
         assert ir.in_tree[0].aval == aval
         assert ir.call(runtime) == expected
 
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    @pytest.mark.parametrize(
+        "aval, value, invalid",
+        [
+            pytest.param(extend.AValFloat(), 1.5, 1, id="float"),
+            pytest.param(extend.AValInt(), 1, True, id="integer"),
+            pytest.param(extend.AValStr(), "x", 1, id="string"),
+            pytest.param(extend.AValBool(), True, 1, id="boolean"),
+            pytest.param(axis.AValBatch(extend.AValStr()), ["a", "b"], ["a", 1], id="batch"),
+            pytest.param(
+                axis.AValBatch(axis.AValBatch(extend.AValStr())),
+                [["a"], ["b", "c"]],
+                ["a"],
+                id="nested-batch",
+            ),
+        ],
+    )
+    def test_trace_abstract_input(self, executor, aval, value, invalid):
+        ir = stage.trace(lambda x: x)(aval)
+        assert ir.in_tree[0].aval == ir.out_tree.aval == aval
+        assert executor(ir, value) == value
+        with pytest.raises(TypeError):
+            executor(ir, invalid)
+
     def test_trace_dict_input_with_scalar_leaves(self):
         def program(payload):
             return payload["name"], payload["count"], payload["score"], payload["active"]
