@@ -23,6 +23,7 @@ from collections.abc import Hashable
 import autoform.src.core as core
 import autoform.src.dead as dead
 import autoform.src.memo as memo
+import autoform.src.numeric as numeric
 import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.utils as utils
@@ -53,11 +54,19 @@ def impl_factor(weight: float, /, *, name: Hashable | None = None) -> None:
     return ()
 
 
-def abstract_factor(weight, /, *, name: Hashable | None = None) -> None:
-    del name
-    number_type = (int, float, type(core.avalof(0)), type(core.avalof(0.0)))
-    assert type(weight) in number_type, f"Expected number: {weight!r}"
+def abstract_unit(weight, /, *, name: Hashable | None = None):
     return ()
+
+
+@utils.dispatch
+def abstract_factor(weight, /, *, name: Hashable | None = None) -> tuple[()]:
+    assert False, f"Expected number: {weight!r}"
+
+
+abstract_factor.register(int, abstract_unit)
+abstract_factor.register(float, abstract_unit)
+abstract_factor.register(numeric.AInt, abstract_unit)
+abstract_factor.register(numeric.AFloat, abstract_unit)
 
 
 def pushforward_factor(in_tree, /, *, name: Hashable | None = None):

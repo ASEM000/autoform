@@ -179,9 +179,19 @@ def impl_match(in_tree: Tree, /) -> bool:
     return a == b
 
 
-def abstract_match(in_tree: Tree, /) -> Any:
-    assert all(type(x) in (str, AStr) for x in in_tree), f"Expected strings: {in_tree!r}"
+def abstract_bool(values: Tree, /) -> Any:
     return core.avalof(False)
+
+
+@utils.dispatch
+def abstract_match(values: Tree, /) -> Any:
+    assert False, f"Expected strings: {values!r}"
+
+
+abstract_match.register((str, str), abstract_bool)
+abstract_match.register((str, AStr), abstract_bool)
+abstract_match.register((AStr, str), abstract_bool)
+abstract_match.register((AStr, AStr), abstract_bool)
 
 
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:

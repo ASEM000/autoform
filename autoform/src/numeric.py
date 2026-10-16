@@ -127,6 +127,10 @@ core.s_tangent.set(ABool, lambda aval: aval)
 core.s_cotangent.set(ABool, lambda aval: aval)
 
 
+def abstract_float(values: Tree, /) -> AFloat:
+    return AFloat()
+
+
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     batch_size, in_batched, in_value = in_tree
     if (spec := utils.batch_spec(in_value, in_batched)) is None:
@@ -162,9 +166,13 @@ def impl_neg(in_tree: Tree, /):
     return -in_tree
 
 
-def abstract_neg(in_tree: Tree, /) -> AFloat:
-    assert type(in_tree) in (float, AFloat), f"Expected float: {in_tree!r}"
-    return AFloat()
+@utils.dispatch
+def abstract_neg(value: Tree, /) -> AFloat:
+    assert False, f"Expected float: {value!r}"
+
+
+abstract_neg.register(float, abstract_float)
+abstract_neg.register(AFloat, abstract_float)
 
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
@@ -220,9 +228,15 @@ def impl_add(in_tree: Tree, /):
     return a + b
 
 
-def abstract_add(in_tree: Tree, /) -> AFloat:
-    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AFloat()
+@utils.dispatch
+def abstract_add(values: Tree, /) -> AFloat:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_add.register((float, float), abstract_float)
+abstract_add.register((float, AFloat), abstract_float)
+abstract_add.register((AFloat, float), abstract_float)
+abstract_add.register((AFloat, AFloat), abstract_float)
 
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
@@ -279,9 +293,15 @@ def impl_sub(in_tree: Tree, /):
     return a - b
 
 
-def abstract_sub(in_tree: Tree, /) -> AFloat:
-    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AFloat()
+@utils.dispatch
+def abstract_sub(values: Tree, /) -> AFloat:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_sub.register((float, float), abstract_float)
+abstract_sub.register((float, AFloat), abstract_float)
+abstract_sub.register((AFloat, float), abstract_float)
+abstract_sub.register((AFloat, AFloat), abstract_float)
 
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
@@ -338,9 +358,15 @@ def impl_mul(in_tree: Tree, /):
     return a * b
 
 
-def abstract_mul(in_tree: Tree, /) -> AFloat:
-    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AFloat()
+@utils.dispatch
+def abstract_mul(values: Tree, /) -> AFloat:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_mul.register((float, float), abstract_float)
+abstract_mul.register((float, AFloat), abstract_float)
+abstract_mul.register((AFloat, float), abstract_float)
+abstract_mul.register((AFloat, AFloat), abstract_float)
 
 
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
@@ -398,9 +424,15 @@ def impl_div(in_tree: Tree, /):
     return a / b
 
 
-def abstract_div(in_tree: Tree, /) -> AFloat:
-    assert all(type(x) in (float, AFloat) for x in in_tree), f"Expected floats: {in_tree!r}"
-    return AFloat()
+@utils.dispatch
+def abstract_div(values: Tree, /) -> AFloat:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_div.register((float, float), abstract_float)
+abstract_div.register((float, AFloat), abstract_float)
+abstract_div.register((AFloat, float), abstract_float)
+abstract_div.register((AFloat, AFloat), abstract_float)
 
 
 def pushforward_div(in_tree: Tree, /) -> TreePair:
@@ -444,8 +476,7 @@ core.r_apull_bwd.set(p_div, utils.asyncify(pullback_bwd_div))
 # ==================================================================================================
 
 
-def abstract_compare(in_tree: Tree, /) -> ABool:
-    assert all(type(x) in (float, AFloat) for x in in_tree)
+def abstract_bool(values: Tree, /) -> ABool:
     return ABool()
 
 
@@ -493,6 +524,17 @@ def impl_eq(in_tree: Tree, /) -> bool:
     return a == b
 
 
+@utils.dispatch
+def abstract_eq(values: Tree, /) -> ABool:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_eq.register((float, float), abstract_bool)
+abstract_eq.register((float, AFloat), abstract_bool)
+abstract_eq.register((AFloat, float), abstract_bool)
+abstract_eq.register((AFloat, AFloat), abstract_bool)
+
+
 pushforward_eq = ft.partial(pushforward_compare, p_eq)
 pullback_fwd_eq = ft.partial(pullback_fwd_compare, p_eq)
 batch_eq = ft.partial(batch_compare, p_eq)
@@ -500,7 +542,7 @@ batch_eq = ft.partial(batch_compare, p_eq)
 
 core.r_impl.set(p_eq, impl_eq)
 core.r_aimpl.set(p_eq, utils.asyncify(impl_eq))
-core.r_abstract.set(p_eq, abstract_compare)
+core.r_abstract.set(p_eq, abstract_eq)
 core.r_batch.set(p_eq, batch_eq)
 core.r_abatch.set(p_eq, utils.asyncify(batch_eq))
 core.r_push.set(p_eq, pushforward_eq)
@@ -532,6 +574,17 @@ def impl_ne(in_tree: Tree, /) -> bool:
     return a != b
 
 
+@utils.dispatch
+def abstract_ne(values: Tree, /) -> ABool:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_ne.register((float, float), abstract_bool)
+abstract_ne.register((float, AFloat), abstract_bool)
+abstract_ne.register((AFloat, float), abstract_bool)
+abstract_ne.register((AFloat, AFloat), abstract_bool)
+
+
 pushforward_ne = ft.partial(pushforward_compare, p_ne)
 pullback_fwd_ne = ft.partial(pullback_fwd_compare, p_ne)
 batch_ne = ft.partial(batch_compare, p_ne)
@@ -539,7 +592,7 @@ batch_ne = ft.partial(batch_compare, p_ne)
 
 core.r_impl.set(p_ne, impl_ne)
 core.r_aimpl.set(p_ne, utils.asyncify(impl_ne))
-core.r_abstract.set(p_ne, abstract_compare)
+core.r_abstract.set(p_ne, abstract_ne)
 core.r_batch.set(p_ne, batch_ne)
 core.r_abatch.set(p_ne, utils.asyncify(batch_ne))
 core.r_push.set(p_ne, pushforward_ne)
@@ -571,6 +624,17 @@ def impl_lt(in_tree: Tree, /) -> bool:
     return a < b
 
 
+@utils.dispatch
+def abstract_lt(values: Tree, /) -> ABool:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_lt.register((float, float), abstract_bool)
+abstract_lt.register((float, AFloat), abstract_bool)
+abstract_lt.register((AFloat, float), abstract_bool)
+abstract_lt.register((AFloat, AFloat), abstract_bool)
+
+
 pushforward_lt = ft.partial(pushforward_compare, p_lt)
 pullback_fwd_lt = ft.partial(pullback_fwd_compare, p_lt)
 batch_lt = ft.partial(batch_compare, p_lt)
@@ -578,7 +642,7 @@ batch_lt = ft.partial(batch_compare, p_lt)
 
 core.r_impl.set(p_lt, impl_lt)
 core.r_aimpl.set(p_lt, utils.asyncify(impl_lt))
-core.r_abstract.set(p_lt, abstract_compare)
+core.r_abstract.set(p_lt, abstract_lt)
 core.r_batch.set(p_lt, batch_lt)
 core.r_abatch.set(p_lt, utils.asyncify(batch_lt))
 core.r_push.set(p_lt, pushforward_lt)
@@ -610,6 +674,17 @@ def impl_le(in_tree: Tree, /) -> bool:
     return a <= b
 
 
+@utils.dispatch
+def abstract_le(values: Tree, /) -> ABool:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_le.register((float, float), abstract_bool)
+abstract_le.register((float, AFloat), abstract_bool)
+abstract_le.register((AFloat, float), abstract_bool)
+abstract_le.register((AFloat, AFloat), abstract_bool)
+
+
 pushforward_le = ft.partial(pushforward_compare, p_le)
 pullback_fwd_le = ft.partial(pullback_fwd_compare, p_le)
 batch_le = ft.partial(batch_compare, p_le)
@@ -617,7 +692,7 @@ batch_le = ft.partial(batch_compare, p_le)
 
 core.r_impl.set(p_le, impl_le)
 core.r_aimpl.set(p_le, utils.asyncify(impl_le))
-core.r_abstract.set(p_le, abstract_compare)
+core.r_abstract.set(p_le, abstract_le)
 core.r_batch.set(p_le, batch_le)
 core.r_abatch.set(p_le, utils.asyncify(batch_le))
 core.r_push.set(p_le, pushforward_le)
@@ -649,6 +724,17 @@ def impl_gt(in_tree: Tree, /) -> bool:
     return a > b
 
 
+@utils.dispatch
+def abstract_gt(values: Tree, /) -> ABool:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_gt.register((float, float), abstract_bool)
+abstract_gt.register((float, AFloat), abstract_bool)
+abstract_gt.register((AFloat, float), abstract_bool)
+abstract_gt.register((AFloat, AFloat), abstract_bool)
+
+
 pushforward_gt = ft.partial(pushforward_compare, p_gt)
 pullback_fwd_gt = ft.partial(pullback_fwd_compare, p_gt)
 batch_gt = ft.partial(batch_compare, p_gt)
@@ -656,7 +742,7 @@ batch_gt = ft.partial(batch_compare, p_gt)
 
 core.r_impl.set(p_gt, impl_gt)
 core.r_aimpl.set(p_gt, utils.asyncify(impl_gt))
-core.r_abstract.set(p_gt, abstract_compare)
+core.r_abstract.set(p_gt, abstract_gt)
 core.r_batch.set(p_gt, batch_gt)
 core.r_abatch.set(p_gt, utils.asyncify(batch_gt))
 core.r_push.set(p_gt, pushforward_gt)
@@ -688,6 +774,17 @@ def impl_ge(in_tree: Tree, /) -> bool:
     return a >= b
 
 
+@utils.dispatch
+def abstract_ge(values: Tree, /) -> ABool:
+    assert False, f"Expected floats: {values!r}"
+
+
+abstract_ge.register((float, float), abstract_bool)
+abstract_ge.register((float, AFloat), abstract_bool)
+abstract_ge.register((AFloat, float), abstract_bool)
+abstract_ge.register((AFloat, AFloat), abstract_bool)
+
+
 pushforward_ge = ft.partial(pushforward_compare, p_ge)
 pullback_fwd_ge = ft.partial(pullback_fwd_compare, p_ge)
 batch_ge = ft.partial(batch_compare, p_ge)
@@ -695,7 +792,7 @@ batch_ge = ft.partial(batch_compare, p_ge)
 
 core.r_impl.set(p_ge, impl_ge)
 core.r_aimpl.set(p_ge, utils.asyncify(impl_ge))
-core.r_abstract.set(p_ge, abstract_compare)
+core.r_abstract.set(p_ge, abstract_ge)
 core.r_batch.set(p_ge, batch_ge)
 core.r_abatch.set(p_ge, utils.asyncify(batch_ge))
 core.r_push.set(p_ge, pushforward_ge)
