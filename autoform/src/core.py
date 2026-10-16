@@ -71,9 +71,9 @@ class AVal:
         raise NotImplementedError
 
     def join(self, other, /) -> AVal:
-        # NOTE(asem): computing the abstract value covering both operands. other can be abstract
-        # or concrete. join is used in typechecking
-        raise TypeError(f"Cannot join {self!r} and {other!r}")
+        # NOTE(asem): computing the abstract value covering both operands. other can be abstract,
+        # concrete, or a symbolic zero. join is used in typechecking
+        raise NotImplementedError
 
 
 def avalof(value, /) -> AVal:
