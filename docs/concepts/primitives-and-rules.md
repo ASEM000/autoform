@@ -1,6 +1,6 @@
 # Primitives and Rules
 
-A transform needs a defined meaning for each operation it encounters. Primitives provide those identifiable operations in a [traced](tracing.md) program. Each call becomes an equation in the [IR](programs-and-ir.md#the-ir), and registered rules describe how that primitive executes or transforms. Examples include {py:func}`concat <autoform.string.concat>`, {py:func}`fill <autoform.lm.fill>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
+A transform needs a defined meaning for each operation it encounters. Primitives provide those identifiable operations in a [traced](tracing.md) program. Each call becomes an equation in the [IR](programs-and-ir.md#the-ir), and registered rules describe how that primitive executes or transforms. Examples include {py:func}`concat <autoform.text.concat>`, {py:func}`fill <autoform.lm.fill>`, {py:func}`switch <autoform.switch>`, {py:func}`checkpoint <autoform.checkpoint>`, and {py:func}`factor <autoform.factor>`.
 
 Primitive identity determines which rule a [transform](transforms.md) selects.[^primitive-identity] This is especially useful for work that cannot run on a tracing placeholder. A language model request, for example, needs concrete data and an external service. Treating {py:func}`fill <autoform.lm.fill>` as a primitive gives tracing an output description and gives {py:func}`pullback <autoform.pullback>` a defined feedback rule, without tracing the provider implementation.
 
@@ -42,7 +42,7 @@ Overrides take precedence over permanent registrations. Nested scopes inherit ou
 
 | Group | Primitives | Purpose |
 | --- | --- | --- |
-| Strings | {py:func}`concat <autoform.string.concat>`, {py:func}`match <autoform.string.match>` | String concatenation and equality checks.[^string-format] |
+| Text | {py:func}`concat <autoform.text.concat>`, {py:func}`match <autoform.text.match>` | Text concatenation and equality checks.[^string-format] |
 | Language models | {py:func}`fill <autoform.lm.fill>` | Generated values replacing specifications in a pytree, with surrounding context retained. [Language Models](../language-models.md) describes the interface. |
 | Numbers | [Numeric primitives](../api/primitives.md#numeric) | Scalar arithmetic and comparisons. |
 | Control flow | {py:func}`switch <autoform.switch>`, {py:func}`while_loop <autoform.while_loop>`, {py:func}`fixpoint <autoform.fixpoint>` | Runtime branch selection and bounded iteration, described in [Control Flow](control-flow.md). |
@@ -227,6 +227,6 @@ Transforms rely on the meaning supplied by registered rules. A structurally vali
 
 [^primitive-identity]: If two different primitives have the same name, the primitives remain different keys when selecting rules.
 
-[^string-format]: The {py:func}`format <autoform.string.format>` helper resolves `{name}` fields from keyword arguments by composing {py:func}`concat <autoform.string.concat>` calls. It has no primitive or transform rules of its own. Attributes or indexed values must be selected before being passed as keyword arguments.
+[^string-format]: The {py:func}`format <autoform.text.format>` helper resolves `{name}` fields from keyword arguments by composing {py:func}`concat <autoform.text.concat>` calls. It has no primitive or transform rules of its own. Attributes or indexed values must be selected before being passed as keyword arguments.
 
 [^async-hooks]: The async hooks are `aset_pushforward`, `aset_pullback`, and `aset_batch`. Matching synchronous and asynchronous behavior requires registrations for both paths.

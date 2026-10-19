@@ -22,6 +22,7 @@ import autoform.src.ad as ad
 import autoform.src.core as core
 import autoform.src.dead as dead
 import autoform.src.order as order
+import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
@@ -69,6 +70,12 @@ class ABatch(core.AVal):
                 for x in utils.tree.leaves(other, is_leaf=lambda x: x is not other):
                     base = base.join(x)
                 return type(self)(base)
+
+
+@ft.partial(pp.register, ABatch)
+def pretty_batch(aval):
+    name = pp.style(type(aval).__name__, pp.Code.BLUE)
+    return name, "(", pp.pretty(aval.base), ")"
 
 
 stage.register_trace_type(ABatch, lambda aval: aval)

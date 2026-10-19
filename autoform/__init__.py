@@ -15,7 +15,7 @@
 from autoform import extend as extend
 from autoform import lm as lm
 from autoform import numeric as numeric
-from autoform import string as string
+from autoform import text as text
 from autoform.src.ad import pullback as pullback
 from autoform.src.ad import pushforward as pushforward
 from autoform.src.axis import batch as batch

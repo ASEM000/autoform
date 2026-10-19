@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""String primitives"""
+"""String primitives."""
 
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ import string as stringlib
 from typing import Any
 
 import autoform.src.core as core
+import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
-type TreePair = tuple[Tree, Tree]
 
 
 # ==================================================================================================
@@ -62,6 +62,11 @@ class AStr(core.AVal):
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
+@ft.partial(pp.register, AStr)
+def pretty_astr(aval):
+    return pp.style(type(aval).__name__, pp.Code.BLUE), "()"
+
+
 stage.register_trace_type(str, lambda value: AStr())
 stage.register_trace_type(AStr, lambda aval: aval)
 core.s_primal.set(AStr, lambda aval: aval)
@@ -69,77 +74,79 @@ core.s_tangent.set(AStr, lambda aval: aval)
 core.s_cotangent.set(AStr, lambda aval: aval)
 
 # ==================================================================================================
-# CONCAT
+# RENDER
 # ==================================================================================================
 
-p_concat = core.Prim("concat")
 
-
-def concat(*args) -> str:
-    """Concatenates multiple strings into a single string.
-
-    Args:
-        *args: A variable number of string arguments to concatenate.
-
-    Returns:
-        A single string that is the concatenation of all input strings.
-
-    Example:
-        >>> import autoform as af
-        >>> result = "Hello, " + "world" + "!"
-        >>> print(result)
-        Hello, world!
-    """
-    return p_concat.bind(args)
-
-
-def impl_concat(in_tree: Tree, /) -> str:
-    return "".join(in_tree)
-
-
-def abstract_concat(in_tree: Tree, /) -> Any:
-    assert all(type(x) in (str, AStr) for x in in_tree), f"Expected strings: {in_tree!r}"
+def abstract_render(_, /, *, width: int = 80):
+    assert type(width) is int and width > 0, "width must be a positive integer"
     return AStr()
 
 
-def pushforward_concat(in_tree: Tree, /) -> TreePair:
-    p, t = in_tree
-    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    t = utils.tree.map(zero, t)
-    return p_concat.bind(p), p_concat.bind(t)
+p_render = core.Prim("render")
 
 
-def pullback_fwd_concat(in_tree: Tree, /) -> TreePair:
-    out = p_concat.bind(in_tree)
-    return out, len(in_tree)
+def render(doc, /, *, width: int = 80) -> str:
+    """Render a pytree document"""
+    assert type(width) is int and width > 0, "width must be a positive integer"
+    doc = utils.tree.map(ft.partial(pp.pretty, default=lambda value: value), doc)
+    return p_render.bind(doc, width=width)
 
 
-def pullback_bwd_concat(in_tree: Tree, /) -> Tree:
-    residuals, out_c = in_tree
-    n = residuals
-    return tuple([out_c] * n)
+def push_render(in_tree, /, **params):
+    primal, tangent = in_tree
+
+    def materialize(value):
+        return value.aval.zero() if isinstance(value, core.Zero) else value
+
+    tangent = utils.tree.map(materialize, tangent)
+    return p_render.bind(primal, **params), p_render.bind(tangent, **params)
 
 
-def batch_concat(in_tree: Tree, /) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return p_concat.bind(in_values), False
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    result = [p_concat.bind(unbatch(b)) for b in range(batch_size)]
-    return spec.unflatten(result), True
+def pull_fwd_render(doc, /, **params):
+    return p_render.bind(doc, **params), doc
 
 
-core.r_impl.set(p_concat, impl_concat)
-core.r_aimpl.set(p_concat, utils.asyncify(impl_concat))
-core.r_abstract.set(p_concat, abstract_concat)
-core.r_batch.set(p_concat, batch_concat)
-core.r_abatch.set(p_concat, utils.asyncify(batch_concat))
-core.r_push.set(p_concat, pushforward_concat)
-core.r_apush.set(p_concat, utils.asyncify(pushforward_concat))
-core.r_pull_fwd.set(p_concat, pullback_fwd_concat)
-core.r_apull_fwd.set(p_concat, utils.asyncify(pullback_fwd_concat))
-core.r_pull_bwd.set(p_concat, pullback_bwd_concat)
-core.r_apull_bwd.set(p_concat, utils.asyncify(pullback_bwd_concat))
+def pull_bwd_render(in_tree, /, **params):
+    del params
+    doc, feedback = in_tree
+
+    def cotangent(value):
+        aval = core.avalof(value)
+        return feedback if isinstance(aval, AStr) else core.Zero(core.s_cotangent.map(aval))
+
+    return utils.tree.map(cotangent, doc)
+
+
+def batch_render(in_tree, /, **params):
+    size, batched, doc = in_tree
+    if (spec := utils.batch_spec(doc, batched)) is None:
+        return p_render.bind(doc, **params), False
+    outputs = [p_render.bind(utils.batch_index(doc, batched, i), **params) for i in range(size)]
+    return spec.unflatten(outputs), True
+
+
+core.r_impl.set(p_render, pp.layout)
+core.r_aimpl.set(p_render, utils.asyncify(pp.layout))
+core.r_abstract.set(p_render, abstract_render)
+core.r_batch.set(p_render, batch_render)
+core.r_abatch.set(p_render, utils.asyncify(batch_render))
+core.r_push.set(p_render, push_render)
+core.r_apush.set(p_render, utils.asyncify(push_render))
+core.r_pull_fwd.set(p_render, pull_fwd_render)
+core.r_apull_fwd.set(p_render, utils.asyncify(pull_fwd_render))
+core.r_pull_bwd.set(p_render, pull_bwd_render)
+core.r_apull_bwd.set(p_render, utils.asyncify(pull_bwd_render))
+
+
+# ==================================================================================================
+# CONCAT
+# ==================================================================================================
+
+
+def concat(*args) -> str:
+    """Render document parts in sequence as a single string."""
+    return render(args)
 
 
 stage.register_dunder(stage.Dunder.ADD, AStr, concat)
@@ -248,7 +255,7 @@ stage.register_dunder(stage.Dunder.EQ, AStr, match)
 
 
 def format(template: str, **kwargs) -> str:
-    """Format a string using named keyword arguments.
+    """Format a string using named document parts as keyword arguments.
 
     Note:
         - Template fields are keyword only.
@@ -256,21 +263,22 @@ def format(template: str, **kwargs) -> str:
 
     Example:
         >>> import autoform as af
-        >>> af.string.format("Hello {name}!", name="World")
+        >>> af.text.format("Hello {name}!", name="World")
         'Hello World!'
     """
     unused = set(kwargs)
     parts = []
-    for literal, field, spec, conversion in stringlib.Formatter().parse(template):
+    for literal, field, format_spec, conversion in stringlib.Formatter().parse(template):
         if literal:
             parts.append(literal)
         if field is None:
             continue
+
+        assert field in kwargs, f"Unknown format field: {field!r}"
         assert conversion is None, "`format` does not support conversions."
-        assert not spec, "`format` does not support format specifications."
-        assert field in kwargs, "Template field name is not found in keyword arguments ."
+        assert not format_spec, "`format` does not support format specifications."
+
         parts.append(kwargs[field])
-        # NOTE(asem): in case of multiple ref to same kw discard does not raise error
         unused.discard(field)
     assert not unused, f"Unused format arguments: {unused}"
     return concat(*parts)

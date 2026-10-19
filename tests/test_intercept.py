@@ -242,7 +242,7 @@ def test_inject_trace_specializes_and_dce_removes_dead_input():
             return ir.call("ignored")
 
     specialized = stage.trace(wrapped)("example")
-    assert [eqn.prim for eqn in specialized.eqns] == [string.p_concat] * 2
+    assert [eqn.prim for eqn in specialized.eqns] == [string.p_render] * 2
     optimized = dead.dce(specialized)
     assert len(optimized.eqns) == 1
     assert optimized.call("any_input") == "Got: CACHED"

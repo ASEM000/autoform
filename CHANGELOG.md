@@ -22,7 +22,7 @@
 
     | v0.3.0 | Now |
     | --- | --- |
-    | `af.format`, `af.concat`, `af.match` | `af.string.format`, `af.string.concat`, `af.string.match` |
+    | `af.format`, `af.concat`, `af.match` | `af.text.format`, `af.text.concat`, `af.text.match` |
     | `af.lm_call`, `af.lm_schema_call` | `af.lm.fill` |
     | `af.lm_client` | `af.lm.client` |
     | `af.lm.LMClient` | Custom clients passed to `af.lm.client` |

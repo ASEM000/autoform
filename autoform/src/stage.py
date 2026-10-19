@@ -28,6 +28,7 @@ from typing import Any, ClassVar, Self, TypeGuard, cast
 import autoform.src.check as check
 import autoform.src.core as core
 import autoform.src.impl as impl
+import autoform.src.pp as pp
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -202,7 +203,62 @@ class IR[*A, R]:
         self.out_tree = out_tree
 
     def __repr__(self) -> str:
-        return generate_text_code(ir=self, expand_ir=True)
+        def color(value, *codes):
+            return pp.style(str(value), *codes)
+
+        def keyword(value):
+            return color(value, pp.Code.MAGENTA, pp.Code.BOLD)
+
+        def function(value):
+            return color(value, pp.Code.CYAN, pp.Code.BOLD)
+
+        def annotation(var):
+            kind = color(type(var).__name__, pp.Code.YELLOW)
+            return pp.pretty(var), ": ", kind, "[", pp.pretty(var.aval), "]"
+
+        def bindings(tree, name):
+            accessors, values, _ = utils.tree.flatten_with_accessor(tree)
+            return [
+                (annotation(var), " = ", color(accessor.codify(name), pp.Code.CYAN))
+                for accessor, var in utils.zip(accessors, values)
+                if is_var(var)
+            ]
+
+        def format_eqn(index, eqn):
+            args = [pp.pretty(eqn.in_tree)]
+            args.extend(
+                (color(key, pp.Code.MAGENTA), "=", pp.pretty(value))
+                for key, value in eqn.params.items()
+            )
+            call = function(eqn.prim.name), "(", pp.join(args), ")"
+            if eqn.tags:
+                tags = [("@", pp.pretty(tag)) for tag in sorted(eqn.tags, key=repr)]
+                call = call, " ", pp.join(tags, " ")
+            if is_var(eqn.out_tree):
+                return [(annotation(eqn.out_tree), " = ", call)]
+            name = f"out{index}"
+            outputs = bindings(eqn.out_tree, name)
+            if not outputs:
+                return [call]
+            return [(color(name, pp.Code.CYAN), " = ", call), *outputs]
+
+        inputs, body = [], []
+        input_vars = set()
+        for index, value in enumerate(self.in_tree):
+            if is_var(value) and value not in input_vars:
+                inputs.append(annotation(value))
+                input_vars.add(value)
+            else:
+                name = f"arg{index}"
+                avals = utils.tree.map(aval_if_var, value)
+                inputs.append((color(name, pp.Code.CYAN), ": ", pp.pretty(avals)))
+                body.extend(bindings(value, name))
+        for index, eqn in enumerate(self.eqns):
+            body.extend(format_eqn(index, eqn))
+        body.append((keyword("return"), " ", pp.pretty(self.out_tree)))
+        header = keyword("def"), " ", function("func"), "(", pp.join(inputs), "):"
+        body = pp.join(body, pp.hardline())
+        return pp.layout((header, pp.nest(4, (pp.hardline(), body))))
 
     def call(self, *args: *A) -> R:
         """Run IR with concrete runtime inputs.
@@ -261,11 +317,11 @@ class IR[*A, R]:
             >>> gen = ir.walk("y")
             >>> eqn, in_values = next(gen)
             >>> eqn.prim.name
-            'concat'
+            'render'
             >>> step = gen.send(eqn.bind(in_values, **eqn.params))
             >>> eqn, in_values = step
             >>> eqn.prim.name
-            'concat'
+            'render'
             >>> eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
             >>> done, out = gen.send(eqn.bind(in_values, **eqn.params))
             >>> done is None, out
@@ -282,54 +338,15 @@ class IR[*A, R]:
         yield None, utils.tree.map(env.read, self.out_tree)
 
 
-def generate_text_code(ir: IR, indent: int = 2, *, expand_ir: bool = False) -> str:
-    assert isinstance(indent, int) and indent >= 0
-    sp = " " * indent
+@ft.partial(pp.register, Var)
+def pretty_var(var):
+    return pp.style(f"v{var.id}", pp.Code.CYAN)
 
-    def format_ir_val(ir_val: Any) -> str:
-        if is_var(ir_val):
-            var_type = type(ir_val).__name__
-            aval_info = repr(ir_val.aval)
-            type_info = f"[{aval_info}]"
-            return f"%{ir_val.id}:{var_type}{type_info}"
-        val = ir_val
-        if isinstance(val, IR):
-            if expand_ir:
-                sub_code = generate_text_code(val, indent, expand_ir=True)
-                return f"<IR:{{\n{sub_code}\n}}>"
-            else:
-                prim_names = ",".join(e.prim.name for e in val.eqns)
-                if len(prim_names) > 20:
-                    prim_names = prim_names[:17] + "..."
-                return f"<IR:[{prim_names}]>"
-        else:
-            val_repr = repr(val)
-            if len(val_repr) > 30:
-                val_repr = val_repr[:27] + "..."
-            return f"{val_repr}:Lit"
 
-    def format_tree(tree: Tree) -> str:
-        leaves = utils.tree.leaves(tree)
-        return ", ".join(format_ir_val(leaf) for leaf in leaves) if leaves else "()"
-
-    in_sig = format_tree(ir.in_tree)
-    out_sig = format_tree(ir.out_tree)
-
-    header = f"func({in_sig}) -> ({out_sig}) {{"
-    lines = [header]
-
-    for eqn in ir.eqns:
-        lhs = format_tree(eqn.out_tree)
-        rhs = format_tree(eqn.in_tree)
-        eqn_args = [rhs]
-        eqn_args.extend(f"{k}={eqn.params[k]!r}" for k in (eqn.params or {}))
-        if eqn.tags:
-            tags = ", ".join(sorted(repr(tag) for tag in eqn.tags))
-            eqn_args.append(f"tags={{{tags}}}")
-        lines.append(f"{sp}({lhs}) = {eqn.prim.name}({', '.join(eqn_args)})")
-
-    lines.append("}")
-    return "\n".join(lines)
+@ft.partial(pp.register, IR)
+def pretty_ir(ir):
+    names = ",".join(eqn.prim.name for eqn in ir.eqns)
+    return "IR(", pp.style(repr(names), pp.Code.GREEN), ")"
 
 
 # ==================================================================================================
@@ -932,7 +949,7 @@ def trace[*A, R](
 
     Args:
         func: A callable that uses autoform primitives such as
-            :func:`autoform.string.concat` and :func:`autoform.lm.fill`.
+            :func:`autoform.text.concat` and :func:`autoform.lm.fill`.
         static: Bool pytree matching the positional input structure.
             Mark a leaf ``True`` to keep that value fixed at trace time.
             Mark a leaf ``False`` to keep it as a normal runtime input.

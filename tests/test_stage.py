@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
 import asyncio
 import functools as ft
 import math
@@ -31,6 +32,7 @@ import autoform.src.lm as lm
 import autoform.src.memo as memo
 import autoform.src.numeric as numeric
 import autoform.src.order as order
+import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.string as string
 import autoform.src.utils as utils
@@ -216,6 +218,151 @@ def test_call_rejects_incompatible_input_aval(executor, transform, args, message
         executor(ir, *args)
 
 
+def test_repr_preserves_document_operands():
+    def program(x):
+        return string.render(pp.group("prefix", pp.line(), {"value": [x, "!"]}))
+
+    ir = stage.trace(program)("x")
+    text = repr(ir)
+    assert "\x1b[0;36m" in text and "\x1b[0;32m" in text
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    ast.parse(text)
+    x = f"v{ir.in_tree[0].id}"
+    y = f"v{ir.out_tree.id}"
+
+    assert text.startswith(f"def func({x}: Var[AStr()]):\n")
+    assert (
+        f"    {y}: Var[AStr()] = "
+        f"render(Group(('prefix', Line(), {{'value': [{x}, '!']}})), width=80)"
+    ) in text
+    assert text.endswith(f"    return {y}")
+
+
+def test_repr_formats_empty_scalar_and_multiple_equation_outputs():
+    x, y, z = (stage.Var(aval=string.AStr()) for _ in range(3))
+    eqns = [
+        stage.Eqn(core.Prim("tick"), (), (), None),
+        stage.Eqn(core.Prim("scalar"), ("text", 7, True), x, None),
+        stage.Eqn(core.Prim("pair"), (x,), (y, z), None),
+    ]
+    ir = stage.IR(eqns, (), (y, z))
+    text = repr(ir)
+    for literal in ("'text'", "7", "True"):
+        assert f"\x1b[0;32m{literal}\x1b[0m" in text
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    ast.parse(text)
+    x, y, z = (f"v{var.id}" for var in (x, y, z))
+
+    assert text.startswith("def func():\n    tick(())\n")
+    assert f"    {x}: Var[AStr()] = scalar(('text', 7, True))" in text
+    assert f"    out2 = pair(({x},))" in text
+    assert f"    {y}: Var[AStr()] = out2[0]" in text
+    assert f"    {z}: Var[AStr()] = out2[1]" in text
+    assert text.endswith(f"    return ({y}, {z})")
+
+
+def test_repr_preserves_nested_trees_and_variable_bindings():
+    x, y, z, w = (stage.Var(aval=string.AStr()) for _ in range(4))
+    inputs = {"value": [x, (y,)], "empty": {}, "none": None}
+    operands = {"items": ([x], y), "empty": ([], {}, ()), "none": None}
+    config = {"levels": [1, (2,)], "empty": (), "none": None}
+    outputs = {"result": [z, (w,)], "empty": []}
+    eqn = stage.Eqn(core.Prim("transform"), operands, outputs, {"config": config})
+    result = ({"left": z, "right": (w,)}, [], {}, (), None)
+    text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.IR([eqn], (inputs,), result)))
+    ast.parse(text)
+
+    def transform(tree, *, config):
+        assert tree == {"items": (["left"], "right"), "empty": ([], {}, ()), "none": None}
+        assert config == {"levels": [1, (2,)], "empty": (), "none": None}
+        return {"result": [tree["items"][1], (tree["items"][0][0],)], "empty": []}
+
+    namespace = {"transform": transform}
+    exec("from __future__ import annotations\n" + text, namespace)
+    value = {"value": ["left", ("right",)], "empty": {}, "none": None}
+    assert namespace["func"](value) == ({"left": "right", "right": ("left",)}, [], {}, (), None)
+
+
+@pytest.mark.parametrize(
+    "aval, expected, code",
+    [
+        pytest.param(string.AStr(), "AStr", pp.Code.BLUE, id="scalar"),
+        pytest.param(
+            axis.ABatch(axis.ABatch(string.AStr())),
+            "ABatch",
+            pp.Code.BLUE,
+            id="nested-batch",
+        ),
+        pytest.param(None, "AText(max=7)", pp.Code.GREEN, id="custom-repr"),
+    ],
+)
+def test_repr_formats_aval_parts_and_preserves_custom_repr(aval, expected, code):
+    class AText(string.AStr):
+        def __repr__(self):
+            return "AText(max=7)"
+
+    aval = AText() if aval is None else aval
+    x = stage.Var(aval=aval)
+    text = repr(stage.IR([], (x,), x))
+
+    assert f"\x1b[0;{int(code)}m{expected}\x1b[0m" in text
+    if isinstance(aval, axis.ABatch):
+        assert "\x1b[0;34mAStr\x1b[0m()" in text
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    ast.parse(text)
+    assert f"Var[{aval!r}]" in text
+
+
+def test_repr_uses_registered_pretty_rule():
+    class AText(string.AStr):
+        def __repr__(self):
+            return "AText(max=7)"
+
+    @ft.partial(pp.register, AText)
+    def pretty_text(_):
+        return (
+            pp.style("AText", pp.Code.BLUE),
+            "(",
+            pp.style("max", pp.Code.MAGENTA),
+            "=",
+            pp.style("7", pp.Code.GREEN),
+            ")",
+        )
+
+    x = stage.Var(aval=AText())
+    text = repr(stage.IR([], (x,), x))
+
+    assert "\x1b[0;34mAText\x1b[0m(" in text
+    assert "\x1b[0;35mmax\x1b[0m=\x1b[0;32m7\x1b[0m)" in text
+    assert "Var[AText(max=7)]" in re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+@pytest.mark.parametrize(
+    "parameter, expected",
+    [
+        pytest.param(lambda ir: ir, "ir=IR('render')", id="direct"),
+        pytest.param(lambda ir: {"branch": [ir]}, "ir={'branch': [IR('render')]}", id="container"),
+    ],
+)
+def test_repr_summarizes_nested_ir(parameter, expected):
+    inner = stage.trace(lambda x: string.concat(x, "!"))("x")
+    x, y = (stage.Var(aval=string.AStr()) for _ in range(2))
+    eqn = stage.Eqn(core.Prim("nested"), (x,), y, {"ir": parameter(inner)})
+    ir = stage.IR([eqn], (x,), y)
+    text = re.sub(r"\x1b\[[0-9;]*m", "", repr(ir))
+    ast.parse(text)
+
+    assert text.count("def func(") == 1
+    assert expected in text
+
+
+def test_repr_preserves_repeated_input_variables():
+    x = stage.Var(aval=string.AStr())
+    text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.IR([], (x, x), x)))
+    compile(text, "<ir>", "exec")
+    assert f"v{x.id}: Var[AStr()] = arg1" in text
+
+
 def test_walk_rejects_incompatible_input_aval():
     ir = stage.trace(lambda x: x)("x")
     with pytest.raises(TypeError, match="Cannot join AStr"):
@@ -356,10 +503,12 @@ class TestTags:
             with stage.tag(Label("draft"), CostTag()):
                 return string.concat(head, "?")
 
-        lines = repr(stage.trace(program)("seed")).splitlines()
+        text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.trace(program)("seed")))
+        lines = text.splitlines()
 
-        assert "tags=" not in lines[1]
-        assert "tags={CostTag(), Label(name='draft')}" in lines[2]
+        assert " @" not in lines[1]
+        assert lines[2].endswith(" @CostTag() @Label(name='draft')")
+        assert "tags=" not in lines[2]
 
     def test_calling_existing_ir_while_tracing_unions_runtime_and_equation_tags(self):
         def inner_program(x):
@@ -437,14 +586,14 @@ class TestRunIR:
     def test_walk_with_supplied_output(self):
         gen = stage.trace(append_bang)("hello").walk("world")
         eqn, in_values = next(gen)
-        assert eqn.prim is string.p_concat
+        assert eqn.prim is string.p_render
         assert in_values == ("world", "!")
         assert gen.send("world!") == (None, "world!")
 
     def test_walk_with_external_bind(self):
         gen = stage.trace(append_bang)("hello").walk("world")
         eqn, in_values = next(gen)
-        assert eqn.prim is string.p_concat
+        assert eqn.prim is string.p_render
         assert in_values == ("world", "!")
         output = eqn.bind(("there", "!"), **eqn.params)
         assert gen.send(output) == (None, "there!")
@@ -1146,7 +1295,7 @@ class TestFold:
 
         ir = stage.trace(program)("seed")
 
-        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["render"]
         assert ir.eqns[0].in_tree[0] == "AB"
         assert ir.call("C") == "ABC"
 
@@ -1159,7 +1308,7 @@ class TestFold:
 
         ir = stage.trace(program)("seed")
 
-        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["render"]
         assert ir.call("C") == "ABC"
 
     def test_fold_block_rejects_dynamic_trace_values(self):
@@ -1214,7 +1363,7 @@ class TestFold:
 
         ir = stage.trace(program, static=(True, False))("Q", "seed")
 
-        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["render"]
         assert ir.eqns[0].in_tree[0] == "Q: "
         assert ir.call("Q", "hello") == "Q: hello"
 
@@ -1228,7 +1377,7 @@ class TestFold:
 
         ir = stage.trace(program)("seed")
 
-        assert [eqn.prim.name for eqn in ir.eqns] == ["concat", "concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["render", "render"]
         assert ir.call("c") == "[ab]c!"
 
     def test_fold_block_evaluates_fill_during_trace(self):
@@ -1254,7 +1403,7 @@ class TestFold:
             ir = stage.trace(program)("seed")
 
         assert len(calls) == 1
-        assert [eqn.prim.name for eqn in ir.eqns] == ["concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["render"]
         assert ir.call("question") == "rubric: question"
 
     def test_async_dynamic_trace_dispatch_stages_primitive(self):
@@ -1327,7 +1476,7 @@ def test_retracing_inlines_equations(program, trace_values, runtime, expected, e
     ir = stage.trace(program)(trace_values[0])
     for value in trace_values[1:]:
         ir = stage.trace(ir.call)(value)
-    assert [eqn.prim for eqn in ir.eqns] == [string.p_concat] * equations
+    assert [eqn.prim for eqn in ir.eqns] == [string.p_render] * equations
     assert ir.call(runtime) == expected
 
 

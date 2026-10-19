@@ -55,7 +55,7 @@ class TestFactor:
 
         ir = stage.trace(program)("x", weight)
 
-        assert [eqn.prim.name for eqn in ir.eqns] == ["factor", "concat"]
+        assert [eqn.prim.name for eqn in ir.eqns] == ["factor", "render"]
         assert ir.eqns[0].out_tree == ()
         assert executor(ir, "hello", weight) == "hello!"
 
@@ -98,7 +98,7 @@ class TestFactor:
 
         dced = dead.dce(stage.trace(program)("x", 1.0))
 
-        assert [eqn.prim.name for eqn in dced.eqns] == ["factor", "concat"]
+        assert [eqn.prim.name for eqn in dced.eqns] == ["factor", "render"]
 
 
 class TestWeight:

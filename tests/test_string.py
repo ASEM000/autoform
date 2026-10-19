@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
+import functools as ft
+import re
 from typing import NamedTuple
 
 import pytest
@@ -20,6 +23,7 @@ import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.core as core
 import autoform.src.numeric as numeric
+import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.string as string
 import autoform.src.utils as utils
@@ -103,6 +107,9 @@ def test_match_lowering(executor, program, traced, equal, unequal, expected):
             id="add-two-inputs",
         ),
         pytest.param(string.concat, ("a", "b"), ("hello", " world"), "hello world", id="concat"),
+        pytest.param(string.concat, ("a", 1), ("value: ", 2), "value: 2", id="mixed-concat"),
+        pytest.param(lambda x: x + 1, ("a",), ("value: ",), "value: 1", id="mixed-add"),
+        pytest.param(lambda x: 1 + x, ("a",), (" item",), "1 item", id="mixed-reverse-add"),
         pytest.param(
             lambda x: string.format("Value: {x}", x=x),
             ("test",),
@@ -112,9 +119,10 @@ def test_match_lowering(executor, program, traced, equal, unequal, expected):
         ),
     ],
 )
-def test_concat_lowering(executor, program, traced, args, expected):
+def test_render_lowering(executor, program, traced, args, expected):
     ir = stage.trace(program)(*traced)
-    assert [eqn.prim for eqn in ir.eqns] == [string.p_concat]
+    assert [eqn.prim for eqn in ir.eqns] == [string.p_render]
+    assert ir.eqns[0].params == {"width": 80}
     actual = executor(ir, *args)
     assert actual == expected
 
@@ -137,21 +145,12 @@ def test_concat_lowering(executor, program, traced, args, expected):
             r"No trace rule for eq on values of type AInt\(\)",
             id="eq-integer",
         ),
-        pytest.param(lambda x: x + 1, ("a",), AssertionError, "Expected strings", id="add"),
-        pytest.param(lambda x: 1 + x, ("a",), AssertionError, "Expected strings", id="reverse-add"),
         pytest.param(
             lambda x: x + 1,
             (1,),
             TypeError,
             r"No trace rule for add on values of type AInt\(\)",
             id="add-integer",
-        ),
-        pytest.param(
-            string.concat,
-            ("a", "b", 1),
-            AssertionError,
-            "Expected strings",
-            id="concat",
         ),
     ],
 )
@@ -265,25 +264,106 @@ def test_batch_match_with_format():
     [
         pytest.param(("Hello", " ", "World"), "Hello World", id="three"),
         pytest.param(("A", "B"), "AB", id="two"),
+        pytest.param(("A", 1), "A1", id="mixed"),
     ],
 )
 def test_concat(args, expected):
     assert string.concat(*args) == expected
 
 
-def test_concat_rejects_nonstring():
-    with pytest.raises(TypeError):
-        string.concat("A", 1)
+def test_render_recurses_through_nested_containers():
+    doc = pp.group(["a", ("b", pp.line(), ["c"])])
+    assert string.render(doc, width=4) == "ab c"
+    assert string.render(doc, width=3) == "ab\nc"
 
 
-def test_format_lowers_template_and_args_to_concat():
+def test_pretty_preserves_container_structure():
+    value = [(), [], {}, None, ("x",), {"nested": ("y", [2, True])}]
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert ast.literal_eval(text) == value
+
+
+def test_pretty_uses_registered_rules_and_repr_fallback():
+    class Pair(tuple):
+        pass
+
+    class Opaque:
+        __slots__ = ["value"]
+
+        def __init__(self):
+            self.value = "hidden"
+
+        def __repr__(self):
+            return "Opaque()"
+
+    @ft.partial(pp.register, Pair)
+    def pretty_pair(value):
+        return "Pair(", pp.pretty(list(value)), ")"
+
+    value = {"pair": Pair(("left", "right")), "other": Opaque()}
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert text == "{'pair': Pair(['left', 'right']), 'other': Opaque()}"
+    assert pp.layout(pp.pretty(value["other"], default=lambda _: "fallback")) == "fallback"
+
+
+def test_pretty_uses_custom_pytree_children():
+    class Pair:
+        def __init__(self, left, right):
+            self.left, self.right = left, right
+
+    utils.tree.register_node(
+        Pair,
+        lambda pair: ((pair.left, pair.right), None),
+        lambda _, children: Pair(*children),
+    )
+    value = Pair(None, [Pair("left", "right"), {}])
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert text == "Pair(None, [Pair('left', 'right'), {}])"
+    assert string.render(value) == "leftright"
+
+
+def test_pretty_omits_custom_pytree_metadata():
+    class Label:
+        def __init__(self, text, name):
+            self.text, self.name = text, name
+
+        def __repr__(self):
+            return f"Label({self.text!r}, name={self.name!r})"
+
+    utils.tree.register_node(
+        Label,
+        lambda label: ((label.text,), label.name),
+        lambda name, children: Label(*children, name),
+    )
+    value = Label("hello", "greeting")
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert text == "Label('hello')"
+
+
+def test_render_accepts_integer_style_codes():
+    assert string.render(pp.style("text", 31)) == "\x1b[0;31mtext\x1b[0m"
+
+
+def test_render_applies_registered_pretty_rule():
+    class Pair(tuple):
+        pass
+
+    @ft.partial(pp.register, Pair)
+    def pretty_pair(value):
+        return pp.group(value[0], pp.line(), value[1])
+
+    assert string.render(Pair(("left", "right")), width=20) == "left right"
+    assert string.render(Pair(("left", "right")), width=5) == "left\nright"
+
+
+def test_format_lowers_template_and_args_to_render():
     def program(x):
         return string.format("Hello, {x}!", x=x)
 
     ir = stage.trace(program)("World")
     assert len(ir.eqns) == 1
     eqn = ir.eqns[0]
-    assert eqn.prim is string.p_concat
+    assert eqn.prim is string.p_render
     prefix, value, suffix = eqn.in_tree
     assert prefix == "Hello, "
     assert suffix == "!"
@@ -345,14 +425,14 @@ def test_format_batch_broadcast(executor):
         pytest.param("", {}, "", {}, id="empty"),
     ],
 )
-def test_format_lowers_to_concat(executor, template, values, expected, feedback):
+def test_format_lowers_to_render(executor, template, values, expected, feedback):
 
     def program(values):
         return string.format(template, **values)
 
     ir = stage.trace(program)(values)
     assert len(ir.eqns) == 1
-    assert ir.eqns[0].prim is string.p_concat
+    assert ir.eqns[0].prim is string.p_render
     p = template.format(**values)
     assert program(values) == p
     actual = executor(ir, values)
@@ -377,7 +457,7 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
 
     row = Record("A", ("B", "C"))
     ir = stage.trace(program)(row)
-    assert ir.eqns[0].prim is string.p_concat
+    assert ir.eqns[0].prim is string.p_render
     pf = ad.pushforward(ir)
     direction = Record("da", ("db", "dc"))
     assert executor(pf, (row,), (direction,)) == ("A/B/A", "dadbda")
@@ -411,9 +491,9 @@ def test_format_does_not_resolve_field_paths(field):
     def program(x):
         return string.format("{" + field + "}", x=x)
 
-    with pytest.raises(AssertionError, match="Template field name is not found"):
+    with pytest.raises(AssertionError, match="Unknown format field"):
         program("A")
-    with pytest.raises(AssertionError, match="Template field name is not found"):
+    with pytest.raises(AssertionError, match="Unknown format field"):
         stage.trace(program)("A")
 
 
@@ -440,8 +520,42 @@ def test_format_requires_keyword_arguments():
         string.format("{x}", "A")
 
 
-def test_format_requires_string_values():
-    with pytest.raises(TypeError):
-        string.format("{value}", value=1)
-    with pytest.raises(AssertionError, match="Expected strings"):
-        stage.trace(lambda x: string.format("{x}", x=x))(1)
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_format_renders_nonstring_values(executor):
+    assert string.format("{value}", value=1) == "1"
+    ir = stage.trace(lambda x: string.format("{x}", x=x))(1)
+    assert executor(ir, 2) == "2"
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "transform, args, expected",
+    [
+        pytest.param(lambda ir: ir, ("a",), "value: a\n  a", id="render"),
+        pytest.param(
+            ad.pushforward,
+            (("a",), ("da",)),
+            ("value: a\n  a", "da\n  da"),
+            id="pushforward",
+        ),
+        pytest.param(
+            ad.pullback,
+            (("a",), "g"),
+            ("value: a\n  a", ("gg",)),
+            id="pullback",
+        ),
+        pytest.param(
+            axis.batch,
+            (["a", "b"],),
+            ["value: a\n  a", "value: b\n  b"],
+            id="batch",
+        ),
+    ],
+)
+def test_format_document_transforms(executor, transform, args, expected):
+    def program(x):
+        doc = pp.nest(2, (x, pp.hardline(), x))
+        return string.format("value: {x}", x=doc)
+
+    ir = transform(stage.trace(program)("x"))
+    assert executor(ir, *args) == expected
