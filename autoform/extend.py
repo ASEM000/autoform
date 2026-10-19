@@ -78,8 +78,8 @@ from autoform.src.stage import is_var as is_var
 from autoform.src.stage import register_dunder as register_dunder
 from autoform.src.stage import register_trace_type as register_trace_type
 from autoform.src.string import AStr as AStr
-from autoform.src.string import p_concat as p_concat
 from autoform.src.string import p_match as p_match
+from autoform.src.string import p_render as p_render
 from autoform.src.utils import batch_index as batch_index
 from autoform.src.utils import batch_spec as batch_spec
 from autoform.src.utils import batch_transpose as batch_transpose
