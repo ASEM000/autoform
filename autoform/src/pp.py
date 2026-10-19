@@ -24,9 +24,12 @@
 
 from __future__ import annotations
 
+import functools as ft
 from collections.abc import Callable
 from enum import IntEnum
 from typing import Any
+
+from optree import GetAttrEntry
 
 import autoform.src.utils as utils
 
@@ -45,13 +48,13 @@ def register[R: Callable[[Any], Tree]](cls: type, rule: R, /) -> R:
     return rule
 
 
-def pretty(tree, default=lambda value: value):
-    """Apply registered rules to a pytree and ``default`` to other leaves."""
-
-    def apply(value):
-        return rules.get(type(value), default)(value)
-
-    return utils.tree.map(apply, tree, is_leaf=lambda value: type(value) in rules)
+def pretty(value, default=None):
+    if rule := rules.get(type(value)):
+        return rule(value)
+    children, spec = utils.tree.flatten(value, is_leaf=lambda child: child is not value)
+    if value is not None and not spec.is_leaf():
+        return style(type(value).__name__, Code.BLUE), "(", join(map(pretty, children)), ")"
+    return style(repr(value), Code.GREEN) if default is None else default(value)
 
 
 def join(parts, sep=", "):
@@ -119,11 +122,35 @@ class Style(Doc):
         self.codes = codes
 
 
-utils.tree.register_node(Line, lambda n: ((), n.alt, ()), lambda a, _: Line(a))
-utils.tree.register_node(Group, lambda n: ((n.doc,), None, ("doc",)), lambda _, c: Group(*c))
-utils.tree.register_node(Nest, lambda n: ((n.doc,), n.amount, ("doc",)), lambda a, c: Nest(a, *c))
-utils.tree.register_node(Align, lambda n: ((n.doc,), None, ("doc",)), lambda _, c: Align(*c))
-utils.tree.register_node(Style, lambda n: ((n.doc,), n.codes, ("doc",)), lambda k, c: Style(*c, k))
+utils.tree.register_node(
+    Line,
+    lambda n: ((), n.alt, ()),
+    lambda a, _: Line(a),
+)
+utils.tree.register_node(
+    Group,
+    lambda n: ((n.doc,), None, ("doc",)),
+    lambda _, c: Group(*c),
+    path_entry_type=GetAttrEntry,
+)
+utils.tree.register_node(
+    Nest,
+    lambda n: ((n.doc,), n.amount, ("doc",)),
+    lambda a, c: Nest(a, *c),
+    path_entry_type=GetAttrEntry,
+)
+utils.tree.register_node(
+    Align,
+    lambda n: ((n.doc,), None, ("doc",)),
+    lambda _, c: Align(*c),
+    path_entry_type=GetAttrEntry,
+)
+utils.tree.register_node(
+    Style,
+    lambda n: ((n.doc,), n.codes, ("doc",)),
+    lambda k, c: Style(*c, k),
+    path_entry_type=GetAttrEntry,
+)
 
 
 def group(*parts):
@@ -157,6 +184,23 @@ def line(alt: str = " "):
 def hardline():
     """A break that remains a break inside a flat group."""
     return Line(None)
+
+
+@ft.partial(register, tuple)
+def pretty_tuple(value):
+    suffix = "," if len(value) == 1 else ""
+    return "(", join(map(pretty, value)), suffix, ")"
+
+
+@ft.partial(register, list)
+def pretty_list(value):
+    return "[", join(map(pretty, value)), "]"
+
+
+@ft.partial(register, dict)
+def pretty_dict(value):
+    items = [(pretty(key), ": ", pretty(child)) for key, child in value.items()]
+    return "{", join(items), "}"
 
 
 def next_column(column: int, text: str) -> int:

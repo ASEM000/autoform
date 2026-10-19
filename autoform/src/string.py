@@ -87,9 +87,10 @@ p_render = core.Prim("render")
 
 
 def render(doc, /, *, width: int = 80) -> str:
-    """Render a pytree document, fitting groups within ``width`` characters."""
+    """Render a pytree document"""
     assert type(width) is int and width > 0, "width must be a positive integer"
-    return p_render.bind(pp.pretty(doc), width=width)
+    doc = utils.tree.map(ft.partial(pp.pretty, default=lambda value: value), doc)
+    return p_render.bind(doc, width=width)
 
 
 def push_render(in_tree, /, **params):

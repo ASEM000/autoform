@@ -212,46 +212,53 @@ class IR[*A, R]:
         def function(value):
             return color(value, pp.Code.CYAN, pp.Code.BOLD)
 
-        def literal(value):
-            return color(repr(value), pp.Code.GREEN)
-
-        format_value = ft.partial(pp.pretty, default=literal)
-
         def annotation(var):
             kind = color(type(var).__name__, pp.Code.YELLOW)
-            return format_value(var), ": ", kind, "[", format_value(var.aval), "]"
+            return pp.pretty(var), ": ", kind, "[", pp.pretty(var.aval), "]"
 
-        def format_values(tree):
-            leaves = utils.tree.leaves(tree, is_leaf=lambda value: type(value) in pp.rules)
-            return format_value(leaves)
+        def bindings(tree, name):
+            accessors, values, _ = utils.tree.flatten_with_accessor(tree)
+            return [
+                (annotation(var), " = ", color(accessor.codify(name), pp.Code.CYAN))
+                for accessor, var in utils.zip(accessors, values)
+                if is_var(var)
+            ]
 
-        def format_tree(tree):
-            values = format_values(tree)
-            return values[0] if len(values) == 1 else ("(", pp.join(values), ")")
-
-        def format_tags(tags):
-            tags = ", ".join(sorted(repr(tag) for tag in tags))
-            return color("tags", pp.Code.MAGENTA), "={", color(tags, pp.Code.GREEN), "}"
-
-        def format_eqn(eqn):
-            args = format_values(eqn.in_tree)
-            for key, value in eqn.params.items():
-                args.append((color(key, pp.Code.MAGENTA), "=", format_tree(value)))
-            if eqn.tags:
-                args.append(format_tags(eqn.tags))
+        def format_eqn(index, eqn):
+            args = [pp.pretty(eqn.in_tree)]
+            args.extend(
+                (color(key, pp.Code.MAGENTA), "=", pp.pretty(value))
+                for key, value in eqn.params.items()
+            )
             call = function(eqn.prim.name), "(", pp.join(args), ")"
-            outputs = var_leaves(eqn.out_tree)
+            if eqn.tags:
+                tags = [("@", pp.pretty(tag)) for tag in sorted(eqn.tags, key=repr)]
+                call = call, " ", pp.join(tags, " ")
+            if is_var(eqn.out_tree):
+                return [(annotation(eqn.out_tree), " = ", call)]
+            name = f"out{index}"
+            outputs = bindings(eqn.out_tree, name)
             if not outputs:
-                return call
-            lhs = annotation(outputs[0]) if len(outputs) == 1 else format_tree(outputs)
-            return lhs, " = ", call
+                return [call]
+            return [(color(name, pp.Code.CYAN), " = ", call), *outputs]
 
-        inputs = [annotation(var) for var in dict.fromkeys(var_leaves(self.in_tree))]
+        inputs, body = [], []
+        input_vars = set()
+        for index, value in enumerate(self.in_tree):
+            if is_var(value) and value not in input_vars:
+                inputs.append(annotation(value))
+                input_vars.add(value)
+            else:
+                name = f"arg{index}"
+                avals = utils.tree.map(aval_if_var, value)
+                inputs.append((color(name, pp.Code.CYAN), ": ", pp.pretty(avals)))
+                body.extend(bindings(value, name))
+        for index, eqn in enumerate(self.eqns):
+            body.extend(format_eqn(index, eqn))
+        body.append((keyword("return"), " ", pp.pretty(self.out_tree)))
         header = keyword("def"), " ", function("func"), "(", pp.join(inputs), "):"
-        lines = [header]
-        lines.extend(("    ", format_eqn(eqn)) for eqn in self.eqns)
-        lines.append(("    ", keyword("return"), " ", format_tree(self.out_tree)))
-        return pp.layout(pp.join(lines, "\n"))
+        body = pp.join(body, pp.hardline())
+        return pp.layout((header, pp.nest(4, (pp.hardline(), body))))
 
     def call(self, *args: *A) -> R:
         """Run IR with concrete runtime inputs.

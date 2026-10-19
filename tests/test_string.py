@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
 import functools as ft
+import re
 from typing import NamedTuple
 
 import pytest
@@ -273,6 +275,69 @@ def test_render_recurses_through_nested_containers():
     doc = pp.group(["a", ("b", pp.line(), ["c"])])
     assert string.render(doc, width=4) == "ab c"
     assert string.render(doc, width=3) == "ab\nc"
+
+
+def test_pretty_preserves_container_structure():
+    value = [(), [], {}, None, ("x",), {"nested": ("y", [2, True])}]
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert ast.literal_eval(text) == value
+
+
+def test_pretty_uses_registered_rules_and_repr_fallback():
+    class Pair(tuple):
+        pass
+
+    class Opaque:
+        __slots__ = ["value"]
+
+        def __init__(self):
+            self.value = "hidden"
+
+        def __repr__(self):
+            return "Opaque()"
+
+    @ft.partial(pp.register, Pair)
+    def pretty_pair(value):
+        return "Pair(", pp.pretty(list(value)), ")"
+
+    value = {"pair": Pair(("left", "right")), "other": Opaque()}
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert text == "{'pair': Pair(['left', 'right']), 'other': Opaque()}"
+    assert pp.layout(pp.pretty(value["other"], default=lambda _: "fallback")) == "fallback"
+
+
+def test_pretty_uses_custom_pytree_children():
+    class Pair:
+        def __init__(self, left, right):
+            self.left, self.right = left, right
+
+    utils.tree.register_node(
+        Pair,
+        lambda pair: ((pair.left, pair.right), None),
+        lambda _, children: Pair(*children),
+    )
+    value = Pair(None, [Pair("left", "right"), {}])
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert text == "Pair(None, [Pair('left', 'right'), {}])"
+    assert string.render(value) == "leftright"
+
+
+def test_pretty_omits_custom_pytree_metadata():
+    class Label:
+        def __init__(self, text, name):
+            self.text, self.name = text, name
+
+        def __repr__(self):
+            return f"Label({self.text!r}, name={self.name!r})"
+
+    utils.tree.register_node(
+        Label,
+        lambda label: ((label.text,), label.name),
+        lambda name, children: Label(*children, name),
+    )
+    value = Label("hello", "greeting")
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value)))
+    assert text == "Label('hello')"
 
 
 def test_render_accepts_integer_style_codes():

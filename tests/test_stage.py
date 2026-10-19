@@ -218,7 +218,7 @@ def test_call_rejects_incompatible_input_aval(executor, transform, args, message
         executor(ir, *args)
 
 
-def test_repr_formats_flattened_document_operands():
+def test_repr_preserves_document_operands():
     def program(x):
         return string.render(pp.group("prefix", pp.line(), {"value": [x, "!"]}))
 
@@ -231,7 +231,10 @@ def test_repr_formats_flattened_document_operands():
     y = f"v{ir.out_tree.id}"
 
     assert text.startswith(f"def func({x}: Var[AStr()]):\n")
-    assert f"    {y}: Var[AStr()] = render('prefix', {x}, '!', width=80)" in text
+    assert (
+        f"    {y}: Var[AStr()] = "
+        f"render(Group(('prefix', Line(), {{'value': [{x}, '!']}})), width=80)"
+    ) in text
     assert text.endswith(f"    return {y}")
 
 
@@ -250,10 +253,34 @@ def test_repr_formats_empty_scalar_and_multiple_equation_outputs():
     ast.parse(text)
     x, y, z = (f"v{var.id}" for var in (x, y, z))
 
-    assert text.startswith("def func():\n    tick()\n")
-    assert f"    {x}: Var[AStr()] = scalar('text', 7, True)" in text
-    assert f"    ({y}, {z}) = pair({x})" in text
+    assert text.startswith("def func():\n    tick(())\n")
+    assert f"    {x}: Var[AStr()] = scalar(('text', 7, True))" in text
+    assert f"    out2 = pair(({x},))" in text
+    assert f"    {y}: Var[AStr()] = out2[0]" in text
+    assert f"    {z}: Var[AStr()] = out2[1]" in text
     assert text.endswith(f"    return ({y}, {z})")
+
+
+def test_repr_preserves_nested_trees_and_variable_bindings():
+    x, y, z, w = (stage.Var(aval=string.AStr()) for _ in range(4))
+    inputs = {"value": [x, (y,)], "empty": {}, "none": None}
+    operands = {"items": ([x], y), "empty": ([], {}, ()), "none": None}
+    config = {"levels": [1, (2,)], "empty": (), "none": None}
+    outputs = {"result": [z, (w,)], "empty": []}
+    eqn = stage.Eqn(core.Prim("transform"), operands, outputs, {"config": config})
+    result = ({"left": z, "right": (w,)}, [], {}, (), None)
+    text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.IR([eqn], (inputs,), result)))
+    ast.parse(text)
+
+    def transform(tree, *, config):
+        assert tree == {"items": (["left"], "right"), "empty": ([], {}, ()), "none": None}
+        assert config == {"levels": [1, (2,)], "empty": (), "none": None}
+        return {"result": [tree["items"][1], (tree["items"][0][0],)], "empty": []}
+
+    namespace = {"transform": transform}
+    exec("from __future__ import annotations\n" + text, namespace)
+    value = {"value": ["left", ("right",)], "empty": {}, "none": None}
+    assert namespace["func"](value) == ({"left": "right", "right": ("left",)}, [], {}, (), None)
 
 
 @pytest.mark.parametrize(
@@ -311,13 +338,13 @@ def test_repr_uses_registered_pretty_rule():
 
 
 @pytest.mark.parametrize(
-    "parameter",
+    "parameter, expected",
     [
-        pytest.param(lambda ir: ir, id="direct"),
-        pytest.param(lambda ir: {"branch": [ir]}, id="container"),
+        pytest.param(lambda ir: ir, "ir=IR('render')", id="direct"),
+        pytest.param(lambda ir: {"branch": [ir]}, "ir={'branch': [IR('render')]}", id="container"),
     ],
 )
-def test_repr_summarizes_nested_ir(parameter):
+def test_repr_summarizes_nested_ir(parameter, expected):
     inner = stage.trace(lambda x: string.concat(x, "!"))("x")
     x, y = (stage.Var(aval=string.AStr()) for _ in range(2))
     eqn = stage.Eqn(core.Prim("nested"), (x,), y, {"ir": parameter(inner)})
@@ -326,7 +353,14 @@ def test_repr_summarizes_nested_ir(parameter):
     ast.parse(text)
 
     assert text.count("def func(") == 1
-    assert "ir=IR('render')" in text
+    assert expected in text
+
+
+def test_repr_preserves_repeated_input_variables():
+    x = stage.Var(aval=string.AStr())
+    text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.IR([], (x, x), x)))
+    compile(text, "<ir>", "exec")
+    assert f"v{x.id}: Var[AStr()] = arg1" in text
 
 
 def test_walk_rejects_incompatible_input_aval():
@@ -472,8 +506,9 @@ class TestTags:
         text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.trace(program)("seed")))
         lines = text.splitlines()
 
-        assert "tags=" not in lines[1]
-        assert any("tags={CostTag(), Label(name='draft')}" in line for line in lines[2:])
+        assert " @" not in lines[1]
+        assert lines[2].endswith(" @CostTag() @Label(name='draft')")
+        assert "tags=" not in lines[2]
 
     def test_calling_existing_ir_while_tracing_unions_runtime_and_equation_tags(self):
         def inner_program(x):
