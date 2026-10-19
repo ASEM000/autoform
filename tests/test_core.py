@@ -287,10 +287,10 @@ class TestRule:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_execution_uses_overrides(self, executor):
         ir = stage.trace(lambda x, y: x + y)("x", "y")
-        reverse = lambda values: "".join(reversed(values))
+        reverse = lambda values, *, width=80: "".join(reversed(values))
         with (
-            core.r_impl.override((string.p_concat, reverse)),
-            core.r_aimpl.override((string.p_concat, utils.asyncify(reverse))),
+            core.r_impl.override((string.p_render, reverse)),
+            core.r_aimpl.override((string.p_render, utils.asyncify(reverse))),
         ):
             assert executor(ir, "a", "b") == "ba"
         assert executor(ir, "a", "b") == "ab"
@@ -300,11 +300,11 @@ class TestRule:
             left, right, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
             async def worker(value, entered):
-                rule = utils.asyncify(lambda values: value)
-                with core.r_aimpl.override((string.p_concat, rule)):
+                rule = utils.asyncify(lambda values, *, width=80: value)
+                with core.r_aimpl.override((string.p_render, rule)):
                     entered.set()
                     await release.wait()
-                    return await string.p_concat.abind(("a", "b"))
+                    return await string.p_render.abind(("a", "b"))
 
             tasks = [
                 asyncio.create_task(worker("left", left)),
@@ -312,10 +312,10 @@ class TestRule:
             ]
             await left.wait()
             await right.wait()
-            assert await string.p_concat.abind(("a", "b")) == "ab"
+            assert await string.p_render.abind(("a", "b")) == "ab"
             release.set()
             assert await asyncio.gather(*tasks) == ["left", "right"]
-            assert await string.p_concat.abind(("a", "b")) == "ab"
+            assert await string.p_render.abind(("a", "b")) == "ab"
 
         asyncio.run(asyncio.wait_for(run(), timeout=5))
 
@@ -357,9 +357,10 @@ def test_custom_rule_interpreter(executor):
     rules = core.Rule("operation_count")
     arules = core.Rule("aoperation_count")
     rules.set(
-        string.p_concat, lambda values: sum(v if isinstance(v, int) else 0 for v in values) + 1
+        string.p_render,
+        lambda values, *, width=80: sum(v if isinstance(v, int) else 0 for v in values) + 1,
     )
-    arules.set(string.p_concat, utils.asyncify(rules.get(string.p_concat)))
+    arules.set(string.p_render, utils.asyncify(rules.get(string.p_render)))
     rules.set(check.p_typecheck, check.impl_check)
     arules.set(check.p_typecheck, utils.asyncify(check.impl_check))
 

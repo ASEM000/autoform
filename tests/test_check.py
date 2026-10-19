@@ -172,7 +172,7 @@ class TestCheck:
         ir = dead.dce(stage.trace(program)("x"))
         for _ in range(3):
             ir = stage.trace(lambda x: executor(ir, x))("x")
-            assert [eqn.prim.name for eqn in ir.eqns] == (["concat", "typecheck"] if used else [])
+            assert [eqn.prim.name for eqn in ir.eqns] == (["render", "typecheck"] if used else [])
             assert executor(ir, "y") == ("y!" if used else "y")
 
     @pytest.mark.parametrize(
@@ -194,6 +194,6 @@ class TestCheck:
         for _ in range(3):
             ir = stage.trace(ir.call)("x", "df")
             assert [eqn.prim.name for eqn in ir.eqns] == (
-                ["concat", "typecheck", "typecheck"] if explicit else ["concat"]
+                ["render", "typecheck", "typecheck"] if explicit else ["render"]
             )
             assert ir.call("y", "dy") == ("y!", ("dy",))

@@ -98,7 +98,7 @@ def format_switch_ir():
 def test_fanout_transforms(executor, joined, transform, args, expected):
     scheduled = order.sched(stage.trace(parallel_formats(joined=joined))("a"))
     assert [e.prim for e in scheduled.eqns] == [order.p_fanout] + (
-        [string.p_concat] if joined else []
+        [string.p_render] if joined else []
     )
     ir = transform(scheduled)
     actual = executor(ir, *args)
@@ -155,13 +155,13 @@ def test_fanout_mixed_axes(executor, values, expected):
     [
         pytest.param(
             lambda x: string.format("[{x}]", x=x),
-            [string.p_concat],
+            [string.p_render],
             "[test]",
             id="single",
         ),
         pytest.param(
             lambda x: string.concat(string.format("[{x}]", x=x), "!"),
-            [string.p_concat] * 2,
+            [string.p_render] * 2,
             "[test]!",
             id="sequential",
         ),
@@ -182,17 +182,17 @@ def test_sched_levels(executor, program, prims, expected):
 
 def test_sched_filter():
     ir = stage.trace(lambda x: (string.format("[{x}]", x=x), string.concat(x, "!")))("x")
-    scheduled = order.sched(ir, cond=lambda e: e.prim is string.p_concat and len(e.in_tree) == 3)
-    assert [e.prim for e in scheduled.eqns] == [string.p_concat] * 2
+    scheduled = order.sched(ir, cond=lambda e: e.prim is string.p_render and len(e.in_tree) == 3)
+    assert [e.prim for e in scheduled.eqns] == [string.p_render] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
 def test_sched_filter_propagates_into_switch():
     inner = stage.trace(lambda x: (string.format("[{x}]", x=x), string.concat(x, "!")))("x")
     ir = stage.trace(lambda x: control.switch("a", {"a": inner}, x))("x")
-    scheduled = order.sched(ir, cond=lambda e: e.prim is string.p_concat and len(e.in_tree) == 3)
+    scheduled = order.sched(ir, cond=lambda e: e.prim is string.p_render and len(e.in_tree) == 3)
     checked = scheduled.eqns[0].params["branches"]["a"]
-    assert [e.prim for e in checked.eqns] == [string.p_concat] * 2
+    assert [e.prim for e in checked.eqns] == [string.p_render] * 2
     assert scheduled.call("test") == ("[test]", "test!")
 
 
