@@ -3,7 +3,7 @@
 Rule registries use primitive instances as dispatch keys. Rules for an existing primitive must refer to the exported instance below. Constructing a new primitive with the same name creates a different key, so the new instance does not inherit the original registrations.
 
 ```{eval-rst}
-.. autodata:: autoform.extend.p_concat
+.. autodata:: autoform.extend.p_render
 .. autodata:: autoform.extend.p_match
 .. autodata:: autoform.extend.p_neg
 .. autodata:: autoform.extend.p_add

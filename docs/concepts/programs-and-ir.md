@@ -33,8 +33,8 @@ The example above produces an IR with the following logical structure:
 ```text
 input: topic
 equations:
-  prompt = concat("Explain ", topic)
-  output = concat("Prompt: ", prompt)
+  prompt = render(("Explain ", topic), width=80)
+  output = render(("Prompt: ", prompt), width=80)
 output: output
 ```
 

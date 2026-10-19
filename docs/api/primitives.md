@@ -6,12 +6,12 @@ Primitives have registered behavior for execution and supported transforms. Trac
 .. autofunction:: autoform.lm.fill
 ```
 
-## String
+## Text
 
 ```{eval-rst}
-.. autofunction:: autoform.string.format
-.. autofunction:: autoform.string.concat
-.. autofunction:: autoform.string.match
+.. autofunction:: autoform.text.format
+.. autofunction:: autoform.text.concat
+.. autofunction:: autoform.text.match
 ```
 
 ## Numeric
