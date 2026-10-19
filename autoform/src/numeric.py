@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools as ft
 
 import autoform.src.core as core
+import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
@@ -118,6 +119,13 @@ class ABool(core.AVal):
             case ABool(), bool() | ABool() | core.Zero(aval=ABool()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
+
+
+@ft.partial(pp.register, AInt)
+@ft.partial(pp.register, AFloat)
+@ft.partial(pp.register, ABool)
+def pretty_scalar(aval):
+    return pp.style(type(aval).__name__, pp.Code.BLUE), "()"
 
 
 stage.register_trace_type(bool, lambda value: ABool())

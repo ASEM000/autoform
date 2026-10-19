@@ -282,7 +282,7 @@ def inject(*, collection: Hashable, values: Collected) -> Generator[None, None, 
         ...     return normalized + "!"
         >>> ir = af.trace(program)("test")
         >>> [eqn.prim.name for eqn in ir.eqns]
-        ['concat']
+        ['render']
         >>> ir.call("alpha")
         'cached item!'
         >>> ir.call("beta")
