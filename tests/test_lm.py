@@ -258,10 +258,7 @@ def test_fill_uses_values_schema_envelope(executor):
         )
 
     ir = stage.trace(program)("seed")
-    assert [eqn.prim for eqn in ir.eqns] == [
-        control.p_stop_gradient,
-        lm.p_fill,
-    ]
+    assert [eqn.prim for eqn in ir.eqns] == [lm.p_fill]
     call = ir.eqns[-1]
     assert call.params == {
         "static_tree": {
@@ -277,7 +274,7 @@ def test_fill_uses_values_schema_envelope(executor):
             "answer": lm.Str() @ "Answer text.",
             "score": lm.Float(min=0, max=1),
         },
-        ir.eqns[0].out_tree,
+        "m1",
     )
     assert call.out_tree["question"] is None
     assert ir.out_tree["question"] is ir.in_tree[0]
@@ -310,6 +307,16 @@ def test_fill_uses_values_schema_envelope(executor):
         "required": ["answer", "score"],
         "additionalProperties": False,
     }
+
+
+def test_fill_stops_gradient_only_for_traced_model():
+    def program(question, model):
+        return lm.fill({"question": question, "answer": lm.Str()}, model=model)
+
+    traced = stage.trace(program)("seed", "m1")
+    constant = stage.trace(lambda question: program(question, "m1"))("seed")
+    assert [eqn.prim for eqn in traced.eqns] == [control.p_stop_gradient, lm.p_fill]
+    assert [eqn.prim for eqn in constant.eqns] == [lm.p_fill]
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
