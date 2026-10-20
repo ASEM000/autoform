@@ -20,6 +20,7 @@ import pytest
 import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
+import autoform.src.boundary as boundary
 import autoform.src.check as check
 import autoform.src.control as control
 import autoform.src.core as core
@@ -1304,3 +1305,56 @@ def test_trace_with_concrete_residual_keeps_one_variable(executor):
     residual_var, _ = traced.in_tree
     assert stage.is_var(residual_var) and residual_var.aval == core.avalof(residual)
     assert executor(traced, residual, 1.0) == (12.0,)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize("nest", ["fanout", "switch", "batch", "while_loop", "custom"])
+def test_pullback_does_not_recompute_nested_forward(executor, nest):
+    drafts = iter(f"draft{i}" for i in range(10))
+    seen = []
+    p_generate = core.Prim("generate")
+
+    def impl(x, /):
+        return x + ":" + next(drafts)
+
+    def pull_fwd(x, /):
+        out = p_generate.bind(x)
+        return out, out
+
+    def pull_bwd(in_tree, /):
+        output, c = in_tree
+        seen.append(output)
+        return c
+
+    core.r_impl.set(p_generate, impl)
+    core.r_aimpl.set(p_generate, utils.asyncify(impl))
+    core.r_abstract.set(p_generate, lambda _: string.AStr())
+    core.r_pull_fwd.set(p_generate, pull_fwd)
+    core.r_apull_fwd.set(p_generate, utils.asyncify(pull_fwd))
+    core.r_pull_bwd.set(p_generate, pull_bwd)
+    core.r_apull_bwd.set(p_generate, utils.asyncify(pull_bwd))
+    core.r_batch.set(p_generate, lambda t: ([impl(x) for x in t[2]], True))
+    core.r_abatch.set(p_generate, utils.asyncify(lambda t: ([impl(x) for x in t[2]], True)))
+
+    inner = stage.trace(p_generate.bind)("seed")
+    if nest == "fanout":
+        ir = order.sched(stage.trace(lambda x: (p_generate.bind(x), p_generate.bind(x)))("seed"))
+        args = (("x",), ("c", "c"))
+    elif nest == "switch":
+        ir = stage.trace(lambda k, x: control.switch(k, {True: inner, False: inner}, x))(
+            True, "seed"
+        )
+        args = ((True, "x"), "c")
+    elif nest == "batch":
+        ir = axis.batch(inner)
+        args = ((["x", "y"],), ["c", "c"])
+    elif nest == "while_loop":
+        cond = stage.trace(lambda s: string.match(s, "x"))("seed")
+        ir = stage.trace(lambda x: control.while_loop(cond, inner, x, max_iters=3))("seed")
+        args = (("x",), "c")
+    else:
+        ir = stage.trace(boundary.custom(lambda x: p_generate.bind(x)))("seed")
+        args = (("x",), "c")
+    out, _ = executor(ad.pullback(ir), *args)
+
+    assert sorted(seen) == sorted(utils.tree.leaves(out))

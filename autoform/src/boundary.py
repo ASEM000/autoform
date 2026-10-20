@@ -33,15 +33,21 @@ type CustomResult = tuple[stage.IR, Tree]
 
 
 def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> stage.IR:
-    def to_ir_input(x, /):
+    def to_aval(x, /):
         if stage.is_var(x):
-            return x
+            return x.aval
         if isinstance(x, core.AVal):
-            return stage.Var.fresh(aval=x)
+            return x
         assert stage.is_traceable(x), f"Unsupported type for custom function: {type(x).__name__}"
-        return stage.Var.fresh(aval=core.avalof(x))
+        return core.avalof(x)
 
-    in_tree = utils.tree.map(to_ir_input, in_tree)
+    avals, spec = utils.tree.flatten(utils.tree.map(to_aval, in_tree))
+    return trace_custom_avals(func, spec, tuple(avals))
+
+
+@ft.partial(utils.lru_cache, maxsize=256)
+def trace_custom_avals(func: Callable[..., Any], spec, avals: tuple[core.AVal, ...], /) -> stage.IR:
+    in_tree = utils.tree.unflatten(spec, [stage.Var.fresh(aval=a) for a in avals])
     with core.using_interp(stage.TraceInterp()) as trace_interpreter:
         out_trace_tree = func(*trace_interpreter.box(in_tree))
     out_tree = trace_interpreter.unbox(out_trace_tree)
@@ -91,31 +97,27 @@ async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]
 
 
 def pullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    p = in_tree
-    _, out = call_custom_body(call, p)
-    return out, (p, out)
+    fwd, _ = ad.fwd_bwd(trace_custom_func(call, in_tree))
+    out, residual = fwd.call(*in_tree)
+    return out, (in_tree, out, residual)
 
 
 async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    p = in_tree
-    _, out = await acall_custom_body(call, p)
-    return out, (p, out)
+    fwd, _ = ad.fwd_bwd(trace_custom_func(call, in_tree))
+    out, residual = await fwd.acall(*in_tree)
+    return out, (in_tree, out, residual)
 
 
 def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    p, out = in_tree[0]
-    c = in_tree[1]
-    ir = trace_custom_func(call, p)
-    _, in_c = ad.pullback(ir).call(p, c)
-    return in_c
+    (p, _, residual), c = in_tree
+    _, bwd = ad.fwd_bwd(trace_custom_func(call, p))
+    return bwd.call(residual, c)
 
 
 async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    p, out = in_tree[0]
-    c = in_tree[1]
-    ir = trace_custom_func(call, p)
-    _, in_c = await ad.pullback(ir).acall(p, c)
-    return in_c
+    (p, _, residual), c = in_tree
+    _, bwd = ad.fwd_bwd(trace_custom_func(call, p))
+    return await bwd.acall(residual, c)
 
 
 def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
@@ -235,7 +237,12 @@ class CustomFunc:
             ('[hello]', ('feedback via [hello]',))
         """
 
-        return core.r_pull_bwd.set(self.prim, rule)
+        def with_output(in_tree, /, **params):
+            (p, out, _), c = in_tree
+            return rule(((p, out), c), **params)
+
+        core.r_pull_bwd.set(self.prim, with_output)
+        return rule
 
     def aset_pullback[R: Callable[..., Awaitable[Tree]]](self, rule: R, /) -> R:
         """Register an async custom pullback rule.
@@ -257,7 +264,12 @@ class CustomFunc:
             ('[hello]', ('async feedback via [hello]',))
         """
 
-        return core.r_apull_bwd.set(self.prim, rule)
+        async def with_output(in_tree, /, **params):
+            (p, out, _), c = in_tree
+            return await rule(((p, out), c), **params)
+
+        core.r_apull_bwd.set(self.prim, with_output)
+        return rule
 
     def set_batch[R: Callable[..., tuple[Tree, Tree[bool]]]](self, rule: R, /) -> R:
         """Register ``rule(in_tree, *, call) -> (outputs, output_axes)``.

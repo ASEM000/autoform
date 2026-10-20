@@ -193,32 +193,28 @@ async def apushforward_switch(in_tree, /, *, branches: Branches):
 
 def pullback_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
     key, operands = in_tree
-    out = branches[key].call(*operands)
-    residuals = (key, operands)
-    return out, residuals
+    fwd, _ = ad.fwd_bwd(branches[key])
+    out, residual = fwd.call(*operands)
+    return out, (key, residual)
 
 
 async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
     key, operands = in_tree
-    out = await branches[key].acall(*operands)
-    residuals = (key, operands)
-    return out, residuals
+    fwd, _ = ad.fwd_bwd(branches[key])
+    out, residual = await fwd.acall(*operands)
+    return out, (key, residual)
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
-    residuals, out_c = in_tree
-    key, operands = residuals
-    pb_ir = ad.pullback(branches[key])
-    _, c_operands = pb_ir.call(operands, out_c)
-    return (core.s_cotangent.zeros_like(key), c_operands)
+    (key, residual), out_c = in_tree
+    _, bwd = ad.fwd_bwd(branches[key])
+    return (core.s_cotangent.zeros_like(key), bwd.call(residual, out_c))
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
-    residuals, out_c = in_tree
-    key, operands = residuals
-    pb_ir = ad.pullback(branches[key])
-    _, c_operands = await pb_ir.acall(operands, out_c)
-    return (core.s_cotangent.zeros_like(key), c_operands)
+    (key, residual), out_c = in_tree
+    _, bwd = ad.fwd_bwd(branches[key])
+    return (core.s_cotangent.zeros_like(key), await bwd.acall(residual, out_c))
 
 
 def batch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
@@ -459,18 +455,17 @@ def pullback_fwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    state = (in_tree,)
+    fwd, _ = ad.fwd_bwd(body_ir)
     out = in_tree
-    trajectory = [state]
+    residuals = []
 
     for _ in range(max_iters):
-        if not cond_ir.call(*state):
+        if not cond_ir.call(out):
             break
-        out = body_ir.call(*state)
-        state = (out,)
-        trajectory.append(state)
+        out, residual = fwd.call(out)
+        residuals.append(residual)
 
-    return out, trajectory
+    return out, residuals
 
 
 async def apull_fwd_while_loop(
@@ -481,18 +476,17 @@ async def apull_fwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    state = (in_tree,)
+    fwd, _ = ad.fwd_bwd(body_ir)
     out = in_tree
-    trajectory = [state]
+    residuals = []
 
     for _ in range(max_iters):
-        if not await cond_ir.acall(*state):
+        if not await cond_ir.acall(out):
             break
-        out = await body_ir.acall(*state)
-        state = (out,)
-        trajectory.append(state)
+        out, residual = await fwd.acall(out)
+        residuals.append(residual)
 
-    return out, trajectory
+    return out, residuals
 
 
 def batch_while_loop(
@@ -653,17 +647,12 @@ def pullback_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    trajectory, out_c = in_tree
+    residuals, c = in_tree
     del cond_ir, max_iters
-    n_iters = len(trajectory) - 1
+    _, bwd = ad.fwd_bwd(body_ir)
 
-    c = out_c
-    pb_body = ad.pullback(body_ir)
-
-    for t in reversed(range(n_iters)):
-        state_t = trajectory[t]
-        _, c = pb_body.call(state_t, c)
-        c = c[0]
+    for residual in reversed(residuals):
+        (c,) = bwd.call(residual, c)
 
     return c
 
@@ -676,17 +665,12 @@ async def apull_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    trajectory, out_c = in_tree
+    residuals, c = in_tree
     del cond_ir, max_iters
-    n_iters = len(trajectory) - 1
+    _, bwd = ad.fwd_bwd(body_ir)
 
-    c = out_c
-    pb_body = ad.pullback(body_ir)
-
-    for t in reversed(range(n_iters)):
-        state_t = trajectory[t]
-        _, c = await pb_body.acall(state_t, c)
-        c = c[0]
+    for residual in reversed(residuals):
+        (c,) = await bwd.acall(residual, c)
 
     return c
 
