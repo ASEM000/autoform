@@ -30,6 +30,8 @@ from autoform.src.intercept import checkpoint as checkpoint
 from autoform.src.intercept import collect as collect
 from autoform.src.intercept import inject as inject
 from autoform.src.memo import memoize as memoize
+from autoform.src.opaque import seal as seal
+from autoform.src.opaque import unseal as unseal
 from autoform.src.order import depends as depends
 from autoform.src.order import sched as sched
 from autoform.src.path import factor as factor
