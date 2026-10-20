@@ -62,7 +62,7 @@ def stop_gradient(x: Tree, /) -> Tree:
         >>> c_y
         'grad'
     """
-    return p_stop_gradient.bind(x)
+    return x if utils.tree.all(utils.tree.map(stage.is_traceable, x)) else p_stop_gradient.bind(x)
 
 
 def impl_stop_gradient(x: Tree, /) -> Tree:

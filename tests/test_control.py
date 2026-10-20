@@ -402,6 +402,11 @@ class TestStopGradient:
         result = executor(ir, value)
         assert result == value
 
+    def test_constant_input_is_not_staged(self):
+        ir = stage.trace(lambda x: (x, stop_gradient("const")))("x")
+        assert not ir.eqns
+        assert ir.call("hello") == ("hello", "const")
+
     @pytest.mark.parametrize(
         "transform, p, feedback, expected",
         [
