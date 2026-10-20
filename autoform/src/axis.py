@@ -59,17 +59,15 @@ class ABatch(core.AVal):
         return hash((type(self), self.base))
 
     def join(self, other, /):
-        match self, other:
-            case ABatch(base=lhs), ABatch(base=rhs) | core.Zero(aval=ABatch(base=rhs)):
-                return type(self)(lhs.join(rhs))
-            case _, core.AVal():
-                raise TypeError(f"Cannot join {self!r} and {other!r}")
-            case ABatch(base=base), _:
-                if utils.tree.is_leaf(other):
-                    raise TypeError(f"Cannot join {self!r} and {other!r}")
+        match other:
+            case ABatch(base=base) | core.Zero(aval=ABatch(base=base)):
+                return type(self)(self.base.join(base))
+            case _ if not utils.tree.is_leaf(other):
+                base = self.base
                 for x in utils.tree.leaves(other, is_leaf=lambda x: x is not other):
                     base = base.join(x)
                 return type(self)(base)
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
 
 
 @ft.partial(pp.register, ABatch)

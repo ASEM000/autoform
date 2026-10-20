@@ -17,7 +17,13 @@
 .. autoclass:: autoform.extend.Rule
    :members: set, get, override
 .. autoclass:: autoform.extend.Prim
+```
+
+## Zeros
+
+```{eval-rst}
 .. autoclass:: autoform.extend.Zero
+.. autofunction:: autoform.extend.instantiate
 ```
 
 ## Dunders

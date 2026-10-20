@@ -66,7 +66,7 @@ afe.s_tangent.set(AValArray, lambda aval: aval)
 afe.s_cotangent.set(AValArray, lambda aval: aval)
 ```
 
-Finally, `join` needs to be able to handle concrete arrays, array AVals, and symbolic zeros carrying array AVals. In this example, the shape and dtype of the array must match exactly, since there is no broader array description. A mismatch raises `TypeError`. The checker calls `expected.join(value)` directly to make sure the result matches the expected AVal. Under the hood, `autoform` accumulates concrete contributions by doing a `reduce(add, ..., zero())`, producing an array of the correct shape and dtype.
+Finally, `join` needs to be able to handle concrete arrays, array AVals, and symbolic zeros carrying array AVals. In this example, the shape and dtype of the array must match exactly, since there is no broader array description. A mismatch raises `TypeError`. The checker calls `expected.join(value)` to make sure the result matches the expected AVal. Under the hood, `autoform` accumulates concrete contributions by doing a `reduce(add, ..., zero())`, producing an array of the correct shape and dtype.
 
 ## Operation Rules
 
@@ -101,8 +101,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def push(in_tree):
         (x, y), (tx, ty) = in_tree
-        tx = tx.aval.zero() if isinstance(tx, afe.Zero) else tx
-        ty = ty.aval.zero() if isinstance(ty, afe.Zero) else ty
+        tx, ty = afe.instantiate((tx, ty))
         return bind(x, y), push_rule(x, y, tx, ty)
 
     def pull_fwd(in_tree):
@@ -111,7 +110,7 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def pull_bwd(in_tree):
         (x, y), g = in_tree
-        g = g.aval.zero() if isinstance(g, afe.Zero) else g
+        g = afe.instantiate(g)
         return pull_rule(x, y, g)
 
     def batch_rule(in_tree):

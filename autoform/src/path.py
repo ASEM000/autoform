@@ -83,7 +83,7 @@ def pullback_fwd_factor(weight, /, *, name: Hashable | None = None):
 def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
     del name
     weight, _ = in_tree
-    return core.Zero(core.s_cotangent.map(core.avalof(weight)))
+    return core.s_cotangent.zeros_like(weight)
 
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):

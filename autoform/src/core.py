@@ -25,7 +25,7 @@ from typing import Any, Self
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
-
+type Concrete = Any
 
 # ==================================================================================================
 # AVAL
@@ -70,7 +70,7 @@ class AVal:
         # type or addition for float type.
         raise NotImplementedError
 
-    def join(self, other, /) -> AVal:
+    def join(self, other: Zero[Self] | AVal | Concrete, /) -> Self:
         # NOTE(asem): computing the abstract value covering both operands. other can be abstract,
         # concrete, or a symbolic zero. join is used in typechecking
         raise NotImplementedError
@@ -87,6 +87,25 @@ def avalof(value, /) -> AVal:
 # ==================================================================================================
 # SPACES
 # ==================================================================================================
+
+
+class Zero[T: AVal]:
+    """Symbolic zero for an abstract value."""
+
+    __slots__ = ["aval"]
+
+    def __init__(self, aval: T, /):
+        assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
+        self.aval = aval
+
+    def __repr__(self):
+        return f"Zero({self.aval!r})"
+
+    def __eq__(self, other):
+        return isinstance(other, Zero) and self.aval == other.aval
+
+    def __hash__(self):
+        return hash((type(self), self.aval))
 
 
 class Space:
@@ -118,24 +137,14 @@ class Space:
         assert isinstance(aval, AVal), f"{self.name.capitalize()} aval rule returned {aval!r}"
         return aval
 
+    def zeros_like(self, value: Tree, /) -> Tree:
+        """Return a symbolic zero in this space for each leaf of ``value``."""
+        return utils.tree.map(lambda x: Zero(self.map(avalof(x))), value)
 
-class Zero[T: AVal]:
-    """Symbolic zero for an abstract value."""
 
-    __slots__ = ["aval"]
-
-    def __init__(self, aval: T, /):
-        assert isinstance(aval, AVal), f"Expected AVal, got {aval!r}"
-        self.aval = aval
-
-    def __repr__(self):
-        return f"Zero({self.aval!r})"
-
-    def __eq__(self, other):
-        return isinstance(other, Zero) and self.aval == other.aval
-
-    def __hash__(self):
-        return hash((type(self), self.aval))
+def instantiate(value: Tree, /) -> Tree:
+    """Replace each symbolic zero leaf of ``value`` with its concrete zero."""
+    return utils.tree.map(lambda x: x.aval.zero() if isinstance(x, Zero) else x, value)
 
 
 s_primal = Space("primal")

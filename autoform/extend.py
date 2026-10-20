@@ -28,6 +28,7 @@ from autoform.src.core import Space as Space
 from autoform.src.core import Zero as Zero
 from autoform.src.core import active_interp as active_interp
 from autoform.src.core import avalof as avalof
+from autoform.src.core import instantiate as instantiate
 from autoform.src.core import r_abatch as r_abatch
 from autoform.src.core import r_abstract as r_abstract
 from autoform.src.core import r_aimpl as r_aimpl

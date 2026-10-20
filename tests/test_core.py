@@ -217,6 +217,12 @@ class TestZero:
         with pytest.raises(NotImplementedError):
             z.aval.zero()
 
+    def test_instantiate(self):
+        z = core.Zero(string.AStr())
+        assert core.instantiate((z, "x", [z, 1.0])) == ("", "x", ["", 1.0])
+        with pytest.raises(NotImplementedError):
+            core.instantiate(core.Zero(numeric.ABool()))
+
     def test_zero_materializes_with_aval_metadata(self):
         class AValBlob(core.AVal):
             __slots__ = ["size"]
