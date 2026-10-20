@@ -428,34 +428,39 @@ def cot_accum(cots: list[Any | core.Zero]) -> Any:
     # >>> ir = af.trace(f)("...")
     # >>> af.pullback(ir).call(("a",), "df")
     # ('aa', ('dfdf',))
-    return p_cot_accum.bind(non_zero)
+    return p_cot_accum.bind(non_zero, n=len(non_zero))
 
 
-def impl_cot_accum(cots: list[Any], /) -> Any:
+def impl_cot_accum(cots: list[Any], /, *, n: int) -> Any:
+    del n
     aval = core.avalof(cots[0])
     return ft.reduce(aval.add, cots, aval.zero())
 
 
-def abstract_cot_accum(cots: list[Any], /) -> core.AVal:
+def abstract_cot_accum(cots: list[Any], /, *, n: int) -> core.AVal:
+    del n
     first = cots[0]
     return first if isinstance(first, core.AVal) else core.avalof(first)
 
 
-def pushforward_cot_accum(in_tree: TreePair, /) -> TreePair:
+def pushforward_cot_accum(in_tree: TreePair, /, *, n: int) -> TreePair:
+    del n
     p_cots, t_cots = in_tree
     return cot_accum(p_cots), cot_accum(t_cots)
 
 
-def pullback_fwd_cot_accum(cots: list[Any], /) -> TreePair:
-    return cot_accum(cots), ((),) * len(cots)
+def pullback_fwd_cot_accum(cots: list[Any], /, *, n: int) -> TreePair:
+    del n
+    return cot_accum(cots), None
 
 
-def pullback_bwd_cot_accum(in_tree: TreePair, /) -> list[Any]:
-    slots, out_c = in_tree
-    return [out_c for _ in slots]
+def pullback_bwd_cot_accum(in_tree: TreePair, /, *, n: int) -> list[Any]:
+    _, out_c = in_tree
+    return [out_c] * n
 
 
-def batch_cot_accum(in_tree: Tree, /) -> TreePair:
+def batch_cot_accum(in_tree: Tree, /, *, n: int) -> TreePair:
+    del n
     batch_size, in_batched, cots = in_tree
     if (spec := utils.batch_spec(cots, in_batched)) is None:
         return cot_accum(cots), False
