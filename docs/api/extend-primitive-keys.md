@@ -30,4 +30,6 @@ Rule registries use primitive instances as dispatch keys. Rules for an existing 
 .. autodata:: autoform.extend.p_pushforward_call
 .. autodata:: autoform.extend.p_pullback_fwd_call
 .. autodata:: autoform.extend.p_pullback_bwd_call
+.. autodata:: autoform.extend.p_seal
+.. autodata:: autoform.extend.p_unseal
 ```

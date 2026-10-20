@@ -100,59 +100,6 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
 # ==================================================================================================
 
 
-class AOpaque(core.AVal):
-    # NOTE(asem): a distinct abstract value per producer/consumer pair, keyed by ``id``, so
-    # an `Opaque` typechecks only against the IR it was produced for.
-    __slots__ = ["id"]
-    counter: ClassVar[it.count[int]] = it.count(0)
-
-    def __init__(self, id: int, /):
-        assert type(id) is int
-        self.id = id
-
-    @classmethod
-    def fresh(cls) -> Self:
-        return cls(next(cls.counter))
-
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other) and self.id == other.id
-
-    def __hash__(self) -> int:
-        return hash((type(self), self.id))
-
-    def join(self, other, /) -> Self:
-        match other:
-            case AOpaque(id=id) | core.Zero(aval=AOpaque(id=id)) | Opaque(id=id) if id == self.id:
-                return self
-        raise TypeError(f"Cannot join {self!r} and {other!r}")
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.id})"
-
-
-class Opaque:
-    __slots__ = ["id", "value"]
-
-    def __init__(self, id: int, value: Any, /):
-        assert type(id) is int
-        self.id = id
-        self.value = value
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.id})"
-
-
-utils.tree.register_node(
-    Opaque,
-    lambda opaque: ((opaque.value,), opaque.id, ("value",)),
-    lambda id, children: Opaque(id, *children),
-)
-register_trace_type(Opaque, lambda opaque: AOpaque(opaque.id))
-core.s_primal.set(AOpaque, lambda aval: aval)
-core.s_tangent.set(AOpaque, lambda aval: aval)
-core.s_cotangent.set(AOpaque, lambda aval: aval)
-
-
 # NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
 # Concrete literals are kept as plain Python values in IR trees.
 class Var:

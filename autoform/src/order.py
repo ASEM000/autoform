@@ -104,26 +104,26 @@ async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
 
 def pull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
-    fwd_irs = [ad.fwd_bwd(ir)[0] for ir in irs]
+    fwd_irs = [ad.pullback_halves(ir)[0] for ir in irs]
     results = p_fanout.bind(in_tree, irs=fwd_irs)
     return [out for out, _ in results], [residual for _, residual in results]
 
 
 async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
-    fwd_irs = [ad.fwd_bwd(ir)[0] for ir in irs]
+    fwd_irs = [ad.pullback_halves(ir)[0] for ir in irs]
     results = await p_fanout.abind(in_tree, irs=fwd_irs)
     return [out for out, _ in results], [residual for _, residual in results]
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     residuals, out_c = in_tree
-    bwd_irs = [ad.fwd_bwd(ir)[1] for ir in irs]
+    bwd_irs = [ad.pullback_halves(ir)[1] for ir in irs]
     return p_fanout.bind(list(zip(residuals, out_c)), irs=bwd_irs)
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
     residuals, out_c = in_tree
-    bwd_irs = [ad.fwd_bwd(ir)[1] for ir in irs]
+    bwd_irs = [ad.pullback_halves(ir)[1] for ir in irs]
     return await p_fanout.abind(list(zip(residuals, out_c)), irs=bwd_irs)
 
 
