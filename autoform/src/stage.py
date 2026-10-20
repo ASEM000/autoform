@@ -104,7 +104,7 @@ class AOpaque(core.AVal):
     # NOTE(asem): a distinct abstract value per producer/consumer pair, keyed by ``id``, so
     # an `Opaque` typechecks only against the IR it was produced for.
     __slots__ = ["id"]
-    counter: ClassVar[it.count[int]] = it.count()
+    counter: ClassVar[it.count[int]] = it.count(0)
 
     def __init__(self, id: int, /):
         assert type(id) is int
