@@ -629,10 +629,7 @@ def test_fill_transforms_traced_descriptions(executor, transform, batch_order):
         expected = utils.tree.map(lambda x: [x, x], expected)
     with lm.client(FillClient()):
         assert executor(ir, *args) == expected
-    expected_calls = 2 if batch_order is None else 4
-    if batch_order == "before" and transform is ad.pullback:
-        expected_calls = 6
-    assert len(calls) == expected_calls
+    assert len(calls) == (2 if batch_order is None else 4)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -671,9 +668,7 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
         args, expected = utils.tree.map(lambda x: [x, x], (args, expected))
     with lm.client(RenderClient(render=render)):
         assert executor(ir, *args) == expected
-    # Pullback of batch_call replays the forward pass before transposing it.
-    count = 1 + generated + (batch_order == "before")
-    assert len(calls) == count * (1 if batch_order is None else 2)
+    assert len(calls) == (1 + generated) * (1 if batch_order is None else 2)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

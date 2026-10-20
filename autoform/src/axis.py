@@ -394,27 +394,23 @@ async def apushforward_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tr
 
 
 def pullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
-    in_v = in_tree
-    batched_ir = batch(ir, in_axes=in_axes)
-    out_v = batched_ir.call(*in_v)
-    return out_v, in_v
+    fwd, _ = ad.fwd_bwd(ir)
+    return batch(fwd, in_axes=in_axes).call(*in_tree)
 
 
 async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
-    in_v = in_tree
-    batched_ir = batch(ir, in_axes=in_axes)
-    out_v = await batched_ir.acall(*in_v)
-    return out_v, in_v
+    fwd, _ = ad.fwd_bwd(ir)
+    return await batch(fwd, in_axes=in_axes).acall(*in_tree)
 
 
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
-    p, out_c = in_tree
+    residual, out_c = in_tree
     in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
-    pb_ir = ad.pullback(ir)
-    if (spec := utils.batch_spec(p, in_b)) is None:
-        return pb_ir.call(p, out_c)[1]
-    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
-    _, in_c = batch_pb_ir.call(p, out_c)
+    _, bwd = ad.fwd_bwd(ir)
+    if not any(utils.tree.leaves(in_b)):
+        return bwd.call(residual, out_c)
+    spec = utils.batch_spec(residual, True)
+    in_c = batch(bwd, in_axes=(True, True)).call(residual, out_c)
 
     def accum(batched, c):
         return c if batched else ad.cot_accum(spec.flatten_up_to(c))
@@ -423,13 +419,13 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
 
 
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
-    p, out_c = in_tree
+    residual, out_c = in_tree
     in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
-    pb_ir = ad.pullback(ir)
-    if (spec := utils.batch_spec(p, in_b)) is None:
-        return (await pb_ir.acall(p, out_c))[1]
-    batch_pb_ir = batch(pb_ir, in_axes=(in_axes, True))
-    _, in_c = await batch_pb_ir.acall(p, out_c)
+    _, bwd = ad.fwd_bwd(ir)
+    if not any(utils.tree.leaves(in_b)):
+        return await bwd.acall(residual, out_c)
+    spec = utils.batch_spec(residual, True)
+    in_c = await batch(bwd, in_axes=(True, True)).acall(residual, out_c)
 
     def accum(batched, c):
         return c if batched else ad.cot_accum(spec.flatten_up_to(c))
