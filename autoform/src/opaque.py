@@ -16,9 +16,11 @@
 
 from __future__ import annotations
 
+import functools as ft
 from typing import Any, Self
 
 import autoform.src.core as core
+import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
@@ -78,6 +80,19 @@ utils.tree.register_node(
     lambda key, children: Opaque(key, *children),
 )
 stage.register_trace_type(Opaque, lambda opaque: AOpaque(opaque.key))
+
+
+@ft.partial(pp.register, object)
+def pretty_object(key):
+    return pp.style(f"object@{id(key):x}", pp.Code.GREEN)
+
+
+@ft.partial(pp.register, AOpaque)
+def pretty_aopaque(aval):
+    name = pp.style(type(aval).__name__, pp.Code.BLUE)
+    return name, "(", () if aval.key is None else pp.pretty(aval.key), ")"
+
+
 core.s_primal.set(AOpaque, lambda aval: aval)
 core.s_tangent.set(AOpaque, lambda aval: aval)
 core.s_cotangent.set(AOpaque, lambda aval: aval)
