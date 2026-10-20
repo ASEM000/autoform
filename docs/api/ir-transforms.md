@@ -4,6 +4,7 @@ Each function below consumes an IR and returns another IR with different computa
 
 ```{eval-rst}
 .. autofunction:: autoform.batch
+.. autofunction:: autoform.fwd_bwd
 .. autofunction:: autoform.pullback
 .. autofunction:: autoform.pushforward
 .. autofunction:: autoform.sched

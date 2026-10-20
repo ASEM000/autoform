@@ -178,8 +178,8 @@ class TestCheck:
     @pytest.mark.parametrize(
         "executor",
         [
-            ad.impl_pullback_call,
-            lambda args, *, ir: asyncio.run(ad.aimpl_pullback_call(args, ir=ir)),
+            ad.impl_pullback,
+            lambda args, *, ir: asyncio.run(ad.aimpl_pullback(args, ir=ir)),
         ],
         ids=["sync", "async"],
     )

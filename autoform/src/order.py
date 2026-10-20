@@ -35,8 +35,7 @@ type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
 type IRList = list[stage.IR]
 type FanoutPair = tuple[list[Tree], list[Tree]]
-type FanoutResidual = tuple[list[Tree], IRList]
-type FanoutFwdResult = tuple[list[Tree], FanoutResidual]
+type FanoutFwdResult = tuple[list[Tree], list[Tree]]
 type BatchFanoutInput = tuple[int, list[bool], list[Tree]]
 type BatchFanoutOutput = tuple[list[Tree], list[Tree[bool]]]
 type DependsType[T] = tuple[T, tuple[Tree, ...]]
@@ -106,19 +105,16 @@ async def apush_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
 
 def pull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
     results = p_fanout.bind(in_tree, irs=irs)
-    residuals = (in_tree, irs)
-    return results, residuals
+    return results, in_tree
 
 
 async def apull_fwd_fanout(in_tree: list[Tree], /, *, irs: IRList) -> FanoutFwdResult:
     results = await p_fanout.abind(in_tree, irs=irs)
-    residuals = (in_tree, irs)
-    return results, residuals
+    return results, in_tree
 
 
 def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    residuals, out_c = in_tree
-    inputs, _ = residuals
+    inputs, out_c = in_tree
     pb_irs = [ad.pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_c)]
     results = p_fanout.bind(pb_inputs, irs=pb_irs)
@@ -126,8 +122,7 @@ def pull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
-    residuals, out_c = in_tree
-    inputs, _ = residuals
+    inputs, out_c = in_tree
     pb_irs = [ad.pullback(ir) for ir in irs]
     pb_inputs = [(inp, cot) for inp, cot in zip(inputs, out_c)]
     results = await p_fanout.abind(pb_inputs, irs=pb_irs)

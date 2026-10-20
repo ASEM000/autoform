@@ -162,7 +162,7 @@ def test_memoize_preserves_repeated_checkpoint():
             (("primal",), "cotangent"),
             (("primal",), "cotangent"),
             (("primal!", ("cotangent",)), ("primal!", ("cotangent",))),
-            2,
+            3,
             id="pullback-cache-hit",
         ),
         pytest.param(

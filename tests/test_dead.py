@@ -187,7 +187,7 @@ def test_removes_unused_switch():
             (True, (False,)),
             1,
             (("x",), "cot"),
-            ("x LIVE", ("cot",)),
+            ("x LIVE", (None,)),
             id="pull-primal",
         ),
         pytest.param(
@@ -556,13 +556,14 @@ def test_preserves_checkpoint_dependency():
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-def test_partial_pullback_preserves_cotangent_structure(executor):
+def test_partial_pullback_prunes_unused_backward_half(executor):
     ir = stage.trace(lambda x: (string.concat(x, "!"), string.concat(x, "?")))("x")
     pb = ad.pullback(ir)
     dced = dead.dce(pb, out_used=((True, False), (False,)))
     args = (("x",), ("g", "h"))
-    expected = pb.call(*args)
+    expected = (("x!", None), (None,))
 
+    assert [eqn.prim for eqn in dced.eqns] == [ad.p_pullback_fwd_call]
     assert executor(dced, *args) == expected
     assert executor(dead.dce(dced), *args) == expected
 

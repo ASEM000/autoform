@@ -25,10 +25,11 @@ import autoform.src.control as control
 import autoform.src.core as core
 import autoform.src.intercept as intercept
 import autoform.src.numeric as numeric
+import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.string as string
 import autoform.src.utils as utils
-from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, execute
+from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, cube, execute, square
 
 
 def test_pushforward_checker_rejects_nested_tangent_without_equations():
@@ -275,12 +276,12 @@ def test_pullback_maps_cotangent_once():
     no_stage = stage.no_stage_flag.get()
     value = core.Zero(AValValue())
     feedback = core.Zero(AValFeedback())
-    assert ad.impl_pullback_call(((value, value), feedback), ir=ir) == (
+    assert ad.impl_pullback(((value, value), feedback), ir=ir) == (
         value,
         (feedback, feedback),
     )
     with pytest.raises(TypeError, match="Cannot join"):
-        ad.impl_pullback_call(((value, value), core.Zero(AValHigherFeedback())), ir=ir)
+        ad.impl_pullback(((value, value), core.Zero(AValHigherFeedback())), ir=ir)
     assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
 
@@ -301,10 +302,10 @@ def test_pullback_checks_under_caller_interpreter():
     ir = stage.IR([], (x, y), (x, x))
 
     with core.using_interp(parent):
-        _, c = ad.impl_pullback_call((("x", "y"), ("a", "b")), ir=ir)
+        _, c = ad.impl_pullback((("x", "y"), ("a", "b")), ir=ir)
         assert c == ("ab", core.Zero(string.AStr()))
         with pytest.raises(TypeError, match="Cannot join AStr"):
-            ad.impl_pullback_call((("x", "y"), ("a", 1.0)), ir=ir)
+            ad.impl_pullback((("x", "y"), ("a", 1.0)), ir=ir)
     assert core.active_interp.get() is parent
     assert stage.no_stage_flag.get() is no_stage
 
@@ -318,7 +319,7 @@ def test_pullback_preserves_parent_pushforward_values():
 
     with core.using_interp(pusher):
         values = pusher.box((("a", "b"), ("da", "db")))
-        _, c = ad.impl_pullback_call((("x", "y"), values), ir=ir)
+        _, c = ad.impl_pullback((("x", "y"), values), ir=ir)
         assert pusher.unbox(c) == (("ab", zero), ("dadb", zero))
     assert core.active_interp.get() is parent
 
@@ -1165,3 +1166,141 @@ def test_nonidentity_primal_space(executor, transform):
     assert executor(traced, *args) == expected
     with pytest.raises(TypeError, match="Cannot join AFloat"):
         executor(ir, ("bad",), args[1])
+
+
+executors = pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+
+
+def zero_like(value):
+    return core.Zero(core.avalof(value))
+
+
+@executors
+def test_hvp_with_symbolic_zero_cotangent_tangent(executor):
+    pf_pb = ad.pushforward(ad.pullback(stage.trace(cube)(2.0)))
+    assert executor(pf_pb, ((2.0,), 1.0), ((1.0,), zero_like(2.0))) == (
+        (8.0, (12.0,)),
+        (12.0, (12.0,)),
+    )
+
+
+@executors
+def test_hvp_through_cot_accum(executor):
+    def program(x):
+        return ad.cot_accum([x * x, x * x * x])
+
+    pf_pb = ad.pushforward(ad.pullback(stage.trace(program)(2.0)))
+    assert executor(pf_pb, ((2.0,), 1.0), ((1.0,), zero_like(2.0))) == (
+        (12.0, (16.0,)),
+        (16.0, (14.0,)),
+    )
+
+
+@executors
+def test_pushforward_bwd_with_residual_from_plain_fwd(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+    _, residual = executor(fwd, 2.0)
+    tangent = (zero_like(residual), 1.0)
+    assert executor(ad.pushforward(bwd), (residual, 1.0), tangent) == ((12.0,), (12.0,))
+
+
+@executors
+def test_pushforward_bwd_after_zero_tangent_fwd(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+    (_, residual), (_, residual_t) = executor(ad.pushforward(fwd), (2.0,), (zero_like(2.0),))
+    assert executor(ad.pushforward(bwd), (residual, 1.0), (residual_t, 1.0)) == ((12.0,), (12.0,))
+
+
+@executors
+def test_pullback_through_traced_halves_with_unused_primal(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+
+    def program(x, g):
+        _, residual = fwd.call(x)
+        (dx,) = bwd.call(residual, g)
+        return dx
+
+    ir = stage.trace(program)(2.0, 1.0)
+    assert executor(ad.pullback(ir), (2.0, 1.0), 1.0) == (12.0, (12.0, 12.0))
+
+
+@executors
+def test_pullback_accumulates_shared_residual(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+
+    def program(x, g1, g2):
+        _, residual = fwd.call(x)
+        (a,) = bwd.call(residual, g1)
+        (b,) = bwd.call(residual, g2)
+        return a, b
+
+    ir = stage.trace(program)(2.0, 1.0, 1.0)
+    expected = ((12.0, 12.0), (24.0, 12.0, 12.0))
+    assert executor(ad.pullback(ir), (2.0, 1.0, 1.0), (1.0, 1.0)) == expected
+
+
+@executors
+def test_pushforward_through_split_pullback(executor):
+    fwd, bwd = ad.fwd_bwd(ad.pullback(stage.trace(cube)(2.0)))
+    (out, residual), (out_t, residual_t) = executor(
+        ad.pushforward(fwd), ((2.0,), 1.0), ((1.0,), 0.0)
+    )
+    assert (out, out_t) == ((8.0, (12.0,)), (12.0, (12.0,)))
+    in_c = executor(ad.pushforward(bwd), (residual, (1.0, (1.0,))), (residual_t, (0.0, (0.0,))))
+    assert in_c == (((24.0,), 12.0), ((18.0,), 12.0))
+
+
+@executors
+def test_pushforward_pullback_fanout(executor):
+    ir = stage.trace(
+        lambda x: order.p_fanout.bind(
+            [(x,), (x,)], irs=[stage.trace(cube)(2.0), stage.trace(square)(2.0)]
+        )
+    )(2.0)
+    out = executor(ad.pushforward(ad.pullback(ir)), ((2.0,), [1.0, 0.0]), ((1.0,), [0.0, 0.0]))
+    assert out == (([8.0, 4.0], (12.0,)), ([12.0, 4.0], (12.0,)))
+
+
+@executors
+def test_pushforward_halves_of_while_loop(executor):
+    # 2 -> 4 -> 16, so f(x) = x**4: f' = 32, f'' = 48. the predicate must stay a
+    # plain bool under pushforward, otherwise the loop runs to max_iters.
+    cond = stage.trace(lambda x: x < 10.0)(2.0)
+    body = stage.trace(square)(2.0)
+    ir = stage.trace(lambda x: control.while_loop(cond, body, x, max_iters=5))(2.0)
+    fwd, bwd = ad.fwd_bwd(ir)
+    (out, residual), (out_t, residual_t) = executor(ad.pushforward(fwd), (2.0,), (1.0,))
+    assert (out, out_t) == (16.0, 32.0)
+    assert executor(ad.pushforward(bwd), (residual, 1.0), (residual_t, 0.0)) == ((32.0,), (48.0,))
+
+
+@executors
+def test_pushforward_pullback_switch_constant_key(executor):
+    ir = stage.trace(
+        lambda x: control.switch(
+            "a", {"a": stage.trace(cube)(2.0), "b": stage.trace(square)(2.0)}, x
+        )
+    )(2.0)
+    out = executor(ad.pushforward(ad.pullback(ir)), ((2.0,), 1.0), ((1.0,), 0.0))
+    assert out == ((8.0, (12.0,)), (12.0, (12.0,)))
+
+
+@executors
+def test_pushforward_pullback_switch_input_key(executor):
+    branches = {"a": stage.trace(cube)(2.0), "b": stage.trace(square)(2.0)}
+    ir = stage.trace(lambda k, x: control.switch(k, branches, x))("a", 2.0)
+    key_t = core.Zero(core.s_tangent.map(core.avalof("a")))
+    (_, (_, dx)), (_, (_, dx_t)) = executor(
+        ad.pushforward(ad.pullback(ir)), (("a", 2.0), 1.0), ((key_t, 1.0), 0.0)
+    )
+    assert (dx, dx_t) == (12.0, 12.0)
+
+
+@executors
+def test_trace_with_concrete_residual_keeps_one_variable(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+    _, residual = fwd.call(2.0)
+    traced = stage.trace(lambda r, g: bwd.call(r, g))(residual, 1.0)
+    residual_var, _ = traced.in_tree
+    assert stage.is_var(residual_var) and residual_var.aval == core.avalof(residual)
+    assert executor(traced, residual, 1.0) == (12.0,)

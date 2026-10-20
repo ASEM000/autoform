@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from autoform.src.ad import p_pullback_call as p_pullback_call
+from autoform.src.ad import p_pullback_bwd_call as p_pullback_bwd_call
+from autoform.src.ad import p_pullback_fwd_call as p_pullback_fwd_call
 from autoform.src.ad import p_pushforward_call as p_pushforward_call
 from autoform.src.axis import ABatch as ABatch
 from autoform.src.axis import p_batch_call as p_batch_call
