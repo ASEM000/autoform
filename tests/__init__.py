@@ -122,3 +122,11 @@ class AValBlob(core.AVal):
 
 
 core.aval_types[AValBlob] = lambda aval: aval
+
+
+def cube(x):
+    return x * x * x
+
+
+def square(x):
+    return x * x

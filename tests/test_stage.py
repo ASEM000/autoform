@@ -1515,14 +1515,14 @@ def test_inline_calls_preserve_dataflow():
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    "program, transform, args, expected, primitive",
+    "program, transform, args, expected, primitives",
     [
         pytest.param(
             bracket_text,
             ad.pushforward,
             (("primal",), ("tangent",)),
             ("[primal]", "tangent"),
-            "pushforward_call",
+            ("pushforward_call",),
             id="pushforward",
         ),
         pytest.param(
@@ -1530,7 +1530,7 @@ def test_inline_calls_preserve_dataflow():
             ad.pullback,
             (("primal",), "cotan"),
             ("primal!", ("cotan",)),
-            "pullback_call",
+            ("pullback_fwd_call", "pullback_bwd_call"),
             id="pullback",
         ),
         pytest.param(
@@ -1538,7 +1538,7 @@ def test_inline_calls_preserve_dataflow():
             ft.partial(axis.batch, in_axes=True),
             (["a", "b", "c"],),
             ["<a>", "<b>", "<c>"],
-            "batch_call",
+            ("batch_call",),
             id="batch",
         ),
     ],
@@ -1562,13 +1562,12 @@ def test_trace_transform_boundary(
     transform,
     args,
     expected,
-    primitive,
+    primitives,
     build_ir,
 ):
     inner = stage.trace(program)("x")
     ir = build_ir(inner, transform, args)
-    assert len(ir.eqns) == 1
-    assert ir.eqns[0].prim.name == primitive
+    assert tuple(eqn.prim.name for eqn in ir.eqns) == primitives
     result = executor(ir, *args)
     assert result == expected
 

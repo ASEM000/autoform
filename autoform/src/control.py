@@ -470,8 +470,7 @@ def pullback_fwd_while_loop(
         state = (out,)
         trajectory.append(state)
 
-    residuals = (trajectory, body_ir)
-    return out, residuals
+    return out, trajectory
 
 
 async def apull_fwd_while_loop(
@@ -493,8 +492,7 @@ async def apull_fwd_while_loop(
         state = (out,)
         trajectory.append(state)
 
-    residuals = (trajectory, body_ir)
-    return out, residuals
+    return out, trajectory
 
 
 def batch_while_loop(
@@ -655,9 +653,8 @@ def pullback_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    residuals, out_c = in_tree
+    trajectory, out_c = in_tree
     del cond_ir, max_iters
-    trajectory, _ = residuals
     n_iters = len(trajectory) - 1
 
     c = out_c
@@ -679,9 +676,8 @@ async def apull_bwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> Tree:
-    residuals, out_c = in_tree
+    trajectory, out_c = in_tree
     del cond_ir, max_iters
-    trajectory, _ = residuals
     n_iters = len(trajectory) - 1
 
     c = out_c
