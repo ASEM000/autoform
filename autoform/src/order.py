@@ -325,13 +325,8 @@ def pull_fwd_depends(in_tree: DependsType[Tree], /) -> DependsFwdResult:
 
 
 def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
-    def make_c(x):
-        if isinstance(x, core.Zero):
-            return x
-        return core.Zero(core.s_cotangent.map(core.avalof(x)))
-
     (_, deps), out_c = in_tree
-    return out_c, utils.tree.map(make_c, deps)
+    return out_c, core.s_cotangent.zeros_like(deps)
 
 
 def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:

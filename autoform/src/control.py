@@ -74,11 +74,8 @@ def abstract_stop_gradient(x: Tree, /) -> Tree:
 
 
 def pushforward_stop_gradient(in_tree: Tree, /) -> TreePair:
-    def make_t(x):
-        return core.Zero(core.s_tangent.map(core.avalof(x)))
-
     p, t = in_tree
-    zero_t = utils.tree.map(make_t, p)
+    zero_t = core.s_tangent.zeros_like(p)
     return p, zero_t
 
 
@@ -88,14 +85,9 @@ def pullback_fwd_stop_gradient(x: Tree, /) -> TreePair:
 
 
 def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
-    def make_c(x):
-        if isinstance(x, core.Zero):
-            return x
-        return core.Zero(core.s_cotangent.map(core.avalof(x)))
-
     residuals, out_c = in_tree
     del out_c
-    return utils.tree.map(make_c, residuals)
+    return core.s_cotangent.zeros_like(residuals)
 
 
 def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
@@ -218,7 +210,7 @@ def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = pb_ir.call(operands, out_c)
-    return (core.Zero(core.s_cotangent.map(core.avalof(key))), c_operands)
+    return (core.s_cotangent.zeros_like(key), c_operands)
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
@@ -226,7 +218,7 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     key, operands = residuals
     pb_ir = ad.pullback(branches[key])
     _, c_operands = await pb_ir.acall(operands, out_c)
-    return (core.Zero(core.s_cotangent.map(core.avalof(key))), c_operands)
+    return (core.s_cotangent.zeros_like(key), c_operands)
 
 
 def batch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
@@ -866,7 +858,7 @@ def pushforward_fixpoint(
     out = p_fixpoint.bind(
         p, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
     )
-    t = utils.tree.map(lambda x: core.Zero(core.s_tangent.map(core.avalof(x))), out)
+    t = core.s_tangent.zeros_like(out)
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_theta)):
         return out, t
 
@@ -893,7 +885,7 @@ async def apushforward_fixpoint(
     out = await p_fixpoint.abind(
         p, step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir
     )
-    t = utils.tree.map(lambda x: core.Zero(core.s_tangent.map(core.avalof(x))), out)
+    t = core.s_tangent.zeros_like(out)
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(t_theta)):
         return out, t
 
@@ -955,16 +947,13 @@ def pullback_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> Tree:
-    def make_c(x):
-        return core.Zero(core.s_cotangent.map(core.avalof(x)))
-
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
-    dx0 = utils.tree.map(make_c, x_star)
+    dx0 = core.s_cotangent.zeros_like(x_star)
 
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
-        return dx0, utils.tree.map(make_c, theta)
+        return dx0, core.s_cotangent.zeros_like(theta)
 
     res: dict[stage.Eqn, Tree] = {}
     parent = core.active_interp.get()
@@ -985,14 +974,15 @@ def pullback_bwd_fixpoint(
                 in_boxed_c = eqn.bind((residuals, bwd.box(out_c)), **eqn.params)
             return bwd.unbox(in_boxed_c)
 
-        env = ad.PBEnv()
+        c_env = ad.PBEnv()
+        c_env.primals = env.primals
 
-        utils.tree.map(env.write_c, step_ir.out_tree, cot)
+        utils.tree.map(c_env.write_c, step_ir.out_tree, cot)
         for eqn in reversed(step_ir.eqns):
-            out_c = utils.tree.map(env.read_c, eqn.out_tree)
+            out_c = utils.tree.map(c_env.read_c, eqn.out_tree)
             in_c = bwd_bind(eqn, out_c)
-            utils.tree.map(env.write_c, eqn.in_tree, in_c)
-        return utils.tree.map(env.read_c, step_ir.in_tree)
+            utils.tree.map(c_env.write_c, eqn.in_tree, in_c)
+        return utils.tree.map(c_env.read_c, step_ir.in_tree)
 
     env = ad.PBEnv()
 
@@ -1027,16 +1017,13 @@ async def apull_bwd_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> Tree:
-    def make_c(x):
-        return core.Zero(core.s_cotangent.map(core.avalof(x)))
-
     del max_iters, equiv_ir
     residuals, g = in_tree
     x_star, theta = residuals
-    dx0 = utils.tree.map(make_c, x_star)
+    dx0 = core.s_cotangent.zeros_like(x_star)
 
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
-        return dx0, utils.tree.map(make_c, theta)
+        return dx0, core.s_cotangent.zeros_like(theta)
 
     res: dict[stage.Eqn, Tree] = {}
     parent = core.active_interp.get()
@@ -1057,14 +1044,15 @@ async def apull_bwd_fixpoint(
                 in_boxed_c = await eqn.abind((residuals, bwd.box(out_c)), **eqn.params)
             return bwd.unbox(in_boxed_c)
 
-        env = ad.PBEnv()
+        c_env = ad.PBEnv()
+        c_env.primals = env.primals
 
-        utils.tree.map(env.write_c, step_ir.out_tree, cot)
+        utils.tree.map(c_env.write_c, step_ir.out_tree, cot)
         for eqn in reversed(step_ir.eqns):
-            out_c = utils.tree.map(env.read_c, eqn.out_tree)
+            out_c = utils.tree.map(c_env.read_c, eqn.out_tree)
             in_c = await bwd_bind(eqn, out_c)
-            utils.tree.map(env.write_c, eqn.in_tree, in_c)
-        return utils.tree.map(env.read_c, step_ir.in_tree)
+            utils.tree.map(c_env.write_c, eqn.in_tree, in_c)
+        return utils.tree.map(c_env.read_c, step_ir.in_tree)
 
     env = ad.PBEnv()
 

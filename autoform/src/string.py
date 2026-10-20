@@ -20,6 +20,7 @@ import functools as ft
 import string as stringlib
 from typing import Any
 
+import autoform.src.ad as ad
 import autoform.src.core as core
 import autoform.src.pp as pp
 import autoform.src.stage as stage
@@ -56,8 +57,8 @@ class AStr(core.AVal):
         return left + right
 
     def join(self, other, /):
-        match self, other:
-            case AStr(), str() | AStr() | core.Zero(aval=AStr()):
+        match other:
+            case str() | AStr() | core.Zero(aval=AStr()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
@@ -95,11 +96,6 @@ def render(doc, /, *, width: int = 80) -> str:
 
 def push_render(in_tree, /, **params):
     primal, tangent = in_tree
-
-    def materialize(value):
-        return value.aval.zero() if isinstance(value, core.Zero) else value
-
-    tangent = utils.tree.map(materialize, tangent)
     return p_render.bind(primal, **params), p_render.bind(tangent, **params)
 
 
@@ -112,8 +108,9 @@ def pull_bwd_render(in_tree, /, **params):
     doc, feedback = in_tree
 
     def cotangent(value):
-        aval = core.avalof(value)
-        return feedback if isinstance(aval, AStr) else core.Zero(core.s_cotangent.map(aval))
+        if isinstance(core.avalof(value), AStr):
+            return feedback
+        return core.s_cotangent.zeros_like(value)
 
     return utils.tree.map(cotangent, doc)
 
@@ -131,8 +128,8 @@ core.r_aimpl.set(p_render, utils.asyncify(pp.layout))
 core.r_abstract.set(p_render, abstract_render)
 core.r_batch.set(p_render, batch_render)
 core.r_abatch.set(p_render, utils.asyncify(batch_render))
-core.r_push.set(p_render, push_render)
-core.r_apush.set(p_render, utils.asyncify(push_render))
+core.r_push.set(p_render, ad.concrete_zeros(push_render))
+core.r_apush.set(p_render, utils.asyncify(ad.concrete_zeros(push_render)))
 core.r_pull_fwd.set(p_render, pull_fwd_render)
 core.r_apull_fwd.set(p_render, utils.asyncify(pull_fwd_render))
 core.r_pull_bwd.set(p_render, pull_bwd_render)
@@ -204,7 +201,7 @@ abstract_match.register((AStr, AStr), abstract_bool)
 def pushforward_match(in_tree: Tree, /) -> tuple[bool, Tree]:
     p, t = in_tree
     out_p = p_match.bind(p)
-    return out_p, core.Zero(core.s_tangent.map(core.avalof(False)))
+    return out_p, core.s_tangent.zeros_like(out_p)
 
 
 def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
@@ -214,14 +211,9 @@ def pullback_fwd_match(in_tree: Tree, /) -> tuple[bool, Tree]:
 
 
 def pullback_bwd_match(in_tree: Tree, /) -> Tree:
-    def make_c(x):
-        if isinstance(x, core.Zero):
-            return x
-        return core.Zero(core.s_cotangent.map(core.avalof(x)))
-
     residuals, out_c = in_tree
     del out_c
-    return utils.tree.map(make_c, residuals)
+    return core.s_cotangent.zeros_like(residuals)
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:

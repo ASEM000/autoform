@@ -39,6 +39,15 @@ type TreePair = tuple[Tree, Tree]
 p_pushforward_call = core.Prim("pushforward_call")
 
 
+def concrete_zeros[R](rule: R, /) -> R:
+    @ft.wraps(rule)
+    def wrapper(in_tree, /, **params):
+        first, second = in_tree
+        return rule((first, core.instantiate(second)), **params)
+
+    return wrapper
+
+
 class PushforwardBox:
     __slots__ = ["owner", "primal", "tangent"]
 
@@ -51,6 +60,16 @@ class PushforwardBox:
 core.aval_types[PushforwardBox] = lambda value: core.avalof(value.primal)
 
 
+def expand_zeros(tangent: Tree, primal: Tree, /) -> Tree:
+    def expand(t, p):
+        if isinstance(t, core.Zero) and not utils.tree.is_leaf(p):
+            return core.s_tangent.zeros_like(p)
+        return t
+
+    leaves, spec = utils.tree.flatten(tangent, is_leaf=lambda x: isinstance(x, core.Zero))
+    return utils.tree.unflatten(spec, map(expand, leaves, spec.flatten_up_to(primal)))
+
+
 class PushInterp(core.Interp):
     __slots__ = ["parent"]
 
@@ -59,6 +78,7 @@ class PushInterp(core.Interp):
 
     def box(self, value, /) -> Tree:
         p, t = value
+        t = expand_zeros(t, p)
         return utils.tree.map(lambda p, t: PushforwardBox(self, p, t), p, t)
 
     def unbox(self, values: Tree, /) -> TreePair:
@@ -66,15 +86,15 @@ class PushInterp(core.Interp):
         # perturbation-confusion bug. Ownership only keeps values from other
         # interpreter instances opaque to this one.
 
-        def p(v):
+        def primal(v):
             return v.primal if isinstance(v, PushforwardBox) and v.owner is self else v
 
-        def t(v):
+        def tangent(v):
             if isinstance(v, PushforwardBox) and v.owner is self:
                 return v.tangent
-            return core.Zero(core.s_tangent.map(core.avalof(v)))
+            return core.s_tangent.zeros_like(v)
 
-        return utils.tree.map(p, values), utils.tree.map(t, values)
+        return utils.tree.map(primal, values), utils.tree.map(tangent, values)
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_p, in_t = self.unbox(in_tree)
@@ -124,7 +144,7 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
     def make_t(atom):
         if stage.is_var(atom):
             return stage.Var.fresh(aval=core.s_tangent.map(atom.aval), source=atom)
-        return core.Zero(core.s_tangent.map(core.avalof(atom)))
+        return core.s_tangent.zeros_like(atom)
 
     in_p_ir = utils.tree.map(make_p, ir.in_tree)
     in_t_ir = utils.tree.map(make_t, ir.in_tree)
@@ -134,10 +154,6 @@ def pushforward(ir: stage.IR, /) -> stage.IR:
     out_tree = (out_p_ir, out_t_ir)
     eqn = stage.Eqn(p_pushforward_call, in_tree, out_tree, dict(ir=ir))
     return stage.IR([eqn], in_tree, out_tree)
-
-
-def zero_tangent(x):
-    return core.Zero(core.s_tangent.map(core.avalof(x)))
 
 
 class PFEnv:
@@ -156,7 +172,7 @@ class PFEnv:
 
     def read_t(self, atom, /):
         if not stage.is_var(atom):
-            return zero_tangent(atom)
+            return core.s_tangent.zeros_like(atom)
         value = self.tangents[atom]
         stage.no_stage_typecheck(value, core.s_tangent.map(atom.aval))
         return value
@@ -186,7 +202,7 @@ def impl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
         ):
             with core.using_interp(parent):
                 out_p = eqn.bind(in_p, **eqn.params)
-            return out_p, utils.tree.map(zero_tangent, out_p)
+            return out_p, core.s_tangent.zeros_like(out_p)
         with core.using_interp(pusher):
             out_boxed = eqn.bind(pusher.box((in_p, in_t)), **eqn.params)
         return pusher.unbox(out_boxed)
@@ -217,7 +233,7 @@ async def aimpl_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
         ):
             with core.using_interp(parent):
                 out_p = await eqn.abind(in_p, **eqn.params)
-            return out_p, utils.tree.map(zero_tangent, out_p)
+            return out_p, core.s_tangent.zeros_like(out_p)
         with core.using_interp(pusher):
             out_boxed = await eqn.abind(pusher.box((in_p, in_t)), **eqn.params)
         return pusher.unbox(out_boxed)
@@ -238,7 +254,7 @@ def abstract_pushforward_call(_: Tree, /, *, ir: stage.IR) -> TreePair:
     def t_aval(atom):
         if stage.is_var(atom):
             return core.s_tangent.map(atom.aval)
-        return core.Zero(core.s_tangent.map(core.avalof(atom)))
+        return core.s_tangent.zeros_like(atom)
 
     def p_aval(atom):
         if stage.is_var(atom):
@@ -475,10 +491,10 @@ class PullFwdInterp(core.Interp):
         return utils.tree.map(lambda p: PullbackFwdBox(self, p), value)
 
     def unbox(self, values: Tree, /) -> Tree:
-        def p(v):
+        def primal(v):
             return v.primal if isinstance(v, PullbackFwdBox) and v.owner is self else v
 
-        return utils.tree.map(p, values)
+        return utils.tree.map(primal, values)
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_p = self.unbox(in_tree)
@@ -514,10 +530,10 @@ class PullBwdInterp(core.Interp):
         return utils.tree.map(lambda c: PullbackBwdBox(self, c), value)
 
     def unbox(self, values: Tree, /) -> Tree:
-        def c(v):
+        def cotangent(v):
             return v.cotangent if isinstance(v, PullbackBwdBox) and v.owner is self else v
 
-        return utils.tree.map(c, values)
+        return utils.tree.map(cotangent, values)
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         residuals, out_c = in_tree
@@ -569,7 +585,7 @@ def pullback(ir: stage.IR, /) -> stage.IR:
     def make_c(atom):
         if stage.is_var(atom):
             return stage.Var.fresh(aval=core.s_cotangent.map(atom.aval), source=atom)
-        return core.Zero(core.s_cotangent.map(core.avalof(atom)))
+        return core.s_cotangent.zeros_like(atom)
 
     in_p_ir = utils.tree.map(make_p, ir.in_tree)
     out_c_ir = utils.tree.map(make_c, ir.out_tree)
@@ -602,7 +618,9 @@ class PBEnv:
 
     def read_c(self, atom, /):
         aval = core.s_cotangent.map(core.avalof(atom))
-        if not stage.is_var(atom) or not (values := self.cotangents[atom]):
+        if not stage.is_var(atom):
+            value = core.s_cotangent.zeros_like(atom)
+        elif not (values := self.cotangents[atom]):
             value = core.Zero(aval)
         else:
             for value in values:
@@ -695,7 +713,7 @@ def abstract_pullback_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     def c_aval(atom):
         if stage.is_var(atom):
             return core.s_cotangent.map(atom.aval)
-        return core.Zero(core.s_cotangent.map(core.avalof(atom)))
+        return core.s_cotangent.zeros_like(atom)
 
     def p_aval(atom):
         if stage.is_var(atom):

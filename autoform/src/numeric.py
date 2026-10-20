@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools as ft
 
+import autoform.src.ad as ad
 import autoform.src.core as core
 import autoform.src.pp as pp
 import autoform.src.stage as stage
@@ -49,10 +50,10 @@ class AInt(core.AVal):
         return f"{type(self).__name__}()"
 
     def join(self, other, /):
-        match self, other:
-            case AInt(), bool():
+        match other:
+            case bool():
                 raise TypeError(f"Cannot join {self!r} and {other!r}")
-            case AInt(), int() | AInt() | core.Zero(aval=AInt()):
+            case int() | AInt() | core.Zero(aval=AInt()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
@@ -85,8 +86,8 @@ class AFloat(core.AVal):
         return left + right
 
     def join(self, other, /):
-        match self, other:
-            case AFloat(), float() | AFloat() | core.Zero(aval=AFloat()):
+        match other:
+            case float() | AFloat() | core.Zero(aval=AFloat()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
@@ -115,8 +116,8 @@ class ABool(core.AVal):
         return f"{type(self).__name__}()"
 
     def join(self, other, /):
-        match self, other:
-            case ABool(), bool() | ABool() | core.Zero(aval=ABool()):
+        match other:
+            case bool() | ABool() | core.Zero(aval=ABool()):
                 return self
         raise TypeError(f"Cannot join {self!r} and {other!r}")
 
@@ -185,7 +186,6 @@ abstract_neg.register(AFloat, abstract_float)
 
 def pushforward_neg(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    t = t.aval.zero() if isinstance(t, core.Zero) else t
     return neg(p), neg(t)
 
 
@@ -207,8 +207,8 @@ core.r_aimpl.set(p_neg, utils.asyncify(impl_neg))
 core.r_abstract.set(p_neg, abstract_neg)
 core.r_batch.set(p_neg, batch_neg)
 core.r_abatch.set(p_neg, utils.asyncify(batch_neg))
-core.r_push.set(p_neg, pushforward_neg)
-core.r_apush.set(p_neg, utils.asyncify(pushforward_neg))
+core.r_push.set(p_neg, ad.concrete_zeros(pushforward_neg))
+core.r_apush.set(p_neg, utils.asyncify(ad.concrete_zeros(pushforward_neg)))
 core.r_pull_fwd.set(p_neg, pullback_fwd_neg)
 core.r_apull_fwd.set(p_neg, utils.asyncify(pullback_fwd_neg))
 core.r_pull_bwd.set(p_neg, pullback_bwd_neg)
@@ -249,8 +249,6 @@ abstract_add.register((AFloat, AFloat), abstract_float)
 
 def pushforward_add(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    t = utils.tree.map(zero, t)
     return p_add.bind(p), p_add.bind(t)
 
 
@@ -272,8 +270,8 @@ core.r_aimpl.set(p_add, utils.asyncify(impl_add))
 core.r_abstract.set(p_add, abstract_add)
 core.r_batch.set(p_add, batch_add)
 core.r_abatch.set(p_add, utils.asyncify(batch_add))
-core.r_push.set(p_add, pushforward_add)
-core.r_apush.set(p_add, utils.asyncify(pushforward_add))
+core.r_push.set(p_add, ad.concrete_zeros(pushforward_add))
+core.r_apush.set(p_add, utils.asyncify(ad.concrete_zeros(pushforward_add)))
 core.r_pull_fwd.set(p_add, pullback_fwd_add)
 core.r_apull_fwd.set(p_add, utils.asyncify(pullback_fwd_add))
 core.r_pull_bwd.set(p_add, pullback_bwd_add)
@@ -314,8 +312,6 @@ abstract_sub.register((AFloat, AFloat), abstract_float)
 
 def pushforward_sub(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
-    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    t = utils.tree.map(zero, t)
     return p_sub.bind(p), p_sub.bind(t)
 
 
@@ -337,8 +333,8 @@ core.r_aimpl.set(p_sub, utils.asyncify(impl_sub))
 core.r_abstract.set(p_sub, abstract_sub)
 core.r_batch.set(p_sub, batch_sub)
 core.r_abatch.set(p_sub, utils.asyncify(batch_sub))
-core.r_push.set(p_sub, pushforward_sub)
-core.r_apush.set(p_sub, utils.asyncify(pushforward_sub))
+core.r_push.set(p_sub, ad.concrete_zeros(pushforward_sub))
+core.r_apush.set(p_sub, utils.asyncify(ad.concrete_zeros(pushforward_sub)))
 core.r_pull_fwd.set(p_sub, pullback_fwd_sub)
 core.r_apull_fwd.set(p_sub, utils.asyncify(pullback_fwd_sub))
 core.r_pull_bwd.set(p_sub, pullback_bwd_sub)
@@ -380,8 +376,7 @@ abstract_mul.register((AFloat, AFloat), abstract_float)
 def pushforward_mul(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     a, b = p
-    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    da, db = utils.tree.map(zero, t)
+    da, db = t
     return mul(a, b), add(mul(da, b), mul(a, db))
 
 
@@ -403,8 +398,8 @@ core.r_aimpl.set(p_mul, utils.asyncify(impl_mul))
 core.r_abstract.set(p_mul, abstract_mul)
 core.r_batch.set(p_mul, batch_mul)
 core.r_abatch.set(p_mul, utils.asyncify(batch_mul))
-core.r_push.set(p_mul, pushforward_mul)
-core.r_apush.set(p_mul, utils.asyncify(pushforward_mul))
+core.r_push.set(p_mul, ad.concrete_zeros(pushforward_mul))
+core.r_apush.set(p_mul, utils.asyncify(ad.concrete_zeros(pushforward_mul)))
 core.r_pull_fwd.set(p_mul, pullback_fwd_mul)
 core.r_apull_fwd.set(p_mul, utils.asyncify(pullback_fwd_mul))
 core.r_pull_bwd.set(p_mul, pullback_bwd_mul)
@@ -446,8 +441,7 @@ abstract_div.register((AFloat, AFloat), abstract_float)
 def pushforward_div(in_tree: Tree, /) -> TreePair:
     p, t = in_tree
     a, b = p
-    zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    da, db = utils.tree.map(zero, t)
+    da, db = t
     return div(a, b), div(sub(mul(da, b), mul(a, db)), mul(b, b))
 
 
@@ -471,8 +465,8 @@ core.r_aimpl.set(p_div, utils.asyncify(impl_div))
 core.r_abstract.set(p_div, abstract_div)
 core.r_batch.set(p_div, batch_div)
 core.r_abatch.set(p_div, utils.asyncify(batch_div))
-core.r_push.set(p_div, pushforward_div)
-core.r_apush.set(p_div, utils.asyncify(pushforward_div))
+core.r_push.set(p_div, ad.concrete_zeros(pushforward_div))
+core.r_apush.set(p_div, utils.asyncify(ad.concrete_zeros(pushforward_div)))
 core.r_pull_fwd.set(p_div, pullback_fwd_div)
 core.r_apull_fwd.set(p_div, utils.asyncify(pullback_fwd_div))
 core.r_pull_bwd.set(p_div, pullback_bwd_div)
@@ -490,7 +484,8 @@ def abstract_bool(values: Tree, /) -> ABool:
 
 def pushforward_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     p, _ = in_tree
-    return prim.bind(p), core.Zero(core.s_tangent.map(ABool()))
+    out_p = prim.bind(p)
+    return out_p, core.s_tangent.zeros_like(out_p)
 
 
 def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
@@ -498,13 +493,8 @@ def pullback_fwd_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:
 
 
 def pullback_bwd_compare(in_tree: Tree, /) -> Tree:
-    def make_c(x):
-        if isinstance(x, core.Zero):
-            return x
-        return core.Zero(core.s_cotangent.map(core.avalof(x)))
-
     p, _ = in_tree
-    return utils.tree.map(make_c, p)
+    return core.s_cotangent.zeros_like(p)
 
 
 def batch_compare(prim: core.Prim, in_tree: Tree, /) -> TreePair:

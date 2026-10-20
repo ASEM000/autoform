@@ -184,7 +184,7 @@ class CustomFunc:
             ...     p, t = in_tree
             ...     (dx,) = t
             ...     out_p = call(*p)
-            ...     out_t = "delta " + (dx.aval.zero() if isinstance(dx, af.extend.Zero) else dx)
+            ...     out_t = "delta " + af.extend.instantiate(dx)
             ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
             >>> af.pushforward(ir).call(("hello",), ("change",))
@@ -207,7 +207,7 @@ class CustomFunc:
             ...     p, t = in_tree
             ...     (dx,) = t
             ...     out_p = call(*p)
-            ...     out_t = "async delta " + (dx.aval.zero() if isinstance(dx, af.extend.Zero) else dx)
+            ...     out_t = "async delta " + af.extend.instantiate(dx)
             ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
             >>> asyncio.run(af.pushforward(ir).acall(("hello",), ("change",)))
@@ -379,7 +379,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     p, t = in_tree
         ...     (dx,) = t
         ...     out_p = call(*p)
-        ...     out_t = "delta: " + (dx.aval.zero() if isinstance(dx, af.extend.Zero) else dx)
+        ...     out_t = "delta: " + af.extend.instantiate(dx)
         ...     return out_p, out_t
         >>> af.pushforward(base).call(("hello",), ("change",))
         ('[hello]', 'delta: change')
@@ -410,7 +410,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         A common use is wrapping an LM call so the forward call remains normal,
         while pushforward and pullback use prompts written for that application.
 
-        >>> from autoform.extend import Zero
+        >>> from autoform.extend import instantiate
         >>> @af.custom
         ... def summarize(text, model):
         ...     message = "Summarize this in one sentence: " + text
@@ -427,7 +427,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     out_p = call(*p)
         ...     prompt = (
         ...         "Original input:\\n" + text
-        ...         + "\\n\\nInput edit:\\n" + (t_text.aval.zero() if isinstance(t_text, Zero) else t_text)
+        ...         + "\\n\\nInput edit:\\n" + instantiate(t_text)
         ...         + "\\n\\nDescribe how the summary should change."
         ...     )
         ...     out_t = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]
@@ -444,7 +444,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...     prompt = (
         ...         "Original input:\\n" + text
         ...         + "\\n\\nLM output:\\n" + output
-        ...         + "\\n\\nDownstream feedback:\\n" + (c.aval.zero() if isinstance(c, Zero) else c)
+        ...         + "\\n\\nDownstream feedback:\\n" + instantiate(c)
         ...         + "\\n\\nReturn feedback for improving the original input."
         ...     )
         ...     text_cotangent = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]
