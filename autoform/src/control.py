@@ -193,27 +193,27 @@ async def apushforward_switch(in_tree, /, *, branches: Branches):
 
 def pullback_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
     key, operands = in_tree
-    fwd, _ = ad.fwd_bwd(branches[key])
+    fwd, _ = ad.pullback_halves(branches[key])
     out, residual = fwd.call(*operands)
     return out, (key, residual)
 
 
 async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
     key, operands = in_tree
-    fwd, _ = ad.fwd_bwd(branches[key])
+    fwd, _ = ad.pullback_halves(branches[key])
     out, residual = await fwd.acall(*operands)
     return out, (key, residual)
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     (key, residual), out_c = in_tree
-    _, bwd = ad.fwd_bwd(branches[key])
+    _, bwd = ad.pullback_halves(branches[key])
     return (core.s_cotangent.zeros_like(key), bwd.call(residual, out_c))
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     (key, residual), out_c = in_tree
-    _, bwd = ad.fwd_bwd(branches[key])
+    _, bwd = ad.pullback_halves(branches[key])
     return (core.s_cotangent.zeros_like(key), await bwd.acall(residual, out_c))
 
 
@@ -455,7 +455,7 @@ def pullback_fwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    fwd, _ = ad.fwd_bwd(body_ir)
+    fwd, _ = ad.pullback_halves(body_ir)
     out = in_tree
     residuals = []
 
@@ -476,7 +476,7 @@ async def apull_fwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    fwd, _ = ad.fwd_bwd(body_ir)
+    fwd, _ = ad.pullback_halves(body_ir)
     out = in_tree
     residuals = []
 
@@ -649,7 +649,7 @@ def pullback_bwd_while_loop(
 ) -> Tree:
     residuals, c = in_tree
     del cond_ir, max_iters
-    _, bwd = ad.fwd_bwd(body_ir)
+    _, bwd = ad.pullback_halves(body_ir)
 
     for residual in reversed(residuals):
         (c,) = bwd.call(residual, c)
@@ -667,7 +667,7 @@ async def apull_bwd_while_loop(
 ) -> Tree:
     residuals, c = in_tree
     del cond_ir, max_iters
-    _, bwd = ad.fwd_bwd(body_ir)
+    _, bwd = ad.pullback_halves(body_ir)
 
     for residual in reversed(residuals):
         (c,) = await bwd.acall(residual, c)

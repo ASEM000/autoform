@@ -97,26 +97,26 @@ async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]
 
 
 def pullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    fwd, _ = ad.fwd_bwd(trace_custom_func(call, in_tree))
+    fwd, _ = ad.pullback_halves(trace_custom_func(call, in_tree))
     out, residual = fwd.call(*in_tree)
     return out, (in_tree, out, residual)
 
 
 async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    fwd, _ = ad.fwd_bwd(trace_custom_func(call, in_tree))
+    fwd, _ = ad.pullback_halves(trace_custom_func(call, in_tree))
     out, residual = await fwd.acall(*in_tree)
     return out, (in_tree, out, residual)
 
 
 def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
     (p, _, residual), c = in_tree
-    _, bwd = ad.fwd_bwd(trace_custom_func(call, p))
+    _, bwd = ad.pullback_halves(trace_custom_func(call, p))
     return bwd.call(residual, c)
 
 
 async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
     (p, _, residual), c = in_tree
-    _, bwd = ad.fwd_bwd(trace_custom_func(call, p))
+    _, bwd = ad.pullback_halves(trace_custom_func(call, p))
     return await bwd.acall(residual, c)
 
 
