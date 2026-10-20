@@ -14,6 +14,7 @@
 
 import asyncio
 import json
+import re
 from contextlib import nullcontext
 
 import optree
