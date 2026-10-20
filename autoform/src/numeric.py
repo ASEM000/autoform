@@ -46,6 +46,12 @@ class AInt(core.AVal):
 
     __slots__ = []
 
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
 
@@ -75,6 +81,12 @@ class AFloat(core.AVal):
     """
 
     __slots__ = []
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
@@ -111,6 +123,12 @@ class ABool(core.AVal):
     """
 
     __slots__ = []
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"

@@ -149,6 +149,12 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
     class Feedback: ...
 
     class AValValue(core.AVal):
+        def __eq__(self, other) -> bool:
+            return type(self) is type(other)
+
+        def __hash__(self) -> int:
+            return hash(type(self))
+
         def join(self, other):
             match other:
                 case core.Zero(aval=AValValue() as aval):
@@ -159,6 +165,12 @@ def test_pullback_rejects_invalid_accumulated_cotangent(executor):
 
     class AValFeedback(core.AVal):
         __slots__ = []
+
+        def __eq__(self, other) -> bool:
+            return type(self) is type(other)
+
+        def __hash__(self) -> int:
+            return hash(type(self))
 
         def zero(self):
             return Feedback()
@@ -234,6 +246,12 @@ def test_pullback_rechecks_mutated_contribution():
 
 def test_pullback_maps_cotangent_once():
     class AValValue(core.AVal):
+        def __eq__(self, other) -> bool:
+            return type(self) is type(other)
+
+        def __hash__(self) -> int:
+            return hash(type(self))
+
         def join(self, other):
             match other:
                 case core.Zero(aval=AValValue() as aval):
@@ -415,6 +433,12 @@ def test_wrapper_uses_derivative_space(transform, space, change):
             self.value = value
 
     class AValText(core.AVal):
+        def __eq__(self, other) -> bool:
+            return type(self) is type(other)
+
+        def __hash__(self) -> int:
+            return hash(type(self))
+
         def join(self, other):
             match other:
                 case core.Zero(aval=AValText() as aval):
@@ -424,6 +448,12 @@ def test_wrapper_uses_derivative_space(transform, space, change):
             raise TypeError(f"Cannot join {self!r} and {other!r}")
 
     class AValChange(core.AVal):
+        def __eq__(self, other) -> bool:
+            return type(self) is type(other)
+
+        def __hash__(self) -> int:
+            return hash(type(self))
+
         def join(self, other):
             match other:
                 case core.Zero(aval=AValChange() as aval):
@@ -536,6 +566,12 @@ class TestCotangentHelpers:
         class AValText(core.AVal):
             __slots__ = []
 
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
             def zero(self):
                 return Text("")
 
@@ -567,6 +603,12 @@ class TestCotangentHelpers:
                 self.value = value
 
         class AValText(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
             def join(self, other):
                 match other:
                     case core.Zero(aval=AValText() as aval):
@@ -577,6 +619,12 @@ class TestCotangentHelpers:
 
         class AValTextFeedback(core.AVal):
             __slots__ = []
+
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
 
             def zero(self):
                 return TextFeedback("")
@@ -1057,6 +1105,12 @@ def test_pullback_unused_batched_output(executor):
 def test_nonidentity_primal_space(executor, transform):
 
     class AValValue(core.AVal):
+        def __eq__(self, other) -> bool:
+            return type(self) is type(other)
+
+        def __hash__(self) -> int:
+            return hash(type(self))
+
         def join(self, other):
             match other:
                 case core.Zero(aval=AValValue() as aval):

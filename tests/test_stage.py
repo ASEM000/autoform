@@ -111,13 +111,13 @@ class TestBuildIR:
         assert result == ("dogs", 2, 2.5, False)
 
     def test_trace_unsupported_input_leaf_errors(self):
-        class Opaque: ...
+        class Unregistered: ...
 
         def program(x):
             return x
 
         with pytest.raises(AssertionError, match="Unsupported input leaf type"):
-            stage.trace(program)(Opaque())
+            stage.trace(program)(Unregistered())
 
     def test_trace_uses_registered_aval_rule(self):
         class TraceBlob(Blob): ...
@@ -1139,6 +1139,12 @@ class TestTraceValuePythonOps:
         class Value(Blob): ...
 
         class AValValue(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
             def join(self, other):
                 match other:
                     case core.Zero(aval=AValValue() as aval):
@@ -1166,6 +1172,12 @@ class TestTraceValuePythonOps:
         class Value(Blob): ...
 
         class AValValue(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
             def join(self, other):
                 match other:
                     case core.Zero(aval=AValValue() as aval):
@@ -1203,6 +1215,12 @@ class TestTraceValuePythonOps:
                 self.values = iter(values)
 
         class AValValues(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
             def join(self, other):
                 match other:
                     case core.Zero(aval=AValValues() as aval):
@@ -1229,6 +1247,12 @@ class TestTraceValuePythonOps:
                 self.values = (x, y)
 
         class AValPair(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
             def join(self, other):
                 match other:
                     case core.Zero(aval=AValPair() as aval):
@@ -1547,3 +1571,42 @@ def test_trace_transform_boundary(
     assert ir.eqns[0].prim.name == primitive
     result = executor(ir, *args)
     assert result == expected
+
+
+def test_opaque_aval_is_one_per_pair():
+    lhs, rhs = stage.AOpaque.fresh(), stage.AOpaque.fresh()
+    opaque = stage.Opaque(lhs.id, {"private": [object()]})
+
+    assert lhs == stage.AOpaque(lhs.id) and lhs != rhs
+    assert len({lhs, stage.AOpaque(lhs.id), rhs}) == 2
+    assert repr(lhs) == f"AOpaque({lhs.id})"
+    assert core.avalof(opaque) == lhs
+    assert repr(opaque) == f"Opaque({lhs.id})"
+    assert "private" not in repr(opaque)
+    for space in (core.s_primal, core.s_tangent, core.s_cotangent):
+        assert space.map(lhs) == lhs
+
+
+def test_opaque_aval_join():
+    aval, other = stage.AOpaque.fresh(), stage.AOpaque.fresh()
+    assert aval.join(stage.AOpaque(aval.id)) is aval
+    assert aval.join(stage.Opaque(aval.id, None)) is aval
+    assert aval.join(core.Zero(aval)) is aval
+    for wrong in (other, stage.Opaque(other.id, None), core.Zero(other), object(), 1.0):
+        with pytest.raises(TypeError, match="Cannot join AOpaque"):
+            aval.join(wrong)
+
+
+def test_trace_opaque_is_one_var_consumed_by_its_pair():
+    aval = stage.AOpaque.fresh()
+    opaque = stage.Opaque(aval.id, ("private", [1.0, 2.0]))
+
+    ir = stage.trace(lambda x, o: (x, o))("seed", opaque)
+
+    x, o = ir.in_tree
+    assert stage.is_var(o) and o.aval == aval
+    assert ir.out_tree == (x, o)
+    assert ir.call("hello", opaque) == ("hello", opaque)
+    assert utils.tree.leaves(opaque) == ["private", 1.0, 2.0]
+    with pytest.raises(TypeError, match="Cannot join AOpaque"):
+        ir.call("hello", stage.Opaque(stage.AOpaque.fresh().id, None))

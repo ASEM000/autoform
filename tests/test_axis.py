@@ -33,6 +33,12 @@ def greet(name, greeting):
 
 
 class AValTagged(core.AVal):
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
+
     def __init__(self, tag):
         self.tag = tag
 

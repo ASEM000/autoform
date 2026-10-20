@@ -70,8 +70,10 @@ from autoform.src.order import serial_fanout as serial_fanout
 from autoform.src.path import p_factor as p_factor
 from autoform.src.path import p_weight_call as p_weight_call
 from autoform.src.stage import IR as IR
+from autoform.src.stage import AOpaque as AOpaque
 from autoform.src.stage import Dunder as Dunder
 from autoform.src.stage import Eqn as Eqn
+from autoform.src.stage import Opaque as Opaque
 from autoform.src.stage import Var as Var
 from autoform.src.stage import active_tags as active_tags
 from autoform.src.stage import aval_if_var as aval_if_var
