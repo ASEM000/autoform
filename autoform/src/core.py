@@ -38,12 +38,6 @@ aval_types: dict[type, Callable[[Any], AVal]] = {}
 class AVal:
     """Base class for abstract values used by traced programs.
 
-    Abstract values carry trace-time information about runtime values. Extension
-    domains subclass ``AVal`` to describe the information primitive abstract
-    rules need, such as shape, dtype, schema, or other static metadata.
-    By default, equality and hashing depend only on the AVal class. Domains with
-    metadata should override both methods to include that metadata.
-
     Example:
         >>> import autoform.extend as afe
         >>> class AValArray(afe.AVal):
@@ -53,12 +47,6 @@ class AVal:
     """
 
     __slots__ = []
-
-    def __eq__(self, other) -> bool:
-        return type(self) is type(other)
-
-    def __hash__(self) -> int:
-        return hash(type(self))
 
     def zero(self):
         # NOTE(asem): returns concrete zero of this type. for example empty string for string type
