@@ -35,6 +35,26 @@ type Tree[T] = utils.Tree[T]
 
 
 # ==================================================================================================
+# TRACE TYPES
+# ==================================================================================================
+
+type AValRule = Callable[[Any], core.AVal]
+
+trace_types: set[type] = set()
+
+
+def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
+    """Register a Python type and its abstract-value rule for tracing."""
+    core.aval_types[type] = aval_rule
+    trace_types.add(type)
+    return aval_rule
+
+
+def is_traceable(x) -> TypeGuard[str | int | float | bool]:
+    return type(x) in trace_types
+
+
+# ==================================================================================================
 # TAGS
 # ==================================================================================================
 
@@ -76,8 +96,61 @@ def tag(*tags: Hashable) -> Generator[tuple[Hashable, ...], None, None]:
 
 
 # ==================================================================================================
-# IR VARS
+# IR VALUES
 # ==================================================================================================
+
+
+class AOpaque(core.AVal):
+    # NOTE(asem): a distinct abstract value per producer/consumer pair, keyed by ``id``, so
+    # an `Opaque` typechecks only against the IR it was produced for.
+    __slots__ = ["id"]
+    counter: ClassVar[it.count[int]] = it.count()
+
+    def __init__(self, id: int, /):
+        assert type(id) is int
+        self.id = id
+
+    @classmethod
+    def fresh(cls) -> Self:
+        return cls(next(cls.counter))
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other) and self.id == other.id
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.id))
+
+    def join(self, other, /) -> Self:
+        match other:
+            case AOpaque(id=id) | core.Zero(aval=AOpaque(id=id)) | Opaque(id=id) if id == self.id:
+                return self
+        raise TypeError(f"Cannot join {self!r} and {other!r}")
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.id})"
+
+
+class Opaque:
+    __slots__ = ["id", "value"]
+
+    def __init__(self, id: int, value: Any, /):
+        assert type(id) is int
+        self.id = id
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.id})"
+
+
+utils.tree.register_node(
+    Opaque,
+    lambda opaque: ((opaque.value,), opaque.id, ("value",)),
+    lambda id, children: Opaque(id, *children),
+)
+register_trace_type(Opaque, lambda opaque: AOpaque(opaque.id))
+core.s_primal.set(AOpaque, lambda aval: aval)
+core.s_tangent.set(AOpaque, lambda aval: aval)
+core.s_cotangent.set(AOpaque, lambda aval: aval)
 
 
 # NOTE(asem): wrapped IR leaves are variables (placeholders) for user inputs.
@@ -531,21 +604,6 @@ def liveness(ir: IR, /, *, out_used: UsedTree | None = None) -> Liveness:
 # TRACING
 # ==================================================================================================
 
-type AValRule = Callable[[Any], core.AVal]
-
-trace_types: set[type] = set()
-
-
-def register_trace_type[T: AValRule](type: type, aval_rule: T, /) -> T:
-    """Register a Python type and its abstract-value rule for tracing."""
-    core.aval_types[type] = aval_rule
-    trace_types.add(type)
-    return aval_rule
-
-
-def is_traceable(x) -> TypeGuard[str | int | float | bool]:
-    return type(x) in trace_types
-
 
 fold_flag: ContextVar[bool] = ContextVar("fold_mode", default=False)
 no_stage_flag: ContextVar[bool] = ContextVar("no_trace_flag", default=False)
@@ -991,7 +1049,8 @@ def trace[*A, R](
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
         arg_tree = args
-        in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_static_spec)
+        is_spec_leaf = lambda x: is_static_spec(x) or is_traceable(x)
+        in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_spec_leaf)
         in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
         with core.using_interp(TraceInterp()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))

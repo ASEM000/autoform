@@ -85,9 +85,19 @@ class TestAVal:
         assert aval.join(x) == aval
 
     def test_default_equality_and_hash(self):
-        class AValX(core.AVal): ...
+        class AValX(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
 
-        class AValY(core.AVal): ...
+            def __hash__(self) -> int:
+                return hash(type(self))
+
+        class AValY(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
 
         assert AValX() == AValX()
         assert AValX() != AValY()
@@ -155,11 +165,26 @@ class TestSpace:
         assert space.map(aval) is aval
 
     def test_custom_ad_spaces(self):
-        class AValText(core.AVal): ...
+        class AValText(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
 
-        class AValTextEdit(core.AVal): ...
+            def __hash__(self) -> int:
+                return hash(type(self))
 
-        class AValTextFeedback(core.AVal): ...
+        class AValTextEdit(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
+
+        class AValTextFeedback(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
 
         s_tangent = core.Space("tangent")
         s_cotangent = core.Space("cotangent")
@@ -186,7 +211,12 @@ class TestSpace:
         ],
     )
     def test_missing_ad_space_rule(self, space):
-        class AValUnknown(core.AVal): ...
+        class AValUnknown(core.AVal):
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
 
         with pytest.raises(TypeError, match=f"No {space.name} aval rule registered"):
             space.map(AValUnknown())
@@ -226,6 +256,12 @@ class TestZero:
     def test_zero_materializes_with_aval_metadata(self):
         class AValBlob(core.AVal):
             __slots__ = ["size"]
+
+            def __eq__(self, other) -> bool:
+                return type(self) is type(other)
+
+            def __hash__(self) -> int:
+                return hash(type(self))
 
             def __init__(self, size):
                 self.size = size
