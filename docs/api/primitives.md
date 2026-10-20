@@ -51,6 +51,13 @@ Primitives have registered behavior for execution and supported transforms. Trac
 .. autofunction:: autoform.checkpoint
 ```
 
+## Opaque Values
+
+```{eval-rst}
+.. autofunction:: autoform.seal
+.. autofunction:: autoform.unseal
+```
+
 ## Trace Weight
 
 ```{eval-rst}
