@@ -18,6 +18,7 @@ Rule registries use primitive instances as dispatch keys. Rules for an existing 
 .. autodata:: autoform.extend.p_ge
 .. autodata:: autoform.extend.p_fill
 .. autodata:: autoform.extend.p_checkpoint
+.. autodata:: autoform.extend.p_untyped
 .. autodata:: autoform.extend.p_stop_gradient
 .. autodata:: autoform.extend.p_switch
 .. autodata:: autoform.extend.p_while_loop
@@ -30,6 +31,4 @@ Rule registries use primitive instances as dispatch keys. Rules for an existing 
 .. autodata:: autoform.extend.p_pushforward_call
 .. autodata:: autoform.extend.p_pullback_fwd_call
 .. autodata:: autoform.extend.p_pullback_bwd_call
-.. autodata:: autoform.extend.p_seal
-.. autodata:: autoform.extend.p_unseal
 ```
