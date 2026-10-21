@@ -603,11 +603,15 @@ def fwd_bwd(ir: stage.IR, /) -> tuple[stage.IR, stage.IR]:
     fwd, bwd = pullback_halves(ir)
     out_p, token = fwd.out_tree
     _, out_c = bwd.in_tree
-    residual = stage.Var.fresh(aval=opaque.AOpaque(object()))
-    seal_eqn = stage.Eqn(opaque.p_seal, token, residual, dict(key=core.avalof(residual).key))
+    residual = stage.Var.fresh(aval=opaque.AOpaque(ir))
+    # NOTE(asem): ir as key ensures same ir can seal/unseal the residual
+    seal_eqn = stage.Eqn(opaque.p_seal, token, residual, dict(key=ir))
     fwd = stage.IR([*fwd.eqns, seal_eqn], fwd.in_tree, (out_p, residual))
-    unseal_eqn = stage.Eqn(opaque.p_unseal, residual, token, dict(key=core.avalof(residual).key))
-    bwd = stage.IR([unseal_eqn, *bwd.eqns], (residual, out_c), bwd.out_tree)
+    opened = stage.Var.fresh(aval=opaque.AOpaque())
+    unseal_eqn = stage.Eqn(opaque.p_unseal, residual, opened, dict(key=ir))
+    (bwd_eqn,) = bwd.eqns
+    bwd_eqn = stage.Eqn(bwd_eqn.prim, (opened, out_c), bwd_eqn.out_tree, bwd_eqn.params)
+    bwd = stage.IR([unseal_eqn, bwd_eqn], (residual, out_c), bwd.out_tree)
     return fwd, bwd
 
 
