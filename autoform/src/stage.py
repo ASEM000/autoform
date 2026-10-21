@@ -212,17 +212,20 @@ class IR[*A, R]:
         out_tree: Tree describing the runtime output structure.
     """
 
-    __slots__ = ["name", "eqns", "in_tree", "out_tree"]
+    __slots__ = ["id", "eqns", "in_tree", "out_tree"]
     counter: ClassVar[it.count[int]] = it.count(0)
 
     def __init__(self, eqns: list[Eqn], in_tree: Tree, out_tree: Tree):
         assert isinstance(eqns, list)
         eqns = tuple(eqns)
         assert all(isinstance(eqn, Eqn) for eqn in eqns)
-        self.name = f"ir{next(self.counter)}"
+        self.id = next(self.counter)
         self.eqns = eqns
         self.in_tree = in_tree
         self.out_tree = out_tree
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}(id={self.id})"
 
     def __repr__(self) -> str:
         def function(value):
@@ -378,7 +381,7 @@ def pretty_var(var):
 
 @ft.partial(pp.register, IR)
 def pretty_ir(ir):
-    return pp.style(ir.name, pp.Theme.FUNCTION)
+    return pp.style(f"ir{ir.id}", pp.Theme.FUNCTION)
 
 
 # ==================================================================================================
