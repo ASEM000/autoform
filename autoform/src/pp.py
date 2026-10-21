@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import functools as ft
 from collections.abc import Callable
-from enum import IntEnum
 from typing import Any
 
 from optree import GetAttrEntry
@@ -53,11 +52,11 @@ def pretty(value, default=None):
         return rule(value)
     children, spec = utils.tree.flatten(value, is_leaf=lambda child: child is not value)
     if value is not None and not spec.is_leaf():
-        return style(type(value).__name__, Code.BLUE), "(", join(map(pretty, children)), ")"
-    return style(repr(value), Code.GREEN) if default is None else default(value)
+        return style(type(value).__name__, Theme.TYPE), bracket("(", map(pretty, children), ")")
+    return style(repr(value), literal_color(value)) if default is None else default(value)
 
 
-def join(parts, sep=", "):
+def join(parts, sep):
     """Join document parts with a separator."""
     doc = []
     for part in parts:
@@ -73,16 +72,35 @@ def is_doc(node):
     return isinstance(node, Doc)
 
 
-class Code(IntEnum):
-    BOLD = 1
-    BLACK = 30
-    RED = 31
-    GREEN = 32
-    YELLOW = 33
-    BLUE = 34
-    MAGENTA = 35
-    CYAN = 36
-    WHITE = 37
+def children(doc):
+    return reversed(utils.tree.leaves(doc, is_leaf=is_doc))
+
+
+def rgb(color: int, /) -> tuple[int, ...]:
+    return 38, 2, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF
+
+
+# NOTE(asem): VS CODE theme
+class Theme:
+    KEYWORD = rgb(0x569CD6)
+    CONTROL = rgb(0xC586C0)
+    FUNCTION = rgb(0xDCDCAA)
+    VARIABLE = rgb(0x9CDCFE)
+    TYPE = rgb(0x4EC9B0)
+    STRING = rgb(0xCE9178)
+    NUMBER = rgb(0xB5CEA8)
+    CONSTANT = rgb(0x569CD6)
+
+
+def literal_color(value: Any, /) -> tuple[int, ...]:
+    match value:
+        case bool() | None:
+            return Theme.CONSTANT
+        case int() | float() | complex():
+            return Theme.NUMBER
+        case str() | bytes():
+            return Theme.STRING
+    return ()
 
 
 class Line(Doc):
@@ -169,10 +187,11 @@ def align(doc):
     return Align(doc)
 
 
-def style(doc, /, *codes: int):
+def style(doc, /, *codes: int | tuple[int, ...]):
     """Apply ordered ANSI style codes without changing layout width."""
+    codes = tuple(c for code in codes for c in (code if isinstance(code, tuple) else (code,)))
     assert all(isinstance(code, int) for code in codes)
-    return Style(doc, codes=tuple(map(int, codes)))
+    return Style(doc, codes=codes)
 
 
 def line(alt: str = " "):
@@ -186,21 +205,30 @@ def hardline():
     return Line(None)
 
 
+def bracket(left: str, parts, right, suffix: str = "", *, indent: int = 4):
+    """Comma-separate ``parts`` between ``left`` and ``right``, one per line if they do not fit."""
+    parts = list(parts)
+    if not parts:
+        return left, right
+    body = line(""), join(parts, (",", line())), suffix
+    return group(left, nest(indent, body), line(""), right)
+
+
 @ft.partial(register, tuple)
 def pretty_tuple(value):
     suffix = "," if len(value) == 1 else ""
-    return "(", join(map(pretty, value)), suffix, ")"
+    return bracket("(", map(pretty, value), ")", suffix)
 
 
 @ft.partial(register, list)
 def pretty_list(value):
-    return "[", join(map(pretty, value)), "]"
+    return bracket("[", map(pretty, value), "]")
 
 
 @ft.partial(register, dict)
 def pretty_dict(value):
     items = [(pretty(key), ": ", pretty(child)) for key, child in value.items()]
-    return "{", join(items), "}"
+    return bracket("{", items, "}")
 
 
 def next_column(column: int, text: str) -> int:
@@ -210,16 +238,16 @@ def next_column(column: int, text: str) -> int:
 
 def ansi_style(codes: tuple[int, ...]):
     # NOTE(asem): reset the style (0) before applying the incoming codes.
-    return "\x1b[" + ";".join(("0", *(str(int(code)) for code in codes))) + "m"
+    return "\x1b[" + ";".join(map(str, (0, *codes))) + "m"
 
 
 def is_flat_fit(doc, remaining: int) -> bool:
-    pending = list(reversed(utils.tree.leaves(doc, is_leaf=is_doc)))
+    pending = list(children(doc))
     while pending and remaining >= 0:
         node = pending.pop()
         match node:
             case Group(doc=child) | Nest(doc=child) | Align(doc=child) | Style(doc=child):
-                pending.extend(reversed(utils.tree.leaves(child, is_leaf=is_doc)))
+                pending.extend(children(child))
             case Line(alt=None):
                 return False
             case Line(alt=alt):
@@ -238,8 +266,7 @@ def layout(doc, /, *, width: int = 80) -> str:
     column = 0
     terminal_style = ()
 
-    nodes = reversed(utils.tree.leaves(doc, is_leaf=is_doc))
-    pending = [(node, 0, False, terminal_style) for node in nodes]
+    pending = [(node, 0, False, terminal_style) for node in children(doc)]
 
     while pending:
         node, indent, flat, node_style = pending.pop()
@@ -249,19 +276,17 @@ def layout(doc, /, *, width: int = 80) -> str:
         match node:
             case Group(doc=child):
                 child_flat = flat or is_flat_fit(child, width - column)
-                children = reversed(utils.tree.leaves(child, is_leaf=is_doc))
-                pending.extend((node, indent, child_flat, node_style) for node in children)
+                pending.extend((node, indent, child_flat, node_style) for node in children(child))
             case Nest(amount=amount, doc=child):
-                children = reversed(utils.tree.leaves(child, is_leaf=is_doc))
-                pending.extend((node, indent + amount, flat, node_style) for node in children)
+                pending.extend(
+                    (node, indent + amount, flat, node_style) for node in children(child)
+                )
             case Align(doc=child):
-                children = reversed(utils.tree.leaves(child, is_leaf=is_doc))
-                pending.extend((node, column, flat, node_style) for node in children)
+                pending.extend((node, column, flat, node_style) for node in children(child))
             case Style(doc=child, codes=codes):
                 # NOTE(asem): repeated style is harmless
                 child_style = node_style + codes
-                children = reversed(utils.tree.leaves(child, is_leaf=is_doc))
-                pending.extend((node, indent, flat, child_style) for node in children)
+                pending.extend((node, indent, flat, child_style) for node in children(child))
             case Line(alt=alt):
                 text = alt if flat and alt is not None else "\n" + " " * indent
                 chunks.append(text)

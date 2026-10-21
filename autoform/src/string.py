@@ -71,7 +71,7 @@ class AStr(core.AVal):
 
 @ft.partial(pp.register, AStr)
 def pretty_astr(aval):
-    return pp.style(type(aval).__name__, pp.Code.BLUE), "()"
+    return pp.style(type(aval).__name__, pp.Theme.TYPE), "()"
 
 
 stage.register_trace_type(str, lambda value: AStr())

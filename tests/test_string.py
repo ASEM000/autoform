@@ -283,6 +283,16 @@ def test_pretty_preserves_container_structure():
     assert ast.literal_eval(text) == value
 
 
+def test_pretty_breaks_long_containers_one_item_per_line():
+    value = {"first": "x" * 20, "second": ("y" * 20,), "third": ["z" * 20]}
+    text = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(value), width=40))
+    assert ast.literal_eval(text) == value
+    assert text.splitlines()[0] == "{" and text.splitlines()[-1] == "}"
+    assert all(len(line) <= 40 for line in text.splitlines())
+    single = re.sub(r"\x1b\[[0-9;]*m", "", pp.layout(pp.pretty(("x",)), width=1))
+    assert single == "(\n    'x',\n)"
+
+
 def test_pretty_uses_registered_rules_and_repr_fallback():
     class Pair(tuple):
         pass

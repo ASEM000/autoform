@@ -72,8 +72,8 @@ class ABatch(core.AVal):
 
 @ft.partial(pp.register, ABatch)
 def pretty_batch(aval):
-    name = pp.style(type(aval).__name__, pp.Code.BLUE)
-    return name, "(", pp.pretty(aval.base), ")"
+    name = pp.style(type(aval).__name__, pp.Theme.TYPE)
+    return name, pp.bracket("(", [pp.pretty(aval.base)], ")")
 
 
 stage.register_trace_type(ABatch, lambda aval: aval)

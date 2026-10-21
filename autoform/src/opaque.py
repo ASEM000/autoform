@@ -84,13 +84,13 @@ stage.register_trace_type(Opaque, lambda opaque: AOpaque(opaque.key))
 
 @ft.partial(pp.register, object)
 def pretty_object(key):
-    return pp.style(f"object@{id(key):x}", pp.Code.GREEN)
+    return f"object@{id(key):x}"
 
 
 @ft.partial(pp.register, AOpaque)
 def pretty_aopaque(aval):
-    name = pp.style(type(aval).__name__, pp.Code.BLUE)
-    return name, "(", () if aval.key is None else pp.pretty(aval.key), ")"
+    name = pp.style(type(aval).__name__, pp.Theme.TYPE)
+    return name, pp.bracket("(", [] if aval.key is None else [pp.pretty(aval.key)], ")")
 
 
 core.s_primal.set(AOpaque, lambda aval: aval)

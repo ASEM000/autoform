@@ -15,6 +15,7 @@
 """Text formatting and pretty-printing."""
 
 from autoform.src.pp import align as align
+from autoform.src.pp import bracket as bracket
 from autoform.src.pp import group as group
 from autoform.src.pp import hardline as hardline
 from autoform.src.pp import line as line

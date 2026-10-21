@@ -207,7 +207,7 @@ class Spec(Hashable):
 def pretty_spec(node: Spec) -> Tree:
     fields = ((name, getattr(node, name)) for name in (*type(node).__slots__, "desc"))
     args = [(f"{name}=", pp.pretty(value)) for name, value in fields if value is not None]
-    return pp.style(type(node).__name__, pp.Code.BLUE), "(", pp.join(args), ")"
+    return pp.style(type(node).__name__, pp.Theme.TYPE), pp.bracket("(", args, ")")
 
 
 def is_spec(node: Any) -> bool:
