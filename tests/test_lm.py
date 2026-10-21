@@ -263,9 +263,8 @@ def test_fill_uses_values_schema_envelope(executor):
     call = ir.eqns[-1]
     assert call.params == {}
     assert call.in_tree == (
-        {"question": ir.in_tree[0], "answer": None, "score": None},
         {
-            "question": None,
+            "question": ir.in_tree[0],
             "answer": lm.Str() @ "Answer text.",
             "score": lm.Float(min=0, max=1),
         },
@@ -915,7 +914,7 @@ def test_fill_rejects_unsupported_context_and_non_string_model():
     with pytest.raises(AssertionError, match="Expected string model"):
         lm.fill({"x": 0.5, "y": lm.Str()}, model=1.0)
     with pytest.raises(AssertionError, match="Expected string model"):
-        stage.trace(lm.p_fill.bind)(({"x": 0.5}, {"y": lm.Str()}, 1.0))
+        stage.trace(lm.p_fill.bind)(({"x": 0.5, "y": lm.Str()}, 1.0))
 
 
 def test_describe_rejects_non_json_enum_values():
@@ -991,7 +990,7 @@ def test_fill_pullback_omits_unused_fields(
     ],
 )
 def test_fill_pullback_requires_matching_cotangent_structure(out_c):
-    residuals = ("seed", {"answer": lm.Str()}, "m1", {"answer": "value"})
+    residuals = ({"question": "seed", "answer": lm.Str()}, "m1", {"answer": "value"})
     with pytest.raises(ValueError, match="Output and cotangent must have identical pytree specs"):
         lm.fill_pullback_request((residuals, out_c))
 
