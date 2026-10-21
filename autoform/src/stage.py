@@ -212,73 +212,86 @@ class IR[*A, R]:
         out_tree: Tree describing the runtime output structure.
     """
 
-    __slots__ = ["eqns", "in_tree", "out_tree"]
+    __slots__ = ["name", "eqns", "in_tree", "out_tree"]
+    counter: ClassVar[it.count[int]] = it.count(0)
 
     def __init__(self, eqns: list[Eqn], in_tree: Tree, out_tree: Tree):
         assert isinstance(eqns, list)
         eqns = tuple(eqns)
         assert all(isinstance(eqn, Eqn) for eqn in eqns)
+        self.name = f"ir{next(self.counter)}"
         self.eqns = eqns
         self.in_tree = in_tree
         self.out_tree = out_tree
 
     def __repr__(self) -> str:
-        def color(value, *codes):
-            return pp.style(str(value), *codes)
-
-        def keyword(value):
-            return color(value, pp.Code.MAGENTA, pp.Code.BOLD)
-
         def function(value):
-            return color(value, pp.Code.CYAN, pp.Code.BOLD)
+            return pp.style(value, pp.Theme.FUNCTION)
+
+        def variable(value):
+            return pp.style(value, pp.Theme.VARIABLE)
 
         def annotation(var):
-            kind = color(type(var).__name__, pp.Code.YELLOW)
+            kind = pp.style(type(var).__name__, pp.Theme.TYPE)
             return pp.pretty(var), ": ", kind, "[", pp.pretty(var.aval), "]"
+
+        def step(entry):
+            path = entry.codify("")
+            return ("[", pp.pretty(entry.entry), "]") if path.startswith("[") else path
 
         def bindings(tree, name):
             accessors, values, _ = utils.tree.flatten_with_accessor(tree)
             return [
-                (annotation(var), " = ", color(accessor.codify(name), pp.Code.CYAN))
+                (annotation(var), " = ", variable(name), list(map(step, accessor)))
                 for accessor, var in utils.zip(accessors, values)
                 if is_var(var)
             ]
 
-        def format_eqn(index, eqn):
+        def collect(ir, irs):
+            for eqn in ir.eqns:
+                for leaf in utils.tree.leaves(eqn.params):
+                    if isinstance(leaf, IR) and id(leaf) not in irs:
+                        irs[id(leaf)] = leaf
+                        collect(leaf, irs)
+            return irs
+
+        def format_eqn(eqn):
             args = [pp.pretty(eqn.in_tree)]
-            args.extend(
-                (color(key, pp.Code.MAGENTA), "=", pp.pretty(value))
-                for key, value in eqn.params.items()
-            )
-            call = function(eqn.prim.name), "(", pp.join(args), ")"
+            args.extend((variable(key), "=", pp.pretty(value)) for key, value in eqn.params.items())
+            call = function(eqn.prim.name), pp.bracket("(", args, ")")
             if eqn.tags:
                 tags = [("@", pp.pretty(tag)) for tag in sorted(eqn.tags, key=repr)]
                 call = call, " ", pp.join(tags, " ")
             if is_var(eqn.out_tree):
-                return [(annotation(eqn.out_tree), " = ", call)]
-            name = f"out{index}"
-            outputs = bindings(eqn.out_tree, name)
+                return annotation(eqn.out_tree), " = ", call
+            outputs = [leaf for leaf in utils.tree.leaves(eqn.out_tree) if is_var(leaf)]
             if not outputs:
-                return [call]
-            return [(color(name, pp.Code.CYAN), " = ", call), *outputs]
+                return call
+            return pp.join(map(annotation, outputs), ", "), " = ", call
 
-        inputs, body = [], []
-        input_vars = set()
-        for index, value in enumerate(self.in_tree):
-            if is_var(value) and value not in input_vars:
-                inputs.append(annotation(value))
-                input_vars.add(value)
-            else:
-                name = f"arg{index}"
-                avals = utils.tree.map(aval_if_var, value)
-                inputs.append((color(name, pp.Code.CYAN), ": ", pp.pretty(avals)))
-                body.extend(bindings(value, name))
-        for index, eqn in enumerate(self.eqns):
-            body.extend(format_eqn(index, eqn))
-        body.append((keyword("return"), " ", pp.pretty(self.out_tree)))
-        header = keyword("def"), " ", function("func"), "(", pp.join(inputs), "):"
-        body = pp.join(body, pp.hardline())
-        return pp.layout((header, pp.nest(4, (pp.hardline(), body))))
+        def format_ir(ir):
+            inputs, body = [], []
+            input_vars = set()
+            for index, value in enumerate(ir.in_tree):
+                if is_var(value) and value not in input_vars:
+                    inputs.append(annotation(value))
+                    input_vars.add(value)
+                else:
+                    name = f"arg{index}"
+                    avals = utils.tree.map(aval_if_var, value)
+                    inputs.append((variable(name), ": ", pp.pretty(avals)))
+                    body.extend(bindings(value, name))
+            body.extend(map(format_eqn, ir.eqns))
+            body.append((pp.style("return", pp.Theme.CONTROL), " ", pp.pretty(ir.out_tree)))
+            name = function("func") if ir is self else pp.pretty(ir)
+            returns = pp.pretty(utils.tree.map(aval_if_var, ir.out_tree))
+            signature = pp.bracket("(", inputs, (")", " -> ", returns, ":"))
+            header = pp.style("def", pp.Theme.KEYWORD), " ", name, signature
+            body = pp.join(body, pp.hardline())
+            return header, pp.nest(4, (pp.hardline(), body))
+
+        defs = [format_ir(ir) for ir in (self, *collect(self, {}).values())]
+        return pp.layout(pp.join(defs, (pp.hardline(), pp.hardline())), width=120)
 
     def call(self, *args: *A) -> R:
         """Run IR with concrete runtime inputs.
@@ -360,13 +373,12 @@ class IR[*A, R]:
 
 @ft.partial(pp.register, Var)
 def pretty_var(var):
-    return pp.style(f"v{var.id}", pp.Code.CYAN)
+    return pp.style(f"v{var.id}", pp.Theme.VARIABLE)
 
 
 @ft.partial(pp.register, IR)
 def pretty_ir(ir):
-    names = ",".join(eqn.prim.name for eqn in ir.eqns)
-    return "IR(", pp.style(repr(names), pp.Code.GREEN), ")"
+    return pp.style(ir.name, pp.Theme.FUNCTION)
 
 
 # ==================================================================================================

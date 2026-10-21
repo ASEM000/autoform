@@ -26,6 +26,7 @@ import pytest
 import autoform.extend as extend
 import autoform.src.ad as ad
 import autoform.src.axis as axis
+import autoform.src.control as control
 import autoform.src.core as core
 import autoform.src.intercept as intercept
 import autoform.src.lm as lm
@@ -224,13 +225,13 @@ def test_repr_preserves_document_operands():
 
     ir = stage.trace(program)("x")
     text = repr(ir)
-    assert "\x1b[0;36m" in text and "\x1b[0;32m" in text
+    assert pp.ansi_style(pp.Theme.FUNCTION) in text and pp.ansi_style(pp.Theme.STRING) in text
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
     ast.parse(text)
     x = f"v{ir.in_tree[0].id}"
     y = f"v{ir.out_tree.id}"
 
-    assert text.startswith(f"def func({x}: Var[AStr()]):\n")
+    assert text.startswith(f"def func({x}: Var[AStr()]) -> AStr():\n")
     assert (
         f"    {y}: Var[AStr()] = "
         f"render(Group(('prefix', Line(), {{'value': [{x}, '!']}})), width=80)"
@@ -247,17 +248,16 @@ def test_repr_formats_empty_scalar_and_multiple_equation_outputs():
     ]
     ir = stage.IR(eqns, (), (y, z))
     text = repr(ir)
-    for literal in ("'text'", "7", "True"):
-        assert f"\x1b[0;32m{literal}\x1b[0m" in text
+    literals = [("'text'", pp.Theme.STRING), ("7", pp.Theme.NUMBER), ("True", pp.Theme.CONSTANT)]
+    for literal, codes in literals:
+        assert f"{pp.ansi_style(codes)}{literal}\x1b[0m" in text
+    assert f"{pp.ansi_style(pp.Theme.VARIABLE)}v{y.id}\x1b[0m: " in text
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
-    ast.parse(text)
     x, y, z = (f"v{var.id}" for var in (x, y, z))
 
-    assert text.startswith("def func():\n    tick(())\n")
+    assert text.startswith("def func() -> (AStr(), AStr()):\n    tick(())\n")
     assert f"    {x}: Var[AStr()] = scalar(('text', 7, True))" in text
-    assert f"    out2 = pair(({x},))" in text
-    assert f"    {y}: Var[AStr()] = out2[0]" in text
-    assert f"    {z}: Var[AStr()] = out2[1]" in text
+    assert f"    {y}: Var[AStr()], {z}: Var[AStr()] = pair(({x},))" in text
     assert text.endswith(f"    return ({y}, {z})")
 
 
@@ -270,30 +270,27 @@ def test_repr_preserves_nested_trees_and_variable_bindings():
     eqn = stage.Eqn(core.Prim("transform"), operands, outputs, {"config": config})
     result = ({"left": z, "right": (w,)}, [], {}, (), None)
     text = re.sub(r"\x1b\[[0-9;]*m", "", repr(stage.IR([eqn], (inputs,), result)))
-    ast.parse(text)
+    x, y, z, w = (f"v{var.id}" for var in (x, y, z, w))
 
-    def transform(tree, *, config):
-        assert tree == {"items": (["left"], "right"), "empty": ([], {}, ()), "none": None}
-        assert config == {"levels": [1, (2,)], "empty": (), "none": None}
-        return {"result": [tree["items"][1], (tree["items"][0][0],)], "empty": []}
-
-    namespace = {"transform": transform}
-    exec("from __future__ import annotations\n" + text, namespace)
-    value = {"value": ["left", ("right",)], "empty": {}, "none": None}
-    assert namespace["func"](value) == ({"left": "right", "right": ("left",)}, [], {}, (), None)
+    assert f"    {x}: Var[AStr()] = arg0['value'][0]" in text
+    assert f"    {y}: Var[AStr()] = arg0['value'][1][0]" in text
+    assert f"{z}: Var[AStr()], {w}: Var[AStr()] = transform(" in text
+    assert f"{{'items': ([{x}], {y}), 'empty': ([], {{}}, ()), 'none': None}}" in text
+    assert "config={'levels': [1, (2,)], 'empty': (), 'none': None}" in text
+    assert text.endswith(f"    return ({{'left': {z}, 'right': ({w},)}}, [], {{}}, (), None)")
 
 
 @pytest.mark.parametrize(
     "aval, expected, code",
     [
-        pytest.param(string.AStr(), "AStr", pp.Code.BLUE, id="scalar"),
+        pytest.param(string.AStr(), "AStr", pp.Theme.TYPE, id="scalar"),
         pytest.param(
             axis.ABatch(axis.ABatch(string.AStr())),
             "ABatch",
-            pp.Code.BLUE,
+            pp.Theme.TYPE,
             id="nested-batch",
         ),
-        pytest.param(None, "AText(max=7)", pp.Code.GREEN, id="custom-repr"),
+        pytest.param(None, "AText(max=7)", (), id="custom-repr"),
     ],
 )
 def test_repr_formats_aval_parts_and_preserves_custom_repr(aval, expected, code):
@@ -305,9 +302,9 @@ def test_repr_formats_aval_parts_and_preserves_custom_repr(aval, expected, code)
     x = stage.Var(aval=aval)
     text = repr(stage.IR([], (x,), x))
 
-    assert f"\x1b[0;{int(code)}m{expected}\x1b[0m" in text
+    assert (f"{pp.ansi_style(code)}{expected}\x1b[0m" if code else expected) in text
     if isinstance(aval, axis.ABatch):
-        assert "\x1b[0;34mAStr\x1b[0m()" in text
+        assert f"{pp.ansi_style(pp.Theme.TYPE)}AStr\x1b[0m()" in text
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
     ast.parse(text)
     assert f"Var[{aval!r}]" in text
@@ -321,11 +318,11 @@ def test_repr_uses_registered_pretty_rule():
     @ft.partial(pp.register, AText)
     def pretty_text(_):
         return (
-            pp.style("AText", pp.Code.BLUE),
+            pp.style("AText", 34),
             "(",
-            pp.style("max", pp.Code.MAGENTA),
+            pp.style("max", 35),
             "=",
-            pp.style("7", pp.Code.GREEN),
+            pp.style("7", 32),
             ")",
         )
 
@@ -340,11 +337,13 @@ def test_repr_uses_registered_pretty_rule():
 @pytest.mark.parametrize(
     "parameter, expected",
     [
-        pytest.param(lambda ir: ir, "ir=IR('render')", id="direct"),
-        pytest.param(lambda ir: {"branch": [ir]}, "ir={'branch': [IR('render')]}", id="container"),
+        pytest.param(lambda ir: ir, "ir={0}", id="direct"),
+        pytest.param(
+            lambda ir: {"branch": [ir, ir]}, "ir={{'branch': [{0}, {0}]}}", id="container"
+        ),
     ],
 )
-def test_repr_summarizes_nested_ir(parameter, expected):
+def test_repr_defines_nested_ir_once_after_use(parameter, expected):
     inner = stage.trace(lambda x: string.concat(x, "!"))("x")
     x, y = (stage.Var(aval=string.AStr()) for _ in range(2))
     eqn = stage.Eqn(core.Prim("nested"), (x,), y, {"ir": parameter(inner)})
@@ -352,8 +351,26 @@ def test_repr_summarizes_nested_ir(parameter, expected):
     text = re.sub(r"\x1b\[[0-9;]*m", "", repr(ir))
     ast.parse(text)
 
-    assert text.count("def func(") == 1
-    assert expected in text
+    name = inner.name
+    assert text.count(f"def {name}(") == 1 and text.count("def func(") == 1
+    assert text.index("def func(") < text.index(f"def {name}(")
+    assert "render(" in text.split(f"def {name}(")[1]
+    assert expected.format(name) in text
+
+
+def test_repr_lists_nested_ir_in_order_of_use():
+    leaf = stage.trace(lambda x: string.concat(x, "!"))("x")
+    cond = stage.trace(lambda x: string.match(x, "stop"))("x")
+    middle = stage.trace(lambda x: control.while_loop(cond, leaf, x, max_iters=2))("x")
+    outer = stage.trace(lambda k, x: control.switch(k, {"a": leaf, "b": middle}, x))("a", "x")
+    text = re.sub(r"\x1b\[[0-9;]*m", "", repr(outer))
+    ast.parse(text)
+
+    leaf, cond, middle = (ir.name for ir in (leaf, cond, middle))
+    defs = re.findall(r"^def (\w+)\(", text, flags=re.MULTILINE)
+    assert defs == ["func", leaf, middle, cond]
+    assert f"branches={{'a': {leaf}, 'b': {middle}}}" in text
+    assert f"body_ir={leaf}" in text and f"cond_ir={cond}" in text
 
 
 def test_repr_preserves_repeated_input_variables():

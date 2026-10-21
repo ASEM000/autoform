@@ -144,7 +144,7 @@ class ABool(core.AVal):
 @ft.partial(pp.register, AFloat)
 @ft.partial(pp.register, ABool)
 def pretty_scalar(aval):
-    return pp.style(type(aval).__name__, pp.Code.BLUE), "()"
+    return pp.style(type(aval).__name__, pp.Theme.TYPE), "()"
 
 
 stage.register_trace_type(bool, lambda value: ABool())
