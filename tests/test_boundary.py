@@ -334,6 +334,17 @@ class TestCustomPullback:
 
         assert c == expected
 
+    def test_pullback_survives_retrace_between_halves(self):
+        @boundary.custom
+        def bracket(x):
+            return string.concat("[", x, "]")
+
+        fwd, bwd = ad.fwd_bwd(stage.trace(lambda x: bracket(x))("seed"))
+        _, residual = fwd.call("hello")
+        for _ in range(256):
+            stage.trace(boundary.custom(lambda x: string.concat(x, "!")))("x")
+        assert bwd.call(residual, "feedback") == ("feedback",)
+
 
 class TestCustomBatch:
     def test_custom_batch_rule_can_use_untraceable_python_for_multi_primitive_body(self):

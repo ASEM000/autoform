@@ -564,7 +564,17 @@ class PullBwdInterp(core.Interp):
 
 
 @ft.partial(utils.lru_cache, maxsize=256)
-def pullback_halves(ir: stage.IR, /) -> tuple[stage.IR, stage.IR]:
+def fwd_bwd(ir: stage.IR, /) -> tuple[stage.IR, stage.IR]:
+    """Split reverse-mode AD into forward and backward IRs.
+
+    Example:
+        >>> import autoform as af
+        >>> fwd, bwd = af.fwd_bwd(af.trace(lambda x: x * x)(2.0))
+        >>> out, residual = fwd.call(3.0)
+        >>> out, bwd.call(residual, 1.0)
+        (9.0, (6.0,))
+    """
+    assert isinstance(ir, stage.IR), f"Expected IR, got {type(ir)}"
 
     def make_p(atom):
         if stage.is_var(atom):
@@ -580,34 +590,11 @@ def pullback_halves(ir: stage.IR, /) -> tuple[stage.IR, stage.IR]:
     out_p = utils.tree.map(make_p, ir.out_tree)
     out_c = utils.tree.map(make_c, ir.out_tree)
     in_c = utils.tree.map(make_c, ir.in_tree)
-    token = stage.Var.fresh(aval=opaque.AOpaque())
-    fwd_eqn = stage.Eqn(p_pullback_fwd_call, in_p, (out_p, token), dict(ir=ir))
-    bwd_eqn = stage.Eqn(p_pullback_bwd_call, (token, out_c), in_c, dict(ir=ir))
-    fwd = stage.IR([fwd_eqn], in_p, (out_p, token))
-    bwd = stage.IR([bwd_eqn], (token, out_c), in_c)
-    return fwd, bwd
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def fwd_bwd(ir: stage.IR, /) -> tuple[stage.IR, stage.IR]:
-    """Split reverse-mode AD into forward and backward IRs.
-
-    Example:
-        >>> import autoform as af
-        >>> fwd, bwd = af.fwd_bwd(af.trace(lambda x: x * x)(2.0))
-        >>> out, residual = fwd.call(3.0)
-        >>> out, bwd.call(residual, 1.0)
-        (9.0, (6.0,))
-    """
-    assert isinstance(ir, stage.IR), f"Expected IR, got {type(ir)}"
-    fwd, bwd = pullback_halves(ir)
-    out_p, token = fwd.out_tree
-    _, out_c = bwd.in_tree
-    residual = stage.Var.fresh(aval=opaque.AOpaque(object()))
-    seal_eqn = stage.Eqn(opaque.p_seal, token, residual, dict(key=core.avalof(residual).key))
-    fwd = stage.IR([*fwd.eqns, seal_eqn], fwd.in_tree, (out_p, residual))
-    unseal_eqn = stage.Eqn(opaque.p_unseal, residual, token, dict(key=core.avalof(residual).key))
-    bwd = stage.IR([unseal_eqn, *bwd.eqns], (residual, out_c), bwd.out_tree)
+    residual = stage.Var.fresh(aval=opaque.AOpaque())
+    fwd_eqn = stage.Eqn(p_pullback_fwd_call, in_p, (out_p, residual), dict(ir=ir))
+    bwd_eqn = stage.Eqn(p_pullback_bwd_call, (residual, out_c), in_c, dict(ir=ir))
+    fwd = stage.IR([fwd_eqn], in_p, (out_p, residual))
+    bwd = stage.IR([bwd_eqn], (residual, out_c), in_c)
     return fwd, bwd
 
 
@@ -637,9 +624,8 @@ def pullback(ir: stage.IR, /) -> stage.IR:
         ('feedback', 'feedback')
     """
     assert isinstance(ir, stage.IR), f"Expected IR, got {type(ir)}"
-    fwd, bwd = pullback_halves(ir)
-    out_p, _ = fwd.out_tree
-    _, out_c = bwd.in_tree
+    fwd, bwd = fwd_bwd(ir)
+    (out_p, _), (_, out_c) = fwd.out_tree, bwd.in_tree
     return stage.IR([*fwd.eqns, *bwd.eqns], (fwd.in_tree, out_c), (out_p, bwd.out_tree))
 
 
@@ -704,7 +690,7 @@ def impl_pullback_fwd_call(
         res.append(residuals)
         utils.tree.map(env.write_p, eqn.out_tree, fwd.unbox(out_boxed))
     out_p = utils.tree.map(env.read_p, ir.out_tree)
-    return out_p, (inputs, tuple(res))
+    return out_p, opaque.Opaque(None, (inputs, tuple(res)))
 
 
 async def aimpl_pullback_fwd_call(
@@ -724,7 +710,7 @@ async def aimpl_pullback_fwd_call(
         res.append(residuals)
         utils.tree.map(env.write_p, eqn.out_tree, fwd.unbox(out_boxed))
     out_p = utils.tree.map(env.read_p, ir.out_tree)
-    return out_p, (inputs, tuple(res))
+    return out_p, opaque.Opaque(None, (inputs, tuple(res)))
 
 
 def impl_pullback_bwd_call(
@@ -734,7 +720,7 @@ def impl_pullback_bwd_call(
     ir: stage.IR,
 ) -> Tree:
     residual, out_c = in_tree
-    _, res = residual
+    _, res = residual.value
     bwd = PullBwdInterp(parent=core.active_interp.get())
     env = PBEnv()
     utils.tree.map(env.write_c, ir.out_tree, out_c)
@@ -755,7 +741,7 @@ async def aimpl_pullback_bwd_call(
     ir: stage.IR,
 ) -> Tree:
     residual, out_c = in_tree
-    _, res = residual
+    _, res = residual.value
     bwd = PullBwdInterp(parent=core.active_interp.get())
     env = PBEnv()
     utils.tree.map(env.write_c, ir.out_tree, out_c)
@@ -936,7 +922,7 @@ def pullback_bwd_pullback_bwd_call(
     ir: stage.IR,
 ) -> Tree:
     (residual, out_c), in_c_c = in_tree
-    in_p, _ = residual
+    in_p, _ = residual.value
     out_c_t = core.s_tangent.zeros_like(out_c)
     (_, _), (out_c_c, in_c_p) = pushforward_pullback(((in_p, out_c), (in_c_c, out_c_t)), ir=ir)
     return in_c_p, out_c_c
@@ -949,7 +935,7 @@ async def apullback_bwd_pullback_bwd_call(
     ir: stage.IR,
 ) -> Tree:
     (residual, out_c), in_c_c = in_tree
-    in_p, _ = residual
+    in_p, _ = residual.value
     out_c_t = core.s_tangent.zeros_like(out_c)
     (_, _), (out_c_c, in_c_p) = await apushforward_pullback(
         ((in_p, out_c), (in_c_c, out_c_t)),
@@ -986,7 +972,7 @@ def batch_pullback_fwd_call(
     *,
     ir: stage.IR,
 ) -> TreePair:
-    fwd, _ = pullback_halves(ir)
+    fwd, _ = fwd_bwd(ir)
     return batch_pullback_half(fwd, in_tree)
 
 
@@ -996,7 +982,7 @@ async def abatch_pullback_fwd_call(
     *,
     ir: stage.IR,
 ) -> TreePair:
-    fwd, _ = pullback_halves(ir)
+    fwd, _ = fwd_bwd(ir)
     return await abatch_pullback_half(fwd, in_tree)
 
 
@@ -1006,7 +992,7 @@ def batch_pullback_bwd_call(
     *,
     ir: stage.IR,
 ) -> TreePair:
-    _, bwd = pullback_halves(ir)
+    _, bwd = fwd_bwd(ir)
     return batch_pullback_half(bwd, in_tree)
 
 
@@ -1016,7 +1002,7 @@ async def abatch_pullback_bwd_call(
     *,
     ir: stage.IR,
 ) -> TreePair:
-    _, bwd = pullback_halves(ir)
+    _, bwd = fwd_bwd(ir)
     return await abatch_pullback_half(bwd, in_tree)
 
 

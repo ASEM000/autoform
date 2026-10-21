@@ -65,13 +65,13 @@ class Opaque[K]:
     __slots__ = ["key", "value"]
 
     def __init__(self, key: K, value: Any, /):
-        assert key is not None, "Opaque requires a key"
         hash(key)
         self.key: K = key
         self.value = value
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.key})"
+        key = "" if self.key is None else self.key
+        return f"{type(self).__name__}({key})"
 
 
 utils.tree.register_node(

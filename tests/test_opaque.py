@@ -70,8 +70,7 @@ def test_seal_and_unseal():
     assert opaque.unseal(core.Zero(aval), key=aval.key) == core.Zero(opaque.AOpaque())
     with pytest.raises(TypeError, match="Expected a value sealed with"):
         opaque.unseal(sealed, key=object())
-    with pytest.raises(AssertionError, match="Opaque requires a key"):
-        opaque.Opaque(None, raw)
+    assert core.avalof(opaque.Opaque(None, raw)) == opaque.AOpaque()
 
 
 def test_seal_and_unseal_check_their_input_types():

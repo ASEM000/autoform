@@ -26,7 +26,7 @@ def explain(topic: str) -> str:
 
 
 ir = af.trace(explain)("topic text")
-print(ir)
+print(repr(ir))
 ```
 
 The recorded program accepts a different topic on each call. The model name and answer instructions belong to the function configuration and remain fixed in this IR. [Tracing](concepts/tracing.md) explains how this distinction determines which values can change after a program is traced.
