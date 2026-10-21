@@ -351,7 +351,7 @@ def test_repr_defines_nested_ir_once_after_use(parameter, expected):
     text = re.sub(r"\x1b\[[0-9;]*m", "", repr(ir))
     ast.parse(text)
 
-    name = inner.name
+    name = f"ir{inner.id}"
     assert text.count(f"def {name}(") == 1 and text.count("def func(") == 1
     assert text.index("def func(") < text.index(f"def {name}(")
     assert "render(" in text.split(f"def {name}(")[1]
@@ -366,7 +366,7 @@ def test_repr_lists_nested_ir_in_order_of_use():
     text = re.sub(r"\x1b\[[0-9;]*m", "", repr(outer))
     ast.parse(text)
 
-    leaf, cond, middle = (ir.name for ir in (leaf, cond, middle))
+    leaf, cond, middle = (f"ir{ir.id}" for ir in (leaf, cond, middle))
     defs = re.findall(r"^def (\w+)\(", text, flags=re.MULTILINE)
     assert defs == ["func", leaf, middle, cond]
     assert f"branches={{'a': {leaf}, 'b': {middle}}}" in text

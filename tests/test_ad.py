@@ -1307,6 +1307,34 @@ def test_trace_with_concrete_residual_keeps_one_variable(executor):
     assert executor(traced, residual, 1.0) == (12.0,)
 
 
+@executors
+def test_fwd_bwd_residual_opens_after_other_transforms(executor):
+    ir = stage.trace(cube)(2.0)
+    fwd, _ = ad.fwd_bwd(ir)
+    _, residual = executor(fwd, 2.0)
+    for scale in range(256):
+        ad.fwd_bwd(stage.trace(lambda x, scale=float(scale): x * scale)(1.0))
+    _, bwd = ad.fwd_bwd(ir)
+    assert executor(bwd, residual, 1.0) == (12.0,)
+
+
+@executors
+def test_fwd_bwd_halves_stay_ssa_when_spliced(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+    out_p, _ = fwd.out_tree
+    _, out_c = bwd.in_tree
+    ir = stage.IR([*fwd.eqns, *bwd.eqns], (fwd.in_tree, out_c), (out_p, bwd.out_tree))
+    out = executor(ad.pullback(ir), ((2.0,), 1.0), (1.0, (1.0,)))
+    assert out == ((8.0, (12.0,)), ((24.0,), 12.0))
+
+
+@executors
+def test_fwd_bwd_survives_sched(executor):
+    fwd, bwd = ad.fwd_bwd(stage.trace(cube)(2.0))
+    _, residual = executor(order.sched(fwd), 2.0)
+    assert executor(order.sched(bwd), residual, 1.0) == (12.0,)
+
+
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
 @pytest.mark.parametrize("nest", ["fanout", "switch", "batch", "while_loop", "custom"])
 def test_pullback_does_not_recompute_nested_forward(executor, nest):
