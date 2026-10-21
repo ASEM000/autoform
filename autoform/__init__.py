@@ -30,8 +30,6 @@ from autoform.src.intercept import checkpoint as checkpoint
 from autoform.src.intercept import collect as collect
 from autoform.src.intercept import inject as inject
 from autoform.src.memo import memoize as memoize
-from autoform.src.opaque import seal as seal
-from autoform.src.opaque import unseal as unseal
 from autoform.src.order import depends as depends
 from autoform.src.order import sched as sched
 from autoform.src.path import factor as factor
@@ -39,6 +37,7 @@ from autoform.src.path import weight as weight
 from autoform.src.stage import fold as fold
 from autoform.src.stage import tag as tag
 from autoform.src.stage import trace as trace
+from autoform.src.untyped import untyped as untyped
 from autoform.src.utils import PYTREE_NAMESPACE as PYTREE_NAMESPACE
 
 __version__ = "0.3.0"

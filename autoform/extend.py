@@ -65,10 +65,6 @@ from autoform.src.numeric import p_mul as p_mul
 from autoform.src.numeric import p_ne as p_ne
 from autoform.src.numeric import p_neg as p_neg
 from autoform.src.numeric import p_sub as p_sub
-from autoform.src.opaque import AOpaque as AOpaque
-from autoform.src.opaque import Opaque as Opaque
-from autoform.src.opaque import p_seal as p_seal
-from autoform.src.opaque import p_unseal as p_unseal
 from autoform.src.order import p_depends as p_depends
 from autoform.src.order import p_fanout as p_fanout
 from autoform.src.order import serial_fanout as serial_fanout
@@ -86,6 +82,9 @@ from autoform.src.stage import register_trace_type as register_trace_type
 from autoform.src.string import AStr as AStr
 from autoform.src.string import p_match as p_match
 from autoform.src.string import p_render as p_render
+from autoform.src.untyped import AUntyped as AUntyped
+from autoform.src.untyped import Untyped as Untyped
+from autoform.src.untyped import p_untyped as p_untyped
 from autoform.src.utils import batch_index as batch_index
 from autoform.src.utils import batch_spec as batch_spec
 from autoform.src.utils import batch_transpose as batch_transpose

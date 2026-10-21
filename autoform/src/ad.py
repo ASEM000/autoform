@@ -22,9 +22,9 @@ from typing import Any
 
 import autoform.src.core as core
 import autoform.src.dead as dead
-import autoform.src.opaque as opaque
 import autoform.src.order as order
 import autoform.src.stage as stage
+import autoform.src.untyped as untyped
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
@@ -590,7 +590,7 @@ def fwd_bwd(ir: stage.IR, /) -> tuple[stage.IR, stage.IR]:
     out_p = utils.tree.map(make_p, ir.out_tree)
     out_c = utils.tree.map(make_c, ir.out_tree)
     in_c = utils.tree.map(make_c, ir.in_tree)
-    residual = stage.Var.fresh(aval=opaque.AOpaque())
+    residual = stage.Var.fresh(aval=untyped.AUntyped())
     fwd_eqn = stage.Eqn(p_pullback_fwd_call, in_p, (out_p, residual), dict(ir=ir))
     bwd_eqn = stage.Eqn(p_pullback_bwd_call, (residual, out_c), in_c, dict(ir=ir))
     fwd = stage.IR([fwd_eqn], in_p, (out_p, residual))
@@ -690,7 +690,7 @@ def impl_pullback_fwd_call(
         res.append(residuals)
         utils.tree.map(env.write_p, eqn.out_tree, fwd.unbox(out_boxed))
     out_p = utils.tree.map(env.read_p, ir.out_tree)
-    return out_p, opaque.Opaque(None, (inputs, tuple(res)))
+    return out_p, untyped.Untyped((inputs, tuple(res)))
 
 
 async def aimpl_pullback_fwd_call(
@@ -710,7 +710,7 @@ async def aimpl_pullback_fwd_call(
         res.append(residuals)
         utils.tree.map(env.write_p, eqn.out_tree, fwd.unbox(out_boxed))
     out_p = utils.tree.map(env.read_p, ir.out_tree)
-    return out_p, opaque.Opaque(None, (inputs, tuple(res)))
+    return out_p, untyped.Untyped((inputs, tuple(res)))
 
 
 def impl_pullback_bwd_call(
@@ -790,7 +790,7 @@ def abstract_pullback_fwd_call(
             return core.s_primal.map(atom.aval)
         return atom
 
-    return utils.tree.map(p_aval, ir.out_tree), opaque.AOpaque()
+    return utils.tree.map(p_aval, ir.out_tree), untyped.AUntyped()
 
 
 def abstract_pullback_bwd_call(
@@ -855,6 +855,12 @@ async def apushforward_pullback_bwd_call(
     return pusher.unbox(out)
 
 
+# NOTE(asem): a residual's cotangent is the cotangent of the inputs it saved, boxed so it
+# flows as one ``AUntyped()`` leaf like the residual itself.
+def unbox_cotangent(residual_c: Tree, /) -> Tree:
+    return residual_c if isinstance(residual_c, core.Zero) else residual_c.value
+
+
 def pullback_fwd_pullback_fwd_call(
     in_p: Tree,
     /,
@@ -883,7 +889,7 @@ def pullback_bwd_pullback_fwd_call(
 ) -> Tree:
     residual, (out_c, residual_c) = in_tree
     in_c = impl_pullback_bwd_call((residual, out_c), ir=ir)
-    return cot_accum([in_c, residual_c])
+    return cot_accum([in_c, unbox_cotangent(residual_c)])
 
 
 async def apullback_bwd_pullback_fwd_call(
@@ -894,7 +900,7 @@ async def apullback_bwd_pullback_fwd_call(
 ) -> Tree:
     residual, (out_c, residual_c) = in_tree
     in_c = await aimpl_pullback_bwd_call((residual, out_c), ir=ir)
-    return cot_accum([in_c, residual_c])
+    return cot_accum([in_c, unbox_cotangent(residual_c)])
 
 
 def pullback_fwd_pullback_bwd_call(
@@ -925,7 +931,7 @@ def pullback_bwd_pullback_bwd_call(
     in_p, _ = residual.value
     out_c_t = core.s_tangent.zeros_like(out_c)
     (_, _), (out_c_c, in_c_p) = pushforward_pullback(((in_p, out_c), (in_c_c, out_c_t)), ir=ir)
-    return in_c_p, out_c_c
+    return untyped.Untyped(in_c_p), out_c_c
 
 
 async def apullback_bwd_pullback_bwd_call(
@@ -941,7 +947,7 @@ async def apullback_bwd_pullback_bwd_call(
         ((in_p, out_c), (in_c_c, out_c_t)),
         ir=ir,
     )
-    return in_c_p, out_c_c
+    return untyped.Untyped(in_c_p), out_c_c
 
 
 def batch_pullback_half(ir: stage.IR, in_tree: Tree, /) -> TreePair:
