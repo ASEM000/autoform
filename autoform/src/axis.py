@@ -394,19 +394,19 @@ async def apushforward_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tr
 
 
 def pullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
-    fwd, _ = ad.pullback_halves(ir)
+    fwd, _ = ad.fwd_bwd(ir)
     return batch(fwd, in_axes=in_axes).call(*in_tree)
 
 
 async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
-    fwd, _ = ad.pullback_halves(ir)
+    fwd, _ = ad.fwd_bwd(ir)
     return await batch(fwd, in_axes=in_axes).acall(*in_tree)
 
 
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     residual, out_c = in_tree
     in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
-    _, bwd = ad.pullback_halves(ir)
+    _, bwd = ad.fwd_bwd(ir)
     if not any(utils.tree.leaves(in_b)):
         return bwd.call(residual, out_c)
     spec = utils.batch_spec(residual, True)
@@ -421,7 +421,7 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     residual, out_c = in_tree
     in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
-    _, bwd = ad.pullback_halves(ir)
+    _, bwd = ad.fwd_bwd(ir)
     if not any(utils.tree.leaves(in_b)):
         return await bwd.acall(residual, out_c)
     spec = utils.batch_spec(residual, True)

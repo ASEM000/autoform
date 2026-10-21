@@ -193,27 +193,27 @@ async def apushforward_switch(in_tree, /, *, branches: Branches):
 
 def pullback_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
     key, operands = in_tree
-    fwd, _ = ad.pullback_halves(branches[key])
+    fwd, _ = ad.fwd_bwd(branches[key])
     out, residual = fwd.call(*operands)
     return out, (key, residual)
 
 
 async def apull_fwd_switch(in_tree, /, *, branches: Branches) -> TreePair:
     key, operands = in_tree
-    fwd, _ = ad.pullback_halves(branches[key])
+    fwd, _ = ad.fwd_bwd(branches[key])
     out, residual = await fwd.acall(*operands)
     return out, (key, residual)
 
 
 def pullback_bwd_switch(in_tree, /, *, branches: Branches):
     (key, residual), out_c = in_tree
-    _, bwd = ad.pullback_halves(branches[key])
+    _, bwd = ad.fwd_bwd(branches[key])
     return (core.s_cotangent.zeros_like(key), bwd.call(residual, out_c))
 
 
 async def apull_bwd_switch(in_tree, /, *, branches: Branches):
     (key, residual), out_c = in_tree
-    _, bwd = ad.pullback_halves(branches[key])
+    _, bwd = ad.fwd_bwd(branches[key])
     return (core.s_cotangent.zeros_like(key), await bwd.acall(residual, out_c))
 
 
@@ -455,7 +455,7 @@ def pullback_fwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    fwd, _ = ad.pullback_halves(body_ir)
+    fwd, _ = ad.fwd_bwd(body_ir)
     out = in_tree
     residuals = []
 
@@ -476,7 +476,7 @@ async def apull_fwd_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    fwd, _ = ad.pullback_halves(body_ir)
+    fwd, _ = ad.fwd_bwd(body_ir)
     out = in_tree
     residuals = []
 
@@ -649,7 +649,7 @@ def pullback_bwd_while_loop(
 ) -> Tree:
     residuals, c = in_tree
     del cond_ir, max_iters
-    _, bwd = ad.pullback_halves(body_ir)
+    _, bwd = ad.fwd_bwd(body_ir)
 
     for residual in reversed(residuals):
         (c,) = bwd.call(residual, c)
@@ -667,7 +667,7 @@ async def apull_bwd_while_loop(
 ) -> Tree:
     residuals, c = in_tree
     del cond_ir, max_iters
-    _, bwd = ad.pullback_halves(body_ir)
+    _, bwd = ad.fwd_bwd(body_ir)
 
     for residual in reversed(residuals):
         (c,) = await bwd.acall(residual, c)
@@ -935,55 +935,19 @@ def pullback_bwd_fixpoint(
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
         return dx0, core.s_cotangent.zeros_like(theta)
 
-    res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interp.get()
-    fwd = ad.PullFwdInterp(parent=parent)
-
-    def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interp(fwd):
-            out_boxed, residuals = eqn.bind(fwd.box(in_p), **eqn.params)
-        res[eqn] = residuals
-        return fwd.unbox(out_boxed)
-
-    def transpose_eq(cot: Tree, /) -> Tree:
-        bwd = ad.PullBwdInterp(parent=parent)
-
-        def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
-            residuals = res[eqn]
-            with core.using_interp(bwd):
-                in_boxed_c = eqn.bind((residuals, bwd.box(out_c)), **eqn.params)
-            return bwd.unbox(in_boxed_c)
-
-        c_env = ad.PBEnv()
-        c_env.primals = env.primals
-
-        utils.tree.map(c_env.write_c, step_ir.out_tree, cot)
-        for eqn in reversed(step_ir.eqns):
-            out_c = utils.tree.map(c_env.read_c, eqn.out_tree)
-            in_c = bwd_bind(eqn, out_c)
-            utils.tree.map(c_env.write_c, eqn.in_tree, in_c)
-        return utils.tree.map(c_env.read_c, step_ir.in_tree)
-
-    env = ad.PBEnv()
-
-    utils.tree.map(env.write_p, step_ir.in_tree, (x_star, theta))
-    for eqn in step_ir.eqns:
-        in_p = utils.tree.map(env.read_p, eqn.in_tree)
-        out_p = fwd_bind(eqn, in_p)
-        utils.tree.map(env.write_p, eqn.out_tree, out_p)
-    utils.tree.map(env.read_p, step_ir.out_tree)
-
+    fwd, bwd = ad.fwd_bwd(step_ir)
+    _, residual = fwd.call(x_star, theta)
     u = g
 
     for _ in range(adj_iters):
-        x_bar, theta_bar = transpose_eq(u)
+        x_bar, theta_bar = bwd.call(residual, u)
         next_u = cot_tree_accum(g, x_bar)
         if utils.tree_equal(next_u, u):
             dtheta = theta_bar
             break
         u = next_u
     else:
-        _, dtheta = transpose_eq(u)
+        _, dtheta = bwd.call(residual, u)
 
     return dx0, dtheta
 
@@ -1005,55 +969,19 @@ async def apull_bwd_fixpoint(
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
         return dx0, core.s_cotangent.zeros_like(theta)
 
-    res: dict[stage.Eqn, Tree] = {}
-    parent = core.active_interp.get()
-    fwd = ad.PullFwdInterp(parent=parent)
-
-    async def fwd_bind(eqn: stage.Eqn, in_p: Tree, /) -> Tree:
-        with core.using_interp(fwd):
-            out_boxed, residuals = await eqn.abind(fwd.box(in_p), **eqn.params)
-        res[eqn] = residuals
-        return fwd.unbox(out_boxed)
-
-    async def atranspose_eq(cot: Tree, /) -> Tree:
-        bwd = ad.PullBwdInterp(parent=parent)
-
-        async def bwd_bind(eqn: stage.Eqn, out_c: Tree, /) -> Tree:
-            residuals = res[eqn]
-            with core.using_interp(bwd):
-                in_boxed_c = await eqn.abind((residuals, bwd.box(out_c)), **eqn.params)
-            return bwd.unbox(in_boxed_c)
-
-        c_env = ad.PBEnv()
-        c_env.primals = env.primals
-
-        utils.tree.map(c_env.write_c, step_ir.out_tree, cot)
-        for eqn in reversed(step_ir.eqns):
-            out_c = utils.tree.map(c_env.read_c, eqn.out_tree)
-            in_c = await bwd_bind(eqn, out_c)
-            utils.tree.map(c_env.write_c, eqn.in_tree, in_c)
-        return utils.tree.map(c_env.read_c, step_ir.in_tree)
-
-    env = ad.PBEnv()
-
-    utils.tree.map(env.write_p, step_ir.in_tree, (x_star, theta))
-    for eqn in step_ir.eqns:
-        in_p = utils.tree.map(env.read_p, eqn.in_tree)
-        out_p = await fwd_bind(eqn, in_p)
-        utils.tree.map(env.write_p, eqn.out_tree, out_p)
-    utils.tree.map(env.read_p, step_ir.out_tree)
-
+    fwd, bwd = ad.fwd_bwd(step_ir)
+    _, residual = await fwd.acall(x_star, theta)
     u = g
 
     for _ in range(adj_iters):
-        x_bar, theta_bar = await atranspose_eq(u)
+        x_bar, theta_bar = await bwd.acall(residual, u)
         next_u = cot_tree_accum(g, x_bar)
         if utils.tree_equal(next_u, u):
             dtheta = theta_bar
             break
         u = next_u
     else:
-        _, dtheta = await atranspose_eq(u)
+        _, dtheta = await bwd.acall(residual, u)
 
     return dx0, dtheta
 
