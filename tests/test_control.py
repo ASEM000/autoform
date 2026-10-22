@@ -172,6 +172,38 @@ class TestFixpointPushforward:
 
 
 class TestFixpointPullback:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_backward_does_not_run_the_step_forward(self, executor):
+        seen = []
+        p_step = core.Prim("step")
+
+        def impl(x, /):
+            seen.append("fwd")
+            return x
+
+        def pull_fwd(x, /):
+            return p_step.bind(x), None
+
+        def pull_bwd(in_tree, /):
+            _, c = in_tree
+            seen.append("bwd")
+            return c
+
+        core.r_impl.set(p_step, impl)
+        core.r_aimpl.set(p_step, utils.asyncify(impl))
+        core.r_abstract.set(p_step, lambda x: x)
+        core.r_pull_fwd.set(p_step, pull_fwd)
+        core.r_apull_fwd.set(p_step, utils.asyncify(pull_fwd))
+        core.r_pull_bwd.set(p_step, pull_bwd)
+        core.r_apull_bwd.set(p_step, utils.asyncify(pull_bwd))
+
+        ir = fixpoint_ir(lambda x, theta: p_step.bind(x * 0.0 + theta), (1.0, 2.0), max_iters=5)
+        fwd, bwd = ad.fwd_bwd(ir)
+        _, residual = executor(fwd, 1.0, 2.0)
+        executor(bwd, residual, 1.0)
+        assert seen[:2] == ["fwd", "fwd"]
+        assert seen[2:] and set(seen[2:]) == {"bwd"}
+
     @pytest.mark.parametrize(
         "executor, step, args, options, c, expected, c_theta",
         [
