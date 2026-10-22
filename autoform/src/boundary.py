@@ -23,133 +23,98 @@ from typing import Any
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.core as core
-import autoform.src.dead as dead
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
 type Tree[T] = utils.Tree[T]
 type TreePair = tuple[Tree, Tree]
-type CustomResult = tuple[stage.IR, Tree]
 
 
-def trace_custom_func(func: Callable[..., Any], in_tree: Tree, /) -> stage.IR:
-    def to_aval(x, /):
-        if stage.is_var(x):
-            return x.aval
-        if isinstance(x, core.AVal):
-            return x
-        assert stage.is_traceable(x), f"Unsupported type for custom function: {type(x).__name__}"
-        return core.avalof(x)
-
-    avals, spec = utils.tree.flatten(utils.tree.map(to_aval, in_tree))
-    return trace_custom_avals(func, spec, tuple(avals))
-
-
-@ft.partial(utils.lru_cache, maxsize=256)
-def trace_custom_avals(func: Callable[..., Any], spec, avals: tuple[core.AVal, ...], /) -> stage.IR:
-    in_tree = utils.tree.unflatten(spec, [stage.Var.fresh(aval=a) for a in avals])
+def trace_custom_func(
+    func: Callable[..., Any], in_tree: Tree, params: dict[str, Any], /
+) -> stage.IR:
+    in_tree = utils.tree.map(lambda x: stage.Var.fresh(aval=core.avalof(x)), in_tree)
     with core.using_interp(stage.TraceInterp()) as trace_interpreter:
-        out_trace_tree = func(*trace_interpreter.box(in_tree))
+        out_trace_tree = func(*trace_interpreter.box(in_tree), **params)
     out_tree = trace_interpreter.unbox(out_trace_tree)
     return stage.IR(trace_interpreter.eqns, in_tree=in_tree, out_tree=out_tree)
-
-
-def call_custom_body(func: Callable[..., Any], in_tree: Tree, /) -> CustomResult:
-    ir = trace_custom_func(func, in_tree)
-    return ir, ir.call(*in_tree)
-
-
-async def acall_custom_body(func: Callable[..., Any], in_tree: Tree, /) -> CustomResult:
-    ir = trace_custom_func(func, in_tree)
-    return ir, await ir.acall(*in_tree)
 
 
 def tree_batched_like(value: Tree, batched: bool, /) -> Tree:
     return utils.tree.map(lambda _: batched, value)
 
 
-def impl_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    return call(*in_tree)
+def impl_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
+    return ir.call(*in_tree)
 
 
-async def aimpl_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    _, out = await acall_custom_body(call, in_tree)
-    return out
+async def aimpl_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
+    return await ir.acall(*in_tree)
 
 
-def abstract_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    ir = trace_custom_func(call, in_tree)
+def abstract_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
     return utils.tree.map(stage.aval_if_var, ir.out_tree)
 
 
-def pushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    p, t = in_tree
-    ir, out_p = call_custom_body(call, p)
-    _, out_t = ad.pushforward(ir).call(p, t)
-    return out_p, out_t
+def pushforward_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
+    return ad.pushforward(ir).call(*in_tree)
 
 
-async def apushforward_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    p, t = in_tree
-    ir, out_p = await acall_custom_body(call, p)
-    _, out_t = await ad.pushforward(ir).acall(p, t)
-    return out_p, out_t
+async def apushforward_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
+    return await ad.pushforward(ir).acall(*in_tree)
 
 
-def pullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    fwd, _ = ad.fwd_bwd(trace_custom_func(call, in_tree))
+def pullback_fwd_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
+    fwd, _ = ad.fwd_bwd(ir)
     out, residual = fwd.call(*in_tree)
     return out, (in_tree, out, residual)
 
 
-async def apullback_fwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
-    fwd, _ = ad.fwd_bwd(trace_custom_func(call, in_tree))
+async def apullback_fwd_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
+    fwd, _ = ad.fwd_bwd(ir)
     out, residual = await fwd.acall(*in_tree)
     return out, (in_tree, out, residual)
 
 
-def pullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    (p, _, residual), c = in_tree
-    _, bwd = ad.fwd_bwd(trace_custom_func(call, p))
+def pullback_bwd_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
+    (_, _, residual), c = in_tree
+    _, bwd = ad.fwd_bwd(ir)
     return bwd.call(residual, c)
 
 
-async def apullback_bwd_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> Tree:
-    (p, _, residual), c = in_tree
-    _, bwd = ad.fwd_bwd(trace_custom_func(call, p))
+async def apullback_bwd_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
+    (_, _, residual), c = in_tree
+    _, bwd = ad.fwd_bwd(ir)
     return await bwd.acall(residual, c)
 
 
-def batch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+def batch_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
-        _, out = call_custom_body(call, values)
+        out = ir.call(*values)
         return out, tree_batched_like(out, False)
-    example_values = utils.batch_index(values, in_axes, 0)
-    ir = trace_custom_func(call, example_values)
-    batched_ir = axis.batch(ir, in_axes=in_axes)
-    out = batched_ir.call(*values)
+    out = axis.batch(ir, in_axes=in_axes).call(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
-async def abatch_custom_call(in_tree: Tree, /, *, call: Callable[..., Any]) -> TreePair:
+async def abatch_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
     _, in_axes, values = in_tree
     if utils.batch_spec(values, in_axes) is None:
-        _, out = await acall_custom_body(call, values)
+        out = await ir.acall(*values)
         return out, tree_batched_like(out, False)
-    example_values = utils.batch_index(values, in_axes, 0)
-    ir = trace_custom_func(call, example_values)
-    batched_ir = axis.batch(ir, in_axes=in_axes)
-    out = await batched_ir.acall(*values)
+    out = await axis.batch(ir, in_axes=in_axes).acall(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
-def dce_custom_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
-    return dead.default_dce(eqn, out_used)
+def without_ir(rule: Callable[..., Any], /) -> Callable[..., Any]:
+    def func(in_tree: Tree, /, *, ir: stage.IR, **params):
+        return rule(in_tree, **params)
+
+    return func
 
 
 def custom_prim_name(func: Callable[..., Any]) -> str:
-    return f"custom_call_p<{func.__name__}-{id(func):x}>"
+    return f"p_custom_call<{func.__name__}-{id(func):x}>"
 
 
 class CustomFunc:
@@ -167,14 +132,14 @@ class CustomFunc:
         core.r_apull_fwd.set(self.prim, apullback_fwd_custom_call)
         core.r_pull_bwd.set(self.prim, pullback_bwd_custom_call)
         core.r_apull_bwd.set(self.prim, apullback_bwd_custom_call)
-        dead.register_dce(self.prim, dce_custom_call)
         ft.update_wrapper(self, func)
 
-    def __call__(self, *args):
-        return self.prim.bind(args, call=self.func)
+    def __call__(self, *args, **params):
+        ir = trace_custom_func(self.func, args, params)
+        return self.prim.bind(args, ir=ir, **params)
 
     def set_pushforward[R: Callable[..., tuple[Tree, Tree]]](self, rule: R, /) -> R:
-        """Register ``rule(in_tree, *, call) -> (out_p, out_t)``.
+        """Register ``rule(in_tree, /, **params) -> (out_p, out_t)``.
 
         Example:
             >>> import autoform as af
@@ -182,10 +147,10 @@ class CustomFunc:
             ... def bracket_push_example(x):
             ...     return "[" + x + "]"
             >>> @bracket_push_example.set_pushforward
-            ... def bracket_push_rule(in_tree, /, *, call):
+            ... def bracket_push_rule(in_tree, /):
             ...     p, t = in_tree
             ...     (dx,) = t
-            ...     out_p = call(*p)
+            ...     out_p = bracket_push_example(*p)
             ...     out_t = "delta " + af.extend.instantiate(dx)
             ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_push_example(x))("seed")
@@ -193,7 +158,8 @@ class CustomFunc:
             ('[hello]', 'delta change')
         """
 
-        return core.r_push.set(self.prim, rule)
+        core.r_push.set(self.prim, without_ir(rule))
+        return rule
 
     def aset_pushforward[R: Callable[..., Awaitable[tuple[Tree, Tree]]]](self, rule: R, /) -> R:
         """Register an async custom pushforward rule.
@@ -205,10 +171,10 @@ class CustomFunc:
             ... def bracket_apush_example(x):
             ...     return "[" + x + "]"
             >>> @bracket_apush_example.aset_pushforward
-            ... async def bracket_apush_rule(in_tree, /, *, call):
+            ... async def bracket_apush_rule(in_tree, /):
             ...     p, t = in_tree
             ...     (dx,) = t
-            ...     out_p = call(*p)
+            ...     out_p = bracket_apush_example(*p)
             ...     out_t = "async delta " + af.extend.instantiate(dx)
             ...     return out_p, out_t
             >>> ir = af.trace(lambda x: bracket_apush_example(x))("seed")
@@ -216,10 +182,11 @@ class CustomFunc:
             ('[hello]', 'async delta change')
         """
 
-        return core.r_apush.set(self.prim, rule)
+        core.r_apush.set(self.prim, without_ir(rule))
+        return rule
 
     def set_pullback[R: Callable[..., Tree]](self, rule: R, /) -> R:
-        """Register ``rule(in_tree, *, call) -> in_c``.
+        """Register ``rule(in_tree, /, **params) -> in_c``.
 
         Example:
             >>> import autoform as af
@@ -227,8 +194,7 @@ class CustomFunc:
             ... def bracket_pull_example(x):
             ...     return "[" + x + "]"
             >>> @bracket_pull_example.set_pullback
-            ... def bracket_pull_rule(in_tree, /, *, call):
-            ...     del call
+            ... def bracket_pull_rule(in_tree, /):
             ...     (p, output), c = in_tree
             ...     del p
             ...     return (c + " via " + output),
@@ -237,7 +203,7 @@ class CustomFunc:
             ('[hello]', ('feedback via [hello]',))
         """
 
-        def with_output(in_tree, /, **params):
+        def with_output(in_tree, /, *, ir, **params):
             (p, out, _), c = in_tree
             return rule(((p, out), c), **params)
 
@@ -254,8 +220,7 @@ class CustomFunc:
             ... def bracket_apull_example(x):
             ...     return "[" + x + "]"
             >>> @bracket_apull_example.aset_pullback
-            ... async def bracket_apull_rule(in_tree, /, *, call):
-            ...     del call
+            ... async def bracket_apull_rule(in_tree, /):
             ...     (p, output), c = in_tree
             ...     del p
             ...     return ("async " + c + " via " + output),
@@ -264,7 +229,7 @@ class CustomFunc:
             ('[hello]', ('async feedback via [hello]',))
         """
 
-        async def with_output(in_tree, /, **params):
+        async def with_output(in_tree, /, *, ir, **params):
             (p, out, _), c = in_tree
             return await rule(((p, out), c), **params)
 
@@ -272,7 +237,7 @@ class CustomFunc:
         return rule
 
     def set_batch[R: Callable[..., tuple[Tree, Tree[bool]]]](self, rule: R, /) -> R:
-        """Register ``rule(in_tree, *, call) -> (outputs, output_axes)``.
+        """Register ``rule(in_tree, /, **params) -> (outputs, output_axes)``.
 
         Example:
             >>> import autoform as af
@@ -280,8 +245,7 @@ class CustomFunc:
             ... def bracket_batch_example(x):
             ...     return "[" + x + "]"
             >>> @bracket_batch_example.set_batch
-            ... def bracket_batch_rule(in_tree, /, *, call):
-            ...     del call
+            ... def bracket_batch_rule(in_tree, /):
             ...     batch_size, axes, values = in_tree
             ...     assert batch_size == 2
             ...     (xs,) = values
@@ -293,7 +257,8 @@ class CustomFunc:
             ['<a>', '<b>']
         """
 
-        return core.r_batch.set(self.prim, rule)
+        core.r_batch.set(self.prim, without_ir(rule))
+        return rule
 
     def aset_batch[R: Callable[..., Awaitable[tuple[Tree, Tree[bool]]]]](self, rule: R, /) -> R:
         """Register an async custom batch rule.
@@ -305,8 +270,7 @@ class CustomFunc:
             ... def bracket_abatch_example(x):
             ...     return "[" + x + "]"
             >>> @bracket_abatch_example.aset_batch
-            ... async def bracket_abatch_rule(in_tree, /, *, call):
-            ...     del call
+            ... async def bracket_abatch_rule(in_tree, /):
             ...     batch_size, axes, values = in_tree
             ...     assert batch_size == 2
             ...     (xs,) = values
@@ -318,7 +282,8 @@ class CustomFunc:
             ['async <a>', 'async <b>']
         """
 
-        return core.r_abatch.set(self.prim, rule)
+        core.r_abatch.set(self.prim, without_ir(rule))
+        return rule
 
 
 def custom(func: Callable[..., Any], /) -> CustomFunc:
@@ -339,16 +304,17 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     - ``set_batch(rule)`` for a synchronous batch rule.
     - ``aset_batch(rule)`` for an asynchronous batch rule.
 
-    Rules receive one positional ``in_tree`` argument. The original behavior is
-    available as the keyword-only ``call`` argument, so a rule can use
-    ``call(*primals)`` when it wants to reuse the normal primal behavior.
-    The rule signatures are:
+    Positional arguments are traced inputs. Keyword arguments are static
+    parameters: they are not traced or differentiated, and rules receive them
+    as keyword arguments. Like core rules, a rule takes one positional
+    ``in_tree`` and the static parameters. To reuse the normal primal
+    behavior, a rule calls the custom function itself. The rule signatures are:
 
-    - Pushforward: ``rule((primals, tangents), /, *, call) -> (out_p, out_t)``.
+    - Pushforward: ``rule((primals, tangents), /, **params) -> (out_p, out_t)``.
     - Pullback backward:
-      ``rule(((primals, output), cotangent), /, *, call) -> cotangents``.
+      ``rule(((primals, output), cotangent), /, **params) -> cotangents``.
     - Batch:
-      ``rule((batch_size, axes, values), /, *, call) -> (outputs, output_axes)``.
+      ``rule((batch_size, axes, values), /, **params) -> (outputs, output_axes)``.
 
     Synchronous and asynchronous registrations are independent. Use both
     ``set_*`` and ``aset_*`` when both execution modes need custom behavior.
@@ -387,10 +353,10 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         A pushforward rule can replace only the pushforward behavior.
 
         >>> @bracket.set_pushforward
-        ... def bracket_push(in_tree, /, *, call):
+        ... def bracket_push(in_tree, /):
         ...     p, t = in_tree
         ...     (dx,) = t
-        ...     out_p = call(*p)
+        ...     out_p = bracket(*p)
         ...     out_t = "delta: " + af.extend.instantiate(dx)
         ...     return out_p, out_t
         >>> af.pushforward(base).call(("hello",), ("change",))
@@ -399,8 +365,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         Pullback and batch rules use the same one-``in_tree`` convention.
 
         >>> @bracket.set_pullback
-        ... def bracket_pull(in_tree, /, *, call):
-        ...     del call
+        ... def bracket_pull(in_tree, /):
         ...     (p, output), c = in_tree
         ...     (x,) = p
         ...     return (c + " via " + output + " from " + x),
@@ -408,8 +373,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ('[hello]', ('feedback via [hello] from hello',))
 
         >>> @bracket.set_batch
-        ... def bracket_batch(in_tree, /, *, call):
-        ...     del call
+        ... def bracket_batch(in_tree, /):
         ...     batch_size, axes, values = in_tree
         ...     assert batch_size == 2
         ...     (xs,) = values
@@ -424,7 +388,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> from autoform.extend import instantiate
         >>> @af.custom
-        ... def summarize(text, model):
+        ... def summarize(text, *, model):
         ...     message = "Summarize this in one sentence: " + text
         ...     return af.lm.fill({"prompt": message, "output": af.lm.Str()}, model=model)["output"]
 
@@ -432,11 +396,9 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         change under an input edit.
 
         >>> @summarize.set_pushforward
-        ... def summarize_push(in_tree, /, *, call):
-        ...     p, t = in_tree
-        ...     text, model = p
-        ...     t_text, _ = t
-        ...     out_p = call(*p)
+        ... def summarize_push(in_tree, /, *, model):
+        ...     (text,), (t_text,) = in_tree
+        ...     out_p = summarize(text, model=model)
         ...     prompt = (
         ...         "Original input:\\n" + text
         ...         + "\\n\\nInput edit:\\n" + instantiate(t_text)
@@ -449,10 +411,8 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         a domain-specific feedback prompt.
 
         >>> @summarize.set_pullback
-        ... def summarize_pull(in_tree, /, *, call):
-        ...     del call
-        ...     (p, output), c = in_tree
-        ...     text, model = p
+        ... def summarize_pull(in_tree, /, *, model):
+        ...     ((text,), output), c = in_tree
         ...     prompt = (
         ...         "Original input:\\n" + text
         ...         + "\\n\\nLM output:\\n" + output
@@ -460,17 +420,11 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         ...         + "\\n\\nReturn feedback for improving the original input."
         ...     )
         ...     text_cotangent = af.lm.fill({"prompt": prompt, "output": af.lm.Str()}, model=model)["output"]
-        ...     return text_cotangent, ""
+        ...     return (text_cotangent,)
 
-        >>> lm_ir = af.trace(lambda text, model: summarize(text, model))("topic", "model-name")
-        >>> af.pushforward(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "model-name"),
-        ...     ("focus on the recursive step", ""),
-        ... )
-        >>> af.pullback(lm_ir).call(  # doctest: +SKIP
-        ...     ("recursion", "model-name"),
-        ...     "make the answer more concrete",
-        ... )
+        >>> lm_ir = af.trace(lambda text: summarize(text, model="model-name"))("topic")
+        >>> af.pushforward(lm_ir).call(("recursion",), ("focus on the recursive step",))  # doctest: +SKIP
+        >>> af.pullback(lm_ir).call(("recursion",), "make the answer more concrete")  # doctest: +SKIP
     """
     assert callable(func), f"Expected a callable function, got {type(func)}"
     return CustomFunc(func)
