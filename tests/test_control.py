@@ -159,12 +159,12 @@ class TestFixpointPushforward:
             return 0.5 * x + y
 
         @step.aset_pushforward
-        async def push(in_tree, /, *, call):
+        async def push(in_tree, /):
             p, t = in_tree
             zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
             x, y = utils.tree.map(zero, t)
             calls.append("push")
-            return call(*p), 0.5 * x + y
+            return step(*p), 0.5 * x + y
 
         ir = fixpoint_ir(step, (2.0, 1.0), max_iters=1)
         assert aexecute(ad.pushforward(ir), (2.0, 1.0), (100.0, 1.0)) == (2.0, 1.5)
@@ -327,26 +327,24 @@ class TestFixpointBatch:
 
 class TestEquivIR:
     def test_judged_convergence_counts(self):
-        counters = dict(step=0, judge=0)
-
-        @boundary.custom
         def step(state, instruction):
             del instruction
-            counters["step"] += 1
-            return string.concat(state, ".")
+            new = string.concat(state, ".")
+            return intercept.checkpoint(new, key="step", collection="counts")
 
-        @boundary.custom
         def probe(prev, new):
             del prev
-            counters["judge"] += 1
-            return new
+            new = intercept.checkpoint(new, key="judge", collection="counts")
+            return string.match(new, "x..")
 
-        step_ir = stage.trace(lambda state, instruction: step(state, instruction))("x", "unused")
-        equiv_ir = stage.trace(lambda prev, new: string.match(probe(prev, new), "x.."))("a", "b")
-        counters["step"] = counters["judge"] = 0
+        step_ir = stage.trace(step)("x", "unused")
+        equiv_ir = stage.trace(probe)("a", "b")
 
-        assert control.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
-        assert counters == dict(step=2, judge=2)
+        with intercept.collect(collection="counts") as collected:
+            assert (
+                control.fixpoint(step_ir, "x", "unused", max_iters=10, equiv_ir=equiv_ir) == "x.."
+            )
+        assert collected == dict(step=["x.", "x.."], judge=["x.", "x.."])
 
     def test_batched_equiv_ir(self):
         def step(state, instruction):
@@ -537,9 +535,9 @@ class TestWhileLoop:
             return string.concat(x, "!")
 
         @body.aset_pushforward
-        async def push(in_tree, /, *, call):
+        async def push(in_tree, /):
             (x,), (y,) = in_tree
-            return call(x), string.concat(y, "?")
+            return body(x), string.concat(y, "?")
 
         cond_ir = stage.trace(always_true)("x")
         ir = stage.trace(while_program(cond_ir, stage.trace(body)("x"), max_iters=2))("x")

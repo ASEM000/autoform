@@ -164,19 +164,18 @@ assert bracket_ir.call("text") == "[text]"
 
 ### Rule Hooks
 
-The hooks are given the `in_tree` and a `call` function that will call the original function. The pushforward hook should return the primal output and the tangent, and the pullback hook should return the input feedback.[^async-hooks]
+The hooks are given the `in_tree` and, as keyword arguments, any static parameters the custom function was called with. A hook reuses the original behavior by calling the custom function itself. The pushforward hook should return the primal output and the tangent, and the pullback hook should return the input feedback.[^async-hooks]
 
 ```python
 @bracket.set_pushforward
-def pushforward_bracket(in_tree, /, *, call):
+def pushforward_bracket(in_tree, /):
     p, t = in_tree
     (t_text,) = t
-    return call(*p), "bracket change: " + t_text
+    return bracket(*p), "bracket change: " + t_text
 
 
 @bracket.set_pullback
-def pullback_bracket(in_tree, /, *, call):
-    del call
+def pullback_bracket(in_tree, /):
     (p, output), feedback = in_tree
     (text,) = p
     return (feedback + " via " + output + " from " + text,)
@@ -199,14 +198,14 @@ The batch hook should also return the tree for the output axes. Here, it keeps t
 
 ```python
 @bracket.set_batch
-def batch_bracket(in_tree, /, *, call):
+def batch_bracket(in_tree, /):
     batch_size, axes, values = in_tree
     del batch_size
     (text_axis,) = axes
     (texts,) = values
     if not text_axis:
-        return call(texts), False
-    return [call(text) for text in texts], True
+        return bracket(texts), False
+    return [bracket(text) for text in texts], True
 
 
 assert af.batch(bracket_ir).call(["a", "b"]) == ["[a]", "[b]"]

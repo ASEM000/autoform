@@ -87,8 +87,7 @@ class TestCustomPushforward:
             return left, right
 
         @pair_program.set_pushforward
-        def pair_program_pushforward(in_tree, /, *, call):
-            del call
+        def pair_program_pushforward(in_tree, /):
             p, t = in_tree
             x, y = p
             dx, dy = t
@@ -112,10 +111,10 @@ class TestCustomPushforward:
             return string.format("[{x}]", x=x)
 
         @bracket.set_pushforward
-        def bracket_pushforward(in_tree, /, *, call):
+        def bracket_pushforward(in_tree, /):
             p, t = in_tree
             (dx,) = t
-            return call(*p), string.format(
+            return bracket(*p), string.format(
                 "custom delta: {value}",
                 value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
@@ -139,10 +138,10 @@ class TestCustomPushforward:
             return string.format("[{x}]", x=x)
 
         @bracket.aset_pushforward
-        async def bracket_pushforward(in_tree, /, *, call):
+        async def bracket_pushforward(in_tree, /):
             p, t = in_tree
             (dx,) = t
-            return call(*p), string.format(
+            return bracket(*p), string.format(
                 "async delta: {value}",
                 value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
@@ -159,10 +158,10 @@ class TestCustomPushforward:
             return string.format("[{x}]", x=x)
 
         @bracket.set_pushforward
-        def bracket_pushforward(in_tree, /, *, call):
+        def bracket_pushforward(in_tree, /):
             p, t = in_tree
             (dx,) = t
-            return call(*p), string.format(
+            return bracket(*p), string.format(
                 "push {value}",
                 value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
@@ -185,10 +184,10 @@ class TestCustomPushforward:
             return string.format("[{x}]", x=x)
 
         @bracket.set_pushforward
-        def bracket_pushforward(in_tree, /, *, call):
+        def bracket_pushforward(in_tree, /):
             p, t = in_tree
             (dx,) = t
-            return call(*p), string.format(
+            return bracket(*p), string.format(
                 "sync push {value}",
                 value=(dx.aval.zero() if isinstance(dx, core.Zero) else dx),
             )
@@ -214,8 +213,7 @@ class TestCustomPullback:
             return left, right
 
         @pair_program.set_pullback
-        def pair_program_pullback(in_tree, /, *, call):
-            del call
+        def pair_program_pullback(in_tree, /):
             (p, output), c = in_tree
             x, y = p
             out_left, out_right = output
@@ -237,8 +235,7 @@ class TestCustomPullback:
             return string.format("[{x}]", x=x)
 
         @bracket.set_pullback
-        def bracket_pullback(in_tree, /, *, call):
-            del call
+        def bracket_pullback(in_tree, /):
             (p, output), c = in_tree
             (x,) = p
             return (
@@ -269,8 +266,7 @@ class TestCustomPullback:
             return string.format("[{x}]", x=x)
 
         @bracket.aset_pullback
-        async def bracket_pullback(in_tree, /, *, call):
-            del call
+        async def bracket_pullback(in_tree, /):
             (p, output), c = in_tree
             del p
             return (
@@ -293,8 +289,7 @@ class TestCustomPullback:
             return string.format("[{x}]", x=x)
 
         @bracket.set_pullback
-        def bracket_pullback(in_tree, /, *, call):
-            del call
+        def bracket_pullback(in_tree, /):
             (p, output), c = in_tree
             del p
             return (string.format("pull {output} {cotangent}", output=output, cotangent=c),)
@@ -317,8 +312,7 @@ class TestCustomPullback:
             return string.format("[{x}]", x=x)
 
         @bracket.set_pullback
-        def bracket_pullback(in_tree, /, *, call):
-            del call
+        def bracket_pullback(in_tree, /):
             (p, output), c = in_tree
             del p
             return (
@@ -361,8 +355,7 @@ class TestCustomBatch:
             return left, right
 
         @pair_program.set_batch
-        def pair_program_batch(in_tree, /, *, call):
-            del call
+        def pair_program_batch(in_tree, /):
             batch_size, axes, values = in_tree
             xs, ys = values
             x_axis, y_axis = axes
@@ -400,8 +393,7 @@ class TestCustomBatch:
             return string.format("[{x}]", x=x)
 
         @bracket.set_batch
-        def bracket_batch(in_tree, /, *, call):
-            del call
+        def bracket_batch(in_tree, /):
             batch_size, axes, values = in_tree
             assert batch_size == 2
             (xs,) = values
@@ -426,8 +418,7 @@ class TestCustomBatch:
             return string.format("[{x}]", x=x)
 
         @bracket.aset_batch
-        async def bracket_batch(in_tree, /, *, call):
-            del call
+        async def bracket_batch(in_tree, /):
             batch_size, axes, values = in_tree
             assert batch_size == 2
             (xs,) = values
@@ -453,8 +444,7 @@ class TestCustomBatch:
             return string.format("[{x}]", x=x)
 
         @bracket.set_batch
-        def bracket_batch(in_tree, /, *, call):
-            del call
+        def bracket_batch(in_tree, /):
             batch_size, axes, values = in_tree
             assert batch_size == 2
             (xs,) = values
@@ -466,3 +456,91 @@ class TestCustomBatch:
         batched = axis.batch(ir)
 
         assert executor(batched, ["a", "b"]) == expected
+
+
+class TestCustomParams:
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_default_rules_use_params(self, executor):
+        @boundary.custom
+        def wrap(x, *, left, right):
+            return string.concat(string.concat(left, x), right)
+
+        def program(x):
+            return wrap(x, left="<", right=">")
+
+        ir = stage.trace(program)("seed")
+        assert executor(ir, "a") == "<a>"
+        assert executor(ad.pushforward(ir), ("a",), ("t",)) == ("<a>", "t")
+        assert executor(ad.pullback(ir), ("a",), "g") == ("<a>", ("g",))
+        assert executor(axis.batch(ir), ["a", "b"]) == ["<a>", "<b>"]
+
+    def test_params_are_not_shared_between_calls(self):
+        @boundary.custom
+        def wrap(x, *, left):
+            return string.concat(left, x)
+
+        def program(x):
+            return wrap(x, left="<"), wrap(x, left="[")
+
+        ir = stage.trace(program)("seed")
+        assert ir.call("a") == ("<a", "[a")
+
+    def test_rules_receive_params(self):
+        @boundary.custom
+        def wrap(x, *, mark):
+            return string.concat(x, mark)
+
+        @wrap.set_pushforward
+        def wrap_pushforward(in_tree, /, *, mark):
+            (x,), (t,) = in_tree
+            return wrap(x, mark=mark), string.concat(t, mark)
+
+        @wrap.set_pullback
+        def wrap_pullback(in_tree, /, *, mark):
+            _, c = in_tree
+            return (string.concat(c, mark),)
+
+        @wrap.set_batch
+        def wrap_batch(in_tree, /, *, mark):
+            _, _, (xs,) = in_tree
+            return [wrap(x, mark=mark) for x in xs], True
+
+        def program(x):
+            return wrap(x, mark="!")
+
+        ir = stage.trace(program)("seed")
+        assert ad.pushforward(ir).call(("a",), ("t",)) == ("a!", "t!")
+        assert ad.pullback(ir).call(("a",), "g") == ("a!", ("g!",))
+        assert axis.batch(ir).call(["a", "b"]) == ["a!", "b!"]
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_body_is_traced_once(self, executor):
+        traces = []
+
+        @boundary.custom
+        def wrap(x, *, mark):
+            traces.append(mark)
+            return string.concat(x, mark)
+
+        def program(x):
+            return wrap(x, mark="!")
+
+        ir = stage.trace(program)("seed")
+        assert executor(ad.pushforward(ir), ("a",), ("t",)) == ("a!", "t")
+        assert executor(ad.pullback(ir), ("a",), "g") == ("a!", ("g",))
+        assert executor(ad.pullback(ir), ("b",), "h") == ("b!", ("h",))
+        assert executor(axis.batch(ir), ["a", "b"]) == ["a!", "b!"]
+        assert traces == ["!"]
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_default_batch_with_shared_inputs(self, executor):
+        @boundary.custom
+        def wrap(x):
+            return string.concat(x, "!")
+
+        def program(x, y):
+            return string.concat(wrap(y), x)
+
+        ir = stage.trace(program)("a", "b")
+        batched = axis.batch(ir, in_axes=(True, False))
+        assert executor(batched, ["a", "b"], "c") == ["c!a", "c!b"]
