@@ -887,15 +887,22 @@ def pullback_fwd_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    out = p_fixpoint.bind(
-        in_tree,
-        step_ir=step_ir,
-        max_iters=max_iters,
-        adj_iters=adj_iters,
-        equiv_ir=equiv_ir,
-    )
-    _, theta = in_tree
-    return out, (out, theta)
+    del adj_iters
+    state, theta = in_tree
+    fwd, _ = ad.fwd_bwd(step_ir)
+
+    for _ in range(max_iters):
+        new_state, residual = fwd.call(state, theta)
+        stable = (
+            utils.tree_equal(state, new_state)
+            if equiv_ir is None
+            else equiv_ir.call(state, new_state)
+        )
+        if stable:
+            return new_state, (new_state, theta, residual)
+        state = new_state
+    _, residual = fwd.call(state, theta)
+    return state, (state, theta, residual)
 
 
 async def apull_fwd_fixpoint(
@@ -907,15 +914,22 @@ async def apull_fwd_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    out = await p_fixpoint.abind(
-        in_tree,
-        step_ir=step_ir,
-        max_iters=max_iters,
-        adj_iters=adj_iters,
-        equiv_ir=equiv_ir,
-    )
-    _, theta = in_tree
-    return out, (out, theta)
+    del adj_iters
+    state, theta = in_tree
+    fwd, _ = ad.fwd_bwd(step_ir)
+
+    for _ in range(max_iters):
+        new_state, residual = await fwd.acall(state, theta)
+        stable = (
+            utils.tree_equal(state, new_state)
+            if equiv_ir is None
+            else await equiv_ir.acall(state, new_state)
+        )
+        if stable:
+            return new_state, (new_state, theta, residual)
+        state = new_state
+    _, residual = await fwd.acall(state, theta)
+    return state, (state, theta, residual)
 
 
 def pullback_bwd_fixpoint(
@@ -929,14 +943,13 @@ def pullback_bwd_fixpoint(
 ) -> Tree:
     del max_iters, equiv_ir
     residuals, g = in_tree
-    x_star, theta = residuals
+    x_star, theta, residual = residuals
     dx0 = core.s_cotangent.zeros_like(x_star)
 
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
         return dx0, core.s_cotangent.zeros_like(theta)
 
-    fwd, bwd = ad.fwd_bwd(step_ir)
-    _, residual = fwd.call(x_star, theta)
+    _, bwd = ad.fwd_bwd(step_ir)
     u = g
 
     for _ in range(adj_iters):
@@ -963,14 +976,13 @@ async def apull_bwd_fixpoint(
 ) -> Tree:
     del max_iters, equiv_ir
     residuals, g = in_tree
-    x_star, theta = residuals
+    x_star, theta, residual = residuals
     dx0 = core.s_cotangent.zeros_like(x_star)
 
     if all(isinstance(x, core.Zero) for x in utils.tree.leaves(g)):
         return dx0, core.s_cotangent.zeros_like(theta)
 
-    fwd, bwd = ad.fwd_bwd(step_ir)
-    _, residual = await fwd.acall(x_star, theta)
+    _, bwd = ad.fwd_bwd(step_ir)
     u = g
 
     for _ in range(adj_iters):
