@@ -70,6 +70,7 @@ def test_dispatch_handler_errors(error, registered):
         pytest.param((int, int), (True, 2), id="subclass"),
         pytest.param((int, float), (2.0, 1), id="order"),
         pytest.param((int, str), [1, "x"], id="structure"),
+        pytest.param({"x": int, "y": str}, {"y": "x", "x": 1}, id="dict-order"),
         pytest.param(None, (), id="empty-structure"),
     ],
 )
@@ -86,7 +87,7 @@ def test_dispatch_missing(types, values):
         pytest.param(int, 1, id="scalar"),
         pytest.param((bool, int), (True, 2), id="explicit-subclass"),
         pytest.param([int, str], [1, "x"], id="list"),
-        pytest.param({"x": [int], "y": (str, None)}, {"y": ("x", None), "x": [1]}, id="nested"),
+        pytest.param({"y": (str, None), "x": [int]}, {"y": ("x", None), "x": [1]}, id="nested"),
         pytest.param(None, None, id="none"),
         pytest.param((), (), id="empty"),
     ],
