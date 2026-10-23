@@ -50,6 +50,8 @@ def asyncify[**P, R](func: Callable[P, R], /) -> Callable[P, Awaitable[R]]:
 # ==================================================================================================
 
 PYTREE_NAMESPACE = "OPTREE_AUTOFORM_NAMESPACE"
+dict_insertion_order = optree.dict_insertion_ordered(True, namespace=PYTREE_NAMESPACE)
+dict_insertion_order.__enter__()
 tree = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
 type Tree[T] = Any
 
