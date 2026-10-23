@@ -283,7 +283,7 @@ def test_parse_uses_partitioned_schema():
         "custom": "y",
     }
     assert calls == []
-    assert lm.describe(schema)["required"] == ["custom", "generated"]
+    assert lm.describe(schema)["required"] == ["generated", "custom"]
     assert calls == [schema["custom"]]
 
 

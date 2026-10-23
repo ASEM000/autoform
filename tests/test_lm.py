@@ -1075,15 +1075,15 @@ def test_schema_dsl_builds_described_schema():
     assert json_schema == {
         "type": "object",
         "properties": {
+            "name": {"type": "string", "description": "Subject name."},
             "kind": {
                 "type": "string",
                 "enum": ["summary", "definition"],
                 "description": "Answer kind.",
             },
-            "name": {"type": "string", "description": "Subject name."},
             "score": {"type": "number", "description": "Confidence score."},
         },
-        "required": ["kind", "name", "score"],
+        "required": ["name", "kind", "score"],
         "additionalProperties": False,
     }
     assert lm.parse(
