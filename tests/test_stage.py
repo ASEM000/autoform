@@ -397,16 +397,20 @@ class TestTraceStatic:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_static_input_mismatch_errors_before_execution(self, executor):
         ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
-        with pytest.raises(AssertionError, match="Static input mismatch"):
+        with pytest.raises(ValueError, match="Static input mismatch"):
             executor(ir, "Hi", "x0")
 
-    def test_static_input_check_is_separate_from_walk(self):
+    @pytest.mark.parametrize("program", [prefix_name, lambda prefix, name: prefix])
+    def test_walk_rejects_static_input_mismatch_before_first_equation(self, program):
+        ir = stage.trace(program, static=(True, False))("Hello", "World")
+
+        with pytest.raises(ValueError, match="Static input mismatch"):
+            next(ir.walk("Hi", "x0"))
+
+    def test_walk_accepts_matching_static_inputs(self):
         ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
 
-        with pytest.raises(AssertionError, match="Static input mismatch"):
-            stage.check_static_inputs(ir.in_tree, ("Hi", "x0"))
-
-        gen = ir.walk("Hi", "x0")
+        gen = ir.walk("Hello", "x0")
 
         eqn, in_values = next(gen)
         assert in_values == ("Hello", " ", "x0")
