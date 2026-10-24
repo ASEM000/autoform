@@ -257,12 +257,13 @@ class TestFixpointPullback:
         assert actual_theta == c_theta
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_pullback_static_step_literal_is_not_boxed(self, executor):
+    def test_pullback_step_input_literal_is_not_boxed(self, executor):
 
         def step(state, suffix):
             return string.concat(state, suffix)
 
-        step_ir = stage.trace(step, static=(False, True))("s", "!")
+        traced = stage.trace(lambda state: step(state, "!"))("s")
+        step_ir = stage.IR(list(traced.eqns), (*traced.in_tree, "!"), traced.out_tree)
 
         def program(init):
             return control.fixpoint(step_ir, init, "!", max_iters=2, adj_iters=1)

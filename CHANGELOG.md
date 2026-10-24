@@ -4,6 +4,10 @@
 
 ### Breaking Changes
 
+  - Removed the `static` keyword from {py:func}`trace <autoform.trace>`.
+    All positional input leaves are dynamic. Capture fixed configuration in a
+    closure or wrapper, and pass only dynamic inputs when calling the resulting IR.
+
   - Added `AVal.join(other)` to compute an abstract value covering both operands,
     where `other` can be a concrete value, an abstract value, or a symbolic zero.
 

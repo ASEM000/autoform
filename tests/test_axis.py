@@ -149,17 +149,24 @@ class TestBatchBasic:
         assert actual == expected
 
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_static_input_literal_is_not_boxed(self, executor):
+    def test_input_literal_is_not_boxed(self, executor):
 
         def label(prefix, value):
             return string.concat(prefix, value)
 
-        ir = stage.trace(label, static=(True, False))("Q", "x")
+        traced = stage.trace(lambda value: label("Q", value))("x")
+        ir = stage.IR(list(traced.eqns), ("Q", *traced.in_tree), traced.out_tree)
         batched_ir = axis.batch(ir, in_axes=(False, True))
         actual = executor(batched_ir, "Q", ["a", "b"])
         assert actual == ["Qa", "Qb"]
         with pytest.raises(ValueError, match="Static input mismatch"):
             executor(batched_ir, "R", ["a", "b"])
+
+    @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+    def test_default_batch_with_captured_prefix(self, executor):
+        prefix = "Q"
+        ir = stage.trace(lambda value: string.concat(prefix, value))("x")
+        assert executor(axis.batch(ir), ["a", "b"]) == ["Qa", "Qb"]
 
 
 class TestBatchIRStructure:

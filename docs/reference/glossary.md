@@ -7,6 +7,7 @@ These terms describe tracing, transformations, and execution:
 | Term | Definition |
 | --- | --- |
 | {py:func}`batch <autoform.batch>` | IR transform to vectorize over a selection of input leaves. |
+| Captured value | A value from a function's enclosing scope used while tracing. Captured configuration does not become an input of the resulting IR. |
 | {py:func}`checkpoint <autoform.checkpoint>` | A primitive that labels an intermediate value with a key and collection. It is transparent unless {py:func}`collect <autoform.collect>` or {py:func}`inject <autoform.inject>` is active. |
 | {py:func}`collect <autoform.collect>` | Context manager to capture checkpointed values during IR execution. |
 | Collection | A namespace used by checkpoints, {py:func}`collect <autoform.collect>`, and {py:func}`inject <autoform.inject>` to decide which values belong together. |
@@ -31,7 +32,6 @@ These terms describe tracing, transformations, and execution:
 | {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` | Optree namespace reserved for use by `autoform` when registering user pytrees. |
 | {py:func}`sched <autoform.sched>` | IR transform to group equations that can be executed concurrently using async. |
 | Schema | A pytree of specifications such as {py:class}`Str <autoform.lm.Str>`, {py:class}`Float <autoform.lm.Float>`, and {py:class}`Enum <autoform.lm.Enum>`, used by {py:func}`fill <autoform.lm.fill>` to describe generated values. |
-| Static argument | An input leaf that will be fixed by {py:func}`trace <autoform.trace>`. `static` is a `bool` pytree that should match the structure of the positional inputs to trace. |
 | tag value | Hashable metadata that can be attached to equations during tracing. |
 | {py:func}`tag <autoform.tag>` | Context manager to apply one or more tags to all equations produced within the block. |
 | Trace | The phase that runs a Python function once with placeholders and records `autoform` primitive calls as IR equations. |

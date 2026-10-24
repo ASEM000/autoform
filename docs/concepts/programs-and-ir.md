@@ -22,7 +22,7 @@ def label(topic: str) -> str:
 ir = af.trace(label)("topic text")
 ```
 
-Here, the input `"topic text"` tells {py:func}`trace <autoform.trace>` to expect a string input. During tracing, the string is replaced with a placeholder and the function body is run to record the operations performed. Later, the traced program can be run with a different string. [Tracing](tracing.md) explains which inputs must be static or can be dynamic.
+Here, the input `"topic text"` tells {py:func}`trace <autoform.trace>` to expect a string input. During tracing, the string is replaced with a placeholder and the function body is run to record the operations performed. Later, the traced program can be run with a different string. [Tracing](tracing.md) explains dynamic inputs and captured configuration.
 
 ## The IR
 

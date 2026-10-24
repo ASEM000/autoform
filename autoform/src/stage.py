@@ -866,7 +866,7 @@ def assert_foldable(prim: core.Prim, value: Tree) -> None:
     traced_values = [x for x in utils.tree.leaves(value) if isinstance(x, TraceBox)]
     assert not traced_values, (
         f"Cannot evaluate {prim.name} in af.fold() because it depends on traced values "
-        f"{traced_values!r}. Mark the dependencies static or move this computation outside af.fold()."
+        f"{traced_values!r}. Capture concrete dependencies or move this computation outside af.fold()."
     )
 
 
@@ -952,49 +952,31 @@ class TraceInterp(core.Interp):
         return self.box(out_tree)
 
 
-def trace[*A, R](
-    func: Callable[[*A], R],
-    /,
-    *,
-    static: Tree[bool] = False,
-) -> Callable[[*A], IR[*A, R]]:
+def trace[*A, R](func: Callable[[*A], R], /) -> Callable[[*A], IR[*A, R]]:
     """Build an IR by tracing a function's execution.
 
     Args:
         func: A callable that uses autoform primitives such as
             :func:`autoform.text.concat` and :func:`autoform.lm.fill`.
-        static: Bool pytree matching the positional input structure.
-            Mark a leaf ``True`` to keep that value fixed at trace time.
-            Mark a leaf ``False`` to keep it as a normal runtime input.
-            This is useful for ordinary Python control flow such as ``if``
-            statements. Later calls must pass the same values for leaves
-            marked static.
 
     Returns:
         A tracer callable that takes positional arguments and returns an IR.
 
-    When a flag is marked static, tracing follows only the branch selected by
-    that flag at trace time.
+    Every input leaf becomes a dynamic variable. Capture fixed configuration
+    in the function's enclosing scope. Captured values can select Python
+    branches while tracing and do not become arguments of the resulting IR.
 
     Example:
         >>> import autoform as af
-        >>> def label(is_error):
+        >>> is_error = True
+        >>> def label(message):
         ...     if is_error:
-        ...         return "error"
-        ...     return "ok"
-        >>> ir = af.trace(label, static=True)(True)
-        >>> ir.call(True)
-        'error'
+        ...         return "error: " + message
+        ...     return "ok: " + message
+        >>> ir = af.trace(label)("example")
+        >>> ir.call("disk full")
+        'error: disk full'
     """
-
-    def is_static_spec(x) -> bool:
-        return isinstance(x, bool)
-
-    def to_in_ir_atom(x: Any, is_static: bool) -> Any:
-        if is_static:
-            hash(x)
-            return x
-        return to_var(x)
 
     def to_var(x: Any, /) -> Var:
         assert not is_var(x), "Inputs to `trace` must be normal python types"
@@ -1003,10 +985,7 @@ def trace[*A, R](
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
-        arg_tree = args
-        is_spec_leaf = lambda x: is_static_spec(x) or is_traceable(x)
-        in_static_tree = utils.tree.broadcast_prefix(static, arg_tree, is_leaf=is_spec_leaf)
-        in_tree = utils.tree.map(to_in_ir_atom, arg_tree, in_static_tree, is_leaf=is_traceable)
+        in_tree = utils.tree.map(to_var, args, is_leaf=is_traceable)
         with core.using_interp(TraceInterp()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
         out_tree = tracer.unbox(out_trace_tree)

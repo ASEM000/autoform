@@ -59,6 +59,11 @@ class Label:
 class CostTag: ...
 
 
+def literal_prefix_ir():
+    ir = stage.trace(lambda x: prefix_name("Q", x))("x")
+    return stage.IR(list(ir.eqns), ("Q", *ir.in_tree), ir.out_tree)
+
+
 class TestBuildIR:
     @pytest.mark.parametrize(
         "traced, runtime, expected, aval",
@@ -146,15 +151,13 @@ class TestBuildIR:
         assert len(ir.eqns) == 1
         assert executor(ir, "y") == "y!"
 
-    def test_trace_static_unhashable_input_errors(self):
-        class Unhashable:
-            __hash__ = None
-
-        def program(x):
-            return x
-
-        with pytest.raises(TypeError):
-            stage.trace(program, static=True)(Unhashable())
+    @pytest.mark.parametrize(
+        "static",
+        [pytest.param(True, id="enabled"), pytest.param(False, id="disabled")],
+    )
+    def test_trace_rejects_removed_static_keyword(self, static):
+        with pytest.raises(TypeError, match="unexpected keyword argument 'static'"):
+            stage.trace(append_bang, static=static)
 
     def test_traces_literal_and_variable(self):
         def program(name):
@@ -386,54 +389,63 @@ def test_walk_rejects_incompatible_input_aval():
         next(ir.walk(["x"]))
 
 
-class TestTraceStatic:
-    def test_static_inputs_become_literals(self):
-        ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
+class TestTraceCapturedValues:
+    def test_captured_prefix_is_not_an_input(self):
+        prefix = "Q"
+        ir = stage.trace(lambda x: prefix_name(prefix, x))("x")
 
-        assert ir.in_tree[0] == "Hello"
-        assert isinstance(ir.in_tree[1], stage.Var)
-        assert ir.call("Hello", "x0") == "Hello x0"
+        assert len(ir.in_tree) == 1
+        assert isinstance(ir.in_tree[0], stage.Var)
+        assert ir.call("y") == "Q y"
 
+    @pytest.mark.parametrize(
+        "flag, expected",
+        [
+            pytest.param(True, "Q y", id="true-branch"),
+            pytest.param(False, "R y", id="false-branch"),
+        ],
+    )
+    def test_captured_bool_specializes_python_branch(self, flag, expected):
+        def program(x):
+            if flag:
+                return string.format("Q {x}", x=x)
+            return string.format("R {x}", x=x)
+
+        ir = stage.trace(program)("x")
+        assert len(ir.in_tree) == 1
+        assert ir.call("y") == expected
+
+
+class TestLiteralInputs:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
-    def test_static_input_mismatch_errors_before_execution(self, executor):
-        ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
+    def test_literal_input_mismatch_errors_before_execution(self, executor):
+        ir = literal_prefix_ir()
         with pytest.raises(ValueError, match="Static input mismatch"):
-            executor(ir, "Hi", "x0")
+            executor(ir, "R", "y")
 
-    @pytest.mark.parametrize("program", [prefix_name, lambda prefix, name: prefix])
-    def test_walk_rejects_static_input_mismatch_before_first_equation(self, program):
-        ir = stage.trace(program, static=(True, False))("Hello", "World")
+    @pytest.mark.parametrize(
+        "program",
+        [
+            pytest.param(prefix_name, id="with-equation"),
+            pytest.param(lambda prefix, x: prefix, id="without-equations"),
+        ],
+    )
+    def test_walk_rejects_literal_input_mismatch_before_first_equation(self, program):
+        traced = stage.trace(lambda x: program("Q", x))("x")
+        ir = stage.IR(list(traced.eqns), ("Q", *traced.in_tree), traced.out_tree)
 
         with pytest.raises(ValueError, match="Static input mismatch"):
-            next(ir.walk("Hi", "x0"))
+            next(ir.walk("R", "y"))
 
-    def test_walk_accepts_matching_static_inputs(self):
-        ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
-
-        gen = ir.walk("Hello", "x0")
+    def test_walk_accepts_matching_literal_inputs(self):
+        gen = literal_prefix_ir().walk("Q", "y")
 
         eqn, in_values = next(gen)
-        assert in_values == ("Hello", " ", "x0")
+        assert in_values == ("Q", " ", "y")
         done, out = gen.send(eqn.bind(in_values, **eqn.params))
 
         assert done is None
-        assert out == "Hello x0"
-
-    def test_static_spec_must_match_input_tree(self):
-        with pytest.raises(ValueError):
-            stage.trace(prefix_name, static=(True, False, True))("Hello", "World")
-
-    def test_static_bool_specializes_python_branch(self):
-        def program(flag, name):
-            if flag:
-                return string.format("Hello {name}", name=name)
-            return string.format("Bye {name}", name=name)
-
-        ir = stage.trace(program, static=(True, False))(True, "World")
-
-        assert ir.in_tree[0] is True
-        assert isinstance(ir.in_tree[1], stage.Var)
-        assert ir.call(True, "x0") == "Hello x0"
+        assert out == "Q y"
 
 
 class TestTags:
@@ -906,14 +918,14 @@ class TestIrStructure:
 
         assert not stage.is_same_structure(lhs, rhs)
 
-    def test_rejects_different_static_inputs(self):
-        lhs = stage.trace(lambda x: "same", static=True)("L")
-        rhs = stage.trace(lambda x: "same", static=True)("R")
+    def test_rejects_different_literal_inputs(self):
+        lhs = stage.IR([], ("L",), "same")
+        rhs = stage.IR([], ("R",), "same")
 
         assert not stage.is_same_structure(lhs, rhs)
 
-    def test_rejects_static_and_dynamic_inputs(self):
-        lhs = stage.trace(lambda x: "same", static=True)("X")
+    def test_rejects_literal_and_variable_inputs(self):
+        lhs = stage.IR([], ("X",), "same")
         rhs = stage.trace(lambda x: "same")("X")
 
         assert not stage.is_same_structure(lhs, rhs)
@@ -950,9 +962,8 @@ class TestIrVarLeaves:
 
         assert stage.var_leaves(ir.in_tree) == [head, pair[0], pair[1]]
 
-    def test_filters_static_input_literals(self):
-        ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
-
+    def test_filters_input_literals(self):
+        ir = literal_prefix_ir()
         assert stage.var_leaves(ir.in_tree) == [ir.in_tree[1]]
 
     def test_returns_output_vars_in_leaf_order(self):
@@ -1111,8 +1122,8 @@ class TestIrLiveness:
 
         assert stage.liveness(ir, out_used=(True, False)) == [{x}, {x, a}, {a}]
 
-    def test_static_inputs_do_not_become_live_vars(self):
-        ir = stage.trace(prefix_name, static=(True, False))("Hello", "World")
+    def test_literal_inputs_do_not_become_live_vars(self):
+        ir = literal_prefix_ir()
         out_var = ir.out_tree
 
         assert stage.liveness(ir) == [{ir.in_tree[1]}, {out_var}]
@@ -1400,17 +1411,19 @@ class TestFold:
         with pytest.raises(AssertionError, match="depends on traced value"):
             stage.trace(program)("seed")
 
-    def test_static_trace_args_are_available_in_fold_block(self):
-        def program(prefix, x):
+    def test_captured_values_are_available_in_fold_block(self):
+        prefix = "Q"
+
+        def program(x):
             with stage.fold():
                 header = string.concat(prefix, ": ")
             return string.concat(header, x)
 
-        ir = stage.trace(program, static=(True, False))("Q", "seed")
+        ir = stage.trace(program)("x")
 
         assert [eqn.prim.name for eqn in ir.eqns] == ["render"]
         assert ir.eqns[0].in_tree[0] == "Q: "
-        assert ir.call("Q", "hello") == "Q: hello"
+        assert ir.call("y") == "Q: y"
 
     def test_tracing_resumes_after_static_block(self):
         def program(x):

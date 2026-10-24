@@ -714,8 +714,9 @@ def test_literal_output_derivatives_are_zero(transform, derivative_side):
         ),
     ],
 )
-def test_static_input_literal_is_not_boxed(executor, transform, feedback, expected):
-    ir = transform(stage.trace(string.concat, static=(True, False))("Q", "x"))
+def test_input_literal_is_not_boxed(executor, transform, feedback, expected):
+    traced = stage.trace(lambda x: string.concat("Q", x))("x")
+    ir = transform(stage.IR(list(traced.eqns), ("Q", *traced.in_tree), traced.out_tree))
     args = (("Q", "x"), feedback)
     actual = executor(ir, *args)
     assert actual == ("Qx", expected)
@@ -1161,10 +1162,14 @@ def test_nonidentity_primal_space(executor, transform):
         args = ((2.0,), ("dy", zero))
         expected = ((4.0, "literal"), ("dydy",))
     assert executor(ir, *args) == expected
-    static = (False, (False, True)) if transform is ad.pullback else False
-    traced = stage.trace(lambda p, d: executor(ir, p, d), static=static)(*args)
+    if transform is ad.pullback:
+        trace_args = (args[0], args[1][0])
+        traced = stage.trace(lambda p, d: executor(ir, p, (d, zero)))(*trace_args)
+    else:
+        trace_args = args
+        traced = stage.trace(lambda p, d: executor(ir, p, d))(*trace_args)
     assert traced.out_tree[0][0].aval == numeric.AFloat()
-    assert executor(traced, *args) == expected
+    assert executor(traced, *trace_args) == expected
     with pytest.raises(TypeError, match="Cannot join AFloat"):
         executor(ir, ("bad",), args[1])
 
