@@ -720,7 +720,7 @@ def test_static_input_literal_is_not_boxed(executor, transform, feedback, expect
     actual = executor(ir, *args)
     assert actual == ("Qx", expected)
     invalid = (("R", "x"), feedback)
-    with pytest.raises(AssertionError, match="Static input mismatch"):
+    with pytest.raises(ValueError, match="Static input mismatch"):
         executor(ir, *invalid)
 
 

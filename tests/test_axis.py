@@ -158,7 +158,7 @@ class TestBatchBasic:
         batched_ir = axis.batch(ir, in_axes=(False, True))
         actual = executor(batched_ir, "Q", ["a", "b"])
         assert actual == ["Qa", "Qb"]
-        with pytest.raises(AssertionError, match="Static input mismatch"):
+        with pytest.raises(ValueError, match="Static input mismatch"):
             executor(batched_ir, "R", ["a", "b"])
 
 

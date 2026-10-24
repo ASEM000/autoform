@@ -307,7 +307,6 @@ class IR[*A, R]:
             >>> ir.call("y")
             '[y]'
         """
-        check_static_inputs(self.in_tree, args)
         eqn, in_values = next(gen := self.walk(*args))
         while eqn:
             eqn, in_values = gen.send(eqn.bind(in_values, **eqn.params))
@@ -329,7 +328,6 @@ class IR[*A, R]:
             >>> asyncio.run(ir.acall("y"))
             '[y]'
         """
-        check_static_inputs(self.in_tree, args)
         eqn, in_values = next(gen := self.walk(*args))
         while eqn:
             eqn, in_values = gen.send(await eqn.abind(in_values, **eqn.params))
@@ -337,12 +335,6 @@ class IR[*A, R]:
 
     def walk(self, *args: *A) -> WalkGen:
         """Step through this IR one equation at a time.
-
-        Manual control over IR execution. Start with `next(gen)` to receive `(eqn, in_values)`,
-        compute or override the equation output, using `eqn.bind(in_values, **eqn.params)`
-        for synchronous execution or `await eqn.abind(in_values, **eqn.params)` for async
-        execution, and send that output back with `gen.send(...)`. After the last equation,
-        the generator yields `(None, out_tree)`.
 
         Example:
             >>> import autoform as af
@@ -363,6 +355,7 @@ class IR[*A, R]:
             >>> done is None, out
             (True, '[y!]')
         """
+        check_static_inputs(self.in_tree, args)
         env = Env()
         utils.tree.map(env.write, self.in_tree, args)
 
@@ -421,8 +414,8 @@ class Env:
 def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
     def check_input(atom: Any, value: Any):
         if not is_var(atom):
-            msg = f"Static input mismatch: expected {atom!r}, got {value!r}"
-            assert atom == value, msg
+            if not atom == value:
+                raise ValueError(f"Static input mismatch: expected {atom!r}, got {value!r}")
 
     utils.tree.map(check_input, atoms, args)
 
