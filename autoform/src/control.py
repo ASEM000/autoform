@@ -220,8 +220,9 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
 def batch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
     spec, in_axes, in_values = in_tree
     items = spec.unstack(in_axes, in_values)
-    results = [branches[key].call(*args) for key, args in items]
-    out_axes = tree.map(lambda _: True, results[0])
+    irs = [branches[key] for key, _ in items]
+    results = (ir.call(*args) for ir, (_, args) in zip(irs, items))
+    out_axes = tree.map(lambda _: True, irs[0].out_tree)
     return spec.stack(out_axes, results), out_axes
 
 
@@ -231,7 +232,7 @@ async def abatch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[b
     irs = [branches[key] for key, _ in items]
     inputs = [args for _, args in items]
     results = await order.p_fanout.abind(inputs, irs=irs)
-    out_axes = tree.map(lambda _: True, results[0])
+    out_axes = tree.map(lambda _: True, irs[0].out_tree)
     return spec.stack(out_axes, results), out_axes
 
 
