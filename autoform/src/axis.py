@@ -234,6 +234,8 @@ class BatchInterp(core.Interp):
         in_v, in_b = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interp(self.parent):
+            if not any(utils.tree.leaves(in_b)):
+                return prim.bind(in_v, **params)
             out_v, out_b = core.r_batch.get(prim)((b_sz, in_b, in_v), **params)
         return self.box((out_v, out_b))
 
@@ -242,6 +244,8 @@ class BatchInterp(core.Interp):
         in_v, in_b = self.unbox(in_tree)
         b_sz = self.batch_size
         with core.using_interp(self.parent):
+            if not any(utils.tree.leaves(in_b)):
+                return await prim.abind(in_v, **params)
             out_v, out_b = await core.r_abatch.get(prim)((b_sz, in_b, in_v), **params)
         return self.box((out_v, out_b))
 
@@ -307,6 +311,9 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     env = BatchEnv()
 
     def batch_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
+        in_v, in_b = in_tree
+        if not any(utils.tree.leaves(in_b)):
+            return eqn.bind(in_v, **eqn.params), utils.tree.map(lambda _: False, eqn.out_tree)
         with core.using_interp(batcher):
             out_boxed = eqn.bind(batcher.box(in_tree), **eqn.params)
         out_v, out_b = batcher.unbox(out_boxed)
@@ -345,6 +352,10 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
     env = BatchEnv()
 
     async def batch_bind(eqn: stage.Eqn, in_tree: TreePair, /) -> TreePair:
+        in_v, in_b = in_tree
+        if not any(utils.tree.leaves(in_b)):
+            out_v = await eqn.abind(in_v, **eqn.params)
+            return out_v, utils.tree.map(lambda _: False, eqn.out_tree)
         with core.using_interp(batcher):
             out_boxed = await eqn.abind(batcher.box(in_tree), **eqn.params)
         out_v, out_b = batcher.unbox(out_boxed)

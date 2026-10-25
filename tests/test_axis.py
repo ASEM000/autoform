@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 from collections import namedtuple
 
 import pytest
@@ -568,3 +569,94 @@ def test_batch_box_avalof_rejects_invalid_batch(values, message):
 
     with pytest.raises(TypeError, match=message):
         core.avalof(box)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_shared_primitive_without_batch_rule(executor):
+    p_shared = core.Prim("shared")
+    calls = []
+
+    def impl(x):
+        calls.append(x)
+        return {"x": x, "y": (x + "!",)}
+
+    core.r_abstract.set(p_shared, lambda x: {"x": x, "y": (x,)})
+    core.r_impl.set(p_shared, impl)
+    core.r_aimpl.set(p_shared, utils.asyncify(impl))
+    ir = stage.trace(lambda x, y: (x, p_shared.bind(y)))("x", "Q")
+    actual = executor(axis.batch(ir, in_axes=(True, False)), ("x", "y"), "Q")
+    assert actual == (("x", "y"), {"x": ("Q", "Q"), "y": (("Q!", "Q!"),)})
+    assert calls == ["Q"]
+
+
+@pytest.mark.parametrize(
+    "executor",
+    [
+        pytest.param(core.Prim.bind, id="sync"),
+        pytest.param(lambda p, x: asyncio.run(p.abind(x)), id="async"),
+    ],
+)
+@pytest.mark.parametrize(
+    "value, batched, expected",
+    [
+        pytest.param("Q", False, ["impl"], id="shared"),
+        pytest.param(["x", "y"], True, ["batch"], id="outer-batched"),
+    ],
+)
+def test_shared_batch_interp_delegates_to_parent(executor, value, batched, expected):
+    p_shared = core.Prim("shared")
+    calls = []
+
+    def impl(x):
+        calls.append("impl")
+        return x
+
+    def batch_rule(in_tree):
+        size, batched, x = in_tree
+        assert size == 2
+        assert batched is True
+        calls.append("batch")
+        return x, True
+
+    core.r_impl.set(p_shared, impl)
+    core.r_aimpl.set(p_shared, utils.asyncify(impl))
+    core.r_batch.set(p_shared, batch_rule)
+    core.r_abatch.set(p_shared, utils.asyncify(batch_rule))
+    parent = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
+    inner = axis.BatchInterp(batch_size=3, parent=parent)
+    x = inner.box((parent.box((value, batched)), False))
+    with core.using_interp(inner):
+        actual = executor(p_shared, x)
+    assert parent.unbox(actual) == (value, batched)
+    assert calls == expected
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_nested_batch_shared_inputs_execute_once(executor):
+    p_mark = core.Prim("mark")
+    calls = []
+
+    def impl(x):
+        calls.append(x)
+        return x + "!"
+
+    def batch_rule(in_tree):
+        _, batched, values = in_tree
+        assert batched is True
+        return [p_mark.bind(x) for x in values], True
+
+    async def abatch_rule(in_tree):
+        _, batched, values = in_tree
+        assert batched is True
+        return [await p_mark.abind(x) for x in values], True
+
+    core.r_abstract.set(p_mark, lambda x: x)
+    core.r_impl.set(p_mark, impl)
+    core.r_aimpl.set(p_mark, utils.asyncify(impl))
+    core.r_batch.set(p_mark, batch_rule)
+    core.r_abatch.set(p_mark, abatch_rule)
+    inner = axis.batch(stage.trace(p_mark.bind)("a"))
+    ir = stage.trace(lambda x, y: (x, inner.call(y)))("x", ["a", "b"])
+    actual = executor(axis.batch(ir, in_axes=(True, False)), ["x", "y", "z"], ["a", "b"])
+    assert actual == (["x", "y", "z"], [["a!", "b!"]] * 3)
+    assert calls == ["a", "b"]
