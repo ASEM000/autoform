@@ -13,7 +13,6 @@ This example is very simple: it only supports floating-point arrays, arrays need
 To trace a function, `autoform` needs to know what an array looks like before the function is actually run. The following AVal describes arrays to `autoform`. It also describes how to construct a zero, and how to add two values together, which are both needed for handling feedback. In this case, the primal, tangent, and cotangent spaces use the same array representation.
 
 ```python
-import functools as ft
 
 import numpy as np
 
@@ -114,15 +113,10 @@ def register_binary(name, op, push_rule, pull_rule):
         return pull_rule(x, y, g)
 
     def batch_rule(in_tree):
-        batch_size, in_batched, in_values = in_tree
-        if afe.batch_spec(in_values, in_batched) is None:
-            return bind(*in_values), False
-
-        x, y = in_values
-        bx, by = in_batched
-        x_at = ft.partial(afe.batch_index, x, bx)
-        y_at = ft.partial(afe.batch_index, y, by)
-        return [bind(x_at(i), y_at(i)) for i in range(batch_size)], True
+        spec, in_axes, in_values = in_tree
+        items = spec.unstack(in_axes, in_values)
+        results = (bind(x, y) for x, y in items)
+        return spec.stack(True, results), True
 
     afe.r_impl.set(p_op, impl)
     afe.r_abstract.set(p_op, abstract)

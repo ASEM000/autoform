@@ -24,6 +24,7 @@ import autoform.src.dead as dead
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.tree as tree
 from tests import AValBlob, Blob, aexecute, execute
 
 
@@ -118,12 +119,12 @@ class TestCheck:
     def test_nested_interpreters_reject_invalid_tangent(self, outer):
         parent = core.active_interp.get()
         if outer == "pushforward":
-            batcher = axis.BatchInterp(batch_size=2, parent=parent)
+            batcher = axis.BatchInterp(spec=tree.structure([0, 0]), parent=parent)
             interpreter = ad.PushInterp(parent=batcher)
             x = interpreter.box((batcher.box((["x", "y"], True)), batcher.box((["dx", 1.0], True))))
         else:
             pusher = ad.PushInterp(parent=parent)
-            interpreter = axis.BatchInterp(batch_size=2, parent=pusher)
+            interpreter = axis.BatchInterp(spec=tree.structure([0, 0]), parent=pusher)
             x = interpreter.box(([pusher.box(("x", "dx")), pusher.box(("y", 1.0))], True))
         aval = string.AStr()
         assert core.avalof(x) == aval
@@ -133,7 +134,7 @@ class TestCheck:
 
     @pytest.mark.parametrize("batched", [False, True], ids=["broadcast-batch", "nested-batch"])
     def test_batch_value_metadata(self, batched):
-        batcher = axis.BatchInterp(batch_size=1, parent=core.active_interp.get())
+        batcher = axis.BatchInterp(spec=tree.structure([0]), parent=core.active_interp.get())
         aval = axis.ABatch(AValBlob(3))
         for size in (3, 4):
             value = [core.Zero(AValBlob(size))]
@@ -148,7 +149,9 @@ class TestCheck:
     @pytest.mark.parametrize("x", [("x", "y"), {"a": "x", "b": "y"}], ids=["tuple", "dict"])
     def test_traced_batch_preserves_used_checks_and_broadcast(self, x):
         def program(x, y):
-            batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
+            batcher = axis.BatchInterp(
+                spec=axis.common_spec(x, True), parent=core.active_interp.get()
+            )
             with core.using_interp(batcher):
                 z = check.p_typecheck.bind(
                     batcher.box(([x, y], [True, False])),

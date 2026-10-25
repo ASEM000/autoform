@@ -111,18 +111,12 @@ def abstract_wikipedia_search(query, /):
     return af.extend.AStr()
 
 
-# async batch receives the batch size, input axes, and input values
+# async batch receives the common container spec, input axes, and input values
 async def abatch_wikipedia_search(in_tree, /):
-    batch_size, axes, values = in_tree
-    del batch_size
-    query_axis = axes
-    queries = values
-
-    if not query_axis:
-        return await p_wikipedia_search.abind(queries), False
-
+    spec, in_axes, values = in_tree
+    queries = spec.unstack(in_axes, values)
     results = await asyncio.gather(*(p_wikipedia_search.abind(query) for query in queries))
-    return list(results), True
+    return spec.stack(True, results), True
 
 
 # async pullback forward sweep records the same residuals

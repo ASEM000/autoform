@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import functools as ft
 from collections.abc import Hashable
 from typing import Any
 
@@ -93,9 +92,8 @@ def pullback_bwd_stop_gradient(in_tree: Tree, /) -> Tree:
 
 
 def batch_stop_gradient(in_tree: Tree, /) -> TreePair:
-    batch_size, in_batched, x = in_tree
-    del batch_size
-    return x, in_batched
+    _, in_axes, x = in_tree
+    return x, in_axes
 
 
 core.r_impl.set(p_stop_gradient, impl_stop_gradient)
@@ -220,40 +218,21 @@ async def apull_bwd_switch(in_tree, /, *, branches: Branches):
 
 
 def batch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
-    batch_size, in_batched, in_values = in_tree
-    key_col, operands_col = in_values
-    key_batched, operands_batched = in_batched
-
-    if utils.batch_spec(in_values, in_batched) is None:
-        return p_switch.bind(in_values, branches=branches), False
-
-    unbatch = ft.partial(utils.batch_index, operands_col, operands_batched)
-
-    def run_ir_at(b):
-        return branches[key_col[b] if key_batched else key_col].call(*unbatch(b))
-
-    results = [run_ir_at(b) for b in range(batch_size)]
-    out_batched = tree.map(lambda _: True, results[0])
-    out_tree = utils.batch_transpose(batch_size, out_batched, results)
-    return out_tree, out_batched
+    spec, in_axes, in_values = in_tree
+    items = spec.unstack(in_axes, in_values)
+    results = [branches[key].call(*args) for key, args in items]
+    out_axes = tree.map(lambda _: True, results[0])
+    return spec.stack(out_axes, results), out_axes
 
 
 async def abatch_switch(in_tree, /, *, branches: Branches) -> tuple[Tree, Tree[bool]]:
-    batch_size, in_batched, in_values = in_tree
-    key_col, operands_col = in_values
-    key_batched, operands_batched = in_batched
-
-    if utils.batch_spec(in_values, in_batched) is None:
-        return await p_switch.abind(in_values, branches=branches), False
-
-    unbatch = ft.partial(utils.batch_index, operands_col, operands_batched)
-
-    irs = [branches[key_col[b] if key_batched else key_col] for b in range(batch_size)]
-    inputs = [unbatch(b) for b in range(batch_size)]
+    spec, in_axes, in_values = in_tree
+    items = spec.unstack(in_axes, in_values)
+    irs = [branches[key] for key, _ in items]
+    inputs = [args for _, args in items]
     results = await order.p_fanout.abind(inputs, irs=irs)
-    out_batched = tree.map(lambda _: True, results[0])
-    out_tree = utils.batch_transpose(batch_size, out_batched, results)
-    return out_tree, out_batched
+    out_axes = tree.map(lambda _: True, results[0])
+    return spec.stack(out_axes, results), out_axes
 
 
 def dce_switch(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -499,7 +478,8 @@ def batch_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    b_sz, in_batched, init_val = in_tree
+    spec, in_axes, init_val = in_tree
+    b_sz = spec.size
     # NOTE(asem): in_tree is a SoA object, however we need to pass in only parts of the SoA
     # that are alive (:= still needs some work). so we need to convert from SoA to AoS
     # filter out dead items then convert back to SoA for the batched cond/body to work.
@@ -510,7 +490,7 @@ def batch_while_loop(
     # cond returns False, saving LLM calls on items that finish early.
     # example: Struct(text=batched, note=broadcast) with 3 items
     # >>> in_tree = Struct(text=["A","B","C"], note="v1")  # text batched, note broadcast
-    # >>> in_batched = Struct(text=True, note=False)
+    # >>> in_axes = Struct(text=True, note=False)
     # >>> cond_ir: s.note != "done"
     # >>> body_ir: Struct(text=refine(s.text), note="done" if good else s.note)
     #
@@ -529,12 +509,11 @@ def batch_while_loop(
     #
     # transpose AoS -> SoA (note becomes batched in output):
     # >>> out_tree = Struct(text=["A'","B","C''"], note=["v2","v1","done"])
-    # >>> out_batched = Struct(text=True, note=True)
+    # >>> out_axes = Struct(text=True, note=True)
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
     # and keep track of which items are not done. initially everything is alive
-    init_at = ft.partial(utils.batch_index, init_val, in_batched)
-    states = [(init_at(b),) for b in range(b_sz)]
+    states = [(x,) for x in spec.unstack(in_axes, init_val)]
     alive = [True] * b_sz
 
     # NOTE(asem): pre-batch cond and body IRs. True marks all leaves as batched.
@@ -550,15 +529,13 @@ def batch_while_loop(
 
         # NOTE(asem): check conditions only for alive items (transpose AoS -> SoA for call)
         alive_states = [states[i] for i in alive_idx]
-        n_alive = len(alive_states)
-        in_batched_cond = in_state_axes
+        active_spec = axis.BatchSpec(tree.structure([0] * len(alive_states)))
         # NOTE(asem): move from AoS to SoA for alive states
-        in_transposed_cond = utils.batch_transpose(n_alive, in_batched_cond, alive_states)
+        in_transposed_cond = active_spec.stack(in_cond_axes, alive_states)
         conds_result = batched_cond.call(*in_transposed_cond)
         # NOTE(asem): cond returns scalar bool, batched -> list. use unbatch for consistency.
-        out_batched_cond = isinstance(conds_result, list)
-        cond_at = ft.partial(utils.batch_index, conds_result, out_batched_cond)
-        conds = [cond_at(b) for b in range(n_alive)]
+        out_cond_axes = isinstance(conds_result, list)
+        conds = active_spec.unstack(out_cond_axes, conds_result)
         # NOTE(asem): mark items as dead if cond returned False
         for idx, c in zip(alive_idx, conds):
             alive[idx] = c
@@ -566,22 +543,19 @@ def batch_while_loop(
         still_alive = [i for i in alive_idx if alive[i]]
         if still_alive:
             still_alive_states = [states[i] for i in still_alive]
-            n_body = len(still_alive_states)
-            b_body = in_state_axes
-            in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
+            body_spec = axis.BatchSpec(tree.structure([0] * len(still_alive_states)))
+            in_transposed = body_spec.stack(in_body_axes, still_alive_states)
             out_transposed = batched_body.call(*in_transposed)
-            out_batched = tree.map(stage.is_var, body_ir.out_tree)
-            out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
+            out_axes = tree.map(stage.is_var, body_ir.out_tree)
+            outputs = body_spec.unstack(out_axes, out_transposed)
 
-            for local_idx, batch_idx in enumerate(still_alive):
-                states[batch_idx] = (out_at(local_idx),)
+            for batch_idx, value in zip(still_alive, outputs):
+                states[batch_idx] = (value,)
     # NOTE(asem): transpose final states AoS -> SoA for batched output
     # only Var positions are batched; literal positions stay scalar
-    out_batched = tree.map(stage.is_var, body_ir.out_tree)
-    out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
-    in_spec = tree.structure(init_val, is_leaf=lambda x: x is not init_val)
-    out_tree = in_spec.unflatten(tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
-    return out_tree, out_batched
+    out_axes = tree.map(stage.is_var, body_ir.out_tree)
+    out_tree = spec.stack(out_axes, (state[0] for state in states))
+    return out_tree, out_axes
 
 
 async def abatch_while_loop(
@@ -592,11 +566,11 @@ async def abatch_while_loop(
     body_ir: stage.IR,
     max_iters: int,
 ) -> TreePair:
-    b_sz, in_batched, init_val = in_tree
+    spec, in_axes, init_val = in_tree
+    b_sz = spec.size
 
     # NOTE(asem): unbatch SoA -> AoS so each state can be tracked independently
-    init_at = ft.partial(utils.batch_index, init_val, in_batched)
-    states = [(init_at(b),) for b in range(b_sz)]
+    states = [(x,) for x in spec.unstack(in_axes, init_val)]
     alive = [True] * b_sz
 
     # NOTE(asem): pre-batch cond and body IRs
@@ -611,34 +585,29 @@ async def abatch_while_loop(
             break
 
         alive_states = [states[i] for i in alive_idx]
-        n_alive = len(alive_states)
-        in_batched_cond = in_state_axes
-        in_transposed_cond = utils.batch_transpose(n_alive, in_batched_cond, alive_states)
+        active_spec = axis.BatchSpec(tree.structure([0] * len(alive_states)))
+        in_transposed_cond = active_spec.stack(in_cond_axes, alive_states)
         conds_result = await batched_cond.acall(*in_transposed_cond)
-        out_batched_cond = isinstance(conds_result, list)
-        cond_at = ft.partial(utils.batch_index, conds_result, out_batched_cond)
-        conds = [cond_at(b) for b in range(n_alive)]
+        out_cond_axes = isinstance(conds_result, list)
+        conds = active_spec.unstack(out_cond_axes, conds_result)
 
         for idx, c in zip(alive_idx, conds):
             alive[idx] = c
 
         if still_alive := [i for i in alive_idx if alive[i]]:
             still_alive_states = [states[i] for i in still_alive]
-            n_body = len(still_alive_states)
-            b_body = in_state_axes
-            in_transposed = utils.batch_transpose(n_body, b_body, still_alive_states)
+            body_spec = axis.BatchSpec(tree.structure([0] * len(still_alive_states)))
+            in_transposed = body_spec.stack(in_body_axes, still_alive_states)
             out_transposed = await batched_body.acall(*in_transposed)
-            out_batched_body = tree.map(stage.is_var, body_ir.out_tree)
-            out_at = ft.partial(utils.batch_index, out_transposed, out_batched_body)
+            out_body_axes = tree.map(stage.is_var, body_ir.out_tree)
+            outputs = body_spec.unstack(out_body_axes, out_transposed)
 
-            for local_idx, batch_idx in enumerate(still_alive):
-                states[batch_idx] = (out_at(local_idx),)
+            for batch_idx, value in zip(still_alive, outputs):
+                states[batch_idx] = (value,)
 
-    out_batched = tree.map(stage.is_var, body_ir.out_tree)
-    out_tree = utils.batch_transpose(b_sz, out_batched, [state[0] for state in states])
-    in_spec = tree.structure(init_val, is_leaf=lambda x: x is not init_val)
-    out_tree = in_spec.unflatten(tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
-    return out_tree, out_batched
+    out_axes = tree.map(stage.is_var, body_ir.out_tree)
+    out_tree = spec.stack(out_axes, (state[0] for state in states))
+    return out_tree, out_axes
 
 
 def pullback_bwd_while_loop(
@@ -1005,19 +974,12 @@ def batch_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    b_sz, in_batched, in_values = in_tree
-    params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
-
-    if utils.batch_spec(in_values, in_batched) is None:
-        out = p_fixpoint.bind(in_values, **params)
-        return out, tree.map(lambda _: False, out)
-
+    spec, in_axes, in_values = in_tree
+    b_sz = spec.size
     init_val, theta = in_values
-    init_batched, theta_batched = in_batched
-    init_at = ft.partial(utils.batch_index, init_val, init_batched)
-    theta_at = ft.partial(utils.batch_index, theta, theta_batched)
-    states = [init_at(b) for b in range(b_sz)]
-    thetas = [theta_at(b) for b in range(b_sz)]
+    init_axes, theta_axes = in_axes
+    states = spec.unstack(init_axes, init_val)
+    thetas = spec.unstack(theta_axes, theta)
     alive = [True] * b_sz
 
     in_state_axes = tree.map(lambda _: True, step_ir.in_tree[0])
@@ -1033,18 +995,16 @@ def batch_fixpoint(
             break
 
         in_alive = [(states[i], thetas[i]) for i in alive_idx]
-        n_alive = len(in_alive)
-        in_transposed = utils.batch_transpose(n_alive, in_axes, in_alive)
+        active_spec = axis.BatchSpec(tree.structure([0] * len(in_alive)))
+        in_transposed = active_spec.stack(in_axes, in_alive)
         out_transposed = batched_step.call(*in_transposed)
-        out_batched = tree.map(stage.is_var, step_ir.out_tree)
-        out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
-
-        new_states = [out_at(i) for i in range(n_alive)]
+        out_axes = tree.map(stage.is_var, step_ir.out_tree)
+        new_states = active_spec.unstack(out_axes, out_transposed)
         if equiv_ir is None:
             flags = [tree.equal(states[b], ns) for b, ns in zip(alive_idx, new_states)]
         else:
             pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states)]
-            in_equiv = utils.batch_transpose(n_alive, equiv_axes, pairs)
+            in_equiv = active_spec.stack(equiv_axes, pairs)
             flags = batched_equiv.call(*in_equiv)
 
         for flag, batch_idx, new_state in zip(flags, alive_idx, new_states):
@@ -1052,11 +1012,9 @@ def batch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = tree.map(stage.is_var, step_ir.out_tree)
-    out_tree = utils.batch_transpose(b_sz, out_batched, states)
-    in_spec = tree.structure(init_val, is_leaf=lambda x: x is not init_val)
-    out_tree = in_spec.unflatten(tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
-    return out_tree, out_batched
+    out_axes = tree.map(stage.is_var, step_ir.out_tree)
+    out_tree = spec.stack(out_axes, states)
+    return out_tree, out_axes
 
 
 async def abatch_fixpoint(
@@ -1068,19 +1026,12 @@ async def abatch_fixpoint(
     adj_iters: int,
     equiv_ir: stage.IR | None,
 ) -> TreePair:
-    b_sz, in_batched, in_values = in_tree
-    params = dict(step_ir=step_ir, max_iters=max_iters, adj_iters=adj_iters, equiv_ir=equiv_ir)
-
-    if utils.batch_spec(in_values, in_batched) is None:
-        out = await p_fixpoint.abind(in_values, **params)
-        return out, tree.map(lambda _: False, out)
-
+    spec, in_axes, in_values = in_tree
+    b_sz = spec.size
     init_val, theta = in_values
-    init_batched, theta_batched = in_batched
-    init_at = ft.partial(utils.batch_index, init_val, init_batched)
-    theta_at = ft.partial(utils.batch_index, theta, theta_batched)
-    states = [init_at(b) for b in range(b_sz)]
-    thetas = [theta_at(b) for b in range(b_sz)]
+    init_axes, theta_axes = in_axes
+    states = spec.unstack(init_axes, init_val)
+    thetas = spec.unstack(theta_axes, theta)
     alive = [True] * b_sz
 
     in_state_axes = tree.map(lambda _: True, step_ir.in_tree[0])
@@ -1096,18 +1047,16 @@ async def abatch_fixpoint(
             break
 
         in_alive = [(states[i], thetas[i]) for i in alive_idx]
-        n_alive = len(in_alive)
-        in_transposed = utils.batch_transpose(n_alive, in_axes, in_alive)
+        active_spec = axis.BatchSpec(tree.structure([0] * len(in_alive)))
+        in_transposed = active_spec.stack(in_axes, in_alive)
         out_transposed = await batched_step.acall(*in_transposed)
-        out_batched = tree.map(stage.is_var, step_ir.out_tree)
-        out_at = ft.partial(utils.batch_index, out_transposed, out_batched)
-
-        new_states = [out_at(i) for i in range(n_alive)]
+        out_axes = tree.map(stage.is_var, step_ir.out_tree)
+        new_states = active_spec.unstack(out_axes, out_transposed)
         if equiv_ir is None:
             flags = [tree.equal(states[b], ns) for b, ns in zip(alive_idx, new_states)]
         else:
             pairs = [(states[b], ns) for b, ns in zip(alive_idx, new_states)]
-            in_equiv = utils.batch_transpose(n_alive, equiv_axes, pairs)
+            in_equiv = active_spec.stack(equiv_axes, pairs)
             flags = await batched_equiv.acall(*in_equiv)
 
         for flag, batch_idx, new_state in zip(flags, alive_idx, new_states):
@@ -1115,11 +1064,9 @@ async def abatch_fixpoint(
                 alive[batch_idx] = False
             states[batch_idx] = new_state
 
-    out_batched = tree.map(stage.is_var, step_ir.out_tree)
-    out_tree = utils.batch_transpose(b_sz, out_batched, states)
-    in_spec = tree.structure(init_val, is_leaf=lambda x: x is not init_val)
-    out_tree = in_spec.unflatten(tree.leaves(out_tree, is_leaf=lambda x: x is not out_tree))
-    return out_tree, out_batched
+    out_axes = tree.map(stage.is_var, step_ir.out_tree)
+    out_tree = spec.stack(out_axes, states)
+    return out_tree, out_axes
 
 
 def dce_fixpoint(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import functools as ft
 from collections import defaultdict, deque
 from collections.abc import Generator, Hashable
 from contextlib import contextmanager
@@ -65,34 +64,17 @@ def pull_bwd_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | Non
 
 
 def batch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
-    b_sz, in_batched, x = in_tree
-
-    if utils.batch_spec(x, in_batched) is None:
-        return p_checkpoint.bind(x, key=key, collection=collection), False
-
-    batch_x = ft.partial(utils.batch_index, x, in_batched)
-
-    out_bi = [p_checkpoint.bind(batch_x(b), key=key, collection=collection) for b in range(b_sz)]
-    out_batched = in_batched
-    out_ib = utils.batch_transpose(b_sz, out_batched, out_bi)
-    return out_ib, out_batched
+    spec, in_axes, x = in_tree
+    items = spec.unstack(in_axes, x)
+    results = (p_checkpoint.bind(x, key=key, collection=collection) for x in items)
+    return spec.stack(in_axes, results), in_axes
 
 
 async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
-    b_sz, in_batched, x = in_tree
-
-    if utils.batch_spec(x, in_batched) is None:
-        return await p_checkpoint.abind(x, key=key, collection=collection), False
-
-    batch_at = ft.partial(utils.batch_index, x, in_batched)
-
-    async def abind(b):
-        return await p_checkpoint.abind(batch_at(b), key=key, collection=collection)
-
-    out_bi = [await abind(b) for b in range(b_sz)]
-    out_batched = in_batched
-    out_ib = utils.batch_transpose(b_sz, out_batched, out_bi)
-    return out_ib, out_batched
+    spec, in_axes, x = in_tree
+    items = spec.unstack(in_axes, x)
+    results = [await p_checkpoint.abind(x, key=key, collection=collection) for x in items]
+    return spec.stack(in_axes, results), in_axes
 
 
 core.r_impl.set(p_checkpoint, impl_checkpoint)

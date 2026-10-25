@@ -26,6 +26,7 @@ import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
 import autoform.src.tree as tree
+import autoform.src.utils as utils
 from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, execute
 
 
@@ -383,7 +384,7 @@ def test_batch_rule_output_shape(shape, flags, expected):
 )
 def test_batch_rule_rejects_mismatched_output_flags(shape):
     ir = batch_primitive(shape("a"), lambda inputs: (shape(inputs[2]), True))
-    with pytest.raises(ValueError, match="out_batched must match the structure"):
+    with pytest.raises(ValueError, match="out_axes must match the structure"):
         ir.call(["a", "b"])
 
 
@@ -496,7 +497,7 @@ def test_pullback_of_nested_batch_accumulates_shared_batch(executor):
 
 
 def test_batch_box_treats_axis_spec_as_prefix():
-    batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
+    batcher = axis.BatchInterp(spec=tree.structure([0, 0]), parent=core.active_interp.get())
     boxed = batcher.box((["a", "b"], True))
     assert isinstance(boxed, axis.BatchBox)
     assert boxed.value == ["a", "b"]
@@ -513,7 +514,7 @@ def test_batch_box_treats_axis_spec_as_prefix():
     ],
 )
 def test_batch_box_avalof_container(values):
-    batcher = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
+    batcher = axis.BatchInterp(spec=axis.common_spec(values, True), parent=core.active_interp.get())
     box = batcher.box((values, True))
 
     assert core.avalof(box) == string.AStr()
@@ -612,8 +613,9 @@ def test_shared_batch_interp_delegates_to_parent(executor, value, batched, expec
         return x
 
     def batch_rule(in_tree):
-        size, batched, x = in_tree
-        assert size == 2
+        spec, batched, x = in_tree
+        assert spec is parent.spec
+        assert spec.size == 2
         assert batched is True
         calls.append("batch")
         return x, True
@@ -622,8 +624,8 @@ def test_shared_batch_interp_delegates_to_parent(executor, value, batched, expec
     core.r_aimpl.set(p_shared, utils.asyncify(impl))
     core.r_batch.set(p_shared, batch_rule)
     core.r_abatch.set(p_shared, utils.asyncify(batch_rule))
-    parent = axis.BatchInterp(batch_size=2, parent=core.active_interp.get())
-    inner = axis.BatchInterp(batch_size=3, parent=parent)
+    parent = axis.BatchInterp(spec=tree.structure([0, 0]), parent=core.active_interp.get())
+    inner = axis.BatchInterp(spec=tree.structure([0, 0, 0]), parent=parent)
     x = inner.box((parent.box((value, batched)), False))
     with core.using_interp(inner):
         actual = executor(p_shared, x)
@@ -660,3 +662,128 @@ def test_nested_batch_shared_inputs_execute_once(executor):
     actual = executor(axis.batch(ir, in_axes=(True, False)), ["x", "y", "z"], ["a", "b"])
     assert actual == (["x", "y", "z"], [["a!", "b!"]] * 3)
     assert calls == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    "columns, axes, expected",
+    [
+        pytest.param((["a", "b"], ["x", "y"]), True, 2, id="both-mapped"),
+        pytest.param((["a", "b"], "single"), (True, False), 2, id="broadcast"),
+        pytest.param(("a", "b"), (False, False), None, id="unmapped"),
+    ],
+)
+def test_common_spec_size(columns, axes, expected):
+    spec = axis.common_spec(columns, axes)
+    assert (spec.num_children if spec is not None else None) == expected
+
+
+@pytest.mark.parametrize(
+    "columns, axes, values, expected",
+    [
+        pytest.param((["a", "b", "c"],), (True,), ["x", "y", "z"], ["x", "y", "z"], id="list"),
+        pytest.param((("a", "b", "c"),), (True,), ["x", "y", "z"], ("x", "y", "z"), id="tuple"),
+        pytest.param((("a", "b"), "broadcast"), (True, False), ["x", "y"], ("x", "y"), id="mixed"),
+        pytest.param(
+            ((("a", "b", "c"),),),
+            ((True,),),
+            ["x", "y", "z"],
+            ("x", "y", "z"),
+            id="nested",
+        ),
+    ],
+)
+def test_common_spec_container(columns, axes, values, expected):
+    assert axis.common_spec(columns, axes).unflatten(values) == expected
+
+
+def test_common_spec_custom_container():
+    point = namedtuple("Point", "x y")
+    columns = ([point(1, 2), point(3, 4)],)
+    values = [point(10, 20), point(30, 40)]
+    assert axis.common_spec(columns, (True,)).unflatten(values) == values
+
+
+@pytest.mark.parametrize(
+    "container, shape, rows, expected",
+    [
+        pytest.param([0, 0], True, ["x", "y"], ["x", "y"], id="scalar"),
+        pytest.param(
+            (0, 0),
+            (True, True),
+            [("x", "a"), ("y", "b")],
+            (("x", "y"), ("a", "b")),
+            id="tuple",
+        ),
+        pytest.param(
+            {"y": 0, "x": 0},
+            {"b": True, "a": True},
+            [{"b": "x", "a": "a"}, {"b": "y", "a": "b"}],
+            {"b": {"y": "x", "x": "y"}, "a": {"y": "a", "x": "b"}},
+            id="dict",
+        ),
+        pytest.param(
+            [0, 0],
+            (True,),
+            [(["x", "y"],), (["a", "b"],)],
+            ([["x", "y"], ["a", "b"]],),
+            id="container-valued-field",
+        ),
+        pytest.param(
+            [0, 0], (True, None), [("x", None), ("y", None)], (["x", "y"], None), id="none-node"
+        ),
+        pytest.param([0, 0], (), [(), ()], (), id="empty-result"),
+    ],
+)
+def test_batch_spec_stack_unstack(container, shape, rows, expected):
+    spec = axis.BatchSpec(tree.structure(container))
+    actual = spec.stack(shape, (row for row in rows))
+    assert tree.equal(actual, expected)
+    assert spec.unstack(shape, actual) == rows
+
+
+def test_batch_spec_unstack_shared_field():
+    shared = ["a", "b"]
+    spec = axis.BatchSpec(tree.structure((0, 0)))
+    rows = spec.unstack((True, False), (("x", "y"), shared))
+    assert rows == [("x", ["a", "b"]), ("y", ["a", "b"])]
+    assert all(row[1] is shared for row in rows)
+
+
+def test_batch_spec_stack_unstack_custom_pytree():
+    @tree.dataclass
+    class Point:
+        x: str
+        y: str
+
+    spec = axis.BatchSpec(tree.structure(Point(0, 0)))
+    rows = [Point("x", "a"), Point("y", "b")]
+    shape = Point(True, True)
+    actual = spec.stack(shape, iter(rows))
+    assert actual == Point(Point("x", "y"), Point("a", "b"))
+    assert spec.unstack(shape, actual) == rows
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [pytest.param(["x"], id="too-few"), pytest.param(["x", "y", "z"], id="too-many")],
+)
+def test_batch_spec_stack_rejects_wrong_item_count(rows):
+    with pytest.raises(ValueError):
+        axis.BatchSpec(tree.structure([0, 0])).stack(True, iter(rows))
+
+
+def test_batch_spec_stack_rejects_empty_container():
+    with pytest.raises(ValueError, match="Cannot stack an empty container"):
+        axis.BatchSpec(tree.structure([])).stack(True, iter(()))
+
+
+@pytest.mark.parametrize(
+    "shape, rows",
+    [
+        pytest.param((True,), [("x",), ["y"]], id="container-type"),
+        pytest.param((), [(), ("x",)], id="empty-result"),
+    ],
+)
+def test_batch_spec_stack_rejects_mismatched_rows(shape, rows):
+    with pytest.raises(ValueError):
+        axis.BatchSpec(tree.structure([0, 0])).stack(shape, iter(rows))

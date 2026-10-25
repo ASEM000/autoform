@@ -20,7 +20,43 @@ import autoform.src.boundary as boundary
 import autoform.src.core as core
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.tree as tree
+import autoform.src.utils as utils
 from tests import aexecute, execute
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        pytest.param(["x", "y"], (["x!", "y!"], ["!", "!"]), id="list"),
+        pytest.param(("x", "y"), (("x!", "y!"), ("!", "!")), id="tuple"),
+        pytest.param(
+            {"y": "x", "x": "y"},
+            ({"y": "x!", "x": "y!"}, {"y": "!", "x": "!"}),
+            id="dict",
+        ),
+    ],
+)
+def test_custom_batch_rule_receives_common_spec(executor, values, expected):
+    @boundary.custom
+    def program(x, y):
+        return string.concat(x, y), y
+
+    @program.set_batch
+    def rule(in_tree):
+        spec, in_axes, inputs = in_tree
+        assert isinstance(spec, axis.BatchSpec)
+        assert spec.size == 2
+        assert spec.tree_spec == tree.structure(values)
+        assert in_axes == (True, False)
+        items = spec.unstack(in_axes, inputs)
+        results = ((x + y, y) for x, y in items)
+        return spec.stack((True, True), results), (True, True)
+
+    program.aset_batch(utils.asyncify(rule))
+    ir = axis.batch(stage.trace(program)("x", "!"), in_axes=(True, False))
+    assert tree.equal(executor(ir, values, "!"), expected)
 
 
 class TestCustomFunction:
@@ -356,10 +392,10 @@ class TestCustomBatch:
 
         @pair_program.set_batch
         def pair_program_batch(in_tree, /):
-            batch_size, axes, values = in_tree
+            spec, in_axes, values = in_tree
             xs, ys = values
-            x_axis, y_axis = axes
-            assert batch_size == 2
+            x_axis, y_axis = in_axes
+            assert spec.size == 2
             assert x_axis is True
             assert y_axis is True
             return (
@@ -394,10 +430,10 @@ class TestCustomBatch:
 
         @bracket.set_batch
         def bracket_batch(in_tree, /):
-            batch_size, axes, values = in_tree
-            assert batch_size == 2
+            spec, in_axes, values = in_tree
+            assert spec.size == 2
             (xs,) = values
-            (x_axis,) = axes
+            (x_axis,) = in_axes
             assert x_axis is True
             return ([string.format(template, x=x) for x in xs], True)
 
@@ -419,10 +455,10 @@ class TestCustomBatch:
 
         @bracket.aset_batch
         async def bracket_batch(in_tree, /):
-            batch_size, axes, values = in_tree
-            assert batch_size == 2
+            spec, in_axes, values = in_tree
+            assert spec.size == 2
             (xs,) = values
-            (x_axis,) = axes
+            (x_axis,) = in_axes
             assert x_axis is True
             return [string.format("async <{x}>", x=x) for x in xs], True
 
@@ -445,10 +481,10 @@ class TestCustomBatch:
 
         @bracket.set_batch
         def bracket_batch(in_tree, /):
-            batch_size, axes, values = in_tree
-            assert batch_size == 2
+            spec, in_axes, values = in_tree
+            assert spec.size == 2
             (xs,) = values
-            (x_axis,) = axes
+            (x_axis,) = in_axes
             assert x_axis is True
             return [string.format("sync batch <{x}>", x=x) for x in xs], True
 

@@ -38,13 +38,13 @@ type TreePair = tuple[Tree, Tree]
 type IRList = list[stage.IR]
 type FanoutPair = tuple[list[Tree], list[Tree]]
 type FanoutFwdResult = tuple[list[Tree], list[Tree]]
-type BatchFanoutInput = tuple[int, list[bool], list[Tree]]
+type BatchFanoutInput = tuple[axis.BatchSpec, list[bool], list[Tree]]
 type BatchFanoutOutput = tuple[list[Tree], list[Tree[bool]]]
 type DependsType[T] = tuple[T, tuple[Tree, ...]]
 type DependsPair = tuple[DependsType[Tree], DependsType[Tree]]
 type DependsFwdResult = tuple[Tree, DependsType[Tree]]
 type DependsBwdInput = tuple[DependsType[Tree], Tree]
-type BatchDependsInput = tuple[int, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
+type BatchDependsInput = tuple[axis.BatchSpec, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
 
 # ==================================================================================================
 # FANOUT
@@ -130,39 +130,39 @@ async def apull_bwd_fanout(in_tree: Tree, /, *, irs: IRList) -> list[Tree]:
 
 
 def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    _, in_batched, inputs = in_tree
+    _, in_axes, inputs = in_tree
 
     results: list[Tree] = []
-    out_batched: list[Tree[bool]] = []
+    out_axes: list[Tree[bool]] = []
 
-    for ir, inp, inp_batched in zip(irs, inputs, in_batched):
-        if utils.batch_spec(inp, inp_batched) is None:
+    for ir, inp, inp_axes in zip(irs, inputs, in_axes):
+        if not any(tree.leaves(inp_axes)):
             results.append(ir.call(*inp))
-            out_batched.append(tree.map(lambda _: False, ir.out_tree))
+            out_axes.append(tree.map(lambda _: False, ir.out_tree))
         else:
-            batched_ir = axis.batch(ir, in_axes=inp_batched)
+            batched_ir = axis.batch(ir, in_axes=inp_axes)
             results.append(batched_ir.call(*inp))
-            out_batched.append(tree.map(lambda _: True, ir.out_tree))
+            out_axes.append(tree.map(lambda _: True, ir.out_tree))
 
-    return results, out_batched
+    return results, out_axes
 
 
 async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOutput:
-    _, in_batched, inputs = in_tree
+    _, in_axes, inputs = in_tree
 
     results: list[Tree] = []
-    out_batched: list[Tree[bool]] = []
+    out_axes: list[Tree[bool]] = []
 
-    for ir, inp, inp_batched in zip(irs, inputs, in_batched):
-        if utils.batch_spec(inp, inp_batched) is None:
+    for ir, inp, inp_axes in zip(irs, inputs, in_axes):
+        if not any(tree.leaves(inp_axes)):
             results.append(await ir.acall(*inp))
-            out_batched.append(tree.map(lambda _: False, ir.out_tree))
+            out_axes.append(tree.map(lambda _: False, ir.out_tree))
         else:
-            batched_ir = axis.batch(ir, in_axes=inp_batched)
+            batched_ir = axis.batch(ir, in_axes=inp_axes)
             results.append(await batched_ir.acall(*inp))
-            out_batched.append(tree.map(lambda _: True, ir.out_tree))
+            out_axes.append(tree.map(lambda _: True, ir.out_tree))
 
-    return results, out_batched
+    return results, out_axes
 
 
 def dce_fanout(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -325,8 +325,8 @@ def pull_bwd_depends(in_tree: DependsBwdInput, /) -> DependsType[Tree]:
 
 
 def batch_depends(in_tree: BatchDependsInput, /) -> tuple[Tree, Tree[bool]]:
-    _, (value_batched, _), (value, deps) = in_tree
-    return p_depends.bind((value, deps)), value_batched
+    _, (value_axes, _), (value, deps) = in_tree
+    return p_depends.bind((value, deps)), value_axes
 
 
 core.r_impl.set(p_depends, impl_depends)

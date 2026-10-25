@@ -123,11 +123,10 @@ def pull_bwd_render(in_tree, /, **params):
 
 
 def batch_render(in_tree, /, **params):
-    size, batched, doc = in_tree
-    if (spec := utils.batch_spec(doc, batched)) is None:
-        return p_render.bind(doc, **params), False
-    outputs = [p_render.bind(utils.batch_index(doc, batched, i), **params) for i in range(size)]
-    return spec.unflatten(outputs), True
+    spec, in_axes, in_values = in_tree
+    items = spec.unstack(in_axes, in_values)
+    results = (p_render.bind(x, **params) for x in items)
+    return spec.stack(True, results), True
 
 
 core.r_impl.set(p_render, pp.layout)
@@ -224,12 +223,10 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
-    batch_size, in_batched, in_values = in_tree
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        return p_match.bind(in_values), False
-    unbatch = ft.partial(utils.batch_index, in_values, in_batched)
-    result = [p_match.bind(unbatch(b)) for b in range(batch_size)]
-    return spec.unflatten(result), True
+    spec, in_axes, in_values = in_tree
+    items = spec.unstack(in_axes, in_values)
+    results = (p_match.bind(x) for x in items)
+    return spec.stack(True, results), True
 
 
 core.r_impl.set(p_match, impl_match)
