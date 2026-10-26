@@ -16,6 +16,7 @@ from autoform import extend as extend
 from autoform import lm as lm
 from autoform import numeric as numeric
 from autoform import text as text
+from autoform import tree as tree
 from autoform.src.ad import fwd_bwd as fwd_bwd
 from autoform.src.ad import pullback as pullback
 from autoform.src.ad import pushforward as pushforward
