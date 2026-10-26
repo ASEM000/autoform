@@ -96,18 +96,49 @@ def dataclass[T](cls: type[T] | None = None, /, **kwargs: bool):
 
 
 def unstack(spec: PyTreeSpec, axes: Tree[bool], x: Tree, /) -> list[Tree]:
-    """Return one tree per item, indexing selected fields and retaining shared fields."""
-    return [map(lambda u, x: get(x) if u else x, axes, x) for get in spec.accessors()]
+    """Split selected fields into rows, preserving shared fields.
+
+    Args:
+        spec: Container structure to extract items from.
+        axes: Tree prefix marking selected fields True and shared fields False.
+        x: Tree containing selected containers and shared values.
+
+    Returns:
+        One row per spec leaf, in traversal order.
+
+    Example:
+        >>> import autoform as af
+        >>> spec = af.tree.structure([0, 0])
+        >>> af.tree.unstack(spec, (True, False), (["a", "b"], "shared"))
+        [('a', 'shared'), ('b', 'shared')]
+    """
+    return [map(lambda axis, x: get(x) if axis else x, axes, x) for get in spec.accessors()]
 
 
-def stack(spec: PyTreeSpec, shape: Tree, rows: Iterable[Tree], /) -> Tree:
-    """Collect corresponding fields from rows into spec's container; shape defines the fields."""
+def stack(spec: PyTreeSpec, axes: Tree[bool], rows: Iterable[Tree], /) -> Tree:
+    """Collect selected fields into containers, preserving shared fields.
+
+    Args:
+        spec: Nonempty container structure to collect items into.
+        axes: Tree prefix marking selected fields True and shared fields False.
+        rows: One row per spec leaf, in traversal order.
+
+    Returns:
+        A tree with selected fields packed using spec. Shared fields are taken
+        from the first row without checking equality.
+
+    Example:
+        >>> import autoform as af
+        >>> spec = af.tree.structure([0, 0])
+        >>> af.tree.stack(spec, (True, False), [("a", "shared"), ("b", "shared")])
+        (['a', 'b'], 'shared')
+    """
     rows = list(rows)
     if len(rows) != spec.num_leaves:
         raise ValueError(f"Expected {spec.num_leaves} rows, got {len(rows)}")
     if not spec.num_leaves:
         raise ValueError("Cannot stack an empty container")
-    return map(lambda _, *xs: spec.unflatten(xs), shape, *rows)
+    return map(lambda axis, *xs: spec.unflatten(xs) if axis else xs[0], axes, *rows)
 
 
 def mask(in_tree: Tree, use: Tree[bool], replace: Any = None) -> Tree:

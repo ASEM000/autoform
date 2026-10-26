@@ -183,4 +183,4 @@ def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -
     rows = spec.flatten_up_to(in_tree)
     if len(rows) != batch_size:
         raise ValueError(f"Expected {batch_size} rows, got {len(rows)}")
-    return tree.stack(spec, in_batched, rows)
+    return tree.stack(spec, tree.map(lambda _: True, in_batched), rows)

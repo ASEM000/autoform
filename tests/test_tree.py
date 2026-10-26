@@ -46,6 +46,7 @@ from autoform import tree
             [0, 0], (True, None), [("x", None), ("y", None)], (["x", "y"], None), id="none-node"
         ),
         pytest.param([0, 0], (), [(), ()], (), id="empty-result"),
+        pytest.param([0, 0], False, ["x", "x"], "x", id="shared"),
     ],
 )
 def test_stack_unstack(container, shape, rows, expected):
@@ -55,12 +56,15 @@ def test_stack_unstack(container, shape, rows, expected):
     assert tree.unstack(spec, shape, actual) == rows
 
 
-def test_unstack_shared_field():
+def test_stack_unstack_shared_field():
     shared = ["a", "b"]
     spec = tree.structure((0, 0))
     rows = tree.unstack(spec, (True, False), (("x", "y"), shared))
     assert rows == [("x", ["a", "b"]), ("y", ["a", "b"])]
     assert all(row[1] is shared for row in rows)
+    actual = tree.stack(spec, (True, False), iter(rows))
+    assert actual == (("x", "y"), shared)
+    assert actual[1] is shared
 
 
 def test_stack_unstack_custom_pytree():
