@@ -27,7 +27,7 @@ import autoform.src.dead as dead
 import autoform.src.order as order
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 # ==================================================================================================
 # CHECKPOINT

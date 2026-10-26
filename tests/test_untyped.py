@@ -17,8 +17,8 @@ import pytest
 import autoform.src.ad as ad
 import autoform.src.core as core
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.untyped as untyped
-import autoform.src.utils as utils
 
 
 def test_untyped_aval_is_one_type():
@@ -43,7 +43,7 @@ def test_untyped_hides_its_value():
     box = untyped.Untyped({"private": [object()]})
     assert core.avalof(box) == untyped.AUntyped()
     assert repr(box) == "Untyped()" and "private" not in repr(box)
-    assert utils.tree.leaves(box) == box.value["private"]
+    assert tree.leaves(box) == box.value["private"]
 
 
 def test_trace_untyped_is_one_var():

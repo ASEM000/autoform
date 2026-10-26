@@ -26,7 +26,7 @@ import autoform.src.numeric as numeric
 import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.string as string
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 from tests import aexecute, execute
 
 
@@ -321,7 +321,7 @@ def test_pretty_uses_custom_pytree_children():
         def __init__(self, left, right):
             self.left, self.right = left, right
 
-    utils.tree.register_node(
+    tree.register_node(
         Pair,
         lambda pair: ((pair.left, pair.right), None),
         lambda _, children: Pair(*children),
@@ -340,7 +340,7 @@ def test_pretty_omits_custom_pytree_metadata():
         def __repr__(self):
             return f"Label({self.text!r}, name={self.name!r})"
 
-    utils.tree.register_node(
+    tree.register_node(
         Label,
         lambda label: ((label.text,), label.name),
         lambda name, children: Label(*children, name),
@@ -450,10 +450,10 @@ def test_format_lowers_to_render(executor, template, values, expected, feedback)
     pf = ad.pushforward(ir)
     result = executor(pf, (values,), (values,))
     zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    assert utils.tree.map(zero, result) == (p, expected)
+    assert tree.map(zero, result) == (p, expected)
     pb = ad.pullback(ir)
     result = executor(pb, (values,), "g")
-    assert utils.tree.map(zero, result) == (p, (feedback,))
+    assert tree.map(zero, result) == (p, (feedback,))
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
@@ -474,7 +474,7 @@ def test_format_explicit_leaf_access_routes_feedback_to_selected_leaves(executor
     pb = ad.pullback(ir)
     expected = ("A/B/A", (Record("gg", ("g", "")),))
     zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-    assert utils.tree.map(zero, executor(pb, (row,), "g")) == expected
+    assert tree.map(zero, executor(pb, (row,), "g")) == expected
 
 
 @pytest.mark.parametrize(

@@ -34,11 +34,12 @@ import autoform.src.order as order
 import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
 zip = utils.strict_zip
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 type TreePair = tuple[Tree, Tree]
 type ClientType = ResponsesAPIResponse
 
@@ -55,14 +56,14 @@ def json_property_names(entries: Iterable[Any]) -> tuple[str, ...]:
     return tuple(names)
 
 
-def json_value(tree: Tree) -> Any:
-    if utils.tree.is_leaf(tree):
-        return tree
-    children, spec = utils.tree.flatten(tree, is_leaf=lambda x: id(x) != id(tree))
+def json_value(value: Tree) -> Any:
+    if tree.is_leaf(value):
+        return value
+    children, spec = tree.flatten(value, is_leaf=lambda x: id(x) != id(value))
     return {
         name: json_value(child)
         for name, child in zip(json_property_names(spec.entries()), children)
-        if utils.tree.leaves(child)
+        if tree.leaves(child)
     }
 
 
@@ -76,7 +77,7 @@ missing = object()
 
 def describe(spec_tree: Tree, /) -> JsonSchema | None:
     """Describe a tree of specs, omitting literal fields."""
-    spec_tree, _ = utils.partition(
+    spec_tree, _ = tree.partition(
         is_spec,
         spec_tree,
         is_leaf=is_spec,
@@ -91,7 +92,7 @@ def describe_node(spec_tree: Tree, /) -> JsonSchema | None:
     if is_spec(spec_tree):
         return spec_tree.describe()
 
-    flat, spec = utils.tree.flatten(spec_tree, is_leaf=lambda x: id(x) != id(spec_tree))
+    flat, spec = tree.flatten(spec_tree, is_leaf=lambda x: id(x) != id(spec_tree))
     property_names = json_property_names(spec.entries())
     properties = {}
     for name, child in zip(property_names, flat):
@@ -115,14 +116,14 @@ def parse_node(spec_tree: Tree, value: Any, /) -> Tree:
         return spec_tree.parse(value)
 
     def has_spec(node):
-        return any(map(is_spec, utils.tree.leaves(node, is_leaf=is_spec)))
+        return any(map(is_spec, tree.leaves(node, is_leaf=is_spec)))
 
-    flat, spec = utils.tree.flatten(spec_tree, is_leaf=lambda x: id(x) != id(spec_tree))
+    flat, spec = tree.flatten(spec_tree, is_leaf=lambda x: id(x) != id(spec_tree))
     schema_keys = json_property_names(spec.entries())
     properties = {key: child for key, child in zip(schema_keys, flat) if has_spec(child)}
     if not properties:
         return spec_tree
-    expected_spec = utils.tree.structure(properties, is_leaf=lambda x: id(x) != id(properties))
+    expected_spec = tree.structure(properties, is_leaf=lambda x: id(x) != id(properties))
     values = dict(zip(expected_spec.entries(), expected_spec.flatten_up_to(value)))
     children = (parse_node(child, values.get(key)) for key, child in zip(schema_keys, flat))
     return spec.unflatten(children)
@@ -134,14 +135,14 @@ def parse(spec_tree: Tree, value: Any, /) -> Tree:
     def select_filled(literal, filled):
         return filled if literal is missing else literal
 
-    spec_tree, lit_tree = utils.partition(
+    spec_tree, lit_tree = tree.partition(
         is_spec,
         spec_tree,
         is_leaf=is_spec,
         fillvalue=missing,
     )
     filled = parse_node(spec_tree, value)
-    return utils.tree.map(select_filled, lit_tree, filled)
+    return tree.map(select_filled, lit_tree, filled)
 
 
 # ==================================================================================================
@@ -180,7 +181,7 @@ class Spec(Hashable):
                 setattr(node, name, value)
             return node
 
-        utils.tree.register_node(cls, flatten, unflatten)
+        tree.register_node(cls, flatten, unflatten)
         pp.register(cls, pretty_spec)
 
     def __matmul__(self, desc: str) -> Spec:
@@ -568,7 +569,7 @@ def literal_content(lit_tree: Tree) -> str:
     def to_spec(value):
         return aval_to_spec(core.avalof(value))
 
-    spec_tree = utils.tree.map(to_spec, lit_tree)
+    spec_tree = tree.map(to_spec, lit_tree)
     return spec_content(lit_tree, spec_tree)
 
 
@@ -579,15 +580,15 @@ def literal_content(lit_tree: Tree) -> str:
 p_fill = core.Prim("fill")
 
 
-def fill(tree: Tree, /, *, model: str) -> Tree:
+def fill(value: Tree, /, *, model: str) -> Tree:
     """Fill specs in a pytree with generated values.
 
     Args:
-        tree: A pytree containing literal inputs and specs.
+        value: A pytree containing literal inputs and specs.
         model: The model name or active client model alias to use.
 
     Returns:
-        ``tree`` with each spec replaced by a generated value.
+        ``value`` with each spec replaced by a generated value.
 
     Example:
         >>> import autoform as af
@@ -598,12 +599,12 @@ def fill(tree: Tree, /, *, model: str) -> Tree:
     def check_context(value):
         aval_to_spec(core.avalof(value))
 
-    utils.tree.map(check_context, tree)
-    if not any(map(is_spec, utils.tree.leaves(tree, is_leaf=is_spec))):
-        return tree
+    tree.map(check_context, value)
+    if not any(map(is_spec, tree.leaves(value, is_leaf=is_spec))):
+        return value
     assert core.avalof(model) == core.avalof(""), f"Expected string model: {model!r}"
-    out = p_fill.bind((tree, control.stop_gradient(model)))
-    return utils.tree.map(select_filled, tree, out, is_leaf=is_spec)
+    out = p_fill.bind((value, control.stop_gradient(model)))
+    return tree.map(select_filled, value, out, is_leaf=is_spec)
 
 
 def select_filled(node: Any, value: Any) -> Any:
@@ -612,14 +613,14 @@ def select_filled(node: Any, value: Any) -> Any:
     return node
 
 
-def split_fill(tree: Tree, /) -> TreePair:
-    spec_tree, lit_tree = utils.partition(is_spec, tree, is_leaf=is_spec)
+def split_fill(value: Tree, /) -> TreePair:
+    spec_tree, lit_tree = tree.partition(is_spec, value, is_leaf=is_spec)
     return lit_tree, spec_tree
 
 
 def impl_fill(in_tree: Tree, /) -> Tree:
-    tree, model = in_tree
-    lit_tree, spec_tree = split_fill(tree)
+    value, model = in_tree
+    lit_tree, spec_tree = split_fill(value)
     input = literal_content(lit_tree)
     json_schema = describe(spec_tree)
     if json_schema is None:
@@ -630,8 +631,8 @@ def impl_fill(in_tree: Tree, /) -> Tree:
 
 
 async def aimpl_fill(in_tree: Tree, /) -> Tree:
-    tree, model = in_tree
-    lit_tree, spec_tree = split_fill(tree)
+    value, model = in_tree
+    lit_tree, spec_tree = split_fill(value)
     input = literal_content(lit_tree)
     json_schema = describe(spec_tree)
     if json_schema is None:
@@ -642,8 +643,8 @@ async def aimpl_fill(in_tree: Tree, /) -> Tree:
 
 
 def abstract_fill(in_tree: Tree, /) -> Tree:
-    tree, model = in_tree
-    lit_tree, spec_tree = split_fill(tree)
+    value, model = in_tree
+    lit_tree, spec_tree = split_fill(value)
     aval = core.avalof("")
     assert type(model) in (str, type(aval)), f"Expected string model: {model!r}"
 
@@ -663,9 +664,9 @@ def abstract_fill(in_tree: Tree, /) -> Tree:
             raise TypeError(f"Static schema leaf must be traceable, got {value!r}")
         return value
 
-    utils.tree.map(check_literal, lit_tree)
-    utils.tree.map(check_description, spec_tree)
-    return utils.tree.map(abstract_spec, spec_tree, is_leaf=is_spec)
+    tree.map(check_literal, lit_tree)
+    tree.map(check_description, spec_tree)
+    return tree.map(abstract_spec, spec_tree, is_leaf=is_spec)
 
 
 def batch_fill(in_tree: Tree, /) -> TreePair:
@@ -673,11 +674,11 @@ def batch_fill(in_tree: Tree, /) -> TreePair:
 
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
         result = p_fill.bind(in_values)
-        out_batched = utils.tree.map(lambda _: False, result)
+        out_batched = tree.map(lambda _: False, result)
         return result, out_batched
 
     results = [p_fill.bind(utils.batch_index(in_values, in_batched, b)) for b in range(batch_size)]
-    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_batched = tree.map(lambda _: True, results[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
     return out_ib, out_batched
 
@@ -687,14 +688,14 @@ async def abatch_fill(in_tree: Tree, /) -> TreePair:
 
     if (spec := utils.batch_spec(in_values, in_batched)) is None:
         result = await p_fill.abind(in_values)
-        out_batched = utils.tree.map(lambda _: False, result)
+        out_batched = tree.map(lambda _: False, result)
         return result, out_batched
 
     inputs = [(utils.batch_index(in_values, in_batched, b),) for b in range(batch_size)]
     in0, *_ = inputs
     ir = stage.trace(p_fill.bind)(*in0)
     results = await order.p_fanout.abind(inputs, irs=[ir] * batch_size)
-    out_batched = utils.tree.map(lambda _: True, results[0])
+    out_batched = tree.map(lambda _: True, results[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
     return out_ib, out_batched
 
@@ -706,12 +707,12 @@ def spec_description(node: Spec) -> str | None:
 def fill_pushforward_request(in_tree: Tree, /) -> Tree | None:
     (p_tree, p_model), (t_tree, _) = in_tree
     (p_lit_tree, spec_tree), (t_lit_tree, t_spec_tree) = split_fill(p_tree), split_fill(t_tree)
-    if utils.tree.structure(p_lit_tree) != utils.tree.structure(t_lit_tree):
+    if tree.structure(p_lit_tree) != tree.structure(t_lit_tree):
         raise ValueError("Primal and tangent literals must have identical pytree specs")
-    if utils.tree.structure(spec_tree) != utils.tree.structure(t_spec_tree):
+    if tree.structure(spec_tree) != tree.structure(t_spec_tree):
         raise ValueError("Primal and tangent schemas must have identical pytree specs")
 
-    if all(isinstance(x, core.Zero) for x in utils.tree.leaves((t_lit_tree, t_spec_tree))):
+    if all(isinstance(x, core.Zero) for x in tree.leaves((t_lit_tree, t_spec_tree))):
         return None
 
     t_lit_tree, t_spec_tree = core.instantiate((t_lit_tree, t_spec_tree))
@@ -719,7 +720,7 @@ def fill_pushforward_request(in_tree: Tree, /) -> Tree | None:
         input=literal_content(p_lit_tree),
         in_tangent=literal_content(t_lit_tree),
     )
-    desc_tree = utils.tree.map(spec_description, t_spec_tree, is_leaf=is_spec)
+    desc_tree = tree.map(spec_description, t_spec_tree, is_leaf=is_spec)
     context = dict(
         instruction=PUSH_SYSTEM_PROMPT,
         request=prompt,
@@ -732,7 +733,7 @@ def fill_pushforward_request(in_tree: Tree, /) -> Tree | None:
             return x
         return aval_to_spec(core.s_tangent.map(core.avalof(x)))
 
-    t_spec_tree = utils.tree.map(tangent_field, spec_tree, is_leaf=is_spec)
+    t_spec_tree = tree.map(tangent_field, spec_tree, is_leaf=is_spec)
     return dict(context=context, output=t_spec_tree), p_model
 
 
@@ -775,23 +776,23 @@ async def apull_fwd_fill(in_tree: Tree, /) -> TreePair:
 
 def fill_pullback_request(in_tree: Tree, /) -> Tree | None:
     residuals, out_c = in_tree
-    tree, model, out = residuals
-    lit_tree, spec_tree = split_fill(tree)
-    if utils.tree.structure(out) != utils.tree.structure(out_c):
+    value, model, out = residuals
+    lit_tree, spec_tree = split_fill(value)
+    if tree.structure(out) != tree.structure(out_c):
         raise ValueError("Output and cotangent must have identical pytree specs")
 
-    if all(isinstance(x, core.Zero) for x in utils.tree.leaves(out_c)):
+    if all(isinstance(x, core.Zero) for x in tree.leaves(out_c)):
         return None
 
     def to_spec(x):
         return aval_to_spec(core.avalof(x))
 
-    lit_spec_tree = utils.tree.map(to_spec, lit_tree)
+    lit_spec_tree = tree.map(to_spec, lit_tree)
 
-    out_c, _ = utils.partition(lambda c: not isinstance(c, core.Zero), out_c)
-    c_spec_tree = utils.tree.map(to_spec, out_c)
-    desc_tree = utils.tree.map(spec_description, spec_tree, is_leaf=is_spec)
-    desc_spec_tree = utils.tree.map(to_spec, desc_tree)
+    out_c, _ = tree.partition(lambda c: not isinstance(c, core.Zero), out_c)
+    c_spec_tree = tree.map(to_spec, out_c)
+    desc_tree = tree.map(spec_description, spec_tree, is_leaf=is_spec)
+    desc_spec_tree = tree.map(to_spec, desc_tree)
     prompt = GRAD_PROMPT.format(
         input=spec_content((lit_tree, model, desc_tree), (lit_spec_tree, Str(), desc_spec_tree)),
         output=spec_content(out, spec_tree),
@@ -806,37 +807,38 @@ def fill_pullback_request(in_tree: Tree, /) -> Tree | None:
         spec.desc = f"Input cotangent at {path}, original value {value!r}."
         return spec
 
-    in_spec_tree = utils.tree.map_with_path(make_feedback_spec, (lit_tree, model, desc_tree))
+    values, spec = tree.flatten((lit_tree, model, desc_tree))
+    in_spec_tree = spec.unflatten(map(make_feedback_spec, spec.paths(), values))
     return dict(context=context, output=in_spec_tree), model
 
 
 def pullback_bwd_fill(in_tree: Tree, /) -> Tree:
-    (tree, model, _), _ = in_tree
+    (value, model, _), _ = in_tree
     in_feedback = fill_pullback_request(in_tree)
     if in_feedback is None:
-        return core.s_cotangent.zeros_like((tree, model))
+        return core.s_cotangent.zeros_like((value, model))
     out = p_fill.bind(in_feedback)
-    return merge_feedback(tree, out["output"]), out["output"][1]
+    return merge_feedback(value, out["output"]), out["output"][1]
 
 
 async def apull_bwd_fill(in_tree: Tree, /) -> Tree:
-    (tree, model, _), _ = in_tree
+    (value, model, _), _ = in_tree
     in_feedback = fill_pullback_request(in_tree)
     if in_feedback is None:
-        return core.s_cotangent.zeros_like((tree, model))
+        return core.s_cotangent.zeros_like((value, model))
     out = await p_fill.abind(in_feedback)
-    return merge_feedback(tree, out["output"]), out["output"][1]
+    return merge_feedback(value, out["output"]), out["output"][1]
 
 
-def merge_feedback(tree: Tree, feedback: Tree, /) -> Tree:
+def merge_feedback(value: Tree, feedback: Tree, /) -> Tree:
     lit_feedback, _, desc_feedback = feedback
-    _, spec_tree = split_fill(tree)
-    spec_feedback = utils.tree.map(cotangent_spec, spec_tree, desc_feedback, is_leaf=is_spec)
+    _, spec_tree = split_fill(value)
+    spec_feedback = tree.map(cotangent_spec, spec_tree, desc_feedback, is_leaf=is_spec)
 
     def pick(node, lit_c, spec_c):
         return spec_c if is_spec(node) else lit_c
 
-    return utils.tree.map(pick, tree, lit_feedback, spec_feedback, is_leaf=is_spec)
+    return tree.map(pick, value, lit_feedback, spec_feedback, is_leaf=is_spec)
 
 
 def cotangent_spec(node: Spec, feedback: str | None) -> Spec:

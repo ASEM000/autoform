@@ -15,17 +15,20 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
+from typing import Any
 
 import autoform.src.core as core
+
+type Tree[T] = Any
 
 
 class ImplInterp(core.Interp):
     __slots__ = []
 
-    def interpret(self, prim: core.Prim, in_tree: core.Tree, /, **params) -> core.Tree:
+    def interpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         return core.r_impl.get(prim)(in_tree, **params)
 
-    async def ainterpret(self, prim: core.Prim, in_tree: core.Tree, /, **params) -> core.Tree:
+    async def ainterpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         return await core.r_aimpl.get(prim)(in_tree, **params)
 
 

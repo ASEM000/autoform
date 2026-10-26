@@ -2,23 +2,21 @@
 
 Programs often pass related values together in a dictionary, tuple, or object. A *pytree* describes such data as a structure of containers and leaves. This gives `autoform` a consistent way to find the values inside a container, batch selected fields, and return feedback in the original shape. A string is a leaf; a tuple or registered dataclass is a container.[^pytrees-and-schemas]
 
-`autoform` uses [Optree's pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html) for traversal and registration.
+`af.tree` provides traversal and registration using [OpTree's pytree utilities](https://optree.readthedocs.io/en/latest/pytree.html), with AutoForm's namespace configured automatically.
 
 ## Registration
 
-A custom dataclass becomes a pytree when its fields are registered in {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>`.[^manual-registration] The review below contains a written comment and a numerical score as leaves. Its source label is fixed metadata, marked with `pytree_node=False`, because the label identifies the review rather than a value to transform.
+The `af.tree.dataclass` decorator registers a custom dataclass as a pytree in {py:data}`tree.NAMESPACE <autoform.tree.NAMESPACE>`.[^manual-registration] The review below contains a written comment and a numerical score as leaves. Its source label is fixed metadata, marked with `pytree_node=False`, because the label identifies the review rather than a value to transform.
 
 ```python
-import optree
-
 import autoform as af
 
 
-@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+@af.tree.dataclass
 class Review:
     comment: str
     score: float
-    source: str = optree.dataclasses.field(pytree_node=False)
+    source: str = af.tree.field(pytree_node=False)
 
 
 review = Review(comment="review text", score=2.0, source="source label")
@@ -31,12 +29,9 @@ Static metadata stays in the tree structure. It is not mapped or batched and doe
 Flattening separates the values from the structure that holds them. In this review, the comment and score become the leaves, while the dataclass type and source label remain in the tree structure. Unflattening combines that structure with the leaves to reconstruct the review:
 
 ```python
-leaves, structure = optree.tree_flatten(
-    review,
-    namespace=af.PYTREE_NAMESPACE,
-)
+leaves, structure = af.tree.flatten(review)
 assert leaves == ["review text", 2.0]
-assert optree.tree_unflatten(structure, leaves) == review
+assert structure.unflatten(leaves) == review
 ```
 
 ```{raw} html
@@ -48,11 +43,11 @@ assert optree.tree_unflatten(structure, leaves) == review
 A registered class can also group parameters with methods that use them. The `Explainer` below keeps instructions and style as transformable leaves, with the model name as fixed metadata. Its methods remain ordinary Python methods: tracing records the supported operations performed when a method is called.
 
 ```python
-@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+@af.tree.dataclass
 class Explainer:
     instruction: str
     style: str
-    model: str = optree.dataclasses.field(pytree_node=False)
+    model: str = af.tree.field(pytree_node=False)
 
     def prompt(self, topic: str) -> str:
         return self.instruction + "\nStyle: " + self.style + "\nTopic: " + topic
@@ -115,4 +110,4 @@ The fields exposed as leaves must contain values that `autoform` can trace, or c
 
 [^pytrees-and-schemas]: Schemas describe structured LM output. Pytrees describe how `autoform` walks data. [Language Models](../language-models.md) covers schema output.
 
-[^manual-registration]: Classes without Optree's dataclass decorator can supply flatten and unflatten functions directly. Transformable values belong among the children, and fixed, hashable values belong in the metadata. Registration and traversal use the same namespace.
+[^manual-registration]: Classes without `af.tree.dataclass` can supply flatten and unflatten functions to `af.tree.register_node`. Transformable values belong among the children, and fixed, hashable values belong in the metadata. Registration and traversal use the same namespace.

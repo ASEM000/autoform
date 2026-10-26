@@ -29,7 +29,7 @@ These terms describe tracing, transformations, and execution:
 | {py:func}`pullback <autoform.pullback>` | IR transform to propagate cotangents from outputs to inputs. |
 | {py:func}`pushforward <autoform.pushforward>` | IR transform to propagate tangents from inputs to outputs. |
 | Pytree | A nested container/leaf structure that `autoform` can walk. Registered dataclasses can be pytrees. |
-| {py:data}`PYTREE_NAMESPACE <autoform.PYTREE_NAMESPACE>` | Optree namespace reserved for use by `autoform` when registering user pytrees. |
+| {py:data}`tree.NAMESPACE <autoform.tree.NAMESPACE>` | Optree namespace reserved for use by `autoform` when registering user pytrees. |
 | {py:func}`sched <autoform.sched>` | IR transform to group equations that can be executed concurrently using async. |
 | Schema | A pytree of specifications such as {py:class}`Str <autoform.lm.Str>`, {py:class}`Float <autoform.lm.Float>`, and {py:class}`Enum <autoform.lm.Enum>`, used by {py:func}`fill <autoform.lm.fill>` to describe generated values. |
 | tag value | Hashable metadata that can be attached to equations during tracing. |

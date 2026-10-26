@@ -29,9 +29,10 @@ import autoform.src.check as check
 import autoform.src.core as core
 import autoform.src.impl as impl
 import autoform.src.pp as pp
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 
 # ==================================================================================================
@@ -242,8 +243,9 @@ class IR[*A, R]:
             path = entry.codify("")
             return ("[", pp.pretty(entry.entry), "]") if path.startswith("[") else path
 
-        def bindings(tree, name):
-            accessors, values, _ = utils.tree.flatten_with_accessor(tree)
+        def bindings(value, name):
+            values, spec = tree.flatten(value)
+            accessors = spec.accessors()
             return [
                 (annotation(var), " = ", variable(name), list(map(step, accessor)))
                 for accessor, var in utils.zip(accessors, values)
@@ -252,7 +254,7 @@ class IR[*A, R]:
 
         def collect(ir, irs):
             for eqn in ir.eqns:
-                for leaf in utils.tree.leaves(eqn.params):
+                for leaf in tree.leaves(eqn.params):
                     if isinstance(leaf, IR) and id(leaf) not in irs:
                         irs[id(leaf)] = leaf
                         collect(leaf, irs)
@@ -267,7 +269,7 @@ class IR[*A, R]:
                 call = call, " ", pp.join(tags, " ")
             if is_var(eqn.out_tree):
                 return annotation(eqn.out_tree), " = ", call
-            outputs = [leaf for leaf in utils.tree.leaves(eqn.out_tree) if is_var(leaf)]
+            outputs = [leaf for leaf in tree.leaves(eqn.out_tree) if is_var(leaf)]
             if not outputs:
                 return call
             return pp.join(map(annotation, outputs), ", "), " = ", call
@@ -281,13 +283,13 @@ class IR[*A, R]:
                     input_vars.add(value)
                 else:
                     name = f"arg{index}"
-                    avals = utils.tree.map(aval_if_var, value)
+                    avals = tree.map(aval_if_var, value)
                     inputs.append((variable(name), ": ", pp.pretty(avals)))
                     body.extend(bindings(value, name))
             body.extend(map(format_eqn, ir.eqns))
             body.append((pp.style("return", pp.Theme.CONTROL), " ", pp.pretty(ir.out_tree)))
             name = function("func") if ir is self else pp.pretty(ir)
-            returns = pp.pretty(utils.tree.map(aval_if_var, ir.out_tree))
+            returns = pp.pretty(tree.map(aval_if_var, ir.out_tree))
             signature = pp.bracket("(", inputs, (")", " -> ", returns, ":"))
             header = pp.style("def", pp.Theme.KEYWORD), " ", name, signature
             body = pp.join(body, pp.hardline())
@@ -357,14 +359,14 @@ class IR[*A, R]:
         """
         check_static_inputs(self.in_tree, args)
         env = Env()
-        utils.tree.map(env.write, self.in_tree, args)
+        tree.map(env.write, self.in_tree, args)
 
         for eqn in self.eqns:
-            in_values = utils.tree.map(env.read, eqn.in_tree)
+            in_values = tree.map(env.read, eqn.in_tree)
             out_values = yield eqn, in_values
-            utils.tree.map(env.write, eqn.out_tree, out_values)
+            tree.map(env.write, eqn.out_tree, out_values)
 
-        yield None, utils.tree.map(env.read, self.out_tree)
+        yield None, tree.map(env.read, self.out_tree)
 
 
 @ft.partial(pp.register, Var)
@@ -417,7 +419,7 @@ def check_static_inputs(atoms: Tree, args: Tree, /) -> None:
             if not atom == value:
                 raise ValueError(f"Static input mismatch: expected {atom!r}, got {value!r}")
 
-    utils.tree.map(check_input, atoms, args)
+    tree.map(check_input, atoms, args)
 
 
 # ==================================================================================================
@@ -442,15 +444,15 @@ def is_same_structure(lhs: IR, rhs: IR, /) -> bool:
         return type(x) is type(y) and x == y
 
     left, right = (lhs.in_tree, lhs.out_tree), (rhs.in_tree, rhs.out_tree)
-    if utils.tree.structure(left) != utils.tree.structure(right):
+    if tree.structure(left) != tree.structure(right):
         return False
-    return utils.tree.all(utils.tree.map(same_atom, left, right))
+    return all(tree.leaves(tree.map(same_atom, left, right)))
 
 
-def var_leaves(tree: Tree, /) -> list[Var]:
+def var_leaves(value: Tree, /) -> list[Var]:
     """Return Vars from an IR tree in leaf order."""
 
-    return [cast(Var, x) for x in utils.tree.leaves(tree) if is_var(x)]
+    return [cast(Var, x) for x in tree.leaves(value) if is_var(x)]
 
 
 def var_producers(ir: IR, /) -> dict[Var, Eqn]:
@@ -528,8 +530,8 @@ def liveness(ir: IR, /, *, out_used: UsedTree | None = None) -> Liveness:
     if out_used is None:
         live_after = set(var_leaves(ir.out_tree))
     else:
-        assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
-        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
+        assert all(isinstance(leaf, bool) for leaf in tree.leaves(out_used))
+        assert tree.structure(out_used) == tree.structure(ir.out_tree)
         # NOTE(asem): with a partial output mask, only the selected output Vars are live.
         # >>> def program(x):
         # ...     a = x + "!"
@@ -537,7 +539,7 @@ def liveness(ir: IR, /, *, out_used: UsedTree | None = None) -> Liveness:
         # ...     return a, b
         # >>> liveness(ir, out_used=(True, False))[-1]
         # {a}
-        live_after = set(var_leaves(utils.mask(ir.out_tree, out_used)))
+        live_after = set(var_leaves(tree.mask(ir.out_tree, out_used)))
 
     liveness: Liveness = [set() for _ in range(len(ir.eqns) + 1)]
     liveness[-1] = live_after
@@ -863,7 +865,7 @@ def apply_dunder(dunder: Dunder, box: TraceBox, /, *operands, **kwargs):
 
 
 def assert_foldable(prim: core.Prim, value: Tree) -> None:
-    traced_values = [x for x in utils.tree.leaves(value) if isinstance(x, TraceBox)]
+    traced_values = [x for x in tree.leaves(value) if isinstance(x, TraceBox)]
     assert not traced_values, (
         f"Cannot evaluate {prim.name} in af.fold() because it depends on traced values "
         f"{traced_values!r}. Capture concrete dependencies or move this computation outside af.fold()."
@@ -877,7 +879,7 @@ class TraceInterp(core.Interp):
         self.eqns: list[Eqn] = []
 
     def box(self, value: Tree, /) -> Tree:
-        return utils.tree.map(lambda v: TraceBox(owner=self, var=v) if is_var(v) else v, value)
+        return tree.map(lambda v: TraceBox(owner=self, var=v) if is_var(v) else v, value)
 
     def unbox(self, value: Tree, /) -> Tree:
         def func(value, /):
@@ -896,7 +898,7 @@ class TraceInterp(core.Interp):
             # >>> ir2 = af.trace(second_func)("input")
             return value.var
 
-        return utils.tree.map(func, value)
+        return tree.map(func, value)
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params) -> Tree:
         if fold_flag.get():
@@ -928,16 +930,15 @@ class TraceInterp(core.Interp):
                 hash(value)
             return value
 
-        def to_concrete(leaf, value):
-            assert not is_var(value), f"Unexpected variable at {'/'.join(map(str, leaf))}"
-            return value
-
         in_tree = self.unbox(in_tree)
         params = self.unbox(params)
-        params = utils.tree.map_with_path(to_concrete, params)
+        values, spec = tree.flatten(params)
+        for path, value in zip(spec.paths(), values):
+            assert not is_var(value), f"Unexpected variable at {'/'.join(map(str, path))}"
+        params = spec.unflatten(values)
 
-        in_tree = utils.tree.map(to_in_ir_atom, in_tree)
-        in_aval_tree = utils.tree.map(aval_if_var, in_tree)
+        in_tree = tree.map(to_in_ir_atom, in_tree)
+        in_aval_tree = tree.map(aval_if_var, in_tree)
         out_aval_tree = core.r_abstract.get(prim)(in_aval_tree, **params)
 
         def to_out_ir_atom(x: Any) -> Any:
@@ -946,7 +947,7 @@ class TraceInterp(core.Interp):
             # this is basically delegated to the user to handle
             return Var.fresh(aval=x) if isinstance(x, core.AVal) else x
 
-        out_tree = utils.tree.map(to_out_ir_atom, out_aval_tree)
+        out_tree = tree.map(to_out_ir_atom, out_aval_tree)
         if not no_stage_flag.get():
             self.eqns.append(Eqn(prim, in_tree, out_tree, params, active_tags.get()))
         return self.box(out_tree)
@@ -985,7 +986,7 @@ def trace[*A, R](func: Callable[[*A], R], /) -> Callable[[*A], IR[*A, R]]:
 
     @ft.wraps(func)
     def wrapper(*args: *A) -> IR[*A, R]:
-        in_tree = utils.tree.map(to_var, args, is_leaf=is_traceable)
+        in_tree = tree.map(to_var, args, is_leaf=is_traceable)
         with core.using_interp(TraceInterp()) as tracer:
             out_trace_tree = func(*cast(tuple, tracer.box(in_tree)))
         out_tree = tracer.unbox(out_trace_tree)

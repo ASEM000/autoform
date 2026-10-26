@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import functools as ft
+from typing import Any
 
 import autoform.src.ad as ad
 import autoform.src.core as core
@@ -24,7 +25,7 @@ import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 type TreePair = tuple[Tree, Tree]
 
 

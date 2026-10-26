@@ -14,6 +14,7 @@
 
 import pytest
 
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
 
@@ -100,7 +101,7 @@ def test_dispatch_pytrees(types, values):
 
 @pytest.fixture
 def point_type():
-    @utils.tree.dataclasses.dataclass
+    @tree.dataclass
     class Point:
         x: int
         y: int
@@ -127,18 +128,6 @@ def test_dispatch_custom_pytree(point_type):
 def test_batch_size(columns, axes, expected):
     spec = utils.batch_spec(columns, axes)
     assert (spec.num_children if spec is not None else None) == expected
-
-
-@pytest.mark.parametrize(
-    "right, expected",
-    [
-        pytest.param(("a", ["b", "c"]), True, id="equal"),
-        pytest.param(("a", ("b", "c")), False, id="structure"),
-        pytest.param(("a", ["b", "d"]), False, id="leaves"),
-    ],
-)
-def test_tree_equal(right, expected):
-    assert utils.tree_equal(("a", ["b", "c"]), right) is expected
 
 
 @pytest.mark.parametrize(

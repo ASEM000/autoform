@@ -29,6 +29,7 @@ import autoform.src.numeric as numeric
 import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, cube, execute, square
 
@@ -490,7 +491,7 @@ def test_wrapper_uses_derivative_space(transform, space, change):
     assert ir.call((text,), (delta,)) == ((text,), (delta,))
     assert isinstance(core.Zero(space.map(core.avalof(text))).aval, AValChange)
     nested_derivatives = transform(ir).in_tree[1]
-    assert all(isinstance(v.aval, AValChange) for v in utils.tree.leaves(nested_derivatives))
+    assert all(isinstance(v.aval, AValChange) for v in tree.leaves(nested_derivatives))
 
 
 class TestCotangentHelpers:
@@ -1390,4 +1391,4 @@ def test_pullback_does_not_recompute_nested_forward(executor, nest):
         args = (("x",), "c")
     out, _ = executor(ad.pullback(ir), *args)
 
-    assert sorted(seen) == sorted(utils.tree.leaves(out))
+    assert sorted(seen) == sorted(tree.leaves(out))

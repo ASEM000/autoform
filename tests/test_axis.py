@@ -24,7 +24,7 @@ import autoform.src.core as core
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 from tests import AValBlob, aexecute, angle_text, append_bang, bracket_text, execute
 
 
@@ -57,7 +57,7 @@ def test_check_batch_aval(value):
 
 
 def test_join_custom_container():
-    @utils.tree.dataclasses.dataclass
+    @tree.dataclass
     class Pair:
         x: object
         y: object
@@ -324,7 +324,7 @@ def test_numeric_program_with_broadcast_input():
 
 def batch_primitive(sample_output, batch_rule, traced="a"):
     p_batch_output = core.Prim("batch_output")
-    extend.r_abstract.set(p_batch_output, lambda _: utils.tree.map(core.avalof, sample_output))
+    extend.r_abstract.set(p_batch_output, lambda _: tree.map(core.avalof, sample_output))
     extend.r_batch.set(p_batch_output, batch_rule)
     return axis.batch(stage.trace(p_batch_output.bind)(traced))
 
