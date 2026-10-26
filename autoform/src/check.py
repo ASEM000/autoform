@@ -76,34 +76,39 @@ async def apullback_bwd_check(in_tree: Tree, /, *, aval: core.AVal) -> Tree:
 
 
 def batch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
-    size, batched, value = in_tree
-    if (spec := utils.batch_spec(value, batched)) is None:
-        return p_typecheck.bind(value, aval=aval), batched
-    if spec.is_leaf() or spec.num_children != size:
-        raise TypeError(f"Expected a batch container with {size} items, got {value!r}")
-    if not size:
-        return value, batched
-    checked = [
-        p_typecheck.bind(utils.batch_index(value, batched, b), aval=aval) for b in range(size)
-    ]
-    out = utils.batch_transpose(size, batched, spec.unflatten(checked))
-    return tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
+    spec, in_axes, value = in_tree
+
+    def validate(use, x):
+        if use:
+            actual = tree.structure(x, is_leaf=lambda node: node is not x)
+            if actual != spec or actual.is_leaf():
+                raise TypeError(f"Expected a batch container matching {spec}, got {x!r}")
+
+    tree.map(validate, in_axes, value)
+    if not spec.num_leaves:
+        return value, in_axes
+    items = tree.unstack(spec, in_axes, value)
+    checked = [p_typecheck.bind(x, aval=aval) for x in items]
+    out = tree.stack(spec, in_axes, checked)
+    return out, in_axes
 
 
 async def abatch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
-    size, batched, value = in_tree
-    if (spec := utils.batch_spec(value, batched)) is None:
-        return await p_typecheck.abind(value, aval=aval), batched
-    if spec.is_leaf() or spec.num_children != size:
-        raise TypeError(f"Expected a batch container with {size} items, got {value!r}")
-    if not size:
-        return value, batched
-    checked = [
-        await p_typecheck.abind(utils.batch_index(value, batched, b), aval=aval)
-        for b in range(size)
-    ]
-    out = utils.batch_transpose(size, batched, spec.unflatten(checked))
-    return tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
+    spec, in_axes, value = in_tree
+
+    def validate(use, x):
+        if use:
+            actual = tree.structure(x, is_leaf=lambda node: node is not x)
+            if actual != spec or actual.is_leaf():
+                raise TypeError(f"Expected a batch container matching {spec}, got {x!r}")
+
+    tree.map(validate, in_axes, value)
+    if not spec.num_leaves:
+        return value, in_axes
+    items = tree.unstack(spec, in_axes, value)
+    checked = [await p_typecheck.abind(x, aval=aval) for x in items]
+    out = tree.stack(spec, in_axes, checked)
+    return out, in_axes
 
 
 core.r_impl.set(p_typecheck, impl_check)

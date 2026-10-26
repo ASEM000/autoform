@@ -85,6 +85,3 @@ from autoform.src.string import p_render as p_render
 from autoform.src.untyped import AUntyped as AUntyped
 from autoform.src.untyped import Untyped as Untyped
 from autoform.src.untyped import p_untyped as p_untyped
-from autoform.src.utils import batch_index as batch_index
-from autoform.src.utils import batch_spec as batch_spec
-from autoform.src.utils import batch_transpose as batch_transpose

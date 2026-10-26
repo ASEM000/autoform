@@ -88,19 +88,14 @@ The abstract rule describes the output without calling the runtime implementatio
 
 ### Primitive Transform Rules
 
-Execution and tracing alone do not define transformation behavior. A batching rule receives the batch size, input axes, and input values, then returns the result and output axes. The lookup example supports either a batch of queries or one query shared across the batch.
+Execution and tracing alone do not define transformation behavior. A batching rule receives the common container spec, input axes, and input values, then returns the result and output axes. Calls with entirely shared inputs bypass the batching rule.
 
 ```python
 def batch_lookup(in_tree, /):
-    batch_size, axes, values = in_tree
-    del batch_size
-    query_axis = axes
-    queries = values
-
-    if not query_axis:
-        return p_lookup.bind(queries), False
-
-    return [p_lookup.bind(query) for query in queries], True
+    spec, in_axes, values = in_tree
+    items = af.tree.unstack(spec, in_axes, values)
+    results = (p_lookup.bind(query) for query in items)
+    return af.tree.stack(spec, True, results), True
 
 
 afe.r_batch.set(p_lookup, batch_lookup)
@@ -199,13 +194,10 @@ The batch hook should also return the tree for the output axes. Here, it keeps t
 ```python
 @bracket.set_batch
 def batch_bracket(in_tree, /):
-    batch_size, axes, values = in_tree
-    del batch_size
-    (text_axis,) = axes
-    (texts,) = values
-    if not text_axis:
-        return bracket(texts), False
-    return [bracket(text) for text in texts], True
+    spec, in_axes, values = in_tree
+    items = af.tree.unstack(spec, in_axes, values)
+    results = (bracket(text) for (text,) in items)
+    return af.tree.stack(spec, True, results), True
 
 
 assert af.batch(bracket_ir).call(["a", "b"]) == ["[a]", "[b]"]
@@ -216,7 +208,7 @@ assert af.batch(bracket_ir, in_axes=False).call("a") == "[a]"
 | --- | --- | --- |
 | `set_pushforward` | `(primals, tangents)` | `(output, tangent)` |
 | `set_pullback` | `((primals, output), feedback)` | Input-shaped feedback. |
-| `set_batch` | `(batch_size, axes, values)` | `(output, output_axes)` |
+| `set_batch` | `(spec, in_axes, values)` | `(output, out_axes)` |
 
 The pullback hook replaces the backward sweep of the pullback transform. The forward sweep still records the primal inputs and output.
 

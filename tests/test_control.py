@@ -775,6 +775,52 @@ def test_switch_rejects_different_literal_branch_outputs():
         stage.trace(lambda key: control.switch(key, branches))("L")
 
 
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_batched_switch_validates_keys_before_running_branches(executor):
+    calls = []
+    p_mark = core.Prim("mark")
+
+    def impl(x):
+        calls.append(x)
+        return x
+
+    core.r_abstract.set(p_mark, lambda x: x)
+    core.r_impl.set(p_mark, impl)
+    core.r_aimpl.set(p_mark, utils.asyncify(impl))
+    branches = {"L": stage.trace(p_mark.bind)("x")}
+    ir = axis.batch(stage.trace(switch_program(branches))("L", "x"))
+    with pytest.raises(KeyError, match="R"):
+        executor(ir, ["L", "R"], ["x", "y"])
+    assert calls == []
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    "keys, values, expected",
+    [
+        pytest.param(("L", "R"), ("x", "y"), ("Lx", "Ry"), id="tuple"),
+        pytest.param(
+            {"y": "L", "x": "R"},
+            {"y": "x", "x": "y"},
+            {"y": "Lx", "x": "Ry"},
+            id="dict",
+        ),
+    ],
+)
+def test_batched_switch_preserves_container(executor, keys, values, expected):
+    ir = axis.batch(switch_ir({"L": "L", "R": "R"}))
+    assert tree.equal(executor(ir, keys, values), expected)
+
+
+@pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
+def test_batched_switch_preserves_batch_valued_output(executor):
+    branch = axis.batch(stage.trace(lambda x: string.concat(x, "!"))("x"))
+    branches = {"L": branch}
+    ir = stage.trace(switch_program(branches))("L", ["x", "y"])
+    actual = executor(axis.batch(ir), ["L", "L"], [["x", "y"], ["a", "b"]])
+    assert actual == [["x!", "a!"], ["y!", "b!"]]
+
+
 def switch_ir(prefixes):
     branches = {
         key: stage.trace(lambda x, prefix=prefix: string.concat(prefix, x))("X")

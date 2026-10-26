@@ -670,34 +670,20 @@ def abstract_fill(in_tree: Tree, /) -> Tree:
 
 
 def batch_fill(in_tree: Tree, /) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        result = p_fill.bind(in_values)
-        out_batched = tree.map(lambda _: False, result)
-        return result, out_batched
-
-    results = [p_fill.bind(utils.batch_index(in_values, in_batched, b)) for b in range(batch_size)]
-    out_batched = tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
-    return out_ib, out_batched
+    spec, in_axes, in_values = in_tree
+    items = tree.unstack(spec, in_axes, in_values)
+    results = [p_fill.bind(x) for x in items]
+    out_axes = tree.map(lambda _: True, results[0])
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_fill(in_tree: Tree, /) -> TreePair:
-    batch_size, in_batched, in_values = in_tree
-
-    if (spec := utils.batch_spec(in_values, in_batched)) is None:
-        result = await p_fill.abind(in_values)
-        out_batched = tree.map(lambda _: False, result)
-        return result, out_batched
-
-    inputs = [(utils.batch_index(in_values, in_batched, b),) for b in range(batch_size)]
-    in0, *_ = inputs
-    ir = stage.trace(p_fill.bind)(*in0)
-    results = await order.p_fanout.abind(inputs, irs=[ir] * batch_size)
-    out_batched = tree.map(lambda _: True, results[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, spec.unflatten(results))
-    return out_ib, out_batched
+    spec, in_axes, in_values = in_tree
+    inputs = [(x,) for x in tree.unstack(spec, in_axes, in_values)]
+    ir = stage.trace(p_fill.bind)(*inputs[0])
+    results = await order.p_fanout.abind(inputs, irs=[ir] * len(inputs))
+    out_axes = tree.map(lambda _: True, results[0])
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def spec_description(node: Spec) -> str | None:

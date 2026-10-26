@@ -138,11 +138,10 @@ def pull_bwd_untyped(in_tree: Tree, /) -> Tree:
 
 
 def batch_untyped(in_tree: Tree, /) -> tuple[Tree, bool]:
-    size, batched, x = in_tree
-    if not batched:
-        return untyped(x), False
-    spec = utils.batch_spec(x, batched)
-    return spec.unflatten([untyped(utils.batch_index(x, batched, b)) for b in range(size)]), True
+    spec, in_axes, in_values = in_tree
+    items = tree.unstack(spec, in_axes, in_values)
+    results = (untyped(x) for x in items)
+    return tree.stack(spec, True, results), True
 
 
 core.r_impl.set(p_untyped, impl_untyped)

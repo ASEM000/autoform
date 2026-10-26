@@ -88,28 +88,16 @@ def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
 
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):
-    batch_size, in_batched, weight = in_tree
-
-    if utils.batch_spec(weight, in_batched) is None:
-        p_factor.bind(weight, name=name)
-        return (), ()
-
-    for b in range(batch_size):
-        p_factor.bind(utils.batch_index(weight, in_batched, b), name=name)
+    spec, in_axes, weight = in_tree
+    for x in tree.unstack(spec, in_axes, weight):
+        p_factor.bind(x, name=name)
     return (), ()
 
 
 async def abatch_factor(in_tree, /, *, name: Hashable | None = None):
-    batch_size, in_batched, weight = in_tree
-
-    if utils.batch_spec(weight, in_batched) is None:
-        await p_factor.abind(weight, name=name)
-        return (), ()
-
-    await asyncio.gather(*[
-        p_factor.abind(utils.batch_index(weight, in_batched, b), name=name)
-        for b in range(batch_size)
-    ])
+    spec, in_axes, weight = in_tree
+    items = tree.unstack(spec, in_axes, weight)
+    await asyncio.gather(*(p_factor.abind(x, name=name) for x in items))
     return (), ()
 
 
@@ -216,31 +204,21 @@ def pullback_bwd_weight_call(in_tree, /, *, ir: stage.IR):
 
 
 def batch_weight_call(in_tree, /, *, ir: stage.IR):
-    batch_size, in_batched, in_values = in_tree
-
-    if utils.batch_spec(in_values, in_batched) is None:
-        return p_weight_call.bind(in_values, ir=ir), False
-
+    spec, in_axes, in_values = in_tree
     weight_ir = weight(ir)
-    inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = order.p_fanout.bind(inputs, irs=[weight_ir] * batch_size)
-    out_batched = tree.map(lambda _: True, out_bi[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
-    return out_ib, out_batched
+    inputs = tree.unstack(spec, in_axes, in_values)
+    results = order.p_fanout.bind(inputs, irs=[weight_ir] * len(inputs))
+    out_axes = tree.map(lambda _: True, results[0])
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_weight_call(in_tree, /, *, ir: stage.IR):
-    batch_size, in_batched, in_values = in_tree
-
-    if utils.batch_spec(in_values, in_batched) is None:
-        return await p_weight_call.abind(in_values, ir=ir), False
-
+    spec, in_axes, in_values = in_tree
     weight_ir = weight(ir)
-    inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
-    out_bi = await order.p_fanout.abind(inputs, irs=[weight_ir] * batch_size)
-    out_batched = tree.map(lambda _: True, out_bi[0])
-    out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
-    return out_ib, out_batched
+    inputs = tree.unstack(spec, in_axes, in_values)
+    results = await order.p_fanout.abind(inputs, irs=[weight_ir] * len(inputs))
+    out_axes = tree.map(lambda _: True, results[0])
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def dce_weight_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

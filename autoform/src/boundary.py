@@ -25,7 +25,6 @@ import autoform.src.axis as axis
 import autoform.src.core as core
 import autoform.src.stage as stage
 import autoform.src.tree as tree
-import autoform.src.utils as utils
 
 type Tree[T] = Any
 type TreePair = tuple[Tree, Tree]
@@ -91,18 +90,12 @@ async def apullback_bwd_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params)
 
 def batch_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
     _, in_axes, values = in_tree
-    if utils.batch_spec(values, in_axes) is None:
-        out = ir.call(*values)
-        return out, tree_batched_like(out, False)
     out = axis.batch(ir, in_axes=in_axes).call(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
 
 async def abatch_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:
     _, in_axes, values = in_tree
-    if utils.batch_spec(values, in_axes) is None:
-        out = await ir.acall(*values)
-        return out, tree_batched_like(out, False)
     out = await axis.batch(ir, in_axes=in_axes).acall(*values)
     return out, tree_batched_like(ir.out_tree, True)
 
@@ -238,7 +231,7 @@ class CustomFunc:
         return rule
 
     def set_batch[R: Callable[..., tuple[Tree, Tree[bool]]]](self, rule: R, /) -> R:
-        """Register ``rule(in_tree, /, **params) -> (outputs, output_axes)``.
+        """Register ``rule(in_tree, /, **params) -> (outputs, out_axes)``.
 
         Example:
             >>> import autoform as af
@@ -247,10 +240,10 @@ class CustomFunc:
             ...     return "[" + x + "]"
             >>> @bracket_batch_example.set_batch
             ... def bracket_batch_rule(in_tree, /):
-            ...     batch_size, axes, values = in_tree
-            ...     assert batch_size == 2
+            ...     spec, in_axes, values = in_tree
+            ...     assert spec.num_leaves == 2
             ...     (xs,) = values
-            ...     (x_axis,) = axes
+            ...     (x_axis,) = in_axes
             ...     assert x_axis is True
             ...     return [("<" + x + ">") for x in xs], True
             >>> ir = af.trace(lambda x: bracket_batch_example(x))("seed")
@@ -272,10 +265,10 @@ class CustomFunc:
             ...     return "[" + x + "]"
             >>> @bracket_abatch_example.aset_batch
             ... async def bracket_abatch_rule(in_tree, /):
-            ...     batch_size, axes, values = in_tree
-            ...     assert batch_size == 2
+            ...     spec, in_axes, values = in_tree
+            ...     assert spec.num_leaves == 2
             ...     (xs,) = values
-            ...     (x_axis,) = axes
+            ...     (x_axis,) = in_axes
             ...     assert x_axis is True
             ...     return [("async <" + x + ">") for x in xs], True
             >>> ir = af.trace(lambda x: bracket_abatch_example(x))("seed")
@@ -315,7 +308,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
     - Pullback backward:
       ``rule(((primals, output), cotangent), /, **params) -> cotangents``.
     - Batch:
-      ``rule((batch_size, axes, values), /, **params) -> (outputs, output_axes)``.
+      ``rule((spec, in_axes, values), /, **params) -> (outputs, out_axes)``.
 
     Synchronous and asynchronous registrations are independent. Use both
     ``set_*`` and ``aset_*`` when both execution modes need custom behavior.
@@ -375,10 +368,10 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
 
         >>> @bracket.set_batch
         ... def bracket_batch(in_tree, /):
-        ...     batch_size, axes, values = in_tree
-        ...     assert batch_size == 2
+        ...     spec, in_axes, values = in_tree
+        ...     assert spec.num_leaves == 2
         ...     (xs,) = values
-        ...     (x_axis,) = axes
+        ...     (x_axis,) = in_axes
         ...     assert x_axis is True
         ...     return [("<" + x + ">") for x in xs], True
         >>> af.batch(base).call(["a", "b"])
