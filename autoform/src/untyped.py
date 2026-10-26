@@ -22,9 +22,10 @@ from typing import Any, Self
 import autoform.src.core as core
 import autoform.src.pp as pp
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 
 class AUntyped(core.AVal):
@@ -56,7 +57,7 @@ class Untyped:
         return f"{type(self).__name__}()"
 
 
-utils.tree.register_node(
+tree.register_node(
     Untyped,
     lambda untyped: ((untyped.value,), None, ("value",)),
     lambda _, children: Untyped(*children),
@@ -82,16 +83,16 @@ core.s_cotangent.set(AUntyped, lambda aval: aval)
 p_untyped = core.Prim("untyped")
 
 
-def untyped(tree: Tree, /) -> Untyped:
+def untyped(value: Tree, /) -> Untyped:
     """Wrap input as a single untyped value.
 
-    Useful when ``tree`` is an arbitrary Python object or its structure is only known at run time.
+    Useful when ``value`` is an arbitrary Python object or its structure is only known at run time.
 
     Args:
-        tree: any Python value.
+        value: any Python value.
 
     Returns:
-        An :class:`Untyped` holding ``tree``.
+        An :class:`Untyped` holding ``value``.
 
     Example:
         >>> import autoform as af
@@ -103,7 +104,7 @@ def untyped(tree: Tree, /) -> Untyped:
         >>> af.trace(lambda x, h: x)("seed", handle).in_tree[1].aval
         AUntyped()
     """
-    return p_untyped.bind(tree)
+    return p_untyped.bind(value)
 
 
 def impl_untyped(in_tree: Tree, /) -> Untyped | core.Zero:

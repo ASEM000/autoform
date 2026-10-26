@@ -24,9 +24,10 @@ import autoform.src.ad as ad
 import autoform.src.core as core
 import autoform.src.pp as pp
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 
 # ==================================================================================================
@@ -96,7 +97,7 @@ p_render = core.Prim("render")
 def render(doc, /, *, width: int = 80) -> str:
     """Render a pytree document"""
     assert type(width) is int and width > 0, "width must be a positive integer"
-    doc = utils.tree.map(ft.partial(pp.pretty, default=lambda value: value), doc)
+    doc = tree.map(ft.partial(pp.pretty, default=lambda value: value), doc)
     return p_render.bind(doc, width=width)
 
 
@@ -118,7 +119,7 @@ def pull_bwd_render(in_tree, /, **params):
             return feedback
         return core.s_cotangent.zeros_like(value)
 
-    return utils.tree.map(cotangent, doc)
+    return tree.map(cotangent, doc)
 
 
 def batch_render(in_tree, /, **params):

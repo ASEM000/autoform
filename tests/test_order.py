@@ -24,6 +24,7 @@ import autoform.src.intercept as intercept
 import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 from tests import aexecute, dependent_formats, execute, switch_program
 
@@ -416,7 +417,7 @@ def multiple_dependencies(x):
 def test_depends_transforms(executor, transform, args, expected):
     ir = stage.trace(dependent_formats)("x")
     [barrier] = [e for e in ir.eqns if e.prim is order.p_depends]
-    assert len(utils.tree.leaves(barrier.in_tree)) == 2
+    assert len(tree.leaves(barrier.in_tree)) == 2
     ir = transform(ir)
     actual = executor(ir, *args)
     assert actual == expected

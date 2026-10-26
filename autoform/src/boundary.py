@@ -24,16 +24,17 @@ import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.core as core
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 type TreePair = tuple[Tree, Tree]
 
 
 def trace_custom_func(
     func: Callable[..., Any], in_tree: Tree, params: dict[str, Any], /
 ) -> stage.IR:
-    in_tree = utils.tree.map(lambda x: stage.Var.fresh(aval=core.avalof(x)), in_tree)
+    in_tree = tree.map(lambda x: stage.Var.fresh(aval=core.avalof(x)), in_tree)
     with core.using_interp(stage.TraceInterp()) as trace_interpreter:
         out_trace_tree = func(*trace_interpreter.box(in_tree), **params)
     out_tree = trace_interpreter.unbox(out_trace_tree)
@@ -41,7 +42,7 @@ def trace_custom_func(
 
 
 def tree_batched_like(value: Tree, batched: bool, /) -> Tree:
-    return utils.tree.map(lambda _: batched, value)
+    return tree.map(lambda _: batched, value)
 
 
 def impl_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
@@ -53,7 +54,7 @@ async def aimpl_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree
 
 
 def abstract_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> Tree:
-    return utils.tree.map(stage.aval_if_var, ir.out_tree)
+    return tree.map(stage.aval_if_var, ir.out_tree)
 
 
 def pushforward_custom_call(in_tree: Tree, /, *, ir: stage.IR, **params) -> TreePair:

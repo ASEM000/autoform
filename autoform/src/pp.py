@@ -30,9 +30,9 @@ from typing import Any
 
 from optree import GetAttrEntry
 
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 
 rules: dict[type, Callable[[Any], Tree]] = {}
@@ -50,7 +50,7 @@ def register[R: Callable[[Any], Tree]](cls: type, rule: R, /) -> R:
 def pretty(value, default=None):
     if rule := rules.get(type(value)):
         return rule(value)
-    children, spec = utils.tree.flatten(value, is_leaf=lambda child: child is not value)
+    children, spec = tree.flatten(value, is_leaf=lambda child: child is not value)
     if value is not None and not spec.is_leaf():
         return style(type(value).__name__, Theme.TYPE), bracket("(", map(pretty, children), ")")
     return style(repr(value), literal_color(value)) if default is None else default(value)
@@ -73,7 +73,7 @@ def is_doc(node):
 
 
 def children(doc):
-    return reversed(utils.tree.leaves(doc, is_leaf=is_doc))
+    return reversed(tree.leaves(doc, is_leaf=is_doc))
 
 
 def rgb(color: int, /) -> tuple[int, ...]:
@@ -140,30 +140,30 @@ class Style(Doc):
         self.codes = codes
 
 
-utils.tree.register_node(
+tree.register_node(
     Line,
     lambda n: ((), n.alt, ()),
     lambda a, _: Line(a),
 )
-utils.tree.register_node(
+tree.register_node(
     Group,
     lambda n: ((n.doc,), None, ("doc",)),
     lambda _, c: Group(*c),
     path_entry_type=GetAttrEntry,
 )
-utils.tree.register_node(
+tree.register_node(
     Nest,
     lambda n: ((n.doc,), n.amount, ("doc",)),
     lambda a, c: Nest(a, *c),
     path_entry_type=GetAttrEntry,
 )
-utils.tree.register_node(
+tree.register_node(
     Align,
     lambda n: ((n.doc,), None, ("doc",)),
     lambda _, c: Align(*c),
     path_entry_type=GetAttrEntry,
 )
-utils.tree.register_node(
+tree.register_node(
     Style,
     lambda n: ((n.doc,), n.codes, ("doc",)),
     lambda k, c: Style(*c, k),

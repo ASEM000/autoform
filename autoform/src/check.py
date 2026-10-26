@@ -16,10 +16,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import autoform.src.core as core
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 
 # ==================================================================================================
@@ -84,7 +87,7 @@ def batch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
         p_typecheck.bind(utils.batch_index(value, batched, b), aval=aval) for b in range(size)
     ]
     out = utils.batch_transpose(size, batched, spec.unflatten(checked))
-    return utils.tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
+    return tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
 
 
 async def abatch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
@@ -100,7 +103,7 @@ async def abatch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree
         for b in range(size)
     ]
     out = utils.batch_transpose(size, batched, spec.unflatten(checked))
-    return utils.tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
+    return tree.map(lambda b, x: x if b else utils.index(x, 0), batched, out), batched
 
 
 core.r_impl.set(p_typecheck, impl_check)

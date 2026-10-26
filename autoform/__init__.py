@@ -38,7 +38,7 @@ from autoform.src.path import weight as weight
 from autoform.src.stage import fold as fold
 from autoform.src.stage import tag as tag
 from autoform.src.stage import trace as trace
+from autoform.src.tree import NAMESPACE as NAMESPACE
 from autoform.src.untyped import untyped as untyped
-from autoform.src.utils import PYTREE_NAMESPACE as PYTREE_NAMESPACE
 
 __version__ = "0.3.0"

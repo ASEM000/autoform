@@ -26,6 +26,7 @@ import autoform.src.memo as memo
 import autoform.src.numeric as numeric
 import autoform.src.order as order
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
 p_factor = core.Prim("factor")
@@ -164,7 +165,7 @@ def weight(ir: stage.IR, /) -> stage.IR:
 
     in_tree = ir.in_tree
     out_tree = (
-        utils.tree.map(make_out, ir.out_tree),
+        tree.map(make_out, ir.out_tree),
         stage.Var.fresh(aval=core.avalof(0.0)),
     )
     eqn = stage.Eqn(p_weight_call, in_tree, out_tree, dict(ir=ir))
@@ -189,7 +190,7 @@ async def aimpl_weight_call(in_tree, /, *, ir: stage.IR):
 
 def abstract_weight_call(in_tree, /, *, ir: stage.IR):
     del in_tree
-    return utils.tree.map(stage.aval_if_var, ir.out_tree), core.avalof(0.0)
+    return tree.map(stage.aval_if_var, ir.out_tree), core.avalof(0.0)
 
 
 def unsupported_weight_call_transform(transform: str) -> None:
@@ -223,7 +224,7 @@ def batch_weight_call(in_tree, /, *, ir: stage.IR):
     weight_ir = weight(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
     out_bi = order.p_fanout.bind(inputs, irs=[weight_ir] * batch_size)
-    out_batched = utils.tree.map(lambda _: True, out_bi[0])
+    out_batched = tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 
@@ -237,7 +238,7 @@ async def abatch_weight_call(in_tree, /, *, ir: stage.IR):
     weight_ir = weight(ir)
     inputs = [utils.batch_index(in_values, in_batched, b) for b in range(batch_size)]
     out_bi = await order.p_fanout.abind(inputs, irs=[weight_ir] * batch_size)
-    out_batched = utils.tree.map(lambda _: True, out_bi[0])
+    out_batched = tree.map(lambda _: True, out_bi[0])
     out_ib = utils.batch_transpose(batch_size, out_batched, out_bi)
     return out_ib, out_batched
 

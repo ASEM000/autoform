@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import functools as ft
+from typing import Any
 
 import autoform.src.ad as ad
 import autoform.src.core as core
@@ -24,9 +25,10 @@ import autoform.src.dead as dead
 import autoform.src.order as order
 import autoform.src.pp as pp
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 
 
 zip = utils.strict_zip
@@ -62,9 +64,9 @@ class ABatch(core.AVal):
         match other:
             case ABatch(base=base) | core.Zero(aval=ABatch(base=base)):
                 return type(self)(self.base.join(base))
-            case _ if not utils.tree.is_leaf(other):
+            case _ if not tree.is_leaf(other):
                 base = self.base
-                for x in utils.tree.leaves(other, is_leaf=lambda x: x is not other):
+                for x in tree.leaves(other, is_leaf=lambda x: x is not other):
                     base = base.join(x)
                 return type(self)(base)
         raise TypeError(f"Cannot join {self!r} and {other!r}")
@@ -87,10 +89,10 @@ def is_axis_spec(v) -> bool:
 
 
 def assert_trees(b: Tree, out_ir: Tree, prim_name: str) -> Tree:
-    expected_b = utils.tree.map(lambda _: False, out_ir)
+    expected_b = tree.map(lambda _: False, out_ir)
     is_bool_leaf = lambda v: isinstance(v, bool)
-    b_spec = utils.tree.structure(b, is_leaf=is_bool_leaf)
-    expected_spec = utils.tree.structure(expected_b, is_leaf=is_bool_leaf)
+    b_spec = tree.structure(b, is_leaf=is_bool_leaf)
+    expected_spec = tree.structure(expected_b, is_leaf=is_bool_leaf)
     if b_spec != expected_spec:
         raise ValueError(
             f"Primitive '{prim_name}' batch_rule returned out_batched with structure {b_spec}, "
@@ -102,9 +104,9 @@ def assert_trees(b: Tree, out_ir: Tree, prim_name: str) -> Tree:
 
 def broadcast_batch_out(spec, out_v: Tree, out_b: Tree[bool], /) -> Tree:
     batch_size = spec.num_children
-    out_spec = utils.tree.structure(out_b, is_leaf=is_axis_spec)
+    out_spec = tree.structure(out_b, is_leaf=is_axis_spec)
     out_flat = out_spec.flatten_up_to(out_v)
-    out_flat_b = utils.tree.leaves(out_b, is_leaf=is_axis_spec)
+    out_flat_b = tree.leaves(out_b, is_leaf=is_axis_spec)
 
     def broadcast_leaf(v, b):
         return v if b else spec.unflatten([v] * batch_size)
@@ -116,9 +118,9 @@ def unbatch_zeros(in_v: Tree, in_b: Tree[bool], /) -> TreePair:
     def is_batched_zero(b, v):
         return b and isinstance(v, core.Zero) and isinstance(core.avalof(v), ABatch)
 
-    is_zero = utils.tree.map(is_batched_zero, in_b, in_v)
-    out_v = utils.tree.map(lambda z, v: core.Zero(v.aval.base) if z else v, is_zero, in_v)
-    out_b = utils.tree.map(lambda z, b: b and not z, is_zero, in_b)
+    is_zero = tree.map(is_batched_zero, in_b, in_v)
+    out_v = tree.map(lambda z, v: core.Zero(v.aval.base) if z else v, is_zero, in_v)
+    out_b = tree.map(lambda z, b: b and not z, is_zero, in_b)
     return out_v, out_b
 
 
@@ -152,8 +154,8 @@ def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
         ['Hello, x0', 'Hello, x1', 'Hello, x2']
     """
     assert isinstance(ir, stage.IR), f"Expected IR, got {type(ir)}"
-    in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
-    has_batched = any(utils.tree.leaves(in_b, is_leaf=is_axis_spec))
+    in_b = tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
+    has_batched = any(tree.leaves(in_b, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
         return ABatch(aval) if is_batched else aval
@@ -170,8 +172,8 @@ def batch(ir: stage.IR, /, *, in_axes: Tree[bool] = True) -> stage.IR:
             return stage.Var.fresh(aval=maybe_batched(core.avalof(atom), True))
         return atom
 
-    in_v_ir = utils.tree.map(make_in, ir.in_tree, in_b)
-    out_v_ir = utils.tree.map(make_out, ir.out_tree)
+    in_v_ir = tree.map(make_in, ir.in_tree, in_b)
+    out_v_ir = tree.map(make_out, ir.out_tree)
     eqn = stage.Eqn(p_batch_call, in_v_ir, out_v_ir, dict(ir=ir, in_axes=in_axes))
     return stage.IR([eqn], in_v_ir, out_v_ir)
 
@@ -188,9 +190,9 @@ class BatchBox:
 def avalof_batch_box(box: BatchBox, /) -> core.AVal:
     if not box.batched:
         return core.avalof(box.value)
-    if utils.tree.is_leaf(box.value):
+    if tree.is_leaf(box.value):
         raise TypeError("Expected a batch container to infer BatchBox aval")
-    if not (items := utils.tree.leaves(box.value, is_leaf=lambda x: x is not box.value)):
+    if not (items := tree.leaves(box.value, is_leaf=lambda x: x is not box.value)):
         raise TypeError("Cannot infer BatchBox aval from an empty batch")
     item0, *rest = items
     aval = core.avalof(item0)
@@ -214,9 +216,9 @@ class BatchInterp(core.Interp):
         # NOTE(asem): ``b`` is a prefix spec, not necessarily the same structure
         # as ``v``. For example, v=["a", "b"] and b=True means the whole list is
         # one batched leaf, not two leaves.
-        spec = utils.tree.structure(b, is_leaf=is_axis_spec)
+        spec = tree.structure(b, is_leaf=is_axis_spec)
         v = spec.flatten_up_to(v)
-        b = utils.tree.leaves(b, is_leaf=is_axis_spec)
+        b = tree.leaves(b, is_leaf=is_axis_spec)
         return spec.unflatten(BatchBox(self, v, b) for v, b in zip(v, b))
 
     def unbox(self, v: Tree, /) -> TreePair:
@@ -226,7 +228,7 @@ class BatchInterp(core.Interp):
         def batched(v):
             return v.batched if isinstance(v, BatchBox) and v.owner is self else False
 
-        return utils.tree.map(value, v), utils.tree.map(batched, v)
+        return tree.map(value, v), tree.map(batched, v)
 
     def interpret(self, prim: core.Prim, in_tree: Tree, /, **params):
         in_v, in_b = self.unbox(in_tree)
@@ -281,9 +283,9 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     # >>> in_b = ReviewState(code=True, has_bugs=True)
     # >>> batch_size = 2
     in_v = in_tree
-    in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
+    in_b = tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
 
-    if not any(utils.tree.leaves(in_b)):
+    if not any(tree.leaves(in_b)):
         return ir.call(*in_v)
 
     in_v, in_b = unbatch_zeros(in_v, in_b)
@@ -310,24 +312,24 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
         out_v, out_b = batcher.unbox(out_boxed)
         return out_v, assert_trees(out_b, eqn.out_tree, eqn.prim.name)
 
-    utils.tree.map(env.write_b, ir.in_tree, in_b)
-    utils.tree.map(env.write_v, ir.in_tree, in_v)
+    tree.map(env.write_b, ir.in_tree, in_b)
+    tree.map(env.write_v, ir.in_tree, in_v)
     for eqn in ir.eqns:
-        in_v = utils.tree.map(env.read_v, eqn.in_tree)
-        in_b = utils.tree.map(env.read_b, eqn.in_tree)
+        in_v = tree.map(env.read_v, eqn.in_tree)
+        in_b = tree.map(env.read_b, eqn.in_tree)
         out_v, out_b = batch_bind(eqn, (in_v, in_b))
-        utils.tree.map(env.write_b, eqn.out_tree, out_b)
-        utils.tree.map(env.write_v, eqn.out_tree, out_v)
-    out_v = utils.tree.map(env.read_v, ir.out_tree)
-    out_b = utils.tree.map(env.read_b, ir.out_tree)
+        tree.map(env.write_b, eqn.out_tree, out_b)
+        tree.map(env.write_v, eqn.out_tree, out_v)
+    out_v = tree.map(env.read_v, ir.out_tree)
+    out_b = tree.map(env.read_b, ir.out_tree)
     return broadcast_batch_out(spec, out_v, out_b)
 
 
 async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     in_v = in_tree
-    in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
+    in_b = tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
 
-    if not any(utils.tree.leaves(in_b)):
+    if not any(tree.leaves(in_b)):
         return await ir.acall(*in_v)
 
     in_v, in_b = unbatch_zeros(in_v, in_b)
@@ -348,23 +350,23 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
         out_v, out_b = batcher.unbox(out_boxed)
         return out_v, assert_trees(out_b, eqn.out_tree, eqn.prim.name)
 
-    utils.tree.map(env.write_b, ir.in_tree, in_b)
-    utils.tree.map(env.write_v, ir.in_tree, in_v)
+    tree.map(env.write_b, ir.in_tree, in_b)
+    tree.map(env.write_v, ir.in_tree, in_v)
     for eqn in ir.eqns:
-        in_v = utils.tree.map(env.read_v, eqn.in_tree)
-        in_b = utils.tree.map(env.read_b, eqn.in_tree)
+        in_v = tree.map(env.read_v, eqn.in_tree)
+        in_b = tree.map(env.read_b, eqn.in_tree)
         out_v, out_b = await batch_bind(eqn, (in_v, in_b))
-        utils.tree.map(env.write_b, eqn.out_tree, out_b)
-        utils.tree.map(env.write_v, eqn.out_tree, out_v)
-    out_v = utils.tree.map(env.read_v, ir.out_tree)
-    out_b = utils.tree.map(env.read_b, ir.out_tree)
+        tree.map(env.write_b, eqn.out_tree, out_b)
+        tree.map(env.write_v, eqn.out_tree, out_v)
+    out_v = tree.map(env.read_v, ir.out_tree)
+    out_b = tree.map(env.read_b, ir.out_tree)
     return broadcast_batch_out(spec, out_v, out_b)
 
 
 def abstract_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     del in_tree
-    in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
-    has_batched = any(utils.tree.leaves(in_b, is_leaf=is_axis_spec))
+    in_b = tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
+    has_batched = any(tree.leaves(in_b, is_leaf=is_axis_spec))
 
     def maybe_batched(aval, is_batched: bool):
         return ABatch(aval) if is_batched else aval
@@ -376,7 +378,7 @@ def abstract_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tre
             return maybe_batched(core.avalof(atom), True)
         return atom
 
-    return utils.tree.map(out_aval, ir.out_tree)
+    return tree.map(out_aval, ir.out_tree)
 
 
 def pushforward_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
@@ -405,9 +407,9 @@ async def apullback_fwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: T
 
 def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     residual, out_c = in_tree
-    in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
+    in_b = tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
     _, bwd = ad.fwd_bwd(ir)
-    if not any(utils.tree.leaves(in_b)):
+    if not any(tree.leaves(in_b)):
         return bwd.call(residual, out_c)
     spec = utils.batch_spec(residual, True)
     in_c = batch(bwd, in_axes=(True, True)).call(residual, out_c)
@@ -415,14 +417,14 @@ def pullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
     def accum(batched, c):
         return c if batched else ad.cot_accum(spec.flatten_up_to(c))
 
-    return utils.tree.map(accum, in_b, in_c)
+    return tree.map(accum, in_b, in_c)
 
 
 async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     residual, out_c = in_tree
-    in_b = utils.tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
+    in_b = tree.broadcast_prefix(in_axes, ir.in_tree, is_leaf=is_axis_spec)
     _, bwd = ad.fwd_bwd(ir)
-    if not any(utils.tree.leaves(in_b)):
+    if not any(tree.leaves(in_b)):
         return await bwd.acall(residual, out_c)
     spec = utils.batch_spec(residual, True)
     in_c = await batch(bwd, in_axes=(True, True)).acall(residual, out_c)
@@ -430,7 +432,7 @@ async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: T
     def accum(batched, c):
         return c if batched else ad.cot_accum(spec.flatten_up_to(c))
 
-    return utils.tree.map(accum, in_b, in_c)
+    return tree.map(accum, in_b, in_c)
 
 
 def batch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
@@ -441,7 +443,7 @@ def batch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePa
     batched_ir = batch(ir, in_axes=in_axes)
     unbatch = ft.partial(utils.batch_index, in_v, in_b)
     v_bi = [batched_ir.call(*unbatch(b)) for b in range(batch_size)]
-    out_b = utils.tree.map(lambda _: True, ir.out_tree)
+    out_b = tree.map(lambda _: True, ir.out_tree)
     out_v = utils.batch_transpose(batch_size, out_b, v_bi)
     return out_v, out_b
 
@@ -453,7 +455,7 @@ async def abatch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) ->
 
     inputs = [unbatch(b) for b in range(batch_size)]
     v_bi = await order.p_fanout.abind(inputs, irs=[batched_ir] * batch_size)
-    out_b = utils.tree.map(lambda _: True, ir.out_tree)
+    out_b = tree.map(lambda _: True, ir.out_tree)
     out_v = utils.batch_transpose(batch_size, out_b, list(v_bi))
     return out_v, out_b
 

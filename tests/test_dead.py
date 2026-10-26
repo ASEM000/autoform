@@ -23,7 +23,7 @@ import autoform.src.order as order
 import autoform.src.path as path
 import autoform.src.stage as stage
 import autoform.src.string as string
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 from tests import aexecute, execute, fixpoint_program, switch_program, while_program
 
 
@@ -120,7 +120,7 @@ def test_preserves_dependency_order():
     dced = dead.dce(stage.trace(program)("x"))
     assert len(dced.eqns) == 3
     for current, following in zip(dced.eqns, dced.eqns[1:]):
-        assert current.out_tree in utils.tree.leaves(following.in_tree)
+        assert current.out_tree in tree.leaves(following.in_tree)
     assert dced.call("x") == "xabc"
 
 
@@ -383,7 +383,7 @@ def test_unused_fanout_structured_branch():
     assert dced.call("X") == "X!"
     inner = dced.eqns[0].params["irs"][1]
     assert not inner.eqns
-    assert all(leaf is None for leaf in utils.tree.leaves(inner.out_tree))
+    assert all(leaf is None for leaf in tree.leaves(inner.out_tree))
 
 
 def test_schedule_after_dce():

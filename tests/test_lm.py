@@ -29,7 +29,7 @@ import autoform.src.lm as lm
 import autoform.src.order as order
 import autoform.src.stage as stage
 import autoform.src.string as string
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 from tests import aexecute, execute
 
 
@@ -272,7 +272,7 @@ def test_fill_uses_values_schema_envelope(executor):
     )
     assert call.out_tree["question"] is None
     assert ir.out_tree["question"] is ir.in_tree[0]
-    assert all(isinstance(x, stage.Var) for x in utils.tree.leaves(call.out_tree))
+    assert all(isinstance(x, stage.Var) for x in tree.leaves(call.out_tree))
 
     client = FillClient()
     with lm.client(client):
@@ -356,7 +356,7 @@ def test_fill_preserves_tree_structure(executor, template, response, expected):
     [("context", "string"), (0.5, "number"), (2, "integer"), (False, "boolean")],
 )
 def test_fill_preserves_custom_pytree_and_json_property_names(executor, x, json_type):
-    @optree.dataclasses.dataclass(namespace=utils.PYTREE_NAMESPACE)
+    @tree.dataclass
     class Answer:
         fields: object
         metadata: object
@@ -454,7 +454,7 @@ def test_fill_pushforward_uses_tangent_context(
         {"question": d_question, "answer": f"filled:{question}->{d_question}"},
     )
     if batch_order is not None:
-        args, expected = utils.tree.map(lambda x: [x, x], (args, expected))
+        args, expected = tree.map(lambda x: [x, x], (args, expected))
     client = FillClient()
     with lm.client(client):
         assert executor(ir, *args) == expected
@@ -573,7 +573,7 @@ def test_fill_pushforward_skips_generation_for_symbolic_zero(executor, source):
     if source in ("literal", "both"):
         expected["x"] = "description"
     assert p == expected
-    assert all(isinstance(value, core.Zero) for value in utils.tree.leaves(t))
+    assert all(isinstance(value, core.Zero) for value in tree.leaves(t))
     assert t["answer"].aval.zero() == ""
     assert t["score"].aval.zero() == 0.0
     assert len(calls) == 1
@@ -635,8 +635,8 @@ def test_fill_transforms_traced_descriptions(executor, transform, batch_order):
     args = (("description",), change)
     expected = ("generated", "changed" if transform is ad.pushforward else ("revised",))
     if batch_order is not None:
-        args = utils.tree.map(lambda x: [x, x], args)
-        expected = utils.tree.map(lambda x: [x, x], expected)
+        args = tree.map(lambda x: [x, x], args)
+        expected = tree.map(lambda x: [x, x], expected)
     with lm.client(FillClient()):
         assert executor(ir, *args) == expected
     assert len(calls) == (2 if batch_order is None else 4)
@@ -675,7 +675,7 @@ def test_fill_pullback_preserves_context_identity(executor, generated, batch_ord
     )
     args = (("q",), c)
     if batch_order is not None:
-        args, expected = utils.tree.map(lambda x: [x, x], (args, expected))
+        args, expected = tree.map(lambda x: [x, x], (args, expected))
     with lm.client(RenderClient(render=render)):
         assert executor(ir, *args) == expected
     assert len(calls) == (1 + generated) * (1 if batch_order is None else 2)
@@ -1097,7 +1097,7 @@ def test_schema_dsl_builds_described_schema():
 
 
 def test_schema_dsl_reconstructs_literal_subtree():
-    @optree.dataclasses.dataclass(namespace=utils.PYTREE_NAMESPACE)
+    @tree.dataclass
     class Answer:
         decision: object
         details: object
@@ -1230,7 +1230,7 @@ def test_schema_dsl_builds_custom_pytree_value():
                 type(self) is type(other) and self.text == other.text and self.score == other.score
             )
 
-    utils.tree.register_node(
+    tree.register_node(
         Answer,
         lambda answer: ((answer.text, answer.score), None, ("text", "score")),
         lambda _, children: Answer(*children),

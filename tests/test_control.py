@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-import optree
 import pytest
 
 import autoform.src.ad as ad
@@ -26,10 +25,9 @@ import autoform.src.memo as memo
 import autoform.src.numeric as numeric
 import autoform.src.stage as stage
 import autoform.src.string as string
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 from tests import aexecute, always_true, execute, fixpoint_program, switch_program, while_program
-
-tree = optree.pytree.reexport(namespace=utils.PYTREE_NAMESPACE)
 
 
 def replace_state(state, instruction):
@@ -162,7 +160,7 @@ class TestFixpointPushforward:
         async def push(in_tree, /):
             p, t = in_tree
             zero = lambda x: x.aval.zero() if isinstance(x, core.Zero) else x
-            x, y = utils.tree.map(zero, t)
+            x, y = tree.map(zero, t)
             calls.append("push")
             return step(*p), 0.5 * x + y
 
@@ -306,11 +304,11 @@ class TestFixpointBatch:
     @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])
     def test_batched_preserves_custom_state_container(self, executor):
 
-        @tree.dataclasses.dataclass
+        @tree.dataclass
         class State:
             text: str
             status: str
-            label: str = tree.dataclasses.field(pytree_node=False)
+            label: str = tree.field(pytree_node=False)
 
         def step(state, instruction):
             return State(

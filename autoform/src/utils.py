@@ -21,8 +21,9 @@ import functools as ft
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
-import optree.pytree
-from optree import PyTreeSpec
+import autoform.src.tree as tree
+
+type Tree[T] = Any
 
 
 def strict_zip(*iterables):
@@ -45,21 +46,10 @@ def asyncify[**P, R](func: Callable[P, R], /) -> Callable[P, Awaitable[R]]:
     return afunc
 
 
-# ==================================================================================================
-# PYTREE UTILITIES
-# ==================================================================================================
-
-PYTREE_NAMESPACE = "OPTREE_AUTOFORM_NAMESPACE"
-dict_insertion_order = optree.dict_insertion_ordered(True, namespace=PYTREE_NAMESPACE)
-dict_insertion_order.__enter__()
-tree = optree.pytree.reexport(namespace=PYTREE_NAMESPACE)
-type Tree[T] = Any
-
-
 def dispatch[R](default: Callable[..., R] | None = None):
     # NOTE(asem): dispatch using optree tree spec with leaves exact type. unlike single dispatch
     # this dispatch on exact type, allow pytrees. however its a bit slower.
-    rules: dict[tuple[PyTreeSpec, tuple[type, ...]], Callable[..., R]] = {}
+    rules: dict[tuple[tree.PyTreeSpec, tuple[type, ...]], Callable[..., R]] = {}
 
     def register[**P](types: Tree[type], rule: Callable[P, R], /) -> Callable[P, R]:
         leaves, spec = tree.flatten(types)
@@ -87,40 +77,8 @@ def lru_cache[**P, R](func: Callable[P, R], maxsize: int = 256) -> Callable[P, R
 def index(node: Tree, b: int, /) -> Tree:
     # NOTE(asem): index a struct without indexing support
     # useful to deal with arbitrary pytrees
-    children = tree.leaves(node, is_leaf=lambda x: id(x) != id(node), none_is_leaf=True)
+    children = tree.leaves(node, is_leaf=lambda x: x is None or x is not node)
     return children[b]
-
-
-def mask(in_tree: Tree, use: Tree[bool], replace: Any = None) -> Tree:
-    def func(node: Tree, use_node: bool):
-        assert isinstance(use_node, bool)
-        return node if use_node else replace
-
-    return tree.map(func, in_tree, use)
-
-
-def partition(
-    predicate: Callable[[Any], bool],
-    in_tree: Tree,
-    /,
-    *,
-    is_leaf: Callable[[Any], bool] | None = None,
-    fillvalue: Any = None,
-) -> tuple[Tree, Tree]:
-    flat, spec = tree.flatten(in_tree, is_leaf=is_leaf)
-    selected = [predicate(x) for x in flat]
-    lhs = [x if keep else fillvalue for x, keep in zip(flat, selected)]
-    rhs = [fillvalue if keep else x for x, keep in zip(flat, selected)]
-    return spec.unflatten(lhs), spec.unflatten(rhs)
-
-
-def tree_equal(lhs: Tree, rhs: Tree, /) -> bool:
-    """Return whether two pytrees have equal structure and leaves."""
-    if tree.structure(lhs) != tree.structure(rhs):
-        return False
-    lhs_leaves = tree.leaves(lhs)
-    rhs_leaves = tree.leaves(rhs)
-    return all(lhs_leaf == rhs_leaf for lhs_leaf, rhs_leaf in zip(lhs_leaves, rhs_leaves))
 
 
 # ==================================================================================================
@@ -174,7 +132,7 @@ def batch_index(in_tree: Tree, in_batched: Tree[bool], b: int, /) -> Tree:
     return spec.unflatten(leaves_i)
 
 
-def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
+def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> tree.PyTreeSpec | None:
     """Return the common output container spec for batched leaves.
 
     Batch rules use this to decide whether an operation has any batched inputs
@@ -220,48 +178,9 @@ def batch_spec(in_tree: Tree, in_batched: Tree[bool], /) -> PyTreeSpec | None:
 
 
 def batch_transpose(batch_size: int, in_batched: Tree[bool], in_tree: Tree, /) -> Tree:
-    # NOTE(asem): AoS -> SoA
-    # Example (used throughout):
-    #   in_tree    = [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=6)]
-    #   in_batched = Point(x=True, y=True)
-    #   batch_size = 3
-    #   desired    = Point(x=[1, 3, 5], y=[2, 4, 6])
-
-    # inner_spec = Point(x=*, y=*)
-    # outer_spec = [*, *, *]
-    # items = [Point(1,2), Point(3,4), Point(5,6)]
-    # leaves_bi = [[1, 2], [3, 4], [5, 6]]  (batch, leaves)
-    # leaves_ib = [[1, 3, 5], [2, 4, 6]]  (leaves, batch)
-    # leaf_batches = [[1, 3, 5], [2, 4, 6]]
-    # result = Point(x=[1, 3, 5], y=[2, 4, 6])
     assert batch_size, f"{batch_size=} must be > 0"
-    inner_spec = tree.structure(in_batched, is_leaf=lambda x: isinstance(x, bool))
-    outer_spec = tree.structure(in_tree, is_leaf=lambda x: x is not in_tree)
-    first_level_leaves = tree.leaves(in_tree, is_leaf=lambda x: x is not in_tree)
-
-    # NOTE(asem): flatten_up_to (not leaves) because we want to stop at the boundary
-    # defined by inner_spec. if leaves are containers (e.g., lists), regular leaves()
-    # would descend into them. flatten_up_to respects the spec and stops at each leaf slot.
-    # >>> item = Batch(items=[1, 2, 3], mask=[True, False])
-    # >>> inner_spec = Batch(items=*, mask=*)
-    # >>> tree.leaves(item) -> [1, 2, 3, True, False]
-    # >>> inner_spec.flatten_up_to(item) -> [[1, 2, 3], [True, False]]
-    leaves_bi = [inner_spec.flatten_up_to(item) for item in first_level_leaves]
-
-    # NOTE(asem): transpose without indexing
-    # leaf_ids prevents transpose from descending INTO the leaf values.
-    # >>> leaves_bi = [[[1,2], [3,4]], [[5,6], [7,8]]]  # leaves are lists
-    # >>> transpose(leaves_bi) without is_leaf descends into [1,2]
-    # >>> transpose(leaves_bi) with is_leaf stops at [1,2]
-    ids = {id(leaf) for row in leaves_bi for leaf in row}
-
-    leaves_ib = tree.transpose(
-        tree.structure([object()] * batch_size),
-        tree.structure([object()] * inner_spec.num_leaves),
-        leaves_bi,
-        is_leaf=lambda x: id(x) in ids,
-    )
-
-    leaf_batches = [outer_spec.unflatten(col) for col in leaves_ib]
-    result = inner_spec.unflatten(leaf_batches)
-    return result
+    spec = tree.structure(in_tree, is_leaf=lambda x: x is not in_tree)
+    rows = spec.flatten_up_to(in_tree)
+    if len(rows) != batch_size:
+        raise ValueError(f"Expected {batch_size} rows, got {len(rows)}")
+    return tree.stack(spec, in_batched, rows)

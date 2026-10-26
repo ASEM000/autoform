@@ -19,16 +19,15 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Generator
 from contextlib import contextmanager
-
-from optree import PyTreeSpec
+from typing import Any
 
 import autoform.src.core as core
 import autoform.src.intercept as intercept
 import autoform.src.stage as stage
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 
-type Tree[T] = utils.Tree[T]
-type CacheKey = tuple[core.Prim, tuple[Tree, ...], PyTreeSpec]
+type Tree[T] = Any
+type CacheKey = tuple[core.Prim, tuple[Tree, ...], tree.PyTreeSpec]
 non_memoizable_primitives: set[core.Prim] = set()
 
 
@@ -59,11 +58,11 @@ def is_non_memo(eqn: stage.Eqn, /) -> bool:
         # NOTE(asem): check if any non-memo prim is in nested IR too.
         return isinstance(leaf, stage.IR) and any(is_non_memo(eqn) for eqn in leaf.eqns)
 
-    return eqn.prim in non_memoizable_primitives or utils.tree.any(utils.tree.map(func, eqn.params))
+    return eqn.prim in non_memoizable_primitives or any(map(func, tree.leaves(eqn.params)))
 
 
 def make_key(prim: core.Prim, in_tree: Tree, /, **params) -> CacheKey:
-    flat, struct = utils.tree.flatten((in_tree, params))
+    flat, struct = tree.flatten((in_tree, params))
     return (prim, tuple(flat), struct)
 
 

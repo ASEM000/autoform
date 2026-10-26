@@ -36,7 +36,7 @@ import autoform.src.order as order
 import autoform.src.pp as pp
 import autoform.src.stage as stage
 import autoform.src.string as string
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 from tests import (
     AValBlob,
     Blob,
@@ -1192,7 +1192,7 @@ class TestTraceValuePythonOps:
             p_dunder,
             lambda inputs: operation(*(x.size if isinstance(x, Value) else x for x in inputs)),
         )
-        extend.r_abstract.set(p_dunder, lambda _: utils.tree.map(core.avalof, expected))
+        extend.r_abstract.set(p_dunder, lambda _: tree.map(core.avalof, expected))
         extend.register_dunder(dunder, AValValue, lambda *inputs: p_dunder.bind(inputs))
 
         ir = stage.trace(program)(Value(5))

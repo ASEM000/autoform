@@ -22,9 +22,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Self
 
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 type Concrete = Any
 
 # ==================================================================================================
@@ -127,12 +127,12 @@ class Space:
 
     def zeros_like(self, value: Tree, /) -> Tree:
         """Return a symbolic zero in this space for each leaf of ``value``."""
-        return utils.tree.map(lambda x: Zero(self.map(avalof(x))), value)
+        return tree.map(lambda x: Zero(self.map(avalof(x))), value)
 
 
 def instantiate(value: Tree, /) -> Tree:
     """Replace each symbolic zero leaf of ``value`` with its concrete zero."""
-    return utils.tree.map(lambda x: x.aval.zero() if isinstance(x, Zero) else x, value)
+    return tree.map(lambda x: x.aval.zero() if isinstance(x, Zero) else x, value)
 
 
 s_primal = Space("primal")

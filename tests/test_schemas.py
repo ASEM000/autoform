@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import optree
 import pytest
 
 import autoform.src.core as core
 import autoform.src.lm as lm
 import autoform.src.stage as stage
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 
 
 @pytest.mark.parametrize(
@@ -143,7 +142,7 @@ def test_schema_dsl_nodes_compare_by_value(left, right):
 )
 def test_schema_constraints_are_static_during_tracing(schema):
     ir = stage.trace(lambda x, y: (x, y))(schema, "seed")
-    assert utils.tree.leaves(schema) == []
+    assert tree.leaves(schema) == []
     assert ir.in_tree[0] == schema
     assert ir.call(schema, "hello") == (schema, "hello")
 
@@ -159,7 +158,7 @@ def test_new_spec_subclasses_register_description_children():
             return value
 
     schema = CustomSpec()
-    leaves, spec = utils.tree.flatten(schema)
+    leaves, spec = tree.flatten(schema)
     assert leaves == []
     assert spec.unflatten(leaves) == schema
     assert stage.trace(lambda x: x)(schema).call(schema) == schema
@@ -168,7 +167,7 @@ def test_new_spec_subclasses_register_description_children():
 def test_spec_description_is_dynamic_and_constraints_are_static():
     schema = lm.Str(min=1, max=100)
     described = schema @ "description"
-    leaves, spec = utils.tree.flatten(described)
+    leaves, spec = tree.flatten(described)
     assert described is not schema
     assert schema.desc is None
     assert leaves == ["description"]
@@ -288,7 +287,7 @@ def test_parse_uses_partitioned_schema():
 
 
 def test_partition_and_parse_custom_pytree():
-    @optree.dataclasses.dataclass(namespace=utils.PYTREE_NAMESPACE)
+    @tree.dataclass
     class Answer:
         score: object
         metadata: object
@@ -299,7 +298,7 @@ def test_partition_and_parse_custom_pytree():
         {"source": "fixed"},
         lm.Str() @ "Reasoning.",
     )
-    spec_tree, lit_tree = utils.partition(
+    spec_tree, lit_tree = tree.partition(
         lm.is_spec,
         schema,
         is_leaf=lm.is_spec,
@@ -337,11 +336,11 @@ def test_partition_and_parse_custom_pytree():
 
 
 def test_spec_methods_support_custom_pytrees():
-    @utils.tree.dataclasses.dataclass
+    @tree.dataclass
     class Record:
         x: object
         y: object
-        label: str = utils.tree.dataclasses.field(pytree_node=False)
+        label: str = tree.field(pytree_node=False)
 
     class Prefix(lm.Spec):
         __slots__ = ["value"]

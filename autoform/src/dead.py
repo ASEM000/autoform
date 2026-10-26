@@ -18,12 +18,13 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable
+from typing import Any
 
 import autoform.src.core as core
 import autoform.src.stage as stage
-import autoform.src.utils as utils
+import autoform.src.tree as tree
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 type UsedTree = Tree[bool]
 type DCEResult = tuple[stage.Eqn, UsedTree]
 
@@ -36,8 +37,8 @@ def default_dce(eqn: stage.Eqn, out_used: UsedTree) -> DCEResult:
     # NOTE(asem): out_used is a pytree of bool matching the eqn output pytree that
     # denotes which output is used. the return is a another Eqn (mostly for edited HOP IR)
     # and a out_used
-    should_use = utils.tree.any(out_used)
-    in_used = utils.tree.map(lambda _: should_use, eqn.in_tree)
+    should_use = any(tree.leaves(out_used))
+    in_used = tree.map(lambda _: should_use, eqn.in_tree)
     return eqn, in_used
 
 
@@ -76,7 +77,7 @@ def is_non_dce(eqn: stage.Eqn, /) -> bool:
     def func(leaf):
         return isinstance(leaf, stage.IR) and any(is_non_dce(eqn) for eqn in leaf.eqns)
 
-    return eqn.prim in non_dce_primitives or utils.tree.any(utils.tree.map(func, eqn.params))
+    return eqn.prim in non_dce_primitives or any(map(func, tree.leaves(eqn.params)))
 
 
 def update_eqn_out(eqn: stage.Eqn, active_vars: set[stage.Var], /) -> stage.Eqn:
@@ -95,9 +96,9 @@ def update_eqn_out(eqn: stage.Eqn, active_vars: set[stage.Var], /) -> stage.Eqn:
         assert not (stage.is_var(atom) and atom in active_vars)
         return out
 
-    in_avals = utils.tree.map(stage.aval_if_var, eqn.in_tree)
+    in_avals = tree.map(stage.aval_if_var, eqn.in_tree)
     out_avals = core.r_abstract.get(eqn.prim)(in_avals, **eqn.params)
-    out_tree = utils.tree.map(keep_var, eqn.out_tree, out_avals)
+    out_tree = tree.map(keep_var, eqn.out_tree, out_avals)
     return stage.Eqn(eqn.prim, eqn.in_tree, out_tree, eqn.params, eqn.tags)
 
 
@@ -119,7 +120,7 @@ def sanitize_out(ir: stage.IR, eqns: list[stage.Eqn], out_used: UsedTree, /) -> 
     in_vars = set(stage.var_leaves(ir.in_tree))
     defined_vars: set[stage.Var] = set(in_vars)
     for kept in eqns:
-        for atom in utils.tree.leaves(kept.out_tree):
+        for atom in tree.leaves(kept.out_tree):
             stage.is_var(atom) and defined_vars.add(atom)
 
     def sanitize_out_leaf(atom, used: bool):
@@ -151,7 +152,7 @@ def sanitize_out(ir: stage.IR, eqns: list[stage.Eqn], out_used: UsedTree, /) -> 
             "This typically indicates inconsistent `out_used` or a bug in a DCE rule for a primitive."
         )
 
-    return utils.tree.map(sanitize_out_leaf, ir.out_tree, out_used)
+    return tree.map(sanitize_out_leaf, ir.out_tree, out_used)
 
 
 def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> stage.IR[*A, R]:
@@ -178,10 +179,10 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
     """
 
     if out_used is None:
-        out_user_used = utils.tree.map(lambda _: True, ir.out_tree)
+        out_user_used = tree.map(lambda _: True, ir.out_tree)
     else:
-        assert utils.tree.all(isinstance(leaf, bool) for leaf in utils.tree.leaves(out_used))
-        assert utils.tree.structure(out_used) == utils.tree.structure(ir.out_tree)
+        assert all(isinstance(leaf, bool) for leaf in tree.leaves(out_used))
+        assert tree.structure(out_used) == tree.structure(ir.out_tree)
         out_user_used = out_used
 
     live_boundaries: stage.Liveness = stage.liveness(ir, out_used=out_user_used)
@@ -196,12 +197,12 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
         # out_used tree. if any output is used, keep the equation. and
         # add the irvars corresponding to the used outputs to the active set.
         protected = is_non_dce(eqn)
-        out_eqn_used: Tree[bool] = utils.tree.map(is_active_node, eqn.out_tree)
+        out_eqn_used: Tree[bool] = tree.map(is_active_node, eqn.out_tree)
         new_eqn, in_used = dce_rules.get(eqn.prim, default_dce)(eqn, out_eqn_used)
-        assert utils.tree.structure(in_used) == utils.tree.structure(eqn.in_tree)
+        assert tree.structure(in_used) == tree.structure(eqn.in_tree)
 
         changed = new_eqn is not eqn
-        used = utils.tree.any(out_eqn_used)
+        used = any(tree.leaves(out_eqn_used))
         keep = protected or used
         new_eqn = update_eqn_out(new_eqn, active_vars) if changed and keep else new_eqn
 
@@ -211,7 +212,7 @@ def dce[*A, R](ir: stage.IR[*A, R], /, *, out_used: UsedTree | None = None) -> s
 
         elif used:
             active_eqns.appendleft(new_eqn)
-            active_vars |= set(stage.var_leaves(utils.mask(eqn.in_tree, in_used)))
+            active_vars |= set(stage.var_leaves(tree.mask(eqn.in_tree, in_used)))
 
     eqns = list(active_eqns)
     out_tree = sanitize_out(ir, eqns, out_user_used)

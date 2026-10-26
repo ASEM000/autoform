@@ -21,17 +21,19 @@ import functools as ft
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any
 
 import autoform.src.ad as ad
 import autoform.src.axis as axis
 import autoform.src.core as core
 import autoform.src.dead as dead
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
 zip = utils.strict_zip
 
-type Tree[T] = utils.Tree[T]
+type Tree[T] = Any
 type TreePair = tuple[Tree, Tree]
 type IRList = list[stage.IR]
 type FanoutPair = tuple[list[Tree], list[Tree]]
@@ -82,7 +84,7 @@ async def aimpl_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
 
 
 def abstract_fanout(in_tree: list[Tree], /, *, irs: IRList) -> list[Tree]:
-    return [utils.tree.map(stage.aval_if_var, ir.out_tree) for ir in irs]
+    return [tree.map(stage.aval_if_var, ir.out_tree) for ir in irs]
 
 
 def push_fanout(in_tree: FanoutPair, /, *, irs: IRList) -> FanoutPair:
@@ -136,11 +138,11 @@ def batch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFanoutOut
     for ir, inp, inp_batched in zip(irs, inputs, in_batched):
         if utils.batch_spec(inp, inp_batched) is None:
             results.append(ir.call(*inp))
-            out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
+            out_batched.append(tree.map(lambda _: False, ir.out_tree))
         else:
             batched_ir = axis.batch(ir, in_axes=inp_batched)
             results.append(batched_ir.call(*inp))
-            out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
+            out_batched.append(tree.map(lambda _: True, ir.out_tree))
 
     return results, out_batched
 
@@ -154,11 +156,11 @@ async def abatch_fanout(in_tree: BatchFanoutInput, /, *, irs: IRList) -> BatchFa
     for ir, inp, inp_batched in zip(irs, inputs, in_batched):
         if utils.batch_spec(inp, inp_batched) is None:
             results.append(await ir.acall(*inp))
-            out_batched.append(utils.tree.map(lambda _: False, ir.out_tree))
+            out_batched.append(tree.map(lambda _: False, ir.out_tree))
         else:
             batched_ir = axis.batch(ir, in_axes=inp_batched)
             results.append(await batched_ir.acall(*inp))
-            out_batched.append(utils.tree.map(lambda _: True, ir.out_tree))
+            out_batched.append(tree.map(lambda _: True, ir.out_tree))
 
     return results, out_batched
 
@@ -174,11 +176,11 @@ def dce_fanout(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
     # fanout returns [a(x), None], but its out_tree still declares [a, b].
     # the fix is to enforce the mask on each IR's out_tree and the parent out_tree.
     def func(ir: stage.IR, used: dead.UsedTree):
-        ir = stage.IR(list(ir.eqns), ir.in_tree, utils.mask(ir.out_tree, used))
+        ir = stage.IR(list(ir.eqns), ir.in_tree, tree.mask(ir.out_tree, used))
         return dead.dce(ir)
 
-    new_eqn = eqn.using(irs=utils.tree.map(func, irs, out_used))
-    new_eqn.out_tree = utils.mask(eqn.out_tree, out_used)
+    new_eqn = eqn.using(irs=tree.map(func, irs, out_used))
+    new_eqn.out_tree = tree.mask(eqn.out_tree, out_used)
     return dead.default_dce(new_eqn, out_used)
 
 
@@ -256,7 +258,7 @@ def sched[*A, R](
         return stage.Eqn(p_fanout, in_trees, out_trees, dict(irs=irs))
 
     for level in levels:
-        eqns = [eqn.using(**utils.tree.map(recurse, eqn.params)) for eqn in level]
+        eqns = [eqn.using(**tree.map(recurse, eqn.params)) for eqn in level]
         seq_eqns = [eqn for eqn in eqns if not cond(eqn)]
         par_eqns = [eqn for eqn in eqns if cond(eqn)]
         out_eqns.extend([make_fanout(par_eqns)] if len(par_eqns) > 1 else par_eqns)
