@@ -34,10 +34,7 @@ The model route must support the JSON Schema response format used by the [LiteLL
 The same pattern extends to structured results. Specifications can appear inside dictionaries, tuples, lists, and [registered dataclasses](concepts/pytrees.md#pytrees). The container shape is fixed during tracing, while the model fills its specified leaves during execution. This example requests a title and score in a dataclass:
 
 ```python
-import optree
-
-
-@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+@af.tree.dataclass
 class Summary:
     title: str
     score: float

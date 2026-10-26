@@ -20,7 +20,6 @@ The model decision and the loop state have different roles. A `Decision` describ
 
 ```python
 import asyncio
-import optree
 from urllib.parse import urlencode
 
 import httpx
@@ -31,7 +30,7 @@ model = "model-name"
 
 
 # decision is the structured output returned by the lm
-@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+@af.tree.dataclass
 class Decision:
     tool: str
     args: str
@@ -39,7 +38,7 @@ class Decision:
 
 
 # state is the value carried through the loop
-@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+@af.tree.dataclass
 class State:
     history: str
     result: str

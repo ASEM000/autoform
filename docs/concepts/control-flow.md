@@ -45,10 +45,7 @@ Some loops have an explicit stopping condition, such as a status flag that chang
 The loop carries a dataclass containing text and a status. The body returns an updated state, and the condition reads its status to decide whether another step is needed. Registering the dataclass as a [pytree](pytrees.md#pytrees) exposes those fields to tracing and transforms:
 
 ```python
-import optree
-
-
-@optree.dataclasses.dataclass(namespace=af.PYTREE_NAMESPACE)
+@af.tree.dataclass
 class State:
     text: str
     status: str
