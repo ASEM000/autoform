@@ -81,17 +81,16 @@ def batch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
     def validate(use, x):
         if use:
             actual = tree.structure(x, is_leaf=lambda node: node is not x)
-            if actual != spec.tree_spec or actual.is_leaf():
+            if actual != spec or actual.is_leaf():
                 raise TypeError(f"Expected a batch container matching {spec}, got {x!r}")
 
     tree.map(validate, in_axes, value)
-    if not spec.size:
+    if not spec.num_leaves:
         return value, in_axes
-    items = spec.unstack(in_axes, value)
+    items = tree.unstack(spec, in_axes, value)
     checked = [p_typecheck.bind(x, aval=aval) for x in items]
-    out = spec.stack(in_axes, checked)
-    get = spec.tree_spec.accessors()[0]
-    return tree.map(lambda b, x: x if b else get(x), in_axes, out), in_axes
+    out = tree.stack(spec, in_axes, checked)
+    return out, in_axes
 
 
 async def abatch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree]:
@@ -100,17 +99,16 @@ async def abatch_check(in_tree: Tree, /, *, aval: core.AVal) -> tuple[Tree, Tree
     def validate(use, x):
         if use:
             actual = tree.structure(x, is_leaf=lambda node: node is not x)
-            if actual != spec.tree_spec or actual.is_leaf():
+            if actual != spec or actual.is_leaf():
                 raise TypeError(f"Expected a batch container matching {spec}, got {x!r}")
 
     tree.map(validate, in_axes, value)
-    if not spec.size:
+    if not spec.num_leaves:
         return value, in_axes
-    items = spec.unstack(in_axes, value)
+    items = tree.unstack(spec, in_axes, value)
     checked = [await p_typecheck.abind(x, aval=aval) for x in items]
-    out = spec.stack(in_axes, checked)
-    get = spec.tree_spec.accessors()[0]
-    return tree.map(lambda b, x: x if b else get(x), in_axes, out), in_axes
+    out = tree.stack(spec, in_axes, checked)
+    return out, in_axes
 
 
 core.r_impl.set(p_typecheck, impl_check)

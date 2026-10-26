@@ -89,14 +89,14 @@ def pullback_bwd_factor(in_tree, /, *, name: Hashable | None = None):
 
 def batch_factor(in_tree, /, *, name: Hashable | None = None):
     spec, in_axes, weight = in_tree
-    for x in spec.unstack(in_axes, weight):
+    for x in tree.unstack(spec, in_axes, weight):
         p_factor.bind(x, name=name)
     return (), ()
 
 
 async def abatch_factor(in_tree, /, *, name: Hashable | None = None):
     spec, in_axes, weight = in_tree
-    items = spec.unstack(in_axes, weight)
+    items = tree.unstack(spec, in_axes, weight)
     await asyncio.gather(*(p_factor.abind(x, name=name) for x in items))
     return (), ()
 
@@ -206,19 +206,19 @@ def pullback_bwd_weight_call(in_tree, /, *, ir: stage.IR):
 def batch_weight_call(in_tree, /, *, ir: stage.IR):
     spec, in_axes, in_values = in_tree
     weight_ir = weight(ir)
-    inputs = spec.unstack(in_axes, in_values)
+    inputs = tree.unstack(spec, in_axes, in_values)
     results = order.p_fanout.bind(inputs, irs=[weight_ir] * len(inputs))
     out_axes = tree.map(lambda _: True, results[0])
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_weight_call(in_tree, /, *, ir: stage.IR):
     spec, in_axes, in_values = in_tree
     weight_ir = weight(ir)
-    inputs = spec.unstack(in_axes, in_values)
+    inputs = tree.unstack(spec, in_axes, in_values)
     results = await order.p_fanout.abind(inputs, irs=[weight_ir] * len(inputs))
     out_axes = tree.map(lambda _: True, results[0])
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def dce_weight_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

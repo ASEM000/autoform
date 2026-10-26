@@ -124,9 +124,9 @@ def pull_bwd_render(in_tree, /, **params):
 
 def batch_render(in_tree, /, **params):
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (p_render.bind(x, **params) for x in items)
-    return spec.stack(True, results), True
+    return tree.stack(spec, True, results), True
 
 
 core.r_impl.set(p_render, pp.layout)
@@ -224,9 +224,9 @@ def pullback_bwd_match(in_tree: Tree, /) -> Tree:
 
 def batch_match(in_tree: Tree, /) -> tuple[list[bool], bool]:
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (p_match.bind(x) for x in items)
-    return spec.stack(True, results), True
+    return tree.stack(spec, True, results), True
 
 
 core.r_impl.set(p_match, impl_match)

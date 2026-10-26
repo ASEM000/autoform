@@ -23,6 +23,7 @@ import autoform.src.ad as ad
 import autoform.src.core as core
 import autoform.src.pp as pp
 import autoform.src.stage as stage
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
 type Tree[T] = Any
@@ -161,16 +162,16 @@ def abstract_float(values: Tree, /) -> AFloat:
 
 def batch_unary(prim: core.Prim, in_tree: Tree, /) -> TreePair:
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (prim.bind(x) for x in items)
-    return spec.stack(True, results), True
+    return tree.stack(spec, True, results), True
 
 
 def batch_binary(prim: core.Prim, in_tree: Tree, /, **params) -> TreePair:
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (prim.bind(x, **params) for x in items)
-    return spec.stack(True, results), True
+    return tree.stack(spec, True, results), True
 
 
 # ==================================================================================================

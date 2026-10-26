@@ -241,7 +241,7 @@ class CustomFunc:
             >>> @bracket_batch_example.set_batch
             ... def bracket_batch_rule(in_tree, /):
             ...     spec, in_axes, values = in_tree
-            ...     assert spec.size == 2
+            ...     assert spec.num_leaves == 2
             ...     (xs,) = values
             ...     (x_axis,) = in_axes
             ...     assert x_axis is True
@@ -266,7 +266,7 @@ class CustomFunc:
             >>> @bracket_abatch_example.aset_batch
             ... async def bracket_abatch_rule(in_tree, /):
             ...     spec, in_axes, values = in_tree
-            ...     assert spec.size == 2
+            ...     assert spec.num_leaves == 2
             ...     (xs,) = values
             ...     (x_axis,) = in_axes
             ...     assert x_axis is True
@@ -369,7 +369,7 @@ def custom(func: Callable[..., Any], /) -> CustomFunc:
         >>> @bracket.set_batch
         ... def bracket_batch(in_tree, /):
         ...     spec, in_axes, values = in_tree
-        ...     assert spec.size == 2
+        ...     assert spec.num_leaves == 2
         ...     (xs,) = values
         ...     (x_axis,) = in_axes
         ...     assert x_axis is True

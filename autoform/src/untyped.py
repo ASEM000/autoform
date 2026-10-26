@@ -139,9 +139,9 @@ def pull_bwd_untyped(in_tree: Tree, /) -> Tree:
 
 def batch_untyped(in_tree: Tree, /) -> tuple[Tree, bool]:
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (untyped(x) for x in items)
-    return spec.stack(True, results), True
+    return tree.stack(spec, True, results), True
 
 
 core.r_impl.set(p_untyped, impl_untyped)

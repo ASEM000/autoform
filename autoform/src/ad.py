@@ -325,19 +325,19 @@ async def apullback_bwd_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> T
 def batch_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     spec, in_axes, in_values = in_tree
     pf_ir = pushforward(ir)
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (pf_ir.call(*x) for x in items)
     out_axes = tree.map(lambda _: True, pf_ir.out_tree)
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_pushforward_call(in_tree: Tree, /, *, ir: stage.IR) -> TreePair:
     spec, in_axes, in_values = in_tree
     pf_ir = pushforward(ir)
-    inputs = spec.unstack(in_axes, in_values)
+    inputs = tree.unstack(spec, in_axes, in_values)
     results = await order.p_fanout.abind(inputs, irs=[pf_ir] * len(inputs))
     out_axes = tree.map(lambda _: True, pf_ir.out_tree)
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def dce_pushforward_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:
@@ -442,9 +442,9 @@ def pullback_bwd_cot_accum(in_tree: TreePair, /, *, n: int) -> list[Any]:
 def batch_cot_accum(in_tree: Tree, /, *, n: int) -> TreePair:
     del n
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (cot_accum(x) for x in items)
-    return spec.stack(True, results), True
+    return tree.stack(spec, True, results), True
 
 
 core.r_impl.set(p_cot_accum, impl_cot_accum)
@@ -929,18 +929,18 @@ async def apullback_bwd_pullback_bwd_call(
 
 def batch_pullback_half(ir: stage.IR, in_tree: Tree, /) -> TreePair:
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = (ir.call(*x) for x in items)
     out_axes = tree.map(lambda _: True, ir.out_tree)
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_pullback_half(ir: stage.IR, in_tree: Tree, /) -> TreePair:
     spec, in_axes, in_values = in_tree
-    inputs = spec.unstack(in_axes, in_values)
+    inputs = tree.unstack(spec, in_axes, in_values)
     results = await order.p_fanout.abind(inputs, irs=[ir] * len(inputs))
     out_axes = tree.map(lambda _: True, ir.out_tree)
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def batch_pullback_fwd_call(

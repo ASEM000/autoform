@@ -24,6 +24,7 @@ from typing import Any
 import autoform.src.core as core
 import autoform.src.dead as dead
 import autoform.src.order as order
+import autoform.src.tree as tree
 import autoform.src.utils as utils
 
 type Tree[T] = Any
@@ -65,16 +66,16 @@ def pull_bwd_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | Non
 
 def batch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
     spec, in_axes, x = in_tree
-    items = spec.unstack(in_axes, x)
+    items = tree.unstack(spec, in_axes, x)
     results = (p_checkpoint.bind(x, key=key, collection=collection) for x in items)
-    return spec.stack(in_axes, results), in_axes
+    return tree.stack(spec, in_axes, results), in_axes
 
 
 async def abatch_checkpoint(in_tree, /, *, key: Hashable, collection: Hashable | None):
     spec, in_axes, x = in_tree
-    items = spec.unstack(in_axes, x)
+    items = tree.unstack(spec, in_axes, x)
     results = [await p_checkpoint.abind(x, key=key, collection=collection) for x in items]
-    return spec.stack(in_axes, results), in_axes
+    return tree.stack(spec, in_axes, results), in_axes
 
 
 core.r_impl.set(p_checkpoint, impl_checkpoint)

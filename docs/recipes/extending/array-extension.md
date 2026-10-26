@@ -114,9 +114,9 @@ def register_binary(name, op, push_rule, pull_rule):
 
     def batch_rule(in_tree):
         spec, in_axes, in_values = in_tree
-        items = spec.unstack(in_axes, in_values)
+        items = af.tree.unstack(spec, in_axes, in_values)
         results = (bind(x, y) for x, y in items)
-        return spec.stack(True, results), True
+        return af.tree.stack(spec, True, results), True
 
     afe.r_impl.set(p_op, impl)
     afe.r_abstract.set(p_op, abstract)

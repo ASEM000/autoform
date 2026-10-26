@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import functools as ft
-from collections.abc import Iterable
 from typing import Any
 
 import autoform.src.ad as ad
@@ -40,31 +39,6 @@ type TreePair = tuple[Tree, Tree]
 # ==================================================================================================
 # BATCH
 # ==================================================================================================
-
-
-class BatchSpec:
-    __slots__ = ["tree_spec"]
-
-    def __init__(self, spec: tree.PyTreeSpec, /):
-        self.tree_spec = spec
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.tree_spec!r})"
-
-    @property
-    def size(self) -> int:
-        return self.tree_spec.num_leaves
-
-    def unstack(self, in_axes: Tree[bool], value: Tree, /) -> list[Tree]:
-        """Return one tree per item, indexing selected fields and retaining shared fields."""
-        return [
-            tree.map(lambda u, x: get(x) if u else x, in_axes, value)
-            for get in self.tree_spec.accessors()
-        ]
-
-    def stack(self, out_axes: Tree[bool], rows: Iterable[Tree], /) -> Tree:
-        """Collect corresponding fields from rows into the specified container."""
-        return tree.stack(self.tree_spec, tree.map(lambda _: True, out_axes), rows)
 
 
 def common_spec(value: Tree, in_axes: Tree[bool], /) -> tree.PyTreeSpec | None:
@@ -145,7 +119,7 @@ def assert_trees(out_axes: Tree, out_ir: Tree, prim_name: str) -> Tree:
 
 
 def broadcast_batch_out(spec, out_v: Tree, out_axes: Tree[bool], /) -> Tree:
-    batch_size = spec.num_children
+    batch_size = spec.num_leaves
     out_spec = tree.structure(out_axes, is_leaf=is_axis_spec)
     out_flat = out_spec.flatten_up_to(out_v)
     flat_out_axes = tree.leaves(out_axes, is_leaf=is_axis_spec)
@@ -251,7 +225,7 @@ class BatchInterp(core.Interp):
 
     def __init__(self, *, spec: tree.PyTreeSpec, parent):
         self.parent = parent
-        self.spec = BatchSpec(spec)
+        self.spec = spec
 
     def box(self, value, /) -> Tree:
         v, b = value
@@ -337,7 +311,7 @@ def impl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> Tree:
     if spec is None:
         raise TypeError("Cannot infer batch layout from symbolic zeros alone")
 
-    batch_size = spec.num_children
+    batch_size = spec.num_leaves
     # NOTE(asem): this case can be something like
     # >>> def program(v):
     # ...     return "constant string"
@@ -384,7 +358,7 @@ async def aimpl_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> 
     if spec is None:
         raise TypeError("Cannot infer batch layout from symbolic zeros alone")
 
-    batch_size = spec.num_children
+    batch_size = spec.num_leaves
     assert batch_size, "batch size must be > 0"
 
     batcher = BatchInterp(spec=spec, parent=core.active_interp.get())
@@ -489,19 +463,19 @@ async def apullback_bwd_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: T
 def batch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
     spec, outer_in_axes, in_v = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
-    items = spec.unstack(outer_in_axes, in_v)
+    items = tree.unstack(spec, outer_in_axes, in_v)
     results = (batched_ir.call(*x) for x in items)
     out_axes = tree.map(lambda _: True, ir.out_tree)
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_batch_call(in_tree: Tree, /, *, ir: stage.IR, in_axes: Tree) -> TreePair:
     spec, outer_in_axes, in_v = in_tree
     batched_ir = batch(ir, in_axes=in_axes)
-    inputs = spec.unstack(outer_in_axes, in_v)
+    inputs = tree.unstack(spec, outer_in_axes, in_v)
     results = await order.p_fanout.abind(inputs, irs=[batched_ir] * len(inputs))
     out_axes = tree.map(lambda _: True, ir.out_tree)
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def dce_batch_call(eqn: stage.Eqn, out_used: dead.UsedTree, /) -> dead.DCEResult:

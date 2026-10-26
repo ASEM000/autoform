@@ -38,13 +38,13 @@ type TreePair = tuple[Tree, Tree]
 type IRList = list[stage.IR]
 type FanoutPair = tuple[list[Tree], list[Tree]]
 type FanoutFwdResult = tuple[list[Tree], list[Tree]]
-type BatchFanoutInput = tuple[axis.BatchSpec, list[bool], list[Tree]]
+type BatchFanoutInput = tuple[tree.PyTreeSpec, list[bool], list[Tree]]
 type BatchFanoutOutput = tuple[list[Tree], list[Tree[bool]]]
 type DependsType[T] = tuple[T, tuple[Tree, ...]]
 type DependsPair = tuple[DependsType[Tree], DependsType[Tree]]
 type DependsFwdResult = tuple[Tree, DependsType[Tree]]
 type DependsBwdInput = tuple[DependsType[Tree], Tree]
-type BatchDependsInput = tuple[axis.BatchSpec, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
+type BatchDependsInput = tuple[tree.PyTreeSpec, tuple[bool, tuple[bool, ...]], DependsType[Tree]]
 
 # ==================================================================================================
 # FANOUT

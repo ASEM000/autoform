@@ -93,9 +93,9 @@ Execution and tracing alone do not define transformation behavior. A batching ru
 ```python
 def batch_lookup(in_tree, /):
     spec, in_axes, values = in_tree
-    items = spec.unstack(in_axes, values)
+    items = af.tree.unstack(spec, in_axes, values)
     results = (p_lookup.bind(query) for query in items)
-    return spec.stack(True, results), True
+    return af.tree.stack(spec, True, results), True
 
 
 afe.r_batch.set(p_lookup, batch_lookup)
@@ -195,9 +195,9 @@ The batch hook should also return the tree for the output axes. Here, it keeps t
 @bracket.set_batch
 def batch_bracket(in_tree, /):
     spec, in_axes, values = in_tree
-    items = spec.unstack(in_axes, values)
+    items = af.tree.unstack(spec, in_axes, values)
     results = (bracket(text) for (text,) in items)
-    return spec.stack(True, results), True
+    return af.tree.stack(spec, True, results), True
 
 
 assert af.batch(bracket_ir).call(["a", "b"]) == ["[a]", "[b]"]

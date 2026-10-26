@@ -809,7 +809,7 @@ def test_batched_switch_validates_keys_before_running_branches(executor):
 )
 def test_batched_switch_preserves_container(executor, keys, values, expected):
     ir = axis.batch(switch_ir({"L": "L", "R": "R"}))
-    assert utils.tree_equal(executor(ir, keys, values), expected)
+    assert tree.equal(executor(ir, keys, values), expected)
 
 
 @pytest.mark.parametrize("executor", [execute, aexecute], ids=["sync", "async"])

@@ -671,19 +671,19 @@ def abstract_fill(in_tree: Tree, /) -> Tree:
 
 def batch_fill(in_tree: Tree, /) -> TreePair:
     spec, in_axes, in_values = in_tree
-    items = spec.unstack(in_axes, in_values)
+    items = tree.unstack(spec, in_axes, in_values)
     results = [p_fill.bind(x) for x in items]
     out_axes = tree.map(lambda _: True, results[0])
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 async def abatch_fill(in_tree: Tree, /) -> TreePair:
     spec, in_axes, in_values = in_tree
-    inputs = [(x,) for x in spec.unstack(in_axes, in_values)]
+    inputs = [(x,) for x in tree.unstack(spec, in_axes, in_values)]
     ir = stage.trace(p_fill.bind)(*inputs[0])
     results = await order.p_fanout.abind(inputs, irs=[ir] * len(inputs))
     out_axes = tree.map(lambda _: True, results[0])
-    return spec.stack(out_axes, results), out_axes
+    return tree.stack(spec, out_axes, results), out_axes
 
 
 def spec_description(node: Spec) -> str | None:

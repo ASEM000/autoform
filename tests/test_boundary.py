@@ -38,7 +38,8 @@ from tests import aexecute, execute
         ),
     ],
 )
-def test_custom_batch_rule_receives_common_spec(executor, values, expected):
+@pytest.mark.parametrize("out_axes", [(True, True), (True, False)], ids=["selected", "shared"])
+def test_custom_batch_rule_receives_common_spec(executor, values, expected, out_axes):
     @boundary.custom
     def program(x, y):
         return string.concat(x, y), y
@@ -46,13 +47,16 @@ def test_custom_batch_rule_receives_common_spec(executor, values, expected):
     @program.set_batch
     def rule(in_tree):
         spec, in_axes, inputs = in_tree
-        assert isinstance(spec, axis.BatchSpec)
-        assert spec.size == 2
-        assert spec.tree_spec == tree.structure(values)
+        assert isinstance(spec, tree.PyTreeSpec)
+        assert spec.num_leaves == 2
+        assert spec == tree.structure(values)
         assert in_axes == (True, False)
-        items = spec.unstack(in_axes, inputs)
+        items = tree.unstack(spec, in_axes, inputs)
         results = ((x + y, y) for x, y in items)
-        return spec.stack((True, True), results), (True, True)
+        out = tree.stack(spec, out_axes, results)
+        if not out_axes[1]:
+            assert out[1] == "!"
+        return out, out_axes
 
     program.aset_batch(utils.asyncify(rule))
     ir = axis.batch(stage.trace(program)("x", "!"), in_axes=(True, False))
@@ -395,7 +399,7 @@ class TestCustomBatch:
             spec, in_axes, values = in_tree
             xs, ys = values
             x_axis, y_axis = in_axes
-            assert spec.size == 2
+            assert spec.num_leaves == 2
             assert x_axis is True
             assert y_axis is True
             return (
@@ -431,7 +435,7 @@ class TestCustomBatch:
         @bracket.set_batch
         def bracket_batch(in_tree, /):
             spec, in_axes, values = in_tree
-            assert spec.size == 2
+            assert spec.num_leaves == 2
             (xs,) = values
             (x_axis,) = in_axes
             assert x_axis is True
@@ -456,7 +460,7 @@ class TestCustomBatch:
         @bracket.aset_batch
         async def bracket_batch(in_tree, /):
             spec, in_axes, values = in_tree
-            assert spec.size == 2
+            assert spec.num_leaves == 2
             (xs,) = values
             (x_axis,) = in_axes
             assert x_axis is True
@@ -482,7 +486,7 @@ class TestCustomBatch:
         @bracket.set_batch
         def bracket_batch(in_tree, /):
             spec, in_axes, values = in_tree
-            assert spec.size == 2
+            assert spec.num_leaves == 2
             (xs,) = values
             (x_axis,) = in_axes
             assert x_axis is True

@@ -615,7 +615,7 @@ def test_shared_batch_interp_delegates_to_parent(executor, value, batched, expec
     def batch_rule(in_tree):
         spec, batched, x = in_tree
         assert spec is parent.spec
-        assert spec.size == 2
+        assert spec.num_leaves == 2
         assert batched is True
         calls.append("batch")
         return x, True
@@ -701,89 +701,3 @@ def test_common_spec_custom_container():
     columns = ([point(1, 2), point(3, 4)],)
     values = [point(10, 20), point(30, 40)]
     assert axis.common_spec(columns, (True,)).unflatten(values) == values
-
-
-@pytest.mark.parametrize(
-    "container, shape, rows, expected",
-    [
-        pytest.param([0, 0], True, ["x", "y"], ["x", "y"], id="scalar"),
-        pytest.param(
-            (0, 0),
-            (True, True),
-            [("x", "a"), ("y", "b")],
-            (("x", "y"), ("a", "b")),
-            id="tuple",
-        ),
-        pytest.param(
-            {"y": 0, "x": 0},
-            {"b": True, "a": True},
-            [{"b": "x", "a": "a"}, {"b": "y", "a": "b"}],
-            {"b": {"y": "x", "x": "y"}, "a": {"y": "a", "x": "b"}},
-            id="dict",
-        ),
-        pytest.param(
-            [0, 0],
-            (True,),
-            [(["x", "y"],), (["a", "b"],)],
-            ([["x", "y"], ["a", "b"]],),
-            id="container-valued-field",
-        ),
-        pytest.param(
-            [0, 0], (True, None), [("x", None), ("y", None)], (["x", "y"], None), id="none-node"
-        ),
-        pytest.param([0, 0], (), [(), ()], (), id="empty-result"),
-    ],
-)
-def test_batch_spec_stack_unstack(container, shape, rows, expected):
-    spec = axis.BatchSpec(tree.structure(container))
-    actual = spec.stack(shape, (row for row in rows))
-    assert tree.equal(actual, expected)
-    assert spec.unstack(shape, actual) == rows
-
-
-def test_batch_spec_unstack_shared_field():
-    shared = ["a", "b"]
-    spec = axis.BatchSpec(tree.structure((0, 0)))
-    rows = spec.unstack((True, False), (("x", "y"), shared))
-    assert rows == [("x", ["a", "b"]), ("y", ["a", "b"])]
-    assert all(row[1] is shared for row in rows)
-
-
-def test_batch_spec_stack_unstack_custom_pytree():
-    @tree.dataclass
-    class Point:
-        x: str
-        y: str
-
-    spec = axis.BatchSpec(tree.structure(Point(0, 0)))
-    rows = [Point("x", "a"), Point("y", "b")]
-    shape = Point(True, True)
-    actual = spec.stack(shape, iter(rows))
-    assert actual == Point(Point("x", "y"), Point("a", "b"))
-    assert spec.unstack(shape, actual) == rows
-
-
-@pytest.mark.parametrize(
-    "rows",
-    [pytest.param(["x"], id="too-few"), pytest.param(["x", "y", "z"], id="too-many")],
-)
-def test_batch_spec_stack_rejects_wrong_item_count(rows):
-    with pytest.raises(ValueError):
-        axis.BatchSpec(tree.structure([0, 0])).stack(True, iter(rows))
-
-
-def test_batch_spec_stack_rejects_empty_container():
-    with pytest.raises(ValueError, match="Cannot stack an empty container"):
-        axis.BatchSpec(tree.structure([])).stack(True, iter(()))
-
-
-@pytest.mark.parametrize(
-    "shape, rows",
-    [
-        pytest.param((True,), [("x",), ["y"]], id="container-type"),
-        pytest.param((), [(), ("x",)], id="empty-result"),
-    ],
-)
-def test_batch_spec_stack_rejects_mismatched_rows(shape, rows):
-    with pytest.raises(ValueError):
-        axis.BatchSpec(tree.structure([0, 0])).stack(shape, iter(rows))
